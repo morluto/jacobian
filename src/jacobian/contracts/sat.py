@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import unicodedata
 from collections.abc import Iterable, Sequence
 from typing import Annotated, Literal, Self
@@ -18,7 +17,7 @@ from pydantic import (
     model_validator,
 )
 
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import canonicalize_json, sha256_digest
 from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
@@ -50,10 +49,6 @@ _PROJECTION_FORMAT: Literal["DIMACS-CNF"] = "DIMACS-CNF"
 _PROJECTION_VERSION: Literal["jacobian.dimacs.cnf/v1"] = "jacobian.dimacs.cnf/v1"
 _PROOF_FORMAT: Literal["DRAT"] = "DRAT"
 _PROOF_FORMAT_VERSION: Literal["drat-text/v1"] = "drat-text/v1"
-
-
-def _sha256(value: bytes) -> str:
-    return f"sha256:{hashlib.sha256(value).hexdigest()}"
 
 
 class SatVariableBinding(ContractModel):
@@ -126,7 +121,7 @@ class CanonicalCnf(ContractModel):
             raise ValueError("clauses must be unique and canonically ordered")
         if self.variable_map_digest != sat_variable_map_digest(self.variables):
             raise ValueError("variable-map digest does not match the canonical map")
-        if self.dimacs_digest != _sha256(self.to_dimacs_bytes()):
+        if self.dimacs_digest != sha256_digest(self.to_dimacs_bytes()):
             raise ValueError(
                 "DIMACS digest does not match the deterministic projection"
             )
@@ -378,7 +373,7 @@ class SatProofArtifact(ContractModel):
         raw = _decode_base64(self.proof_base64)
         if self.proof_base64 != base64.b64encode(raw).decode("ascii"):
             raise ValueError("proof bytes must use canonical base64")
-        if self.proof_digest != _sha256(raw):
+        if self.proof_digest != sha256_digest(raw):
             raise ValueError("raw proof digest does not match the preserved bytes")
         _require_available_producer(self.producer)
         return self
@@ -397,7 +392,7 @@ class SatProofArtifact(ContractModel):
         return cls(
             cnf=cnf,
             proof_base64=base64.b64encode(proof).decode("ascii"),
-            proof_digest=_sha256(proof),
+            proof_digest=sha256_digest(proof),
             producer=producer,
             resource_budget=resource_budget,
         )
@@ -473,7 +468,7 @@ class SatLratProofArtifact(ContractModel):
         raw = _decode_base64(self.proof_base64)
         if self.proof_base64 != base64.b64encode(raw).decode("ascii"):
             raise ValueError("LRAT proof must use canonical base64")
-        if self.proof_digest != _sha256(raw) or self.proof_byte_count != len(raw):
+        if self.proof_digest != sha256_digest(raw) or self.proof_byte_count != len(raw):
             raise ValueError("LRAT proof digest or byte count does not match")
         if len(raw) > self.limits.max_proof_bytes:
             raise ValueError("LRAT proof exceeds its declared byte limit")
@@ -490,7 +485,7 @@ class SatLratProofArtifact(ContractModel):
         return cls(
             cnf=cnf,
             proof_base64=base64.b64encode(proof).decode("ascii"),
-            proof_digest=_sha256(proof),
+            proof_digest=sha256_digest(proof),
             proof_byte_count=len(proof),
             limits=limits,
         )
@@ -613,7 +608,7 @@ def canonicalize_cnf(
         variables=variables,
         clauses=clause_models,
         variable_map_digest=sat_variable_map_digest(variables),
-        dimacs_digest=_sha256(_dimacs_bytes(len(variables), clause_models)),
+        dimacs_digest=sha256_digest(_dimacs_bytes(len(variables), clause_models)),
     )
 
 
@@ -626,7 +621,7 @@ def sat_variable_map_digest(
         "variable_map_format": "jacobian.sat.variable-map/v1",
         "variables": [variable.model_dump(mode="json") for variable in variables],
     }
-    return _sha256(canonicalize_json(payload))
+    return sha256_digest(canonicalize_json(payload))
 
 
 def _literal_sort_key(literal: int) -> tuple[int, bool]:

@@ -71,6 +71,7 @@ class ComputedOperation[
     tags: tuple[str, ...] = ()
     invalid_request: CapabilityDiagnostic | None = None
     invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
+    provider_runtime: CapabilityProviderRuntime | None = None
     version: str = "2"
 
 
@@ -102,9 +103,15 @@ class MaterializedOperation[
     ) = None
     artifact_payload_model: type[PayloadT] | None = None
     artifact_uri_field: str | None = None
+    resource_reason: str = ""
+    provider_runtime: CapabilityProviderRuntime | None = None
     version: str = "2"
 
     def __post_init__(self) -> None:
+        if not self.resource_reason.strip():
+            raise ValueError(
+                "materialized operations must declare an explicit resource reason"
+            )
         if self.preview_complete and self.preview is None:
             raise ValueError("a complete materialized preview requires a preview")
         has_converter = self.artifact_converter is not None
@@ -159,6 +166,7 @@ class ComputedOperationFactory:
         *tags: str,
         invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
         relation_id: str | None = None,
+        provider_runtime: CapabilityProviderRuntime | None = None,
     ) -> ComputedOperation[RequestT, ResultT]:
         def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
             try:
@@ -176,6 +184,7 @@ class ComputedOperationFactory:
             relation_id=relation_id or _relation_id(capability_id),
             tags=tags,
             invocation_examples=invocation_examples,
+            provider_runtime=provider_runtime,
         )
 
 
@@ -199,6 +208,8 @@ class MaterializedOperationFactory:
         *tags: str,
         invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
         relation_id: str | None = None,
+        resource_reason: str = "",
+        provider_runtime: CapabilityProviderRuntime | None = None,
         preview: Callable[[ResultT], ResultT] | None = None,
         preview_complete: bool = False,
         version: str = "2",
@@ -219,6 +230,8 @@ class MaterializedOperationFactory:
             relation_id=relation_id or _relation_id(capability_id),
             tags=tags,
             invocation_examples=invocation_examples,
+            resource_reason=resource_reason,
+            provider_runtime=provider_runtime,
             preview_model=result_model,
             preview=preview,
             preview_complete=preview_complete,
@@ -319,6 +332,7 @@ class BoundedSearchOperation[
     tags: tuple[str, ...] = ()
     invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
     invalid_request: CapabilityDiagnostic | None = None
+    provider_runtime: CapabilityProviderRuntime | None = None
     version: str = "1"
 
 

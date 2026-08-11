@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import textwrap
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from benchmarks.tooling.harbor_suite import (
     EnvironmentProfile,
     Suite,
     load_registry,
+    verifier_bundle_checksum_bytes,
 )
 
 
@@ -167,7 +167,9 @@ def _make_minimal_task(root: Path, *, task_id: str = "jacobian/test-v1-a") -> Pa
     (tests / "test.sh").write_text("#!/bin/sh\npython /tests/verifier.py\n")
     verifier_source = "print('ok')\n"
     (tests / "verifier.py").write_text(verifier_source)
-    verifier_checksum = hashlib.sha256(verifier_source.encode()).hexdigest()
+    verifier_checksum = verifier_bundle_checksum_bytes(
+        verifier_source.encode(), b"# vendored support\n"
+    )
     (tests / "Dockerfile").write_text(
         "FROM python:3.12-slim\n"
         f'LABEL jacobian.checksum="{verifier_checksum}"\n'

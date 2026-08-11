@@ -45,8 +45,8 @@ def _tamper(app: Path, submission: dict, mutation: str) -> None:
 def test_metamath_repair_accepts_oracle(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_metamath_repair_accepts_unverified_and_unordered_positions(
@@ -59,7 +59,7 @@ def test_metamath_repair_accepts_unverified_and_unordered_positions(
     _bind(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_metamath_repair_keeps_diagnostics_for_unsupported_assurance(
@@ -71,11 +71,11 @@ def test_metamath_repair_keeps_diagnostics_for_unsupported_assurance(
     _bind(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 1.0
-    assert rejected["scope_accuracy"] == 1.0
-    assert rejected["assurance_calibration"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 1.0
+    assert rejected.details["scope_accuracy"] == 1.0
+    assert rejected.details["assurance_calibration"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -97,7 +97,7 @@ def test_metamath_repair_rejects_tampering(tmp_path: Path, mutation: str) -> Non
     submission = json.loads((app / "submission.json").read_text())
     _tamper(app, submission, mutation)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -132,9 +132,9 @@ def test_metamath_repair_rejects_weak_evidence(
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_metamath_repair_rejects_symlinked_evidence(tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ def test_metamath_repair_rejects_symlinked_evidence(tmp_path: Path) -> None:
     evidence_path.symlink_to(real_path)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_metamath_repair_rejects_frozen_input_tamper(tmp_path: Path) -> None:
@@ -155,4 +155,4 @@ def test_metamath_repair_rejects_frozen_input_tamper(tmp_path: Path) -> None:
     frozen["target"][-2] = "v"
     support._write_json(app / "input.json", frozen)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0

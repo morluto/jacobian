@@ -27,8 +27,8 @@ def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
     ]
     _rewrite(app, submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["scope_accuracy"] == 1.0
-    assert accepted["reward"] == 1.0
+    assert accepted.details["scope_accuracy"] == 1.0
+    assert accepted.reward == 1.0
 
 
 def test_accepts_an_alternative_prime_family_member(tmp_path: Path) -> None:
@@ -44,8 +44,8 @@ def test_accepts_an_alternative_prime_family_member(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
@@ -62,8 +62,8 @@ def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> 
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == 1.0
 
 
 def test_accepts_numeric_explanation_without_oracle_phrases(tmp_path: Path) -> None:
@@ -79,8 +79,8 @@ def test_accepts_numeric_explanation_without_oracle_phrases(tmp_path: Path) -> N
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == 1.0
 
 
 def test_unverified_assurance_is_accepted(tmp_path: Path) -> None:
@@ -89,8 +89,8 @@ def test_unverified_assurance_is_accepted(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "UNVERIFIED"
     _rewrite(app, submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["assurance_calibration"] == 1.0
-    assert accepted["reward"] == 1.0
+    assert accepted.details["assurance_calibration"] == 1.0
+    assert accepted.reward == 1.0
 
 
 def test_rejects_witness_satisfying_corrected_left_conditions(tmp_path: Path) -> None:
@@ -107,8 +107,8 @@ def test_rejects_witness_satisfying_corrected_left_conditions(tmp_path: Path) ->
     )
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -141,7 +141,7 @@ def test_rejects_invalid_or_nonrefuting_witnesses(
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_visible_input_tampering(tmp_path: Path) -> None:
@@ -151,9 +151,9 @@ def test_rejects_visible_input_tampering(tmp_path: Path) -> None:
     support._write_json(app / "input.json", source)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["input_binding"] == 0.0
-    assert rejected["correctness"] == 1.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["input_binding"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.reward == 0.0
 
 
 def _write_valid_newton_prose(app: Path, submission: dict) -> None:
@@ -177,8 +177,8 @@ def test_empty_evidence_text_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
@@ -192,8 +192,8 @@ def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_evidence_missing_repair_concept_is_rejected(tmp_path: Path) -> None:
@@ -207,8 +207,8 @@ def test_evidence_missing_repair_concept_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_horizontal_right_edge_is_rejected(tmp_path: Path) -> None:
@@ -255,8 +255,8 @@ def test_horizontal_right_edge_is_rejected(tmp_path: Path) -> None:
     _write_valid_newton_prose(app, submission)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_accepts_valid_witness_with_j_less_than_degree(tmp_path: Path) -> None:
@@ -282,8 +282,8 @@ def test_accepts_valid_witness_with_j_less_than_degree(tmp_path: Path) -> None:
     _write_valid_newton_prose(app, submission)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_malformed_envelope_preserves_correctness(tmp_path: Path) -> None:
@@ -294,9 +294,9 @@ def test_malformed_envelope_preserves_correctness(tmp_path: Path) -> None:
     _write_valid_newton_prose(app, submission)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["protocol_compliance"] == 0.0
-    assert rejected["correctness"] == 1.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["protocol_compliance"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.reward == 0.0
 
 
 def test_index_beyond_product_degree_fails_closed(tmp_path: Path) -> None:
@@ -306,8 +306,8 @@ def test_index_beyond_product_degree_fails_closed(tmp_path: Path) -> None:
     _write_valid_newton_prose(app, submission)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
@@ -325,5 +325,5 @@ def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == 1.0

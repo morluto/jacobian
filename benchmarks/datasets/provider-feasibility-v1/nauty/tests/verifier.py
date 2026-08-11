@@ -8,6 +8,7 @@ from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
 )
 
@@ -185,3 +186,4 @@ target.write_text(
         sort_keys=True,
     )
 )
+normalize_reward_file(target)

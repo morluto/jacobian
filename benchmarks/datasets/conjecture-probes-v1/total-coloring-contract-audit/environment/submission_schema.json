@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "assignment": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_colors": {
+          "items": {
+            "maximum": 3,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 15,
+          "minItems": 15,
+          "type": "array"
+        },
+        "vertex_colors": {
+          "items": {
+            "maximum": 3,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "type": "array"
+        }
+      },
+      "required": [
+        "vertex_colors",
+        "edge_colors"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "PROJECTED_VALIDATOR_IS_UNSOUND_AND_REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_PETERSEN_GRAPH_INSTANCE",
+        "PROJECTED_VALIDATOR_DEFECT_ONLY",
+        "TOTAL_COLORING_CONJECTURE_NOT_ASSESSED"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "flawed_pass": {
+          "$ref": "#/$defs/assignment"
+        },
+        "incidence_collisions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "edge_index": {
+                "maximum": 14,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "vertex": {
+                "maximum": 9,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "vertex",
+              "edge_index"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "repair": {
+          "$ref": "#/$defs/assignment"
+        }
+      },
+      "required": [
+        "flawed_pass",
+        "incidence_collisions",
+        "repair"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "petersen-total-coloring-contract-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/total-coloring-contract-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

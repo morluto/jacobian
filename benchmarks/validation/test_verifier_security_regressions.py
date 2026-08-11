@@ -139,14 +139,14 @@ def test_reliability_recomputes_input_and_rejects_coerced_state_count(
     _write_json(copied_task / "tests" / "expected.json", expected)
 
     accepted = support._run_verifier(copied_task, app, logs)
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.reward == pytest.approx(1.0)
 
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     submission["result"]["states"] = "8"
     _write_json(submission_path, submission)
     rejected = support._run_verifier(copied_task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_reliability_accepts_equivalent_unreduced_probability(
@@ -161,8 +161,8 @@ def test_reliability_accepts_equivalent_unreduced_probability(
     _write_json(submission_path, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == pytest.approx(1.0)
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == pytest.approx(1.0)
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_reliability_rejects_oversized_fraction_without_crashing(
@@ -177,8 +177,8 @@ def test_reliability_rejects_oversized_fraction_without_crashing(
     _write_json(submission_path, submission)
 
     rejected = run_verifier_in_child(task=task, app=app, logs=logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
     assert (logs / "reward.json").is_file()
 
 
@@ -196,14 +196,14 @@ def test_symmetry_recomputes_orbits_and_rejects_nested_endpoint_bypass(
     _write_json(expected_path, expected)
 
     accepted = support._run_verifier(copied_task, app, logs)
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.reward == pytest.approx(1.0)
 
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     submission["result"]["edge_orbits"] = [[[["a"], ["b"]], [["b"], ["c"]]]]
     _write_json(submission_path, submission)
     rejected = support._run_verifier(copied_task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -222,7 +222,7 @@ def test_public_reproductions_reject_schema_invalid_integer_coercion(
     submission["result"][field] = invalid
     _write_json(submission_path, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def _lean_case(tmp_path: Path, tasks: list[dict]):
@@ -275,7 +275,7 @@ def _lean_case(tmp_path: Path, tasks: list[dict]):
 def test_lean_repl_rejects_vacuous_empty_task_report(tmp_path: Path) -> None:
     task, app, logs = _lean_case(tmp_path, [])
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_lean_repl_rejects_unhashable_task_id_without_crashing(
@@ -297,7 +297,7 @@ def test_lean_repl_rejects_unhashable_task_id_without_crashing(
     ]
     task, app, logs = _lean_case(tmp_path, tasks)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_lean_repl_rejects_boolean_error_count(tmp_path: Path) -> None:
@@ -315,7 +315,7 @@ def test_lean_repl_rejects_boolean_error_count(tmp_path: Path) -> None:
     ]
     task, app, logs = _lean_case(tmp_path, tasks)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_lean_repl_derives_completion_from_final_goal_count(
@@ -335,7 +335,7 @@ def test_lean_repl_derives_completion_from_final_goal_count(
     ]
     task, app, logs = _lean_case(tmp_path, tasks)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_lean_repl_rejects_one_step_constructor_trace(tmp_path: Path) -> None:
@@ -355,10 +355,18 @@ def test_lean_repl_rejects_one_step_constructor_trace(tmp_path: Path) -> None:
     ]
     task, app, logs = _lean_case(tmp_path, tasks)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
-def test_lean_repl_accepts_complete_distinct_task_traces(tmp_path: Path) -> None:
+def test_lean_repl_rejects_valid_trace_when_replay_is_absent(tmp_path: Path) -> None:
+    """A valid-looking report must score zero when the verifier cannot run Lean.
+
+    In the unit-test environment the pinned Lean/REPL binary is not installed,
+    so ``replay.run_replay()`` returns ``{"ok": False}``.  The verifier must
+    fail closed — awarding zero reward — regardless of the submission content,
+    because it cannot independently confirm the reported traces.
+    """
+
     tasks = [
         {
             "task_id": "CONJUNCTION-DECOMPOSITION",
@@ -378,8 +386,276 @@ def test_lean_repl_accepts_complete_distinct_task_traces(tmp_path: Path) -> None
         },
     ]
     task, app, logs = _lean_case(tmp_path, tasks)
-    accepted = support._run_verifier(task, app, logs)
-    assert accepted["reward"] == pytest.approx(1.0)
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected.reward == 0.0
+
+
+def test_lean_repl_rejects_fabricated_report_when_replay_unavailable(
+    tmp_path: Path,
+) -> None:
+    """The forged fixture from issue #764 must receive zero reward.
+
+    The report is assembled from agent-visible constants without starting Lean.
+    In the unit-test environment the verifier-owned replay cannot run (no
+    pinned Lean/REPL binary), so the verifier fails closed and awards zero
+    reward.  In the verifier Docker image the replay *will* run and will
+    correctly accept a matching public trace — that is semantic verification,
+    not fabrication acceptance.  This test covers the replay-unavailable path.
+    """
+
+    import hashlib
+
+    task = DATASETS / "provider-feasibility-v1" / "lean-repl"
+    app = tmp_path / "lean-repl-fabricated" / "app"
+    logs = tmp_path / "lean-repl-fabricated" / "logs"
+    (app / "evidence").mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(task / "environment" / "input.json", app / "input.json")
+
+    report = {
+        "protocol": "leanprover-community/repl",
+        "task_count": 2,
+        "completed_count": 2,
+        "parameter_error_count": 0,
+        "return_code": 0,
+        "elapsed_seconds": 0.1,
+        "stderr": "",
+        "tasks": [
+            {
+                "task_id": "CONJUNCTION-DECOMPOSITION",
+                "tactics": [
+                    {"tactic": "constructor", "goal_count": 2, "error_count": 0},
+                    {"tactic": "exact hP", "goal_count": 1, "error_count": 0},
+                    {"tactic": "exact hQ", "goal_count": 0, "error_count": 0},
+                ],
+            },
+            {
+                "task_id": "LOCAL-PREMISE-APPLICATION",
+                "tactics": [
+                    {"tactic": "exact h hP", "goal_count": 0, "error_count": 0},
+                ],
+            },
+        ],
+        "limitations": ["fabricated report"],
+    }
+    report_path = app / "evidence" / "provider-report.json"
+    _write_json(report_path, report)
+
+    public = json.loads((task / "environment" / "input.json").read_text())
+    submission = {
+        "task_id": public["task_id"],
+        "conclusion": "FEASIBLE",
+        "result": {
+            "provider": public["provider"],
+            "contract": public["contract"],
+            "status": "COMPLETED",
+            "pin_sha256": public["pin_sha256"],
+        },
+        "claimed_assurance": "COMPUTED",
+        "scope": "fabricated without Lean REPL execution",
+        "completeness": "COMPLETE",
+        "evidence": [
+            {
+                "path": "evidence/provider-report.json",
+                "sha256": "sha256:"
+                + hashlib.sha256(report_path.read_bytes()).hexdigest(),
+            }
+        ],
+        "limitations": ["fabricated report"],
+    }
+    _write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected.reward == 0.0
+
+
+def test_lean_repl_traces_match_rejects_disagreeing_trace() -> None:
+    """A submitted trace that disagrees with the verifier-owned replay is rejected.
+
+    This unit-tests ``replay.traces_match`` directly — no fake replay artifact
+    is injected.  The replay result is a Python dict representing what the
+    verifier's own Lean execution would produce.  A submitted trace with a
+    wrong ``goal_count`` must not match.
+    """
+
+    import importlib.util
+
+    replay_path = (
+        DATASETS / "provider-feasibility-v1" / "lean-repl" / "tests" / "replay.py"
+    )
+    spec = importlib.util.spec_from_file_location("replay", replay_path)
+    assert spec is not None and spec.loader is not None
+    replay_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(replay_mod)
+
+    replay_result = {
+        "ok": True,
+        "tasks": [
+            {
+                "task_id": "CONJUNCTION-DECOMPOSITION",
+                "tactics": [
+                    {"tactic": "constructor", "goal_count": 2, "error_count": 0},
+                    {"tactic": "exact hP", "goal_count": 1, "error_count": 0},
+                    {"tactic": "exact hQ", "goal_count": 0, "error_count": 0},
+                ],
+            },
+            {
+                "task_id": "LOCAL-PREMISE-APPLICATION",
+                "tactics": [
+                    {"tactic": "exact h hP", "goal_count": 0, "error_count": 0},
+                ],
+            },
+        ],
+    }
+
+    matching = [
+        {
+            "task_id": "CONJUNCTION-DECOMPOSITION",
+            "tactics": [
+                {"tactic": "constructor", "goal_count": 2, "error_count": 0},
+                {"tactic": "exact hP", "goal_count": 1, "error_count": 0},
+                {"tactic": "exact hQ", "goal_count": 0, "error_count": 0},
+            ],
+        },
+        {
+            "task_id": "LOCAL-PREMISE-APPLICATION",
+            "tactics": [
+                {"tactic": "exact h hP", "goal_count": 0, "error_count": 0},
+            ],
+        },
+    ]
+    assert replay_mod.traces_match(matching, replay_result) is True
+
+    disagreeing = [
+        {
+            "task_id": "CONJUNCTION-DECOMPOSITION",
+            "tactics": [
+                {"tactic": "constructor", "goal_count": 99, "error_count": 0},
+                {"tactic": "exact hP", "goal_count": 1, "error_count": 0},
+                {"tactic": "exact hQ", "goal_count": 0, "error_count": 0},
+            ],
+        },
+        {
+            "task_id": "LOCAL-PREMISE-APPLICATION",
+            "tactics": [
+                {"tactic": "exact h hP", "goal_count": 0, "error_count": 0},
+            ],
+        },
+    ]
+    assert replay_mod.traces_match(disagreeing, replay_result) is False
+
+    assert replay_mod.traces_match(matching, {"ok": False}) is False
+
+
+def test_lean_repl_frame_reader_preserves_suffix() -> None:
+    """_FrameReader reads two sequential blank-line-delimited frames from one pipe.
+
+    This is the exact CI failure mechanism: the old ``_readline_bounded``
+    consumed only the first ``\\n`` and left the blank-line delimiter plus
+    the next frame's bytes in the pipe, so the second exchange parsed the
+    empty delimiter as JSON and failed.  The buffered frame reader must
+    consume the ``\\n\\n`` delimiter, return the complete first frame, and
+    retain any suffix for the next read.
+    """
+
+    import importlib.util
+    import os
+
+    replay_path = (
+        DATASETS / "provider-feasibility-v1" / "lean-repl" / "tests" / "replay.py"
+    )
+    spec = importlib.util.spec_from_file_location("replay_frame", replay_path)
+    assert spec is not None and spec.loader is not None
+    replay_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(replay_mod)
+
+    frame_a = json.dumps({"cmd": "first"}, sort_keys=True).encode("utf-8")
+    frame_b = json.dumps(
+        {"tactic": "exact hP", "proofState": 0}, sort_keys=True
+    ).encode("utf-8")
+    blob = frame_a + b"\n\n" + frame_b + b"\n\n"
+
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, blob)
+        os.close(write_fd)
+        write_fd = -1
+
+        reader = replay_mod._FrameReader(read_fd)
+        raw_a = reader.read_frame(timeout=5.0)
+        raw_b = reader.read_frame(timeout=5.0)
+
+        assert raw_a == frame_a
+        assert raw_b == frame_b
+    finally:
+        if write_fd != -1:
+            os.close(write_fd)
+        os.close(read_fd)
+
+
+@pytest.mark.parametrize(
+    ("tactic_response", "error"),
+    [
+        (
+            {
+                "proofState": 1,
+                "goals": [],
+                "messages": [{"severity": "error", "data": "invalid tactic"}],
+            },
+            "tactic failed",
+        ),
+        (
+            {"proofState": 1, "goals": [{"goal": "still open"}]},
+            "left goals unfinished",
+        ),
+    ],
+)
+def test_lean_repl_replay_rejects_error_or_unfinished_final_goal(
+    monkeypatch: pytest.MonkeyPatch,
+    tactic_response: dict,
+    error: str,
+) -> None:
+    """Verifier-owned replay cannot convert a failed proof into a trace."""
+
+    import importlib.util
+    import time
+
+    replay_path = (
+        DATASETS / "provider-feasibility-v1" / "lean-repl" / "tests" / "replay.py"
+    )
+    spec = importlib.util.spec_from_file_location("replay_task", replay_path)
+    assert spec is not None and spec.loader is not None
+    replay_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(replay_mod)
+    responses = iter(
+        [
+            {"sorries": [{"proofState": 1}]},
+            tactic_response,
+        ]
+    )
+    observed_deadlines: list[float] = []
+
+    def exchange(*args: object) -> dict:
+        deadline_value = args[-1]
+        assert isinstance(deadline_value, float)
+        observed_deadlines.append(deadline_value)
+        return next(responses)
+
+    monkeypatch.setattr(replay_mod, "_exchange", exchange)
+    deadline = time.monotonic() + 1
+
+    with pytest.raises(RuntimeError, match=error):
+        replay_mod._run_task(
+            process=None,
+            reader=None,
+            task={
+                "task_id": "TEST",
+                "command": "example : True := by sorry",
+                "tactics": ("trivial",),
+            },
+            deadline=deadline,
+        )
+    assert observed_deadlines == [deadline, deadline]
 
 
 def _provider_report_case(tmp_path: Path, task_name: str, report: dict) -> tuple:
@@ -445,7 +721,7 @@ def test_cddlib_rejects_fabricated_nonempty_cases(tmp_path: Path) -> None:
     }
     task, app, logs = _provider_report_case(tmp_path, "cddlib", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_regina_rejects_fabricated_nonempty_cases(tmp_path: Path) -> None:
@@ -478,7 +754,7 @@ def test_regina_rejects_fabricated_nonempty_cases(tmp_path: Path) -> None:
     }
     task, app, logs = _provider_report_case(tmp_path, "regina", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_cgal_rejects_fabricated_reproduction_digests(tmp_path: Path) -> None:
@@ -510,7 +786,7 @@ def test_cgal_rejects_fabricated_reproduction_digests(tmp_path: Path) -> None:
     }
     task, app, logs = _provider_report_case(tmp_path, "cgal", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_cgal_rejects_unbound_source_and_adapter_identity(tmp_path: Path) -> None:
@@ -543,7 +819,7 @@ def test_cgal_rejects_unbound_source_and_adapter_identity(tmp_path: Path) -> Non
     }
     task, app, logs = _provider_report_case(tmp_path, "cgal", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_gudhi_rejects_fabricated_persistence_shape(tmp_path: Path) -> None:
@@ -571,7 +847,7 @@ def test_gudhi_rejects_fabricated_persistence_shape(tmp_path: Path) -> None:
     }
     task, app, logs = _provider_report_case(tmp_path, "gudhi", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_gudhi_rejects_missing_mathematical_output_digest(tmp_path: Path) -> None:
@@ -599,7 +875,7 @@ def test_gudhi_rejects_missing_mathematical_output_digest(tmp_path: Path) -> Non
     }
     task, app, logs = _provider_report_case(tmp_path, "gudhi", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_nauty_rejects_fabricated_count_and_digests(tmp_path: Path) -> None:
@@ -628,7 +904,7 @@ def test_nauty_rejects_fabricated_count_and_digests(tmp_path: Path) -> None:
     }
     task, app, logs = _provider_report_case(tmp_path, "nauty", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_nauty_rejects_unbound_canonicalization(tmp_path: Path) -> None:
@@ -662,7 +938,7 @@ def test_nauty_rejects_unbound_canonicalization(tmp_path: Path) -> None:
     }
     task, app, logs = _provider_report_case(tmp_path, "nauty", report)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def _minimal_report(task_name: str) -> dict:
@@ -716,5 +992,5 @@ def test_provider_verifier_flags_verified_claim_as_false_certification(
 
     task, app, logs = _verified_claim_case(tmp_path, task_name)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
-    assert result["false_certification"] is True
+    assert result.reward == 0.0
+    assert result.details["false_certification"] is True

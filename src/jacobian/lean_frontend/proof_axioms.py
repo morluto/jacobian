@@ -23,7 +23,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
@@ -37,6 +36,11 @@ from jacobian.contracts.lean_proof_axioms import (
 )
 from jacobian.contracts.lean_statement import LeanElaborationDiagnostic
 from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.providers.lean_runtime import (
+    LeanRuntimeIdentityError,
+    lean_semantic_runtime_digest,
+    require_lean_semantic_runtime_identity,
+)
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 
@@ -141,7 +145,6 @@ class LeanProofAxiomsAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanProofAxiomsInspectRequest.model_json_schema(),
             output_schema=LeanProofAxiomsInspectOutput.model_json_schema(),
             read_only=True,
@@ -150,7 +153,6 @@ class LeanProofAxiomsAdapter:
                 CapabilityInvocationExample(
                     name="inspect_true",
                     description="Inspect a proof of True without making a trust decision.",
-                    mode=CapabilityMode.EXPLORE,
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -189,6 +191,21 @@ class LeanProofAxiomsAdapter:
                     hint="Install the exact Lean/Mathlib runtime, then retry.",
                 )
             )
+
+        if "semantic_runtime" in self.resources.provider_runtime.configuration:
+            try:
+                require_lean_semantic_runtime_identity(self.resources.provider_runtime)
+            except LeanRuntimeIdentityError as exc:
+                raise CapabilityInvocationError(
+                    CapabilityDiagnostic(
+                        code="LEAN_RUNTIME_IDENTITY_UNAVAILABLE",
+                        stage="runtime_identity",
+                        message=(
+                            "The pinned Lean semantic runtime changed or is unavailable."
+                        ),
+                        hint="Restore the exact authorized Lean runtime, then retry.",
+                    )
+                ) from exc
 
         started = time.monotonic()
         inspection = _inspect_source(validated)
@@ -248,7 +265,6 @@ class LeanProofAxiomsAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=int((time.monotonic() - started) * 1000),
@@ -361,24 +377,30 @@ def _skip_block_comment(source: str, index: int, length: int) -> int:
 
 
 def _skip_string_literal(source: str, index: int, length: int) -> int:
-    index += 1
-    while index < length:
-        if source[index] == "\\":
-            index += 2
-        elif source[index] == '"':
-            return index + 1
-        else:
-            index += 1
-    return index
+    return _skip_quoted_literal(source, index, length, '"')
 
 
 def _skip_char_literal(source: str, index: int, length: int) -> int:
+    return _skip_quoted_literal(source, index, length, "'")
+
+
+def _skip_quoted_literal(source: str, index: int, length: int, delimiter: str) -> int:
     index += 1
-    if index < length and source[index] == "\\":
-        index += 2
-    elif index < length:
-        index += 1
-    return index + 1 if index < length and source[index] == "'" else index
+    while index < length:
+        character = source[index]
+        if character in "\r\n":
+            raise ValueError("Lean quoted literals cannot contain a newline")
+        if character == "\\":
+            if index + 1 >= length:
+                raise ValueError("Lean quoted literal ends with an escape")
+            if source[index + 1] in "\r\n":
+                raise ValueError("Lean quoted literals cannot contain a newline")
+            index += 2
+        elif character == delimiter:
+            return index + 1
+        else:
+            index += 1
+    raise ValueError("unterminated Lean quoted literal")
 
 
 def _is_identifier_start(character: str) -> bool:
@@ -531,11 +553,17 @@ def _environment_digest(
     runtime: CapabilityProviderRuntime,
     manifest_digest: str | None,
 ) -> str:
+    semantic_runtime = runtime.configuration.get("semantic_runtime")
     payload = {
         "contract": "jacobian.lean.proof.axioms/v1",
         "environment": environment.value,
         "provider_runtime_digest": runtime.digest,
         "manifest_digest": manifest_digest,
+        "semantic_runtime_digest": (
+            lean_semantic_runtime_digest(semantic_runtime)
+            if isinstance(semantic_runtime, dict)
+            else None
+        ),
     }
     return "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
 

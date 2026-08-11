@@ -5,7 +5,6 @@ from __future__ import annotations
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -19,7 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -48,6 +46,10 @@ from jacobian.lean_frontend.exploration import (
     _validate_source_parts,
 )
 from jacobian.lean_frontend.repl import _response_errors
+from jacobian.lean_frontend.repl_protocol import (
+    LeanReplProofStepResponse,
+    LeanReplValidatedExecution,
+)
 
 
 class LeanProofStateAdapter:
@@ -64,7 +66,6 @@ class LeanProofStateAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanProofStateRequest.model_json_schema(),
             output_schema=LeanProofStateOutput.model_json_schema(),
             tags=("lean", "proof-state", "tactic", "exploration"),
@@ -75,7 +76,6 @@ class LeanProofStateAdapter:
                         "Apply trivial to a replayable proof state for True; "
                         "a completed transition still requires lean.check."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input=LeanProofStateRequest.model_validate(
                         {
                             "environment": "CORE",
@@ -124,7 +124,8 @@ class LeanProofStateAdapter:
         """Resolve the statement and tactic prefix from a fresh or bound state."""
 
         if validated.state_uri is None:
-            assert validated.statement is not None
+            if validated.statement is None:
+                raise ValueError("validated statement is unexpectedly None")
             return validated.statement, validated.proof_prefix, None
         bound_state = _load_validated_proof_state(
             self.resources,
@@ -166,7 +167,7 @@ class LeanProofStateAdapter:
         self,
         validated: LeanProofStateRequest,
         command: str,
-    ) -> tuple[tuple[Any, Any, Any], tuple[LeanTypedGoal, ...], bool]:
+    ) -> tuple[LeanReplValidatedExecution, tuple[LeanTypedGoal, ...], bool]:
         """Execute the tactic in a clean process and extract typed successor goals."""
 
         with tempfile.TemporaryDirectory(prefix="jacobian-lean-proof-state-") as root:
@@ -201,6 +202,8 @@ class LeanProofStateAdapter:
             accepted = not tactic_errors
             typed_goals: tuple[LeanTypedGoal, ...] = ()
             if accepted:
+                if not isinstance(tactic_response, LeanReplProofStepResponse):
+                    raise RuntimeError("Lean REPL returned an invalid tactic response")
                 try:
                     typed_goals = _exploration_support._extract_typed_goals(
                         self.resources,
@@ -289,7 +292,8 @@ class LeanProofStateAdapter:
             input_state_uri = input_state_artifact.artifact_uri
             input_state = input_state_payload
         else:
-            assert validated.state_uri is not None
+            if validated.state_uri is None:
+                raise ValueError("validated state_uri is unexpectedly None")
             input_state_uri = validated.state_uri
             input_state = bound_state
 
@@ -299,9 +303,10 @@ class LeanProofStateAdapter:
         goals: tuple[str, ...] = ()
         completed = False
         if accepted:
+            if not isinstance(tactic_response, LeanReplProofStepResponse):
+                raise RuntimeError("Lean REPL returned an invalid tactic response")
             goals = _normalized_response_goals(tactic_response)
-            proof_status = tactic_response.get("proofStatus")
-            if (proof_status == "Completed") != (len(goals) == 0):
+            if (tactic_response.proof_status == "Completed") != (len(goals) == 0):
                 raise RuntimeError(
                     "Lean REPL returned inconsistent completion and goals"
                 )
@@ -382,7 +387,6 @@ class LeanProofStateAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),

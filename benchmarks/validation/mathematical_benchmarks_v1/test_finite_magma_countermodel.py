@@ -17,8 +17,8 @@ def test_accepts_alternate_smallest_countermodel(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_corrupted_table(tmp_path: Path) -> None:
@@ -27,5 +27,5 @@ def test_rejects_corrupted_table(tmp_path: Path) -> None:
     submission["result"]["table"][1][1] = 2
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

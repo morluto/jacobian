@@ -7,6 +7,10 @@ from typing import Literal, Self
 
 from pydantic import model_validator
 
+from jacobian.contracts._verification_rules import (
+    validate_certified_relationship_endpoints,
+    validate_decisive_replayable_evidence,
+)
 from jacobian.contracts.capabilities import (
     CapabilityId,
     CapabilityProviderAvailability,
@@ -130,45 +134,6 @@ def _validate_rejected_checker_evidence(
         raise ValueError("rejected evidence cannot certify relationship metadata")
 
 
-def _validate_certified_relationship_endpoints(
-    relation_id: CapabilityId | None,
-    relationship_source_artifact_uris: tuple[ArtifactUri, ...],
-    relationship_target_artifact_uris: tuple[ArtifactUri, ...],
-) -> None:
-    if relation_id is None and (
-        relationship_source_artifact_uris or relationship_target_artifact_uris
-    ):
-        raise ValueError("relationship endpoints require a relation ID")
-    if relation_id is not None and (
-        not relationship_source_artifact_uris or not relationship_target_artifact_uris
-    ):
-        raise ValueError("a certified relationship requires exact endpoints")
-    if len(set(relationship_source_artifact_uris)) != len(
-        relationship_source_artifact_uris
-    ) or len(set(relationship_target_artifact_uris)) != len(
-        relationship_target_artifact_uris
-    ):
-        raise ValueError("certified relationship endpoints must be unique")
-
-
-def _validate_accepted_checker_evidence(
-    conclusion: Conclusion,
-    arithmetic: Arithmetic,
-    coverage: Coverage,
-    method: Method,
-) -> None:
-    if conclusion not in {Conclusion.TRUE, Conclusion.FALSE}:
-        raise ValueError("accepted checker evidence requires a decisive conclusion")
-    if arithmetic == Arithmetic.FLOATING_HEURISTIC:
-        raise ValueError("a checker cannot accept floating heuristic evidence")
-    if coverage in {Coverage.RESTRICTED, Coverage.SAMPLED}:
-        raise ValueError("a checker cannot accept restricted or sampled evidence")
-    if method == Method.DIRECT_WITNESS and coverage != Coverage.NOT_APPLICABLE:
-        raise ValueError("a direct witness checker cannot claim coverage")
-    if method == Method.EXHAUSTIVE_FINITE and coverage != Coverage.EXHAUSTIVE:
-        raise ValueError("exhaustive checker acceptance requires exhaustive coverage")
-
-
 class CheckerDecision(ContractModel):
     accepted: bool
     conclusion: Conclusion
@@ -191,13 +156,13 @@ class CheckerDecision(ContractModel):
             self.relationship_target_artifact_uris,
             self.obligation_uri,
         )
-        _validate_certified_relationship_endpoints(
+        validate_certified_relationship_endpoints(
             self.relation_id,
             self.relationship_source_artifact_uris,
             self.relationship_target_artifact_uris,
         )
         if self.accepted:
-            _validate_accepted_checker_evidence(
+            validate_decisive_replayable_evidence(
                 self.conclusion,
                 self.arithmetic,
                 self.coverage,

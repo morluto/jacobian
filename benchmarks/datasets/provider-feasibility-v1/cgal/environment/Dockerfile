@@ -10,6 +10,7 @@ WORKDIR /app
 COPY __init__.py /opt/benchmarks/__init__.py
 COPY tooling/__init__.py /opt/benchmarks/tooling/__init__.py
 COPY tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY tooling/spike_utils.py /opt/benchmarks/tooling/spike_utils.py
 COPY datasets/provider-feasibility-v1/cgal/environment/cgal_delaunay_spike.cpp datasets/provider-feasibility-v1/cgal/environment/input.json datasets/provider-feasibility-v1/cgal/environment/cgal_delaunay_pin.json datasets/provider-feasibility-v1/cgal/environment/spike.py datasets/provider-feasibility-v1/cgal/environment/submission_schema.json /app/
 RUN g++ -std=c++17 -O2 -I/opt/provider/CGAL-6.2/include /app/cgal_delaunay_spike.cpp -lgmp -lmpfr -o /opt/provider/cgal-spike
 ENV PYTHONDONTWRITEBYTECODE=1

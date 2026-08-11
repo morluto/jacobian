@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact finite semantic verifier for binder shadowing and subset-sum drift.
 LABEL jacobian.task="jacobian/extremal-subset-sum-semantic-audit" \
-      jacobian.checksum="8bbf5db5776f174ead12d387d7d31098a98fa5098835a6e9167a2e45c70e0902"
+      jacobian.checksum="7bd553c36cf724610ab728a78597e5527a9f12439400d477903d1207137a51eb"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

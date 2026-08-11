@@ -747,7 +747,11 @@ def test_schedule_event_runs_full_portfolio() -> None:
 
 def test_timing_weights_balance_slow_tasks_deterministically() -> None:
     suites = planner._harbor_suite().load_registry()
-    suite = next(item for item in suites if len(item.tasks) > 12)
+    suite = next((item for item in suites if len(item.tasks) > 12), None)
+    assert suite is not None, (
+        "expected a suite with more than 12 tasks for timing weight validation; "
+        "found: " + ", ".join(f"{item.id}={len(item.tasks)}" for item in suites)
+    )
     timings = {
         f"{suite.id}/{ref.path.name}": float(index + 1)
         for index, ref in enumerate(suite.tasks)

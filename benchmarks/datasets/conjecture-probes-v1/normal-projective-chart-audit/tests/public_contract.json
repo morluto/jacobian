@@ -1,0 +1,262 @@
+{
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "task_id": "jacobian/normal-projective-chart-audit",
+  "conclusion": {
+    "const": "AFFINE_NORMAL_COUNT_IS_INCOMPLETE_AND_REPAIRED"
+  },
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "scope": {
+    "type": "string",
+    "const": "ellipse-normal-projective-chart-audit-v1"
+  },
+  "limitations": {
+    "const": [
+      "ONE_RATIONAL_ELLIPSE",
+      "ONE_QUERY_POINT",
+      "CONCURRENT_NORMALS_CONJECTURE_NOT_ASSESSED"
+    ]
+  },
+  "required_artifact_filenames": [
+    "evidence/answer.json"
+  ],
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "min_items": 1,
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "payload_shape": null
+  },
+  "schema_definitions": {
+    "q": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
+    },
+    "point": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/q"
+      }
+    }
+  },
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "finite_parameters",
+      "finite_points",
+      "missing_projective_parameter",
+      "missing_point",
+      "footpoint_records"
+    ],
+    "properties": {
+      "finite_parameters": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": {
+          "$ref": "#/$defs/q"
+        }
+      },
+      "finite_points": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": {
+          "$ref": "#/$defs/point"
+        }
+      },
+      "missing_projective_parameter": {
+        "$ref": "#/$defs/point"
+      },
+      "missing_point": {
+        "$ref": "#/$defs/point"
+      },
+      "footpoint_records": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "point",
+            "ellipse_residual",
+            "normal_residual"
+          ],
+          "properties": {
+            "point": {
+              "$ref": "#/$defs/point"
+            },
+            "ellipse_residual": {
+              "$ref": "#/$defs/q"
+            },
+            "normal_residual": {
+              "$ref": "#/$defs/q"
+            }
+          }
+        }
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/normal-projective-chart-audit"
+      },
+      "conclusion": {
+        "const": "AFFINE_NORMAL_COUNT_IS_INCOMPLETE_AND_REPAIRED"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "finite_parameters",
+          "finite_points",
+          "missing_projective_parameter",
+          "missing_point",
+          "footpoint_records"
+        ],
+        "properties": {
+          "finite_parameters": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/$defs/q"
+            }
+          },
+          "finite_points": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/$defs/point"
+            }
+          },
+          "missing_projective_parameter": {
+            "$ref": "#/$defs/point"
+          },
+          "missing_point": {
+            "$ref": "#/$defs/point"
+          },
+          "footpoint_records": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "point",
+                "ellipse_residual",
+                "normal_residual"
+              ],
+              "properties": {
+                "point": {
+                  "$ref": "#/$defs/point"
+                },
+                "ellipse_residual": {
+                  "$ref": "#/$defs/q"
+                },
+                "normal_residual": {
+                  "$ref": "#/$defs/q"
+                }
+              }
+            }
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "type": "string",
+        "const": "ellipse-normal-projective-chart-audit-v1"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/answer.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "ONE_RATIONAL_ELLIPSE",
+          "ONE_QUERY_POINT",
+          "CONCURRENT_NORMALS_CONJECTURE_NOT_ASSESSED"
+        ]
+      }
+    },
+    "$defs": {
+      "q": {
+        "type": "string",
+        "maxLength": 128,
+        "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
+      },
+      "point": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "$ref": "#/$defs/q"
+        }
+      }
+    }
+  },
+  "verification_record": null,
+  "public_notes": "Exact affine-versus-projective normal-footpoint audit for one ellipse only.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list."
+}

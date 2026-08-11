@@ -6,7 +6,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 from jacobian.contracts.graph_coloring import ChromaticGraph, GraphVertex
 from jacobian.contracts.results import ContractModel
 
@@ -22,16 +22,6 @@ OptimizationTermination = Literal[
 MAX_GRAPH_WEIGHT_DIGITS = 256
 
 
-def _require_bounded_weight(value: CanonicalRational) -> None:
-    if (
-        len(value.num.lstrip("-")) > MAX_GRAPH_WEIGHT_DIGITS
-        or len(value.den) > MAX_GRAPH_WEIGHT_DIGITS
-    ):
-        raise ValueError(
-            f"graph weights are limited to {MAX_GRAPH_WEIGHT_DIGITS} decimal digits"
-        )
-
-
 class RationalWeightedEdge(ContractModel):
     """One exact rational edge of a bounded simple undirected graph."""
 
@@ -42,7 +32,11 @@ class RationalWeightedEdge(ContractModel):
     def require_distinct_endpoints_and_bounded_weight(self) -> Self:
         if self.endpoints[0] == self.endpoints[1]:
             raise ValueError("weighted graph edges must not contain self-loops")
-        _require_bounded_weight(self.weight)
+        require_bounded_rational(
+            self.weight,
+            max_digits=MAX_GRAPH_WEIGHT_DIGITS,
+            label="graph weight",
+        )
         return self
 
 
@@ -88,7 +82,11 @@ class CanonicalWeightedTreeEdge(ContractModel):
             raise ValueError(
                 "tree edge endpoints must be in strict lexicographic order"
             )
-        _require_bounded_weight(self.weight)
+        require_bounded_rational(
+            self.weight,
+            max_digits=MAX_GRAPH_WEIGHT_DIGITS,
+            label="graph weight",
+        )
         return self
 
 
@@ -120,8 +118,12 @@ class GraphMstCycleCheck(ContractModel):
             raise ValueError(
                 "tree path must be simple and join the non-tree edge endpoints"
             )
-        _require_bounded_weight(self.edge_weight)
-        _require_bounded_weight(self.maximum_tree_path_weight)
+        for weight in (self.edge_weight, self.maximum_tree_path_weight):
+            require_bounded_rational(
+                weight,
+                max_digits=MAX_GRAPH_WEIGHT_DIGITS,
+                label="graph weight",
+            )
         return self
 
 

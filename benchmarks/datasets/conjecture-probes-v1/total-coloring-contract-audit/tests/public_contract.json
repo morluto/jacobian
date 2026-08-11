@@ -1,0 +1,260 @@
+{
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "task_id": "jacobian/total-coloring-contract-audit",
+  "conclusion": {
+    "const": "PROJECTED_VALIDATOR_IS_UNSOUND_AND_REPAIRED"
+  },
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "scope": {
+    "type": "string",
+    "const": "petersen-total-coloring-contract-v1"
+  },
+  "limitations": {
+    "const": [
+      "ONE_PETERSEN_GRAPH_INSTANCE",
+      "PROJECTED_VALIDATOR_DEFECT_ONLY",
+      "TOTAL_COLORING_CONJECTURE_NOT_ASSESSED"
+    ]
+  },
+  "required_artifact_filenames": [
+    "evidence/answer.json"
+  ],
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "min_items": 1,
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "payload_shape": null
+  },
+  "schema_definitions": {
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vertex_colors",
+        "edge_colors"
+      ],
+      "properties": {
+        "vertex_colors": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        },
+        "edge_colors": {
+          "type": "array",
+          "minItems": 15,
+          "maxItems": 15,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        }
+      }
+    }
+  },
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "flawed_pass",
+      "incidence_collisions",
+      "repair"
+    ],
+    "properties": {
+      "flawed_pass": {
+        "$ref": "#/$defs/assignment"
+      },
+      "incidence_collisions": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "vertex",
+            "edge_index"
+          ],
+          "properties": {
+            "vertex": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9
+            },
+            "edge_index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 14
+            }
+          }
+        }
+      },
+      "repair": {
+        "$ref": "#/$defs/assignment"
+      }
+    }
+  },
+  "public_notes": "Exact audit and repair of one projected total-coloring validator on the Petersen graph only.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.",
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/total-coloring-contract-audit"
+      },
+      "conclusion": {
+        "const": "PROJECTED_VALIDATOR_IS_UNSOUND_AND_REPAIRED"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flawed_pass",
+          "incidence_collisions",
+          "repair"
+        ],
+        "properties": {
+          "flawed_pass": {
+            "$ref": "#/$defs/assignment"
+          },
+          "incidence_collisions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "vertex",
+                "edge_index"
+              ],
+              "properties": {
+                "vertex": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9
+                },
+                "edge_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 14
+                }
+              }
+            }
+          },
+          "repair": {
+            "$ref": "#/$defs/assignment"
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "const": "petersen-total-coloring-contract-v1",
+        "type": "string"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/answer.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "ONE_PETERSEN_GRAPH_INSTANCE",
+          "PROJECTED_VALIDATOR_DEFECT_ONLY",
+          "TOTAL_COLORING_CONJECTURE_NOT_ASSESSED"
+        ]
+      }
+    },
+    "$defs": {
+      "assignment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "vertex_colors",
+          "edge_colors"
+        ],
+        "properties": {
+          "vertex_colors": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          },
+          "edge_colors": {
+            "type": "array",
+            "minItems": 15,
+            "maxItems": 15,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          }
+        }
+      }
+    }
+  },
+  "verification_record": null
+}

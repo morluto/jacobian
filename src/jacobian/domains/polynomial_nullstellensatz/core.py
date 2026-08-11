@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
@@ -50,6 +49,7 @@ from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 MATERIALIZE_CAPABILITY_ID = "polynomial.jacobian_degree_slice.system.materialize"
 VERIFY_CAPABILITY_ID = "polynomial.nullstellensatz.infeasibility_certificate.verify"
 CERTIFICATE_FORMAT = "polynomial.nullstellensatz.chart-cover"
+_MAX_DIAGNOSTIC_REASON_CHARS = 512
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +61,49 @@ class NullstellensatzCoreInstallation:
     checker_id: str | None
 
 
-def _diagnostic(code: str, stage: str, message: str, hint: str) -> CapabilityDiagnostic:
-    return CapabilityDiagnostic(code=code, stage=stage, message=message, hint=hint)
+def _diagnostic(
+    code: str,
+    stage: str,
+    message: str,
+    hint: str,
+    *,
+    expected: str | None = None,
+    actual_type: str | None = None,
+    details: dict[str, str] | None = None,
+) -> CapabilityDiagnostic:
+    return CapabilityDiagnostic(
+        code=code,
+        stage=stage,
+        message=message,
+        hint=hint,
+        expected=expected,
+        actual_type=actual_type,
+        details=details or {},
+    )
+
+
+def _failure_details(exc: Exception) -> dict[str, str]:
+    """Return bounded failure metadata without rendering an entire error tree."""
+    details = {"exception_type": type(exc).__name__}
+    if isinstance(exc, ValidationError):
+        error_count = exc.error_count()
+        details["validation_error_count"] = str(error_count)
+        reason = f"validation_error: {error_count} invalid field(s)"
+    else:
+        reason = str(exc)
+    details["reason"] = reason[:_MAX_DIAGNOSTIC_REASON_CHARS]
+    return details
+
+
+def _request_value_summary(value: object) -> str:
+    """Return a URI when short, otherwise describe it without echoing contents."""
+    if isinstance(value, str):
+        if len(value) <= _MAX_DIAGNOSTIC_REASON_CHARS:
+            return value
+        return f"string(length={len(value)})"
+    if isinstance(value, (list, tuple, dict, set)):
+        return f"{type(value).__name__}(length={len(value)})"
+    return type(value).__name__
 
 
 class JacobianDegreeSliceMaterializeAdapter:
@@ -84,7 +125,6 @@ class JacobianDegreeSliceMaterializeAdapter:
             ),
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(JacobianDegreeSliceMaterializeRequest),
             output_schema=model_schema(JacobianDegreeSliceMaterializeOutput),
             tags=("polynomial", "jacobian", "degree-slice", "rabinowitsch", "exact"),
@@ -123,7 +163,6 @@ class JacobianDegreeSliceMaterializeAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -166,7 +205,6 @@ class NullstellensatzVerificationAdapter:
             ),
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(NullstellensatzVerificationRequest),
             output_schema=model_schema(NullstellensatzVerificationOutput),
             tags=(
@@ -188,6 +226,7 @@ class NullstellensatzVerificationAdapter:
         return self._descriptor
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        actual_artifact_type: str | None = None
         try:
             validated = NullstellensatzVerificationRequest.model_validate(request.input)
             system_artifact = self.context.store.get(validated.system_uri)
@@ -196,6 +235,7 @@ class NullstellensatzVerificationAdapter:
                 system_artifact.manifest.schema_uri
                 != self.installation.system_schema_uri
             ):
+                actual_artifact_type = system_artifact.manifest.schema_uri
                 raise ValueError(
                     "system_uri does not reference the registered system schema"
                 )
@@ -203,6 +243,7 @@ class NullstellensatzVerificationAdapter:
                 bundle_artifact.manifest.schema_uri
                 != self.installation.certificate_bundle_schema_uri
             ):
+                actual_artifact_type = bundle_artifact.manifest.schema_uri
                 raise ValueError("certificate_bundle_uri has the wrong schema")
             if (
                 system_artifact.manifest.semantics_uri
@@ -231,12 +272,38 @@ class NullstellensatzVerificationAdapter:
             ArtifactNotFoundError,
             StorageError,
         ) as exc:
+            requested_system_uri = (
+                _request_value_summary(validated.system_uri)
+                if "validated" in locals()
+                else _request_value_summary(request.input.get("system_uri"))
+            )
+            requested_bundle_uri = (
+                _request_value_summary(validated.certificate_bundle_uri)
+                if "validated" in locals()
+                else _request_value_summary(request.input.get("certificate_bundle_uri"))
+            )
             raise CapabilityInvocationError(
                 _diagnostic(
                     "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST",
                     "artifact_resolution",
                     "The system and certificate bundle are not a compatible bound pair.",
-                    "Use producer-owned artifacts from this installed contract and exact system URI.",
+                    (
+                        "Use the exact materialized system URI and a certificate bundle "
+                        "created for that system by a compatible installed producer. Do not "
+                        "substitute unrelated artifacts. Without a compatible producer, this "
+                        "verifier cannot establish infeasibility."
+                    ),
+                    expected=(
+                        f"system schema {self.installation.system_schema_uri}; "
+                        "certificate bundle schema "
+                        f"{self.installation.certificate_bundle_schema_uri}"
+                    ),
+                    actual_type=actual_artifact_type,
+                    details={
+                        **_failure_details(exc),
+                        "system_uri": requested_system_uri,
+                        "certificate_bundle_uri": requested_bundle_uri,
+                    },
                 )
             ) from exc
 
@@ -301,7 +368,6 @@ class NullstellensatzVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=(
                 checked.execution
                 if checked is not None

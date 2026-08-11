@@ -27,10 +27,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
-from pydantic import ValidationError
-
 from jacobian.artifacts import ArtifactService
-from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -41,7 +39,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -50,7 +47,6 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
-from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.polynomial_intervals import (
     RationalInterval,
     UnivariateRationalPolynomial,
@@ -70,12 +66,15 @@ from jacobian.contracts.polynomials import (
 )
 from jacobian.contracts.results import (
     Conclusion,
-    ContractModel,
-    Execution,
     ExecutionStatus,
     Verification,
 )
 from jacobian.domains._examples import example
+from jacobian.polynomials._support import (
+    _computed_result,
+    _validate_request,
+    _wire_rational,
+)
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 from jacobian.providers import LazyLoader
 from jacobian.registry import CheckerRegistry
@@ -275,7 +274,6 @@ class PolynomialIntervalPositivityDecideAdapter:
                 ),
                 checker_ids=checker_ids,
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialIntervalPositivityRequest),
             output_schema=model_schema(PolynomialIntervalPositivityOutput),
             tags=(
@@ -321,6 +319,7 @@ class PolynomialIntervalPositivityDecideAdapter:
             request.input,
             code="INVALID_POLYNOMIAL_POSITIVITY_REQUEST",
             operation="positivity decision",
+            error_factory=_positivity_error,
         )
         started = time.monotonic()
         polynomial = validated.polynomial
@@ -436,7 +435,10 @@ class PolynomialIntervalPositivityVerifyAdapter:
     def __init__(self, resources: PolynomialPositivityResources) -> None:
         self.resources = resources
         checker_id = resources.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError(
+                "polynomial positivity verify adapter requires an authorized checker"
+            )
         self._descriptor = CapabilityDescriptor(
             capability_id="polynomial.interval.positivity.verify",
             version="1",
@@ -457,7 +459,6 @@ class PolynomialIntervalPositivityVerifyAdapter:
                 ),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialIntervalPositivityVerifyRequest),
             output_schema=model_schema(PolynomialIntervalPositivityVerifyOutput),
             tags=(
@@ -480,10 +481,16 @@ class PolynomialIntervalPositivityVerifyAdapter:
             request.input,
             code="INVALID_POLYNOMIAL_POSITIVITY_VERIFY_REQUEST",
             operation="positivity verification",
+            error_factory=_positivity_error,
         )
         installation = self.resources.installation
         checker_id = installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise _positivity_error(
+                "POLYNOMIAL_POSITIVITY_CHECKER_UNAVAILABLE",
+                "positivity_verification",
+                "The independent positivity checker is not installed in this runtime.",
+            )
         polynomial = validated.polynomial
         interval = validated.interval
         polynomial_artifact = self.resources.artifacts.put(
@@ -587,9 +594,14 @@ class PolynomialIntervalPositivityVerifyAdapter:
             and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
-        conclusion = cast(
-            Literal["TRUE", "FALSE", "UNKNOWN"],
-            checked.conclusion.value,
+        conclusion: Literal["TRUE", "FALSE", "UNKNOWN"] = (
+            "TRUE"
+            if verified and checked.conclusion is Conclusion.TRUE
+            else (
+                "FALSE"
+                if verified and checked.conclusion is Conclusion.FALSE
+                else "UNKNOWN"
+            )
         )
         record_uri = checked.verification_record_uri if verified else None
         output = PolynomialIntervalPositivityVerifyOutput(
@@ -620,7 +632,6 @@ class PolynomialIntervalPositivityVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -702,23 +713,6 @@ class PolynomialIntervalPositivityVerifyAdapter:
             ),
             artifact_uris=tuple(artifact_uris),
         )
-
-
-def _validate_request[RequestModel: ContractModel](
-    model: type[RequestModel],
-    payload: object,
-    *,
-    code: str,
-    operation: str,
-) -> RequestModel:
-    try:
-        return model.model_validate(payload)
-    except ValidationError as exc:
-        raise _positivity_error(
-            code,
-            "request_validation",
-            f"The complete polynomial {operation} request is invalid.",
-        ) from exc
 
 
 def _sturm_positivity(
@@ -807,59 +801,12 @@ def _wire_univariate_poly(poly: Poly) -> SparseRationalPolynomial:
     return SparseRationalPolynomial(
         terms=tuple(
             RationalPolynomialTerm(
-                coefficient=_rational(coefficient),
+                coefficient=_wire_rational(coefficient),
                 exponents=(exponent,),
             )
             for (exponent,), coefficient in poly.terms()
             if coefficient != 0
         )
-    )
-
-
-def _rational(value: Any) -> CanonicalRational:
-    rational = _sympy.get().Rational(value)
-    return CanonicalRational(
-        num=format_canonical_integer(int(rational.p)),
-        den=format_canonical_integer(int(rational.q)),
-    )
-
-
-def _computed_result(
-    *,
-    descriptor: CapabilityDescriptor,
-    request: CapabilityRequest,
-    started: float,
-    output: dict[str, Any],
-    scope: CapabilityScope,
-    relationships: tuple[CapabilityRelationship, ...],
-    artifact_uris: tuple[str, ...],
-    completeness_basis: str,
-    assurance_basis: str,
-) -> CapabilityResult:
-    return CapabilityResult(
-        capability_id=descriptor.capability_id,
-        capability_version=descriptor.version,
-        mode=request.mode,
-        execution=Execution(
-            status=ExecutionStatus.COMPLETED,
-            runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-        ),
-        output=output,
-        scope=scope,
-        completeness=CapabilityCompleteness(
-            status=CapabilityCompletenessStatus.COMPLETE,
-            basis=(
-                f"{completeness_basis}; no mathematical conclusion or "
-                "independent verification is claimed"
-            ),
-            assurance_level=CapabilityAssuranceLevel.COMPUTED,
-        ),
-        relationships=relationships,
-        assurance=CapabilityAssurance(
-            level=CapabilityAssuranceLevel.COMPUTED,
-            basis=assurance_basis,
-        ),
-        artifact_uris=artifact_uris,
     )
 
 

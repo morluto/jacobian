@@ -31,7 +31,7 @@ def test_accepts_alternative_trace_set(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["traces"] = list(reversed(submission["result"]["traces"]))
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_locally_plausible_wrong_transform(tmp_path: Path) -> None:
@@ -41,7 +41,7 @@ def test_rejects_locally_plausible_wrong_transform(tmp_path: Path) -> None:
     submission["result"]["value_multiplier"] = 1
     submission["result"]["value_offset"] = 0
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_accepts_reverse_position_involution(tmp_path: Path) -> None:
@@ -59,7 +59,7 @@ def test_accepts_reverse_position_involution(tmp_path: Path) -> None:
             transformed[i] > transformed[j] for i in range(7) for j in range(i + 1, 7)
         )
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_corrupted_trace(tmp_path: Path) -> None:
@@ -67,7 +67,7 @@ def test_rejects_corrupted_trace(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["traces"][3]["inversions"] += 1
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_oversized_evidence_emits_zero_reward(tmp_path: Path) -> None:
@@ -80,8 +80,8 @@ def test_oversized_evidence_emits_zero_reward(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_unhashable_permutation_trace_emits_zero_reward(tmp_path: Path) -> None:
@@ -93,8 +93,8 @@ def test_unhashable_permutation_trace_emits_zero_reward(tmp_path: Path) -> None:
     submission["result"]["traces"][0]["permutation"] = [1, 2, 3, 4, 5, 6, [7]]
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_boolean_permutation_entry_is_rejected(tmp_path: Path) -> None:
@@ -105,8 +105,8 @@ def test_boolean_permutation_entry_is_rejected(tmp_path: Path) -> None:
     submission["result"]["traces"][0]["permutation"] = [True, 2, 3, 4, 5, 6, 7]
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_boolean_result_field_is_rejected(tmp_path: Path) -> None:
@@ -117,8 +117,8 @@ def test_boolean_result_field_is_rejected(tmp_path: Path) -> None:
     submission["result"]["fixed_point_count"] = False
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_type_sensitive_evidence_comparison(tmp_path: Path) -> None:
@@ -138,8 +138,8 @@ def test_type_sensitive_evidence_comparison(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_boolean_trace_inversions_is_rejected(tmp_path: Path) -> None:
@@ -150,8 +150,8 @@ def test_boolean_trace_inversions_is_rejected(tmp_path: Path) -> None:
     submission["result"]["traces"][0]["inversions"] = False
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_boolean_trace_transformed_entry_is_rejected(tmp_path: Path) -> None:
@@ -162,8 +162,8 @@ def test_boolean_trace_transformed_entry_is_rejected(tmp_path: Path) -> None:
     submission["result"]["traces"][0]["transformed"][0] = True
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_decouples_scope_from_assurance(tmp_path: Path) -> None:
@@ -173,8 +173,8 @@ def test_decouples_scope_from_assurance(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["scope_accuracy"] == 0.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["scope_accuracy"] == 0.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0

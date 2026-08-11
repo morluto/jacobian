@@ -65,6 +65,7 @@ def test_analyze_trajectory_measures_all_tools_projection(tmp_path: Path) -> Non
     assert result["all_tools_model_visible_bytes"] == len(b"catalog output")
     assert result["all_tools_unbound_observation_count"] == 0
     assert result["tool_model_visible_bytes"] == len(b"catalog output")
+    assert result["direct_jacobian_find_run_model_visible_bytes"] == 0
     assert result["direct_jacobian_find_references"] == 0
     assert result["uncached_prompt_tokens"] == 40
 
@@ -89,6 +90,9 @@ def test_analyze_trajectory_counts_direct_nested_calls_without_scan(
     assert result["all_tools_model_visible_bytes"] == 0
     assert result["direct_jacobian_find_references"] == 1
     assert result["direct_jacobian_run_references"] == 1
+    assert result["direct_jacobian_find_run_model_visible_bytes"] == len(
+        json.dumps({"kind": "result"}, separators=(",", ":"), sort_keys=True).encode()
+    )
 
 
 def test_build_report_aggregates_trials_with_medians(tmp_path: Path) -> None:
@@ -104,6 +108,12 @@ def test_build_report_aggregates_trials_with_medians(tmp_path: Path) -> None:
     assert report["label"] == "paired-control"
     assert report["trial_count"] == 2
     assert report["summary"] == {
+        "jacobian_invocation_trials": 0,
+        "jacobian_execution_trials": 0,
+        "jacobian_unused_trials": 2,
+        "direct_jacobian_find_references": 0,
+        "direct_jacobian_run_references": 0,
+        "direct_jacobian_find_run_model_visible_bytes": 0,
         "all_tools_scan_trials": 1,
         "all_tools_scan_count": 1,
         "all_tools_model_visible_bytes": 3,

@@ -330,18 +330,25 @@ class TenantRuntimeRouter:
     def _close_runtime_entries(
         self, runtimes: tuple[tuple[str, _TenantRuntimeEntry], ...]
     ) -> None:
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         for tenant_key, entry in runtimes:
             try:
                 entry.runtime.close()
-            except Exception as exc:
+            except BaseException as exc:
                 failures.append(exc)
             else:
                 with self._condition:
                     self._runtimes.pop(tenant_key, None)
                     self._quarantined.pop(tenant_key, None)
         if failures:
-            raise ExceptionGroup(
+            exception_failures = [
+                failure for failure in failures if isinstance(failure, Exception)
+            ]
+            if len(exception_failures) == len(failures):
+                raise ExceptionGroup(
+                    "one or more tenant runtimes failed to close", exception_failures
+                )
+            raise BaseExceptionGroup(
                 "one or more tenant runtimes failed to close", failures
             )
 

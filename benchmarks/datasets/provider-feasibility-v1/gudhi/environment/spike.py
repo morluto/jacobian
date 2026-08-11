@@ -16,10 +16,13 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.command_runner import (
-    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
-    run_tool_command,
+)
+from benchmarks.tooling.spike_utils import (
+    canonical_json,
+    default_runner,
+    sha256_bytes,
 )
 
 PIN_PATH = Path(__file__).with_name("pin.json")
@@ -44,28 +47,6 @@ ProcessRunner = Callable[..., ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 
 
-def _default_runner(
-    command: Sequence[str],
-    *,
-    input_bytes: bytes,
-    timeout_seconds: float,
-    environment: Mapping[str, str],
-    stdout_limit: int,
-    stderr_limit: int,
-) -> ToolCommandResult:
-    request = ToolCommandRequest(
-        executable=command[0],
-        arguments=tuple(command[1:]),
-        environment=environment,
-        cwd=str(Path.cwd()),
-        timeout_seconds=timeout_seconds,
-        stdin_bytes=input_bytes,
-        stdout_limit_bytes=stdout_limit,
-        stderr_limit_bytes=stderr_limit,
-    )
-    return run_tool_command(request)
-
-
 class GudhiSpikeError(RuntimeError):
     """A typed non-conclusion from the optional-provider spike."""
 
@@ -74,10 +55,6 @@ class GudhiSpikeError(RuntimeError):
         self.status = status
         self.code = code
         self.detail = detail
-
-
-def _sha256_bytes(payload: bytes) -> str:
-    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
 def _sha256_file(path: Path) -> str:
@@ -93,13 +70,6 @@ def _sha256_file(path: Path) -> str:
             "A selected GUDHI spike artifact could not be read.",
         ) from exc
     return f"sha256:{digest.hexdigest()}"
-
-
-def _canonical_json(payload: object) -> bytes:
-    return (
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-        + "\n"
-    ).encode("ascii")
 
 
 def _load_pin(path: Path) -> dict[str, Any]:
@@ -251,7 +221,7 @@ def _inspect_source_archive(path: Path, pin: Mapping[str, Any]) -> dict[str, Any
     for role, payload in contents.items():
         expected = module_pins[role]
         if (
-            _sha256_bytes(payload) != expected["header_sha256"]
+            sha256_bytes(payload) != expected["header_sha256"]
             or b"released under MIT" not in payload[:1024]
             or expected["license_id"] != "MIT"
         ):
@@ -291,7 +261,7 @@ def _inspect_wheel(path: Path, pin: Mapping[str, Any]) -> dict[str, Any]:
             "The pinned GUDHI wheel could not be inspected safely.",
         ) from exc
     if (
-        _sha256_bytes(license_payload) != wheel_pin["license_sha256"]
+        sha256_bytes(license_payload) != wheel_pin["license_sha256"]
         or not license_payload.startswith(b"MIT License\n")
         or b"Name: gudhi\n" not in metadata
         or f"Version: {pin['version']}\n".encode() not in metadata
@@ -462,7 +432,7 @@ def _parse_provider_output(output: bytes, pin: Mapping[str, Any]) -> dict[str, A
     }
     if (
         mathematical_output != expected
-        or _sha256_bytes(_canonical_json(mathematical_output))
+        or sha256_bytes(canonical_json(mathematical_output))
         != pin["reproduction"]["expected_mathematical_output_sha256"]
     ):
         raise GudhiSpikeError(
@@ -589,7 +559,7 @@ def run_spike(
     wheel: Path,
     source_archive: Path,
     timeout_seconds: float = 10,
-    runner: ProcessRunner = _default_runner,
+    runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
     adapter_source: Path = ADAPTER_SOURCE,
 ) -> dict[str, Any]:
@@ -629,7 +599,7 @@ def run_spike(
         mathematical_output = {
             key: value for key, value in provider_output.items() if key != "runtime"
         }
-        mathematical_digest = _sha256_bytes(_canonical_json(mathematical_output))
+        mathematical_digest = sha256_bytes(canonical_json(mathematical_output))
         prime = pin["reproduction"]["coefficient_prime"]
         independent = _independent_reduction(simplices, prime)
         if independent["pairs"] != provider_output["pairs"]:
@@ -660,7 +630,7 @@ def run_spike(
                 "coefficient_prime": prime,
                 "rank_transport": "UNIQUE_INTEGER_RANKS_NOT_EXACT_VALUES",
                 "exact_value_source": "FROZEN_CANONICAL_INPUT",
-                "provider_output_sha256": _sha256_bytes(output),
+                "provider_output_sha256": sha256_bytes(output),
                 "mathematical_output_sha256": mathematical_digest,
                 "pairs": provider_output["pairs"],
                 "filtration": provider_output["filtration"],
@@ -717,7 +687,7 @@ def _worker(pin_path: Path) -> int:
             "provider": pin["provider"],
             "version": gudhi.__version__,
         }
-        sys.stdout.buffer.write(_canonical_json(payload))
+        sys.stdout.buffer.write(canonical_json(payload))
         return 0
 
     tree = gudhi.SimplexTree()
@@ -784,7 +754,7 @@ def _worker(pin_path: Path) -> int:
         },
         "version": pin["version"],
     }
-    sys.stdout.buffer.write(_canonical_json(payload))
+    sys.stdout.buffer.write(canonical_json(payload))
     return 0
 
 
@@ -806,7 +776,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "code": exc.code,
                 "detail": exc.detail,
             }
-            sys.stderr.buffer.write(_WORKER_ERROR_PREFIX + _canonical_json(payload))
+            sys.stderr.buffer.write(_WORKER_ERROR_PREFIX + canonical_json(payload))
             return 64
     if (
         args.python_executable is None

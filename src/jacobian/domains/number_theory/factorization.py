@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import signal
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
-
-from pydantic import ValidationError
+from typing import Any, overload
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
@@ -27,6 +26,24 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.domains.number_theory.factorization_protocol import (
+    PROTOCOL,
+    DivisorsWorkerRequest,
+    DivisorsWorkerResponse,
+    FactorizationWorkerRequest,
+    FactorizationWorkerResponse,
+    PowerfulWorkerRequest,
+    PowerfulWorkerResponse,
+    PrimeFactorizationWorkerRequest,
+    PrimeFactorizationWorkerResponse,
+    ProperDivisorsWorkerRequest,
+    ProperDivisorsWorkerResponse,
+    RadicalWorkerRequest,
+    RadicalWorkerResponse,
+    SquarefreeWorkerRequest,
+    SquarefreeWorkerResponse,
+    parse_factorization_worker_response,
+)
 from jacobian.operations import (
     ComputedNotApplicable,
     ComputedOperation,
@@ -37,7 +54,6 @@ from jacobian.operations import (
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
 
-_PROTOCOL = "jacobian.number-theory.factorization.sympy.v1"
 _STDOUT_LIMIT = 2_000_000
 _STDERR_LIMIT = 64_000
 _ADDRESS_SPACE_LIMIT = 512 * 1024 * 1024
@@ -103,19 +119,46 @@ def _classify_termination(
     return None
 
 
-def _compute[ResultT: ContractModel](
-    operation: str,
-    result_model: type[ResultT],
-    request: FactorizationRequest | ArithmeticFunctionRequest,
-) -> ComputedOutcome[ResultT]:
-    if isinstance(request, FactorizationRequest) and int(request.value) == 0:
-        return ComputedNotApplicable(
-            _diagnostic(
-                "INTEGER_FACTORIZATION_NOT_APPLICABLE",
-                "Zero has no finite factorization or divisor enumeration.",
-            )
-        )
-    wall_seconds = int(request.resource_budget.wall_seconds)
+@overload
+def _run_worker(
+    request: DivisorsWorkerRequest,
+) -> DivisorsWorkerResponse | OperationExecutionFailure: ...
+
+
+@overload
+def _run_worker(
+    request: ProperDivisorsWorkerRequest,
+) -> ProperDivisorsWorkerResponse | OperationExecutionFailure: ...
+
+
+@overload
+def _run_worker(
+    request: PrimeFactorizationWorkerRequest,
+) -> PrimeFactorizationWorkerResponse | OperationExecutionFailure: ...
+
+
+@overload
+def _run_worker(
+    request: PowerfulWorkerRequest,
+) -> PowerfulWorkerResponse | OperationExecutionFailure: ...
+
+
+@overload
+def _run_worker(
+    request: SquarefreeWorkerRequest,
+) -> SquarefreeWorkerResponse | OperationExecutionFailure: ...
+
+
+@overload
+def _run_worker(
+    request: RadicalWorkerRequest,
+) -> RadicalWorkerResponse | OperationExecutionFailure: ...
+
+
+def _run_worker(
+    request: FactorizationWorkerRequest,
+) -> FactorizationWorkerResponse | OperationExecutionFailure:
+    wall_seconds = int(request.request.resource_budget.wall_seconds)
     completed = execute_process(
         ProcessRequest(
             executable=sys.executable,
@@ -124,16 +167,7 @@ def _compute[ResultT: ContractModel](
                 "-m",
                 "jacobian.domains.number_theory.factorization_worker",
             ),
-            stdin_bytes=canonicalize_json(
-                {
-                    "operation": operation,
-                    "protocol": _PROTOCOL,
-                    "request": request.model_dump(
-                        mode="json",
-                        exclude={"resource_budget"},
-                    ),
-                }
-            ),
+            stdin_bytes=canonicalize_json(request.model_dump(mode="json")),
             timeout_seconds=float(wall_seconds),
             environment=worker_environment(locale="C"),
             cwd=str(Path.cwd()),
@@ -150,12 +184,11 @@ def _compute[ResultT: ContractModel](
         return failure
     try:
         payload = loads_strict_json(completed.stdout)
-        if not isinstance(payload, dict) or set(payload) != {"protocol", "result"}:
-            raise ValueError("unexpected worker response fields")
-        if payload["protocol"] != _PROTOCOL:
-            raise ValueError("worker protocol does not match")
-        return ComputedSuccess(result_model.model_validate(payload["result"]))
-    except (TypeError, ValueError, ValidationError):
+        return parse_factorization_worker_response(
+            payload,
+            expected_operation=request.operation,
+        )
+    except (TypeError, ValueError):
         return OperationExecutionFailure(
             status=ExecutionStatus.ERROR,
             diagnostic=_diagnostic(
@@ -165,22 +198,126 @@ def _compute[ResultT: ContractModel](
         )
 
 
+def _zero_is_not_applicable(
+    request: FactorizationRequest,
+) -> ComputedNotApplicable | None:
+    if int(request.value) != 0:
+        return None
+    return ComputedNotApplicable(
+        _diagnostic(
+            "INTEGER_FACTORIZATION_NOT_APPLICABLE",
+            "Zero has no finite factorization or divisor enumeration.",
+        )
+    )
+
+
+def _compute_divisors(
+    request: FactorizationRequest,
+) -> ComputedOutcome[DivisorListResult]:
+    if (not_applicable := _zero_is_not_applicable(request)) is not None:
+        return not_applicable
+    response = _run_worker(
+        DivisorsWorkerRequest(
+            protocol=PROTOCOL,
+            operation="divisors",
+            request=request,
+        )
+    )
+    if isinstance(response, OperationExecutionFailure):
+        return response
+    return ComputedSuccess(response.result)
+
+
+def _compute_proper_divisors(
+    request: FactorizationRequest,
+) -> ComputedOutcome[DivisorListResult]:
+    if (not_applicable := _zero_is_not_applicable(request)) is not None:
+        return not_applicable
+    response = _run_worker(
+        ProperDivisorsWorkerRequest(
+            protocol=PROTOCOL,
+            operation="proper_divisors",
+            request=request,
+        )
+    )
+    if isinstance(response, OperationExecutionFailure):
+        return response
+    return ComputedSuccess(response.result)
+
+
+def _compute_prime_factorization(
+    request: FactorizationRequest,
+) -> ComputedOutcome[PrimeFactorizationResult]:
+    if (not_applicable := _zero_is_not_applicable(request)) is not None:
+        return not_applicable
+    response = _run_worker(
+        PrimeFactorizationWorkerRequest(
+            protocol=PROTOCOL,
+            operation="prime_factorization",
+            request=request,
+        )
+    )
+    if isinstance(response, OperationExecutionFailure):
+        return response
+    return ComputedSuccess(response.result)
+
+
+def _compute_powerful(
+    request: PowerfulNumberRequest,
+) -> ComputedOutcome[PowerfulNumberResult]:
+    response = _run_worker(
+        PowerfulWorkerRequest(
+            protocol=PROTOCOL,
+            operation="powerful",
+            request=request,
+        )
+    )
+    if isinstance(response, OperationExecutionFailure):
+        return response
+    return ComputedSuccess(response.result)
+
+
+def _compute_squarefree(
+    request: ArithmeticFunctionRequest,
+) -> ComputedOutcome[BooleanResult]:
+    response = _run_worker(
+        SquarefreeWorkerRequest(
+            protocol=PROTOCOL,
+            operation="squarefree",
+            request=request,
+        )
+    )
+    if isinstance(response, OperationExecutionFailure):
+        return response
+    return ComputedSuccess(response.result)
+
+
+def _compute_radical(
+    request: ArithmeticFunctionRequest,
+) -> ComputedOutcome[IntegerValueResult]:
+    response = _run_worker(
+        RadicalWorkerRequest(
+            protocol=PROTOCOL,
+            operation="radical",
+            request=request,
+        )
+    )
+    if isinstance(response, OperationExecutionFailure):
+        return response
+    return ComputedSuccess(response.result)
+
+
 def _operation[RequestT: ContractModel, ResultT: ContractModel](
     *,
     capability_id: str,
     title: str,
     description: str,
-    operation: str,
     request_model: type[RequestT],
     result_model: type[ResultT],
+    implementation: Callable[[RequestT], ComputedOutcome[ResultT]],
     tags: tuple[str, ...],
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
 ) -> ComputedOperation[RequestT, ResultT]:
-    def implementation(request: RequestT) -> ComputedOutcome[ResultT]:
-        if not isinstance(request, (FactorizationRequest, ArithmeticFunctionRequest)):
-            raise TypeError("unsupported factorization request model")
-        return _compute(operation, result_model, request)
-
     return ComputedOperation(
         capability_id=capability_id,
         title=title,
@@ -202,9 +339,9 @@ FACTORIZATION_CAPABILITIES = (
             "Enumerate every positive divisor in an isolated, resource-bounded "
             "SymPy worker. Timeout is a non-conclusion."
         ),
-        operation="divisors",
         request_model=FactorizationRequest,
         result_model=DivisorListResult,
+        implementation=_compute_divisors,
         tags=("number-theory", "enumeration"),
         invocation_examples=(
             example(
@@ -219,9 +356,9 @@ FACTORIZATION_CAPABILITIES = (
             "Enumerate every positive proper divisor in an isolated, "
             "resource-bounded SymPy worker. Timeout is a non-conclusion."
         ),
-        operation="proper_divisors",
         request_model=FactorizationRequest,
         result_model=DivisorListResult,
+        implementation=_compute_proper_divisors,
         tags=("number-theory", "enumeration"),
         invocation_examples=(
             example(
@@ -238,9 +375,9 @@ FACTORIZATION_CAPABILITIES = (
             "Compute a complete prime-power factorization in an isolated, "
             "resource-bounded SymPy worker. Timeout is a non-conclusion."
         ),
-        operation="prime_factorization",
         request_model=FactorizationRequest,
         result_model=PrimeFactorizationResult,
+        implementation=_compute_prime_factorization,
         tags=("number-theory", "factorization"),
         invocation_examples=(
             example(
@@ -258,9 +395,9 @@ FACTORIZATION_CAPABILITIES = (
             "least two, preserving the complete factor witness and every "
             "violating prime from an isolated, resource-bounded SymPy worker."
         ),
-        operation="powerful",
         request_model=PowerfulNumberRequest,
         result_model=PowerfulNumberResult,
+        implementation=_compute_powerful,
         tags=("number-theory", "factorization", "predicate"),
         invocation_examples=(
             example(
@@ -277,9 +414,9 @@ FACTORIZATION_CAPABILITIES = (
             "Decide whether a bounded nonnegative integer is square-free in an "
             "isolated, resource-bounded SymPy worker."
         ),
-        operation="squarefree",
         request_model=ArithmeticFunctionRequest,
         result_model=BooleanResult,
+        implementation=_compute_squarefree,
         tags=("number-theory", "predicate"),
         invocation_examples=(
             example("squarefree_30", "Check whether 30 is square-free.", {"n": 30}),
@@ -292,9 +429,9 @@ FACTORIZATION_CAPABILITIES = (
             "Compute the product of distinct prime divisors in an isolated, "
             "resource-bounded SymPy worker."
         ),
-        operation="radical",
         request_model=ArithmeticFunctionRequest,
         result_model=IntegerValueResult,
+        implementation=_compute_radical,
         tags=("number-theory", "arithmetic-function"),
         invocation_examples=(
             example("radical_360", "Compute the radical of 360.", {"n": 360}),

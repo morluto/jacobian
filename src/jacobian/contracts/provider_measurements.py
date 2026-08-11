@@ -39,10 +39,36 @@ class ProviderMeasurementSample(ContractModel):
         return self
 
 
+class ProviderInstalledSize(ContractModel):
+    """The installed footprint measurement for one provider runtime."""
+
+    status: ProviderMeasurementStatus
+    bytes: int | None = Field(default=None, ge=0)
+    detail: str | None = Field(default=None, min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def bind_installed_size_status(self) -> Self:
+        if self.status is ProviderMeasurementStatus.COMPLETED and self.bytes is None:
+            raise ValueError("completed installed-size measurement requires bytes")
+        if (
+            self.status is not ProviderMeasurementStatus.COMPLETED
+            and self.bytes is not None
+        ):
+            raise ValueError(
+                "incomplete installed-size measurement must not include bytes"
+            )
+        if (
+            self.status is not ProviderMeasurementStatus.COMPLETED
+            and self.detail is None
+        ):
+            raise ValueError("incomplete installed-size measurement requires a detail")
+        return self
+
+
 class ProviderMeasurement(ContractModel):
-    measurement_version: Literal["1"] = "1"
+    measurement_version: Literal["2"] = "2"
     provider_runtime: CapabilityProviderRuntime
-    installed_bytes: int = Field(ge=0)
+    installed_size: ProviderInstalledSize
     cold_install: ProviderMeasurementSample
     cold_start: ProviderMeasurementSample
     reproduction_case: ProviderMeasurementSample

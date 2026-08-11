@@ -108,7 +108,6 @@ class WitnessFindResult(ContractModel):
         ):
             raise ValueError("NONE_CERTIFIED requires a verified certificate")
         if self.status == WitnessSearchStatus.NONE_CERTIFIED:
-            assert self.certificate_uri is not None
             if self.result.assurance.verification != Verification.VERIFIED:
                 raise ValueError("NONE_CERTIFIED requires verified assurance")
             if self.certificate_uri not in self.result.evidence_uris:

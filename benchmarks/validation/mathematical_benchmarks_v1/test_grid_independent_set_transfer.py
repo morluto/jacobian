@@ -80,9 +80,9 @@ def test_accepts_computed_submission(tmp_path: Path) -> None:
         tmp_path, "grid-independent-set-transfer", "computed"
     )
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_float_in_result(tmp_path: Path) -> None:
@@ -94,8 +94,8 @@ def test_rejects_float_in_result(tmp_path: Path) -> None:
     submission["result"]["cases"][0]["independent_set_count"] = 7.0
     _write_evidence_and_submission(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_bool_in_result(tmp_path: Path) -> None:
@@ -107,8 +107,8 @@ def test_rejects_bool_in_result(tmp_path: Path) -> None:
     submission["result"]["cases"][0]["valid_row_masks"][1] = True
     _write_evidence_and_submission(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_float_in_evidence(tmp_path: Path) -> None:
@@ -124,6 +124,6 @@ def test_rejects_float_in_evidence(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0

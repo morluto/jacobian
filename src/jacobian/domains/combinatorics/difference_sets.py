@@ -18,7 +18,6 @@ from jacobian.contracts.combinatorics import (
 from jacobian.domains._examples import example
 from jacobian.domains.combinatorics._support import (
     combinatorics_operation,
-    materialized_combinatorics_operation,
 )
 
 
@@ -233,7 +232,7 @@ DIFFERENCE_SET_CAPABILITIES = (
             ),
         ),
     ),
-    materialized_combinatorics_operation(
+    combinatorics_operation(
         "combinatorics.cyclic_difference_set.extension.decide",
         "Decide fixed-order perfect-difference-set extension",
         (
@@ -257,8 +256,6 @@ DIFFERENCE_SET_CAPABILITIES = (
                 },
             ),
         ),
-        preview=lambda result: result,
-        preview_complete=True,
     ),
 )
 

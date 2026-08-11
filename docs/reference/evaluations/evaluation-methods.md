@@ -2,10 +2,6 @@
 
 [Documentation home](../../index.md) · [Benchmark contracts](benchmark-contracts.md)
 
-The observation-only research contract for extracting typed mathematical
-milestones is documented in
-[observable trajectory-state value estimation](trajectory-state-value-estimation.md).
-
 ## Workflow observations
 
 Jacobian's fixed workflow observation surface is the Harbor

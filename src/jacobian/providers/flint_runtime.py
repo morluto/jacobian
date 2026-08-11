@@ -382,6 +382,7 @@ def combinatorics_exact_checker_provider_runtime(
             "additive-difference-set-replay",
             "fixed-order-extension-exhaustion",
             "linear-recurrence-replay",
+            "polynomial-coefficient-recurrence-replay",
             "rational-series-residual-replay",
             "standard-library-only",
         ),
@@ -410,7 +411,7 @@ def topology_exact_checker_provider_runtime(
             version=version,
             entrypoint=(
                 "jacobian_checkers.simplicial_topology:"
-                "check_simplicial_complex_materialization"
+                "check_simplicial_complex_canonicalization"
             ),
             install_tier=CapabilityInstallTier.T1,
             license_id="MIT",

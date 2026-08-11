@@ -47,8 +47,9 @@
     },
     "limitations": {
       "items": {
-        "type": "string"
+        "const": "NO_OPEN_PROBLEM_OR_LEAN_CLAIM"
       },
+      "maxItems": 1,
       "minItems": 1,
       "type": "array"
     },
@@ -89,10 +90,36 @@
           "type": "array"
         },
         "pointwise_argument": {
-          "const": "one_hit_and_at_least_one_miss_per_level"
+          "additionalProperties": false,
+          "properties": {
+            "hit_count_per_level": {
+              "const": 1
+            },
+            "miss_count_per_level": {
+              "const": "AT_LEAST_ONE"
+            }
+          },
+          "required": [
+            "hit_count_per_level",
+            "miss_count_per_level"
+          ],
+          "type": "object"
         },
         "probability_argument": {
-          "const": "event_mass_tends_to_zero"
+          "additionalProperties": false,
+          "properties": {
+            "event_mass_formula": {
+              "const": "1/2^k"
+            },
+            "limit": {
+              "const": "ZERO"
+            }
+          },
+          "required": [
+            "event_mass_formula",
+            "limit"
+          ],
+          "type": "object"
         },
         "probes": {
           "items": {
@@ -122,6 +149,22 @@
         },
         "relationship": {
           "const": "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
+        },
+        "research_scope": {
+          "additionalProperties": false,
+          "properties": {
+            "lean_theorem": {
+              "const": "NOT_ELABORATED"
+            },
+            "underlying_problem": {
+              "const": "NOT_ADJUDICATED"
+            }
+          },
+          "required": [
+            "underlying_problem",
+            "lean_theorem"
+          ],
+          "type": "object"
         }
       },
       "required": [
@@ -129,11 +172,13 @@
         "levels",
         "probes",
         "probability_argument",
-        "pointwise_argument"
+        "pointwise_argument",
+        "research_scope"
       ],
       "type": "object"
     },
     "scope": {
+      "const": "the frozen dyadic typewriter construction on [0,1)",
       "type": "string"
     },
     "task_id": {

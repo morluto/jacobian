@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import comb, gcd
+from math import comb
 from typing import cast
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.projective_geometry import (
     NormalizedProjectiveLine,
     PrimitiveProjectiveTriple,
@@ -16,6 +17,7 @@ from jacobian.contracts.projective_geometry import (
 )
 from jacobian.contracts.results import ContractModel
 from jacobian.domains._examples import example
+from jacobian.math.arithmetic import primitive_integer_vector
 from jacobian.operations import (
     MaterializedOperation,
     MaterializedOperationFactory,
@@ -24,24 +26,10 @@ from jacobian.operations import (
 
 
 def _primitive(values: tuple[Fraction, Fraction, Fraction]) -> tuple[int, int, int]:
-    denominator_lcm = 1
-    for fraction_value in values:
-        denominator_lcm = (
-            denominator_lcm
-            * fraction_value.denominator
-            // gcd(denominator_lcm, fraction_value.denominator)
-        )
-    integers = tuple(
-        value.numerator * (denominator_lcm // value.denominator) for value in values
-    )
-    divisor = 0
-    for integer in integers:
-        divisor = gcd(divisor, abs(integer))
-    if divisor == 0:
-        raise ValueError("projective homogeneous coordinates must be nonzero")
-    primitive = tuple(value // divisor for value in integers)
-    if next(value for value in primitive if value) < 0:
-        primitive = tuple(-value for value in primitive)
+    try:
+        primitive = primitive_integer_vector(values)
+    except ValueError as exc:
+        raise ValueError("projective homogeneous coordinates must be nonzero") from exc
     return cast(tuple[int, int, int], primitive)
 
 
@@ -60,7 +48,11 @@ def _cross(
 
 def _wire_triple(values: tuple[int, int, int]) -> PrimitiveProjectiveTriple:
     return PrimitiveProjectiveTriple(
-        coordinates=(str(values[0]), str(values[1]), str(values[2]))
+        coordinates=(
+            format_canonical_integer(values[0]),
+            format_canonical_integer(values[1]),
+            format_canonical_integer(values[2]),
+        )
     )
 
 
@@ -176,6 +168,10 @@ PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: MaterializedOperation[
     "flats",
     "exact",
     relation_id="geometry.projective_line_arrangement.flats.relation",
+    resource_reason=(
+        "the complete labelled flat lattice is retained for durable projective "
+        "incidence provenance and downstream certificate binding"
+    ),
     version="3",
     invocation_examples=(
         example(

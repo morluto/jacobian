@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.claims import ClaimValidationService
 from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.contracts.checkers import EvidenceKind
@@ -624,7 +624,7 @@ def _objective_value(value: Any) -> Fraction:
     if isinstance(value, int):
         return Fraction(value)
     if isinstance(value, str) and _INTEGER_OBJECTIVE.fullmatch(value):
-        return Fraction(int(value))
+        return Fraction(parse_canonical_integer(value))
     if isinstance(value, dict) and set(value) == {"num", "den"}:
         numerator = value.get("num")
         denominator = value.get("den")
@@ -634,7 +634,10 @@ def _objective_value(value: Any) -> Fraction:
             and _INTEGER_OBJECTIVE.fullmatch(numerator)
             and _INTEGER_OBJECTIVE.fullmatch(denominator)
         ):
-            result = Fraction(int(numerator), int(denominator))
+            result = Fraction(
+                parse_canonical_integer(numerator),
+                parse_canonical_integer(denominator),
+            )
             if value == {
                 "num": format_canonical_integer(result.numerator),
                 "den": format_canonical_integer(result.denominator),

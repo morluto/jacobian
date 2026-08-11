@@ -99,7 +99,9 @@ def test_cli_measures_exact_provider_without_implicit_cold_install(
     assert result.exit_code == 0, result.stdout
     measurement = json.loads(result.stdout)
     assert measurement["provider_runtime"]["provider"] == "jacobian.networkx"
-    assert measurement["installed_bytes"] > 0
+    assert measurement["measurement_version"] == "2"
+    assert measurement["installed_size"]["status"] == "COMPLETED"
+    assert measurement["installed_size"]["bytes"] > 0
     assert measurement["cold_install"]["status"] == "SKIPPED"
     assert measurement["cold_start"]["status"] == "COMPLETED"
     assert measurement["cold_start"]["peak_rss_bytes"] > 0

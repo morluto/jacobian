@@ -79,6 +79,11 @@
         "properties": {
           "name": {"type": "string", "minLength": 1},
           "model_name": {"type": "string", "minLength": 1},
+          "skills": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
           "kwargs": {
             "type": "object",
             "additionalProperties": false,

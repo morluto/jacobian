@@ -9,7 +9,7 @@ import pytest
 from tests.support.capabilities import invoke_capability as _invoke
 from tests.support.rationals import rational_payload as _q
 
-from jacobian.contracts.capabilities import CapabilityAssuranceLevel, CapabilityMode
+from jacobian.contracts.capabilities import CapabilityAssuranceLevel
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime import create_runtime
 
@@ -72,7 +72,6 @@ def test_expansion_term_budget_failure_is_specific_and_non_retryable(
                 }
             )
         },
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.execution.status is ExecutionStatus.ERROR
     diagnostic = result.diagnostics[0]
@@ -111,7 +110,6 @@ def test_sympy_normalizes_typed_multivariate_expression(
             "expression": _difference_of_squares_plus_half_x(),
             "resource_budget": {"wall_seconds": 5},
         },
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "NORMALIZATION_PRODUCED"
@@ -157,7 +155,6 @@ def test_sympy_normalization_preserves_exact_zero(attached_complete_runtime) -> 
                 variables=["x"],
             )
         },
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.output["normalized"] == {"terms": []}
     assert result.output["status"] == "NORMALIZATION_PRODUCED"
@@ -193,7 +190,6 @@ def test_normalization_rejects_inputs_outside_typed_ast_contract(
         create_runtime(tmp_path),
         "polynomial.expression.normalize",
         {"expression": expression},
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output["error"]["stage"] in {

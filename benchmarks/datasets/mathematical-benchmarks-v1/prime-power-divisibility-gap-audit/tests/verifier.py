@@ -11,6 +11,7 @@ from verifier_support import (
     MAX_SUBMISSION_BYTES,
     false_verified_claim,
     is_regular_bounded_file,
+    normalize_reward_file,
     resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -273,6 +274,7 @@ def main() -> None:
             }
         )
     )
+    normalize_reward_file(out / "reward.json")
 
 
 if __name__ == "__main__":

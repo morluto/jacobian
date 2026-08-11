@@ -54,3 +54,28 @@ def test_geometric_sequence_handles_zero_terms_exactly(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == {"holds": expected}
+
+
+def test_sequence_products_format_results_beyond_python_digit_limit(
+    domain_services: DomainTestServices,
+) -> None:
+    factor = "1" + ("0" * 2_500)
+    expected_product = "1" + ("0" * 5_000)
+
+    product = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="sequence.compute.product",
+            input={"values": [factor, factor]},
+        )
+    )
+    prefixes = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="sequence.compute.prefix_products",
+            input={"values": [factor, factor]},
+        )
+    )
+
+    assert product.execution.status is ExecutionStatus.COMPLETED
+    assert product.output["result"] == {"value": expected_product}
+    assert prefixes.execution.status is ExecutionStatus.COMPLETED
+    assert prefixes.output["result"] == {"values": [factor, expected_product]}

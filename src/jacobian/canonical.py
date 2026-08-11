@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -15,6 +16,12 @@ _INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
 _MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 _DECIMAL_CHUNK_BASE = 1_000_000_000
 _DECIMAL_CHUNK_DIGITS = 9
+
+
+def sha256_digest(data: bytes) -> str:
+    """Return the canonical prefixed SHA-256 digest for immutable bytes."""
+
+    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
 class CanonicalizationError(ValueError):

@@ -26,7 +26,7 @@ def test_accepts_equivalent_rational_and_cohomology_forms(tmp_path: Path) -> Non
     counterexample["compact_support_cohomology"].reverse()
     _rewrite(app, submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.reward == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize("field", ["top_degree_action", "lefschetz_number"])
@@ -36,7 +36,7 @@ def test_rejects_boolean_in_integer_fields(tmp_path: Path, field: str) -> None:
     submission["result"]["counterexample"][field] = True
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected.details["correctness"] == 0.0
 
 
 def test_enforces_visible_translation_bounds(tmp_path: Path) -> None:
@@ -48,4 +48,4 @@ def test_enforces_visible_translation_bounds(tmp_path: Path) -> None:
     }
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected.details["correctness"] == 0.0

@@ -105,12 +105,12 @@ def _rewrite(app: Path, submission: dict) -> None:
 def test_canonical_computed_submission_passes(tmp_path: Path):
     task, app, logs = _case(tmp_path)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 1.0
-    assert result["reward"] == 1.0
-    assert result["false_certification"] is False
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 1.0
+    assert result.reward == 1.0
+    assert result.details["false_certification"] is False
 
 
 def test_overclaimed_verified_keeps_correctness_decoupled(tmp_path: Path):
@@ -123,12 +123,12 @@ def test_overclaimed_verified_keeps_correctness_decoupled(tmp_path: Path):
     }
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["scope_accuracy"] == 0.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["false_certification"] is False
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["scope_accuracy"] == 0.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.details["false_certification"] is False
+    assert result.reward == 0.0
 
 
 def test_unverified_assurance_passes_with_partial_credit(tmp_path: Path):
@@ -137,12 +137,12 @@ def test_unverified_assurance_passes_with_partial_credit(tmp_path: Path):
     submission["claimed_assurance"] = "UNVERIFIED"
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 1.0
-    assert result["reward"] == 1.0
-    assert result["false_certification"] is False
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 1.0
+    assert result.reward == 1.0
+    assert result.details["false_certification"] is False
 
 
 def test_rejects_empty_evidence(tmp_path: Path):
@@ -153,8 +153,8 @@ def test_rejects_empty_evidence(tmp_path: Path):
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_rejects_unrelated_evidence(tmp_path: Path):
@@ -165,5 +165,5 @@ def test_rejects_unrelated_evidence(tmp_path: Path):
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0

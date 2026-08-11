@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 from tests.support.services import DomainTestServices, open_domain_services
 
+from jacobian.contracts import number_theory as number_theory_contracts
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
@@ -123,9 +124,19 @@ def _cubic_residue_payload() -> dict[str, object]:
 def test_modular_polynomial_residue_image_is_complete_and_materialized(
     domain_services,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
+    inline = domain_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.compute",
+            input=_cubic_residue_payload(),
+        )
+    )
+    assert inline.execution.status is ExecutionStatus.COMPLETED
+    assert inline.artifact_uris == ()
+    assert inline.output["result"]["table"] is None
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input=_cubic_residue_payload(),
         )
     )
@@ -169,7 +180,7 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
     assert stored_artifact.payload == stored_result
     assert stored_artifact.manifest.parents == (input_uri,)
     assert result.relationships[0].relation_id == (
-        "modular.polynomial_residue_image.relation"
+        "modular.polynomial_residue_image.assignments.relation"
     )
     assert result.relationships[0].source_artifact_uris == (input_uri,)
     assert result.relationships[0].target_artifact_uris == (result_uri,)
@@ -180,7 +191,7 @@ def test_modular_polynomial_residue_image_handles_multivariate_domains(
 ) -> None:
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input={
                 "modulus": 5,
                 "variables": [
@@ -218,7 +229,7 @@ def test_modular_polynomial_residue_result_rejects_an_incomplete_table(
 ) -> None:
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input=_cubic_residue_payload(),
         )
     )
@@ -229,12 +240,39 @@ def test_modular_polynomial_residue_result_rejects_an_incomplete_table(
         ModularPolynomialResidueImageResult.model_validate(corrupted)
 
 
+def test_modular_polynomial_residue_result_rejects_oversized_domains_before_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_product(*_: object) -> object:
+        raise AssertionError("oversized Cartesian domains must not be materialized")
+
+    monkeypatch.setattr(number_theory_contracts, "product", unexpected_product)
+    domains = [list(range(32))] * 6
+
+    with pytest.raises(ValidationError, match="result domains exceed"):
+        ModularPolynomialResidueImageResult.model_validate(
+            {
+                "semantics_version": "modular-polynomial-residue-image.v1",
+                "modulus": 32,
+                "variable_order": ["a", "b", "c", "d", "e", "f"],
+                "domains": domains,
+                "normalized_terms": [],
+                "enumeration_scope": "COMPLETE_DECLARED_CARTESIAN_PRODUCT",
+                "total_assignments": 1,
+                "image": [0],
+                "residue_counts": [{"residue": 0, "count": 1}],
+                "witnesses": [{"residue": 0, "assignment": [0, 0, 0, 0, 0, 0]}],
+                "table": [{"assignment": [0, 0, 0, 0, 0, 0], "residue": 0}],
+            }
+        )
+
+
 def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(
     domain_services,
 ) -> None:
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+            capability_id="modular.polynomial_residue_image.assignments.materialize",
             input={
                 "modulus": 7**7,
                 "variables": [
@@ -337,3 +375,58 @@ def test_modular_polynomial_residue_image_is_discoverable_by_intent(
         "modular.polynomial_residue_image.compute"
     )
     assert discovered.matches[0].has_invocation_examples is True
+
+
+def test_number_theory_resource_atomics_are_exact_computed(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
+        (
+            "integer.compute.prime_count",
+            {"n": 100},
+            {"value": "25"},
+        ),
+        (
+            "integer.compute.floor_square_root",
+            {"n": 10},
+            {"root": 3},
+        ),
+        (
+            "integer.compute.floor_square_root",
+            {"n": 1_000_000_000_000},
+            {"root": 1_000_000},
+        ),
+        (
+            "number_theory.compute.legendre_symbol",
+            {"a": 2, "prime": 7},
+            {"a": 2, "prime": 7, "symbol": 1},
+        ),
+        (
+            "number_theory.compute.factorial_valuation",
+            {"n": 10, "base": 12},
+            {"n": 10, "base": 12, "valuation": 4},
+        ),
+    )
+    for capability_id, payload, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
+        )
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+        assert result.output["result"] == expected
+
+
+def test_legendre_symbol_rejects_non_prime_before_conclusion(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="number_theory.compute.legendre_symbol",
+            input={"a": 2, "prime": 9},
+        )
+    )
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
+    assert result.artifact_uris == ()
+    assert result.diagnostics[0].code == "NUMBER_THEORY_OPERATION_NOT_APPLICABLE"
+    assert result.assurance.verification_record_uri is None

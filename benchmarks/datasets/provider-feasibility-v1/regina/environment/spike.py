@@ -18,10 +18,13 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.command_runner import (
-    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
-    run_tool_command,
+)
+from benchmarks.tooling.spike_utils import (
+    canonical_json,
+    default_runner,
+    sha256_bytes,
 )
 
 PIN_PATH = Path(__file__).with_name("pin.json")
@@ -46,28 +49,6 @@ ProcessRunner = Callable[..., ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 
 
-def _default_runner(
-    command: Sequence[str],
-    *,
-    input_bytes: bytes,
-    timeout_seconds: float,
-    environment: Mapping[str, str],
-    stdout_limit: int,
-    stderr_limit: int,
-) -> ToolCommandResult:
-    request = ToolCommandRequest(
-        executable=command[0],
-        arguments=tuple(command[1:]),
-        environment=environment,
-        cwd=str(Path.cwd()),
-        timeout_seconds=timeout_seconds,
-        stdin_bytes=input_bytes,
-        stdout_limit_bytes=stdout_limit,
-        stderr_limit_bytes=stderr_limit,
-    )
-    return run_tool_command(request)
-
-
 class ReginaSpikeError(RuntimeError):
     """A typed non-conclusion from the optional-provider spike."""
 
@@ -78,23 +59,12 @@ class ReginaSpikeError(RuntimeError):
         self.detail = detail
 
 
-def _sha256_bytes(payload: bytes) -> str:
-    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
-
-
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return f"sha256:{digest.hexdigest()}"
-
-
-def _canonical_json(payload: object) -> bytes:
-    return (
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-        + "\n"
-    ).encode("ascii")
 
 
 def _load_pin(path: Path) -> dict[str, Any]:
@@ -248,7 +218,7 @@ def _inspect_source_archive(path: Path, pin: Mapping[str, Any]) -> dict[str, Any
         ) from exc
     expected = source_pin["members"]
     if any(
-        _sha256_bytes(payload) != expected[role]["sha256"]
+        sha256_bytes(payload) != expected[role]["sha256"]
         for role, payload in contents.items()
     ) or not all(
         b"GNU General Public License" in contents[role][:2048]
@@ -295,8 +265,8 @@ def _inspect_wheel(path: Path, pin: Mapping[str, Any]) -> dict[str, Any]:
             "The pinned Regina wheel could not be inspected safely.",
         ) from exc
     if (
-        _sha256_bytes(metadata) != wheel_pin["metadata_sha256"]
-        or _sha256_bytes(wheel_metadata) != wheel_pin["wheel_sha256"]
+        sha256_bytes(metadata) != wheel_pin["metadata_sha256"]
+        or sha256_bytes(wheel_metadata) != wheel_pin["wheel_sha256"]
         or b"Name: regina\n" not in metadata
         or f"Version: {pin['distribution_version']}\n".encode() not in metadata
         or b"License: GPLv2+\n" not in metadata
@@ -446,7 +416,7 @@ def _parse_provider_output(output: bytes, pin: Mapping[str, Any]) -> dict[str, A
     expected = pin["reproduction"]["expected_provider_output"]
     if (
         mathematical != expected
-        or _sha256_bytes(_canonical_json(mathematical))
+        or sha256_bytes(canonical_json(mathematical))
         != pin["reproduction"]["expected_mathematical_output_sha256"]
     ):
         raise ReginaSpikeError(
@@ -734,7 +704,7 @@ def run_spike(
     wheel: Path,
     source_archive: Path,
     timeout_seconds: float = 20,
-    runner: ProcessRunner = _default_runner,
+    runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
     adapter_source: Path = ADAPTER_SOURCE,
 ) -> dict[str, Any]:
@@ -793,7 +763,7 @@ def run_spike(
             },
             "reproduction": {
                 "scope": pin["reproduction"]["scope"],
-                "provider_output_sha256": _sha256_bytes(output),
+                "provider_output_sha256": sha256_bytes(output),
                 "cases": provider_output["cases"],
                 "normal_surfaces": provider_output["normal_surfaces"],
             },
@@ -905,7 +875,7 @@ def _verify_installed_runtime(wheel_path: Path) -> int:
                         "PROVIDER_RUNTIME_MISMATCH",
                         "The installed Regina runtime is missing a pinned wheel member.",
                     )
-                if _sha256_file(installed_path) != _sha256_bytes(archive.read(member)):
+                if _sha256_file(installed_path) != sha256_bytes(archive.read(member)):
                     raise ReginaSpikeError(
                         "REJECTED",
                         "PROVIDER_RUNTIME_MISMATCH",
@@ -1022,7 +992,7 @@ def _worker(pin_path: Path, wheel_path: Path) -> int:
             "verified_runtime_files": verified_runtime_files,
         },
     }
-    sys.stdout.buffer.write(_canonical_json(payload))
+    sys.stdout.buffer.write(canonical_json(payload))
     return 0
 
 
@@ -1046,7 +1016,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "code": exc.code,
                 "detail": exc.detail,
             }
-            sys.stderr.buffer.write(_WORKER_ERROR_PREFIX + _canonical_json(payload))
+            sys.stderr.buffer.write(_WORKER_ERROR_PREFIX + canonical_json(payload))
             return 64
     if (
         args.python_executable is None

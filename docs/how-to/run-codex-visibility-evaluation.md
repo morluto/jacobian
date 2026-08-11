@@ -44,13 +44,19 @@ remains available by setting
 
 Per-run observations report discovery, exact contract inspection, invocation,
 completion, discovery-free invocation, abstention, unexpected capabilities, and
-independently bound `VERIFIED` evidence. Summary cost totals separate cached and
-uncached input tokens and include MCP calls and model-visible bytes. Shell calls,
-tool errors, token counts, MCP wire bytes, and logical payload bytes remain
-independent diagnostics rather than proxies for mathematical correctness. The
-cumulative Codex input-token count may grow much faster than MCP payload bytes
-because each later model turn includes earlier tool results; compare both
-dimensions rather than treating adoption alone as a win.
+independently bound `VERIFIED` evidence. Each run also records an
+`elapsed_seconds` wall-clock duration measured with a monotonic clock around the
+Codex command invocation, and the summary exposes a `duration_totals.elapsed_seconds`
+sum. Duration is observational only: it does not affect contract satisfaction,
+reward, timeout policy, or mathematical assurance. Single-run wall time is noisy;
+paired or repeated comparisons are required before drawing an efficiency
+conclusion. Summary cost totals separate cached and uncached input tokens and
+include MCP calls and model-visible bytes. Shell calls, tool errors, token
+counts, MCP wire bytes, and logical payload bytes remain independent diagnostics
+rather than proxies for mathematical correctness. The cumulative Codex
+input-token count may grow much faster than MCP payload bytes because each later
+model turn includes earlier tool results; compare both dimensions rather than
+treating adoption alone as a win.
 
 For Harbor ATIF trajectories, measure that projection directly rather than
 inferring it from token totals:

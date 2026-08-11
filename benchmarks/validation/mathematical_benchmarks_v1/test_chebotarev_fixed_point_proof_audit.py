@@ -23,7 +23,7 @@ def rewrite(app: Path, s: dict):
 def test_oracle_passes(tmp_path: Path):
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     rewrite(app, json.loads((app / "submission.json").read_text()))
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_published_double_transposition_error(tmp_path: Path):
@@ -38,7 +38,7 @@ def test_rejects_published_double_transposition_error(tmp_path: Path):
         }
     )
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_rejects_correct_density_with_wrong_discriminant(tmp_path: Path):
@@ -46,4 +46,4 @@ def test_rejects_correct_density_with_wrong_discriminant(tmp_path: Path):
     s = json.loads((app / "submission.json").read_text())
     s["result"]["actual_discriminant"] = 4352
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs)["correctness"] == 0.0
+    assert support._run_verifier(task, app, logs).details["correctness"] == 0.0

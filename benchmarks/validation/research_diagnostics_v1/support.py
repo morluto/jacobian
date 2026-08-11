@@ -7,6 +7,7 @@ from pathlib import Path
 
 from benchmarks.validation._verifier_child import (
     VerifierExecutionError,
+    VerifierOutput,
     run_verifier_in_child,
 )
 
@@ -59,17 +60,19 @@ def prepare_case(
     return task, app, logs
 
 
-def run_verifier(task: Path, app: Path, logs: Path) -> dict:
+def run_verifier(task: Path, app: Path, logs: Path) -> VerifierOutput:
     try:
         return run_verifier_in_child(task=task, app=app, logs=logs)
     except (ValueError, VerifierExecutionError):
-        return {
-            "correctness": 0.0,
-            "evidence_validity": 0.0,
-            "scope_accuracy": 0.0,
-            "assurance_calibration": 0.0,
-            "limitation_accuracy": 0.0,
-            "protocol_compliance": 0.0,
-            "reward": 0.0,
-            "false_certification": False,
-        }
+        return VerifierOutput(
+            reward=0.0,
+            details={
+                "correctness": 0.0,
+                "evidence_validity": 0.0,
+                "scope_accuracy": 0.0,
+                "assurance_calibration": 0.0,
+                "limitation_accuracy": 0.0,
+                "protocol_compliance": 0.0,
+                "false_certification": False,
+            },
+        )

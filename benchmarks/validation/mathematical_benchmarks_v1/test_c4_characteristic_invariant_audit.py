@@ -12,7 +12,7 @@ TASK = "c4-characteristic-invariant-audit"
 def test_oracle_passes(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_induced_count_corruption(tmp_path: Path) -> None:
@@ -21,7 +21,7 @@ def test_rejects_induced_count_corruption(tmp_path: Path) -> None:
     submission["result"]["witnesses"][1]["induced_c4_count"] = 2
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0 and rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0 and rejected.reward == 0.0
 
 
 def test_rejects_chorded_graph_claimed_induced(tmp_path: Path) -> None:
@@ -30,7 +30,7 @@ def test_rejects_chorded_graph_claimed_induced(tmp_path: Path) -> None:
     submission["result"]["witnesses"][2]["induced_c4_count"] = 1
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0 and rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0 and rejected.reward == 0.0
 
 
 def test_rejects_unsorted_edges(tmp_path: Path) -> None:
@@ -39,7 +39,7 @@ def test_rejects_unsorted_edges(tmp_path: Path) -> None:
     submission["result"]["witnesses"][0]["edges"].reverse()
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0 and rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0 and rejected.reward == 0.0
 
 
 def test_rejects_oversized_edge_list_before_graph_checks(tmp_path: Path) -> None:
@@ -49,8 +49,8 @@ def test_rejects_oversized_edge_list_before_graph_checks(tmp_path: Path) -> None
     submission["result"]["witnesses"][0]["edges"] = [[0, 1]] * 37
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_above_ceiling_assurance(tmp_path: Path) -> None:
@@ -60,9 +60,9 @@ def test_rejects_above_ceiling_assurance(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "CHECKED"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
-    assert rejected["assurance_calibration"] == 0.0
-    assert rejected["evidence_validity"] == 1.0
+    assert rejected.reward == 0.0
+    assert rejected.details["assurance_calibration"] == 0.0
+    assert rejected.details["evidence_validity"] == 1.0
 
 
 def test_rejects_boolean_invariant_counts(tmp_path: Path) -> None:
@@ -75,8 +75,8 @@ def test_rejects_boolean_invariant_counts(tmp_path: Path) -> None:
     support._bind_result_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_boolean_chorded_zero_fields(tmp_path: Path) -> None:
@@ -89,8 +89,8 @@ def test_rejects_boolean_chorded_zero_fields(tmp_path: Path) -> None:
     support._bind_result_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_unhashable_role(tmp_path: Path) -> None:
@@ -100,8 +100,8 @@ def test_rejects_unhashable_role(tmp_path: Path) -> None:
     submission["result"]["witnesses"][0]["role"] = ["C4_FREE_ZERO_COUNT"]
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_rejects_symlinked_evidence_directory(tmp_path: Path) -> None:
@@ -123,7 +123,7 @@ def test_rejects_symlinked_evidence_directory(tmp_path: Path) -> None:
     shutil.rmtree(app / "evidence")
     (app / "evidence").symlink_to(forged_dir)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
 
 
 def test_deeply_nested_evidence_json_does_not_crash(tmp_path: Path) -> None:
@@ -138,7 +138,7 @@ def test_deeply_nested_evidence_json_does_not_crash(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
 
 
 def test_rejects_affirmative_lean_verification_claim(tmp_path: Path) -> None:
@@ -151,8 +151,8 @@ def test_rejects_affirmative_lean_verification_claim(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
-    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected.reward == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
 
 
 def test_rejects_lean_compile_overclaim(tmp_path: Path) -> None:
@@ -165,8 +165,8 @@ def test_rejects_lean_compile_overclaim(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
-    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected.reward == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
 
 
 def test_rejects_lean_compile_overclaim_across_limitation_items(
@@ -182,7 +182,7 @@ def test_rejects_lean_compile_overclaim_across_limitation_items(
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
 
 
 def test_rejects_lean_compile_overclaim_across_evidence_lines(
@@ -204,7 +204,7 @@ def test_rejects_lean_compile_overclaim_across_evidence_lines(
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
 
 
 def test_accepts_finite_verification_wording_with_limitations(
@@ -220,8 +220,8 @@ def test_accepts_finite_verification_wording_with_limitations(
     ]
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["limitation_accuracy"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["limitation_accuracy"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_requires_topic_specific_limitation_negation(tmp_path: Path) -> None:
@@ -234,8 +234,8 @@ def test_requires_topic_specific_limitation_negation(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_lean_compile_overclaim_in_evidence(tmp_path: Path) -> None:
@@ -250,7 +250,7 @@ def test_rejects_lean_compile_overclaim_in_evidence(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
 
 
 def test_rejects_split_lean_compile_overclaim(tmp_path: Path) -> None:
@@ -263,7 +263,7 @@ def test_rejects_split_lean_compile_overclaim(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
 
 
 def test_rejects_elided_subject_compile_overclaim(tmp_path: Path) -> None:
@@ -276,8 +276,8 @@ def test_rejects_elided_subject_compile_overclaim(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize("intervening", ["no proof is claimed", "is not verified"])
@@ -293,8 +293,8 @@ def test_retains_theorem_context_across_negated_predicates(
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize("predicate", ["can compile", "does compile", "has compiled"])
@@ -310,8 +310,8 @@ def test_rejects_modal_elided_subject_compile_overclaim(
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_elided_subject_compile_overclaim_in_evidence(
@@ -332,8 +332,8 @@ def test_rejects_elided_subject_compile_overclaim_in_evidence(
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_accepts_explicit_finite_subject_after_theorem_limitation(
@@ -349,8 +349,8 @@ def test_accepts_explicit_finite_subject_after_theorem_limitation(
     ]
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["limitation_accuracy"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["limitation_accuracy"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_accepts_theorem_object_in_finite_certificate_claim(tmp_path: Path) -> None:
@@ -365,8 +365,8 @@ def test_accepts_theorem_object_in_finite_certificate_claim(tmp_path: Path) -> N
     ]
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["limitation_accuracy"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["limitation_accuracy"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_accepts_equivalent_evidence_limitation_wording(tmp_path: Path) -> None:
@@ -384,7 +384,7 @@ def test_accepts_equivalent_evidence_limitation_wording(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["evidence_validity"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
 
 
 def test_assurance_diagnostic_is_independent_of_envelope(tmp_path: Path) -> None:
@@ -394,8 +394,8 @@ def test_assurance_diagnostic_is_independent_of_envelope(tmp_path: Path) -> None
     submission["conclusion"] = "UNSUPPORTED"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["assurance_calibration"] == 1.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["assurance_calibration"] == 1.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_missing_conjecture_limitation(tmp_path: Path) -> None:
@@ -405,7 +405,7 @@ def test_rejects_missing_conjecture_limitation(tmp_path: Path) -> None:
     submission["limitations"] = ["No Lean compilation is claimed."]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
 
 
 def test_rejects_affirmative_conjecture_proof_claim(tmp_path: Path) -> None:
@@ -418,7 +418,7 @@ def test_rejects_affirmative_conjecture_proof_claim(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_noun_form_conjecture_proof_claim(tmp_path: Path) -> None:
@@ -432,8 +432,8 @@ def test_rejects_noun_form_conjecture_proof_claim(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["limitation_accuracy"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["limitation_accuracy"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_accepts_equivalent_no_claim_limitation(tmp_path: Path) -> None:
@@ -445,8 +445,8 @@ def test_accepts_equivalent_no_claim_limitation(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["limitation_accuracy"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["limitation_accuracy"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_accepts_result_marker_after_prose(tmp_path: Path) -> None:
@@ -463,7 +463,7 @@ def test_accepts_result_marker_after_prose(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["evidence_validity"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
 
 
 def test_rejects_bool_int_coercion_in_result_marker(tmp_path: Path) -> None:
@@ -481,7 +481,7 @@ def test_rejects_bool_int_coercion_in_result_marker(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
 
 
 def test_scope_diagnostic_is_independent_of_contract(tmp_path: Path) -> None:
@@ -491,8 +491,8 @@ def test_scope_diagnostic_is_independent_of_contract(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "CHECKED"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["scope_accuracy"] == 1.0
-    assert rejected["assurance_calibration"] == 0.0
+    assert rejected.details["scope_accuracy"] == 1.0
+    assert rejected.details["assurance_calibration"] == 0.0
 
 
 def test_incomplete_scope_gates_reward(tmp_path: Path) -> None:
@@ -502,9 +502,9 @@ def test_incomplete_scope_gates_reward(tmp_path: Path) -> None:
     submission["scope"] = "partial finite comparison"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["scope_accuracy"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["scope_accuracy"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_completeness_diagnostic_is_independent(tmp_path: Path) -> None:
@@ -514,11 +514,11 @@ def test_completeness_diagnostic_is_independent(tmp_path: Path) -> None:
     submission["completeness"] = "PARTIAL"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["scope_accuracy"] == 1.0
-    assert rejected["assurance_calibration"] == 1.0
-    assert rejected["completeness_accuracy"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["scope_accuracy"] == 1.0
+    assert rejected.details["assurance_calibration"] == 1.0
+    assert rejected.details["completeness_accuracy"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:
@@ -526,9 +526,9 @@ def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     (app / "input.json").write_text("{}")
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["input_binding"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["input_binding"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_oversized_workspace_input_fails_closed(tmp_path: Path) -> None:
@@ -536,8 +536,8 @@ def test_oversized_workspace_input_fails_closed(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     (app / "input.json").write_text("x" * (20 * 1024 * 1024))
     result = support._run_verifier(task, app, logs)
-    assert result["input_binding"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["input_binding"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
@@ -556,8 +556,8 @@ def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_oversized_evidence_line_after_valid_content(tmp_path: Path) -> None:
@@ -577,5 +577,5 @@ def test_rejects_oversized_evidence_line_after_valid_content(tmp_path: Path) -> 
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0

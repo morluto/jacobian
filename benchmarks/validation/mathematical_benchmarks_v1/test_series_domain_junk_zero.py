@@ -49,8 +49,8 @@ def test_accepts_alternative_denominator_bound_notation(
     _rewrite(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_corrupted_general_bound(tmp_path: Path) -> None:
@@ -60,8 +60,8 @@ def test_rejects_corrupted_general_bound(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_affirmative_analytic_claim_in_evidence(tmp_path: Path) -> None:
@@ -78,5 +78,5 @@ def test_rejects_affirmative_analytic_claim_in_evidence(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0

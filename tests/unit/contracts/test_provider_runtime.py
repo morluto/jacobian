@@ -11,7 +11,6 @@ import jacobian.providers.flint_runtime as flint_runtime
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -33,8 +32,10 @@ from jacobian.providers.flint_runtime import (
     python_flint_exact_checker_provider_runtime,
 )
 from jacobian.providers.lean_runtime import (
+    LeanRuntimeIdentityError,
     lean_frontend_provider_runtime,
     lean_provider_runtime,
+    require_lean_semantic_runtime_identity,
 )
 
 
@@ -54,6 +55,40 @@ def _runtime(**updates: object) -> CapabilityProviderRuntime:
     }
     values.update(updates)
     return CapabilityProviderRuntime(**values)
+
+
+def _lean_runtime_layout(
+    tmp_path: Path,
+    *,
+    with_mathlib_project: bool,
+) -> tuple[Path, Path | None]:
+    toolchain = tmp_path / "toolchain"
+    executable = toolchain / "bin" / "lean"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"pinned-lean")
+    (toolchain / "bin" / "lake").write_bytes(b"pinned-lake")
+    init_module = toolchain / "lib" / "lean" / "Init.olean"
+    init_module.parent.mkdir(parents=True)
+    init_module.write_bytes(b"pinned-init")
+    if not with_mathlib_project:
+        return executable, None
+    project = tmp_path / "project"
+    for path, content in {
+        "lake-manifest.json": b'{"packages":[]}',
+        "lakefile.toml": b'name = "jacobianLeanRuntime"',
+        "lean-toolchain": b"leanprover/lean4:v4.31.0",
+        "JacobianLeanRuntime.lean": b"import Mathlib",
+        "JacobianLeanProofState.lean": b"import Mathlib",
+        ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean": b"mathlib",
+        ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Algebra.olean": b"algebra",
+        ".lake/build/lib/lean/JacobianLeanRuntime.olean": b"runtime-module",
+        ".lake/build/lib/lean/JacobianLeanProofState.olean": b"state-module",
+        ".lake/build/bin/jacobian_lean_proof_state": b"proof-state-helper",
+    }.items():
+        target = project / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+    return executable, project
 
 
 def test_available_provider_requires_exact_version_and_digest() -> None:
@@ -94,7 +129,6 @@ def test_descriptor_provider_must_match_runtime_identity() -> None:
             description="Increment one integer.",
             provider="tests.other",
             provider_runtime=_runtime(),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={"type": "object"},
             output_schema={"type": "object"},
         )
@@ -323,8 +357,7 @@ def test_lean_frontend_runtime_binds_the_pinned_executable(
 ) -> None:
     from jacobian_checkers import lean4
 
-    executable = tmp_path / "lean"
-    executable.write_bytes(b"pinned-lean")
+    executable, _project = _lean_runtime_layout(tmp_path, with_mathlib_project=False)
     monkeypatch.setattr(
         lean4,
         "inspect_runtime",
@@ -390,15 +423,14 @@ def test_lean_mathlib_runtime_binds_the_lake_launcher(
 ) -> None:
     from jacobian_checkers import lean4
 
-    executable = tmp_path / "lean"
-    executable.write_bytes(b"pinned-lean")
-    lake = tmp_path / "lake"
-    lake.write_bytes(b"pinned-lake")
+    executable, project = _lean_runtime_layout(tmp_path, with_mathlib_project=True)
+    assert project is not None
+    lake = executable.with_name("lake")
     monkeypatch.setattr(
         lean4,
         "inspect_runtime",
         lambda *, require_mathlib: (
-            (executable, tmp_path) if require_mathlib else (executable, None)
+            (executable, project) if require_mathlib else (executable, None)
         ),
     )
 
@@ -416,14 +448,129 @@ def test_lean_mathlib_runtime_binds_the_lake_launcher(
     assert runtime.configuration["lake_digest"] == provider_runtime._sha256_file(lake)
 
 
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        "lakefile.toml",
+        "JacobianLeanProofState.lean",
+        ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean",
+        ".lake/build/bin/jacobian_lean_proof_state",
+    ),
+)
+def test_lean_semantic_runtime_identity_rejects_project_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: str,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable, project = _lean_runtime_layout(tmp_path, with_mathlib_project=True)
+    assert project is not None
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            (executable, project) if require_mathlib else (executable, None)
+        ),
+    )
+    runtime = lean_provider_runtime(
+        profiles={"mathlib": {"mathlib_commit": "pinned"}},
+        checker_ids=(),
+    )
+
+    (project / relative_path).write_bytes(b"replacement")
+
+    with pytest.raises(LeanRuntimeIdentityError, match="identity changed"):
+        require_lean_semantic_runtime_identity(runtime)
+
+
+def test_lean_semantic_runtime_identity_rejects_lake_launcher_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable, project = _lean_runtime_layout(tmp_path, with_mathlib_project=True)
+    assert project is not None
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            (executable, project) if require_mathlib else (executable, None)
+        ),
+    )
+    runtime = lean_provider_runtime(
+        profiles={"mathlib": {"mathlib_commit": "pinned"}},
+        checker_ids=(),
+    )
+
+    executable.with_name("lake").write_bytes(b"replacement")
+
+    with pytest.raises(LeanRuntimeIdentityError, match="identity changed"):
+        require_lean_semantic_runtime_identity(runtime)
+
+
+def test_lean_semantic_runtime_identity_rejects_imported_mathlib_module_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable, project = _lean_runtime_layout(tmp_path, with_mathlib_project=True)
+    assert project is not None
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            (executable, project) if require_mathlib else (executable, None)
+        ),
+    )
+    runtime = lean_provider_runtime(
+        profiles={"mathlib": {"mathlib_commit": "pinned"}}, checker_ids=()
+    )
+
+    (
+        project / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Algebra.olean"
+    ).write_bytes(b"replacement")
+
+    with pytest.raises(LeanRuntimeIdentityError, match="identity changed"):
+        require_lean_semantic_runtime_identity(runtime)
+
+
+def test_lean_semantic_runtime_identity_requires_the_resolved_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian_checkers import lean4
+
+    executable, project = _lean_runtime_layout(tmp_path, with_mathlib_project=True)
+    assert project is not None
+    monkeypatch.setattr(
+        lean4,
+        "inspect_runtime",
+        lambda *, require_mathlib: (
+            (executable, project) if require_mathlib else (executable, None)
+        ),
+    )
+    runtime = lean_provider_runtime(
+        profiles={"mathlib": {"mathlib_commit": "pinned"}},
+        checker_ids=(),
+    )
+
+    (project / ".lake/build/bin/jacobian_lean_proof_state").unlink()
+
+    with pytest.raises(LeanRuntimeIdentityError, match=r"component .* is unavailable"):
+        require_lean_semantic_runtime_identity(runtime)
+
+
 def test_lean_mathlib_runtime_is_unavailable_without_a_lake_sibling(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian_checkers import lean4
 
-    executable = tmp_path / "lean"
-    executable.write_bytes(b"pinned-lean")
+    executable, _project = _lean_runtime_layout(tmp_path, with_mathlib_project=False)
+    executable.with_name("lake").unlink()
     monkeypatch.setattr(
         lean4,
         "inspect_runtime",
@@ -446,8 +593,7 @@ def test_lean_core_runtime_does_not_bind_a_lake_launcher(
 ) -> None:
     from jacobian_checkers import lean4
 
-    executable = tmp_path / "lean"
-    executable.write_bytes(b"pinned-lean")
+    executable, _project = _lean_runtime_layout(tmp_path, with_mathlib_project=False)
     monkeypatch.setattr(
         lean4,
         "inspect_runtime",

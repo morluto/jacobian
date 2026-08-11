@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/input.json","/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/total-coloring-contract-audit"
+version="1.0.0"
+description="Expose and repair a projected-constraint bug in total-coloring validation."
+keywords=["total-coloring","contract-audit","petersen-graph","constraint-validation"]
+[metadata]
+evaluation_kind="assurance"
+domain="mathematical-sciences"
+primary_domain="graph-theory"
+field="graph-coloring"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:2605812dd55d406609a1d25937d768918ea4ef600f212e1249cd151ca8cbef44"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","contract-audit","constraint-repair","exact-verification","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-source-transformation"
+derivation="Derived from retained row C-048; the incomplete projected validator is an authored assurance fixture."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

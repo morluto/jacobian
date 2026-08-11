@@ -46,8 +46,8 @@ def _case(tmp_path: Path, submission: dict, *, label: str, tamper_input: bool = 
 
 def test_reference_strategy_certificate_passes(tmp_path: Path) -> None:
     reward = support._run_verifier(*_case(tmp_path, _submission(), label="reference"))
-    assert reward["reward"] == pytest.approx(1.0)
-    assert reward["false_certification"] is False
+    assert reward.reward == pytest.approx(1.0)
+    assert reward.details["false_certification"] is False
 
 
 def test_other_checkerboard_parity_and_reordering_pass(tmp_path: Path) -> None:
@@ -68,7 +68,7 @@ def test_other_checkerboard_parity_and_reordering_pass(tmp_path: Path) -> None:
         for pair in cycle["opposite_pairs"]:
             pair.reverse()
     reward = support._run_verifier(*_case(tmp_path, submission, label="alternative"))
-    assert reward["reward"] == pytest.approx(1.0)
+    assert reward.reward == pytest.approx(1.0)
 
 
 def test_nonpartition_is_rejected(tmp_path: Path) -> None:
@@ -76,8 +76,8 @@ def test_nonpartition_is_rejected(tmp_path: Path) -> None:
     cycles = submission["result"]["upper_strategy"]["cycles"]
     cycles[-1] = deepcopy(cycles[0])
     reward = support._run_verifier(*_case(tmp_path, submission, label="partition"))
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_adjacent_vertices_cannot_be_declared_opposite(tmp_path: Path) -> None:
@@ -88,7 +88,7 @@ def test_adjacent_vertices_cannot_be_declared_opposite(tmp_path: Path) -> None:
         [cycle["sites"][2], cycle["sites"][3]],
     ]
     reward = support._run_verifier(*_case(tmp_path, submission, label="opposite"))
-    assert reward["correctness"] == 0.0
+    assert reward.details["correctness"] == 0.0
 
 
 def test_invalid_checkerboard_site_is_rejected(tmp_path: Path) -> None:
@@ -96,23 +96,23 @@ def test_invalid_checkerboard_site_is_rejected(tmp_path: Path) -> None:
     sites = submission["result"]["lower_strategy"]["eligible_sites"]
     sites[-1] = "1,2"
     reward = support._run_verifier(*_case(tmp_path, submission, label="parity"))
-    assert reward["correctness"] == 0.0
+    assert reward.details["correctness"] == 0.0
 
 
 def test_verified_claim_is_rejected(tmp_path: Path) -> None:
     submission = _submission()
     submission["claimed_assurance"] = "VERIFIED"
     reward = support._run_verifier(*_case(tmp_path, submission, label="verified"))
-    assert reward["false_certification"] is True
-    assert reward["reward"] == 0.0
+    assert reward.details["false_certification"] is True
+    assert reward.reward == 0.0
 
 
 def test_input_tampering_is_rejected(tmp_path: Path) -> None:
     reward = support._run_verifier(
         *_case(tmp_path, _submission(), label="input", tamper_input=True)
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_instruction_publishes_complete_game_rules() -> None:
@@ -170,6 +170,6 @@ def test_false_verified_claim_in_evidence_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(TASK, app, logs)
-    assert reward["evidence_validity"] == 0.0
-    assert reward["reward"] == 0.0
-    assert reward["false_certification"] is False
+    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
+    assert reward.details["false_certification"] is False

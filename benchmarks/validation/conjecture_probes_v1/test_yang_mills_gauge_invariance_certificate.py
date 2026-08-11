@@ -47,41 +47,41 @@ def run(app, logs):
 
 def test_oracle_passes(tmp_path):
     app, logs, _ = case(tmp_path)
-    assert run(app, logs)["aggregate_reward"] == 1.0
+    assert run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_corrupt_transformed_link_and_plaquette_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["result"]["transformed_links"][0][0] = "2"
     write(app, s)
-    assert run(app, logs)["mathematics"] == 0.0
+    assert run(app, logs).details["mathematics"] == 0.0
     app, logs, s = case(tmp_path / "p")
     s["result"]["plaquette"][1] = "0"
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_identity_shortcut_and_nonunit_gauge_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["result"]["links"] = [["1", "0", "0", "0"]] * 4
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
     app, logs, s = case(tmp_path / "unit")
     s["result"]["gauges"][0] = ["1", "1", "0", "0"]
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_false_verified_and_tampered_input_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["claimed_assurance"] = "VERIFIED"
     write(app, s)
-    assert run(app, logs)["false_certification"] is True
+    assert run(app, logs).details["false_certification"] is True
     app, logs, _ = case(tmp_path / "input")
     (app / "input.json").write_text("{}\n")
     r = run(app, logs)
     assert (
-        r["input_binding"] == 0.0
-        and r["mathematics"] == 1.0
-        and r["aggregate_reward"] == 0.0
+        r.details["input_binding"] == 0.0
+        and r.details["mathematics"] == 1.0
+        and r.details["aggregate_reward"] == 0.0
     )

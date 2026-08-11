@@ -19,9 +19,10 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
+    CapabilityProviderAvailability,
+    CapabilityProviderRuntime,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -132,6 +133,14 @@ class _OperationResources:
     obligation_schema_uris: dict[str, str]
 
 
+def _operation_runtime(
+    operation: DomainOperation,
+    bundle: DomainBundle,
+) -> CapabilityProviderRuntime:
+    """Resolve provider identity at operation granularity."""
+    return operation.provider_runtime or bundle.provider_runtime
+
+
 def _execution_failure_result(
     *,
     operation: DomainOperation,
@@ -142,7 +151,6 @@ def _execution_failure_result(
     return CapabilityResult(
         capability_id=operation.capability_id,
         capability_version=operation.version,
-        mode=request.mode,
         execution=Execution(
             status=outcome.status,
             runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -160,6 +168,15 @@ def _execution_failure_result(
             basis="operation did not complete; no mathematical conclusion",
         ),
     )
+
+
+def _enriched_invalid_request(
+    base: CapabilityDiagnostic,
+    exc: ValidationError,
+) -> CapabilityDiagnostic:
+    """Add bounded, redacted Pydantic context to a bundle diagnostic."""
+
+    return _validation_diagnostic(base, exc)
 
 
 class OperationInstaller:
@@ -221,6 +238,7 @@ class OperationInstaller:
         adapters = tuple(
             self._adapter(operation, bundle, resources)
             for operation in bundle.capabilities
+            if self._operation_available(operation, bundle)
         )
         return InstalledDomainBundle(
             adapters=adapters,
@@ -229,6 +247,14 @@ class OperationInstaller:
             result_schema_uris=result_schema_uris,
             obligation_schema_uris=obligation_schema_uris,
         )
+
+    @staticmethod
+    def _operation_available(
+        operation: DomainOperation,
+        bundle: DomainBundle,
+    ) -> bool:
+        runtime = _operation_runtime(operation, bundle)
+        return runtime.availability is CapabilityProviderAvailability.AVAILABLE
 
     @staticmethod
     def _adapter(
@@ -275,9 +301,8 @@ class ComputedOperationAdapter:
             version=operation.version,
             title=operation.title,
             description=operation.description,
-            provider=bundle.provider_runtime.provider,
-            provider_runtime=bundle.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
+            provider=_operation_runtime(operation, bundle).provider,
+            provider_runtime=_operation_runtime(operation, bundle),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             read_only=True,
@@ -295,12 +320,14 @@ class ComputedOperationAdapter:
                 request.input
             )
         except ValidationError as exc:
+            base = (
+                self.operation.invalid_request
+                or self.bundle.diagnostics.invalid_request
+            )
             raise CapabilityInvocationError(
-                _validation_diagnostic(
-                    self.operation.invalid_request
-                    or self.bundle.diagnostics.invalid_request,
-                    exc,
-                )
+                base
+                if self.operation.invalid_request is not None
+                else _enriched_invalid_request(base, exc)
             ) from exc
 
         started = time.monotonic()
@@ -324,7 +351,6 @@ class ComputedOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -369,9 +395,8 @@ class MaterializedOperationAdapter:
             version=operation.version,
             title=operation.title,
             description=operation.description,
-            provider=bundle.provider_runtime.provider,
-            provider_runtime=bundle.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
+            provider=_operation_runtime(operation, bundle).provider,
+            provider_runtime=_operation_runtime(operation, bundle),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             tags=operation.tags,
@@ -403,7 +428,10 @@ class MaterializedOperationAdapter:
             if self.operation.artifact_converter is not None:
                 uri_field = self.operation.artifact_uri_field
                 payload_model = self.operation.artifact_payload_model
-                assert uri_field is not None and payload_model is not None
+                if uri_field is None or payload_model is None:
+                    raise RuntimeError(
+                        "artifact converter requires uri_field and payload_model"
+                    )
                 artifact_uri = getattr(validated_request, uri_field)
                 if artifact_uri is not None:
                     artifact = self.resources.artifacts.store.get(artifact_uri)
@@ -424,12 +452,16 @@ class MaterializedOperationAdapter:
             ValidationError,
             ValueError,
         ) as exc:
-            diagnostic = (
+            base = (
                 self.operation.invalid_request
                 or self.bundle.diagnostics.invalid_request
             )
-            if isinstance(exc, ValidationError):
-                diagnostic = _validation_diagnostic(diagnostic, exc)
+            if self.operation.invalid_request is not None or not isinstance(
+                exc, ValidationError
+            ):
+                diagnostic = base
+            else:
+                diagnostic = _enriched_invalid_request(base, exc)
             raise CapabilityInvocationError(diagnostic) from exc
         started = time.monotonic()
         outcome = self.operation.implementation(validated_request)
@@ -471,12 +503,15 @@ class MaterializedOperationAdapter:
             result_uri=result_uri,
             preview=preview,
             preview_complete=self.operation.preview_complete,
-            backend_version=self.bundle.backend_version,
+            backend_version=(
+                self.operation.provider_runtime.version or self.bundle.backend_version
+                if self.operation.provider_runtime is not None
+                else self.bundle.backend_version
+            ),
         )
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -524,9 +559,8 @@ class BoundedSearchOperationAdapter:
             version=operation.version,
             title=operation.title,
             description=operation.description,
-            provider=bundle.provider_runtime.provider,
-            provider_runtime=bundle.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
+            provider=_operation_runtime(operation, bundle).provider,
+            provider_runtime=_operation_runtime(operation, bundle),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(operation.result_model),
             tags=operation.tags,
@@ -546,12 +580,14 @@ class BoundedSearchOperationAdapter:
                 request.input
             )
         except ValidationError as exc:
+            base = (
+                self.operation.invalid_request
+                or self.bundle.diagnostics.invalid_request
+            )
             raise CapabilityInvocationError(
-                _validation_diagnostic(
-                    self.operation.invalid_request
-                    or self.bundle.diagnostics.invalid_request,
-                    exc,
-                )
+                base
+                if self.operation.invalid_request is not None
+                else _enriched_invalid_request(base, exc)
             ) from exc
 
         started = time.monotonic()
@@ -611,7 +647,6 @@ class BoundedSearchOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
-            mode=request.mode,
             execution=Execution(
                 status=(
                     interrupted_outcome.status

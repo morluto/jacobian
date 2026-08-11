@@ -25,8 +25,8 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
 
 def _result_payload(services: DomainTestServices, result: object) -> dict[str, object]:
-    result_uri = result.output["result_uri"]  # type: ignore[attr-defined]
-    return services.core.store.get(result_uri).payload
+    del services
+    return result.output["result"]  # type: ignore[attr-defined]
 
 
 def test_cycle_rotation_has_one_vertex_and_one_edge_orbit(
@@ -87,7 +87,7 @@ def test_cycle_rotation_has_one_vertex_and_one_edge_orbit(
         == "FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"
     )
     assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.artifact_uris) == 2
+    assert result.artifact_uris == ()
 
 
 def test_colored_path_reflection_preserves_declared_classes(
@@ -216,13 +216,9 @@ def test_maximum_contract_payloads_fit_artifact_and_checker_budgets(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    input_artifact = domain_services.core.store.get(result.artifact_uris[0])
-    output_artifact = domain_services.core.store.get(result.artifact_uris[1])
-    input_bytes = len(canonicalize_json(input_artifact.payload))
-    output_bytes = len(canonicalize_json(output_artifact.payload))
-    assert input_bytes < 10 * 1024 * 1024
+    assert result.artifact_uris == ()
+    output_bytes = len(canonicalize_json(result.output["result"]))
     assert output_bytes < 10 * 1024 * 1024
-    assert input_bytes + output_bytes < 8 * 1024 * 1024
 
 
 def test_multibyte_payload_over_artifact_budget_is_a_scored_input_error(

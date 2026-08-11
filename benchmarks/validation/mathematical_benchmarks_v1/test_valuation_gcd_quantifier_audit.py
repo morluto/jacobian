@@ -45,14 +45,14 @@ def _verify(tmp_path, submission):
 
 
 def test_oracle_and_alternative_repair(tmp_path):
-    assert _verify(tmp_path / "oracle", _oracle())["reward"] == 1.0
+    assert _verify(tmp_path / "oracle", _oracle()).reward == 1.0
     alt = _oracle()
     alt["result"]["repair"] = [
         {"prime": 2, "exponents": [0, 1, 1, 1]},
         {"prime": 7, "exponents": [1, 0, 1, 1]},
         {"prime": 11, "exponents": [1, 1, 0, 1]},
     ]
-    assert _verify(tmp_path / "alt", alt)["reward"] == 1.0
+    assert _verify(tmp_path / "alt", alt).reward == 1.0
 
 
 def test_rejects_weak_countermodel_and_false_assurance(tmp_path):
@@ -62,7 +62,7 @@ def test_rejects_weak_countermodel_and_false_assurance(tmp_path):
     ]:
         submission = copy.deepcopy(_oracle())
         mutate(submission)
-        assert _verify(tmp_path / name, submission)["reward"] == 0
+        assert _verify(tmp_path / name, submission).reward == 0
 
 
 def test_rejects_zero_row_that_is_not_a_prime_factor(tmp_path):
@@ -73,8 +73,8 @@ def test_rejects_zero_row_that_is_not_a_prime_factor(tmp_path):
         {"prime": 5, "exponents": [2, 2, 2, 2]},
     ]
     reward = _verify(tmp_path, submission)
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0
 
 
 def test_rejects_out_of_bound_prime_without_crashing(tmp_path):
@@ -82,8 +82,8 @@ def test_rejects_out_of_bound_prime_without_crashing(tmp_path):
         submission = copy.deepcopy(_oracle())
         submission["result"]["countermodel"][0]["prime"] = prime
         reward = _verify(tmp_path / name, submission)
-        assert reward["correctness"] == 0.0
-        assert reward["reward"] == 0
+        assert reward.details["correctness"] == 0.0
+        assert reward.reward == 0
         assert (tmp_path / name / "logs" / "reward.json").is_file()
 
 
@@ -99,9 +99,9 @@ def test_evidence_result_requires_exact_json_types(tmp_path):
     )
     (app / "submission.json").write_text(json.dumps(submission))
     reward = _run_verifier(task, app, logs)
-    assert reward["correctness"] == 1.0
-    assert reward["evidence_validity"] == 0.0
-    assert reward["reward"] == 0
+    assert reward.details["correctness"] == 1.0
+    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0
 
 
 def test_math_diagnostic_survives_envelope_failures(tmp_path):
@@ -117,5 +117,5 @@ def test_math_diagnostic_survives_envelope_failures(tmp_path):
         submission = copy.deepcopy(_oracle())
         mutate(submission)
         reward = _verify(tmp_path / name, submission)
-        assert reward["correctness"] == expected_correctness, name
-        assert reward["reward"] == 0
+        assert reward.details["correctness"] == expected_correctness, name
+        assert reward.reward == 0

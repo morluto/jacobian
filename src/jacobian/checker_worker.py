@@ -31,12 +31,21 @@ from jacobian.provider_runtime import (
     ProviderRuntimeErrorCode,
     require_provider_runtime_unchanged,
 )
+from jacobian.providers.lean_runtime import (
+    LeanRuntimeIdentityError,
+    require_lean_semantic_runtime_identity,
+)
+from jacobian.verification.checker_protocol import (
+    CheckerWorkerErrorCode,
+    CheckerWorkerFailure,
+    CheckerWorkerSuccess,
+)
 
 
 class _CheckerWorkerFailureError(ValueError):
     """A bounded failure classification for checker-owned runtime parsing."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: CheckerWorkerErrorCode) -> None:
         self.code = code
         super().__init__(code)
 
@@ -58,6 +67,7 @@ def _measure_runtime(
     os.environ.pop("JACOBIAN_CHECKER_EXECUTABLE", None)
     os.environ.pop("JACOBIAN_CHECKER_RUNTIME_DIGEST", None)
     os.environ.pop("JACOBIAN_CHECKER_LAKE_DIGEST", None)
+    os.environ.pop("JACOBIAN_CHECKER_LEAN_PROJECT_ROOT", None)
     if encoded is None:
         return None, None
     try:
@@ -66,7 +76,7 @@ def _measure_runtime(
     except (CanonicalizationError, ValidationError) as exc:
         raise _CheckerWorkerFailureError("MALFORMED_RUNTIME") from exc
     except ProviderRuntimeError as exc:
-        code = (
+        code: CheckerWorkerErrorCode = (
             "MALFORMED_RUNTIME"
             if exc.code is ProviderRuntimeErrorCode.MALFORMED_RUNTIME
             else "EXECUTION_FAILED"
@@ -83,9 +93,28 @@ def _measure_runtime(
             raise ValueError("checker runtime path is not exact")
         os.environ["JACOBIAN_CHECKER_EXECUTABLE"] = str(path)
         _bind_lake_launcher(runtime)
-    assert runtime.digest is not None
+    _bind_lean_semantic_environment(runtime)
+    if runtime.digest is None:
+        raise RuntimeError("runtime digest is unexpectedly None")
     os.environ["JACOBIAN_CHECKER_RUNTIME_DIGEST"] = runtime.digest
     return runtime, runtime.digest
+
+
+def _bind_lean_semantic_environment(runtime: CapabilityProviderRuntime) -> None:
+    if runtime.provider != "jacobian.lean4":
+        return
+    semantic_runtime = runtime.configuration.get("semantic_runtime")
+    if semantic_runtime is None:
+        return
+    if not isinstance(semantic_runtime, dict):
+        raise _CheckerWorkerFailureError("MALFORMED_RUNTIME")
+    try:
+        require_lean_semantic_runtime_identity(runtime)
+    except LeanRuntimeIdentityError as exc:
+        raise _CheckerWorkerFailureError("EXECUTION_FAILED") from exc
+    project = semantic_runtime.get("mathlib_project")
+    if isinstance(project, dict) and isinstance(project.get("root"), str):
+        os.environ["JACOBIAN_CHECKER_LEAN_PROJECT_ROOT"] = project["root"]
 
 
 def _bind_lake_launcher(runtime: CapabilityProviderRuntime) -> None:
@@ -120,7 +149,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
-    error_code = "EXECUTION_FAILED"
+    error_code: CheckerWorkerErrorCode = "EXECUTION_FAILED"
     request_decoded = False
     try:
         request = loads_strict_json(sys.stdin.buffer.read())
@@ -151,32 +180,32 @@ def main() -> int:
         if runtime_digest_after != runtime_digest_before:
             error_code = "SOURCE_CHANGED"
             raise ValueError("checker runtime changed during execution")
-        sys.stdout.buffer.write(
-            canonicalize_json(
-                {
-                    "decision": response,
-                    "measured_checker_digest": measured_after,
-                    "measured_runtime_digest": runtime_digest_after,
-                }
-            )
+        error_code = "RESPONSE_INVALID"
+        success = CheckerWorkerSuccess.model_validate(
+            {
+                "decision": response,
+                "measured_checker_digest": measured_after,
+                "measured_runtime_digest": runtime_digest_after,
+            }
         )
+        sys.stdout.buffer.write(canonicalize_json(success.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 0
     except _CheckerWorkerFailureError as exc:
-        error = {"error_code": exc.code}
-        sys.stdout.buffer.write(canonicalize_json(error))
+        error = CheckerWorkerFailure(error_code=exc.code)
+        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
     except CanonicalizationError:
-        error = {
-            "error_code": "RESPONSE_INVALID" if request_decoded else "INVALID_REQUEST"
-        }
-        sys.stdout.buffer.write(canonicalize_json(error))
+        error = CheckerWorkerFailure(
+            error_code="RESPONSE_INVALID" if request_decoded else "INVALID_REQUEST"
+        )
+        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
     except Exception:  # checker isolation turns all failures into ERROR
-        error = {"error_code": error_code}
-        sys.stdout.buffer.write(canonicalize_json(error))
+        error = CheckerWorkerFailure(error_code=error_code)
+        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
         sys.stdout.buffer.write(b"\n")
         return 1
 

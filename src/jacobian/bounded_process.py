@@ -92,6 +92,28 @@ def _read_proc_status(pid_dir: Path) -> tuple[int, int] | None:
     return parent, rss_kb * 1024
 
 
+def _read_proc_pss_bytes(pid_dir: Path) -> int | None:
+    """Return proportional resident memory from ``smaps_rollup`` when available.
+
+    Summing ``VmRSS`` for a process tree counts shared Lean and Mathlib pages
+    once for every process that maps them.  PSS apportions those shared pages,
+    so it represents the tree's actual memory footprint much more closely.
+    """
+
+    try:
+        lines = (pid_dir / "smaps_rollup").read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    for line in lines:
+        if not line.startswith("Pss:"):
+            continue
+        try:
+            return int(line.split()[1]) * 1024
+        except (IndexError, ValueError):
+            return None
+    return None
+
+
 def _collect_linux_processes() -> dict[int, tuple[int, int]] | None:
     """Read all ``/proc`` process statuses, or ``None`` if procfs is unavailable."""
 
@@ -132,6 +154,29 @@ def _linux_process_tree_rss_bytes(root_pid: int) -> int | None:
         return None
     descendants = _descendant_pids(processes, root_pid)
     return sum(processes.get(pid, (0, 0))[1] for pid in descendants)
+
+
+def _linux_process_tree_memory_bytes(root_pid: int) -> int | None:
+    """Return proportional memory for a Linux process tree.
+
+    ``smaps_rollup`` PSS avoids counting shared pages once for every process
+    that maps them. Constrained or older procfs installations fall back to
+    VmRSS, retaining a conservative bound.
+    """
+
+    if not sys.platform.startswith("linux"):
+        return None
+    processes = _collect_linux_processes()
+    if processes is None:
+        return None
+    descendants = _descendant_pids(processes, root_pid)
+    memory_bytes = 0
+    for pid in descendants:
+        pss_bytes = _read_proc_pss_bytes(Path("/proc") / str(pid))
+        memory_bytes += (
+            processes.get(pid, (0, 0))[1] if pss_bytes is None else pss_bytes
+        )
+    return memory_bytes
 
 
 @contextmanager
@@ -832,8 +877,10 @@ class BoundedInteractiveProcess:
     def _memory_limit_exceeded(self, pid: int) -> bool:
         if self._request.max_rss_kb == 0:
             return False
-        rss_bytes = _linux_process_tree_rss_bytes(pid)
-        return rss_bytes is not None and rss_bytes > self._request.max_rss_kb * 1024
+        memory_bytes = _linux_process_tree_memory_bytes(pid)
+        return (
+            memory_bytes is not None and memory_bytes > self._request.max_rss_kb * 1024
+        )
 
     def _enforce_memory_limit(self, pid: int) -> None:
         if self._memory_limit_exceeded(pid):

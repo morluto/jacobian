@@ -23,7 +23,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -91,7 +90,6 @@ class SatCnfMaterializationAdapter:
                 "jacobian.sat",
                 features=("canonical-cnf", "cnf-materialization"),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(SatCnfMaterializationRequest),
             output_schema=model_schema(SatCnfMaterializationOutput),
             tags=(
@@ -115,7 +113,6 @@ class SatCnfMaterializationAdapter:
                         "Encode two items with exactly one of two colors and forbid "
                         "them from sharing a color."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input={
                         "variable_names": [
                             "item1_red",
@@ -202,7 +199,6 @@ class SatCnfMaterializationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -376,7 +372,6 @@ class SatAssignmentVerificationAdapter:
                 features=("total-assignment-replay", "canonical-cnf"),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(SatAssignmentVerificationRequest),
             output_schema=model_schema(SatAssignmentVerificationOutput),
             tags=(
@@ -426,7 +421,8 @@ class SatAssignmentVerificationAdapter:
             ) from exc
 
         checker_id = self.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError("checker is not installed")
         witness_artifact = put_witness_envelope(
             self.artifacts,
             witness_schema_uri=self.installation.witness_schema_uri,
@@ -511,7 +507,6 @@ class SatAssignmentVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -589,7 +584,6 @@ class SatUnsatProofVerificationAdapter:
             ),
             provider="drat-trim",
             provider_runtime=descriptor_runtime,
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(SatUnsatProofVerificationRequest),
             output_schema=model_schema(SatUnsatProofVerificationOutput),
             tags=(
@@ -641,7 +635,8 @@ class SatUnsatProofVerificationAdapter:
             ) from exc
 
         checker_id = self.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError("checker is not installed")
         bindings = EvidenceBindings(
             claim_digest=resolved.cnf_artifact.manifest.object_digest,
             semantics_digest=semantics.manifest.object_digest,
@@ -740,7 +735,6 @@ class SatUnsatProofVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

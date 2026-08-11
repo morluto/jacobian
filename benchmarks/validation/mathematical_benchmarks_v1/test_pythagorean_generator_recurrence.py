@@ -107,8 +107,8 @@ def test_integer_rejected_in_boolean_field():
 def test_reference_passes(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["protocol_compliance"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_false_verified_is_rejected(tmp_path: Path) -> None:
@@ -117,8 +117,8 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
-    assert result["false_certification"] is True
+    assert result.reward == 0.0
+    assert result.details["false_certification"] is True
 
 
 def test_protocol_failure_preserves_math_correctness(tmp_path: Path) -> None:
@@ -127,9 +127,9 @@ def test_protocol_failure_preserves_math_correctness(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_unverified_claim_preserves_other_metrics(tmp_path: Path) -> None:
@@ -138,11 +138,11 @@ def test_unverified_claim_preserves_other_metrics(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "UNVERIFIED"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_assurance_calibration_independent_of_envelope(tmp_path: Path) -> None:
@@ -151,8 +151,8 @@ def test_assurance_calibration_independent_of_envelope(tmp_path: Path) -> None:
     submission["extra_field"] = True
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_large_evidence_without_result_binding_is_rejected(tmp_path: Path) -> None:
@@ -166,8 +166,8 @@ def test_large_evidence_without_result_binding_is_rejected(tmp_path: Path) -> No
     )
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_oversized_result_marker_is_rejected_without_buffering_it(
@@ -182,8 +182,8 @@ def test_oversized_result_marker_is_rejected_without_buffering_it(
 
     result = support._run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_large_evidence_with_result_binding_is_accepted(tmp_path: Path) -> None:
@@ -205,8 +205,8 @@ def test_large_evidence_with_result_binding_is_accepted(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_keyword_only_evidence_without_result_binding_is_rejected(
@@ -219,8 +219,8 @@ def test_keyword_only_evidence_without_result_binding_is_rejected(
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_evidence_with_wrong_result_json_is_rejected(tmp_path: Path) -> None:
@@ -236,8 +236,8 @@ def test_evidence_with_wrong_result_json_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_boolean_in_result_json_evidence_is_rejected(tmp_path: Path) -> None:
@@ -256,7 +256,7 @@ def test_boolean_in_result_json_evidence_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
 
 
 def test_symlinked_workspace_input_is_rejected(tmp_path: Path) -> None:
@@ -264,7 +264,7 @@ def test_symlinked_workspace_input_is_rejected(tmp_path: Path) -> None:
     original = app / "input-original.json"
     (app / "input.json").rename(original)
     (app / "input.json").symlink_to(original)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_input_tamper_preserves_assurance_diagnostics(tmp_path: Path) -> None:
@@ -276,12 +276,12 @@ def test_input_tamper_preserves_assurance_diagnostics(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     (app / "input.json").write_text("{}")
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["input_binding"] == 0.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["input_binding"] == 0.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_result_shape_violation_reports_protocol_failure(tmp_path: Path) -> None:
@@ -292,9 +292,9 @@ def test_result_shape_violation_reports_protocol_failure(tmp_path: Path) -> None
     submission["result"]["extra_property"] = 1
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_float_in_result_reports_protocol_failure(tmp_path: Path) -> None:
@@ -305,9 +305,9 @@ def test_float_in_result_reports_protocol_failure(tmp_path: Path) -> None:
     submission["result"]["transform_determinant"] = -1.0
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_float_matrix_entry_reports_protocol_failure(tmp_path: Path) -> None:
@@ -318,9 +318,9 @@ def test_float_matrix_entry_reports_protocol_failure(tmp_path: Path) -> None:
     submission["result"]["transform_matrix"][0][0] = 2.0
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_negative_stage_index_reports_protocol_failure(tmp_path: Path) -> None:
@@ -331,17 +331,17 @@ def test_negative_stage_index_reports_protocol_failure(tmp_path: Path) -> None:
     submission["result"]["stages"][0]["stage"] = -1
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_reference_reports_input_binding(tmp_path: Path) -> None:
     """A valid reference submission must report input_binding = 1.0."""
     task, app, logs = _case(tmp_path)
     result = support._run_verifier(task, app, logs)
-    assert result["input_binding"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["input_binding"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_null_evidence_descriptor_reports_protocol_failure(
@@ -354,9 +354,9 @@ def test_null_evidence_descriptor_reports_protocol_failure(
     submission["evidence"] = [None]
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_evidence_descriptor_extra_field_reports_protocol_failure(
@@ -369,9 +369,9 @@ def test_evidence_descriptor_extra_field_reports_protocol_failure(
     submission["evidence"][0]["extra"] = True
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_evidence_descriptor_bad_digest_syntax_reports_protocol_failure(
@@ -384,9 +384,9 @@ def test_evidence_descriptor_bad_digest_syntax_reports_protocol_failure(
     submission["evidence"][0]["sha256"] = "not-a-digest"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_multiple_result_json_markers_are_rejected(tmp_path: Path) -> None:
@@ -402,8 +402,8 @@ def test_multiple_result_json_markers_are_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_instruction_documents_evidence_binding():

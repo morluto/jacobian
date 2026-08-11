@@ -6,10 +6,15 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, StrictStr, model_validator
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.claims import flatten_claim_spec
 from jacobian.contracts.exact import CanonicalInteger
 from jacobian.contracts.plugin_protocol import PluginRequestContext
 from jacobian.contracts.results import ContractModel
+
+
+def _matrix_integer(value: int | str) -> int:
+    return value if isinstance(value, int) else parse_canonical_integer(value)
 
 
 class MatrixScope(ContractModel):
@@ -57,11 +62,16 @@ class MatrixCandidate(ContractModel):
         ):
             raise ValueError("determinant predicates require a square matrix")
         if claim.predicate == "maximize_absolute_determinant":
-            assert claim.scope is not None
+            if claim.scope is None:
+                raise ValueError("maximize_absolute_determinant requires a scope")
             if self.rows != claim.scope.rows or self.cols != claim.scope.cols:
                 raise ValueError("candidate dimensions do not match claim scope")
-            allowed = {int(value) for value in claim.scope.entries}
-            if any(int(entry) not in allowed for row in self.entries for entry in row):
+            allowed = {_matrix_integer(value) for value in claim.scope.entries}
+            if any(
+                _matrix_integer(entry) not in allowed
+                for row in self.entries
+                for entry in row
+            ):
                 raise ValueError("candidate entry is outside claim scope")
 
 

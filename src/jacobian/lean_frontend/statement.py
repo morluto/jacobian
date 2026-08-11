@@ -19,7 +19,6 @@ unavailable/diagnostic behavior rather than a silent success.
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import tempfile
 from dataclasses import dataclass
@@ -40,7 +39,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -62,10 +60,16 @@ from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.process_policy import (
     ProcessRequest,
+    ProcessResult,
     ProcessTermination,
     execute_process,
 )
-from jacobian.providers.lean_runtime import lean_frontend_provider_runtime
+from jacobian.providers.lean_runtime import (
+    LeanRuntimeIdentityError,
+    lean_frontend_provider_runtime,
+    lean_semantic_runtime_digest,
+    require_lean_semantic_runtime_identity,
+)
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.worker_environment import worker_environment
@@ -313,14 +317,13 @@ def _execute_lean_source(
     timeout_seconds: int,
 ) -> str:
     _require_current_runtime(provider_runtime)
-    fd, temp_path = tempfile.mkstemp(suffix=".lean")
+    temp_path: str | None = None
+    result: ProcessResult | None = None
     try:
-        try:
-            handle = os.fdopen(fd, "w")
-        except OSError:
-            os.close(fd)
-            raise
-        with handle:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".lean", delete=False
+        ) as handle:
+            temp_path = handle.name
             handle.write(source)
         lean_bin = executable or _lean_executable()
         environment = _lean_process_environment(lean_bin)
@@ -341,7 +344,8 @@ def _execute_lean_source(
             f"The pinned Lean executable could not run: {exc}"
         ) from exc
     finally:
-        Path(temp_path).unlink(missing_ok=True)
+        if temp_path is not None:
+            Path(temp_path).unlink(missing_ok=True)
     if result.termination is ProcessTermination.TIMED_OUT:
         raise _LeanUnavailableError(f"lean timed out after {timeout_seconds}s")
     if result.termination is ProcessTermination.START_FAILED:
@@ -380,7 +384,14 @@ def _require_current_runtime(
 
     try:
         require_provider_runtime_unchanged(provider_runtime)
-    except (OSError, ProviderRuntimeError, ValidationError) as exc:
+        if "semantic_runtime" in provider_runtime.configuration:
+            require_lean_semantic_runtime_identity(provider_runtime)
+    except (
+        LeanRuntimeIdentityError,
+        OSError,
+        ProviderRuntimeError,
+        ValidationError,
+    ) as exc:
         raise _LeanUnavailableError(
             "The pinned Lean executable identity changed or became unavailable."
         ) from exc
@@ -453,6 +464,7 @@ def _environment_digest(
     mathlib_commit: str | None,
     imports: tuple[str, ...],
     options: tuple[LeanElaborationOption, ...],
+    semantic_runtime_digest: str | None = None,
 ) -> str:
     payload = {
         "environment": environment.value,
@@ -461,8 +473,20 @@ def _environment_digest(
         "mathlib_commit": mathlib_commit,
         "imports": list(imports),
         "options": [option.model_dump(mode="json") for option in options],
+        "semantic_runtime_digest": semantic_runtime_digest,
     }
     return "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
+
+
+def _semantic_runtime_digest(runtime: CapabilityProviderRuntime | None) -> str | None:
+    if runtime is None:
+        return None
+    semantic_runtime = runtime.configuration.get("semantic_runtime")
+    return (
+        lean_semantic_runtime_digest(semantic_runtime)
+        if isinstance(semantic_runtime, dict)
+        else None
+    )
 
 
 def _indent_proof(proof: str) -> str:
@@ -603,7 +627,6 @@ class LeanStatementProposalAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanStatementProposalRequest.model_json_schema(),
             output_schema=LeanStatementProposalOutput.model_json_schema(),
             tags=("lean", "statement", "elaboration", "proposal", "proposition"),
@@ -618,7 +641,6 @@ class LeanStatementProposalAdapter:
                         "Elaborate the proposition True in the pinned CORE "
                         "environment without assessing its truth."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input=LeanStatementProposalRequest.model_validate(
                         {
                             "operation": "ELABORATE_PROPOSITION",
@@ -692,6 +714,9 @@ class LeanStatementProposalAdapter:
                 mathlib_commit=None,
                 imports=imports,
                 options=options,
+                semantic_runtime_digest=_semantic_runtime_digest(
+                    self.resources.provider_runtime
+                ),
             ),
             informal_claim=validated.informal_claim,
             proposed_statement=validated.proposed_statement,
@@ -724,7 +749,6 @@ class LeanStatementProposalAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -783,7 +807,6 @@ class LeanStatementCompareAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanStatementComparisonRequest.model_json_schema(),
             output_schema=LeanStatementComparisonOutput.model_json_schema(),
             tags=("lean", "statement", "comparison", "axiom-set"),
@@ -894,7 +917,6 @@ class LeanStatementCompareAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

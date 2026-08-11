@@ -117,7 +117,9 @@ def test_pinned_cvc5_measurement_runs_its_proof_reproduction(
     assert measurement.cold_start.status.value == "COMPLETED"
     assert measurement.reproduction_case.status.value == "COMPLETED"
     assert measurement.cold_install.status.value == "SKIPPED"
-    assert measurement.installed_bytes > 0
+    assert measurement.installed_size.status.value == "COMPLETED"
+    assert measurement.installed_size.bytes is not None
+    assert measurement.installed_size.bytes > 0
 
 
 def test_qf_uf_proof_is_durable_computed_evidence(

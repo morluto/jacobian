@@ -12,6 +12,7 @@ from jacobian.domains.polynomial.invariants import (
 )
 from jacobian.domains.polynomial.jacobian_syzygy import (
     GRADED_JACOBIAN_SYZYGY_CAPABILITY,
+    JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY,
 )
 from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
@@ -35,6 +36,10 @@ def build_polynomial_bundle() -> DomainBundle:
                     "standard univariate convention: linear is 1; constant and zero are 0"
                 ),
                 "square_free_normalization": "separate coefficient and monic factors",
+                "factorization": (
+                    "univariate content and monic irreducible factors over QQ; "
+                    "irreducibility is computed, not independently certified"
+                ),
                 "integer_polynomials": (
                     "dense canonical descending-degree coefficient strings over ZZ"
                 ),
@@ -57,6 +62,7 @@ def build_polynomial_bundle() -> DomainBundle:
             *POLYNOMIAL_INVARIANT_CAPABILITIES,
             POLYNOMIAL_GROEBNER_CAPABILITY,
             GRADED_JACOBIAN_SYZYGY_CAPABILITY,
+            JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY,
             *INTEGER_POLYNOMIAL_CAPABILITIES,
             *RATIONAL_POLYNOMIAL_CAPABILITIES,
         ),

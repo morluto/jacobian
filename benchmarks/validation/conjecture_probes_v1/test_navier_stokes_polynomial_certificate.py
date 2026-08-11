@@ -51,7 +51,7 @@ def _run(app: Path, logs: Path) -> dict:
 
 def test_oracle_and_alternative_scaled_rotation_pass(tmp_path: Path) -> None:
     app, logs, _submission = _case(tmp_path)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
     app, logs, submission = _case(tmp_path / "alt")
     submission["result"] = {
         "velocity": [["0", "0", "-2"], ["0", "2", "0"]],
@@ -62,7 +62,7 @@ def test_oracle_and_alternative_scaled_rotation_pass(tmp_path: Path) -> None:
         "vorticity": "4",
     }
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_zero_field_and_wrong_residual_fail(tmp_path: Path) -> None:
@@ -71,28 +71,28 @@ def test_zero_field_and_wrong_residual_fail(tmp_path: Path) -> None:
     submission["result"]["pressure"] = ["0"] * 6
     submission["result"]["vorticity"] = "0"
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
     app, logs, submission = _case(tmp_path / "residual")
     submission["result"]["momentum_x"][1] = "1"
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_noncanonical_fraction_and_false_verification_fail(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["result"]["pressure"][3] = "2/4"
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
     app, logs, submission = _case(tmp_path / "verified")
     submission["claimed_assurance"] = "VERIFIED"
     _write(app, submission)
-    assert _run(app, logs)["false_certification"] is True
+    assert _run(app, logs).details["false_certification"] is True
 
 
 def test_tampered_input_is_diagnostic_only_for_math(tmp_path: Path) -> None:
     app, logs, _submission = _case(tmp_path)
     (app / "input.json").write_text("{}\n")
     reward = _run(app, logs)
-    assert reward["input_binding"] == 0.0
-    assert reward["mathematics"] == 1.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["input_binding"] == 0.0
+    assert reward.details["mathematics"] == 1.0
+    assert reward.details["aggregate_reward"] == 0.0

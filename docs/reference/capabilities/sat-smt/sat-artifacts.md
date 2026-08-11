@@ -9,8 +9,6 @@
   installs bundled references and an exactly identified DRAT-trim runtime
 - Installed operations: `sat.model.verify` and `sat.lrat.verify` when the
   operator installs the bundled reference checkers
-- Related plan:
-  [Atomic capability portfolio](../../../contributing/atomic-capability-portfolio.md#wave-2-sat-certificate-vertical-slice)
 
 Jacobian always installs canonical CNF, total assignment, and raw DRAT proof
 artifact contracts. It exposes `sat.cnf.materialize` to turn bounded

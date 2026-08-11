@@ -433,6 +433,7 @@ __all__ = [
     "false_verified_claim",
     "is_regular_bounded_file",
     "load_submission",
+    "normalize_reward_file",
     "read_evidence_json",
     "resolve_evidence",
     "sha256_uri",
@@ -440,3 +441,48 @@ __all__ = [
     "valid_sha256_uri",
     "workspace_input_is_bound",
 ]
+
+
+def normalize_reward_file(reward_path: Path) -> None:
+    """Split a verifier's completed reward payload into scalar and details files."""
+
+    import json
+
+    def reject_duplicates(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise RuntimeError(f"duplicate verifier reward key: {key}")
+            value[key] = item
+        return value
+
+    def reject_constant(value):
+        raise RuntimeError(f"non-finite verifier reward value: {value}")
+
+    path = reward_path
+    payload = json.loads(
+        path.read_text(encoding="utf-8"),
+        object_pairs_hook=reject_duplicates,
+        parse_constant=reject_constant,
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError("verifier reward payload must be a JSON object")
+    if "reward" not in payload:
+        raise RuntimeError("verifier reward payload is missing reward")
+    reward = payload["reward"]
+    if (
+        isinstance(reward, bool)
+        or not isinstance(reward, (int, float))
+        or reward != reward
+        or abs(reward) == float("inf")
+        or not 0.0 <= reward <= 1.0
+    ):
+        raise RuntimeError("verifier reward must be a finite numeric scalar")
+    details = {key: value for key, value in payload.items() if key != "reward"}
+    (path.parent / "reward-details.json").write_text(
+        json.dumps(details, sort_keys=True, allow_nan=False), encoding="utf-8"
+    )
+    path.write_text(
+        json.dumps({"reward": reward}, sort_keys=True, allow_nan=False),
+        encoding="utf-8",
+    )

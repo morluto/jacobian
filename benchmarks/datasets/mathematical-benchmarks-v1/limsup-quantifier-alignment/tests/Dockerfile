@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact semantic-alignment verifier for a limsup quantifier-and-polarity claim.
 LABEL jacobian.task="jacobian/limsup-quantifier-alignment" \
-      jacobian.checksum="02a8d42125da85bfb8516fa7e4b7cca1b76eb50aa6d5df4cfe0fba1edda49e8f"
+      jacobian.checksum="663efa85e65f4d76985628adfa2d07c97e2b236fc12d981ae80095b103a21bb8"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

@@ -12,6 +12,7 @@ from verifier_support import (
     evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -119,6 +120,7 @@ def _reward(value: dict[str, Any]) -> None:
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
     (path / "reward.json").write_text(json.dumps(value, sort_keys=True))
+    normalize_reward_file(path / "reward.json")
 
 
 def _raw_submission() -> dict[str, Any] | None:
@@ -147,15 +149,13 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(
-            submission.get("evidence"), max_bytes=MAX_SUBMISSION_BYTES
-        )
+        and evidence_list_is_bound(submission.get("evidence"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
             submission["evidence"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=MAX_SUBMISSION_BYTES,
+            max_bytes=None,
         )
         if evidence
         else None

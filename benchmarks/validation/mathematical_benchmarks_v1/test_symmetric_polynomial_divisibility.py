@@ -14,8 +14,8 @@ def test_rejects_corrupted_multiplier(tmp_path: Path) -> None:
     submission["result"]["generator_multipliers"][0][0]["coefficient"] = "2"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_incomplete_multiplier(tmp_path: Path) -> None:
@@ -24,5 +24,5 @@ def test_rejects_incomplete_multiplier(tmp_path: Path) -> None:
     submission["result"]["generator_multipliers"][1].pop()
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

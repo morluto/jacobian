@@ -50,6 +50,10 @@ CERTIFIED_SNF_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...
             "exact",
             "bounded",
         ),
+        resource_reason=(
+            "the complete U, D, and V transformation certificate is retained for "
+            "independent replay and downstream integral-homology binding"
+        ),
         invocation_examples=(
             example(
                 "certified_smith_two_by_two",

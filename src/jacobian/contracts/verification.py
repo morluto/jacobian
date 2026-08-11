@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
+from pydantic import model_validator
+
+from jacobian.contracts._verification_rules import (
+    validate_certified_relationship_endpoints,
+    validate_decisive_replayable_evidence,
+)
 from jacobian.contracts.capabilities import CapabilityId
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
@@ -34,3 +40,18 @@ class VerificationRecord(ContractModel):
     relationship_source_artifact_uris: tuple[ArtifactUri, ...] = ()
     relationship_target_artifact_uris: tuple[ArtifactUri, ...] = ()
     obligation_uri: ArtifactUri | None = None
+
+    @model_validator(mode="after")
+    def require_decisive_replayable_record(self) -> Self:
+        validate_decisive_replayable_evidence(
+            self.conclusion,
+            self.arithmetic,
+            self.coverage,
+            self.method,
+        )
+        validate_certified_relationship_endpoints(
+            self.relation_id,
+            self.relationship_source_artifact_uris,
+            self.relationship_target_artifact_uris,
+        )
+        return self

@@ -17,8 +17,9 @@ from fractions import Fraction
 from typing import Any
 
 from pydantic import ValidationError
+from sympy import Matrix
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.plugin_matrices import (
     MatrixCandidate,
     MatrixCapabilityRequest,
@@ -38,7 +39,11 @@ MAX_SEARCHED_MATRICES = 65_536
 
 
 def _to_int(value: Any) -> int:
-    return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return parse_canonical_integer(value)
+    raise ValueError("matrix entries must be integers")
 
 
 def _to_int_matrix(entries: Any) -> list[list[int]]:
@@ -79,7 +84,7 @@ def _enumerate_typed(
         index = flat_index
         flat: list[str] = []
         for _ in range(rows * cols):
-            flat.append(str(values[index % len(values)]))
+            flat.append(format_canonical_integer(values[index % len(values)]))
             index //= len(values)
         entries = [flat[row * cols : (row + 1) * cols] for row in range(rows)]
         candidates.append({"rows": rows, "cols": cols, "entries": entries})
@@ -93,7 +98,7 @@ def _enumerate_typed(
         "scope": {
             "rows": rows,
             "cols": cols,
-            "entries": [str(value) for value in values],
+            "entries": [format_canonical_integer(value) for value in values],
             "labeled": True,
             "candidate_count": total,
         },
@@ -127,7 +132,11 @@ def transform_row_major_capability(request: dict[str, Any]) -> dict[str, Any]:
         ) from exc
     rows = selected.source.rows
     cols = selected.source.cols
-    values = [str(value) for row in _candidate_matrix(selected.source) for value in row]
+    values = [
+        format_canonical_integer(value)
+        for row in _candidate_matrix(selected.source)
+        for value in row
+    ]
     return {
         "response_version": "1",
         "transform_format": "matrix.row_major",
@@ -152,91 +161,26 @@ def transform_row_major_capability(request: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _fraction_from_sympy(value: Any) -> Fraction:
+    numerator, denominator = value.as_numer_denom()
+    return Fraction(int(numerator), int(denominator))
+
+
 def _det_fraction(matrix: list[list[int]]) -> Fraction:
-    """Exact determinant using Fraction Gaussian elimination."""
-    n = len(matrix)
-    if n == 0:
+    """Return the exact determinant through SymPy's maintained matrix kernel."""
+    if not matrix:
         return Fraction(1)
-    a = [[Fraction(x) for x in row] for row in matrix]
-    det = Fraction(1)
-    row = 0
-    for col in range(n):
-        pivot = None
-        for r in range(row, n):
-            if a[r][col] != 0:
-                pivot = r
-                break
-        if pivot is None:
-            return Fraction(0)
-        if pivot != row:
-            a[pivot], a[row] = a[row], a[pivot]
-            det = -det
-        piv = a[row][col]
-        det *= piv
-        for r in range(row + 1, n):
-            if a[r][col] == 0:
-                continue
-            factor = a[r][col] / piv
-            for c in range(col, n):
-                a[r][c] -= factor * a[row][c]
-        row += 1
-    return det
-
-
-def _row_echelon(
-    matrix: list[list[int]],
-) -> tuple[list[list[Fraction]], list[int], list[int]]:
-    """Reduce *matrix* to row echelon form over QQ.
-
-    Returns the reduced matrix together with the pivot columns and rows.
-    """
-    rows = len(matrix)
-    cols = len(matrix[0]) if rows else 0
-    a = [[Fraction(x) for x in row] for row in matrix]
-    pivot_cols: list[int] = []
-    pivot_rows: list[int] = []
-    r = 0
-    for c in range(cols):
-        pivot = None
-        for i in range(r, rows):
-            if a[i][c] != 0:
-                pivot = i
-                break
-        if pivot is None:
-            continue
-        a[pivot], a[r] = a[r], a[pivot]
-        pivot_cols.append(c)
-        pivot_rows.append(r)
-        for i in range(r + 1, rows):
-            if a[i][c] == 0:
-                continue
-            factor = a[i][c] / a[r][c]
-            for j in range(c, cols):
-                a[i][j] -= factor * a[r][j]
-        r += 1
-    return a, pivot_cols, pivot_rows
+    return _fraction_from_sympy(Matrix(matrix).det())
 
 
 def _kernel_vector(matrix: list[list[int]]) -> list[Fraction] | None:
     """Return a non-zero rational vector in the kernel, or None if trivial."""
-    rows = len(matrix)
-    cols = len(matrix[0]) if rows else 0
-    a, pivot_cols, pivot_rows = _row_echelon(matrix)
-
-    if len(pivot_cols) == cols:
+    if not matrix:
         return None
-
-    free_cols = [c for c in range(cols) if c not in pivot_cols]
-    sol = [Fraction(0) for _ in range(cols)]
-    sol[free_cols[0]] = Fraction(1)
-
-    for r_idx, c_idx in reversed(list(zip(pivot_rows, pivot_cols, strict=True))):
-        total = Fraction(0)
-        for j in range(c_idx + 1, cols):
-            total += a[r_idx][j] * sol[j]
-        sol[c_idx] = -total / a[r_idx][c_idx]
-
-    return sol
+    nullspace = Matrix(matrix).nullspace()
+    if not nullspace:
+        return None
+    return [_fraction_from_sympy(value) for value in nullspace[0]]
 
 
 def _is_singular(matrix: list[list[int]]) -> bool:

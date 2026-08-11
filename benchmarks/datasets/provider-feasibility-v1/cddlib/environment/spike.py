@@ -14,10 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.command_runner import (
-    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
-    run_tool_command,
+)
+from benchmarks.tooling.spike_utils import (
+    canonical_json,
+    default_runner,
+    sha256_bytes,
 )
 
 PIN_PATH = Path(__file__).with_name("pin.json")
@@ -41,28 +44,6 @@ ProcessRunner = Callable[..., ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 
 
-def _default_runner(
-    command: Sequence[str],
-    *,
-    input_bytes: bytes,
-    timeout_seconds: float,
-    environment: Mapping[str, str],
-    stdout_limit: int,
-    stderr_limit: int,
-) -> ToolCommandResult:
-    request = ToolCommandRequest(
-        executable=command[0],
-        arguments=tuple(command[1:]),
-        environment=environment,
-        cwd=str(Path.cwd()),
-        timeout_seconds=timeout_seconds,
-        stdin_bytes=input_bytes,
-        stdout_limit_bytes=stdout_limit,
-        stderr_limit_bytes=stderr_limit,
-    )
-    return run_tool_command(request)
-
-
 class CddlibSpikeError(RuntimeError):
     """A typed non-conclusion from the optional-provider spike."""
 
@@ -73,23 +54,12 @@ class CddlibSpikeError(RuntimeError):
         self.detail = detail
 
 
-def _sha256_bytes(payload: bytes) -> str:
-    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
-
-
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return f"sha256:{digest.hexdigest()}"
-
-
-def _canonical_json(payload: object) -> bytes:
-    return (
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-        + "\n"
-    ).encode("ascii")
 
 
 def _load_pin(path: Path) -> dict[str, Any]:
@@ -272,7 +242,7 @@ def _inspect_archive(
 
     for member_name, payload in contents.items():
         expected = source_pin["identity_members"][member_name]
-        if _sha256_bytes(payload) != expected["sha256"]:
+        if sha256_bytes(payload) != expected["sha256"]:
             raise CddlibSpikeError(
                 "REJECTED",
                 "SOURCE_METADATA_MISMATCH",
@@ -782,7 +752,7 @@ def _parse_provider_output(output: bytes, pin: Mapping[str, Any]) -> dict[str, A
             "PROVIDER_OUTPUT_MALFORMED",
             "The pycddlib output is not canonical ASCII JSON.",
         ) from exc
-    if not isinstance(payload, dict) or _canonical_json(payload) != output:
+    if not isinstance(payload, dict) or canonical_json(payload) != output:
         raise CddlibSpikeError(
             "ERROR",
             "PROVIDER_OUTPUT_MALFORMED",
@@ -817,7 +787,7 @@ def _parse_provider_output(output: bytes, pin: Mapping[str, Any]) -> dict[str, A
     reproduction = pin["reproduction"]
     if (
         mathematical != _expected_mathematical(pin)
-        or _sha256_bytes(_canonical_json(mathematical))
+        or sha256_bytes(canonical_json(mathematical))
         != reproduction["expected_mathematical_output_sha256"]
     ):
         raise CddlibSpikeError(
@@ -834,7 +804,7 @@ def run_spike(
     cddlib_source_archive: Path,
     pycddlib_source_archive: Path,
     timeout_seconds: float = 10,
-    runner: ProcessRunner = _default_runner,
+    runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
     adapter_source: Path = ADAPTER_SOURCE,
 ) -> dict[str, Any]:
@@ -904,7 +874,7 @@ def run_spike(
             },
             "reproduction": {
                 "scope": pin["reproduction"]["scope"],
-                "provider_output_sha256": _sha256_bytes(output),
+                "provider_output_sha256": sha256_bytes(output),
                 "exact_arithmetic": provider_output["exact_arithmetic"],
                 "cases": provider_output["cases"],
             },
@@ -964,7 +934,7 @@ def _worker(pin_path: Path) -> int:
     installed_version = importlib.metadata.version("pycddlib")
     if installed_version != pin["versions"]["pycddlib"]:
         sys.stdout.buffer.write(
-            _canonical_json(
+            canonical_json(
                 {
                     "contract": pin["contract"],
                     "provider": pin["provider"],
@@ -1072,7 +1042,7 @@ def _worker(pin_path: Path) -> int:
             "distribution_record_sha256": _sha256_file(record_path),
         },
     }
-    sys.stdout.buffer.write(_canonical_json(payload))
+    sys.stdout.buffer.write(canonical_json(payload))
     return 0
 
 
@@ -1094,7 +1064,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "code": exc.code,
                 "detail": exc.detail,
             }
-            sys.stderr.buffer.write(_WORKER_ERROR_PREFIX + _canonical_json(payload))
+            sys.stderr.buffer.write(_WORKER_ERROR_PREFIX + canonical_json(payload))
             return 64
     if (
         args.python_executable is None

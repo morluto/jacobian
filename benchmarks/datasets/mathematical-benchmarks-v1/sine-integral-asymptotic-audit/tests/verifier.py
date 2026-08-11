@@ -10,6 +10,7 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     is_regular_bounded_file,
+    normalize_reward_file,
     resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -251,6 +252,7 @@ def main() -> None:
             }
         )
     )
+    normalize_reward_file(output / "reward.json")
 
 
 if __name__ == "__main__":

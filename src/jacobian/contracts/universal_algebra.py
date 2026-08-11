@@ -39,20 +39,24 @@ class MagmaTerm(ContractModel):
     def node_count(self) -> int:
         if self.kind == "VARIABLE":
             return 1
-        assert self.left is not None and self.right is not None
+        if self.left is None or self.right is None:
+            raise ValueError("product terms require exactly two child terms")
         return 1 + self.left.node_count() + self.right.node_count()
 
     def depth(self) -> int:
         if self.kind == "VARIABLE":
             return 1
-        assert self.left is not None and self.right is not None
+        if self.left is None or self.right is None:
+            raise ValueError("product terms require exactly two child terms")
         return 1 + max(self.left.depth(), self.right.depth())
 
     def variable_names(self) -> frozenset[str]:
         if self.kind == "VARIABLE":
-            assert self.variable is not None
+            if self.variable is None:
+                raise ValueError("variable terms require only a variable name")
             return frozenset((self.variable,))
-        assert self.left is not None and self.right is not None
+        if self.left is None or self.right is None:
+            raise ValueError("product terms require exactly two child terms")
         return self.left.variable_names() | self.right.variable_names()
 
 
@@ -270,7 +274,6 @@ class UniversalAlgebraCertificateVerificationPayload(ContractModel):
 
 class UniversalAlgebraVerificationHandoff(ContractModel):
     capability_id: Literal["certificate.verify"] = "certificate.verify"
-    mode: Literal["VERIFY"] = "VERIFY"
     payload: UniversalAlgebraCertificateVerificationPayload
 
 
@@ -331,15 +334,14 @@ class FiniteMagmaCountermodelArtifact(ContractModel):
     def require_status_evidence_shape(self) -> Self:
         evidence = (self.structure, self.source_records, self.target_record)
         if self.status is CountermodelSearchStatus.WITNESS_FOUND:
-            if any(value is None for value in evidence):
+            if (
+                self.structure is None
+                or self.source_records is None
+                or self.target_record is None
+            ):
                 raise ValueError(
                     "found countermodels require complete witness evidence"
                 )
-            assert (
-                self.structure is not None
-                and self.source_records is not None
-                and self.target_record is not None
-            )
             if self.structure.order != self.order:
                 raise ValueError(
                     "countermodel carrier order must match the search order"

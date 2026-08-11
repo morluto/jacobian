@@ -1,0 +1,272 @@
+{
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "task_id": "jacobian/thrackle-local-maximality-certificate",
+  "conclusion": {
+    "const": "LOCAL_THRACKLE_CERTIFIED"
+  },
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "scope": {
+    "type": "string",
+    "const": "five-point-thrackle-local-maximality-v1"
+  },
+  "limitations": {
+    "const": [
+      "ONE_FIVE_POINT_CONFIGURATION",
+      "LOCAL_MAXIMALITY_INSIDE_FROZEN_K5",
+      "THRACKLE_CONJECTURE_NOT_ASSESSED"
+    ]
+  },
+  "required_artifact_filenames": [
+    "evidence/answer.json"
+  ],
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "min_items": 1,
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "payload_shape": null
+  },
+  "schema_definitions": {
+    "edge": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4
+      }
+    }
+  },
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "selected_edges",
+      "pair_classifications",
+      "excluded_edge_witnesses"
+    ],
+    "properties": {
+      "selected_edges": {
+        "type": "array",
+        "minItems": 5,
+        "maxItems": 5,
+        "items": {
+          "$ref": "#/$defs/edge"
+        }
+      },
+      "pair_classifications": {
+        "type": "array",
+        "minItems": 10,
+        "maxItems": 10,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "left",
+            "right",
+            "relation"
+          ],
+          "properties": {
+            "left": {
+              "$ref": "#/$defs/edge"
+            },
+            "right": {
+              "$ref": "#/$defs/edge"
+            },
+            "relation": {
+              "enum": [
+                "SHARED_ENDPOINT",
+                "PROPER_CROSSING"
+              ]
+            }
+          }
+        }
+      },
+      "excluded_edge_witnesses": {
+        "type": "array",
+        "minItems": 5,
+        "maxItems": 5,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "excluded",
+            "disjoint_selected"
+          ],
+          "properties": {
+            "excluded": {
+              "$ref": "#/$defs/edge"
+            },
+            "disjoint_selected": {
+              "$ref": "#/$defs/edge"
+            }
+          }
+        }
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/thrackle-local-maximality-certificate"
+      },
+      "conclusion": {
+        "const": "LOCAL_THRACKLE_CERTIFIED"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "selected_edges",
+          "pair_classifications",
+          "excluded_edge_witnesses"
+        ],
+        "properties": {
+          "selected_edges": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/$defs/edge"
+            }
+          },
+          "pair_classifications": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "left",
+                "right",
+                "relation"
+              ],
+              "properties": {
+                "left": {
+                  "$ref": "#/$defs/edge"
+                },
+                "right": {
+                  "$ref": "#/$defs/edge"
+                },
+                "relation": {
+                  "enum": [
+                    "SHARED_ENDPOINT",
+                    "PROPER_CROSSING"
+                  ]
+                }
+              }
+            }
+          },
+          "excluded_edge_witnesses": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "excluded",
+                "disjoint_selected"
+              ],
+              "properties": {
+                "excluded": {
+                  "$ref": "#/$defs/edge"
+                },
+                "disjoint_selected": {
+                  "$ref": "#/$defs/edge"
+                }
+              }
+            }
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "type": "string",
+        "const": "five-point-thrackle-local-maximality-v1"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/answer.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "ONE_FIVE_POINT_CONFIGURATION",
+          "LOCAL_MAXIMALITY_INSIDE_FROZEN_K5",
+          "THRACKLE_CONJECTURE_NOT_ASSESSED"
+        ]
+      }
+    },
+    "$defs": {
+      "edge": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        }
+      }
+    }
+  },
+  "verification_record": null,
+  "public_notes": "Exact five-edge thrackle and local-maximality certificate inside one frozen K5 universe.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list."
+}

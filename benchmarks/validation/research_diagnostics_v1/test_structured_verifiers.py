@@ -30,7 +30,8 @@ def test_structured_oracle_receives_full_reward(
         expected["protocol_compliance"] = 1.0
     if task_name in {"jcb-postdoc-015", "jcb-postdoc-016"}:
         expected["limitation_accuracy"] = 1.0
-    assert result == expected
+    assert result.reward == expected.pop("reward")
+    assert result.details == expected
 
 
 @pytest.mark.parametrize("task_name", TASKS)
@@ -129,9 +130,9 @@ def test_structured_verifiers_fail_closed_on_protocol_attacks(
     attack_handlers[attack]()
 
     rejected = support.run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
     if attack == "false-verified":
-        assert rejected["false_certification"] is True
+        assert rejected.details["false_certification"] is True
 
 
 def test_structured_verifier_scores_math_separately_from_protocol_compliance(
@@ -145,12 +146,12 @@ def test_structured_verifier_scores_math_separately_from_protocol_compliance(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 1.0
-    assert result["protocol_compliance"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 1.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_nullstellensatz_verifier_rejects_nonregular_workspace_input(
@@ -163,8 +164,8 @@ def test_nullstellensatz_verifier_rejects_nonregular_workspace_input(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["protocol_compliance"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_nullstellensatz_verifier_accepts_reordered_polynomial_terms(
@@ -188,7 +189,7 @@ def test_nullstellensatz_verifier_accepts_reordered_polynomial_terms(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["reward"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_syzygy_verifier_rejects_mutated_workspace_input(tmp_path: Path) -> None:
@@ -203,7 +204,7 @@ def test_syzygy_verifier_rejects_mutated_workspace_input(tmp_path: Path) -> None
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["reward"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_graph_verifier_accepts_a_relabelled_counterexample(tmp_path: Path) -> None:
@@ -227,7 +228,7 @@ def test_graph_verifier_accepts_a_relabelled_counterexample(tmp_path: Path) -> N
     support.write_json(submission_path, submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["reward"] == 1.0
+    assert result.reward == 1.0
 
 
 @pytest.mark.parametrize(
@@ -261,8 +262,8 @@ def test_graph_verifier_rejects_corrupted_witnesses(
     support.write_json(submission_path, submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_graph_verifier_rejects_boolean_summary_scalar(tmp_path: Path) -> None:
@@ -274,8 +275,8 @@ def test_graph_verifier_rejects_boolean_summary_scalar(tmp_path: Path) -> None:
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -303,8 +304,8 @@ def test_sidon_extension_verifier_rejects_corrupted_finite_core(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_sidon_extension_rejects_unhashable_target_order(tmp_path: Path) -> None:
@@ -319,8 +320,8 @@ def test_sidon_extension_rejects_unhashable_target_order(tmp_path: Path) -> None
     support.write_json(app / "submission.json", submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -348,8 +349,8 @@ def test_powerful_window_verifier_rejects_corrupted_finite_evidence(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize("field", ("power", "start"))
@@ -369,8 +370,8 @@ def test_powerful_window_rejects_boolean_integer_fields(
     support.write_json(app / "submission.json", submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_powerful_window_rejects_overflowing_json_number(tmp_path: Path) -> None:
@@ -384,8 +385,8 @@ def test_powerful_window_rejects_overflowing_json_number(tmp_path: Path) -> None
     support.write_json(app / "submission.json", submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_powerful_window_scope_survives_extra_envelope_field(tmp_path: Path) -> None:
@@ -395,8 +396,8 @@ def test_powerful_window_scope_survives_extra_envelope_field(tmp_path: Path) -> 
     support.write_json(app / "submission.json", submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["scope_accuracy"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize("task_name", ("jcb-postdoc-015", "jcb-postdoc-016"))
@@ -417,9 +418,9 @@ def test_structured_verifier_marks_malformed_evidence_invalid(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize("task_name", ("jcb-postdoc-015", "jcb-postdoc-016"))
@@ -438,10 +439,10 @@ def test_structured_verifier_preserves_correctness_under_protocol_failure(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["false_certification"] is True
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["false_certification"] is True
+    assert result.reward == 0.0
 
 
 def test_sidon_extension_verifier_accepts_reordered_differences(tmp_path: Path) -> None:
@@ -460,7 +461,7 @@ def test_sidon_extension_verifier_accepts_reordered_differences(tmp_path: Path) 
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["reward"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_powerful_window_verifier_accepts_reordered_rows(tmp_path: Path) -> None:
@@ -479,7 +480,7 @@ def test_powerful_window_verifier_accepts_reordered_rows(tmp_path: Path) -> None
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["reward"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_powerful_window_verifier_accepts_reordered_factor_collections(
@@ -503,8 +504,8 @@ def test_powerful_window_verifier_accepts_reordered_factor_collections(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_powerful_window_verifier_rejects_duplicate_factors(tmp_path: Path) -> None:
@@ -523,8 +524,8 @@ def test_powerful_window_verifier_rejects_duplicate_factors(tmp_path: Path) -> N
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_sidon_extension_verifier_accepts_reordered_base_residues(
@@ -547,8 +548,8 @@ def test_sidon_extension_verifier_accepts_reordered_base_residues(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_sidon_extension_verifier_rejects_duplicate_base_residues(
@@ -570,8 +571,8 @@ def test_sidon_extension_verifier_rejects_duplicate_base_residues(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize("task_name", ("jcb-postdoc-015", "jcb-postdoc-016"))
@@ -596,9 +597,9 @@ def test_structured_verifier_rejects_duplicate_evidence_rows(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_sidon_verifier_rejects_unhashable_target_orders(tmp_path: Path) -> None:
@@ -617,9 +618,9 @@ def test_sidon_verifier_rejects_unhashable_target_orders(tmp_path: Path) -> None
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_sidon_verifier_rejects_bool_candidate_space_size(tmp_path: Path) -> None:
@@ -637,9 +638,9 @@ def test_sidon_verifier_rejects_bool_candidate_space_size(tmp_path: Path) -> Non
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_powerful_window_verifier_rejects_bool_factor_power(tmp_path: Path) -> None:
@@ -657,9 +658,9 @@ def test_powerful_window_verifier_rejects_bool_factor_power(tmp_path: Path) -> N
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_powerful_window_verifier_rejects_bool_all_powerful(tmp_path: Path) -> None:
@@ -677,9 +678,9 @@ def test_powerful_window_verifier_rejects_bool_all_powerful(tmp_path: Path) -> N
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize("task_name", ("jcb-postdoc-015", "jcb-postdoc-016"))
@@ -704,9 +705,9 @@ def test_structured_verifier_rejects_overflowing_json_numbers(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["evidence_validity"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize("task_name", ("jcb-postdoc-015", "jcb-postdoc-016"))
@@ -724,10 +725,10 @@ def test_structured_verifier_scores_scope_independently_of_envelope(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 1.0
-    assert result["limitation_accuracy"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 1.0
+    assert result.details["limitation_accuracy"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_syzygy_verifier_accepts_scaled_relations(tmp_path: Path) -> None:
@@ -745,7 +746,7 @@ def test_syzygy_verifier_accepts_scaled_relations(tmp_path: Path) -> None:
     support.write_json(submission_path, submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["reward"] == 1.0
+    assert result.reward == 1.0
 
 
 @pytest.mark.parametrize(
@@ -777,8 +778,8 @@ def test_syzygy_verifier_rejects_corrupted_certificates(
     support.write_json(submission_path, submission)
 
     result = support.run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -827,4 +828,4 @@ def test_nullstellensatz_verifier_rejects_corrupted_certificates(
 
     result = support.run_verifier(task, app, logs)
 
-    assert result["reward"] == 0.0
+    assert result.reward == 0.0

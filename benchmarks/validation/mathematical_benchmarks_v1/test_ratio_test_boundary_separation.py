@@ -15,7 +15,7 @@ def _case(tmp_path: Path):
 def test_reference_passes(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_alternative_checkpoints_pass(tmp_path: Path) -> None:
@@ -29,7 +29,7 @@ def test_alternative_checkpoints_pass(tmp_path: Path) -> None:
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_corrupt_block_is_rejected(tmp_path: Path) -> None:
@@ -39,7 +39,7 @@ def test_corrupt_block_is_rejected(tmp_path: Path) -> None:
     submission["result"]["divergent_witness"]["blocks"][3]["count"] += 1
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_corrupt_partial_sum_is_rejected(tmp_path: Path) -> None:
@@ -49,7 +49,7 @@ def test_corrupt_partial_sum_is_rejected(tmp_path: Path) -> None:
     submission["result"]["convergent_witness"]["checkpoints"][1]["partial_sum"] = "3/4"
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_one_witness_is_rejected(tmp_path: Path) -> None:
@@ -59,7 +59,7 @@ def test_one_witness_is_rejected(tmp_path: Path) -> None:
     del submission["result"]["convergent_witness"]
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_false_verified_is_rejected(tmp_path: Path) -> None:
@@ -69,8 +69,8 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
-    assert result["false_certification"] is True
+    assert result.reward == 0.0
+    assert result.details["false_certification"] is True
 
 
 def test_small_checkpoints_below_threshold_pass(tmp_path: Path) -> None:
@@ -85,7 +85,7 @@ def test_small_checkpoints_below_threshold_pass(tmp_path: Path) -> None:
     ]
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_large_checkpoint_closed_form_passes(tmp_path: Path) -> None:
@@ -101,7 +101,7 @@ def test_large_checkpoint_closed_form_passes(tmp_path: Path) -> None:
     ]
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_evidence_prose_outside_result_marker_is_required(tmp_path: Path) -> None:
@@ -117,7 +117,7 @@ def test_evidence_prose_outside_result_marker_is_required(tmp_path: Path) -> Non
     evidence_path.write_text("dyadic\n" + marker + "\n", encoding="utf-8")
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_affirmative_proof_assistant_claim_is_rejected(tmp_path: Path) -> None:
@@ -130,7 +130,7 @@ def test_affirmative_proof_assistant_claim_is_rejected(tmp_path: Path) -> None:
         "Noteworthy proof assistant verification was performed."
     ]
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_visible_schema_does_not_leak_witness_values() -> None:
@@ -163,9 +163,9 @@ def test_dimensions_scored_independently(tmp_path: Path) -> None:
     submission["scope"] = "wrong scope"
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["scope_accuracy"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["scope_accuracy"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_instruction_prescribes_specific_witnesses() -> None:
@@ -197,8 +197,8 @@ def test_keyword_only_evidence_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_unrelated_negation_does_not_satisfy_limitation(tmp_path: Path) -> None:
@@ -213,8 +213,8 @@ def test_unrelated_negation_does_not_satisfy_limitation(tmp_path: Path) -> None:
     ]
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_oversized_evidence_is_rejected(tmp_path: Path) -> None:
@@ -229,8 +229,8 @@ def test_oversized_evidence_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_unreduced_rational_checkpoints_are_accepted(tmp_path: Path) -> None:
@@ -249,5 +249,5 @@ def test_unreduced_rational_checkpoints_are_accepted(tmp_path: Path) -> None:
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["correctness"] == 1.0
+    assert result.reward == 1.0

@@ -497,7 +497,7 @@ class ModularPolynomialResidueTableRow(ContractModel):
 
 
 class ModularPolynomialResidueImageResult(ContractModel):
-    """Complete image and exhaustive table for one bounded modular polynomial."""
+    """Inline residue-image summary with an optional durable assignment ledger."""
 
     semantics_version: Literal["modular-polynomial-residue-image.v1"]
     modulus: StrictInt = Field(ge=2, le=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
@@ -527,7 +527,8 @@ class ModularPolynomialResidueImageResult(ContractModel):
         min_length=1,
         max_length=_MAX_RESIDUE_ASSIGNMENTS,
     )
-    table: tuple[ModularPolynomialResidueTableRow, ...] = Field(
+    table: tuple[ModularPolynomialResidueTableRow, ...] | None = Field(
+        default=None,
         min_length=1,
         max_length=_MAX_RESIDUE_ASSIGNMENTS,
     )
@@ -584,11 +585,14 @@ def _validate_residue_image_shape(
     exponent_vectors = [term.exponents for term in result.normalized_terms]
     if exponent_vectors != sorted(set(exponent_vectors)):
         raise ValueError("normalized term exponents must be canonical")
-    assignments = tuple(product(*result.domains))
-    if result.total_assignments != len(assignments):
+    assignment_count = math.prod(len(domain) for domain in result.domains)
+    if assignment_count > _MAX_RESIDUE_ASSIGNMENTS:
+        raise ValueError("result domains exceed the 4,096-assignment bound")
+    if result.total_assignments != assignment_count:
         raise ValueError("total assignments do not match the declared domains")
-    if len(result.table) != len(assignments):
+    if result.table is not None and len(result.table) != assignment_count:
         raise ValueError("complete table length does not match the declared domains")
+    assignments = tuple(product(*result.domains))
     return assignments
 
 
@@ -596,10 +600,6 @@ def _validate_residue_image_table(
     result: ModularPolynomialResidueImageResult,
     assignments: tuple[tuple[int, ...], ...],
 ) -> tuple[int, ...]:
-    if tuple(row.assignment for row in result.table) != assignments:
-        raise ValueError(
-            "complete table must enumerate the declared Cartesian product in order"
-        )
     expected_residues = tuple(
         _evaluate_normalized_modular_polynomial(
             result.normalized_terms,
@@ -608,8 +608,15 @@ def _validate_residue_image_table(
         )
         for assignment in assignments
     )
-    if tuple(row.residue for row in result.table) != expected_residues:
-        raise ValueError("complete table contains an incorrect polynomial evaluation")
+    if result.table is not None:
+        if tuple(row.assignment for row in result.table) != assignments:
+            raise ValueError(
+                "complete table must enumerate the declared Cartesian product in order"
+            )
+        if tuple(row.residue for row in result.table) != expected_residues:
+            raise ValueError(
+                "complete table contains an incorrect polynomial evaluation"
+            )
     return expected_residues
 
 

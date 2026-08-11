@@ -7,7 +7,14 @@ from enum import StrEnum
 from itertools import combinations, pairwise
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StrictInt,
+    StringConstraints,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import canonicalize_json
@@ -24,6 +31,7 @@ MAX_TOPOLOGY_FACETS = 128
 MAX_TOPOLOGY_DIMENSION = 7
 MAX_TOPOLOGY_FACES = 2048
 MAX_TOPOLOGY_CHAIN_GROUP = 512
+MAX_INLINE_HOMOLOGY_CHAIN_GROUP = 64
 MAX_TOPOLOGY_MATRIX_CELLS = 131_072
 MAX_TOPOLOGY_PRIME = 251
 MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP = 16
@@ -112,7 +120,7 @@ def _require_request_complex(
 
 
 class SimplicialComplexRequest(ContractModel):
-    """A bounded facet presentation validated before artifact materialization."""
+    """A bounded facet presentation for canonicalization."""
 
     vertices: tuple[VertexLabel, ...] = Field(
         min_length=1,
@@ -215,6 +223,55 @@ class FiniteSimplicialComplex(ContractModel):
     empty_simplex_stored: Literal[False] = False
     complex_digest: Sha256Digest
 
+    @field_validator("complex_digest", mode="after")
+    @classmethod
+    def require_digest_binds_canonical_complex(
+        cls, value: str, info: ValidationInfo
+    ) -> str:
+        """Bind ``complex_digest`` to the canonical complex derived from the
+        other fields.  Runs as a field validator so Pydantic reports the
+        error location as ``complex_digest`` (nested inside the parent
+        model's ``loc``), not as a model-level error.
+        """
+
+        required = (
+            "vertices",
+            "maximal_simplices",
+            "faces_by_dimension",
+            "dimension",
+            "f_vector",
+            "closure_size",
+        )
+        if not all(key in info.data for key in required):
+            return value
+        vertices: tuple[str, ...] = info.data["vertices"]
+        maximal_simplices: tuple[tuple[str, ...], ...] = info.data["maximal_simplices"]
+        faces_by_dimension: tuple[FacesInDimension, ...] = info.data[
+            "faces_by_dimension"
+        ]
+        dimension: int = info.data["dimension"]
+        f_vector: tuple[int, ...] = info.data["f_vector"]
+        closure_size: int = info.data["closure_size"]
+        expected_digest = simplicial_complex_digest(
+            vertices=vertices,
+            maximal_simplices=maximal_simplices,
+            faces_by_dimension=faces_by_dimension,
+            dimension=dimension,
+            f_vector=f_vector,
+            closure_size=closure_size,
+        )
+        if value != expected_digest:
+            raise PydanticCustomError(
+                "jacobian.stale_complex_digest",
+                "complex_digest does not bind the canonical complex",
+                {
+                    "jacobian_validation_reason": (
+                        "complex_digest does not bind the canonical complex"
+                    )
+                },
+            )
+        return value
+
     @model_validator(mode="after")
     def require_complete_canonical_complex(self) -> Self:
         if tuple(sorted(set(self.vertices))) != self.vertices:
@@ -239,24 +296,6 @@ class FiniteSimplicialComplex(ContractModel):
             or self.closure_size != sum(expected_f_vector)
         ):
             raise ValueError("complex dimension, f-vector, or closure size is invalid")
-        expected_digest = simplicial_complex_digest(
-            vertices=self.vertices,
-            maximal_simplices=self.maximal_simplices,
-            faces_by_dimension=self.faces_by_dimension,
-            dimension=self.dimension,
-            f_vector=self.f_vector,
-            closure_size=self.closure_size,
-        )
-        if self.complex_digest != expected_digest:
-            raise PydanticCustomError(
-                "jacobian.stale_complex_digest",
-                "complex_digest does not bind the canonical complex",
-                {
-                    "jacobian_validation_reason": (
-                        "complex_digest does not bind the canonical complex"
-                    )
-                },
-            )
         return self
 
 
@@ -268,7 +307,7 @@ class TopologyExactResult(ContractModel):
     verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
 
-class SimplicialComplexMaterializationResult(TopologyExactResult):
+class SimplicialComplexCanonicalizationResult(TopologyExactResult):
     complex: FiniteSimplicialComplex
     completeness: Literal["COMPLETE_FACE_CLOSURE"] = "COMPLETE_FACE_CLOSURE"
 
@@ -427,6 +466,13 @@ class SimplicialHomologyRequest(ContractModel):
         if not is_bounded_prime(self.prime):
             raise ValueError("homology coefficients require a bounded prime")
         require_linear_algebra_bounds(self.complex)
+        if any(
+            size > MAX_INLINE_HOMOLOGY_CHAIN_GROUP for size in self.complex.f_vector
+        ):
+            raise ValueError(
+                "inline homology bases require at most "
+                f"{MAX_INLINE_HOMOLOGY_CHAIN_GROUP} simplices in each chain group"
+            )
         return self
 
 
@@ -741,7 +787,7 @@ __all__ = [
     "ModularVector",
     "Simplex",
     "SimplexBasis",
-    "SimplicialComplexMaterializationResult",
+    "SimplicialComplexCanonicalizationResult",
     "SimplicialComplexRequest",
     "SimplicialHomologyRequest",
     "SimplicialHomologyResult",

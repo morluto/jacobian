@@ -45,8 +45,8 @@ def test_accepts_permuted_weight_order(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_corrupted_symbolic_coefficient(tmp_path: Path) -> None:
@@ -56,8 +56,8 @@ def test_rejects_corrupted_symbolic_coefficient(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_false_verified_claim(tmp_path: Path) -> None:
@@ -67,8 +67,8 @@ def test_rejects_false_verified_claim(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["false_certification"] is True
-    assert rejected["reward"] == 0.0
+    assert rejected.details["false_certification"] is True
+    assert rejected.reward == 0.0
 
 
 def test_rejects_boolean_in_weight_sum(tmp_path: Path) -> None:
@@ -79,8 +79,8 @@ def test_rejects_boolean_in_weight_sum(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_boolean_in_controlled_powers(tmp_path: Path) -> None:
@@ -91,8 +91,8 @@ def test_rejects_boolean_in_controlled_powers(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_boolean_in_evidence_copy(tmp_path: Path) -> None:
@@ -111,5 +111,5 @@ def test_rejects_boolean_in_evidence_copy(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0

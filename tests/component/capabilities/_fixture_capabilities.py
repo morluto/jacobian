@@ -9,7 +9,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInstallTier,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -33,7 +32,6 @@ class FixtureAdapter:
             license_id="MIT",
             features=("integer-increment",),
         ),
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={
             "type": "object",
             "properties": {"value": {"type": "integer"}},
@@ -45,7 +43,6 @@ class FixtureAdapter:
             CapabilityInvocationExample(
                 name="increment_41",
                 description="Increment 41 to obtain 42.",
-                mode=CapabilityMode.EXPLORE,
                 input={"value": 41},
             ),
         ),
@@ -55,7 +52,6 @@ class FixtureAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output={"value": int(request.input["value"]) + 1},
             assurance=CapabilityAssurance(

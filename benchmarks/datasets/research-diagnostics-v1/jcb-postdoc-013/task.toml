@@ -2,7 +2,7 @@ schema_version = "1.4"
 artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/jcb-postdoc-013"
-version = "1.0.0"
+version = "1.1.0"
 description = "Research diagnostic: Erdős Problem 397: a parametric family of central-binomial collisions"
 keywords = ["research", "diagnostic", "mathematical-sciences", "enumerative combinatorics", "number theory", "symbolic identities"]
 [metadata]

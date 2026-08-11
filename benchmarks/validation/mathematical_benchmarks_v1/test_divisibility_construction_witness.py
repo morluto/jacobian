@@ -18,4 +18,4 @@ def test_accepts_schema_valid_integral_numbers(tmp_path: Path) -> None:
     support._write_json(app / "submission.json", submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
+    assert accepted.details["correctness"] == 1.0

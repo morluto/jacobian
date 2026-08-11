@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from benchmarks.tooling.errors import HarborSuiteError
+from benchmarks.tooling.harbor_suite import verifier_bundle_checksum
 from tests.unit.tooling.harbor_suite_support import (
     _make_canonical_task,
     _make_suite_with_task,
@@ -35,9 +35,7 @@ def test_checksum_update_only_rewrites_selected_task(
     first_docker = first / "tests" / "Dockerfile"
     second_docker = second / "tests" / "Dockerfile"
     second_before = second_docker.read_bytes()
-    verifier_digest = hashlib.sha256(
-        (first / "tests" / "verifier.py").read_bytes()
-    ).hexdigest()
+    verifier_digest = verifier_bundle_checksum(first / "tests")
 
     checksum_tool.update("test-v1", ("test-v1-a",))
 

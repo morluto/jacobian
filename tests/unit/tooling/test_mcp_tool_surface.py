@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.adapters.mcp.constants import ReasoningLogMode
 from jacobian.adapters.mcp.guidance import (
     MATH_FIND_DESCRIPTION,
     MATH_RUN_DESCRIPTION,
@@ -12,12 +11,9 @@ from jacobian.adapters.mcp.server import JacobianCoreExtension
 
 
 def test_core_extension_exposes_exactly_the_stable_math_tools() -> None:
-    extension = JacobianCoreExtension(None, None, ReasoningLogMode.OFF)
+    extension = JacobianCoreExtension(None, None)
     assert extension.identifier == "io.jacobian/core"
-    assert extension.settings() == {
-        "version": "2",
-        "reasoning_log_mode": "OFF",
-    }
+    assert extension.settings() == {"version": "2"}
     assert tuple(binding.kwargs["name"] for binding in extension.tools()) == (
         "math.find",
         "math.run",

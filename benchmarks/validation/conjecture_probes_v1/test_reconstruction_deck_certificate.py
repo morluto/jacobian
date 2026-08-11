@@ -45,7 +45,7 @@ def run(app, logs):
 
 def test_oracle_passes(tmp_path):
     app, logs, _ = case(tmp_path)
-    assert run(app, logs)["aggregate_reward"] == 1.0
+    assert run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_wrong_mapping_and_deleted_vertex_fail(tmp_path):
@@ -54,36 +54,36 @@ def test_wrong_mapping_and_deleted_vertex_fail(tmp_path):
         s["result"]["embeddings"][0]["local_to_original"][:2]
     )
     write(app, s)
-    assert run(app, logs)["mathematics"] == 0.0
+    assert run(app, logs).details["mathematics"] == 0.0
     app, logs, s = case(tmp_path / "d")
     s["result"]["embeddings"][0]["deleted_vertex"] = 1
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_corrupt_original_and_duplicate_card_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["result"]["original_edges"][0] = [0, 4]
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
     app, logs, s = case(tmp_path / "dup")
     s["result"]["embeddings"][-1] = s["result"]["embeddings"][0]
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_false_verified_and_tampered_input_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["claimed_assurance"] = "VERIFIED"
     write(app, s)
-    assert run(app, logs)["false_certification"] is True
+    assert run(app, logs).details["false_certification"] is True
     app, logs, _ = case(tmp_path / "input")
     (app / "input.json").write_text("{}\n")
     r = run(app, logs)
     assert (
-        r["input_binding"] == 0.0
-        and r["mathematics"] == 1.0
-        and r["aggregate_reward"] == 0.0
+        r.details["input_binding"] == 0.0
+        and r.details["mathematics"] == 1.0
+        and r.details["aggregate_reward"] == 0.0
     )
 
 
@@ -95,12 +95,12 @@ def test_unhashable_claimed_assurance_keeps_other_diagnostics(tmp_path):
         write(app, s)
         r = run(app, logs)
         assert (
-            r["assurance"] == 0.0
-            and r["input_binding"] == 1.0
-            and r["mathematics"] == 1.0
-            and r["evidence"] == 1.0
-            and r["scope"] == 1.0
-            and r["aggregate_reward"] == 0.0
+            r.details["assurance"] == 0.0
+            and r.details["input_binding"] == 1.0
+            and r.details["mathematics"] == 1.0
+            and r.details["evidence"] == 1.0
+            and r.details["scope"] == 1.0
+            and r.details["aggregate_reward"] == 0.0
         )
 
 
@@ -126,7 +126,7 @@ def test_evidence_with_oversized_whitespace_padding_passes(tmp_path):
     s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
     (app / "submission.json").write_text(json.dumps(s) + "\n")
     r = run(app, logs)
-    assert r["evidence"] == 1.0 and r["aggregate_reward"] == 1.0
+    assert r.details["evidence"] == 1.0 and r.details["aggregate_reward"] == 1.0
 
 
 def test_evidence_with_large_whitespace_prefix_passes_quickly(tmp_path):
@@ -162,7 +162,7 @@ def test_evidence_with_large_whitespace_prefix_passes_quickly(tmp_path):
     started = time.monotonic()
     r = run(app, logs)
     elapsed = time.monotonic() - started
-    assert r["evidence"] == 1.0 and r["aggregate_reward"] == 1.0
+    assert r.details["evidence"] == 1.0 and r.details["aggregate_reward"] == 1.0
     # Retaining the prefix makes parsing quadratic: 64 MiB of padding takes
     # ~15 s in-process before the fix, vs well under 1 s after. 15 seconds
     # cleanly separates streaming discard from unbounded buffer accumulation
@@ -192,7 +192,7 @@ def test_evidence_leading_garbage_still_rejected(tmp_path):
     s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
     (app / "submission.json").write_text(json.dumps(s) + "\n")
     r = run(app, logs)
-    assert r["evidence"] == 0.0 and r["aggregate_reward"] == 0.0
+    assert r.details["evidence"] == 0.0 and r.details["aggregate_reward"] == 0.0
 
 
 def test_evidence_trailing_garbage_still_rejected(tmp_path):
@@ -216,7 +216,7 @@ def test_evidence_trailing_garbage_still_rejected(tmp_path):
     s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
     (app / "submission.json").write_text(json.dumps(s) + "\n")
     r = run(app, logs)
-    assert r["evidence"] == 0.0 and r["aggregate_reward"] == 0.0
+    assert r.details["evidence"] == 0.0 and r.details["aggregate_reward"] == 0.0
 
 
 def test_duplicate_json_object_member_in_submission_rejected(tmp_path):
@@ -236,6 +236,6 @@ def test_duplicate_json_object_member_in_submission_rejected(tmp_path):
     assert duplicate != raw, "replacement target not found in canonical submission"
     (app / "submission.json").write_text(duplicate)
     r = run(app, logs)
-    assert r["protocol"] == 0.0
-    assert r["aggregate_reward"] == 0.0
-    assert r["reward"] == 0.0
+    assert r.details["protocol"] == 0.0
+    assert r.details["aggregate_reward"] == 0.0
+    assert r.reward == 0.0

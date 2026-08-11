@@ -43,6 +43,7 @@ from jacobian.contracts.results import (
     ResultEnvelope,
     Verification,
 )
+from jacobian.math.arithmetic import integerize_rational_vector
 from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_schema
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StoredArtifact
@@ -430,16 +431,9 @@ class PolytopeService:
             _model_fraction(model, coefficient) for coefficient in coefficients
         )
         rational_rhs = _model_fraction(model, rhs)
-        common_denominator = math.lcm(
-            *(value.denominator for value in (*rational_values, rational_rhs))
-        )
-        integer_coefficients = tuple(
-            value.numerator * (common_denominator // value.denominator)
-            for value in rational_values
-        )
-        integer_rhs = rational_rhs.numerator * (
-            common_denominator // rational_rhs.denominator
-        )
+        integer_values = integerize_rational_vector((*rational_values, rational_rhs))
+        integer_coefficients = integer_values[:-1]
+        integer_rhs = integer_values[-1]
         divisor = reduce(
             math.gcd,
             (abs(value) for value in (*integer_coefficients, integer_rhs)),

@@ -14,8 +14,8 @@ def test_rejects_corrupted_generic_formula(tmp_path: Path) -> None:
     submission["result"]["generic_formula"]["numerator"][0]["coefficient"] = "2"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_missing_singular_branch(tmp_path: Path) -> None:
@@ -24,5 +24,5 @@ def test_rejects_missing_singular_branch(tmp_path: Path) -> None:
     submission["result"]["singular_formula"] = submission["result"]["generic_formula"]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

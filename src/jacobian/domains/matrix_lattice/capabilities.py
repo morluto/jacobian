@@ -12,8 +12,12 @@ from jacobian.contracts.matrix_operations import (
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
     MatrixAdjugateResult,
+    MatrixDeterminantRequest,
+    MatrixDeterminantResult,
     MatrixInverseResult,
     MatrixProductResult,
+    MatrixRankRequest,
+    MatrixRankResult,
     MatrixTraceResult,
     NullspaceResult,
     RationalLinearSolveRequest,
@@ -30,9 +34,11 @@ from jacobian.domains._examples import example
 from jacobian.domains.matrix_lattice.operations import (
     compute_adjugate,
     compute_characteristic_polynomial,
+    compute_determinant,
     compute_inverse,
     compute_nullspace,
     compute_product,
+    compute_rank,
     compute_rational_linear_solve,
     compute_rref,
     compute_smith_normal_form,
@@ -106,6 +112,82 @@ def matrix_operation[
 
 
 MATRIX_CAPABILITIES = (
+    matrix_operation(
+        "matrix.determinant.compute",
+        "Compute an exact rational matrix determinant",
+        "Compute the determinant of one square matrix over QQ with SymPy's exact Bareiss algorithm.",
+        MatrixDeterminantRequest,
+        MatrixDeterminantResult,
+        compute_determinant,
+        "matrix.relation.determinant-of",
+        "matrix",
+        "determinant",
+        "exact-rational",
+        invocation_examples=(
+            example(
+                "determinant_minus_six",
+                "Compute the determinant of [[0, 2], [3, 4]].",
+                {
+                    "matrix": {
+                        "entries": [
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "2", "den": "1"},
+                            ],
+                            [
+                                {"num": "3", "den": "1"},
+                                {"num": "4", "den": "1"},
+                            ],
+                        ]
+                    }
+                },
+            ),
+        ),
+        version="2",
+    ),
+    matrix_operation(
+        "matrix.rank.compute",
+        "Compute exact rational matrix rank",
+        "Compute the rank and RREF pivot columns of one rectangular matrix over QQ.",
+        MatrixRankRequest,
+        MatrixRankResult,
+        compute_rank,
+        "matrix.relation.rank-of",
+        "matrix",
+        "rank",
+        "exact-rational",
+        invocation_examples=(
+            example(
+                "rank_three_by_four",
+                "Compute rank and pivots of a rectangular rational matrix.",
+                {
+                    "matrix": {
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "2", "den": "1"},
+                                {"num": "3", "den": "1"},
+                                {"num": "4", "den": "1"},
+                            ],
+                            [
+                                {"num": "2", "den": "1"},
+                                {"num": "4", "den": "1"},
+                                {"num": "6", "den": "1"},
+                                {"num": "8", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                        ]
+                    }
+                },
+            ),
+        ),
+        version="2",
+    ),
     matrix_operation(
         "matrix.rational_linear_system.solve",
         "Solve an exact rational linear system",

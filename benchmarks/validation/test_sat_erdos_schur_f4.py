@@ -37,8 +37,8 @@ def test_rejects_prose_in_place_of_schur_certificates(tmp_path: Path) -> None:
 
     result = support._run_verifier(task, app, logs)
 
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_accepts_explicit_sum_free_partition_and_independent_upper_check(
@@ -60,5 +60,5 @@ def test_accepts_explicit_sum_free_partition_and_independent_upper_check(
     support._write_json(submission_path, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)

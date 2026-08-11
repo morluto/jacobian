@@ -42,10 +42,11 @@ class JacobianRuntime:
                     services.close()
                 except BaseException as cleanup_exc:
                     cleanup_failures.append(cleanup_exc)
-            try:
-                self.core.close()
-            except BaseException as cleanup_exc:
-                cleanup_failures.append(cleanup_exc)
+            if hasattr(self, "core"):
+                try:
+                    self.core.close()
+                except BaseException as cleanup_exc:
+                    cleanup_failures.append(cleanup_exc)
             self._closed = True
             if cleanup_failures:
                 exc.add_note(
@@ -59,7 +60,7 @@ class JacobianRuntime:
 
         if self._closed:
             return
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         for close in (
             self.services.close,
             self.portfolio.close,
@@ -67,10 +68,17 @@ class JacobianRuntime:
         ):
             try:
                 close()
-            except Exception as exc:
+            except BaseException as exc:
                 failures.append(exc)
         if failures:
-            raise ExceptionGroup("runtime resources failed to close", failures)
+            exception_failures = [
+                failure for failure in failures if isinstance(failure, Exception)
+            ]
+            if len(exception_failures) == len(failures):
+                raise ExceptionGroup(
+                    "runtime resources failed to close", exception_failures
+                )
+            raise BaseExceptionGroup("runtime resources failed to close", failures)
         self._closed = True
 
     def __enter__(self) -> JacobianRuntime:

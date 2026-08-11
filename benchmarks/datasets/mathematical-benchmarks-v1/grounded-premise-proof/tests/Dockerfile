@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Grounded premise-selection and proof-DAG verifier.
 LABEL jacobian.task="jacobian/grounded-premise-proof" \
-      jacobian.checksum="4fddcc886073ee18c7c4cfb080e2d9260deb70159fb79efaee2e1102a55194db"
+      jacobian.checksum="24af697c7c1ce2bc20e868edf67a66820889746e54acec418201d99622247f20"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

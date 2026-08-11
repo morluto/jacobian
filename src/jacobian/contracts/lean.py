@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian.contracts.common import ArtifactUri, Sha256Digest
 from jacobian.contracts.results import ContractModel, ResultEnvelope
@@ -65,6 +65,12 @@ class LeanDeclarationSource(ContractModel):
     column: StrictInt = Field(ge=0)
     end_line: StrictInt = Field(ge=1)
     end_column: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_forward_source_range(self) -> Self:
+        if (self.end_line, self.end_column) < (self.line, self.column):
+            raise ValueError("declaration source range must not run backwards")
+        return self
 
 
 class LeanDeclarationRecord(ContractModel):
@@ -131,6 +137,33 @@ class LeanDeclarationSearchOutput(ContractModel):
     def bind_result_budget(self) -> Self:
         if len(self.declarations) > self.query.result_limit:
             raise ValueError("declaration results exceed the requested result limit")
+        names = tuple(declaration.name for declaration in self.declarations)
+        if len(set(names)) != len(names):
+            raise ValueError("declaration search results must have unique names")
+        expected_reasons = (
+            *(
+                (LeanDeclarationMatchReason.NAME_SUBSTRING,)
+                if self.query.name_contains is not None
+                else ()
+            ),
+            *(
+                (LeanDeclarationMatchReason.TYPE_CONSTANTS,)
+                if self.query.type_pattern is not None
+                else ()
+            ),
+        )
+        if any(
+            declaration.match_reasons != expected_reasons
+            for declaration in self.declarations
+        ):
+            raise ValueError("declaration match reasons must bind the search query")
+        if (
+            self.stop_reason is LeanDeclarationSearchStopReason.RESULT_LIMIT
+            and len(self.declarations) != self.query.result_limit
+        ):
+            raise ValueError(
+                "a result-limit stop must fill the requested result budget"
+            )
         return self
 
 
@@ -156,6 +189,8 @@ class LeanDeclarationInspectOutput(ContractModel):
             raise ValueError(
                 "inspected declaration differs from the requested exact name"
             )
+        if self.declaration.match_reasons:
+            raise ValueError("exact declaration inspection has no search match reasons")
         return self
 
 
@@ -202,31 +237,57 @@ class LeanDependencyGraphArtifact(ContractModel):
     nodes: tuple[LeanDependencyNode, ...]
     edges: tuple[LeanDependencyEdge, ...]
     frontier: tuple[str, ...]
-    node_budget_exhausted: bool
-    closure_complete: bool
+    node_budget_exhausted: StrictBool
+    closure_complete: StrictBool
 
     @model_validator(mode="after")
     def require_consistent_bounded_graph(self) -> Self:
-        if not self.nodes or self.nodes[0].name != self.query.root_declaration:
-            raise ValueError("dependency graph must begin with its requested root")
-        if len(self.nodes) > self.query.max_nodes:
-            raise ValueError("dependency graph exceeds its node budget")
-        names = tuple(node.name for node in self.nodes)
-        if len(set(names)) != len(names):
-            raise ValueError("dependency graph node names must be unique")
-        depths = {node.name: node.depth for node in self.nodes}
-        for edge in self.edges:
-            if edge.source not in depths or edge.target not in depths:
-                raise ValueError("dependency edge endpoint is absent from nodes")
-            if depths[edge.target] > depths[edge.source] + 1:
-                raise ValueError("dependency edge skips a traversal depth")
-        if len(set(self.frontier)) != len(self.frontier):
-            raise ValueError("dependency frontier names must be unique")
-        if any(name not in depths for name in self.frontier):
-            raise ValueError("dependency frontier must refer to returned nodes")
-        if self.closure_complete and (self.node_budget_exhausted or self.frontier):
-            raise ValueError("a complete dependency closure cannot have a frontier")
+        depths = _validate_dependency_nodes(self)
+        _validate_dependency_edges(self, depths)
+        _validate_dependency_frontier(self, depths)
         return self
+
+
+def _validate_dependency_nodes(
+    graph: LeanDependencyGraphArtifact,
+) -> dict[str, int]:
+    if not graph.nodes or graph.nodes[0].name != graph.query.root_declaration:
+        raise ValueError("dependency graph must begin with its requested root")
+    if graph.nodes[0].depth != 0:
+        raise ValueError("dependency graph root must have depth zero")
+    if len(graph.nodes) > graph.query.max_nodes:
+        raise ValueError("dependency graph exceeds its node budget")
+    if any(node.depth > graph.query.max_depth for node in graph.nodes):
+        raise ValueError("dependency graph exceeds its depth budget")
+    depths = {node.name: node.depth for node in graph.nodes}
+    if len(depths) != len(graph.nodes):
+        raise ValueError("dependency graph node names must be unique")
+    return depths
+
+
+def _validate_dependency_edges(
+    graph: LeanDependencyGraphArtifact,
+    depths: dict[str, int],
+) -> None:
+    for edge in graph.edges:
+        if edge.source not in depths or edge.target not in depths:
+            raise ValueError("dependency edge endpoint is absent from nodes")
+        if depths[edge.target] > depths[edge.source] + 1:
+            raise ValueError("dependency edge skips a traversal depth")
+
+
+def _validate_dependency_frontier(
+    graph: LeanDependencyGraphArtifact,
+    depths: dict[str, int],
+) -> None:
+    if len(set(graph.frontier)) != len(graph.frontier):
+        raise ValueError("dependency frontier names must be unique")
+    if any(name not in depths for name in graph.frontier):
+        raise ValueError("dependency frontier must refer to returned nodes")
+    if graph.closure_complete != (not graph.frontier):
+        raise ValueError("dependency closure completeness must match its frontier")
+    if graph.node_budget_exhausted and not graph.frontier:
+        raise ValueError("an exhausted node budget must identify a frontier")
 
 
 class LeanDependencyGraphOutput(LeanDependencyGraphArtifact):

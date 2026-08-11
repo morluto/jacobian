@@ -47,6 +47,23 @@
           "minLength": 1
         },
         "key_facts": {
+          "additionalProperties": false,
+          "properties": {
+            "tree": {
+              "const": "7"
+            },
+            "lambda_avg": {
+              "const": "36/7"
+            },
+            "hamiltonian_path": {
+              "const": "absent"
+            }
+          },
+          "required": [
+            "tree",
+            "lambda_avg",
+            "hamiltonian_path"
+          ],
           "type": "object"
         }
       }

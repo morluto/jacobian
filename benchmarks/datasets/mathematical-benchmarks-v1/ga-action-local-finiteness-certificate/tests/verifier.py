@@ -11,6 +11,7 @@ from verifier_support import (
     false_verified_claim,
     is_regular_bounded_file,
     load_submission,
+    normalize_reward_file,
     resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -455,6 +456,7 @@ def main() -> None:
             }
         )
     )
+    normalize_reward_file(logs / "reward.json")
 
 
 if __name__ == "__main__":

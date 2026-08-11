@@ -591,8 +591,18 @@ def test_snapshot_id_and_publication_dir_are_content_addressed(
 
 def _strip_header(text: str) -> str:
     lines = text.splitlines()
-    body_start = next(i for i, line in enumerate(lines) if not line.startswith("#"))
+    body_start = next(
+        (index for index, line in enumerate(lines) if not line.startswith("#")),
+        None,
+    )
+    if body_start is None:
+        raise AssertionError("publication must contain a TOML body after its header")
     return "\n".join(lines[body_start:]) + "\n"
+
+
+def test_strip_header_requires_toml_body() -> None:
+    with pytest.raises(AssertionError, match="must contain a TOML body"):
+        _strip_header("# publication header\n# still a header\n")
 
 
 def test_generate_publication_writes_frozen_dataset_toml(

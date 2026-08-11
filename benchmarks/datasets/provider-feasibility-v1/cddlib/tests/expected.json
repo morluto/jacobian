@@ -2,7 +2,7 @@
   "task_id": "jacobian/cddlib",
   "provider": "cddlib/pycddlib",
   "contract": "jacobian.cddlib-hv-spike/v1",
-  "pin_sha256": "sha256:15b0b5b4d608bc2f354dd484c44aa3da7441d615ab9650d6f7611c7e97af7871",
+  "pin_sha256": "sha256:129610626988ff70540c9d7aef51efbda771ccee199eb44b629de50ad589104f",
   "report_conclusion": "SPIKE_PASSED_PRODUCTION_DEFERRED",
   "report_assurance": "OBSERVED_EXACT_PROVIDER_BEHAVIOR_WITH_SOUNDNESS_REPLAY",
   "reproduction": {

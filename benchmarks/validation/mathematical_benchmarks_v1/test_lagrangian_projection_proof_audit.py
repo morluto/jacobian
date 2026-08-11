@@ -39,8 +39,8 @@ def test_accepts_alternative_coefficients(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_tampered_frozen_input(tmp_path: Path) -> None:
@@ -50,8 +50,8 @@ def test_rejects_tampered_frozen_input(tmp_path: Path) -> None:
         '["0","0","0","1"],["0","0","0","0"],["0","0","0","0"]]}}'
     )
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_extra_result_field(tmp_path: Path) -> None:
@@ -60,8 +60,8 @@ def test_rejects_extra_result_field(tmp_path: Path) -> None:
     submission["result"]["extra_field"] = "malicious"
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_multiple_evidence_descriptors(tmp_path: Path) -> None:
@@ -73,7 +73,7 @@ def test_rejects_multiple_evidence_descriptors(tmp_path: Path) -> None:
     ]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
 
 
 def test_rejects_corrupted_lagrangian_defect(tmp_path: Path) -> None:
@@ -82,8 +82,8 @@ def test_rejects_corrupted_lagrangian_defect(tmp_path: Path) -> None:
     submission["result"]["lagrangian_defect"][0][1] = "0"
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_oversized_evidence(tmp_path: Path) -> None:
@@ -94,4 +94,4 @@ def test_rejects_oversized_evidence(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0

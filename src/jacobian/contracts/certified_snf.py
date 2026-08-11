@@ -7,6 +7,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.exact import CanonicalInteger
 from jacobian.contracts.results import ContractModel
 
@@ -115,16 +116,19 @@ class SmithNormalFormCertificate(ContractModel):
             raise ValueError("Smith certificate matrix shapes are incompatible")
         diagonal_count = min(rows, columns)
         diagonal = tuple(
-            int(self.diagonal.entries[index][index]) for index in range(diagonal_count)
+            parse_canonical_integer(self.diagonal.entries[index][index])
+            for index in range(diagonal_count)
         )
         if any(
-            int(self.diagonal.entries[row][column]) != 0
+            parse_canonical_integer(self.diagonal.entries[row][column]) != 0
             for row in range(rows)
             for column in range(columns)
             if row != column
         ):
             raise ValueError("Smith normal form must be diagonal")
-        factors = tuple(int(value) for value in self.invariant_factors)
+        factors = tuple(
+            parse_canonical_integer(value) for value in self.invariant_factors
+        )
         if (
             self.rank != len(factors)
             or self.rank > diagonal_count

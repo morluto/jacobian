@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
+from pathlib import PureWindowsPath
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BeforeValidator,
+    Field,
+    model_validator,
+)
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.common import Sha256Digest
 from jacobian.contracts.results import ContractModel
+from jacobian.contracts.urls import normalize_http_url
 from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
 
 
@@ -28,6 +35,15 @@ def _require_nonblank_nfc(value: str) -> str:
     if not value.strip():
         raise ValueError("value must not be blank")
     return _require_nfc(value)
+
+
+def _normalize_http_url(value: object) -> str:
+    """Normalize a source URL before its bounded contract is enforced."""
+
+    if not isinstance(value, str):
+        raise ValueError("source URL must be a valid HTTP(S) URL")
+    _require_nonblank_nfc(value)
+    return normalize_http_url(value, label="source URL")
 
 
 BoundedFormalString = Annotated[
@@ -48,6 +64,7 @@ DatasetSampleId = Annotated[
 ]
 DatasetSourceUrl = Annotated[
     str,
+    BeforeValidator(_normalize_http_url),
     Field(min_length=1, max_length=2_000),
     AfterValidator(_require_nonblank_nfc),
 ]
@@ -128,6 +145,7 @@ class FormalProjectFile(ContractModel):
             self.path.startswith("/")
             or "\\" in self.path
             or "\x00" in self.path
+            or PureWindowsPath(self.path).drive
             or any(part in {"", ".", ".."} for part in parts)
         ):
             raise ValueError("project file path must be canonical NFC and relative")

@@ -12,10 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.command_runner import (
-    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
-    run_tool_command,
+)
+from benchmarks.tooling.spike_utils import (
+    default_runner,
+    sha256_bytes,
 )
 
 PIN_PATH = Path(__file__).with_name("nauty_provider_pin.json")
@@ -44,28 +46,6 @@ _SOURCE_MEMBERS = (
 ProcessRunner = Callable[..., ToolCommandResult]
 
 
-def _default_runner(
-    command: Sequence[str],
-    *,
-    input_bytes: bytes,
-    timeout_seconds: float,
-    environment: Mapping[str, str],
-    stdout_limit: int,
-    stderr_limit: int,
-) -> ToolCommandResult:
-    request = ToolCommandRequest(
-        executable=command[0],
-        arguments=tuple(command[1:]),
-        environment=environment,
-        cwd=str(Path.cwd()),
-        timeout_seconds=timeout_seconds,
-        stdin_bytes=input_bytes,
-        stdout_limit_bytes=stdout_limit,
-        stderr_limit_bytes=stderr_limit,
-    )
-    return run_tool_command(request)
-
-
 class NautySpikeError(RuntimeError):
     """A typed non-conclusion from the optional-provider spike."""
 
@@ -74,10 +54,6 @@ class NautySpikeError(RuntimeError):
         self.status = status
         self.code = code
         self.detail = detail
-
-
-def _sha256_bytes(payload: bytes) -> str:
-    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
 def _sha256_file(path: Path) -> str:
@@ -448,11 +424,11 @@ def _success_report(
         "reproduction": {
             **pin["reproduction"],
             "observed_count": len(generated.splitlines()),
-            "observed_output_sha256": _sha256_bytes(generated),
+            "observed_output_sha256": sha256_bytes(generated),
         },
         "canonicalization": {
             **pin["canonicalization"],
-            "observed_output_sha256": _sha256_bytes(canonicalized),
+            "observed_output_sha256": sha256_bytes(canonicalized),
             "isomorphic_inputs_converged": len(set(canonicalized.splitlines())) == 1,
         },
         "checker_feasibility": {
@@ -488,7 +464,7 @@ def run_spike(
     labelg: Path,
     source_archive: Path,
     timeout_seconds: float = 5,
-    runner: ProcessRunner = _default_runner,
+    runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
 ) -> dict[str, Any]:
     """Run the frozen probe and return a JSON-safe success or non-conclusion."""
@@ -529,7 +505,7 @@ def run_spike(
         reproduction = pin["reproduction"]
         if (
             list(generated_lines) != reproduction["expected_graph6"]
-            or _sha256_bytes(generated) != reproduction["expected_output_sha256"]
+            or sha256_bytes(generated) != reproduction["expected_output_sha256"]
         ):
             raise NautySpikeError(
                 "REJECTED",
@@ -551,8 +527,7 @@ def run_spike(
         canonicalization = pin["canonicalization"]
         if (
             list(canonical_lines) != canonicalization["expected_output_graph6"]
-            or _sha256_bytes(canonicalized)
-            != canonicalization["expected_output_sha256"]
+            or sha256_bytes(canonicalized) != canonicalization["expected_output_sha256"]
         ):
             raise NautySpikeError(
                 "REJECTED",

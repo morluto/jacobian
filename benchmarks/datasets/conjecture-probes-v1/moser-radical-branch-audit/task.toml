@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/moser-radical-branch-audit"
+version="1.0.0"
+description="Diagnose and repair an exact radical-sign error in a Moser-spindle embedding."
+keywords=["unit-distance","radicals","proof-audit","hadwiger-nelson"]
+[metadata]
+evaluation_kind="assurance"
+domain="mathematical-sciences"
+primary_domain="graph-theory"
+field="unit-distance-geometry"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:053dd37bfa381bd69f8f988b950786685028b9ba204d05807a10e125e65caa88"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","radical-arithmetic","semantic-audit","exact-verification","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-source-transformation"
+derivation="Derived from retained row C-009 and the public SageMath exact Moser-spindle embedding; the sign corruption is authored."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

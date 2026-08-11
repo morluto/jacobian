@@ -19,7 +19,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -122,7 +121,8 @@ class SatLratVerificationAdapter:
         self.verification = verification
         self.installation = installation
         checker_id = installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError("checker is not installed")
         self._descriptor = CapabilityDescriptor(
             capability_id="sat.lrat.verify",
             version="1",
@@ -137,7 +137,6 @@ class SatLratVerificationAdapter:
                 features=("ascii-lrat", "ordered-rup-hints", "bounded-replay"),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(SatLratVerificationRequest),
             output_schema=model_schema(SatLratVerificationOutput),
             tags=("sat", "cnf", "lrat", "unsat", "certificate", "verification"),
@@ -177,7 +176,8 @@ class SatLratVerificationAdapter:
             summary="unverified exact ASCII LRAT proof",
         )
         checker_id = self.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError("checker is not installed")
         bindings = EvidenceBindings(
             claim_digest=resolved.artifact.manifest.object_digest,
             semantics_digest=semantics.manifest.object_digest,
@@ -217,7 +217,6 @@ class SatLratVerificationAdapter:
             return CapabilityResult(
                 capability_id=self.descriptor.capability_id,
                 capability_version=self.descriptor.version,
-                mode=request.mode,
                 execution=Execution(
                     status=ExecutionStatus.CANCELLED,
                     detail="cancelled before independent LRAT replay",
@@ -308,7 +307,6 @@ class SatLratVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=projected_execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

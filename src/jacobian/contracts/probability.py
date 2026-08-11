@@ -9,7 +9,11 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
+from jacobian.contracts.exact import (
+    CanonicalInteger,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.results import ContractModel
 
@@ -40,19 +44,6 @@ def _require_bounded_fraction(
         or len(format_canonical_integer(value.denominator)) > max_digits
     ):
         raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
-
-
-def _require_bounded_rational(
-    value: CanonicalRational,
-    *,
-    max_digits: int,
-    label: str,
-) -> None:
-    _require_bounded_fraction(
-        value.as_fraction(),
-        max_digits=max_digits,
-        label=label,
-    )
 
 
 def _require_strictly_increasing(
@@ -90,7 +81,7 @@ class ExactComplexRational(ContractModel):
             ("complex real component", self.real),
             ("complex imaginary component", self.imaginary),
         ):
-            _require_bounded_rational(
+            require_bounded_rational(
                 value,
                 max_digits=MAX_GAUSSIAN_RESULT_RATIONAL_DIGITS,
                 label=label,
@@ -121,7 +112,7 @@ class GaussianPolynomialTerm(ContractModel):
         if self.coefficient.as_fractions() == (Fraction(), Fraction()):
             raise ValueError("Gaussian polynomial terms must have nonzero coefficients")
         for component in (self.coefficient.real, self.coefficient.imaginary):
-            _require_bounded_rational(
+            require_bounded_rational(
                 component,
                 max_digits=MAX_INPUT_RATIONAL_DIGITS,
                 label="Gaussian polynomial input coefficient",
@@ -136,6 +127,10 @@ class GaussianPolynomial(ContractModel):
     terms: tuple[GaussianPolynomialTerm, ...] = Field(
         min_length=1,
         max_length=MAX_GAUSSIAN_POLYNOMIAL_TERMS,
+        description=(
+            "Nonzero sparse terms ordered lexicographically by their complete "
+            "exponent vectors, for example [0, 1] before [1, 0]."
+        ),
     )
 
     @model_validator(mode="after")
@@ -145,10 +140,13 @@ class GaussianPolynomial(ContractModel):
             raise ValueError(
                 "every Gaussian polynomial exponent vector must match variable_count"
             )
-        if any(left >= right for left, right in pairwise(exponents)):
-            raise ValueError(
-                "Gaussian polynomial terms must use strictly increasing exponent order"
-            )
+        for left, right in pairwise(exponents):
+            if left >= right:
+                raise ValueError(
+                    "Gaussian polynomial terms must use strictly increasing "
+                    "lexicographic exponent-vector order; first offending adjacent "
+                    f"pair is {list(left)} then {list(right)}"
+                )
         return self
 
 
@@ -274,7 +272,7 @@ class GraphReliabilityEdgeProbability(ContractModel):
     def require_canonical_bounded_probability(self) -> Self:
         if len(self.edge) != 2 or self.edge[0] >= self.edge[1]:
             raise ValueError("reliability edge must contain two ordered vertices")
-        _require_bounded_rational(
+        require_bounded_rational(
             self.open_probability,
             max_digits=MAX_INPUT_RATIONAL_DIGITS,
             label="graph reliability edge probability",
@@ -432,12 +430,12 @@ class FiniteDistributionAtom(ContractModel):
 
     @model_validator(mode="after")
     def require_bounded_nonnegative_probability(self) -> Self:
-        _require_bounded_rational(
+        require_bounded_rational(
             self.value,
             max_digits=MAX_RESULT_RATIONAL_DIGITS,
             label="finite-distribution atom",
         )
-        _require_bounded_rational(
+        require_bounded_rational(
             self.probability,
             max_digits=MAX_RESULT_RATIONAL_DIGITS,
             label="finite-distribution probability",
@@ -483,12 +481,12 @@ def require_input_distribution(
             "finite-distribution support values must be strictly increasing"
         )
     for atom in atoms:
-        _require_bounded_rational(
+        require_bounded_rational(
             atom.value,
             max_digits=MAX_INPUT_RATIONAL_DIGITS,
             label="finite-distribution input atom",
         )
-        _require_bounded_rational(
+        require_bounded_rational(
             atom.probability,
             max_digits=MAX_INPUT_RATIONAL_DIGITS,
             label="finite-distribution input probability",
@@ -523,7 +521,7 @@ class FiniteEventRequest(ContractModel):
             label="finite event values",
         )
         for value in self.event_values:
-            _require_bounded_rational(
+            require_bounded_rational(
                 value,
                 max_digits=MAX_INPUT_RATIONAL_DIGITS,
                 label="finite event value",
@@ -584,7 +582,7 @@ class FiniteConditionalContribution(ContractModel):
             ("conditional source probability", self.source_probability),
             ("conditioned probability", self.conditioned_probability),
         ):
-            _require_bounded_rational(
+            require_bounded_rational(
                 value,
                 max_digits=MAX_RESULT_RATIONAL_DIGITS,
                 label=label,
@@ -665,12 +663,12 @@ class FinitePushforwardRequest(ContractModel):
             )
         aggregated: dict[Fraction, Fraction] = {}
         for atom, item in zip(self.distribution.atoms, self.mapping, strict=True):
-            _require_bounded_rational(
+            require_bounded_rational(
                 item.source,
                 max_digits=MAX_INPUT_RATIONAL_DIGITS,
                 label="pushforward source",
             )
-            _require_bounded_rational(
+            require_bounded_rational(
                 item.target,
                 max_digits=MAX_INPUT_RATIONAL_DIGITS,
                 label="pushforward target",
@@ -705,7 +703,7 @@ class FinitePushforwardContribution(ContractModel):
             ("pushforward target", self.target),
             ("pushforward probability", self.probability),
         ):
-            _require_bounded_rational(
+            require_bounded_rational(
                 value,
                 max_digits=MAX_RESULT_RATIONAL_DIGITS,
                 label=label,
@@ -803,7 +801,7 @@ class FiniteConvolutionContribution(ContractModel):
             ("convolution sum value", self.sum_value),
             ("convolution probability", self.probability),
         ):
-            _require_bounded_rational(
+            require_bounded_rational(
                 value,
                 max_digits=MAX_RESULT_RATIONAL_DIGITS,
                 label=label,

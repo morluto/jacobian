@@ -7,6 +7,7 @@ import logging
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,9 +15,12 @@ from typing import Any
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 
-from jacobian.adapters.mcp.constants import ReasoningLogMode
 from jacobian.adapters.mcp.remote import TenantRuntimeRouter
-from jacobian.adapters.mcp.tooling import AgentRecoveryError
+from jacobian.adapters.mcp.tooling import (
+    AgentRecoveryError,
+    MCPBlockingWorkerRegistry,
+    blocking_worker_scope,
+)
 from jacobian.runtime.model import JacobianRuntime
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,36 +29,71 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True, slots=True)
 class AppState:
     runtime: JacobianRuntime | None
+    worker_registry: MCPBlockingWorkerRegistry
     tenant_router: TenantRuntimeRouter | None = None
-    reasoning_log_mode: ReasoningLogMode = ReasoningLogMode.OFF
 
 
-def _runtime(ctx: Context[AppState, Any] | None) -> JacobianRuntime:
-    if ctx is None:
-        raise AgentRecoveryError(
-            "Jacobian is unavailable for this request. Retry once; if it fails "
-            "again, inspect the local Jacobian log."
-        )
+_active_runtime: ContextVar[JacobianRuntime | None] = ContextVar(
+    "jacobian_mcp_active_runtime",
+    default=None,
+)
+
+
+@contextmanager
+def _runtime(ctx: Context[Any, Any]) -> Iterator[JacobianRuntime]:
+    """Return a runtime, holding a tenant lease for the full request lifetime.
+
+    When tenant isolation is active, the lease is held until the context
+    manager exits so the runtime cannot be evicted mid-request.
+    """
+
+    active_runtime = _active_runtime.get()
+    if active_runtime is not None:
+        yield active_runtime
+        return
+
     state = ctx.request_context.lifespan_context
     if not isinstance(state, AppState):
         raise AgentRecoveryError(
             "Jacobian is unavailable for this request. Retry once; if it fails "
             "again, inspect the local Jacobian log."
         )
+    with _runtime_scope(state) as runtime:
+        yield runtime
+
+
+@contextmanager
+def _runtime_scope(state: AppState) -> Iterator[JacobianRuntime]:
+    """Bind exactly one runtime and blocking-worker owner to an MCP request."""
+
     if state.tenant_router is not None:
         from mcp.server.auth.middleware.auth_context import get_access_token
 
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
-        runtime = state.tenant_router.runtime_for(subject)
-        _start_lean_warmup(runtime)
-        return runtime
+        lease = state.tenant_router.lease_for(subject)
+        with blocking_worker_scope(
+            state.worker_registry,
+            lease_release=lease.release,
+        ):
+            token: Token[JacobianRuntime | None] = _active_runtime.set(lease.runtime)
+            try:
+                _start_lean_warmup(lease.runtime)
+                yield lease.runtime
+            finally:
+                _active_runtime.reset(token)
+        return
     if state.runtime is None:
         raise AgentRecoveryError(
             "Jacobian is unavailable for this request. Retry once; if it fails "
             "again, inspect the local Jacobian log."
         )
-    return state.runtime
+    with blocking_worker_scope(state.worker_registry):
+        token = _active_runtime.set(state.runtime)
+        try:
+            yield state.runtime
+        finally:
+            _active_runtime.reset(token)
 
 
 def _start_lean_warmup(runtime: JacobianRuntime) -> None:
@@ -66,15 +105,21 @@ def _start_lean_warmup(runtime: JacobianRuntime) -> None:
 
 
 @contextmanager
-def _resource_runtime(
+def _static_resource_runtime(
     runtime: JacobianRuntime | None,
     tenant_router: TenantRuntimeRouter | None,
 ) -> Iterator[JacobianRuntime]:
-    """Route resources through the same auth context as tools.
+    """Route SDK static resources through the active authentication context.
 
     MCP 2.0.0 does not inject ``Context`` into static resources, but its HTTP
     authentication middleware still scopes the access token with a contextvar.
+    Template resources use native ``Context`` injection and ``_runtime`` instead.
     """
+
+    active_runtime = _active_runtime.get()
+    if active_runtime is not None:
+        yield active_runtime
+        return
 
     if tenant_router is not None:
         from mcp.server.auth.middleware.auth_context import get_access_token
@@ -118,12 +163,9 @@ def _classify_public_tool_error(
         TenantRuntimeLimitError,
     )
     from jacobian.experiments import ExperimentNotFoundError
-    from jacobian.reasoning_log import ReasoningProtocolError
     from jacobian.registry import CheckerNotFoundError
     from jacobian.storage.errors import ArtifactNotFoundError
 
-    if isinstance(tool_error, ReasoningProtocolError):
-        return (tool_error.code, str(tool_error), tool_error.hint)
     if isinstance(tool_error, AgentRecoveryError):
         return (
             "SERVICE_UNAVAILABLE",
@@ -195,29 +237,6 @@ def _public_tool_error(tool_name: str, exc: Exception) -> str:
                 "message": message,
                 "hint": hint,
             }
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-
-
-def _experiment_scope_content(runtime: JacobianRuntime, snapshot: Any) -> str:
-    scope_uri = getattr(snapshot, "scope_uri", None)
-    if scope_uri is None:
-        return json.dumps(
-            {
-                "experiment_uri": snapshot.experiment_uri,
-                "scope_uri": None,
-            },
-            sort_keys=True,
-        )
-    scope = runtime.core.store.get(scope_uri)
-    return json.dumps(
-        {
-            "experiment_uri": snapshot.experiment_uri,
-            "scope_uri": scope.artifact_uri,
-            "manifest": scope.manifest.model_dump(mode="json"),
-            "payload": scope.payload,
         },
         ensure_ascii=False,
         sort_keys=True,

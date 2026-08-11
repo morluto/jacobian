@@ -9,7 +9,7 @@ REPORT = APP / "evidence" / "provider-report.json"
 TASK_ID = "jacobian/gudhi"
 PROVIDER = "gudhi"
 CONTRACT = "jacobian.gudhi-persistence-spike/v1"
-PIN = "sha256:329e57f50ad88ddbf2f6a3fe7cbbb0b5121be7c92a01d3a0b57db9241b1e6813"
+PIN = "sha256:3decd51546ff618689114fb57eff03e1abc50133207e50fcba5c473583c02f4f"
 
 report = json.loads(REPORT.read_text())
 status = report.get("status", "ERROR")

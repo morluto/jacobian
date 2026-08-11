@@ -7,6 +7,7 @@ from proof_replay import VerifyResult, verify_submission
 from verifier_support import (
     false_verified_claim,
     load_submission,
+    normalize_reward_file,
     workspace_input_is_bound,
 )
 
@@ -58,6 +59,7 @@ def main() -> None:
             }
         )
     )
+    normalize_reward_file(logs / "reward.json")
     print(json.dumps({"accepted": accepted, "message": message}, sort_keys=True))
 
 

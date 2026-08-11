@@ -49,7 +49,7 @@ def _run(app: Path, logs: Path) -> dict:
 
 def test_oracle_certificate_gets_full_reward(tmp_path: Path) -> None:
     app, logs, _ = _case(tmp_path)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_equivalent_normalized_row_column_permutation_passes(tmp_path: Path) -> None:
@@ -59,19 +59,19 @@ def test_equivalent_normalized_row_column_permutation_passes(tmp_path: Path) -> 
     for row in matrix:
         row[1], row[2] = row[2], row[1]
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_nonorthogonal_entry_and_wrong_determinant_fail(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["result"]["matrix"][4][7] *= -1
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
 
     app, logs, submission = _case(tmp_path / "det")
     submission["result"]["determinant"] += 1
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_unnormalized_and_false_verified_claim_fail(tmp_path: Path) -> None:
@@ -80,14 +80,14 @@ def test_unnormalized_and_false_verified_claim_fail(tmp_path: Path) -> None:
         -value for value in submission["result"]["matrix"][0]
     ]
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
 
     app, logs, submission = _case(tmp_path / "verified")
     submission["claimed_assurance"] = "VERIFIED"
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["false_certification"] is True
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["false_certification"] is True
+    assert reward.details["aggregate_reward"] == 0.0
 
 
 def test_input_and_evidence_tampering_fail_closed(tmp_path: Path) -> None:
@@ -96,10 +96,10 @@ def test_input_and_evidence_tampering_fail_closed(tmp_path: Path) -> None:
     frozen["order"] = 8
     (app / "input.json").write_text(json.dumps(frozen))
     _write(app, submission)
-    assert _run(app, logs)["input_binding"] == 0.0
+    assert _run(app, logs).details["input_binding"] == 0.0
 
     app, logs, submission = _case(tmp_path / "evidence")
     (app / "evidence/answer.txt").write_text("{}\n")
     reward = _run(app, logs)
-    assert reward["evidence"] == 0.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["evidence"] == 0.0
+    assert reward.details["aggregate_reward"] == 0.0

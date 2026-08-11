@@ -12,7 +12,7 @@ from jacobian.contracts.search import (
     SearchExperimentSnapshot,
 )
 from jacobian.search._helpers import _record_parents
-from jacobian.search.errors import SearchError
+from jacobian.search.errors import SearchCorruptionError, SearchError
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -178,7 +178,8 @@ def _validate_checkpoint(
     semantics_uri: str,
     checkpoint_schema_uri: str,
 ) -> dict[str, Any]:
-    assert snapshot.checkpoint_uri is not None
+    if snapshot.checkpoint_uri is None:
+        raise SearchCorruptionError("snapshot checkpoint URI is unexpectedly None")
     checkpoint_artifact = store.get(snapshot.checkpoint_uri)
     if (
         checkpoint_artifact.manifest.schema_uri != checkpoint_schema_uri

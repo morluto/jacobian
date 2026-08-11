@@ -61,9 +61,9 @@ def test_keyword_only_evidence_is_accepted_with_bound_result(
     support._write_json(app / "submission.json", submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(("task_name", "expected_reward"), _NO_MARKER_CASES)
@@ -83,10 +83,10 @@ def test_evidence_without_result_marker_is_rejected(
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0
     if expected_reward is not None:
-        assert rejected["reward"] == pytest.approx(expected_reward)
+        assert rejected.reward == pytest.approx(expected_reward)
 
 
 @pytest.mark.parametrize("task_name", _UNDOCUMENTED_MARKER_TASKS)
@@ -111,9 +111,9 @@ def test_undocumented_evidence_markers_are_not_required(
     support._write_json(submission_path, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["evidence_validity"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize("task_name", _UNDOCUMENTED_MARKER_TASKS)
@@ -129,9 +129,9 @@ def test_public_prose_evidence_rejects_unrelated_text(
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] < 1.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward < 1.0
 
 
 @pytest.mark.parametrize("task_name", _EMPTY_PROSE_TASKS)
@@ -144,7 +144,7 @@ def test_evidence_rejects_empty_prose(tmp_path: Path, task_name: str) -> None:
     support._write_json(app / "submission.json", submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
 
 
 @pytest.mark.parametrize(
@@ -173,5 +173,5 @@ def test_evidence_rejects_mismatched_result_marker(
     support._write_json(submission_path, tampered)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

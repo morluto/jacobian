@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -38,7 +37,7 @@ from jacobian.contracts.graph_isomorphism import (
     GraphVertexMapping,
     SimpleUndirectedGraph,
 )
-from jacobian.contracts.results import ExecutionStatus
+from jacobian.contracts.results import Conclusion, ExecutionStatus, Verification
 from jacobian.graphs.installation import GraphInstallation
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
@@ -162,7 +161,10 @@ class GraphIsomorphismAdapter:
         self.artifacts = artifacts
         self.verification = verification
         self.installation = installation
-        assert installation.checker_id is not None
+        if installation.checker_id is None:
+            raise RuntimeError(
+                "graph isomorphism verify adapter requires an authorized checker"
+            )
         self._descriptor = CapabilityDescriptor(
             capability_id="graph.isomorphism.verify",
             version="1",
@@ -177,7 +179,6 @@ class GraphIsomorphismAdapter:
                 features=("graph", "isomorphism", "direct-witness"),
                 checker_ids=(installation.checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(GraphIsomorphismVerifyRequest),
             output_schema=model_schema(GraphIsomorphismVerifyOutput),
             tags=("graph", "isomorphism", "verification"),
@@ -190,7 +191,17 @@ class GraphIsomorphismAdapter:
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
         validated = GraphIsomorphismVerifyRequest.model_validate(request.input)
         checker_id = self.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="GRAPH_ISOMORPHISM_CHECKER_UNAVAILABLE",
+                    stage="isomorphism_verification",
+                    message=(
+                        "The independent graph isomorphism checker is not installed "
+                        "in this runtime."
+                    ),
+                )
+            )
         left = self._load_source_graph(
             validated.left_graph_uri,
             path="left_graph_uri",
@@ -275,17 +286,21 @@ class GraphIsomorphismAdapter:
         )
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
+            and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
-        conclusion = cast(
-            Literal["TRUE", "FALSE", "UNKNOWN"],
-            checked.conclusion.value,
-        )
-        is_isomorphism = {
-            "TRUE": True,
-            "FALSE": False,
-            "UNKNOWN": None,
-        }[conclusion]
+        conclusion: Literal["TRUE", "FALSE", "UNKNOWN"]
+        if checked.conclusion is Conclusion.TRUE:
+            conclusion = "TRUE"
+            is_isomorphism = True
+        elif checked.conclusion is Conclusion.FALSE:
+            conclusion = "FALSE"
+            is_isomorphism = False
+        else:
+            conclusion = "UNKNOWN"
+            is_isomorphism = None
+        record_uri = checked.verification_record_uri if verified else None
         output = GraphIsomorphismVerifyOutput(
             is_isomorphism=is_isomorphism,
             conclusion=conclusion,
@@ -295,11 +310,10 @@ class GraphIsomorphismAdapter:
             mapping_uri=mapping.artifact_uri,
             claim_uri=claim.artifact_uri,
             certificate_uri=evidence.artifact_uri,
-            verification_record_uri=checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
             coverage="EXHAUSTIVE" if verified else "UNKNOWN",
         )
-        record_uri = checked.verification_record_uri
         artifact_uris = [
             *source_graph_uris,
             pair.artifact_uri,
@@ -312,7 +326,6 @@ class GraphIsomorphismAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

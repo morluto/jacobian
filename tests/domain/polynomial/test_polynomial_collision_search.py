@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
 
+from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
     CapabilityRequest,
 )
+from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
 from jacobian.polynomials import install_polynomial_capabilities
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture
@@ -142,6 +145,25 @@ def test_collision_search_reports_exact_completed_not_found_scope(
     assert set(result.relationships[0].target_artifact_uris) <= set(
         result.artifact_uris
     )
+
+
+def test_collision_search_preserves_partial_evidence_when_cancelled(
+    domain_services,
+) -> None:
+    cancellation_event = threading.Event()
+    cancellation_event.set()
+
+    with bounded_process_cancellation(cancellation_event):
+        result = domain_services.core.capabilities.invoke(_request(1))
+
+    assert result.execution.status is ExecutionStatus.CANCELLED
+    assert result.output["found"] is False
+    assert result.output["stop_reason"] == "CANCELLED"
+    assert result.output["examined_point_count"] == 0
+    assert result.output["grid_point_count"] == 3
+    assert result.completeness.status is CapabilityCompletenessStatus.PARTIAL
+    assert len(result.artifact_uris) == 1
+    assert result.relationships == ()
 
 
 def test_collision_search_validates_grid_bound_before_artifact_writes(

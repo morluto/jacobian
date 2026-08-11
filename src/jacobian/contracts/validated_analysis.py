@@ -8,7 +8,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 from jacobian.contracts.probability import (
     FiniteDistributionAtom,
     require_input_distribution,
@@ -23,17 +23,6 @@ type RationalLinearProgramStatus = Literal[
     "TIMEOUT",
     "BACKEND_ERROR",
 ]
-
-
-def _require_bounded_rational(value: CanonicalRational) -> None:
-    if (
-        len(value.num.lstrip("-")) > MAX_RATIONAL_DIGITS
-        or len(value.den) > MAX_RATIONAL_DIGITS
-    ):
-        raise ValueError(
-            "validated-analysis rationals are limited to 128 decimal digits "
-            "per numerator and denominator"
-        )
 
 
 class RealUnaryFunction(StrEnum):
@@ -52,7 +41,11 @@ class ArbPointEnclosureRequest(ContractModel):
 
     @model_validator(mode="after")
     def bound_argument_size(self) -> Self:
-        _require_bounded_rational(self.argument)
+        require_bounded_rational(
+            self.argument,
+            max_digits=MAX_RATIONAL_DIGITS,
+            label="validated-analysis rational",
+        )
         return self
 
 
@@ -211,7 +204,11 @@ class StandardFormRationalLinearProgram(ContractModel):
             *self.rhs,
             *(item for row in self.coefficients for item in row),
         ):
-            _require_bounded_rational(value)
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="validated-analysis rational",
+            )
         return self
 
 

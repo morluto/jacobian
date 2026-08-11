@@ -10,6 +10,7 @@ from verifier_support import (
     evidence_list_is_bound,
     false_verified_claim,
     load_submission,
+    normalize_reward_file,
     resolve_evidence,
     strict_submission_contract,
 )
@@ -31,6 +32,7 @@ _PROJECTION_SUMMARY_KEYS = (
 def _write_reward(values: dict[str, object]) -> None:
     LOGS.mkdir(parents=True, exist_ok=True)
     (LOGS / "reward.json").write_text(json.dumps(values), encoding="utf-8")
+    normalize_reward_file(LOGS / "reward.json")
 
 
 def _source() -> dict | None:

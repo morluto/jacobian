@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
@@ -392,6 +393,7 @@ def _run_case(
     transcript_path = output / f"{stem}.jsonl"
     stderr_path = output / f"{stem}.stderr"
     environment = operator_environment(include=_CODEX_ENVIRONMENT)
+    command_start = time.monotonic()
     result = run_operator_command(
         "codex",
         _codex_arguments(
@@ -408,6 +410,7 @@ def _run_case(
         stderr_limit_bytes=2 * 1024 * 1024,
         environment=environment,
     )
+    elapsed_seconds = round(time.monotonic() - command_start, 6)
     transcript_path.write_bytes(result.stdout)
     stderr_path.write_bytes(result.stderr)
     telemetry = parse_agent_transcript(transcript_path)
@@ -426,6 +429,7 @@ def _run_case(
             "diagnostic": result.diagnostic,
             "stdout_exceeded": result.stdout_exceeded,
             "stderr_exceeded": result.stderr_exceeded,
+            "elapsed_seconds": elapsed_seconds,
         },
         "classification": {
             **classification,
@@ -497,6 +501,64 @@ def _validate_mcp_url(value: str) -> None:
         )
 
 
+def _build_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate per-run observations into the report summary block."""
+
+    return {
+        "run_count": len(runs),
+        "command_failure_count": sum(
+            run["command"]["status"] != ToolCommandStatus.EXITED
+            or run["command"]["exit_code"] != 0
+            for run in runs
+        ),
+        "contract_satisfied_count": sum(
+            run["classification"]["contract_satisfied"] for run in runs
+        ),
+        "discovered_count": sum(
+            run["classification"]["observed"]["discovered"] for run in runs
+        ),
+        "invoked_count": sum(
+            run["classification"]["observed"]["invoked"] for run in runs
+        ),
+        "verified_count": sum(
+            run["classification"]["observed"]["verified"] for run in runs
+        ),
+        "discovery_free_invocation_count": sum(
+            run["classification"]["observed"]["discovery_free_invocation"]
+            for run in runs
+        ),
+        "abstained_count": sum(
+            run["classification"]["observed"]["abstained"] for run in runs
+        ),
+        "cost_totals": {
+            "input_tokens": sum(
+                (run["classification"]["usage"] or {}).get("input_tokens", 0)
+                for run in runs
+            ),
+            "cached_input_tokens": sum(
+                (run["classification"]["usage"] or {}).get("cached_input_tokens", 0)
+                for run in runs
+            ),
+            "uncached_input_tokens": sum(
+                run["classification"]["uncached_input_tokens"] or 0 for run in runs
+            ),
+            "output_tokens": sum(
+                (run["classification"]["usage"] or {}).get("output_tokens", 0)
+                for run in runs
+            ),
+            "mcp_calls": sum(run["classification"]["mcp_call_count"] for run in runs),
+            "mcp_model_visible_bytes": sum(
+                run["classification"]["mcp_model_visible_bytes"] for run in runs
+            ),
+        },
+        "duration_totals": {
+            "elapsed_seconds": round(
+                sum(run["command"]["elapsed_seconds"] for run in runs), 6
+            ),
+        },
+    }
+
+
 def main() -> None:
     args = _parser().parse_args()
     if not args.execute:
@@ -543,11 +605,7 @@ def main() -> None:
             for repetition in range(1, args.repetitions + 1)
         ]
     suite_payload = suite.model_dump(mode="json")
-    command_failure_count = sum(
-        run["command"]["status"] != ToolCommandStatus.EXITED
-        or run["command"]["exit_code"] != 0
-        for run in runs
-    )
+    summary = _build_summary(runs)
     report = {
         "schema_version": "2",
         "suite": {
@@ -574,59 +632,14 @@ def main() -> None:
             "repository_revision": git_head_sha(_ROOT),
         },
         "runs": runs,
-        "summary": {
-            "run_count": len(runs),
-            "command_failure_count": command_failure_count,
-            "contract_satisfied_count": sum(
-                run["classification"]["contract_satisfied"] for run in runs
-            ),
-            "discovered_count": sum(
-                run["classification"]["observed"]["discovered"] for run in runs
-            ),
-            "invoked_count": sum(
-                run["classification"]["observed"]["invoked"] for run in runs
-            ),
-            "verified_count": sum(
-                run["classification"]["observed"]["verified"] for run in runs
-            ),
-            "discovery_free_invocation_count": sum(
-                run["classification"]["observed"]["discovery_free_invocation"]
-                for run in runs
-            ),
-            "abstained_count": sum(
-                run["classification"]["observed"]["abstained"] for run in runs
-            ),
-            "cost_totals": {
-                "input_tokens": sum(
-                    (run["classification"]["usage"] or {}).get("input_tokens", 0)
-                    for run in runs
-                ),
-                "cached_input_tokens": sum(
-                    (run["classification"]["usage"] or {}).get("cached_input_tokens", 0)
-                    for run in runs
-                ),
-                "uncached_input_tokens": sum(
-                    run["classification"]["uncached_input_tokens"] or 0 for run in runs
-                ),
-                "output_tokens": sum(
-                    (run["classification"]["usage"] or {}).get("output_tokens", 0)
-                    for run in runs
-                ),
-                "mcp_calls": sum(
-                    run["classification"]["mcp_call_count"] for run in runs
-                ),
-                "mcp_model_visible_bytes": sum(
-                    run["classification"]["mcp_model_visible_bytes"] for run in runs
-                ),
-            },
-        },
+        "summary": summary,
     }
     (output / "report.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     print(json.dumps(report["summary"], sort_keys=True))
-    if command_failure_count:
+    if summary["command_failure_count"]:
         raise SystemExit("one or more Codex commands failed; inspect report.json")
 
 

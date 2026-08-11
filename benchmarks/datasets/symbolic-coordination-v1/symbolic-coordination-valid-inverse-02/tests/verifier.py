@@ -17,6 +17,7 @@ from verifier_support import (
     SUBMISSION_FIELDS,
     is_regular_bounded_file,
     load_submission_raw,
+    normalize_reward_file,
     read_evidence_json,
     submission_matches_public_schema,
     workspace_input_is_bound,
@@ -706,6 +707,7 @@ def main() -> None:
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(output, sort_keys=True, separators=(",", ":"))
     )
+    normalize_reward_file(Path("/logs/verifier/reward.json"))
 
 
 if __name__ == "__main__":

@@ -89,60 +89,6 @@ def _mcnemar_exact(control: list[float], treatment: list[float]) -> float | None
     return float(min(1.0, 2 * tail))
 
 
-_VARYING_CONDITION_KEYS = frozenset({"id", "role", "reasoning_log_mode"})
-
-
-def _reasoning_condition_failures(
-    control_condition: Any, treatment_condition: Any
-) -> list[str]:
-    """Validate the reasoning-log condition pair and its non-varying invariants.
-
-    Only applies when both arms have Jacobian enabled — a baseline
-    comparison (control has Jacobian disabled) is not a reasoning-log
-    isolation experiment and must not be rejected here.
-    """
-
-    failures: list[str] = []
-    if not (
-        isinstance(control_condition, dict)
-        and isinstance(treatment_condition, dict)
-        and control_condition.get("jacobian_enabled") is True
-        and treatment_condition.get("jacobian_enabled") is True
-    ):
-        return failures
-    control_mode = control_condition.get("reasoning_log_mode")
-    treatment_mode = treatment_condition.get("reasoning_log_mode")
-    if control_mode is None and treatment_mode is None:
-        return failures
-    if (control_mode, treatment_mode) != ("OFF", "REQUIRED"):
-        failures.append(
-            "reasoning-log comparison must pair OFF control with REQUIRED treatment"
-        )
-    # Compare every condition field except the explicitly varying
-    # identity, role, and reasoning_log_mode fields.  Divergent
-    # image, server_version, policy_profile, catalog_digest, or
-    # policy_digest means the two arms used different Jacobian code
-    # or capability portfolios and cannot support a valid
-    # reasoning-log comparison.
-    if isinstance(control_condition, dict) and isinstance(treatment_condition, dict):
-        control_invariant = {
-            k: v
-            for k, v in control_condition.items()
-            if k not in _VARYING_CONDITION_KEYS
-        }
-        treatment_invariant = {
-            k: v
-            for k, v in treatment_condition.items()
-            if k not in _VARYING_CONDITION_KEYS
-        }
-        if control_invariant != treatment_invariant:
-            failures.append(
-                "reasoning-log condition invariants differ outside "
-                "the allowed id/role/mode fields"
-            )
-    return failures
-
-
 def _comparison_failures(
     control: dict[str, Any], treatment: dict[str, Any]
 ) -> list[str]:
@@ -177,12 +123,6 @@ def _comparison_failures(
     )
     if control.get("fixed_invariants") != treatment.get("fixed_invariants"):
         failures.append("fixed invariants differ")
-    control_condition = control.get("runtime_snapshot", {}).get("condition")
-    treatment_condition = treatment.get("runtime_snapshot", {}).get("condition")
-    if isinstance(control_condition, dict) or isinstance(treatment_condition, dict):
-        failures.extend(
-            _reasoning_condition_failures(control_condition, treatment_condition)
-        )
     if control.get("job", {}).get("comparison_signature") != treatment.get(
         "job", {}
     ).get("comparison_signature"):

@@ -62,8 +62,8 @@ def test_accepts_alternative_polynomial_parameterization(tmp_path: Path) -> None
     submission["result"]["probes"] = [_probe(family, t) for t in (2, 4, 6)]
     _rewrite(app, submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 def test_rejects_ratio_not_bound_to_pair(tmp_path: Path) -> None:
@@ -72,8 +72,8 @@ def test_rejects_ratio_not_bound_to_pair(tmp_path: Path) -> None:
     submission["result"]["family"]["ratio"] = [1]
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_probe_count_above_public_maximum(tmp_path: Path) -> None:
@@ -83,8 +83,8 @@ def test_rejects_probe_count_above_public_maximum(tmp_path: Path) -> None:
     submission["result"]["probes"] = [_probe(family, t) for t in range(2, 9)]
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["protocol_compliance"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["protocol_compliance"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_polynomial_outside_public_bounds(tmp_path: Path) -> None:
@@ -93,8 +93,8 @@ def test_rejects_polynomial_outside_public_bounds(tmp_path: Path) -> None:
     submission["result"]["family"]["a"] = [0] * 13
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_preserves_math_diagnostic_for_envelope_error(tmp_path: Path) -> None:
@@ -103,10 +103,10 @@ def test_preserves_math_diagnostic_for_envelope_error(tmp_path: Path) -> None:
     submission["completeness"] = "PARTIAL"
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["protocol_compliance"] == 0.0
-    assert rejected["correctness"] == 0.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["protocol_compliance"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_evidence_json_with_json_type_coercion(tmp_path: Path) -> None:
@@ -119,9 +119,9 @@ def test_rejects_evidence_json_with_json_type_coercion(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_deeply_nested_evidence_without_crashing(tmp_path: Path) -> None:
@@ -132,9 +132,9 @@ def test_rejects_deeply_nested_evidence_without_crashing(tmp_path: Path) -> None
     submission["evidence"][0]["sha256"] = support._digest(evidence_path)
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_non_regular_visible_input_without_blocking(tmp_path: Path) -> None:
@@ -143,7 +143,7 @@ def test_rejects_non_regular_visible_input_without_blocking(tmp_path: Path) -> N
     app_input.unlink()
     os.mkfifo(app_input)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["reward"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_oversized_evidence_before_hashing(tmp_path: Path) -> None:
@@ -155,9 +155,9 @@ def test_rejects_oversized_evidence_before_hashing(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = "sha256:" + "0" * 64
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 1.0
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 1.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize(
@@ -172,8 +172,8 @@ def test_rejects_corrupted_family(
     submission["result"]["family"][path] = replacement
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_false_vieta_integrality(tmp_path: Path) -> None:
@@ -182,7 +182,7 @@ def test_rejects_false_vieta_integrality(tmp_path: Path) -> None:
     submission["result"]["source_audit"]["status_for_d_ge_2"] = "INTEGER"
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected.details["correctness"] == 0.0
 
 
 def test_rejects_empty_audit_tokens_as_protocol_failure(tmp_path: Path) -> None:
@@ -193,8 +193,8 @@ def test_rejects_empty_audit_tokens_as_protocol_failure(tmp_path: Path) -> None:
     submission["result"]["source_audit"]["invalid_step"] = ""
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["protocol_compliance"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["protocol_compliance"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_zero_valued_probe_multiple(tmp_path: Path) -> None:
@@ -217,8 +217,8 @@ def test_rejects_zero_valued_probe_multiple(tmp_path: Path) -> None:
     submission["result"]["probes"] = [_probe(family, 2)]
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_malformed_evidence_descriptor_as_protocol_failure(
@@ -231,8 +231,8 @@ def test_rejects_malformed_evidence_descriptor_as_protocol_failure(
     submission["evidence"] = [None]
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["protocol_compliance"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["protocol_compliance"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_sign_equivalent_decomposition_failing_auxiliary_identities(
@@ -268,5 +268,5 @@ def test_rejects_sign_equivalent_decomposition_failing_auxiliary_identities(
     submission["result"]["probes"] = [_probe(family, t) for t in (2, 3, 5)]
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

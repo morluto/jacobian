@@ -28,7 +28,8 @@ def _compute_homogeneous_source_degree(
         if len(degrees) != 1:
             raise ValueError("the source polynomial must be homogeneous")
         return next(iter(degrees))
-    assert linear_factors is not None
+    if linear_factors is None:
+        raise ValueError("labelled linear factors are required")
     return len(linear_factors)
 
 
@@ -66,25 +67,28 @@ class GradedJacobianSyzygyRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_bounded_homogeneous_three_variable_input(self) -> Self:
-        if (self.polynomial is None) == (self.linear_factors is None):
-            raise ValueError(
-                "supply exactly one of polynomial or labelled linear_factors"
-            )
         if self.polynomial is not None:
+            if self.linear_factors is not None:
+                raise ValueError(
+                    "supply exactly one of polynomial or labelled linear_factors"
+                )
             if self.linear_factor_variables is not None:
                 raise ValueError(
                     "linear_factor_variables is only valid with linear_factors"
                 )
             polynomial = self.polynomial
             variables = polynomial.variables
-        else:
+        elif self.linear_factors is not None:
             if self.linear_factor_variables is None:
                 raise ValueError("linear_factors require an exact three-variable order")
-            assert self.linear_factors is not None
             labels = tuple(factor.label for factor in self.linear_factors)
             if len(labels) != len(set(labels)):
                 raise ValueError("labelled linear-factor names must be unique")
             variables = self.linear_factor_variables
+        else:
+            raise ValueError(
+                "supply exactly one of polynomial or labelled linear_factors"
+            )
         if len(variables) != 3:
             raise ValueError(
                 "graded Jacobian syzygies currently require exactly three variables"
@@ -222,10 +226,6 @@ class GradedJacobianSyzygyResult(ContractModel):
     first_syzygy_degree: StrictInt | None = Field(default=None, ge=0, le=8)
     kernel_witness: GradedJacobianKernelWitness | None = None
     completion: Literal["COMPLETE_THROUGH_BOUND"] = "COMPLETE_THROUGH_BOUND"
-    verification_capability_id: Literal[
-        "polynomial.jacobian_syzygy.minimum_degree.verify"
-    ] = "polynomial.jacobian_syzygy.minimum_degree.verify"
-    verification_input_field: Literal["result_uri"] = "result_uri"
 
     @model_validator(mode="after")
     def bind_first_kernel_and_finite_scope(self) -> Self:

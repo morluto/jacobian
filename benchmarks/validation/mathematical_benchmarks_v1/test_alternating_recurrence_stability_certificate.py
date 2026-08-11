@@ -34,7 +34,7 @@ def test_accepts_alternative_checkpoints(tmp_path: Path) -> None:
         for n in (2, 7, 13, 23, 29)
     ]
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_accepts_unordered_equivalent_checkpoints(tmp_path: Path) -> None:
@@ -42,7 +42,7 @@ def test_accepts_unordered_equivalent_checkpoints(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["checkpoints"].reverse()
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_finite_simulation_with_wrong_parity_argument(tmp_path: Path) -> None:
@@ -50,7 +50,7 @@ def test_rejects_finite_simulation_with_wrong_parity_argument(tmp_path: Path) ->
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["negative_delta_bad_parity"] = "EVEN"
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["correctness"] == 0.0
+    assert support._run_verifier(task, app, logs).details["correctness"] == 0.0
 
 
 def test_rejects_corrupt_closed_form_checkpoint(tmp_path: Path) -> None:
@@ -61,7 +61,7 @@ def test_rejects_corrupt_closed_form_checkpoint(tmp_path: Path) -> None:
         "denominator": 1,
     }
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_rejects_float_integer_certificate_fields(tmp_path: Path) -> None:
@@ -69,7 +69,7 @@ def test_rejects_float_integer_certificate_fields(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["homogeneous_base"] = -7.0
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_rejects_recursive_evidence_without_crashing(tmp_path: Path) -> None:
@@ -89,8 +89,8 @@ def test_rejects_recursive_evidence_without_crashing(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_rejects_evidence_limitations_mismatched_with_submission(
@@ -113,5 +113,5 @@ def test_rejects_evidence_limitations_mismatched_with_submission(
     submission["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import hashlib
 import json
 import math
@@ -262,6 +263,49 @@ def resolve_evidence(
     return target
 
 
+_JSON_WHITESPACE = frozenset(" \t\n\r")
+_JSON_WHITESPACE_CHARS = " \t\n\r"
+
+
+def _drain_stream_tail(stream, decoder) -> None:
+    """Reject non-whitespace after the parsed JSON value incrementally."""
+
+    while block := stream.read(65_536):
+        tail = decoder.decode(block)
+        if tail and not all(character in _JSON_WHITESPACE for character in tail):
+            raise ValueError("non-whitespace after evidence JSON value")
+    tail = decoder.decode(b"", final=True)
+    if tail and not all(character in _JSON_WHITESPACE for character in tail):
+        raise ValueError("non-whitespace after evidence JSON value")
+
+
+def _read_streaming_json_value(stream) -> Any:
+    """Parse one UTF-8 JSON value without materializing legal file padding."""
+
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    parser = json.JSONDecoder(object_pairs_hook=_reject_duplicate_keys)
+    buffer = ""
+    while True:
+        block = stream.read(65_536)
+        if block:
+            buffer += decoder.decode(block)
+        if buffer[:1] in _JSON_WHITESPACE:
+            buffer = buffer.lstrip(_JSON_WHITESPACE_CHARS)
+        try:
+            value, end = parser.raw_decode(buffer)
+        except json.JSONDecodeError:
+            # A token can be split in the middle of the buffer, for example
+            # after leading whitespace.  Only EOF turns a decoder error into a
+            # malformed value; the next chunk may complete any prefix.
+            if not block:
+                raise
+            continue
+        if not all(character in _JSON_WHITESPACE for character in buffer[end:]):
+            raise ValueError("non-whitespace after evidence JSON value")
+        _drain_stream_tail(stream, decoder)
+        return value
+
+
 def read_evidence_json(
     descriptor: object,
     *,
@@ -269,7 +313,12 @@ def read_evidence_json(
     workspace: Path = WORKSPACE,
     max_bytes: int | None = None,
 ) -> dict[str, Any] | None:
-    """Resolve and parse a digest-bound evidence object."""
+    """Resolve and stream-parse a digest-bound evidence object.
+
+    ``max_bytes`` applies only to explicit caller policy. Without one, a valid
+    evidence file may contain arbitrarily large legal JSON whitespace because
+    its workspace path, regular-file status, and digest remain authoritative.
+    """
 
     target = resolve_evidence(
         descriptor,
@@ -280,11 +329,9 @@ def read_evidence_json(
     if target is None:
         return None
     try:
-        value = json.loads(
-            target.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-        )
-    except (OSError, ValueError, RecursionError, MemoryError):
+        with target.open("rb") as stream:
+            value = _read_streaming_json_value(stream)
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError, MemoryError):
         return None
     return value if isinstance(value, dict) else None
 
@@ -433,6 +480,7 @@ __all__ = [
     "false_verified_claim",
     "is_regular_bounded_file",
     "load_submission",
+    "normalize_reward_file",
     "read_evidence_json",
     "resolve_evidence",
     "sha256_uri",
@@ -440,3 +488,48 @@ __all__ = [
     "valid_sha256_uri",
     "workspace_input_is_bound",
 ]
+
+
+def normalize_reward_file(reward_path: Path) -> None:
+    """Split a verifier's completed reward payload into scalar and details files."""
+
+    import json
+
+    def reject_duplicates(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise RuntimeError(f"duplicate verifier reward key: {key}")
+            value[key] = item
+        return value
+
+    def reject_constant(value):
+        raise RuntimeError(f"non-finite verifier reward value: {value}")
+
+    path = reward_path
+    payload = json.loads(
+        path.read_text(encoding="utf-8"),
+        object_pairs_hook=reject_duplicates,
+        parse_constant=reject_constant,
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError("verifier reward payload must be a JSON object")
+    if "reward" not in payload:
+        raise RuntimeError("verifier reward payload is missing reward")
+    reward = payload["reward"]
+    if (
+        isinstance(reward, bool)
+        or not isinstance(reward, (int, float))
+        or reward != reward
+        or abs(reward) == float("inf")
+        or not 0.0 <= reward <= 1.0
+    ):
+        raise RuntimeError("verifier reward must be a finite numeric scalar")
+    details = {key: value for key, value in payload.items() if key != "reward"}
+    (path.parent / "reward-details.json").write_text(
+        json.dumps(details, sort_keys=True, allow_nan=False), encoding="utf-8"
+    )
+    path.write_text(
+        json.dumps({"reward": reward}, sort_keys=True, allow_nan=False),
+        encoding="utf-8",
+    )

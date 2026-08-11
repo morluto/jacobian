@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
 
 import pytest
@@ -8,12 +7,14 @@ from tests.support.polynomials import univariate_term as _term
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.verification import CheckerExecutionError
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def _input(value: int) -> dict[str, Any]:
@@ -36,7 +37,6 @@ def test_solution_capability_verifies_valid_assignment(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(2),
         )
     )
@@ -81,7 +81,6 @@ def test_solution_capability_verifies_invalid_assignment(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(1),
         )
     )
@@ -114,7 +113,6 @@ def test_solution_capability_keeps_checker_failure_unknown(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(1),
         )
     )
@@ -126,36 +124,6 @@ def test_solution_capability_keeps_checker_failure_unknown(
     assert result.output["verification_record_uri"] is None
     assert result.assurance.level is not CapabilityAssuranceLevel.VERIFIED
     assert result.relationships == ()
-
-
-def test_solution_capability_rejects_dimension_mismatch_before_artifact_writes(
-    authorized_complete_runtime,
-) -> None:
-    connection = sqlite3.connect(authorized_complete_runtime.core.store.db_path)
-    try:
-        before = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
-    finally:
-        connection.close()
-    invalid = _input(2)
-    invalid["assignment"].append({"num": "3", "den": "1"})
-
-    result = authorized_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.system.solution.verify",
-            mode=CapabilityMode.VERIFY,
-            input=invalid,
-        )
-    )
-
-    connection = sqlite3.connect(authorized_complete_runtime.core.store.db_path)
-    try:
-        after = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
-    finally:
-        connection.close()
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "INVALID_POLYNOMIAL_SYSTEM_SOLUTION_REQUEST"
-    assert result.diagnostics[0].stage == "request_validation"
-    assert before == after
 
 
 def test_solution_capability_is_only_available_with_checker(

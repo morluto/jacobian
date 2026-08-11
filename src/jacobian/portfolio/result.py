@@ -36,18 +36,6 @@ from jacobian.lean_frontend.proof_axioms import LeanProofAxiomsInstallation
 from jacobian.lean_frontend.proof_edit import LeanProofEditInstallation
 from jacobian.lean_frontend.service import LeanService
 from jacobian.lean_frontend.statement import LeanStatementInstallation
-from jacobian.matrices.capabilities import MatrixInstallation
-from jacobian.matrices.determinant import (
-    MatrixDeterminantCheckerInstallation,
-)
-from jacobian.matrices.linear_capabilities import (
-    LinearRationalInconsistencyCheckerInstallation,
-    LinearRationalSolutionCheckerInstallation,
-)
-from jacobian.matrices.normal_form import (
-    MatrixNormalFormCheckerInstallation,
-)
-from jacobian.matrices.rank import MatrixRankCheckerInstallation
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.polynomial_expression_capabilities import (
     PolynomialExpressionCheckerInstallation,
@@ -218,22 +206,8 @@ class PortfolioInstallation:
     carcara_runtime: CapabilityProviderRuntime | None = None
     cadical_runtime: CapabilityProviderRuntime | None = None
     cvc5_runtime: CapabilityProviderRuntime | None = None
-    python_flint_runtime: CapabilityProviderRuntime | None = None
-    python_flint_hnf_runtime: CapabilityProviderRuntime | None = None
     sympy_polynomial_normalization_runtime: CapabilityProviderRuntime | None = None
     lean_runtime: CapabilityProviderRuntime | None = None
-
-    # --- Linear checkers ---
-    linear_solution_checker: LinearRationalSolutionCheckerInstallation | None = None
-    linear_inconsistency_checker: (
-        LinearRationalInconsistencyCheckerInstallation | None
-    ) = None
-
-    # --- Matrix ---
-    matrix: MatrixInstallation | None = None
-    matrix_normal_form_checker: MatrixNormalFormCheckerInstallation | None = None
-    matrix_determinant_checker: MatrixDeterminantCheckerInstallation | None = None
-    matrix_rank_checker: MatrixRankCheckerInstallation | None = None
 
     # --- Polynomial ---
     polynomial: PolynomialInstallation | None = None
@@ -289,7 +263,7 @@ class PortfolioInstallation:
 
         if self._closed:
             return
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         resources = (
             self.lean_declarations,
             self.lean_exploration.repl if self.lean_exploration is not None else None,
@@ -300,10 +274,17 @@ class PortfolioInstallation:
                 continue
             try:
                 resource.close()
-            except Exception as exc:
+            except BaseException as exc:
                 failures.append(exc)
         if failures:
-            raise ExceptionGroup("portfolio resources failed to close", failures)
+            exception_failures = [
+                failure for failure in failures if isinstance(failure, Exception)
+            ]
+            if len(exception_failures) == len(failures):
+                raise ExceptionGroup(
+                    "portfolio resources failed to close", exception_failures
+                )
+            raise BaseExceptionGroup("portfolio resources failed to close", failures)
         self._closed = True
 
     def installed_bundle(self, domain_id: str) -> InstalledDomainBundle | None:

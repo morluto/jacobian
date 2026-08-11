@@ -13,7 +13,7 @@ from jacobian.contracts.graph_symmetry import (
 )
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import nx
-from jacobian.operations import ComputedSuccess, MaterializedOperation
+from jacobian.operations import ComputedOperation, ComputedSuccess
 
 
 def _canonical_edge(left: str, right: str) -> tuple[str, str]:
@@ -108,8 +108,8 @@ def _generator_orbits(
     )
 
 
-GRAPH_SYMMETRY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
-    MaterializedOperation(
+GRAPH_SYMMETRY_CAPABILITIES: tuple[ComputedOperation[Any, Any], ...] = (
+    ComputedOperation(
         capability_id="graph.symmetry.generator_orbits.compute",
         title="Exact declared graph-symmetry orbit partitions",
         description=(
@@ -158,7 +158,7 @@ GRAPH_SYMMETRY_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ..
                 },
             ),
         ),
-        version="4",
+        version="5",
     ),
 )
 

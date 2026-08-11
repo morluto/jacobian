@@ -33,7 +33,7 @@ def write_bound(app: Path, submission_path: Path, submission: dict) -> None:
 def test_canonical_certificate_receives_full_reward(tmp_path: Path) -> None:
     task, app, logs, _, _ = load_case(tmp_path)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == pytest.approx(1.0)
+    assert result.reward == pytest.approx(1.0)
 
 
 def test_alternative_exact_certificates_are_accepted(tmp_path: Path) -> None:
@@ -65,7 +65,7 @@ def test_alternative_exact_certificates_are_accepted(tmp_path: Path) -> None:
     }
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == pytest.approx(1.0)
+    assert result.reward == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(
@@ -88,8 +88,8 @@ def test_corrupted_defect_certificates_are_rejected(
     submission["result"][section][field] = bad_value
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_verified_claim_is_rejected(tmp_path: Path) -> None:
@@ -97,7 +97,7 @@ def test_verified_claim_is_rejected(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_checked_assurance_above_computed_ceiling_is_rejected(
@@ -108,7 +108,7 @@ def test_checked_assurance_above_computed_ceiling_is_rejected(
     submission["claimed_assurance"] = "CHECKED"
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_missing_required_limitations_lose_scope_credit(tmp_path: Path) -> None:
@@ -117,8 +117,8 @@ def test_missing_required_limitations_lose_scope_credit(tmp_path: Path) -> None:
     submission["limitations"] = []
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["scope_accuracy"] == 0.0
-    assert result["reward"] < 1.0
+    assert result.details["scope_accuracy"] == 0.0
+    assert result.reward < 1.0
 
 
 def test_undeclared_nested_certificate_field_is_rejected(
@@ -129,8 +129,8 @@ def test_undeclared_nested_certificate_field_is_rejected(
     submission["result"]["fourier_block"]["extra_field"] = 0
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_deeply_nested_evidence_is_rejected(tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ def test_deeply_nested_evidence_is_rejected(tmp_path: Path) -> None:
     )
     support._write_json(submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
 
 
 def test_unreduced_rationals_are_accepted(tmp_path: Path) -> None:
@@ -166,7 +166,7 @@ def test_unreduced_rationals_are_accepted(tmp_path: Path) -> None:
     }
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == pytest.approx(1.0)
+    assert result.reward == pytest.approx(1.0)
 
 
 def test_collision_out_of_bounds_is_rejected(tmp_path: Path) -> None:
@@ -181,8 +181,8 @@ def test_collision_out_of_bounds_is_rejected(tmp_path: Path) -> None:
     }
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_oversized_diagonal_entries_is_rejected(tmp_path: Path) -> None:
@@ -202,8 +202,8 @@ def test_oversized_diagonal_entries_is_rejected(tmp_path: Path) -> None:
     }
     write_bound(app, submission_path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_oversized_submission_is_rejected(tmp_path: Path) -> None:
@@ -211,5 +211,5 @@ def test_oversized_submission_is_rejected(tmp_path: Path) -> None:
     task, app, logs, _submission_path, _submission = load_case(tmp_path)
     (app / "submission.json").write_text('{"a": 1' + ", " * (2 * 1024 * 1024) + "}")
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0

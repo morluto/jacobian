@@ -53,6 +53,16 @@ def test_subprocess_in_command_runner_is_allowed(tmp_path: Path) -> None:
     assert all(v.code != "subprocess-confined" for v in report.violations)
 
 
+def test_subprocess_in_clean_room_lean_replay_is_allowed(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "benchmarks/datasets/provider-feasibility-v1/lean-repl/tests/replay.py",
+        "import subprocess\n\nsubprocess.Popen(['repl'])\n",
+    )
+    report = check_architecture(tmp_path)
+    assert all(v.code != "subprocess-confined" for v in report.violations)
+
+
 def test_subprocess_in_checkers_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,

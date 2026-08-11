@@ -54,17 +54,17 @@ def _alternate_probe(p):
 
 
 def test_oracle_and_alternative_primes(tmp_path):
-    assert _verify(tmp_path / "oracle", _oracle())["reward"] == 1.0
+    assert _verify(tmp_path / "oracle", _oracle()).reward == 1.0
     alt = _oracle()
     alt["result"]["probes"] = [_probe(p) for p in (13, 17, 19, 23)]
-    assert _verify(tmp_path / "alt", alt)["reward"] == 1.0
+    assert _verify(tmp_path / "alt", alt).reward == 1.0
 
 
 def test_non_ascending_probe_order_accepted(tmp_path):
     """Distinct valid probes in any order earn full reward (T9)."""
     sub = _oracle()
     sub["result"]["probes"] = [_probe(p) for p in (5, 3, 7, 11)]
-    assert _verify(tmp_path / "perm", sub)["reward"] == 1.0
+    assert _verify(tmp_path / "perm", sub).reward == 1.0
 
 
 def test_corruption_and_false_assurance_fail(tmp_path):
@@ -74,7 +74,7 @@ def test_corruption_and_false_assurance_fail(tmp_path):
     ]:
         submission = copy.deepcopy(_oracle())
         mutate(submission)
-        assert _verify(tmp_path / name, submission)["reward"] == 0
+        assert _verify(tmp_path / name, submission).reward == 0
 
 
 def test_false_verified_preserves_correctness(tmp_path):
@@ -82,9 +82,9 @@ def test_false_verified_preserves_correctness(tmp_path):
     sub = _oracle()
     sub["claimed_assurance"] = "VERIFIED"
     result = _verify(tmp_path / "false_verified", sub)
-    assert result["reward"] == 0
-    assert result["correctness"] == 1.0
-    assert result["false_certification"] is True
+    assert result.reward == 0
+    assert result.details["correctness"] == 1.0
+    assert result.details["false_certification"] is True
 
 
 def test_oversized_probe_rejected(tmp_path):
@@ -92,7 +92,7 @@ def test_oversized_probe_rejected(tmp_path):
     sub = _oracle()
     sub["result"]["probes"][0]["prime"] = 10**400
     result = _verify(tmp_path / "huge_probe", sub)
-    assert result["reward"] == 0
+    assert result.reward == 0
 
 
 def test_boolean_construction_fields_rejected(tmp_path):
@@ -100,14 +100,14 @@ def test_boolean_construction_fields_rejected(tmp_path):
     for field in ("a_1", "default_exponent_offset"):
         sub = _oracle()
         sub["result"][field] = True
-        assert _verify(tmp_path / f"bool_{field}", sub)["reward"] == 0
+        assert _verify(tmp_path / f"bool_{field}", sub).reward == 0
 
 
 def test_float_probe_values_rejected(tmp_path):
     """Integral floats must not satisfy integer probe fields (T11)."""
     sub = _oracle()
     sub["result"]["probes"][0]["a_p"] = float(sub["result"]["probes"][0]["a_p"])
-    assert _verify(tmp_path / "float_a_p", sub)["reward"] == 0
+    assert _verify(tmp_path / "float_a_p", sub).reward == 0
 
 
 def test_old_threshold_rule_string_accepted(tmp_path):
@@ -115,7 +115,7 @@ def test_old_threshold_rule_string_accepted(tmp_path):
 
     sub = _oracle()
     sub["result"]["threshold_rule"] = "n>=k_implies_a_n_divisible_by_2^k"
-    assert _verify(tmp_path / "old_threshold", sub)["reward"] == 1.0
+    assert _verify(tmp_path / "old_threshold", sub).reward == 1.0
 
 
 def test_alternate_piecewise_construction_accepted(tmp_path):
@@ -126,7 +126,7 @@ def test_alternate_piecewise_construction_accepted(tmp_path):
     sub["result"]["prime_formula"] = "2^n"
     sub["result"]["threshold_rule"] = "n>=max(2,k)_implies_2^k_divides_a_n"
     sub["result"]["probes"] = [_alternate_probe(p) for p in (3, 5, 7, 11)]
-    assert _verify(tmp_path / "alt_construction", sub)["reward"] == 1.0
+    assert _verify(tmp_path / "alt_construction", sub).reward == 1.0
 
 
 def test_probe_not_divisible_by_2p_rejected(tmp_path):
@@ -137,7 +137,7 @@ def test_probe_not_divisible_by_2p_rejected(tmp_path):
     sub["result"]["probes"][0]["a_p"] = 3
     sub["result"]["probes"][0]["b_p"] = 1 + 3 * 3
     sub["result"]["probes"][0]["square_root"] = 0
-    assert _verify(tmp_path / "bad_threshold", sub)["reward"] == 0
+    assert _verify(tmp_path / "bad_threshold", sub).reward == 0
 
 
 def test_evidence_type_coercion_rejected(tmp_path):
@@ -163,8 +163,8 @@ def test_evidence_type_coercion_rejected(tmp_path):
     )
     (app / "submission.json").write_text(json.dumps(sub))
     result = _run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0
 
 
 def test_completeness_partial_rejected(tmp_path):
@@ -172,7 +172,7 @@ def test_completeness_partial_rejected(tmp_path):
 
     sub = _oracle()
     sub["completeness"] = "PARTIAL"
-    assert _verify(tmp_path / "partial", sub)["reward"] == 0
+    assert _verify(tmp_path / "partial", sub).reward == 0
 
 
 def test_garbage_prime_formula_rejected(tmp_path):
@@ -181,8 +181,8 @@ def test_garbage_prime_formula_rejected(tmp_path):
     sub = _oracle()
     sub["result"]["prime_formula"] = "not a formula"
     result = _verify(tmp_path / "garbage_formula", sub)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0
 
 
 def test_garbage_threshold_rule_rejected(tmp_path):
@@ -191,8 +191,8 @@ def test_garbage_threshold_rule_rejected(tmp_path):
     sub = _oracle()
     sub["result"]["threshold_rule"] = "false"
     result = _verify(tmp_path / "garbage_threshold", sub)
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0
 
 
 def test_recursive_evidence_comparison_does_not_crash(tmp_path):
@@ -220,5 +220,5 @@ def test_recursive_evidence_comparison_does_not_crash(tmp_path):
     )
     (app / "submission.json").write_text(json.dumps(sub))
     result = _run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0

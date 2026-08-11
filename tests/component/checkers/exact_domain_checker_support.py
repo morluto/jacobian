@@ -18,12 +18,15 @@ from jacobian_checkers.exact_domain_operations import (
     check_integer_powerful_number,
     check_integer_prime_factorization,
     check_matrix_characteristic_polynomial,
+    check_matrix_determinant,
     check_matrix_nullspace,
     check_matrix_product,
+    check_matrix_rank,
     check_matrix_rref,
     check_matrix_smith_normal_form,
     check_modular_polynomial_residue_image,
     check_polynomial_discriminant,
+    check_polynomial_factorization,
     check_polynomial_gcd,
     check_polynomial_resultant,
     check_polynomial_square_free,
@@ -80,11 +83,19 @@ def _rational_poly(
 
 
 def _qq(entries: list[list[int]]) -> dict[str, Any]:
-    return {"domain": "QQ", "entries": [[_q(item) for item in row] for row in entries]}
+    return {
+        "matrix_schema_version": "1",
+        "domain": "QQ",
+        "entries": [[_q(item) for item in row] for row in entries],
+    }
 
 
 def _zz(entries: list[list[int]]) -> dict[str, Any]:
-    return {"domain": "ZZ", "entries": [[str(item) for item in row] for row in entries]}
+    return {
+        "matrix_schema_version": "1",
+        "domain": "ZZ",
+        "entries": [[str(item) for item in row] for row in entries],
+    }
 
 
 def _artifact(
@@ -267,11 +278,54 @@ _POLY_CASES: tuple[
             },
         ),
     ),
+    (
+        check_polynomial_factorization,
+        _request(
+            "polynomial.factor.compute",
+            "polynomial.factorization.flint-replay",
+            {"polynomial": _poly(1, -2, 1)},
+            {
+                "coefficient": _q(1),
+                "factors": [
+                    {"factor": _poly(-1, 1), "multiplicity": 2},
+                ],
+                "reconstructed": _poly(1, -2, 1),
+                "normalization": "CONTENT_AND_MONIC_IRREDUCIBLES",
+                "irreducibility_assurance": "UNVERIFIED",
+                "product_reconstruction": "EXACT",
+            },
+        ),
+    ),
 )
 
 _MATRIX_CASES: tuple[
     tuple[Callable[[dict[str, Any]], dict[str, Any]], dict[str, Any]], ...
 ] = (
+    (
+        check_matrix_determinant,
+        _request(
+            "matrix.determinant.compute",
+            "matrix.determinant.flint-replay",
+            {"matrix": _qq([[1, 2], [3, 4]])},
+            {
+                "determinant": _q(-2),
+                "method": "FRACTION_FREE_BAREISS",
+            },
+        ),
+    ),
+    (
+        check_matrix_rank,
+        _request(
+            "matrix.rank.compute",
+            "matrix.rank.flint-replay",
+            {"matrix": _qq([[1, 2, 3], [2, 4, 6], [0, 1, 1]])},
+            {
+                "rank": 2,
+                "pivot_columns": [0, 1],
+                "method": "EXACT_RATIONAL_ROW_REDUCTION",
+            },
+        ),
+    ),
     (
         check_matrix_product,
         _request(

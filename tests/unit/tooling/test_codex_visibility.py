@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 
@@ -10,13 +11,17 @@ from benchmarks.tooling.codex_visibility import (
     CueLevel,
     ToolMode,
     VisibilityCase,
+    _build_summary,
     _codex_arguments,
+    _run_case,
     classify_visibility,
     load_suite,
 )
+from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from pydantic import ValidationError
 
-from jacobian.contracts.matrices import MatrixDeterminantRequest
+from jacobian.contracts.combinatorics import CyclicDifferenceSetExtensionRequest
+from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
 from jacobian.contracts.number_theory import IntegerPairRequest
 from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
 from jacobian.eval.telemetry import parse_agent_transcript
@@ -156,7 +161,10 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
         "matrix.determinant.compute",
         "matrix.rank.compute",
         "polynomial.compute.gcd",
+        "polynomial.expression.normalize",
         "matrix.determinant.verify",
+        "combinatorics.cyclic_difference_set.extension.decide",
+        "combinatorics.cyclic_difference_set.extension.verify",
     ):
         assert f"`{capability_id}`" in skill
     integer_payload = '{"left":"84","right":"30"}'
@@ -169,12 +177,19 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert integer_payload in skill
     assert matrix_payload in skill
     assert polynomial in skill
+    extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
+    assert extension_payload in skill
+    assert '"input":<JSON>' in skill
+    assert "No discovery for stable producers" in skill
+    assert "never with `capability_id`" in skill
+    assert '"candidate":<producer output.result>' in skill
     IntegerPairRequest.model_validate_json(integer_payload)
     MatrixDeterminantRequest.model_validate_json(matrix_payload)
     polynomial_value = json.loads(polynomial)
     PolynomialGcdRequest.model_validate(
         {"left": polynomial_value, "right": polynomial_value}
     )
+    CyclicDifferenceSetExtensionRequest.model_validate_json(extension_payload)
     assert len(skill.encode("utf-8")) <= 4 * 1024
 
 
@@ -190,17 +205,28 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     skill_flat = re.sub(r"\s+", " ", skill)
     assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill
+    assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
+    assert "never put `CONTRACT` in a query" in skill_flat
+    assert "`matrix.determinant.verify` for an independent check" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
+    assert "a writable path or schema alone is not authorization" in skill_flat
+    assert "claim the highest lower permitted assurance" in skill_flat
+    assert "even if Jacobian returned `VERIFIED`" in skill_flat
     for guidance in (
         "Keep decomposition and routing decisions agent-owned",
         "composing already-known supporting operations remains allowed",
-        "follow those fields",
+        "Follow exposed recovery paths",
         "retry within the task resource bounds",
         "continue with other installed routes",
         "completeness, and open obligations",
+        "check payload fields against the intended object",
+        "compare it with the submitted input",
+        "does not replace server validation or evidence binding",
+        "Account for each requested outcome in the final comparison",
+        "does not verify another result or their comparison",
     ):
-        assert guidance in skill
+        assert guidance in skill_flat
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(
@@ -409,3 +435,159 @@ def test_visibility_classification_treats_timeout_as_non_completion(
     assert result["observed"]["invoked"] is True
     assert result["observed"]["completed"] is False
     assert result["contract_satisfied"] is False
+
+
+def _patched_run_case(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    result: ToolCommandResult,
+) -> dict[str, object]:
+    """Run ``_run_case`` with ``run_operator_command`` replaced by a stub.
+
+    The stub avoids real Codex execution while exercising the real timing,
+    transcript write, telemetry parse, and classification paths.  An empty
+    JSONL transcript is sufficient for ``parse_agent_transcript`` and yields a
+    clean abstention classification for the USE case.
+    """
+
+    monkeypatch.setattr(
+        "benchmarks.tooling.codex_visibility.run_operator_command",
+        lambda *_args, **_kwargs: result,
+    )
+    return _run_case(
+        case=_case(),
+        repetition=1,
+        workspace=tmp_path / "workspace",
+        output=tmp_path,
+        model="test-model",
+        reasoning_effort="high",
+        mcp_url="https://example.test/mcp",
+        timeout_seconds=5.0,
+        tool_mode=ToolMode.DIRECT,
+    )
+
+
+def test_run_case_records_elapsed_seconds_for_successful_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "workspace").mkdir()
+    result = ToolCommandResult(
+        status=ToolCommandStatus.EXITED,
+        exit_code=0,
+        stdout=b"",
+        stderr=b"",
+    )
+
+    run = _patched_run_case(monkeypatch, tmp_path, result=result)
+
+    elapsed = run["command"]["elapsed_seconds"]
+    assert isinstance(elapsed, float)
+    assert math.isfinite(elapsed)
+    assert elapsed >= 0.0
+    assert run["command"]["status"] == ToolCommandStatus.EXITED
+    assert run["command"]["exit_code"] == 0
+
+
+def test_run_case_records_elapsed_seconds_for_failed_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "workspace").mkdir()
+    result = ToolCommandResult(
+        status=ToolCommandStatus.START_FAILED,
+        exit_code=None,
+        stdout=b"",
+        stderr=b"",
+        diagnostic="codex is unavailable",
+    )
+
+    run = _patched_run_case(monkeypatch, tmp_path, result=result)
+
+    elapsed = run["command"]["elapsed_seconds"]
+    assert isinstance(elapsed, float)
+    assert math.isfinite(elapsed)
+    assert elapsed >= 0.0
+    assert run["command"]["status"] == ToolCommandStatus.START_FAILED
+    assert run["command"]["exit_code"] is None
+    assert run["command"]["diagnostic"] == "codex is unavailable"
+
+
+def test_run_case_elapsed_seconds_does_not_affect_classification(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "workspace").mkdir()
+    result = ToolCommandResult(
+        status=ToolCommandStatus.EXITED,
+        exit_code=0,
+        stdout=b"",
+        stderr=b"",
+    )
+
+    run = _patched_run_case(monkeypatch, tmp_path, result=result)
+
+    assert "elapsed_seconds" not in run["classification"]
+    assert "elapsed_seconds" not in run["classification"]["observed"]
+    assert "elapsed_seconds" not in run["artifacts"]
+
+
+def test_visibility_report_serializes_duration_fields(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "workspace").mkdir()
+    exited = ToolCommandResult(
+        status=ToolCommandStatus.EXITED,
+        exit_code=0,
+        stdout=b"",
+        stderr=b"",
+    )
+    failed = ToolCommandResult(
+        status=ToolCommandStatus.START_FAILED,
+        exit_code=None,
+        stdout=b"",
+        stderr=b"",
+        diagnostic="codex is unavailable",
+    )
+
+    results = [exited, failed]
+    monkeypatch.setattr(
+        "benchmarks.tooling.codex_visibility.run_operator_command",
+        lambda *_args, **_kwargs: results.pop(0),
+    )
+    runs = [
+        _run_case(
+            case=_case(),
+            repetition=rep,
+            workspace=tmp_path / "workspace",
+            output=tmp_path,
+            model="test-model",
+            reasoning_effort="high",
+            mcp_url="https://example.test/mcp",
+            timeout_seconds=5.0,
+            tool_mode=ToolMode.DIRECT,
+        )
+        for rep in (1, 2)
+    ]
+
+    summary = _build_summary(runs)
+    report = {
+        "schema_version": "2",
+        "runs": runs,
+        "summary": summary,
+    }
+
+    serialized = json.dumps(report, indent=2, sort_keys=True)
+    parsed = json.loads(serialized)
+
+    for run in parsed["runs"]:
+        assert "elapsed_seconds" in run["command"]
+        assert isinstance(run["command"]["elapsed_seconds"], (int, float))
+        assert run["command"]["elapsed_seconds"] >= 0
+        assert "elapsed_seconds" not in run["classification"]
+    assert "duration_totals" in parsed["summary"]
+    assert "elapsed_seconds" in parsed["summary"]["duration_totals"]
+    assert isinstance(
+        parsed["summary"]["duration_totals"]["elapsed_seconds"], (int, float)
+    )
+    assert parsed["summary"]["duration_totals"]["elapsed_seconds"] >= 0
+    assert parsed["summary"]["run_count"] == 2
+    assert parsed["summary"]["command_failure_count"] == 1

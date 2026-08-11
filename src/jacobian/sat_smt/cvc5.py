@@ -24,7 +24,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -44,10 +43,12 @@ from jacobian.process_policy import (
     execute_process,
 )
 from jacobian.providers.external_solver_runtime import CVC5_VERSION
-from jacobian.sat_smt.cvc5_worker import (
-    CVC5_PROOF_LIMIT,
-    CVC5_WORKER_PROTOCOL,
+from jacobian.sat_smt.cvc5_protocol import (
+    Cvc5UnsatisfiableWorkerResult,
+    Cvc5WorkerResult,
+    parse_cvc5_worker_result,
 )
+from jacobian.sat_smt.cvc5_worker import CVC5_PROOF_LIMIT
 from jacobian.sat_smt.smt import ResolvedSmtProblem, SmtArtifactService
 from jacobian.schema_registry import model_schema
 from jacobian.worker_environment import worker_environment
@@ -129,9 +130,7 @@ class _Cvc5Backend:
             if operational is not None:
                 return operational
             try:
-                solver_status, proof_written, reported_holes = _parse_worker_output(
-                    completed.stdout,
-                )
+                worker_result = _parse_worker_output(completed.stdout)
             except ValueError:
                 return _run_failure(
                     started,
@@ -142,17 +141,7 @@ class _Cvc5Backend:
                         "protocol; no solver evidence was retained."
                     ),
                 )
-            if solver_status == "UNSATISFIABLE":
-                if not proof_written or reported_holes is None:
-                    return _run_failure(
-                        started,
-                        code="CVC5_PROOF_MISSING",
-                        stage="proof_capture",
-                        message=(
-                            "cvc5 reported UNSATISFIABLE without bound Alethe proof "
-                            "metadata; no evidence was retained."
-                        ),
-                    )
+            if isinstance(worker_result, Cvc5UnsatisfiableWorkerResult):
                 try:
                     proof = _read_proof_file(proof_path)
                 except (FileNotFoundError, OSError, OverflowError):
@@ -165,7 +154,7 @@ class _Cvc5Backend:
                             "the durable artifact limit."
                         ),
                     )
-                if proof.count(b":rule hole") != reported_holes:
+                if proof.count(b":rule hole") != worker_result.alethe_hole_count:
                     return _run_failure(
                         started,
                         code="CVC5_PROOF_METADATA_MISMATCH",
@@ -178,11 +167,11 @@ class _Cvc5Backend:
                 return _Cvc5Run(
                     execution_status=ExecutionStatus.COMPLETED,
                     runtime_ms=_runtime_ms(started),
-                    solver_status=solver_status,
+                    solver_status=worker_result.solver_status,
                     proof=proof,
-                    alethe_hole_count=reported_holes,
+                    alethe_hole_count=worker_result.alethe_hole_count,
                 )
-            if proof_written or reported_holes is not None or proof_path.exists():
+            if proof_path.exists():
                 return _run_failure(
                     started,
                     code="UNEXPECTED_CVC5_PROOF",
@@ -195,7 +184,7 @@ class _Cvc5Backend:
             return _Cvc5Run(
                 execution_status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),
-                solver_status=solver_status,
+                solver_status=worker_result.solver_status,
             )
 
 
@@ -222,7 +211,6 @@ class Cvc5UnsatProofFindAdapter:
             ),
             provider="cvc5",
             provider_runtime=backend.runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(SmtUnsatProofFindRequest),
             output_schema=model_schema(SmtUnsatProofFindOutput),
             tags=(
@@ -243,7 +231,6 @@ class Cvc5UnsatProofFindAdapter:
                         "Minimal valid request shape for a bounded arithmetic "
                         "contradiction."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input={
                         "logic": "QF_LIA",
                         "smtlib_text": (
@@ -308,11 +295,13 @@ class Cvc5UnsatProofFindAdapter:
             )
         if run.execution_status is not ExecutionStatus.COMPLETED:
             return _failed_result(self.descriptor, request, resolved, run)
-        assert run.solver_status is not None
+        if run.solver_status is None:
+            return _failed_result(self.descriptor, request, resolved, run)
         proof_uri: str | None = None
         holes: int | None = None
         if run.solver_status == "UNSATISFIABLE":
-            assert run.proof is not None
+            if run.proof is None:
+                return _failed_result(self.descriptor, request, resolved, run)
             proof_uri = self.smt.put_proof(
                 problem_uri=problem_uri,
                 proof=run.proof,
@@ -320,7 +309,8 @@ class Cvc5UnsatProofFindAdapter:
                 resource_budget=validated.resource_budget.artifact_budget(),
             ).artifact_uri
             holes = run.alethe_hole_count
-            assert holes is not None
+            if holes is None:
+                return _failed_result(self.descriptor, request, resolved, run)
         output = SmtUnsatProofFindOutput(
             status="PROOF_PRODUCED" if proof_uri is not None else "NO_PROOF_PRODUCED",
             solver_status=run.solver_status,
@@ -375,7 +365,6 @@ def _completed_result(
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
         execution=Execution(
             status=ExecutionStatus.COMPLETED,
             runtime_ms=run.runtime_ms,
@@ -404,11 +393,11 @@ def _failed_result(
     resolved: ResolvedSmtProblem,
     run: _Cvc5Run,
 ) -> CapabilityResult:
-    assert run.diagnostic is not None
+    if run.diagnostic is None:
+        raise RuntimeError("run diagnostic is unexpectedly None")
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
         execution=Execution(
             status=run.execution_status,
             runtime_ms=run.runtime_ms,
@@ -508,39 +497,8 @@ def _operational_failure(
 
 def _parse_worker_output(
     stdout: bytes,
-) -> tuple[_SolverStatus, bool, int | None]:
-    payload = loads_strict_json(stdout)
-    if not isinstance(payload, dict) or payload.get("protocol") != CVC5_WORKER_PROTOCOL:
-        raise ValueError("invalid worker protocol")
-    if set(payload) != {
-        "protocol",
-        "solver_status",
-        "proof_written",
-        "alethe_hole_count",
-    }:
-        raise ValueError("unexpected worker fields")
-    status = payload["solver_status"]
-    proof_written = payload["proof_written"]
-    hole_count = payload["alethe_hole_count"]
-    solver_status: _SolverStatus | None = None
-    if status == "SATISFIABLE":
-        solver_status = "SATISFIABLE"
-    elif status == "UNSATISFIABLE":
-        solver_status = "UNSATISFIABLE"
-    elif status == "UNKNOWN":
-        solver_status = "UNKNOWN"
-    if solver_status is None:
-        raise ValueError("invalid worker status")
-    if not isinstance(proof_written, bool):
-        raise ValueError("invalid proof-written flag")
-    if hole_count is not None and (
-        not isinstance(hole_count, int)
-        or isinstance(hole_count, bool)
-        or hole_count < 0
-        or hole_count > 1_000_000
-    ):
-        raise ValueError("invalid Alethe hole count")
-    return solver_status, proof_written, hole_count
+) -> Cvc5WorkerResult:
+    return parse_cvc5_worker_result(loads_strict_json(stdout))
 
 
 def _read_proof_file(path: Path) -> bytes:
@@ -548,8 +506,9 @@ def _read_proof_file(path: Path) -> bytes:
     if not stat.S_ISREG(path_metadata.st_mode):
         raise OSError("proof output is not a regular file")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
+    descriptor = -1
     try:
+        descriptor = os.open(path, flags)
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
             raise OSError("proof output is not a regular file")
@@ -561,7 +520,8 @@ def _read_proof_file(path: Path) -> bytes:
             raise OverflowError("proof output grew beyond its durable artifact limit")
         return proof
     finally:
-        os.close(descriptor)
+        if descriptor >= 0:
+            os.close(descriptor)
 
 
 def _run_failure(

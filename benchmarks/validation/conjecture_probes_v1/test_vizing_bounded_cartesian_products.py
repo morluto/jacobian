@@ -51,8 +51,8 @@ def test_oracle_certificate_gets_full_reward(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["aggregate_reward"] == 1.0
-    assert reward["mathematics"] == 1.0
+    assert reward.details["aggregate_reward"] == 1.0
+    assert reward.details["mathematics"] == 1.0
 
 
 def test_alternate_minimum_witnesses_pass(tmp_path: Path) -> None:
@@ -70,7 +70,7 @@ def test_alternate_minimum_witnesses_pass(tmp_path: Path) -> None:
             reversed(row["product_minimum_dominating_set"])
         )
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_wrong_scope_and_false_assurance_fail_closed(tmp_path: Path) -> None:
@@ -78,12 +78,15 @@ def test_wrong_scope_and_false_assurance_fail_closed(tmp_path: Path) -> None:
     submission["scope"] = "global-vizing-conjecture"
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["scope"] == 0.0 and reward["aggregate_reward"] == 0.0
+    assert reward.details["scope"] == 0.0 and reward.details["aggregate_reward"] == 0.0
     app, logs, submission = _case(tmp_path / "verified")
     submission["claimed_assurance"] = "VERIFIED"
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["false_certification"] is True and reward["aggregate_reward"] == 0.0
+    assert (
+        reward.details["false_certification"] is True
+        and reward.details["aggregate_reward"] == 0.0
+    )
 
 
 def test_wrong_values_omissions_duplicates_and_boolean_integers_fail(
@@ -92,15 +95,15 @@ def test_wrong_values_omissions_duplicates_and_boolean_integers_fail(
     app, logs, submission = _case(tmp_path)
     submission["result"]["graphs"][0]["domination_number"] += 1
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
     app, logs, submission = _case(tmp_path / "missing")
     submission["result"]["pairs"].pop()
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
     app, logs, submission = _case(tmp_path / "bool")
     submission["result"]["graphs"][0]["vertex_count"] = True
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
 
 
 def test_tampered_input_and_bad_evidence_binding_are_separate(tmp_path: Path) -> None:
@@ -110,12 +113,17 @@ def test_tampered_input_and_bad_evidence_binding_are_separate(tmp_path: Path) ->
     (app / "input.json").write_text(json.dumps(input_data))
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["input_binding"] == 0.0 and reward["aggregate_reward"] == 0.0
+    assert (
+        reward.details["input_binding"] == 0.0
+        and reward.details["aggregate_reward"] == 0.0
+    )
     app, logs, submission = _case(tmp_path / "evidence")
     submission["evidence"][0]["path"] = "evidence/../answer.txt"
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["evidence"] == 0.0 and reward["aggregate_reward"] == 0.0
+    assert (
+        reward.details["evidence"] == 0.0 and reward.details["aggregate_reward"] == 0.0
+    )
 
 
 def test_malformed_bound_evidence_fails_closed(tmp_path: Path) -> None:
@@ -128,8 +136,8 @@ def test_malformed_bound_evidence_fails_closed(tmp_path: Path) -> None:
     )
     (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
     reward = _run(app, logs)
-    assert reward["evidence"] == 0.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["evidence"] == 0.0
+    assert reward.details["aggregate_reward"] == 0.0
 
 
 def test_reward_emission_is_deterministic_for_malformed_json(tmp_path: Path) -> None:

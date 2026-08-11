@@ -1,0 +1,154 @@
+{
+  "$defs": {
+    "distance": {
+      "items": {
+        "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+        "type": "string"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "edge": {
+      "items": {
+        "maximum": 6,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "row": {
+      "additionalProperties": false,
+      "properties": {
+        "distance_squared": {
+          "$ref": "#/$defs/distance"
+        },
+        "pair": {
+          "$ref": "#/$defs/edge"
+        },
+        "unit": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pair",
+        "distance_squared",
+        "unit"
+      ],
+      "type": "object"
+    },
+    "table": {
+      "items": {
+        "$ref": "#/$defs/row"
+      },
+      "maxItems": 21,
+      "minItems": 21,
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "MOSER_RADICAL_BRANCH_REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_EXACT_MOSER_SPINDLE_EMBEDDING",
+        "RADICAL_RELATIONS_REPLAYED_IN_Q_SQRT_33",
+        "NO_PLANE_CHROMATIC_NUMBER_DETERMINATION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "corrected_edges": {
+          "items": {
+            "$ref": "#/$defs/edge"
+          },
+          "maxItems": 11,
+          "minItems": 11,
+          "type": "array"
+        },
+        "corrected_pair_table": {
+          "$ref": "#/$defs/table"
+        },
+        "corrupted_pair_table": {
+          "$ref": "#/$defs/table"
+        },
+        "false_claimed_edges": {
+          "items": {
+            "$ref": "#/$defs/edge"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "repair": {
+          "const": "FLIP_VERTEX_5_B_BRANCH_TO_POSITIVE"
+        }
+      },
+      "required": [
+        "corrupted_pair_table",
+        "false_claimed_edges",
+        "repair",
+        "corrected_pair_table",
+        "corrected_edges"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "moser-spindle-radical-sign-repair-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/moser-radical-branch-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -7,21 +7,22 @@
 - Independent replay: standard-library clean-process checker
 - Producer assurance: at most `COMPUTED`
 
-The `poset` bundle exposes four atomic capabilities:
+The `poset` bundle exposes five atomic capabilities:
 
-- `poset.finite.materialize`;
+- `poset.finite.compute`;
 - `poset.width.compute`;
-- `poset.linear_extensions.count`; and
-- `poset.mobius_function.compute`.
+- `poset.linear_extensions.count`;
+- `poset.mobius_function.compute`; and
+- `poset.mobius_function.recurrence.materialize` for its full bulk ledger.
 
 Each producer has a separate verifier when bundled checker authorization is
 enabled: `poset.finite.verify`, `poset.width.verify`,
 `poset.linear_extensions.verify`, and `poset.mobius_function.verify`. Exact
 and deterministic producer output does not self-certify.
 
-## Finite-poset materialization
+## Finite-poset computation
 
-`poset.finite.materialize` accepts a labelled finite carrier and one explicitly
+`poset.finite.compute` accepts a labelled finite carrier and one explicitly
 interpreted relation:
 
 - `COVER_EDGES` means the supplied strict pairs are exactly the Hasse edges.
@@ -33,9 +34,10 @@ interpreted relation:
 Labels are unique bounded ASCII identifiers. Relation endpoints must lie in
 the carrier. Duplicate pairs, cycles, reverse comparable pairs, an incomplete
 transitive relation, and an inconsistent reflexive policy fail complete
-request validation before any operation artifact is written.
+request validation before computation. The canonical finite-poset value is
+returned inline for ordinary composition.
 
-The canonical finite-poset artifact contains:
+The canonical finite-poset value contains:
 
 - the lexicographically ordered carrier;
 - every strict comparable pair;
@@ -92,7 +94,7 @@ count to the full-carrier state.
 - `COMPLETE_MATRIX` returns every interval \(x\leq y\); and
 - `SELECTED_INTERVALS` returns exactly the requested valid intervals.
 
-Every value includes the canonical recurrence contributions used in
+The inline summary includes the canonical Möbius values used in
 
 \[
 \mu(x,x)=1,\qquad
@@ -108,6 +110,12 @@ convolution identity
 
 A selected interval result never claims matrix completeness, and a complete
 matrix request cannot carry an interval selection.
+
+`poset.mobius_function.recurrence.materialize` retains the complete
+interval-convolution recurrence table as explicit bulk evidence. Use it when
+the contribution ledger needs durable identity, independent retrieval, or
+replay; the ordinary Möbius summary remains available inline from
+`poset.mobius_function.compute`.
 
 ## Bounds and public cases
 

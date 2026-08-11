@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -9,8 +11,14 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     canonicalize_json,
+    sha256_digest,
 )
-from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
+
+
+def test_sha256_digest_uses_the_canonical_prefixed_format() -> None:
+    for value in (b"", b"\x00", b"jacobian", b"\xde\xad\xbe\xef" * 100):
+        assert sha256_digest(value) == "sha256:" + hashlib.sha256(value).hexdigest()
 
 
 def test_equivalent_rationals_have_identical_canonical_bytes() -> None:
@@ -59,6 +67,24 @@ def test_canonical_errors_preserve_only_repair_relevant_context(
 def test_canonical_rational_wire_model_rejects_unreduced_input() -> None:
     with pytest.raises(ValidationError):
         CanonicalRational.model_validate({"num": "2", "den": "4"})
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"num": "-101", "den": "1"},
+        {"num": "1", "den": "101"},
+    ],
+)
+def test_bounded_rational_rejects_oversized_canonical_components(
+    value: dict[str, str],
+) -> None:
+    with pytest.raises(ValueError, match="test rational exceeds the 2-digit bound"):
+        require_bounded_rational(
+            CanonicalRational.model_validate(value),
+            max_digits=2,
+            label="test rational",
+        )
 
 
 def test_negative_zero_is_not_a_canonical_integer_encoding() -> None:

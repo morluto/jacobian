@@ -326,3 +326,110 @@ def test_existing_model_schema_reattaches_without_durable_writes(
 
     with pytest.raises(SchemaValidationError, match="pair must be ordered"):
         runtime_registry.validate(schema_uri, {"first": 2, "second": 1})
+
+
+def test_failed_transactional_registration_does_not_leave_empty_pending_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ArtifactRepository(tmp_path)
+    registry = SchemaRegistry(store)
+    register_descriptor = store.register_descriptor
+
+    def fail_first_registration(
+        *,
+        kind: str,
+        name: str,
+        version: str,
+        definition: dict[str, Any],
+    ) -> str:
+        if name == "will-fail":
+            raise RuntimeError("simulated descriptor failure")
+        return register_descriptor(
+            kind=kind,
+            name=name,
+            version=version,
+            definition=definition,
+        )
+
+    monkeypatch.setattr(store, "register_descriptor", fail_first_registration)
+
+    with (
+        store.transaction(),
+        pytest.raises(
+            RuntimeError,
+            match="simulated descriptor failure",
+        ),
+    ):
+        registry.register(
+            name="will-fail",
+            version="1",
+            schema={"type": "object"},
+        )
+
+    assert registry.register(
+        name="still-usable",
+        version="1",
+        schema={"type": "object"},
+    ).startswith("artifact://sha256/")
+
+
+def test_transaction_cannot_replace_committed_model_contract(tmp_path: Path) -> None:
+    store = ArtifactRepository(tmp_path)
+    registry = SchemaRegistry(store)
+    schema_uri = registry.register_model(
+        name="shared-model-contract",
+        version="1",
+        model=_CachedSchemaModel,
+    )
+
+    with store.transaction():
+        with pytest.raises(SchemaRegistryError, match="one schema URI"):
+            registry.register_model(
+                name="shared-model-contract",
+                version="1",
+                model=_EquivalentCachedSchemaModel,
+            )
+        assert registry._pending == {}
+
+    assert registry._model_contracts[schema_uri] is _CachedSchemaModel
+
+
+def test_transaction_can_reattach_the_same_model_contract(tmp_path: Path) -> None:
+    store = ArtifactRepository(tmp_path)
+    registry = SchemaRegistry(store)
+    schema_uri = registry.register_model(
+        name="same-model-contract",
+        version="1",
+        model=_CachedSchemaModel,
+    )
+
+    with store.transaction():
+        assert (
+            registry.register_model(
+                name="same-model-contract",
+                version="1",
+                model=_CachedSchemaModel,
+            )
+            == schema_uri
+        )
+
+    assert registry._model_contracts[schema_uri] is _CachedSchemaModel
+
+
+def test_transaction_cannot_bind_two_models_to_the_same_schema(tmp_path: Path) -> None:
+    store = ArtifactRepository(tmp_path)
+    registry = SchemaRegistry(store)
+
+    with store.transaction():
+        registry.register_model(
+            name="intra-transaction-model-conflict",
+            version="1",
+            model=_CachedSchemaModel,
+        )
+        with pytest.raises(SchemaRegistryError, match="one schema URI"):
+            registry.register_model(
+                name="intra-transaction-model-conflict",
+                version="1",
+                model=_EquivalentCachedSchemaModel,
+            )

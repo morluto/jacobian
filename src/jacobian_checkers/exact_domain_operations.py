@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from fractions import Fraction
+from itertools import product
 from typing import Any
 
 import flint
-from flint import fmpq, fmpq_mat, fmpq_poly, fmpz_mat
+from flint import fmpq, fmpq_mat, fmpq_poly, fmpz, fmpz_mat
 
 from jacobian_checkers.bound_artifacts import bound_request as _bound_request
 
@@ -28,7 +28,7 @@ _MAX_RESIDUE_ASSIGNMENTS = 4_096
 _MAX_RESIDUE_MODULUS = 1_000_000
 _MAX_MATRIX_DIMENSION = 32
 _MAX_MATRIX_INPUT_DIGITS = 256
-_MAX_MATRIX_OUTPUT_DIGITS = 4_096
+_MAX_MATRIX_OUTPUT_DIGITS = 32_768
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -75,31 +75,29 @@ def _accept_exhaustive_integer(detail: str) -> dict[str, Any]:
     }
 
 
-def _integer(value: object) -> int:
+def _integer(value: object) -> Any:
     if not isinstance(value, str) or _INTEGER.fullmatch(value) is None:
         raise ValueError("integer is not canonical")
-    parsed = int(value)
-    if str(parsed) != value:
-        raise ValueError("integer is not canonical")
-    return parsed
+    # FLINT parses decimal input without crossing Python's 4,300-digit limit.
+    return fmpz(value)
 
 
-def _fraction(value: object) -> Fraction:
+def _fraction(value: object) -> tuple[fmpz, fmpz]:
     if not isinstance(value, dict) or set(value) != {"num", "den"}:
         raise ValueError("rational is malformed")
     numerator = _integer(value["num"])
     denominator = _integer(value["den"])
     if denominator <= 0:
         raise ValueError("rational denominator must be positive")
-    result = Fraction(numerator, denominator)
-    if (result.numerator, result.denominator) != (numerator, denominator):
+    result = fmpq(numerator, denominator)
+    if (result.numer(), result.denom()) != (numerator, denominator):
         raise ValueError("rational is not reduced")
-    return result
+    return numerator, denominator
 
 
 def _q(value: object) -> fmpq:
-    value = _fraction(value)
-    return fmpq(value.numerator, value.denominator)
+    numerator, denominator = _fraction(value)
+    return fmpq(numerator, denominator)
 
 
 def _polynomial(value: object) -> fmpq_poly:
@@ -170,7 +168,11 @@ def _same_polynomial_variable(*values: object) -> str:
 
 
 def _rational_matrix(value: object) -> fmpq_mat:
-    if not isinstance(value, dict) or set(value) != {"domain", "entries"}:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"matrix_schema_version", "domain", "entries"}
+        or value["matrix_schema_version"] != "1"
+    ):
         raise ValueError("rational matrix is malformed")
     if value["domain"] != "QQ":
         raise ValueError("rational matrix domain is unsupported")
@@ -189,7 +191,11 @@ def _rational_matrix(value: object) -> fmpq_mat:
 
 
 def _integer_matrix(value: object) -> fmpz_mat:
-    if not isinstance(value, dict) or set(value) != {"domain", "entries"}:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"matrix_schema_version", "domain", "entries"}
+        or value["matrix_schema_version"] != "1"
+    ):
         raise ValueError("integer matrix is malformed")
     if value["domain"] != "ZZ":
         raise ValueError("integer matrix domain is unsupported")
@@ -260,7 +266,7 @@ def _run(
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
-def _factorization_value(source: dict[str, Any], *, positive: bool) -> int:
+def _factorization_value(source: dict[str, Any], *, positive: bool) -> Any:
     if set(source) != {"value", "resource_budget"}:
         raise ValueError("factorization source is malformed")
     budget = source["resource_budget"]
@@ -460,12 +466,7 @@ def _modular_residue_terms(
 
 
 def _cartesian_assignments(domains: list[list[int]]) -> list[list[int]]:
-    assignments: list[list[int]] = [[]]
-    for domain in domains:
-        assignments = [
-            [*prefix, residue] for prefix in assignments for residue in domain
-        ]
-    return assignments
+    return [list(assignment) for assignment in product(*domains)]
 
 
 def _evaluate_modular_polynomial_with_flint(
@@ -492,19 +493,34 @@ def _strict_result_integer(value: object) -> int:
 
 
 def _modular_residue_result_shape(result: dict[str, Any]) -> None:
-    if set(result) != {
-        "semantics_version",
-        "modulus",
-        "variable_order",
-        "domains",
-        "normalized_terms",
-        "enumeration_scope",
-        "total_assignments",
-        "image",
-        "residue_counts",
-        "witnesses",
-        "table",
-    }:
+    allowed_keys = (
+        {
+            "semantics_version",
+            "modulus",
+            "variable_order",
+            "domains",
+            "normalized_terms",
+            "enumeration_scope",
+            "total_assignments",
+            "image",
+            "residue_counts",
+            "witnesses",
+            "table",
+        },
+        {
+            "semantics_version",
+            "modulus",
+            "variable_order",
+            "domains",
+            "normalized_terms",
+            "enumeration_scope",
+            "total_assignments",
+            "image",
+            "residue_counts",
+            "witnesses",
+        },
+    )
+    if set(result) not in allowed_keys:
         raise ValueError("modular-polynomial result is malformed")
     _strict_result_integer(result["modulus"])
     _strict_result_integer(result["total_assignments"])
@@ -548,13 +564,20 @@ def _modular_residue_result_shape(result: dict[str, Any]) -> None:
         for item in result["witnesses"]
     ):
         raise ValueError("modular-polynomial witnesses are malformed")
-    if not isinstance(result["table"], list) or any(
-        not isinstance(row, dict)
-        or set(row) != {"assignment", "residue"}
-        or type(row["residue"]) is not int
-        or not isinstance(row["assignment"], list)
-        or any(type(value) is not int for value in row["assignment"])
-        for row in result["table"]
+    if (
+        "table" in result
+        and result["table"] is not None
+        and (
+            not isinstance(result["table"], list)
+            or any(
+                not isinstance(row, dict)
+                or set(row) != {"assignment", "residue"}
+                or type(row["residue"]) is not int
+                or not isinstance(row["assignment"], list)
+                or any(type(value) is not int for value in row["assignment"])
+                for row in result["table"]
+            )
+        )
     ):
         raise ValueError("modular-polynomial assignment table is malformed")
 
@@ -589,6 +612,9 @@ def _modular_polynomial_residue_image(
         {"assignment": assignment, "residue": residue}
         for assignment, residue in zip(assignments, residues, strict=True)
     ]
+    table_matches = (
+        "table" not in result or result["table"] is None or result["table"] == table
+    )
     return bool(
         result["semantics_version"] == "modular-polynomial-residue-image.v1"
         and result["modulus"] == modulus
@@ -600,7 +626,7 @@ def _modular_polynomial_residue_image(
         and result["image"] == image
         and result["residue_counts"] == counts
         and result["witnesses"] == witnesses
-        and result["table"] == table
+        and table_matches
     )
 
 
@@ -783,6 +809,66 @@ def check_polynomial_square_free(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _factor_sort_key(
+    factor: Any, multiplicity: int
+) -> tuple[int, int, tuple[tuple[int, ...], Any]]:
+    coefficients = tuple(factor.coeffs())
+    degree = max(len(coefficients) - 1, 0)
+    return (multiplicity, degree, coefficients)
+
+
+def _factorization(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(source) != {"polynomial"} or set(result) != {
+        "coefficient",
+        "factors",
+        "reconstructed",
+        "normalization",
+        "irreducibility_assurance",
+        "product_reconstruction",
+    }:
+        return False
+    if (
+        result["normalization"] != "CONTENT_AND_MONIC_IRREDUCIBLES"
+        or result["irreducibility_assurance"] != "UNVERIFIED"
+        or result["product_reconstruction"] != "EXACT"
+    ):
+        return False
+    polynomial = _polynomial(source["polynomial"])
+    coefficient, expected = polynomial.factor()
+    factors = result["factors"]
+    if not isinstance(factors, list):
+        return False
+    declared = []
+    for item in factors:
+        if not isinstance(item, dict) or set(item) != {"factor", "multiplicity"}:
+            return False
+        _same_polynomial_variable(source["polynomial"], item["factor"])
+        declared.append((_polynomial(item["factor"]), item["multiplicity"]))
+    _same_polynomial_variable(source["polynomial"], result["reconstructed"])
+    normalized_expected = []
+    normalized_coefficient = coefficient
+    for factor, multiplicity in expected:
+        leading = factor.leading_coefficient()
+        normalized_expected.append((factor / leading, multiplicity))
+        normalized_coefficient *= leading**multiplicity
+    normalized_expected.sort(key=lambda item: _factor_sort_key(item[0], item[1]))
+    declared.sort(key=lambda item: _factor_sort_key(item[0], item[1]))
+    return (
+        _q(result["coefficient"]) == normalized_coefficient
+        and declared == normalized_expected
+        and _polynomial(result["reconstructed"]) == polynomial
+    )
+
+
+def check_polynomial_factorization(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="polynomial.factor.compute",
+        witness_format="polynomial.factorization.flint-replay",
+        replay=_factorization,
+    )
+
+
 def _matrix_source(source: dict[str, Any], *, integer: bool = False) -> Any:
     if set(source) != {"matrix"}:
         raise ValueError("matrix request is malformed")
@@ -919,6 +1005,56 @@ def check_matrix_product(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _matrix_determinant(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(result) != {"determinant", "method"} or result["method"] != (
+        "FRACTION_FREE_BAREISS"
+    ):
+        return False
+    matrix = _matrix_source(source)
+    if matrix.nrows() != matrix.ncols():
+        return False
+    return bool(_q(result["determinant"]) == matrix.det())
+
+
+def check_matrix_determinant(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="matrix.determinant.compute",
+        witness_format="matrix.determinant.flint-replay",
+        replay=_matrix_determinant,
+    )
+
+
+def _matrix_rank(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if (
+        set(result) != {"rank", "pivot_columns", "method"}
+        or result["method"] != "EXACT_RATIONAL_ROW_REDUCTION"
+    ):
+        return False
+    matrix = _matrix_source(source)
+    reduced, rank = matrix.rref()
+    return (
+        type(result["rank"]) is int
+        and result["rank"] == rank
+        and isinstance(result["pivot_columns"], list)
+        and all(type(column) is int for column in result["pivot_columns"])
+        and tuple(result["pivot_columns"])
+        == tuple(
+            next(column for column in range(reduced.ncols()) if reduced[row, column])
+            for row in range(rank)
+        )
+    )
+
+
+def check_matrix_rank(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="matrix.rank.compute",
+        witness_format="matrix.rank.flint-replay",
+        replay=_matrix_rank,
+    )
+
+
 def _characteristic_polynomial(source: dict[str, Any], result: dict[str, Any]) -> bool:
     if set(result) != {
         "variable",
@@ -994,11 +1130,14 @@ __all__ = [
     "check_integer_powerful_number",
     "check_integer_prime_factorization",
     "check_matrix_characteristic_polynomial",
+    "check_matrix_determinant",
     "check_matrix_nullspace",
     "check_matrix_product",
+    "check_matrix_rank",
     "check_matrix_rref",
     "check_matrix_smith_normal_form",
     "check_polynomial_discriminant",
+    "check_polynomial_factorization",
     "check_polynomial_gcd",
     "check_polynomial_resultant",
     "check_polynomial_square_free",

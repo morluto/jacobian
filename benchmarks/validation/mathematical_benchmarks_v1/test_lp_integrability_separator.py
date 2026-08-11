@@ -101,14 +101,14 @@ def _evidence_case(tmp_path: Path, text: str):
 
 def test_valid_evidence_rejects_empty_text(tmp_path: Path):
     result = _evidence_case(tmp_path, "")
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_valid_evidence_rejects_unrelated_text(tmp_path: Path):
     result = _evidence_case(tmp_path, "hello world\n")
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_valid_evidence_rejects_missing_result_json_marker(tmp_path: Path):
@@ -118,8 +118,8 @@ def test_valid_evidence_rejects_missing_result_json_marker(tmp_path: Path):
         "The log factor controls integrability.\n"
     )
     result = _evidence_case(tmp_path, text)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_valid_evidence_rejects_mismatched_result_json(tmp_path: Path):
@@ -131,8 +131,8 @@ def test_valid_evidence_rejects_mismatched_result_json(tmp_path: Path):
         "The log factor controls integrability.\n"
     )
     res = _evidence_case(tmp_path, text)
-    assert res["evidence_validity"] == 0.0
-    assert res["reward"] == 0.0
+    assert res.details["evidence_validity"] == 0.0
+    assert res.reward == 0.0
 
 
 def test_valid_evidence_accepts_bound_result(tmp_path: Path):
@@ -140,8 +140,8 @@ def test_valid_evidence_accepts_bound_result(tmp_path: Path):
         tmp_path, "lp-integrability-separator", "computed"
     )
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_assurance_failure_preserves_evidence_and_scope(tmp_path: Path) -> None:
@@ -152,11 +152,11 @@ def test_assurance_failure_preserves_evidence_and_scope(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_rational_field_max_length_is_documented():

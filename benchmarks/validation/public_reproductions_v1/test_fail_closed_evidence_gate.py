@@ -32,9 +32,9 @@ def test_wrong_evidence_digest_zeros_reward_with_visible_diagnostics(
 ) -> None:
     task, app, logs = support._prepare_case(tmp_path, task_name, "computed")
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["reward"] == pytest.approx(1.0)
-    assert accepted.get(
-        "evidence_validity", accepted.get("evidence", 1.0)
+    assert accepted.reward == pytest.approx(1.0)
+    assert accepted.details.get(
+        "evidence_validity", accepted.details.get("evidence", 1.0)
     ) == pytest.approx(1.0)
 
     submission_path = app / "submission.json"
@@ -44,9 +44,11 @@ def test_wrong_evidence_digest_zeros_reward_with_visible_diagnostics(
     support._write_json(submission_path, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    evidence = rejected.get("evidence_validity", rejected.get("evidence"))
+    evidence = rejected.details.get(
+        "evidence_validity", rejected.details.get("evidence")
+    )
     assert evidence == pytest.approx(0.0)
-    assert rejected["reward"] == pytest.approx(0.0)
+    assert rejected.reward == pytest.approx(0.0)
     # Correct mathematics may remain visible; aggregate must still fail closed.
-    if "correctness" in rejected:
-        assert rejected["correctness"] in {0.0, 1.0}
+    if "correctness" in rejected.details:
+        assert rejected.details["correctness"] in {0.0, 1.0}

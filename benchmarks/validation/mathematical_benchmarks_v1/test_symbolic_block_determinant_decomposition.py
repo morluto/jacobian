@@ -34,8 +34,8 @@ def test_accepts_alternative_sum_zero_basis(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(
@@ -57,8 +57,8 @@ def test_rejects_corrupted_certificates(
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_enforces_common_channel_first(tmp_path: Path) -> None:
@@ -74,4 +74,4 @@ def test_enforces_common_channel_first(tmp_path: Path) -> None:
     result["channels"] = ["A-B", "A+2B", "A-B"]
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected.details["correctness"] == 0.0

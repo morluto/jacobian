@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="364dd88af0847f154183044419b7e7c51d78e3610377c6c32b080472ba9774f5"
+LABEL jacobian.checksum="67bcbfc4fbefbfcde622a6b708bf1ad408b6ae49740b37618d081c9567d68dbc"
 LABEL jacobian.task="jacobian/finite-support-sum-scope-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

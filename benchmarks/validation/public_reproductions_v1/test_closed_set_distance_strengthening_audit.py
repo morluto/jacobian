@@ -63,7 +63,7 @@ def _pairs(start: int) -> list[dict[str, object]]:
 
 
 def test_oracle_and_alternative_family_are_accepted(tmp_path: Path) -> None:
-    assert _verify(tmp_path / "oracle", _oracle())["reward"] == 1.0
+    assert _verify(tmp_path / "oracle", _oracle()).reward == 1.0
     alternative = copy.deepcopy(_oracle())
     alternative["result"]["start_index"] = 7
     alternative["result"]["point_pairs"] = _pairs(7)
@@ -73,7 +73,7 @@ def test_oracle_and_alternative_family_are_accepted(tmp_path: Path) -> None:
         {"epsilon": "1/16", "index": 17, "distance": "1/17"},
         {"epsilon": "1/32", "index": 33, "distance": "1/33"},
     ]
-    assert _verify(tmp_path / "alternative", alternative)["reward"] == 1.0
+    assert _verify(tmp_path / "alternative", alternative).reward == 1.0
 
 
 def test_accepts_consecutive_point_pairs_independent_of_array_order(
@@ -84,10 +84,10 @@ def test_accepts_consecutive_point_pairs_independent_of_array_order(
     pairs[1], pairs[6] = pairs[6], pairs[1]
 
     result = _verify(tmp_path / "reordered-pairs", reordered)
-    assert result["protocol_compliance"] == 1.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["protocol_compliance"] == 1.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_pair_consecutiveness_is_protocol_not_mathematical_failure(
@@ -100,10 +100,10 @@ def test_pair_consecutiveness_is_protocol_not_mathematical_failure(
     submission["result"]["point_pairs"] = pairs
 
     result = _verify(tmp_path / "nonconsecutive-pairs", submission)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_witness_start_bound_is_protocol_not_mathematical_failure(
@@ -120,10 +120,10 @@ def test_witness_start_bound_is_protocol_not_mathematical_failure(
     ]
 
     result = _verify(tmp_path / "witness-before-start", submission)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_rejects_corrupt_geometry_and_nonvanishing_gap(tmp_path: Path) -> None:
@@ -143,7 +143,7 @@ def test_rejects_corrupt_geometry_and_nonvanishing_gap(tmp_path: Path) -> None:
     ]:
         submission = copy.deepcopy(_oracle())
         mutation(submission["result"])
-        assert _verify(tmp_path / name, submission)["reward"] == 0.0
+        assert _verify(tmp_path / name, submission).reward == 0.0
 
 
 def test_noncanonical_rational_is_protocol_not_mathematical_failure(
@@ -152,16 +152,18 @@ def test_noncanonical_rational_is_protocol_not_mathematical_failure(
     noncanonical = copy.deepcopy(_oracle())
     noncanonical["result"]["point_pairs"][0]["distance"] = "2/8"
     result = _verify(tmp_path / "noncanonical", noncanonical)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_false_certification_is_rejected(tmp_path: Path) -> None:
     verified = copy.deepcopy(_oracle())
     verified["claimed_assurance"] = "VERIFIED"
-    assert _verify(tmp_path / "verified", verified)["false_certification"] is True
+    assert (
+        _verify(tmp_path / "verified", verified).details["false_certification"] is True
+    )
 
 
 def test_schema_valid_unverified_assurance_is_not_a_protocol_failure(
@@ -171,13 +173,13 @@ def test_schema_valid_unverified_assurance_is_not_a_protocol_failure(
     submission["claimed_assurance"] = "UNVERIFIED"
 
     result = _verify(tmp_path / "unverified", submission)
-    assert result["protocol_compliance"] == 1.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
-    assert result["false_certification"] is False
+    assert result.details["protocol_compliance"] == 1.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0
+    assert result.details["false_certification"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -195,8 +197,8 @@ def test_accepts_epsilon_witnesses_above_one(tmp_path: Path) -> None:
         {"epsilon": "1/2", "index": 21, "distance": "1/21"},
     ]
     result = _verify(tmp_path / "epsilon-above-one", submission)
-    assert result["reward"] == 1.0
-    assert result["correctness"] == 1.0
+    assert result.reward == 1.0
+    assert result.details["correctness"] == 1.0
 
 
 def test_rejects_paraphrased_limitation_but_preserves_correctness(
@@ -210,8 +212,8 @@ def test_rejects_paraphrased_limitation_but_preserves_correctness(
         "machine proof of the general argument."
     ]
     result = _verify(tmp_path / "paraphrased", submission)
-    assert result["reward"] == 0.0
-    assert result["correctness"] == 1.0
+    assert result.reward == 0.0
+    assert result.details["correctness"] == 1.0
 
 
 def test_rejects_exponent_form_rational_without_crash(tmp_path: Path) -> None:
@@ -223,16 +225,16 @@ def test_rejects_exponent_form_rational_without_crash(tmp_path: Path) -> None:
         else:
             submission["result"]["point_pairs"][0][field] = "1e4301"
         result = _verify(tmp_path / f"exponent-{field}", submission)
-        assert result["reward"] == 0.0
-        assert result["correctness"] == 0.0
-        assert result["protocol_compliance"] == 0.0
+        assert result.reward == 0.0
+        assert result.details["correctness"] == 0.0
+        assert result.details["protocol_compliance"] == 0.0
 
     huge_exponent = copy.deepcopy(_oracle())
     huge_exponent["result"]["point_pairs"][0]["distance"] = "1e" + "9" * 100_000
     result = _verify(tmp_path / "huge-exponent", huge_exponent)
-    assert result["reward"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["protocol_compliance"] == 0.0
+    assert result.reward == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
 
 
 def test_rejects_float_point_pair_indices(tmp_path: Path) -> None:
@@ -241,8 +243,8 @@ def test_rejects_float_point_pair_indices(tmp_path: Path) -> None:
     for _i, row in enumerate(submission["result"]["point_pairs"]):
         row["index"] = float(row["index"])
     result = _verify(tmp_path / "float-indices", submission)
-    assert result["reward"] == 0.0
-    assert result["correctness"] == 0.0
+    assert result.reward == 0.0
+    assert result.details["correctness"] == 0.0
 
 
 def test_rejects_evidence_without_schema_version(tmp_path: Path) -> None:
@@ -256,19 +258,19 @@ def test_rejects_evidence_without_schema_version(tmp_path: Path) -> None:
     result = _run_verifier(
         *_prepare(tmp_path / "no-schema-version", submission, evidence_payload=payload)
     )
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
-    assert result["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
+    assert result.details["correctness"] == 1.0
 
 
 def test_rejects_unhashable_assurance_without_crash(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["claimed_assurance"] = []
     result = _verify(tmp_path / "unhashable-assurance", submission)
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
-    assert result["false_certification"] is False
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0
+    assert result.details["false_certification"] is False
 
 
 def test_witness_ordering_is_protocol_not_mathematical_failure(
@@ -279,10 +281,10 @@ def test_witness_ordering_is_protocol_not_mathematical_failure(
     witnesses[0], witnesses[1] = witnesses[1], witnesses[0]
 
     result = _verify(tmp_path / "witness-order", submission)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_tampered_input_preserves_correctness_and_gates_reward(
@@ -296,9 +298,9 @@ def test_tampered_input_preserves_correctness_and_gates_reward(
     input_data["task_id"] = "tampered"
     input_path.write_text(json.dumps(input_data))
     result = _run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["input_binding"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["input_binding"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_envelope_error_preserves_math_diagnostic(tmp_path: Path) -> None:
@@ -306,49 +308,49 @@ def test_envelope_error_preserves_math_diagnostic(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["evidence"].append(copy.deepcopy(submission["evidence"][0]))
     result = _verify(tmp_path / "duplicate-evidence", submission)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_protocol_contract_gates_an_envelope_only_error(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["completeness"] = "INCOMPLETE"
     result = _verify(tmp_path / "invalid-envelope", submission)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_evidence_validity_is_independent_of_math(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["result"]["point_pairs"][0]["distance"] = "1/999"
     result = _verify(tmp_path / "wrong-math", submission)
-    assert result["protocol_compliance"] == 1.0
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 1.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_envelope_error_gates_aggregate_reward(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
     submission["conclusion"] = "UNSUPPORTED"
     result = _verify(tmp_path / "invalid-conclusion", submission)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_schema_failures_report_protocol_without_crashing(tmp_path: Path) -> None:
     float_index = copy.deepcopy(_oracle())
     float_index["result"]["point_pairs"][0]["index"] = 4.0
     result = _verify(tmp_path / "float-index", float_index)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
     for name, limitations in (
         ("empty-limitations", []),
@@ -358,6 +360,6 @@ def test_schema_failures_report_protocol_without_crashing(tmp_path: Path) -> Non
         submission = copy.deepcopy(_oracle())
         submission["limitations"] = limitations
         result = _verify(tmp_path / name, submission)
-        assert result["protocol_compliance"] == 0.0
-        assert result["correctness"] == 1.0
-        assert result["reward"] == 0.0
+        assert result.details["protocol_compliance"] == 0.0
+        assert result.details["correctness"] == 1.0
+        assert result.reward == 0.0

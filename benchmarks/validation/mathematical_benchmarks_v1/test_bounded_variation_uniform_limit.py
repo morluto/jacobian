@@ -14,7 +14,7 @@ def _case(tmp_path: Path):
 
 def test_reference_passes(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_alternative_scale_and_indices_pass(tmp_path: Path) -> None:
@@ -39,7 +39,7 @@ def test_alternative_scale_and_indices_pass(tmp_path: Path) -> None:
         )
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def _mutate(tmp_path: Path, mutation) -> float:
@@ -49,7 +49,7 @@ def _mutate(tmp_path: Path, mutation) -> float:
     mutation(submission)
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    return support._run_verifier(task, app, logs)["reward"]
+    return support._run_verifier(task, app, logs).reward
 
 
 def test_wrong_segment_count_is_rejected(tmp_path: Path) -> None:
@@ -90,8 +90,8 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
-    assert result["false_certification"] is True
+    assert result.reward == 0.0
+    assert result.details["false_certification"] is True
 
 
 def test_visible_input_tampering_is_rejected(tmp_path: Path) -> None:
@@ -99,7 +99,7 @@ def test_visible_input_tampering_is_rejected(tmp_path: Path) -> None:
     data = json.loads((app / "input.json").read_text())
     data["source"]["row"] = 601
     support._write_json(app / "input.json", data)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_unstructured_argument_claim_is_rejected(tmp_path: Path) -> None:
@@ -109,7 +109,7 @@ def test_unstructured_argument_claim_is_rejected(tmp_path: Path) -> None:
     submission["result"]["argument"]["implication"] = "does not force"
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_oversized_evidence_is_rejected_before_digest_binding(tmp_path: Path) -> None:
@@ -122,7 +122,7 @@ def test_oversized_evidence_is_rejected_before_digest_binding(tmp_path: Path) ->
     evidence.write_text("x" * (1_048_576 + 1))
     submission["evidence"][0]["sha256"] = "sha256:" + "0" * 64
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_bool_in_integer_certificate_is_rejected(tmp_path: Path) -> None:
@@ -150,7 +150,7 @@ def test_equivalent_sequence_serialization_passes(tmp_path: Path) -> None:
     submission["result"]["sequence"] = "sin(n*q*x)/(n*q)"
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_equivalent_limitation_wording_passes(tmp_path: Path) -> None:
@@ -162,7 +162,7 @@ def test_equivalent_limitation_wording_passes(tmp_path: Path) -> None:
     submission["limitations"] = ["NO_PROOF_ASSISTANT_VERIFICATION"]
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_protocol_failure_preserves_math_correctness(tmp_path: Path) -> None:
@@ -175,8 +175,8 @@ def test_protocol_failure_preserves_math_correctness(tmp_path: Path) -> None:
     support._bind_result_evidence(app, submission)
     support._write_json(path, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
-    assert result["protocol"] is False
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["scope_accuracy"] == 0.0
+    assert result.reward == 0.0
+    assert result.details["protocol"] is False
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["scope_accuracy"] == 0.0

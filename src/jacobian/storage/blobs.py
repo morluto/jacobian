@@ -15,13 +15,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from jacobian.canonical import sha256_digest
 from jacobian.storage.errors import (
     ArtifactIntegrityError,
     ArtifactNotFoundError,
     StorageError,
     StorageLimitError,
 )
-from jacobian.storage.identity import sha256_digest
 
 _LOGGER = logging.getLogger(__name__)
 

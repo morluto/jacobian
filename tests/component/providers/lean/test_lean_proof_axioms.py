@@ -8,7 +8,6 @@ import pytest
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -68,7 +67,6 @@ def test_proof_hole_inspection_ignores_strings_and_identifiers(
         result = adapter.invoke(
             CapabilityRequest(
                 capability_id="lean.proof.axioms.inspect",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",
@@ -89,3 +87,36 @@ def test_proof_holes_are_counted_but_not_rejected_as_commands() -> None:
 def test_proof_hole_count_is_bounded_before_artifact_validation() -> None:
     with pytest.raises(ValueError, match="more than 64"):
         proof_axioms._validate_source("True", "by " + " ".join(["sorry"] * 65))
+
+
+@pytest.mark.parametrize("literal", (r"'\xAF'", r"'\uFACE'", r"'\''"))
+def test_char_escapes_are_not_scanned_as_tokens(literal: str) -> None:
+    assert proof_axioms._lean_source_tokens(literal) == ()
+
+
+@pytest.mark.parametrize("literal", (r"'\xAF'", r"'\uFACE'", r"'\''"))
+def test_tokens_after_char_escapes_are_scanned(literal: str) -> None:
+    source = f"{literal} sorry admit"
+
+    assert proof_axioms._lean_source_tokens(source) == ("sorry", "admit")
+    assert proof_axioms._proof_hole_counts(source) == (1, 1)
+
+
+def test_string_literal_escaped_quote_is_not_scanned_as_tokens() -> None:
+    assert proof_axioms._lean_source_tokens(r'"\"" sorry') == ("sorry",)
+
+
+@pytest.mark.parametrize(
+    "source",
+    ("'x\nsorry", '"x\nsorry', "'\\\nsorry", '"\\\nsorry'),
+)
+def test_quoted_literals_with_newlines_are_rejected_before_token_scanning(
+    source: str,
+) -> None:
+    with pytest.raises(ValueError, match="cannot contain a newline"):
+        proof_axioms._lean_source_tokens(source)
+
+
+def test_unterminated_character_literal_cannot_hide_forbidden_tokens() -> None:
+    with pytest.raises(ValueError, match="unterminated Lean quoted literal"):
+        proof_axioms._validate_source("True", "by ' sorry")

@@ -88,41 +88,6 @@ def matrix_columns(matrix: Matrix, start: int = 0) -> Matrix:
     ]
 
 
-def determinant(matrix: Matrix) -> int:
-    """Exact fraction-free Bareiss determinant."""
-
-    size = len(matrix)
-    if any(len(row) != size for row in matrix):
-        raise ValueError("determinant requires a square matrix")
-    if size == 0:
-        return 1
-    work = [row[:] for row in matrix]
-    sign = 1
-    previous = 1
-    for pivot_index in range(size - 1):
-        selected = next(
-            (row for row in range(pivot_index, size) if work[row][pivot_index] != 0),
-            None,
-        )
-        if selected is None:
-            return 0
-        if selected != pivot_index:
-            work[pivot_index], work[selected] = work[selected], work[pivot_index]
-            sign = -sign
-        pivot = work[pivot_index][pivot_index]
-        for row in range(pivot_index + 1, size):
-            for column in range(pivot_index + 1, size):
-                numerator = (
-                    work[row][column] * pivot
-                    - work[row][pivot_index] * work[pivot_index][column]
-                )
-                if numerator % previous:
-                    raise ArithmeticError("Bareiss division was not exact")
-                work[row][column] = numerator // previous
-        previous = pivot
-    return sign * work[-1][-1]
-
-
 def _reduce_pivot_to_unit(
     augmented: list[list[int]],
     *,
@@ -263,8 +228,8 @@ def smith_reduce(
         != diagonal_matrix
     ):
         raise ArithmeticError("Smith transformations do not bind the source")
-    left_determinant = determinant(left_matrix)
-    right_determinant = determinant(right_matrix)
+    left_determinant = int(left.det())
+    right_determinant = int(right.det())
     if abs(left_determinant) != 1 or abs(right_determinant) != 1:
         raise ArithmeticError("Smith transformations are not unimodular")
     return SmithReduction(
@@ -331,7 +296,6 @@ __all__ = [
     "Matrix",
     "SmithReduction",
     "certificate_from_reduction",
-    "determinant",
     "identity_matrix",
     "inverse_unimodular",
     "matrix_columns",

@@ -9,10 +9,12 @@ import os
 import pathlib
 import sys
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path, PurePosixPath
 
 _VIRTUAL_ROOTS = ("/app", "/tests", "/logs/verifier")
-_FAILURE_REWARD = {
+_FAILURE_DETAILS = {
     "assurance_calibration": 0.0,
     "correctness": 0.0,
     "evidence_validity": 0.0,
@@ -21,13 +23,78 @@ _FAILURE_REWARD = {
     "input_integrity": 0.0,
     "limitation_accuracy": 0.0,
     "protocol_compliance": 0.0,
-    "reward": 0.0,
     "scope_accuracy": 0.0,
 }
 
 
+@dataclass(frozen=True)
+class VerifierOutput:
+    """The scalar Harbor reward and separate verifier diagnostics."""
+
+    reward: float
+    details: Mapping[str, object]
+
+
 class VerifierExecutionError(RuntimeError):
     """The verifier child failed before producing a valid reward record."""
+
+
+def _reject_duplicate_object_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise VerifierExecutionError(f"duplicate JSON object key: {key}")
+        value[key] = item
+    return value
+
+
+def _reject_nonfinite_json(value: str) -> object:
+    raise VerifierExecutionError(f"non-finite JSON value: {value}")
+
+
+def _read_json_object(path: Path, *, name: str) -> dict[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise VerifierExecutionError(f"verifier did not produce a regular {name}")
+    try:
+        value = json.loads(
+            path.read_bytes(),
+            object_pairs_hook=_reject_duplicate_object_keys,
+            parse_constant=_reject_nonfinite_json,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise VerifierExecutionError(f"verifier {name} is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise VerifierExecutionError(f"verifier {name} must be a JSON object")
+    return value
+
+
+def _read_verifier_output(logs_root: Path) -> VerifierOutput:
+    reward_record = _read_json_object(logs_root / "reward.json", name="reward.json")
+    if set(reward_record) != {"reward"}:
+        raise VerifierExecutionError("verifier reward.json must contain exactly reward")
+    reward = reward_record["reward"]
+    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
+        raise VerifierExecutionError("verifier reward must be a finite number")
+    normalized_reward = float(reward)
+    if not isfinite(normalized_reward) or not 0.0 <= normalized_reward <= 1.0:
+        raise VerifierExecutionError("verifier reward must be finite and in [0, 1]")
+    details = _read_json_object(
+        logs_root / "reward-details.json", name="reward-details.json"
+    )
+    if "reward" in details:
+        raise VerifierExecutionError(
+            "verifier reward-details.json must not contain reward"
+        )
+    return VerifierOutput(reward=normalized_reward, details=details)
+
+
+def _write_failure_output(logs_root: Path) -> None:
+    (logs_root / "reward.json").write_text(
+        json.dumps({"reward": 0.0}, sort_keys=True), encoding="utf-8"
+    )
+    (logs_root / "reward-details.json").write_text(
+        json.dumps(_FAILURE_DETAILS, sort_keys=True), encoding="utf-8"
+    )
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
@@ -154,8 +221,8 @@ def run_verifier_in_child(
     logs: Path,
     timeout_seconds: float = 30.0,
     output_limit_bytes: int = 64 * 1024,
-) -> dict[str, object]:
-    """Run one task verifier in a clean interpreter and return its reward."""
+) -> VerifierOutput:
+    """Run one task verifier in a clean interpreter and return both output files."""
 
     from benchmarks.tooling.command_runner import (
         ToolCommandRequest,
@@ -204,13 +271,7 @@ def run_verifier_in_child(
         raise VerifierExecutionError(
             f"verifier child {result.status}: {diagnostic or 'no diagnostic'}"
         )
-    reward_path = logs_root / "reward.json"
-    if reward_path.is_symlink() or not reward_path.is_file():
-        raise VerifierExecutionError("verifier did not produce a regular reward.json")
-    value = json.loads(reward_path.read_bytes())
-    if not isinstance(value, dict):
-        raise VerifierExecutionError("verifier reward must be a JSON object")
-    return value
+    return _read_verifier_output(logs_root)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -228,9 +289,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as exc:
         try:
             if args.logs.is_dir() and not args.logs.is_symlink():
-                (args.logs / "reward.json").write_text(
-                    json.dumps(_FAILURE_REWARD, sort_keys=True), encoding="utf-8"
-                )
+                _write_failure_output(args.logs)
         except OSError:
             pass
         diagnostic = " ".join(str(exc).split())[:1024]

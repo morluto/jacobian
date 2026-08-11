@@ -54,7 +54,7 @@ def test_accepts_alternative_ramified_witness_and_inert_prime(tmp_path: Path) ->
     }
     _rewrite(app, submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["reward"] == 1.0, accepted
+    assert accepted.reward == 1.0, accepted
 
 
 def test_rejects_corrupt_residue_certificate(tmp_path: Path) -> None:
@@ -63,8 +63,8 @@ def test_rejects_corrupt_residue_certificate(tmp_path: Path) -> None:
     submission["result"]["inert_obstruction"]["zero_pairs"].append({"x": 1, "y": 1})
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_nonprimitive_ramified_example(tmp_path: Path) -> None:
@@ -79,7 +79,7 @@ def test_rejects_nonprimitive_ramified_example(tmp_path: Path) -> None:
     }
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected.details["correctness"] == 0.0
 
 
 def test_rejects_boolean_in_integer_certificate_fields(tmp_path: Path) -> None:
@@ -89,8 +89,8 @@ def test_rejects_boolean_in_integer_certificate_fields(tmp_path: Path) -> None:
     submission["result"]["ramified_witness"]["v3"] = True
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_boolean_in_residue_pair_coordinates(tmp_path: Path) -> None:
@@ -99,8 +99,8 @@ def test_rejects_boolean_in_residue_pair_coordinates(tmp_path: Path) -> None:
     submission["result"]["inert_obstruction"]["zero_pairs"] = [{"x": False, "y": False}]
     _rewrite(app, submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_accepts_equivalent_residue_representatives(tmp_path: Path) -> None:
@@ -110,8 +110,8 @@ def test_accepts_equivalent_residue_representatives(tmp_path: Path) -> None:
     submission["result"]["inert_obstruction"]["zero_pairs"] = [{"x": 5, "y": 5}]
     _rewrite(app, submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0, accepted
-    assert accepted["reward"] == 1.0, accepted
+    assert accepted.details["correctness"] == 1.0, accepted
+    assert accepted.reward == 1.0, accepted
 
 
 def test_separates_protocol_validity_from_mathematical_correctness(
@@ -122,9 +122,9 @@ def test_separates_protocol_validity_from_mathematical_correctness(
     submission["claimed_assurance"] = "VERIFIED"
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0, result
-    assert result["reward"] == 0.0, result
-    assert result["false_certification"] is True
+    assert result.details["correctness"] == 1.0, result
+    assert result.reward == 0.0, result
+    assert result.details["false_certification"] is True
 
 
 def test_rejects_result_only_evidence_envelope(tmp_path: Path) -> None:
@@ -135,8 +135,8 @@ def test_rejects_result_only_evidence_envelope(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_rejects_oversized_evidence_deterministically(tmp_path: Path) -> None:
@@ -149,13 +149,13 @@ def test_rejects_oversized_evidence_deterministically(tmp_path: Path) -> None:
     )
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["evidence_validity"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_emits_reward_json_for_malformed_submission(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     (app / "submission.json").write_text("not json")
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
-    assert result["correctness"] == 0.0
+    assert result.reward == 0.0
+    assert result.details["correctness"] == 0.0

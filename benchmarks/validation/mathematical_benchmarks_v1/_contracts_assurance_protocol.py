@@ -19,9 +19,9 @@ def test_rational_solution_rejects_unsupported_verified_claim(
     computed = support._run_verifier(
         *support._prepare_case(tmp_path, support.RATIONAL_TASK, "computed")
     )
-    assert computed["correctness"] == 1.0
-    assert computed["reward"] == pytest.approx(1.0)
-    assert computed["false_certification"] is False
+    assert computed.details["correctness"] == 1.0
+    assert computed.reward == pytest.approx(1.0)
+    assert computed.details["false_certification"] is False
 
     for scenario, expected_correctness, false_certification in (
         ("missing", 1.0, True),
@@ -30,9 +30,9 @@ def test_rational_solution_rejects_unsupported_verified_claim(
         result = support._run_verifier(
             *support._prepare_case(tmp_path, support.RATIONAL_TASK, scenario)
         )
-        assert result["correctness"] == expected_correctness
-        assert result["reward"] == 0.0
-        assert result["false_certification"] is false_certification
+        assert result.details["correctness"] == expected_correctness
+        assert result.reward == 0.0
+        assert result.details["false_certification"] is false_certification
 
 
 @pytest.mark.parametrize("task_name", support.RESOURCE_DERIVED_TASKS)
@@ -43,16 +43,16 @@ def test_resource_derived_oracles_and_assurance_boundary(
     computed = support._run_verifier(
         *support._prepare_case(tmp_path, task_name, "computed")
     )
-    assert computed["correctness"] == 1.0
-    assert computed["reward"] == pytest.approx(1.0)
-    assert computed["false_certification"] is False
+    assert computed.details["correctness"] == 1.0
+    assert computed.reward == pytest.approx(1.0)
+    assert computed.details["false_certification"] is False
 
     unsupported = support._run_verifier(
         *support._prepare_case(tmp_path, task_name, "missing")
     )
-    assert unsupported["correctness"] == 1.0
-    assert unsupported["reward"] == 0.0
-    assert unsupported["false_certification"] is True
+    assert unsupported.details["correctness"] == 1.0
+    assert unsupported.reward == 0.0
+    assert unsupported.details["false_certification"] is True
 
 
 @pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
@@ -68,9 +68,9 @@ def test_verifiers_reject_unhashable_assurance(
 
     rejected = support._run_verifier(task, app, logs)
     expected_scope = 1.0 if support.is_scope_independent_assurance(task_name) else 0.0
-    assert rejected["scope_accuracy"] == expected_scope
-    assert rejected["reward"] == 0.0
-    assert rejected["false_certification"] is False
+    assert rejected.details["scope_accuracy"] == expected_scope
+    assert rejected.reward == 0.0
+    assert rejected.details["false_certification"] is False
 
 
 @pytest.mark.parametrize(
@@ -92,9 +92,9 @@ def test_scope_independent_verifiers_preserve_scope_for_unsupported_assurance(
     support._write_json(submission_path, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["scope_accuracy"] == 1.0
-    assert rejected["assurance_calibration"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["scope_accuracy"] == 1.0
+    assert rejected.details["assurance_calibration"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize(

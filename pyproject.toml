@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jacobian"
-version = "0.9.0"
+version = "0.11.0"
 description = "A capability-first MCP workbench for executable mathematics"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -37,13 +37,11 @@ jacobian = "jacobian.cli:app"
 jacobian-mcp = "jacobian.adapters.mcp.cli:main"
 
 [dependency-groups]
-dev = [
-    "cvc5==1.3.4",
+dev-core = [
     "deptry>=0.21,<1",
     "hypothesis>=6.130,<7",
     "mypy>=1.15,<3",
     "pip-audit>=2.9,<3",
-    "python-flint==0.9.0",
     "pre-commit>=4.4,<5",
     "pyperf>=2.9,<3",
     "pytest>=8.3,<10",
@@ -58,6 +56,11 @@ dev = [
     "types-jsonschema>=4.23,<5",
     "types-networkx>=3.4,<4",
     "vulture>=2.14,<3",
+]
+dev = [
+    { include-group = "dev-core" },
+    "cvc5==1.3.4",
+    "python-flint==0.9.0",
 ]
 
 [tool.hatch.build.targets.wheel]

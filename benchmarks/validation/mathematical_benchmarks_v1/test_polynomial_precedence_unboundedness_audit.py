@@ -62,7 +62,7 @@ def verify(tmp_path, submission):
 
 
 def test_oracle_and_alternative_family(tmp_path):
-    assert verify(tmp_path / "oracle", oracle())["reward"] == 1.0
+    assert verify(tmp_path / "oracle", oracle()).reward == 1.0
     alt = oracle()
     # x=-t^2/4-7, y=t gives leading coefficient -3/16.
     alt["result"] = {
@@ -77,26 +77,26 @@ def test_oracle_and_alternative_family(tmp_path):
         ],
         "formal_status": "UNBOUNDED_BELOW",
     }
-    assert verify(tmp_path / "alt", alt)["reward"] == 1.0
+    assert verify(tmp_path / "alt", alt).reward == 1.0
 
 
 def test_corruption_and_false_assurance_fail(tmp_path):
     bad = oracle()
     bad["result"]["formal_coefficients"][-1] = r(-1, 3)
-    assert verify(tmp_path / "bad", bad)["reward"] == 0
+    assert verify(tmp_path / "bad", bad).reward == 0
     assurance = oracle()
     assurance["claimed_assurance"] = "VERIFIED"
-    assert verify(tmp_path / "assurance", assurance)["reward"] == 0
+    assert verify(tmp_path / "assurance", assurance).reward == 0
 
 
 def test_malformed_and_input_tamper_fail_closed(tmp_path):
     malformed = oracle()
     malformed["result"]["x_coefficients"][0]["numerator"] = True
-    assert verify(tmp_path / "malformed", malformed)["reward"] == 0
+    assert verify(tmp_path / "malformed", malformed).reward == 0
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "tamper/app", tmp_path / "tamper/logs"
     (app / "evidence").mkdir(parents=True)
     logs.mkdir(parents=True)
     (app / "input.json").write_text("{}")
     (app / "submission.json").write_text(json.dumps(oracle()))
-    assert _run_verifier(task, app, logs)["reward"] == 0
+    assert _run_verifier(task, app, logs).reward == 0

@@ -84,6 +84,30 @@ _SECRET = re.compile(
 _FLOATING = re.compile(r"\bpip(?:3)?\s+install\s+([^\s#|&;]+)")
 
 
+def verifier_bundle_checksum_bytes(verifier: bytes, support: bytes) -> str:
+    """Return the domain-separated digest for executable verifier sources."""
+
+    digest = hashlib.sha256()
+    for filename, source in (
+        ("verifier.py", verifier),
+        ("verifier_support.py", support),
+    ):
+        digest.update(filename.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(source)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def verifier_bundle_checksum(tests: Path) -> str:
+    """Return the digest for all executable verifier code in one task."""
+
+    return verifier_bundle_checksum_bytes(
+        (tests / "verifier.py").read_bytes(),
+        (tests / "verifier_support.py").read_bytes(),
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class TaskRef:
     name: str
@@ -911,7 +935,7 @@ def _tests_dockerfile_failures(
     ):
         failures.append(f"{rel}/tests/Dockerfile: does not copy public_contract.json")
     checksum = re.search(r'jacobian\.checksum="([0-9a-f]{64})"', docker_text)
-    expected_checksum = hashlib.sha256((tests / "verifier.py").read_bytes()).hexdigest()
+    expected_checksum = verifier_bundle_checksum(tests)
     if checksum is None:
         failures.append(f"{rel}/tests/Dockerfile: missing verifier checksum label")
     elif checksum.group(1) != expected_checksum:

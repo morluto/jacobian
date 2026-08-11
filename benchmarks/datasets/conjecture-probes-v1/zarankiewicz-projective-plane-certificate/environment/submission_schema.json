@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "degrees": {
+      "items": {
+        "const": 4
+      },
+      "maxItems": 13,
+      "minItems": 13,
+      "type": "array"
+    },
+    "edge": {
+      "items": {
+        "maximum": 12,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "pair_count": {
+      "additionalProperties": false,
+      "properties": {
+        "common_neighbors": {
+          "const": 1
+        },
+        "pair": {
+          "$ref": "#/$defs/edge"
+        }
+      },
+      "required": [
+        "pair",
+        "common_neighbors"
+      ],
+      "type": "object"
+    },
+    "pair_counts": {
+      "items": {
+        "$ref": "#/$defs/pair_count"
+      },
+      "maxItems": 78,
+      "minItems": 78,
+      "type": "array"
+    },
+    "triple": {
+      "items": {
+        "maximum": 2,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "triples": {
+      "items": {
+        "$ref": "#/$defs/triple"
+      },
+      "maxItems": 13,
+      "minItems": 13,
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "PG2_F3_ZARANKIEWICZ_EXTREMAL_CERTIFICATE"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_FINITE_PG2_F3_INSTANCE",
+        "EXACT_K22_FREE_PAIR_COUNT_REPLAY",
+        "NO_GENERAL_ZARANKIEWICZ_CONCLUSION"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_count": {
+          "const": 52
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/edge"
+          },
+          "maxItems": 52,
+          "minItems": 52,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "excluded_edge_count": {
+          "const": 53
+        },
+        "left_degrees": {
+          "$ref": "#/$defs/degrees"
+        },
+        "left_pair_common_counts": {
+          "$ref": "#/$defs/pair_counts"
+        },
+        "lines": {
+          "$ref": "#/$defs/triples"
+        },
+        "pair_budget": {
+          "const": 78
+        },
+        "points": {
+          "$ref": "#/$defs/triples"
+        },
+        "right_degrees": {
+          "$ref": "#/$defs/degrees"
+        },
+        "right_pair_common_counts": {
+          "$ref": "#/$defs/pair_counts"
+        }
+      },
+      "required": [
+        "points",
+        "lines",
+        "edges",
+        "left_degrees",
+        "right_degrees",
+        "left_pair_common_counts",
+        "right_pair_common_counts",
+        "edge_count",
+        "pair_budget",
+        "excluded_edge_count"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "pg2-f3-zarankiewicz-k22-extremal-certificate-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/zarankiewicz-projective-plane-certificate"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

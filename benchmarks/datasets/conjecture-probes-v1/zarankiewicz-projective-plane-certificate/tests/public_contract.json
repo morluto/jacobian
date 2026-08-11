@@ -1,0 +1,41 @@
+{
+  "allowed_assurance": ["UNVERIFIED", "COMPUTED", "CHECKED"],
+  "allowed_completeness": ["COMPLETE"],
+  "assurance_ceiling": "CHECKED",
+  "conclusion": {"const": "PG2_F3_ZARANKIEWICZ_EXTREMAL_CERTIFICATE"},
+  "evidence": {"allowed_paths": ["evidence/answer.json"], "digest_pattern": "^sha256:[0-9a-f]{64}$", "max_items": 1, "media_types": ["application/json"], "min_items": 1, "payload_shape": null},
+  "limitations": {"const": ["ONE_FINITE_PG2_F3_INSTANCE", "EXACT_K22_FREE_PAIR_COUNT_REPLAY", "NO_GENERAL_ZARANKIEWICZ_CONCLUSION"]},
+  "public_notes": "Exact PG(2,3) incidence and finite extremal replay only; no general Zarankiewicz conclusion.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.",
+  "required_artifact_filenames": ["evidence/answer.json"],
+  "schema_definitions": {
+    "triple": {"items": {"maximum": 2, "minimum": 0, "type": "integer"}, "maxItems": 3, "minItems": 3, "type": "array"},
+    "triples": {"items": {"$ref": "#/$defs/triple"}, "maxItems": 13, "minItems": 13, "type": "array", "uniqueItems": true},
+    "edge": {"items": {"maximum": 12, "minimum": 0, "type": "integer"}, "maxItems": 2, "minItems": 2, "type": "array"},
+    "degrees": {"items": {"const": 4}, "maxItems": 13, "minItems": 13, "type": "array"},
+    "pair_count": {"additionalProperties": false, "properties": {"pair": {"$ref": "#/$defs/edge"}, "common_neighbors": {"const": 1}}, "required": ["pair", "common_neighbors"], "type": "object"},
+    "pair_counts": {"items": {"$ref": "#/$defs/pair_count"}, "maxItems": 78, "minItems": 78, "type": "array"}
+  },
+  "schema_version": "1",
+  "scope": {"const": "pg2-f3-zarankiewicz-k22-extremal-certificate-v1", "type": "string"},
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "points": {"$ref": "#/$defs/triples"},
+      "lines": {"$ref": "#/$defs/triples"},
+      "edges": {"items": {"$ref": "#/$defs/edge"}, "maxItems": 52, "minItems": 52, "type": "array", "uniqueItems": true},
+      "left_degrees": {"$ref": "#/$defs/degrees"},
+      "right_degrees": {"$ref": "#/$defs/degrees"},
+      "left_pair_common_counts": {"$ref": "#/$defs/pair_counts"},
+      "right_pair_common_counts": {"$ref": "#/$defs/pair_counts"},
+      "edge_count": {"const": 52},
+      "pair_budget": {"const": 78},
+      "excluded_edge_count": {"const": 53}
+    },
+    "required": ["points", "lines", "edges", "left_degrees", "right_degrees", "left_pair_common_counts", "right_pair_common_counts", "edge_count", "pair_budget", "excluded_edge_count"],
+    "type": "object"
+  },
+  "submission_schema": {"$defs":{"degrees":{"items":{"const":4},"maxItems":13,"minItems":13,"type":"array"},"edge":{"items":{"maximum":12,"minimum":0,"type":"integer"},"maxItems":2,"minItems":2,"type":"array"},"pair_count":{"additionalProperties":false,"properties":{"common_neighbors":{"const":1},"pair":{"$ref":"#/$defs/edge"}},"required":["pair","common_neighbors"],"type":"object"},"pair_counts":{"items":{"$ref":"#/$defs/pair_count"},"maxItems":78,"minItems":78,"type":"array"},"triple":{"items":{"maximum":2,"minimum":0,"type":"integer"},"maxItems":3,"minItems":3,"type":"array"},"triples":{"items":{"$ref":"#/$defs/triple"},"maxItems":13,"minItems":13,"type":"array","uniqueItems":true}},"$schema":"https://json-schema.org/draft/2020-12/schema","additionalProperties":false,"properties":{"claimed_assurance":{"enum":["UNVERIFIED","COMPUTED","CHECKED","VERIFIED"]},"completeness":{"const":"COMPLETE"},"conclusion":{"const":"PG2_F3_ZARANKIEWICZ_EXTREMAL_CERTIFICATE"},"evidence":{"items":{"additionalProperties":false,"properties":{"path":{"const":"evidence/answer.json"},"sha256":{"pattern":"^sha256:[0-9a-f]{64}$","type":"string"}},"required":["path","sha256"],"type":"object"},"maxItems":1,"minItems":1,"type":"array"},"limitations":{"const":["ONE_FINITE_PG2_F3_INSTANCE","EXACT_K22_FREE_PAIR_COUNT_REPLAY","NO_GENERAL_ZARANKIEWICZ_CONCLUSION"]},"result":{"additionalProperties":false,"properties":{"edge_count":{"const":52},"edges":{"items":{"$ref":"#/$defs/edge"},"maxItems":52,"minItems":52,"type":"array","uniqueItems":true},"excluded_edge_count":{"const":53},"left_degrees":{"$ref":"#/$defs/degrees"},"left_pair_common_counts":{"$ref":"#/$defs/pair_counts"},"lines":{"$ref":"#/$defs/triples"},"pair_budget":{"const":78},"points":{"$ref":"#/$defs/triples"},"right_degrees":{"$ref":"#/$defs/degrees"},"right_pair_common_counts":{"$ref":"#/$defs/pair_counts"}},"required":["points","lines","edges","left_degrees","right_degrees","left_pair_common_counts","right_pair_common_counts","edge_count","pair_budget","excluded_edge_count"],"type":"object"},"scope":{"const":"pg2-f3-zarankiewicz-k22-extremal-certificate-v1","type":"string"},"task_id":{"const":"jacobian/zarankiewicz-projective-plane-certificate"}},"required":["task_id","conclusion","result","claimed_assurance","scope","completeness","evidence","limitations"],"type":"object"},
+  "task_id": "jacobian/zarankiewicz-projective-plane-certificate",
+  "verification_record": null
+}

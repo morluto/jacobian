@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-`graph.invariant.maximum_matching.compute` version `2` returns a feasible
+`graph.invariant.maximum_matching.compute` version `3` returns a feasible
 matching together with a Tutte–Berge barrier certificate. The producer remains
 `COMPUTED`. An operator-authorized
 `graph.invariant.maximum_matching.verify` capability may promote the exact
@@ -21,8 +21,11 @@ runtime. It does not certify a graph supplied directly by the caller, a
 different matching, or any theorem that uses the matching as an intermediate
 fact.
 
-The producer accepts at most 32 vertices and 496 edges. The independent checker
-uses only bounded standard-library graph traversal. It imports neither
+The producer accepts at most 64 vertices and 2,016 edges through a
+matching-specific graph contract. Other graph invariants retain their own
+existing bounds; this does not broaden coloring or exponential graph-search
+operations. The independent checker uses only bounded standard-library graph
+traversal. It imports neither
 NetworkX, which constructs the matching and certificate, nor Python-FLINT,
 which serves unrelated polynomial and matrix checkers.
 

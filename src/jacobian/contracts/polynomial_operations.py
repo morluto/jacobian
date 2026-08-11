@@ -6,10 +6,17 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
+from jacobian.contracts.exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalInteger,
+    CanonicalRational,
+)
 from jacobian.contracts.polynomials import (
+    MAX_POLYNOMIAL_TERMS,
+    MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalPolynomial,
+    require_polynomial_budget,
 )
 from jacobian.contracts.results import ContractModel
 
@@ -24,42 +31,11 @@ _MAX_ELEMENTARY_DEGREE = 127
 _MAX_INTEGER_COEFFICIENT_DIGITS = 256
 
 
-def _coefficient_digits(polynomial: RationalPolynomial) -> int:
-    return max(
-        (
-            max(
-                len(term.coefficient.num.lstrip("-")),
-                len(term.coefficient.den),
-            )
-            for term in polynomial.polynomial.terms
-        ),
-        default=1,
-    )
-
-
 def _degree(polynomial: RationalPolynomial, variable_index: int) -> int:
     return max(
         (term.exponents[variable_index] for term in polynomial.polynomial.terms),
         default=0,
     )
-
-
-def _require_polynomial_budget(
-    polynomial: RationalPolynomial,
-    *,
-    maximum_terms: int,
-    maximum_exponent: int,
-) -> None:
-    if len(polynomial.polynomial.terms) > maximum_terms:
-        raise ValueError("polynomial exceeds the operation term budget")
-    if _coefficient_digits(polynomial) > _MAX_COEFFICIENT_DIGITS:
-        raise ValueError("polynomial coefficient exceeds the decimal-digit budget")
-    if any(
-        exponent > maximum_exponent
-        for term in polynomial.polynomial.terms
-        for exponent in term.exponents
-    ):
-        raise ValueError("polynomial exponent exceeds the operation degree budget")
 
 
 class PolynomialPairRequest(ContractModel):
@@ -81,7 +57,7 @@ class PolynomialGcdRequest(PolynomialPairRequest):
         if len(self.left.variables) != 1:
             raise ValueError("Bézout GCD currently supports one variable over QQ")
         for polynomial in (self.left, self.right):
-            _require_polynomial_budget(
+            require_polynomial_budget(
                 polynomial,
                 maximum_terms=_MAX_GCD_TERMS,
                 maximum_exponent=_MAX_GCD_DEGREE,
@@ -108,7 +84,7 @@ class PolynomialResultantRequest(PolynomialPairRequest):
         if self.elimination_variable not in self.left.variables:
             raise ValueError("elimination variable must belong to the declared ring")
         for polynomial in (self.left, self.right):
-            _require_polynomial_budget(
+            require_polynomial_budget(
                 polynomial,
                 maximum_terms=_MAX_INVARIANT_TERMS,
                 maximum_exponent=_MAX_ELIMINATION_DEGREE_SUM,
@@ -130,7 +106,7 @@ class PolynomialDiscriminantRequest(ContractModel):
     def require_discriminant_budget(self) -> Self:
         if self.variable not in self.polynomial.variables:
             raise ValueError("discriminant variable must belong to the declared ring")
-        _require_polynomial_budget(
+        require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_INVARIANT_TERMS,
             maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
@@ -174,7 +150,7 @@ class PolynomialSquareFreeRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_square_free_budget(self) -> Self:
-        _require_polynomial_budget(
+        require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_SQUARE_FREE_EXPONENT,
@@ -208,6 +184,76 @@ class PolynomialSquareFreeDecompositionResult(ContractModel):
         return self
 
 
+class PolynomialFactorRequest(ContractModel):
+    """Univariate factorization request over ``QQ``."""
+
+    polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_univariate_factor_budget(self) -> Self:
+        if len(self.polynomial.variables) != 1:
+            raise ValueError("factorization currently supports one variable over QQ")
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=_MAX_GCD_TERMS,
+            maximum_exponent=_MAX_GCD_DEGREE,
+        )
+        return self
+
+
+class PolynomialIrreducibleFactor(ContractModel):
+    factor: RationalPolynomial
+    multiplicity: int = Field(ge=1, le=_MAX_GCD_DEGREE)
+
+
+class PolynomialFactorizationResult(ContractModel):
+    coefficient: CanonicalRational
+    factors: tuple[PolynomialIrreducibleFactor, ...] = Field(max_length=64)
+    reconstructed: RationalPolynomial
+    normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
+        "CONTENT_AND_MONIC_IRREDUCIBLES"
+    )
+    irreducibility_assurance: Literal["UNVERIFIED"] = "UNVERIFIED"
+    product_reconstruction: Literal["EXACT"] = "EXACT"
+
+    @model_validator(mode="after")
+    def require_canonical_irreducible_records(self) -> Self:
+        if any(
+            factor.factor.variables != self.reconstructed.variables
+            for factor in self.factors
+        ):
+            raise ValueError("irreducible factors must use the source ring")
+        ordered = tuple(
+            sorted(
+                self.factors,
+                key=lambda record: (
+                    record.multiplicity,
+                    max(
+                        (
+                            sum(term.exponents)
+                            for term in record.factor.polynomial.terms
+                        ),
+                        default=0,
+                    ),
+                    tuple(
+                        (
+                            term.exponents,
+                            term.coefficient.num,
+                            term.coefficient.den,
+                        )
+                        for term in record.factor.polynomial.terms
+                    ),
+                ),
+            )
+        )
+        if self.factors != ordered:
+            raise ValueError(
+                "irreducible factors must be ordered by multiplicity, degree, "
+                "and sparse term fingerprint"
+            )
+        return self
+
+
 class PolynomialGroebnerBudget(ContractModel):
     """Enforced wall and result limits for one isolated Gröbner computation."""
 
@@ -231,17 +277,23 @@ class PolynomialGroebnerBasisRequest(ContractModel):
         if sum(len(generator.polynomial.terms) for generator in self.generators) > 256:
             raise ValueError("ideal generators exceed the aggregate term budget")
         for generator in self.generators:
-            if _coefficient_digits(generator) > 128:
-                raise ValueError(
-                    "ideal generator coefficient exceeds the decimal-digit budget"
-                )
+            require_polynomial_budget(
+                generator,
+                maximum_terms=MAX_POLYNOMIAL_TERMS,
+                maximum_exponent=12,
+                maximum_coefficient_digits=128,
+                label="ideal generator",
+            )
             if any(sum(term.exponents) > 12 for term in generator.polynomial.terms):
                 raise ValueError("ideal generator exceeds total degree 12")
         return self
 
 
 class PolynomialGroebnerBasisResult(ContractModel):
-    variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"]
     basis: tuple[RationalPolynomial, ...] = Field(max_length=64)
     completion: Literal["COMPLETE"] = "COMPLETE"
@@ -284,7 +336,7 @@ class IntegerPolynomial(ContractModel):
     coefficient_order: Literal["DESCENDING_DEGREE"] = "DESCENDING_DEGREE"
     coefficients: tuple[CanonicalInteger, ...] = Field(
         min_length=1,
-        max_length=_MAX_ELEMENTARY_DEGREE + 1,
+        max_length=MAX_POLYNOMIAL_TERMS,
     )
 
     @model_validator(mode="after")
@@ -292,15 +344,32 @@ class IntegerPolynomial(ContractModel):
         if len(self.coefficients) > 1 and self.coefficients[0] == "0":
             raise ValueError("leading zero coefficients must be omitted")
         if any(
-            len(coefficient.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS
+            len(coefficient.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
             for coefficient in self.coefficients
         ):
-            raise ValueError("integer coefficient exceeds the decimal-digit budget")
+            raise ValueError(
+                "integer coefficient exceeds the shared representation limit"
+            )
         return self
+
+
+def _require_integer_polynomial_budget(polynomial: IntegerPolynomial) -> None:
+    if len(polynomial.coefficients) > _MAX_ELEMENTARY_DEGREE + 1:
+        raise ValueError("integer polynomial exceeds the degree-127 operation budget")
+    if any(
+        len(coefficient.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS
+        for coefficient in polynomial.coefficients
+    ):
+        raise ValueError("integer coefficient exceeds the decimal-digit budget")
 
 
 class IntegerPolynomialRequest(ContractModel):
     polynomial: IntegerPolynomial
+
+    @model_validator(mode="after")
+    def require_operation_budget(self) -> Self:
+        _require_integer_polynomial_budget(self.polynomial)
+        return self
 
 
 class IntegerPolynomialShiftRequest(IntegerPolynomialRequest):
@@ -316,6 +385,12 @@ class IntegerPolynomialShiftResult(ContractModel):
 class IntegerPolynomialPairRequest(ContractModel):
     left: IntegerPolynomial
     right: IntegerPolynomial
+
+    @model_validator(mode="after")
+    def require_operation_budget(self) -> Self:
+        _require_integer_polynomial_budget(self.left)
+        _require_integer_polynomial_budget(self.right)
+        return self
 
 
 class IntegerPolynomialGcdResult(ContractModel):
@@ -361,6 +436,8 @@ class IntegerPolynomialCompositionRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_bounded_output_degree(self) -> Self:
+        _require_integer_polynomial_budget(self.outer)
+        _require_integer_polynomial_budget(self.inner)
         outer_degree = len(self.outer.coefficients) - 1
         inner_degree = len(self.inner.coefficients) - 1
         if outer_degree * inner_degree > _MAX_ELEMENTARY_DEGREE:
@@ -379,7 +456,7 @@ class RationalPolynomialRequest(ContractModel):
     def require_univariate_budget(self) -> Self:
         if len(self.polynomial.variables) != 1:
             raise ValueError("elementary polynomial operations require one variable")
-        _require_polynomial_budget(
+        require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_GCD_TERMS,
             maximum_exponent=_MAX_ELEMENTARY_DEGREE,
@@ -395,7 +472,7 @@ class RationalPolynomialDivisionRequest(PolynomialPairRequest):
         if not self.right.polynomial.terms:
             raise ValueError("divisor polynomial must be nonzero")
         for polynomial in (self.left, self.right):
-            _require_polynomial_budget(
+            require_polynomial_budget(
                 polynomial,
                 maximum_terms=_MAX_GCD_TERMS,
                 maximum_exponent=_MAX_ELEMENTARY_DEGREE,
@@ -440,7 +517,7 @@ class RationalFunctionRequest(ContractModel):
         if not self.denominator.polynomial.terms:
             raise ValueError("denominator polynomial must be nonzero")
         for polynomial in (self.numerator, self.denominator):
-            _require_polynomial_budget(
+            require_polynomial_budget(
                 polynomial,
                 maximum_terms=_MAX_INVARIANT_TERMS,
                 maximum_exponent=_MAX_ELEMENTARY_DEGREE,
@@ -476,6 +553,8 @@ __all__ = [
     "PolynomialBezoutIdentity",
     "PolynomialDiscriminantRequest",
     "PolynomialDiscriminantResult",
+    "PolynomialFactorRequest",
+    "PolynomialFactorizationResult",
     "PolynomialGcdRequest",
     "PolynomialGcdResult",
     "PolynomialGroebnerBasisObligation",
@@ -483,6 +562,7 @@ __all__ = [
     "PolynomialGroebnerBasisResult",
     "PolynomialGroebnerBudget",
     "PolynomialInvariantValue",
+    "PolynomialIrreducibleFactor",
     "PolynomialPairRequest",
     "PolynomialResultantRequest",
     "PolynomialResultantResult",

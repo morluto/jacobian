@@ -14,4 +14,4 @@ def test_rejects_boolean_joint_gcd(tmp_path: Path) -> None:
     submission["result"]["joint_gcd"] = True
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
+    assert rejected.details["correctness"] == 0.0

@@ -21,7 +21,6 @@ REQUIRED_TOOLS = {
     "math.find",
     "math.run",
 }
-OPTIONAL_TOOLS = {"reasoning.write"}
 DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
 
 
@@ -102,7 +101,7 @@ async def inspect(
         listed = await client.list_tools()
         tool_names = {tool.name for tool in listed.tools}
         missing = sorted(REQUIRED_TOOLS - tool_names)
-        unexpected = sorted(tool_names - REQUIRED_TOOLS - OPTIONAL_TOOLS)
+        unexpected = sorted(tool_names - REQUIRED_TOOLS)
         if missing:
             failures.append(
                 f"deployed MCP tool surface is missing required tools: {missing!r}"

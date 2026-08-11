@@ -135,7 +135,8 @@ class LazyLoader[ImplementationT]:
                 raise LazyLoadError(f"{self._component_id} loader is closed")
             if state is LoaderState.LOADED:
                 # state is LOADED only when _implementation was assigned.
-                assert self._implementation is not None
+                if self._implementation is None:
+                    raise RuntimeError("provider implementation is unexpectedly None")
                 return self._implementation
             if state is LoaderState.LOADING:
                 raise LazyLoadError(
@@ -143,7 +144,8 @@ class LazyLoader[ImplementationT]:
                 )
             if state is LoaderState.FAILED:
                 # state is FAILED only when _error was assigned.
-                assert self._error is not None
+                if self._error is None:
+                    raise RuntimeError("provider error is unexpectedly None")
                 raise self._error
             self._state = LoaderState.LOADING
             try:

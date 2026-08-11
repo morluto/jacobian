@@ -14,10 +14,12 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.tooling.command_runner import (
-    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
-    run_tool_command,
+)
+from benchmarks.tooling.spike_utils import (
+    default_runner,
+    sha256_bytes,
 )
 
 PIN_PATH = Path(__file__).with_name("cgal_delaunay_pin.json")
@@ -30,38 +32,12 @@ _ENVIRONMENT = {"LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
 ProcessRunner = Callable[..., ToolCommandResult]
 
 
-def _default_runner(
-    command: Sequence[str],
-    *,
-    input_bytes: bytes,
-    timeout_seconds: float,
-    environment: Mapping[str, str],
-    stdout_limit: int,
-    stderr_limit: int,
-) -> ToolCommandResult:
-    request = ToolCommandRequest(
-        executable=command[0],
-        arguments=tuple(command[1:]),
-        environment=environment,
-        cwd=str(Path.cwd()),
-        timeout_seconds=timeout_seconds,
-        stdin_bytes=input_bytes,
-        stdout_limit_bytes=stdout_limit,
-        stderr_limit_bytes=stderr_limit,
-    )
-    return run_tool_command(request)
-
-
 class CgalSpikeError(RuntimeError):
     def __init__(self, status: str, code: str, detail: str) -> None:
         super().__init__(detail)
         self.status = status
         self.code = code
         self.detail = detail
-
-
-def _sha256_bytes(payload: bytes) -> str:
-    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
 def _sha256_file(path: Path) -> str:
@@ -279,7 +255,7 @@ def run_spike(
     executable: Path,
     source_archive: Path,
     timeout_seconds: float = 5,
-    runner: ProcessRunner = _default_runner,
+    runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
     adapter_source: Path = ADAPTER_SOURCE,
 ) -> dict[str, Any]:
@@ -325,14 +301,14 @@ def run_spike(
                 ) from exc
             if (
                 decoded != case["expected_output"]
-                or _sha256_bytes(output) != case["expected_output_sha256"]
+                or sha256_bytes(output) != case["expected_output_sha256"]
             ):
                 raise CgalSpikeError(
                     "REJECTED",
                     "REPRODUCTION_MISMATCH",
                     f"The CGAL {name} reproduction differs from the frozen result.",
                 )
-            observed[name] = _sha256_bytes(output)
+            observed[name] = sha256_bytes(output)
         compiler_support = _compiler_support(
             toolchain["compiler"],
             pin["supported_gnu_compiler_minimum"],

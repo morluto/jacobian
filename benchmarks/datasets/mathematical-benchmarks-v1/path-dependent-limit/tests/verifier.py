@@ -8,6 +8,7 @@ from pathlib import Path
 from verifier_support import (
     false_verified_claim,
     load_submission,
+    normalize_reward_file,
     resolve_evidence,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -276,6 +277,7 @@ def main() -> None:
     destination = Path("/logs/verifier/reward.json")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(result, sort_keys=True) + "\n")
+    normalize_reward_file(destination)
 
 
 if __name__ == "__main__":

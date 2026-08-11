@@ -53,9 +53,9 @@ def test_unordered_public_answer_is_rejected():
 def test_reference_submission_passes_with_protocol_diagnostic(tmp_path: Path):
     task, app, logs = _case(tmp_path)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 1.0
-    assert result["correctness"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["protocol_compliance"] == 1.0
+    assert result.details["correctness"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_empty_evidence_is_rejected_without_losing_mathematical_diagnostic(
@@ -70,9 +70,9 @@ def test_empty_evidence_is_rejected_without_losing_mathematical_diagnostic(
     support._write_json(app / "submission.json", submission)
 
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_extra_result_field_is_protocol_failure_only(tmp_path: Path):
@@ -82,9 +82,9 @@ def test_extra_result_field_is_protocol_failure_only(tmp_path: Path):
     _rewrite(app, submission)
 
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_duplicate_probe_is_rejected_as_malformed_and_incorrect(tmp_path: Path):
@@ -94,9 +94,9 @@ def test_duplicate_probe_is_rejected_as_malformed_and_incorrect(tmp_path: Path):
     _rewrite(app, submission)
 
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["correctness"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_non_string_pair_semantics_does_not_crash(tmp_path: Path):
@@ -105,8 +105,8 @@ def test_non_string_pair_semantics_does_not_crash(tmp_path: Path):
     submission["result"]["pair_semantics"] = ["ORDERED"]
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_keyword_only_evidence_is_rejected(tmp_path: Path):
@@ -125,8 +125,8 @@ def test_keyword_only_evidence_is_rejected(tmp_path: Path):
     )
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_recursive_evidence_marker_does_not_crash(tmp_path: Path):
@@ -144,8 +144,8 @@ def test_recursive_evidence_marker_does_not_crash(tmp_path: Path):
     )
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_scope_accuracy_independent_of_conclusion_mismatch(tmp_path: Path):
@@ -156,9 +156,9 @@ def test_scope_accuracy_independent_of_conclusion_mismatch(tmp_path: Path):
     submission["conclusion"] = "UNSUPPORTED"
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["scope_accuracy"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["scope_accuracy"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_wrong_limitation_reported_as_protocol_failure(tmp_path: Path):
@@ -169,5 +169,5 @@ def test_wrong_limitation_reported_as_protocol_failure(tmp_path: Path):
     submission["limitations"] = ["wrong limitation text"]
     _rewrite(app, submission)
     result = support._run_verifier(task, app, logs)
-    assert result["protocol_compliance"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["protocol_compliance"] == 0.0
+    assert result.reward == 0.0

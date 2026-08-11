@@ -6,12 +6,18 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.capability_service import CapabilityInvocationError
+from jacobian.contracts.capabilities import (
+    CapabilityAssuranceLevel,
+    CapabilityRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
     build_graph_invariant_bundle,
     build_graph_optimization_bundle,
 )
+from jacobian.graphs import atlas_search, invariants
+from jacobian.graphs.artifacts import nx
 
 
 @pytest.fixture
@@ -104,7 +110,7 @@ def test_maximum_matching_and_star_conventions(domain_services) -> None:
             "upper_bound": 2,
         },
     }
-    assert matching.capability_version == "2"
+    assert matching.capability_version == "3"
 
     star = domain_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -125,6 +131,48 @@ def test_maximum_matching_and_star_conventions(domain_services) -> None:
         "odd_component_count": 3,
         "upper_bound": 1,
     }
+
+
+def test_maximum_matching_has_a_capability_specific_64_vertex_bound(
+    domain_services,
+) -> None:
+    vertices = [f"v{index:02d}" for index in range(64)]
+    edges = [[vertices[index], vertices[index + 1]] for index in range(0, 64, 2)]
+
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input={"graph": _graph(vertices, edges)},
+        )
+    )
+
+    assert result.output["result"]["maximum_matching_cardinality"] == 32
+    assert result.output["result"]["witness_edges"] == edges
+    assert result.output["result"]["certificate"] == {
+        "certificate_schema_version": "1",
+        "kind": "TUTTE_BERGE_BARRIER",
+        "barrier_vertices": [],
+        "odd_component_count": 0,
+        "upper_bound": 32,
+    }
+
+    too_large = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input={"graph": _graph([*vertices, "v64"], edges)},
+        )
+    )
+    assert too_large.execution.status is ExecutionStatus.ERROR
+    assert too_large.diagnostics[0].code == "INVALID_REQUEST"
+
+    unrelated_invariant = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.diameter.compute",
+            input={"graph": _graph(vertices[:33], edges[:16])},
+        )
+    )
+    assert unrelated_invariant.execution.status is ExecutionStatus.ERROR
+    assert unrelated_invariant.diagnostics[0].code == "INVALID_REQUEST"
 
 
 def test_disconnected_and_acyclic_graph_conventions(domain_services) -> None:
@@ -204,6 +252,42 @@ _CYCLE_5 = {
 }
 
 
+class _InconsistentCliqueBackend:
+    def __init__(self, backend: object) -> None:
+        self._backend = backend
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._backend, name)
+
+    def max_weight_clique(
+        self, *_args: object, **_kwargs: object
+    ) -> tuple[set[object], int]:
+        return set(), 1
+
+
+@pytest.mark.parametrize(
+    "compute",
+    (
+        lambda graph: invariants._independence_number_property(
+            graph, "independence_number"
+        ),
+        atlas_search._compute_all_properties,
+    ),
+)
+def test_graph_backends_with_inconsistent_independence_results_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    compute,
+) -> None:
+    backend = _InconsistentCliqueBackend(nx())
+    monkeypatch.setattr(invariants, "nx", lambda: backend)
+    monkeypatch.setattr(atlas_search, "nx", lambda: backend)
+
+    with pytest.raises(CapabilityInvocationError) as caught:
+        compute(nx().path_graph(2))
+
+    assert caught.value.diagnostic.code == "INCONSISTENT_INDEPENDENCE_RESULT"
+
+
 @pytest.mark.parametrize(
     ("capability_id", "optimum"),
     [
@@ -237,3 +321,65 @@ def test_np_hard_invariants_are_budgeted_and_carry_obligations(
     assert len(result.artifact_uris) == 3
     obligation = domain_services.core.store.get(result.obligations[0].obligation_uri)
     assert obligation.payload["claimed_value"] == optimum
+
+
+def test_graph_invariant_resource_atomics_are_exact_computed(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
+        (
+            "graph.invariant.triangle_count.compute",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                }
+            },
+            {"triangle_count": 1},
+        ),
+        (
+            "graph.invariant.radius.compute",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                }
+            },
+            {
+                "status": "COMPUTED",
+                "radius": 1,
+                "connected": True,
+                "exactness": "EXACT",
+                "detail": None,
+            },
+        ),
+        (
+            "graph.invariant.radius.compute",
+            {"graph": {"vertices": [], "edges": []}},
+            {
+                "status": "NOT_APPLICABLE",
+                "radius": None,
+                "connected": False,
+                "exactness": "NOT_APPLICABLE",
+                "detail": "radius requires a nonempty connected graph",
+            },
+        ),
+        (
+            "graph.k_core.compute",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c", "d"],
+                    "edges": [["a", "b"], ["a", "c"], ["b", "c"], ["c", "d"]],
+                },
+                "k": 2,
+            },
+            {"k": 2, "vertices": ["a", "b", "c"]},
+        ),
+    )
+    for capability_id, payload, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
+        )
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+        assert result.output["result"] == expected

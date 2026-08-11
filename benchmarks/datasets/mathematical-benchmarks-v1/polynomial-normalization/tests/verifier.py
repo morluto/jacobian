@@ -5,6 +5,7 @@ from pathlib import Path
 from verifier_support import (
     aggregate_reward,
     authorized_record_is_bound,
+    normalize_reward_file,
     sha256_uri,
     workspace_input_is_bound,
 )
@@ -211,6 +212,7 @@ def main():
             }
         )
     )
+    normalize_reward_file(Path("/logs/verifier/reward.json"))
 
 
 if __name__ == "__main__":

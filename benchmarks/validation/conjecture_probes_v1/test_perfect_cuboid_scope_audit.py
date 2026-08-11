@@ -52,8 +52,8 @@ def test_oracle_and_reordered_cases_receive_full_reward(tmp_path: Path) -> None:
     submission["result"]["cases"].reverse()
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["aggregate_reward"] == 1.0
-    assert reward["mathematics"] == 1.0
+    assert reward.details["aggregate_reward"] == 1.0
+    assert reward.details["mathematics"] == 1.0
 
 
 def test_reordered_aligned_face_pairs_receive_full_reward(tmp_path: Path) -> None:
@@ -63,7 +63,7 @@ def test_reordered_aligned_face_pairs_receive_full_reward(tmp_path: Path) -> Non
     row["face_radicands"] = [row["face_radicands"][index] for index in order]
     row["face_roots"] = [row["face_roots"][index] for index in order]
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_euler_brick_cannot_be_promoted_to_perfect_cuboid(tmp_path: Path) -> None:
@@ -72,39 +72,39 @@ def test_euler_brick_cannot_be_promoted_to_perfect_cuboid(tmp_path: Path) -> Non
     submission["result"]["contains_perfect_cuboid"] = True
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["mathematics"] == 0.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["mathematics"] == 0.0
+    assert reward.details["aggregate_reward"] == 0.0
 
 
 def test_wrong_root_omission_and_duplicate_fail_closed(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["result"]["cases"][0]["space_root"] = 271
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
 
     app, logs, submission = _case(tmp_path / "missing")
     submission["result"]["cases"].pop()
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
 
     app, logs, submission = _case(tmp_path / "duplicate")
     submission["result"]["cases"][-1] = submission["result"]["cases"][0]
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_false_global_scope_and_verified_claim_fail_closed(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["scope"] = "all-positive-integer-cuboids"
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
 
     app, logs, submission = _case(tmp_path / "verified")
     submission["claimed_assurance"] = "VERIFIED"
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["false_certification"] is True
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["false_certification"] is True
+    assert reward.details["aggregate_reward"] == 0.0
 
 
 def test_tampered_input_and_evidence_are_rejected(tmp_path: Path) -> None:
@@ -114,16 +114,16 @@ def test_tampered_input_and_evidence_are_rejected(tmp_path: Path) -> None:
     (app / "input.json").write_text(json.dumps(frozen))
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["input_binding"] == 0.0
-    assert reward["mathematics"] == 1.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["input_binding"] == 0.0
+    assert reward.details["mathematics"] == 1.0
+    assert reward.details["aggregate_reward"] == 0.0
 
     app, logs, submission = _case(tmp_path / "evidence")
     _write(app, submission)
     (app / "evidence/answer.txt").write_text("{}\n")
     reward = _run(app, logs)
-    assert reward["evidence"] == 0.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["evidence"] == 0.0
+    assert reward.details["aggregate_reward"] == 0.0
 
 
 def test_oversized_evidence_fails_closed(tmp_path: Path) -> None:
@@ -135,5 +135,5 @@ def test_oversized_evidence_fails_closed(tmp_path: Path) -> None:
     )
     (app / "submission.json").write_text(json.dumps(submission) + "\n")
     reward = _run(app, logs)
-    assert reward["evidence"] == 0.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["evidence"] == 0.0
+    assert reward.details["aggregate_reward"] == 0.0

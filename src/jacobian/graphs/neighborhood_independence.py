@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -78,7 +77,6 @@ class GraphNeighborhoodIndependenceAdapter:
                     else ()
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(GraphNeighborhoodIndependenceRequest),
             output_schema=model_schema(GraphNeighborhoodIndependenceOutput),
             tags=(
@@ -227,7 +225,6 @@ class GraphNeighborhoodIndependenceAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms(started),

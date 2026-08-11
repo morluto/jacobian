@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from math import comb, gcd
+from math import comb, gcd, lcm
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.results import ContractModel
 
@@ -23,15 +24,9 @@ def _primitive_integer_triple(
     coefficients: tuple[CanonicalRational, CanonicalRational, CanonicalRational],
 ) -> tuple[int, int, int]:
     fractions = tuple(coefficient.as_fraction() for coefficient in coefficients)
-    denominator_lcm = 1
-    for coefficient in fractions:
-        denominator_lcm = (
-            denominator_lcm
-            * coefficient.denominator
-            // gcd(denominator_lcm, coefficient.denominator)
-        )
+    common_denominator = lcm(*(coefficient.denominator for coefficient in fractions))
     integers = tuple(
-        coefficient.numerator * (denominator_lcm // coefficient.denominator)
+        coefficient.numerator * (common_denominator // coefficient.denominator)
         for coefficient in fractions
     )
     divisor = 0
@@ -40,8 +35,7 @@ def _primitive_integer_triple(
     if divisor == 0:
         raise ValueError("a projective line coefficient triple must be nonzero")
     primitive = tuple(value // divisor for value in integers)
-    first = next(value for value in primitive if value)
-    if first < 0:
+    if next(value for value in primitive if value) < 0:
         primitive = tuple(-value for value in primitive)
     return (primitive[0], primitive[1], primitive[2])
 
@@ -94,10 +88,13 @@ class PrimitiveProjectiveTriple(ContractModel):
     @model_validator(mode="after")
     def require_canonical_primitive_coordinates(self) -> Self:
         try:
-            values = tuple(int(value) for value in self.coordinates)
+            values = tuple(parse_canonical_integer(value) for value in self.coordinates)
         except ValueError as exc:
             raise ValueError("projective coordinates must be integer strings") from exc
-        if tuple(str(value) for value in values) != self.coordinates:
+        if (
+            tuple(format_canonical_integer(value) for value in values)
+            != self.coordinates
+        ):
             raise ValueError("projective coordinates must be canonical integer strings")
         divisor = 0
         for value in values:

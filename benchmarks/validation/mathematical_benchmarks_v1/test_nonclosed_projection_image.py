@@ -178,9 +178,9 @@ def test_nonclosed_projection_accepts_alternate_diagonal_weights(
             label="alternate",
         )
     )
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == pytest.approx(1.0)
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == pytest.approx(1.0)
 
 
 def test_nonclosed_projection_rejects_token_only_evidence(tmp_path: Path) -> None:
@@ -195,9 +195,9 @@ def test_nonclosed_projection_rejects_token_only_evidence(tmp_path: Path) -> Non
             label="token_only",
         )
     )
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_nonclosed_projection_rejects_missing_proof_obligation(
@@ -213,9 +213,9 @@ def test_nonclosed_projection_rejects_missing_proof_obligation(
             label="missing_obligation",
         )
     )
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_nonclosed_projection_rejects_keyword_only_proof_argument(
@@ -231,9 +231,9 @@ def test_nonclosed_projection_rejects_keyword_only_proof_argument(
             label="keyword_only",
         )
     )
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_nonclosed_projection_ignores_stale_hidden_result_marker(
@@ -259,9 +259,9 @@ def test_nonclosed_projection_ignores_stale_hidden_result_marker(
             label="stale_marker",
         )
     )
-    assert out["correctness"] == 1.0
-    assert out["evidence_validity"] == 1.0
-    assert out["reward"] == pytest.approx(1.0)
+    assert out.details["correctness"] == 1.0
+    assert out.details["evidence_validity"] == 1.0
+    assert out.reward == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(
@@ -288,8 +288,8 @@ def test_nonclosed_projection_rejects_corrupted_witnesses(
             label=f"corrupt_{field}",
         )
     )
-    assert out["correctness"] == 0.0
-    assert out["reward"] == 0.0
+    assert out.details["correctness"] == 0.0
+    assert out.reward == 0.0
 
 
 def test_nonclosed_projection_solution_satisfies_agent_schema() -> None:

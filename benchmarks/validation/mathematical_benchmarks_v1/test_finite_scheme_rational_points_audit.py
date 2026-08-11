@@ -29,15 +29,15 @@ def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
             ]
         ),
     )
-    assert reward["scope_accuracy"] == 1.0
-    assert reward["reward"] == 1.0
+    assert reward.details["scope_accuracy"] == 1.0
+    assert reward.reward == 1.0
 
 
 def test_oracle_countermodel_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     reward = support._run_verifier(task, app, logs)
-    assert reward["correctness"] == 1.0
-    assert reward["reward"] == 1.0
+    assert reward.details["correctness"] == 1.0
+    assert reward.reward == 1.0
 
 
 def test_published_evidence_sentence_needs_no_private_marker(tmp_path: Path) -> None:
@@ -51,39 +51,39 @@ def test_published_evidence_sentence_needs_no_private_marker(tmp_path: Path) -> 
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["evidence_validity"] == 1.0
-    assert reward["reward"] == 1.0
+    assert reward.details["evidence_validity"] == 1.0
+    assert reward.reward == 1.0
 
 
 def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     (app / "input.json").write_text("{}")
     reward = support._run_verifier(task, app, logs)
-    assert reward["input_binding"] == 0.0
-    assert reward["correctness"] == 1.0
-    assert reward["reward"] == 0.0
+    assert reward.details["input_binding"] == 0.0
+    assert reward.details["correctness"] == 1.0
+    assert reward.reward == 0.0
 
 
 def test_corrupted_multiplication_table_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(
         tmp_path, lambda s: s["result"]["a_multiplication"][3][3].__setitem__(4, 0)
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_incomplete_rational_point_enumeration_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(tmp_path, lambda s: s["result"]["a_points"].pop())
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_nonmultiplicative_morphism_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(
         tmp_path, lambda s: s["result"]["morphism_columns"][0].__setitem__(3, 1)
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_valid_but_unspecified_morphism_is_rejected(tmp_path: Path) -> None:
@@ -98,15 +98,15 @@ def test_valid_but_unspecified_morphism_is_rejected(tmp_path: Path) -> None:
             ],
         ),
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_bad_scope_preserves_math_diagnostic(tmp_path: Path) -> None:
     reward = _mutate(tmp_path, lambda s: s.__setitem__("scope", "wrong"))
-    assert reward["correctness"] == 1.0
-    assert reward["scope_accuracy"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 1.0
+    assert reward.details["scope_accuracy"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_false_nilpotent_order_is_rejected(tmp_path: Path) -> None:
@@ -114,14 +114,14 @@ def test_false_nilpotent_order_is_rejected(tmp_path: Path) -> None:
         tmp_path,
         lambda s: s["result"]["nilpotent"].__setitem__("power2", [0, 0, 0, 0, 0]),
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_false_verified_claim_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(tmp_path, lambda s: s.__setitem__("claimed_assurance", "VERIFIED"))
-    assert reward["false_certification"] is True
-    assert reward["reward"] == 0.0
+    assert reward.details["false_certification"] is True
+    assert reward.reward == 0.0
 
 
 def test_equivalent_evidence_wording_is_accepted(tmp_path: Path) -> None:
@@ -137,8 +137,8 @@ def test_equivalent_evidence_wording_is_accepted(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["evidence_validity"] == 1.0
-    assert reward["reward"] == 1.0
+    assert reward.details["evidence_validity"] == 1.0
+    assert reward.reward == 1.0
 
 
 def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
@@ -149,8 +149,8 @@ def test_unrelated_evidence_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["evidence_validity"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_contradictory_keyword_evidence_is_rejected(tmp_path: Path) -> None:
@@ -165,8 +165,8 @@ def test_contradictory_keyword_evidence_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["evidence_validity"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_large_evidence_is_accepted(tmp_path: Path) -> None:
@@ -183,8 +183,8 @@ def test_large_evidence_is_accepted(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["evidence_validity"] == 1.0
-    assert reward["reward"] == 1.0
+    assert reward.details["evidence_validity"] == 1.0
+    assert reward.reward == 1.0
 
 
 def test_malformed_point_entries_do_not_crash(tmp_path: Path) -> None:
@@ -192,8 +192,8 @@ def test_malformed_point_entries_do_not_crash(tmp_path: Path) -> None:
         tmp_path,
         lambda s: s["result"].__setitem__("a_points", [{}, {}, {}]),
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_wrong_length_nilpotent_vector_does_not_crash(tmp_path: Path) -> None:
@@ -201,8 +201,8 @@ def test_wrong_length_nilpotent_vector_does_not_crash(tmp_path: Path) -> None:
         tmp_path,
         lambda s: s["result"]["nilpotent"].__setitem__("vector", [0, 0, 0, 0, 0, 0]),
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_nonnumeric_nilpotent_vector_does_not_crash(tmp_path: Path) -> None:
@@ -210,5 +210,5 @@ def test_nonnumeric_nilpotent_vector_does_not_crash(tmp_path: Path) -> None:
         tmp_path,
         lambda s: s["result"]["nilpotent"].__setitem__("vector", [0, 0, 0, 0, "x"]),
     )
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0

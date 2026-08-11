@@ -10,12 +10,51 @@ import time
 
 import pytest
 
+import jacobian.bounded_process as bounded_process
 from jacobian.bounded_process import (
     ProcessPlatformTools,
     ProcessResourceLimits,
     bounded_process_cancellation,
     run_bounded_process,
 )
+
+
+def test_process_tree_memory_prefers_pss_over_double_counted_rss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shared mappings contribute their proportional, not full, RSS twice."""
+
+    monkeypatch.setattr(
+        bounded_process,
+        "_collect_linux_processes",
+        lambda: {100: (1, 8_000), 101: (100, 8_000)},
+    )
+    monkeypatch.setattr(
+        bounded_process.sys,
+        "platform",
+        "linux",
+    )
+    monkeypatch.setattr(
+        bounded_process,
+        "_read_proc_pss_bytes",
+        lambda path: {"100": 5_000, "101": 3_000}[path.name],
+    )
+
+    assert bounded_process._linux_process_tree_memory_bytes(100) == 8_000
+
+
+def test_process_tree_memory_falls_back_to_rss_without_smaps_rollup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        bounded_process,
+        "_collect_linux_processes",
+        lambda: {100: (1, 8_000), 101: (100, 8_000)},
+    )
+    monkeypatch.setattr(bounded_process.sys, "platform", "linux")
+    monkeypatch.setattr(bounded_process, "_read_proc_pss_bytes", lambda _path: None)
+
+    assert bounded_process._linux_process_tree_memory_bytes(100) == 16_000
 
 
 @pytest.mark.parametrize("timeout_seconds", [math.inf, math.nan])

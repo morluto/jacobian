@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/zarankiewicz-projective-plane-certificate"
+version="1.0.0"
+description="Construct and independently certify the sharp K2,2-free 13-by-13 incidence bound."
+keywords=["zarankiewicz","projective-plane","finite-field","extremal-graph-theory"]
+[metadata]
+evaluation_kind="conjecture-probe"
+domain="mathematical-sciences"
+primary_domain="graph-theory"
+field="extremal-combinatorics"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:1f2aa383838df8edde061203e2edf40a3b65642ddb24038d3279481901390fc2"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","finite-geometry","incidence-graph","exact-verification","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-finite-conjecture-probe"
+derivation="Derived from retained spreadsheet row C-044; it tests one closed finite extremal slice and makes no global conjecture claim."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

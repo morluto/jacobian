@@ -9,6 +9,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from benchmarks.validation._verifier_child import VerifierOutput, _read_verifier_output
+
 ROOT = Path(__file__).resolve().parents[3]
 DATASET = ROOT / "benchmarks/datasets/symbolic-coordination-v1"
 
@@ -62,7 +64,7 @@ def rebind_evidence(app: Path, submission: dict) -> None:
     write_json(app / "submission.json", submission)
 
 
-def run_verifier(task_path: Path, app: Path, logs: Path) -> dict:
+def run_verifier(task_path: Path, app: Path, logs: Path) -> VerifierOutput:
     concrete_path = type(pathlib.Path())
     original_path = pathlib.Path
     original_dont_write_bytecode = sys.dont_write_bytecode
@@ -92,4 +94,4 @@ def run_verifier(task_path: Path, app: Path, logs: Path) -> dict:
         sys.modules.pop("verifier_support", None)
         sys.dont_write_bytecode = original_dont_write_bytecode
         pathlib.Path = original_path
-    return json.loads((logs / "reward.json").read_text())
+    return _read_verifier_output(logs)

@@ -14,5 +14,5 @@ def test_rejects_corrupted_value(tmp_path: Path) -> None:
     submission["result"]["value"] = 59
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

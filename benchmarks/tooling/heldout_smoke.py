@@ -94,7 +94,8 @@ from pathlib import Path
 correct = Path("/app/submission.txt").read_text().strip() == "blue"
 logs = Path("/logs/verifier")
 logs.mkdir(parents=True, exist_ok=True)
-(logs / "reward.json").write_text(json.dumps({"correctness": float(correct), "false_certification": 0.0, "reward": float(correct)}))
+(logs / "reward.json").write_text(json.dumps({"reward": float(correct)}))
+(logs / "reward-details.json").write_text(json.dumps({"correctness": float(correct), "false_certification": 0.0}))
 """,
     )
     _write(

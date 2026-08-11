@@ -59,7 +59,7 @@ def test_accepts_alternative_ideal_generators_and_fiber_order(tmp_path: Path) ->
     result["fiber_checks"].reverse()
     _bind_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_strictly_smaller_minor_ideal(tmp_path: Path) -> None:
@@ -72,8 +72,8 @@ def test_rejects_strictly_smaller_minor_ideal(tmp_path: Path) -> None:
     _bind_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["correctness"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_rejects_duplicate_monomials_fail_closed(tmp_path: Path) -> None:
@@ -86,8 +86,8 @@ def test_rejects_duplicate_monomials_fail_closed(tmp_path: Path) -> None:
     _bind_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["protocol_compliance"] == 0.0
-    assert reward["correctness"] == 0.0
+    assert reward.details["protocol_compliance"] == 0.0
+    assert reward.details["correctness"] == 0.0
 
 
 def test_rejects_wrong_fiber_rank(tmp_path: Path) -> None:
@@ -96,16 +96,16 @@ def test_rejects_wrong_fiber_rank(tmp_path: Path) -> None:
     submission["result"]["fiber_checks"][0]["matrix_rank"] = 1
     _bind_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
-    assert support._run_verifier(task, app, logs)["correctness"] == 0.0
+    assert support._run_verifier(task, app, logs).details["correctness"] == 0.0
 
 
 def test_visible_input_tamper_fails_closed(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     (app / "input.json").write_text("{}")
     reward = support._run_verifier(task, app, logs)
-    assert reward["input_binding"] == 0.0
-    assert reward["correctness"] == 1.0
-    assert reward["reward"] == 0.0
+    assert reward.details["input_binding"] == 0.0
+    assert reward.details["correctness"] == 1.0
+    assert reward.reward == 0.0
 
 
 def test_scope_diagnostic_is_independent_of_assurance_type(tmp_path: Path) -> None:
@@ -114,9 +114,9 @@ def test_scope_diagnostic_is_independent_of_assurance_type(tmp_path: Path) -> No
     submission["claimed_assurance"] = []
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["scope_accuracy"] == 1.0
-    assert reward["assurance_calibration"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["scope_accuracy"] == 1.0
+    assert reward.details["assurance_calibration"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_unsupported_verified_claim_is_rejected(tmp_path: Path) -> None:
@@ -125,9 +125,9 @@ def test_unsupported_verified_claim_is_rejected(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["false_certification"] is True
-    assert reward["assurance_calibration"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["false_certification"] is True
+    assert reward.details["assurance_calibration"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_evidence_must_bind_submitted_generator_count(tmp_path: Path) -> None:
@@ -142,9 +142,9 @@ def test_evidence_must_bind_submitted_generator_count(tmp_path: Path) -> None:
     )
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["correctness"] == 1.0
-    assert reward["evidence_validity"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 1.0
+    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_oversized_fiber_list_rejected_without_crash(tmp_path: Path) -> None:
@@ -157,9 +157,9 @@ def test_oversized_fiber_list_rejected_without_crash(tmp_path: Path) -> None:
     _bind_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
     reward = support._run_verifier(task, app, logs)
-    assert reward["correctness"] == 0.0
-    assert reward["evidence_validity"] == 0.0
-    assert reward["reward"] == 0.0
+    assert reward.details["correctness"] == 0.0
+    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
 
 
 def test_task_metadata_declares_diagnostics() -> None:

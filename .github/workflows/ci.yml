@@ -8,6 +8,7 @@ on:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   merge_group:
     types: [checks_requested]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -216,6 +217,8 @@ jobs:
         run: make typecheck
       - if: needs.plan.outputs.run-static == 'true'
         run: make test-architecture
+      - if: needs.plan.outputs.run-static == 'true'
+        run: make architecture
       - if: needs.plan.outputs.run-static == 'true'
         run: make todo-check
 
@@ -967,6 +970,9 @@ jobs:
         with:
           node-version: ${{ needs.plan.outputs.node-version-npm }}
           package-manager-cache: false
+      - if: needs.plan.outputs.run-npm == 'true'
+        name: Assert release surfaces agree
+        run: python .github/scripts/check-release-consistency
       - if: needs.plan.outputs.run-npm == 'true'
         run: npm test
         working-directory: npm

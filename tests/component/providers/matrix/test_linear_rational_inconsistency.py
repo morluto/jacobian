@@ -1,196 +1,116 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import pytest
-from tests.support.capabilities import invoke_capability as _invoke
-from tests.support.rationals import rational_payload as _q
-from tests.support.services import open_domain_services
+from tests.support.capabilities import invoke_capability
+from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
-    CapabilityMode,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+    CapabilityRequest,
 )
-from jacobian.contracts.results import ExecutionStatus
-from jacobian.matrices.flint_linear import install_python_flint_inconsistency_capability
-from jacobian.matrices.linear_capabilities import (
-    install_linear_rational_inconsistency_checker,
+from jacobian.contracts.linear import (
+    LinearRationalInconsistencyFindRequest,
+    LinearRationalSolutionFindRequest,
 )
-from jacobian.process_policy import ProcessResult, ProcessTermination
-from jacobian.providers.flint_runtime import python_flint_provider_runtime
-from jacobian.runtime import CheckerAuthorityMode
-from jacobian.runtime.services import CoreServices
+from jacobian.domains.rational_linear import build_rational_linear_bundle
+from jacobian.domains.rational_linear.protocol import (
+    RationalLinearCertificateProduced,
+    RationalLinearSolutionProduced,
+    parse_inconsistency_worker_response,
+    parse_solution_worker_response,
+)
 
 
-def _system(coefficients: list[list[int]], rhs: list[int]) -> dict[str, Any]:
+def _system() -> dict[str, object]:
     return {
-        "variables": [f"x{index}" for index in range(len(coefficients[0]))],
-        "coefficients": {
-            "entries": [[_q(value) for value in row] for row in coefficients]
-        },
-        "rhs": [_q(value) for value in rhs],
+        "system": {
+            "variables": ["x", "y"],
+            "coefficients": {
+                "entries": [
+                    [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+                    [{"num": "2", "den": "1"}, {"num": "2", "den": "1"}],
+                ]
+            },
+            "rhs": [{"num": "1", "den": "1"}, {"num": "3", "den": "1"}],
+        }
     }
 
 
-@dataclass(frozen=True, slots=True)
-class _LinearRuntime:
-    core: CoreServices
-    provider_runtime: CapabilityProviderRuntime
-
-
-@contextmanager
-def _open_runtime(root: Path, *, install_checker: bool) -> Iterator[_LinearRuntime]:
-    authority = (
-        CheckerAuthorityMode.INSTALL_BUNDLED
-        if install_checker
-        else CheckerAuthorityMode.NONE
-    )
-    with open_domain_services(root, checker_authority=authority) as services:
-        runtime = python_flint_provider_runtime()
-        producer = install_python_flint_inconsistency_capability(
-            services.core.linear,
-            runtime,
-        )
-        services.installation.register_capability(producer)
-        if install_checker:
-            adapter, _installation = install_linear_rational_inconsistency_checker(
-                services.core.store,
-                services.core.schemas,
-                services.core.artifacts,
-                services.core.linear,
-                services.installation.verification,
-                services.core.checkers,
-                authorize_checker=True,
-            )
-            assert adapter is not None
-            services.installation.register_capability(adapter)
-        yield _LinearRuntime(core=services.core, provider_runtime=runtime)
-
-
-@pytest.fixture
-def linear_services(tmp_path: Path) -> Iterator[_LinearRuntime]:
-    with _open_runtime(tmp_path, install_checker=False) as services:
-        yield services
-
-
-@pytest.fixture
-def linear_checker_services(tmp_path: Path) -> Iterator[_LinearRuntime]:
-    with _open_runtime(tmp_path, install_checker=True) as services:
-        yield services
-
-
-def test_python_flint_finds_normalized_unverified_inconsistency_witness(
-    linear_services: _LinearRuntime,
-) -> None:
-    runtime = linear_services
-    assert (
-        runtime.provider_runtime.availability
-        is CapabilityProviderAvailability.AVAILABLE
-    )
-    result = _invoke(
-        runtime,
-        "linear.rational_inconsistency.find",
+def test_rational_linear_worker_payloads_bind_status_and_source_dimensions() -> None:
+    solution_request = LinearRationalSolutionFindRequest.model_validate(
         {
-            "system": _system([[1, 1], [2, 2]], [1, 3]),
-            "resource_budget": {"wall_seconds": 5},
-        },
-        mode=CapabilityMode.EXPLORE,
+            **_system(),
+            "system": {
+                **_system()["system"],
+                "rhs": [{"num": "3", "den": "1"}, {"num": "7", "den": "1"}],
+            },
+        }
     )
-
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["status"] == "CERTIFICATE_PRODUCED"
-    assert result.output["left_witness"] == [_q(-2), _q(1)]
-    assert result.output["rhs_pairing"] == _q(1)
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["verification"] == "UNVERIFIED"
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert (
-        result.relationships[0].relation_id
-        == "linear.relation.inconsistency-certificate-of"
+    solution = {
+        "protocol": "jacobian.rational-linear-solution-worker/v1",
+        "status": "SOLUTION_PRODUCED",
+        "values": [
+            {"num": "2", "den": "1"},
+            {"num": "1", "den": "1"},
+        ],
+    }
+    parsed_solution = parse_solution_worker_response(
+        solution,
+        expected_value_count=len(solution_request.system.variables),
     )
-    resolved = runtime.core.linear.resolve_inconsistency(
-        result.output["certificate_uri"]
+    assert isinstance(parsed_solution, RationalLinearSolutionProduced)
+
+    inconsistency_request = LinearRationalInconsistencyFindRequest.model_validate(
+        _system()
     )
-    assert (
-        resolved.certificate.system.system_artifact_uri == result.output["system_uri"]
+    inconsistency = {
+        "protocol": "jacobian.rational-linear-inconsistency-worker/v1",
+        "status": "CERTIFICATE_PRODUCED",
+        "left_witness": [
+            {"num": "-2", "den": "1"},
+            {"num": "1", "den": "1"},
+        ],
+        "rhs_pairing": {"num": "1", "den": "1"},
+    }
+    parsed_inconsistency = parse_inconsistency_worker_response(
+        inconsistency,
+        expected_witness_count=len(inconsistency_request.system.rhs),
     )
-    assert result.output["system_uri"] in resolved.artifact.manifest.parents
+    assert isinstance(parsed_inconsistency, RationalLinearCertificateProduced)
+
+    for invalid in (
+        {**solution, "values": solution["values"][:1]},
+        {key: value for key, value in solution.items() if key != "values"},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_solution_worker_response(
+                invalid,
+                expected_value_count=len(solution_request.system.variables),
+            )
 
 
-def test_no_certificate_is_not_a_consistency_conclusion(
-    linear_services: _LinearRuntime,
-) -> None:
-    runtime = linear_services
-    result = _invoke(
-        runtime,
-        "linear.rational_inconsistency.find",
-        {"system": _system([[1, 0], [0, 1]], [2, 3])},
-        mode=CapabilityMode.EXPLORE,
-    )
-
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["status"] == "NO_CERTIFICATE_PRODUCED"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["certificate_uri"] is None
-    assert result.completeness.status is CapabilityCompletenessStatus.UNKNOWN
-
-
-def test_independent_checker_verifies_inconsistency(
-    linear_checker_services: _LinearRuntime,
-) -> None:
-    runtime = linear_checker_services
-    found = _invoke(
-        runtime,
-        "linear.rational_inconsistency.find",
-        {"system": _system([[1, 1], [2, 2]], [1, 3])},
-        mode=CapabilityMode.EXPLORE,
-    )
-    verified = _invoke(
-        runtime,
-        "linear.rational_inconsistency.verify",
-        {"certificate_uri": found.output["certificate_uri"]},
-        mode=CapabilityMode.VERIFY,
-    )
-
-    assert verified.output["status"] == "VERIFIED_INCONSISTENT"
-    assert verified.output["conclusion"] == "TRUE"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.relationships[0].status.value == "VERIFIED"
-    assert verified.output["verification_record_uri"].startswith("artifact://sha256/")
-
-
-def test_inconsistency_timeout_retains_no_certificate(
-    linear_services: _LinearRuntime,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runtime = linear_services
-    monkeypatch.setattr(
-        "jacobian.matrices.flint_linear.execute_process",
-        lambda *_args, **_kwargs: ProcessResult(
-            termination=ProcessTermination.TIMED_OUT,
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-        ),
-    )
-    result = _invoke(
-        runtime,
-        "linear.rational_inconsistency.find",
-        {"system": _system([[1]], [1])},
-        mode=CapabilityMode.EXPLORE,
-    )
-
-    assert result.execution.status is ExecutionStatus.TIMEOUT
-    assert result.output["status"] == "NO_CERTIFICATE_PRODUCED"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["certificate_uri"] is None
-    assert result.assurance.level is not CapabilityAssuranceLevel.VERIFIED
+def test_inconsistency_candidate_is_inline_and_replayable(tmp_path: Path) -> None:
+    with open_exact_domain_services(
+        tmp_path,
+        build_rational_linear_bundle(),
+    ) as services:
+        computed = invoke_capability(
+            services,
+            "linear.rational_inconsistency.compute",
+            _system(),
+        )
+        assert computed.output["result"]["left_witness"] == [
+            {"num": "-2", "den": "1"},
+            {"num": "1", "den": "1"},
+        ]
+        assert computed.artifact_uris == ()
+        verified = services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id="linear.rational_inconsistency.verify",
+                input={"input": _system(), "candidate": computed.output["result"]},
+            )
+        )
+        assert verified.output["status"] == "VERIFIED"
+        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED

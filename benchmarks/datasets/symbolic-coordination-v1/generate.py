@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from benchmarks.tooling.harbor_suite import verifier_bundle_checksum_bytes  # noqa: E402
 from benchmarks.tooling.public_contract import (  # noqa: E402
     PublicContract,
     render_instruction,
@@ -1232,7 +1233,7 @@ def render_task(
     contract = public_contract(data)
     contract_value = contract.model_dump(mode="json", exclude_none=True)
     schema_text = render_submission_schema(contract)
-    checksum = hashlib.sha256(verifier).hexdigest()
+    checksum = verifier_bundle_checksum_bytes(verifier, support)
     description = (
         f"Assess one exact polynomial-map claim in the {data['family']} pilot family."
     )

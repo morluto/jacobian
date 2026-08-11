@@ -1,6 +1,6 @@
 # Graph capability references
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 - [Graph counterexample shrinking](graph-counterexample-shrinking.md)
 - [Graph distance matrix](graph-distance-matrix.md)

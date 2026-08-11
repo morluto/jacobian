@@ -152,6 +152,20 @@ def test_request_persists_normalized_provenance_urls() -> None:
     assert request.license_evidence_url == "https://example.invalid/license%20path"
 
 
+def test_request_applies_url_length_limit_after_normalization() -> None:
+    canonical_url = "https://example.invalid/" + "x" * 1_976
+    request = ExternalConjectureIngestRequest(
+        corpus_id="fixture",
+        corpus_revision="revision-1",
+        source_url=f" {canonical_url} ",
+        item_id="item-1",
+        metadata={"title": "Fixture conjecture"},
+        source_license="MISSING",
+    )
+
+    assert request.source_url == canonical_url
+
+
 def test_request_rejects_whitespace_only_metadata_title() -> None:
     with pytest.raises(ValidationError, match="title must not be blank"):
         ExternalConjectureIngestRequest(

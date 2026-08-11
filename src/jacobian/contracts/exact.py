@@ -56,6 +56,21 @@ def bounded_rational_grid_size(
     return size
 
 
+def require_bounded_rational(
+    value: CanonicalRational,
+    *,
+    max_digits: int,
+    label: str,
+) -> None:
+    """Reject a canonical rational whose components exceed a domain bound."""
+
+    if (
+        len(value.num.lstrip("-")) > max_digits
+        or len(value.den.lstrip("-")) > max_digits
+    ):
+        raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+
+
 class CanonicalRational(ContractModel):
     num: CanonicalInteger
     den: CanonicalInteger
@@ -82,6 +97,22 @@ class CanonicalRational(ContractModel):
         return self
 
     def as_fraction(self) -> Fraction:
-        return Fraction(
-            parse_canonical_integer(self.num), parse_canonical_integer(self.den)
+        return Fraction(*self.as_integer_ratio())
+
+    def as_integer_ratio(self) -> tuple[int, int]:
+        return parse_canonical_integer(self.num), parse_canonical_integer(self.den)
+
+    @classmethod
+    def from_integer_ratio(cls, numerator: int, denominator: int) -> CanonicalRational:
+        try:
+            fraction = Fraction(numerator, denominator)
+        except ZeroDivisionError:
+            raise ValueError("rational denominator cannot be zero") from None
+        return cls.from_fraction(fraction)
+
+    @classmethod
+    def from_fraction(cls, value: Fraction) -> CanonicalRational:
+        return cls(
+            num=format_canonical_integer(value.numerator),
+            den=format_canonical_integer(value.denominator),
         )

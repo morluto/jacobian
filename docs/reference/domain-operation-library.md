@@ -156,9 +156,11 @@ pointwise denominator-definedness remains outside its scope. See
 [Rational-function identities](capabilities/polynomial/rational-function-identities.md).
 
 Some polynomial, matrix, graph, geometry, probability, topology, poset, and
-combinatorics results have a separate verification capability. The producer
-first returns a result artifact in `EXPLORE` mode. A verification request then
-supplies that exact `result_uri` to the matching `VERIFY` capability.
+combinatorics results have a **separate checker tool** (distinct catalog ID).
+The producer returns a result (and often a `result_uri`); the agent then runs
+the matching `*.verify` (or equivalent) tool with that exact lineage. Do not
+treat this as switching `EXPLORE`/`VERIFY` mode on one ID—see
+[#1143](https://github.com/morluto/jacobian/issues/1143).
 
 Domain-owned `ExactReplayCheckerDeclaration` values name the request model,
 certificate format, and checker function, but they carry no authority.
@@ -201,15 +203,17 @@ Bounded portfolio examples show the intended boundary:
   The corresponding `.verify` capabilities use a standard-library checker
   module that imports no producer code. Negative extension replay enumerates
   every candidate with `itertools.combinations`, independently of the
-  producer's pruned depth-first search. See
-  [Additive-combinatorics decisions](additive-combinatorics-decisions.md).
+  producer's pruned depth-first search.
 - `polynomial.jacobian_syzygy.minimum_degree.compute` constructs the graded
   maps from degree zero through the first kernel or a declared finite bound.
   The source can be a canonical sparse polynomial or a labelled product of
   rational linear forms; the latter keeps factor-to-expansion provenance inside
   the producer and checker boundary.
   Its compact default exposes bases, map digests, ranks, nonzero minors, and a
-  kernel witness; full sparse entries are opt-in.
+  kernel witness. This compact producer accepts the `CERTIFICATES` request
+  detail; requests with `coefficient_map_detail: "SPARSE_ENTRIES"` belong to
+  the explicit `polynomial.jacobian_syzygy.coefficients.materialize` capability,
+  which retains the complete sparse coefficient ledger.
   `polynomial.jacobian_syzygy.minimum_degree.verify` reconstructs the maps with
   a standard-library rational checker independent of the SymPy producer.
 - `polynomial.jacobian_degree_slice.system.materialize` writes the frozen

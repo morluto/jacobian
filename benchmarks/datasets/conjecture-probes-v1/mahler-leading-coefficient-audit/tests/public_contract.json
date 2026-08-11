@@ -1,0 +1,226 @@
+{
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "task_id": "jacobian/mahler-leading-coefficient-audit",
+  "conclusion": {
+    "const": "NONMONIC_FORMULA_REPAIRED"
+  },
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "scope": {
+    "type": "string",
+    "const": "mahler-leading-coefficient-audit-v1"
+  },
+  "limitations": {
+    "const": [
+      "ONE_DEGREE_EIGHT_POLYNOMIAL",
+      "EXACT_FACTOR_FORMULA_AUDIT_ONLY",
+      "LEHMER_PROBLEM_NOT_ASSESSED"
+    ]
+  },
+  "required_artifact_filenames": [
+    "evidence/answer.json"
+  ],
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "min_items": 1,
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "payload_shape": null
+  },
+  "schema_definitions": {
+    "rational": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
+    },
+    "radical": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/rational"
+      }
+    }
+  },
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "factors",
+      "outside_contributions",
+      "flawed_monic_result",
+      "leading_coefficient",
+      "corrected_mahler_measure"
+    ],
+    "properties": {
+      "factors": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "outside_contributions": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {
+          "$ref": "#/$defs/radical"
+        }
+      },
+      "flawed_monic_result": {
+        "$ref": "#/$defs/radical"
+      },
+      "leading_coefficient": {
+        "$ref": "#/$defs/rational"
+      },
+      "corrected_mahler_measure": {
+        "$ref": "#/$defs/radical"
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/mahler-leading-coefficient-audit"
+      },
+      "conclusion": {
+        "const": "NONMONIC_FORMULA_REPAIRED"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "factors",
+          "outside_contributions",
+          "flawed_monic_result",
+          "leading_coefficient",
+          "corrected_mahler_measure"
+        ],
+        "properties": {
+          "factors": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "integer"
+              }
+            }
+          },
+          "outside_contributions": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/$defs/radical"
+            }
+          },
+          "flawed_monic_result": {
+            "$ref": "#/$defs/radical"
+          },
+          "leading_coefficient": {
+            "$ref": "#/$defs/rational"
+          },
+          "corrected_mahler_measure": {
+            "$ref": "#/$defs/radical"
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "type": "string",
+        "const": "mahler-leading-coefficient-audit-v1"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/answer.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "ONE_DEGREE_EIGHT_POLYNOMIAL",
+          "EXACT_FACTOR_FORMULA_AUDIT_ONLY",
+          "LEHMER_PROBLEM_NOT_ASSESSED"
+        ]
+      }
+    },
+    "$defs": {
+      "rational": {
+        "type": "string",
+        "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
+      },
+      "radical": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "$ref": "#/$defs/rational"
+        }
+      }
+    }
+  },
+  "verification_record": null,
+  "public_notes": "Exact nonmonic Mahler-formula audit for one degree-eight polynomial only.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list."
+}

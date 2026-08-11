@@ -9,7 +9,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-CVC5_WORKER_PROTOCOL = "jacobian.cvc5-worker/v1"
+from jacobian.sat_smt.cvc5_protocol import (
+    CVC5_WORKER_PROTOCOL,
+    Cvc5SatisfiableWorkerResult,
+    Cvc5UnknownWorkerResult,
+    Cvc5UnsatisfiableWorkerResult,
+    Cvc5WorkerResult,
+)
+
 CVC5_INPUT_LIMIT = 1_000_000
 CVC5_PROOF_LIMIT = 6_000_000
 _ALLOWED_PARSED_COMMANDS = frozenset(
@@ -118,12 +125,14 @@ def _capture_cvc5_proof(
         if len(proof) > CVC5_PROOF_LIMIT:
             raise Cvc5WorkerError("CVC5_PROOF_LIMIT_EXCEEDED")
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
-        descriptor = os.open(proof_path, flags, 0o600)
+        descriptor = -1
         try:
+            descriptor = os.open(proof_path, flags, 0o600)
             with os.fdopen(descriptor, "wb", closefd=False) as stream:
                 stream.write(proof)
         finally:
-            os.close(descriptor)
+            if descriptor >= 0:
+                os.close(descriptor)
     except Cvc5WorkerError:
         raise
     except (OSError, RuntimeError, TypeError) as exc:
@@ -137,7 +146,7 @@ def _run(
     proof_path: Path,
     expected_logic: str,
     wall_milliseconds: int,
-) -> dict[str, object]:
+) -> Cvc5WorkerResult:
     try:
         raw_input = _read_bounded(input_path)
         smtlib_text = raw_input.decode("ascii")
@@ -161,18 +170,27 @@ def _run(
     except (AttributeError, ImportError, OSError, RuntimeError, TypeError) as exc:
         raise Cvc5WorkerError("CVC5_REJECTED_INPUT_OR_FAILED") from exc
     solver_status = _validate_query_profile(command_names, status_text)
-    if solver_status != "UNSATISFIABLE":
-        return {
-            "solver_status": solver_status,
-            "proof_written": False,
-            "alethe_hole_count": None,
-        }
+    if solver_status == "SATISFIABLE":
+        return Cvc5SatisfiableWorkerResult(
+            protocol="jacobian.cvc5-worker/v1",
+            solver_status="SATISFIABLE",
+            proof_written=False,
+            alethe_hole_count=None,
+        )
+    if solver_status == "UNKNOWN":
+        return Cvc5UnknownWorkerResult(
+            protocol="jacobian.cvc5-worker/v1",
+            solver_status="UNKNOWN",
+            proof_written=False,
+            alethe_hole_count=None,
+        )
     alethe_hole_count = _capture_cvc5_proof(cvc5, solver, proof_path)
-    return {
-        "solver_status": solver_status,
-        "proof_written": True,
-        "alethe_hole_count": alethe_hole_count,
-    }
+    return Cvc5UnsatisfiableWorkerResult(
+        protocol="jacobian.cvc5-worker/v1",
+        solver_status="UNSATISFIABLE",
+        proof_written=True,
+        alethe_hole_count=alethe_hole_count,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -205,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
     except Cvc5WorkerError as exc:
         _emit({"error_code": exc.code})
         return 2
-    _emit(result)
+    _emit(result.model_dump(mode="json"))
     return 0
 
 

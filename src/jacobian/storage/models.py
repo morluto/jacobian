@@ -18,8 +18,8 @@ class StorageLimits:
     max_total_blob_bytes: int = 1024 * 1024 * 1024
 
     def __post_init__(self) -> None:
-        if self.max_parents < 3:
-            raise ValueError("max_parents must be at least 3")
+        if self.max_parents < 4:
+            raise ValueError("max_parents must be at least 4")
 
 
 @dataclass(frozen=True, slots=True)

@@ -20,7 +20,7 @@ def _rewrite(app: Path, submission: dict) -> None:
 
 def test_reference_passes(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_alternative_tree_and_orders_pass(tmp_path: Path) -> None:
@@ -48,7 +48,7 @@ def test_alternative_tree_and_orders_pass(tmp_path: Path) -> None:
     ]
     result["determinant"] = -2
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_corrupted_coordinate_is_rejected(tmp_path: Path) -> None:
@@ -56,7 +56,7 @@ def test_corrupted_coordinate_is_rejected(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["cycle_coordinate_matrix"][0][0] = 0
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_non_tree_edge_omission_is_rejected(tmp_path: Path) -> None:
@@ -64,7 +64,7 @@ def test_non_tree_edge_omission_is_rejected(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["non_tree_edges"][0] = [0, 1]
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_forged_determinant_is_rejected(tmp_path: Path) -> None:
@@ -72,7 +72,7 @@ def test_forged_determinant_is_rejected(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["determinant"] = 4
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_false_verified_is_rejected(tmp_path: Path) -> None:
@@ -81,8 +81,8 @@ def test_false_verified_is_rejected(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "VERIFIED"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["reward"] == 0.0
-    assert result["false_certification"] is True
+    assert result.reward == 0.0
+    assert result.details["false_certification"] is True
 
 
 @pytest.mark.parametrize(
@@ -96,7 +96,7 @@ def test_malformed_result_collections_are_cleanly_rejected(
     submission = json.loads((app / "submission.json").read_text())
     submission["result"][field] = None
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_affirmative_proof_assistant_claim_is_rejected(tmp_path: Path) -> None:
@@ -106,7 +106,7 @@ def test_affirmative_proof_assistant_claim_is_rejected(tmp_path: Path) -> None:
         "A proof assistant verifies that the geometric realization is RP2."
     ]
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_out_of_domain_vertex_is_cleanly_rejected(tmp_path: Path) -> None:
@@ -114,7 +114,7 @@ def test_out_of_domain_vertex_is_cleanly_rejected(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["spanning_tree"][0] = [0, 6]
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_oversized_evidence_is_rejected_without_crashing(tmp_path: Path) -> None:
@@ -125,8 +125,8 @@ def test_oversized_evidence_is_rejected_without_crashing(tmp_path: Path) -> None
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_affirmative_proof_assistant_in_evidence_is_rejected(tmp_path: Path) -> None:
@@ -139,8 +139,8 @@ def test_affirmative_proof_assistant_in_evidence_is_rejected(tmp_path: Path) -> 
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
@@ -149,11 +149,11 @@ def test_unverified_claim_preserves_other_metric_axes(tmp_path: Path) -> None:
     submission["claimed_assurance"] = "UNVERIFIED"
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 1.0
-    assert result["evidence_validity"] == 1.0
-    assert result["scope_accuracy"] == 1.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_affirmative_claim_with_unrelated_negation_is_rejected(
@@ -169,8 +169,8 @@ def test_affirmative_claim_with_unrelated_negation_is_rejected(
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_transposed_coordinate_matrix_is_accepted(tmp_path: Path) -> None:
@@ -181,7 +181,7 @@ def test_transposed_coordinate_matrix_is_accepted(tmp_path: Path) -> None:
     submission["result"]["cycle_coordinate_matrix"] = transposed
     support._bind_result_evidence(app, submission)
     support._write_json(app / "submission.json", submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_evidence_without_hidden_keyword_is_accepted(tmp_path: Path) -> None:
@@ -200,4 +200,4 @@ def test_evidence_without_hidden_keyword_is_accepted(tmp_path: Path) -> None:
     evidence.write_text(prose + ("\n" + marker_line + "\n" if marker_line else "\n"))
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0

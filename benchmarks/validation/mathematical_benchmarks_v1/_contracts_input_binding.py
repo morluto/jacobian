@@ -38,11 +38,11 @@ def test_verifiers_reject_replaced_workspace_inputs(
 
     rejected = support._run_verifier(task, app, logs)
     if support.is_input_binding_decoupled(task_name):
-        assert rejected["correctness"] == 1.0
-        assert rejected["input_binding"] == 0.0
+        assert rejected.details["correctness"] == 1.0
+        assert rejected.details["input_binding"] == 0.0
     else:
-        assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+        assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 @pytest.mark.parametrize("task_name", support.VERIFIER_TASKS)
@@ -62,11 +62,11 @@ def test_verifiers_fail_closed_on_malformed_workspace_inputs(
         # Mathematical correctness is reported independently of input binding;
         # the result is still canonical, so correctness stays 1.0 while the
         # separate input_binding diagnostic captures the tamper.
-        assert rejected["correctness"] == 1.0
-        assert rejected["input_binding"] == 0.0
+        assert rejected.details["correctness"] == 1.0
+        assert rejected.details["input_binding"] == 0.0
     else:
-        assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+        assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
 
 
 def test_verifier_rejects_symlinked_workspace_input(tmp_path: Path) -> None:
@@ -77,5 +77,5 @@ def test_verifier_rejects_symlinked_workspace_input(tmp_path: Path) -> None:
     input_path.symlink_to(frozen_input)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

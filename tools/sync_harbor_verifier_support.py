@@ -1,7 +1,7 @@
 """Update verifier checksum labels for explicitly selected Harbor tasks.
 
 Task support modules are intentionally owned by their task bundles.  This
-command only updates the checksum label for each selected task's verifier and
+command only updates the checksum label for each selected task's verifier bundle and
 never copies support code, formats benchmark files, or touches unselected
 tasks.
 """
@@ -9,7 +9,6 @@ tasks.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import re
 import sys
 from pathlib import Path
@@ -22,6 +21,7 @@ from benchmarks.tooling.harbor_suite import (  # noqa: E402
     HarborSuiteError,
     get_suite,
     select_task_refs,
+    verifier_bundle_checksum,
 )
 
 _CHECKSUM = re.compile(r'jacobian\.checksum="[^"]*"')
@@ -42,7 +42,12 @@ def update(dataset: str, tasks: tuple[str, ...]) -> int:
             raise HarborSuiteError(
                 f"{dockerfile.relative_to(ROOT)}: Dockerfile must be a regular file"
             )
-        digest = hashlib.sha256(verifier.read_bytes()).hexdigest()
+        support = tests / "verifier_support.py"
+        if support.is_symlink() or not support.is_file():
+            raise HarborSuiteError(
+                f"{support.relative_to(ROOT)}: verifier_support.py must be a regular file"
+            )
+        digest = verifier_bundle_checksum(tests)
         text = dockerfile.read_text(encoding="utf-8")
         updated, count = _CHECKSUM.subn(f'jacobian.checksum="{digest}"', text, count=1)
         if not count:

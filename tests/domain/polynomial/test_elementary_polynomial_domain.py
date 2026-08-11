@@ -2,11 +2,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.capabilities import (
+    CapabilityAssuranceLevel,
+    CapabilityRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture
@@ -104,6 +107,23 @@ def test_integer_polynomial_operations_preserve_ring_semantics(
             "inner": {"coefficients": ["1", "1"]},
         },
     )["composition"]["coefficients"] == ["1", "2", "2"]
+
+
+def test_integer_polynomial_evaluation_formats_large_exact_result(
+    domain_services: DomainTestServices,
+) -> None:
+    point = "9" * 256
+    result = _invoke(
+        domain_services,
+        "polynomial.integer.compute.evaluate",
+        {
+            "polynomial": {"coefficients": ["1"] + (["0"] * 127)},
+            "point": point,
+        },
+    )
+
+    assert result["point"] == point
+    assert len(result["value"]) > 4_300
 
 
 def test_rational_polynomial_operations_return_typed_intermediates(
@@ -258,3 +278,31 @@ def test_elementary_polynomial_requests_fail_closed_before_artifact_writes(
     assert outcome.execution.status is ExecutionStatus.ERROR
     assert outcome.diagnostics[0].code == "INVALID_POLYNOMIAL_REQUEST"
     assert outcome.artifact_uris == ()
+
+
+def test_integer_polynomial_shift_is_exact_computed(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.integer.compute.shift",
+            input={
+                "polynomial": {
+                    "coefficient_order": "DESCENDING_DEGREE",
+                    "coefficients": ["1", "0"],
+                },
+                "shift": 2,
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+    assert result.output["result"] == {
+        "shift": 2,
+        "shifted": {
+            "coefficient_order": "DESCENDING_DEGREE",
+            "coefficients": ["1", "2"],
+        },
+        "convention": "SUBSTITUTE_X_PLUS_SHIFT",
+    }

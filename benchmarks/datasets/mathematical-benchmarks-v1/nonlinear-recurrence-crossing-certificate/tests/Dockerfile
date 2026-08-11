@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="ca1a3c1b8d2732cf74187bac5e54bfc457a26c2aac2b3527813bf6c2403fd73b"
+LABEL jacobian.checksum="068e191c390928386abdd9f18cf40d8e943fe17cb9e6c462e6c7288a938b3a31"
 LABEL jacobian.task="jacobian/nonlinear-recurrence-crossing-certificate"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

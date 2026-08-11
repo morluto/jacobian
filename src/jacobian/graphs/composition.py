@@ -37,7 +37,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -179,7 +178,6 @@ class GraphComposeAdapter:
                     "simple-undirected-graphs",
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=GraphCompositionRequest.model_json_schema(),
             output_schema={
                 "type": "object",
@@ -284,7 +282,6 @@ class GraphComposeAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),
@@ -361,7 +358,6 @@ class GraphEnumerateNonisomorphicAdapter:
                     "simple-undirected-graphs",
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=GraphEnumerationRequest.model_json_schema(),
             output_schema={
                 "type": "object",
@@ -500,7 +496,6 @@ class GraphEnumerateNonisomorphicAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),
@@ -570,6 +565,22 @@ def _backend_suffix(operation: str) -> str:
     raise ValueError(f"unsupported composition operation: {operation}")
 
 
+def _require_right_graph(
+    operation: str,
+    right: nx.Graph[Any] | None,
+) -> nx.Graph[Any]:
+    if right is None:
+        raise CapabilityInvocationError(
+            CapabilityDiagnostic(
+                code="MISSING_RIGHT_GRAPH",
+                stage="composition",
+                message=f"{operation} requires a right graph.",
+                hint="Provide right_graph_uri for this binary operation.",
+            )
+        )
+    return right
+
+
 def _apply_composition(
     operation: str,
     left: nx.Graph[Any],
@@ -577,15 +588,15 @@ def _apply_composition(
 ) -> nx.Graph[Any]:
     backend = networkx_loader.get()
     if operation == "DISJOINT_UNION":
-        assert right is not None
+        right = _require_right_graph(operation, right)
         return cast("nx.Graph[Any]", backend.disjoint_union(left, right))
     if operation == "JOIN":
-        assert right is not None
+        right = _require_right_graph(operation, right)
         return _join(left, right)
     if operation == "COMPLEMENT":
         return cast("nx.Graph[Any]", backend.complement(left))
     if operation == "LEXICOGRAPHIC_PRODUCT":
-        assert right is not None
+        right = _require_right_graph(operation, right)
         return cast("nx.Graph[Any]", backend.lexicographic_product(left, right))
     raise ValueError(f"unsupported composition operation: {operation}")
 

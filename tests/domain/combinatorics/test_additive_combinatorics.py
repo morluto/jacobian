@@ -63,7 +63,7 @@ def test_perfect_difference_set_reports_complete_residue_profile(
     ("order", "candidate_count"),
     ((5, 1), (6, 26), (7, 703)),
 )
-def test_fixed_order_extension_materializes_complete_negative_decisions(
+def test_fixed_order_extension_returns_complete_negative_decisions(
     domain_services: DomainTestServices,
     order: int,
     candidate_count: int,
@@ -75,15 +75,12 @@ def test_fixed_order_extension_materializes_complete_negative_decisions(
         )
     )
 
-    stored = domain_services.core.store.get(computed.output["result_uri"])
     assert computed.execution.status is ExecutionStatus.COMPLETED
     assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert computed.output["result_uri"] in computed.artifact_uris
-    assert computed.output["preview_complete"] is True
-    assert stored.payload == computed.output["preview"]
-    assert stored.payload["decision"] == "DOES_NOT_EXTEND"
-    assert stored.payload["coverage"] == "ALL_CANDIDATES"
-    assert stored.payload["candidate_space_size"] == candidate_count
+    assert computed.artifact_uris == ()
+    assert computed.output["result"]["decision"] == "DOES_NOT_EXTEND"
+    assert computed.output["result"]["coverage"] == "ALL_CANDIDATES"
+    assert computed.output["result"]["candidate_space_size"] == candidate_count
 
 
 def test_fixed_order_extension_returns_a_complete_positive_witness(
@@ -96,10 +93,10 @@ def test_fixed_order_extension_returns_a_complete_positive_witness(
         )
     )
 
-    stored = domain_services.core.store.get(computed.output["result_uri"])
-    assert stored.payload["decision"] == "EXTENDS"
-    assert stored.payload["coverage"] == "WITNESS"
-    assert stored.payload["extension"] == [0, 1, 3]
+    assert computed.artifact_uris == ()
+    assert computed.output["result"]["decision"] == "EXTENDS"
+    assert computed.output["result"]["coverage"] == "WITNESS"
+    assert computed.output["result"]["extension"] == [0, 1, 3]
 
 
 def test_integer_sidon_accepts_the_widest_canonical_difference(

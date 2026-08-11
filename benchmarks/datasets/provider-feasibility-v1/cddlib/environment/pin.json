@@ -1,5 +1,5 @@
 {
-  "adapter_source_sha256": "sha256:8a6f0c90929f3cf9582208844d4d9ce10258bc5721dbe8581171dbc180eb05cd",
+  "adapter_source_sha256": "sha256:ddbf25b188f6fd5ca6aca2fb0ac6f64c514cb76cc00a4cb504fd660baf343d38",
   "contract": "jacobian.cddlib-hv-spike/v1",
   "provider": "cddlib/pycddlib",
   "reproduction": {

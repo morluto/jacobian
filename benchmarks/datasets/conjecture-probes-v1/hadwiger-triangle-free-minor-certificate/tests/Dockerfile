@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/hadwiger-triangle-free-minor-certificate" \
-      jacobian.checksum="dce32620ce2121568284ca7aebf617fa10d792f6714cb7f92b7a0d26b9c7738b"
+      jacobian.checksum="c7904167acedd067061a9dfb220f124401c1eb2fd1763bedf05169e71e39731e"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

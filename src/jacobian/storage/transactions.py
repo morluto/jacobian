@@ -144,10 +144,12 @@ class TransactionCoordinator:
 
     def _handle_transaction_failure(
         self,
-        connection: sqlite3.Connection,
+        connection: sqlite3.Connection | None,
     ) -> None:
         """Clean up a connection after a transaction setup or body failure."""
 
+        if connection is None:
+            return
         if self.database.transaction_active:
             try:
                 self.database.close_connection(connection)
@@ -184,6 +186,7 @@ class TransactionCoordinator:
             raise StorageError("nested artifact store transactions are unsupported")
 
         with self._exclusive_blob_lock():
+            connection: sqlite3.Connection | None = None
             try:
                 if self.transaction_recovery_path.exists():
                     self._reconcile_blob_quota(force=True)
@@ -216,11 +219,13 @@ class TransactionCoordinator:
     def _sync_directory(self, path: Path) -> None:
         if os.name == "nt":  # pragma: no cover - Windows has no directory fsync
             return
-        descriptor = os.open(path, os.O_RDONLY)
+        descriptor = -1
         try:
+            descriptor = os.open(path, os.O_RDONLY)
             os.fsync(descriptor)
         finally:
-            os.close(descriptor)
+            if descriptor >= 0:
+                os.close(descriptor)
 
     def _sync_root_directory(self) -> None:
         self._sync_directory(self.root)

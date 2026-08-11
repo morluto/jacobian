@@ -16,8 +16,9 @@ import math
 from fractions import Fraction
 from typing import Literal
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.arithmetic import (
+    MAX_BASE_DIGITS,
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
     IntegerNthRootRequest,
@@ -39,16 +40,11 @@ from jacobian.math import arithmetic as native_arithmetic
 
 
 def _int(value: str) -> int:
-    return int(value)
+    return parse_canonical_integer(value)
 
 
 def _canonical(value: int) -> str:
-    return str(value)
-
-
-def to_fraction(num: str, den: str) -> Fraction:
-    """Build a reduced ``Fraction`` from canonical integer strings."""
-    return Fraction(int(num), int(den))
+    return format_canonical_integer(value)
 
 
 def absolute_value(request: IntegerValueRequest) -> IntegerValueResult:
@@ -70,15 +66,16 @@ def sign(request: IntegerValueRequest) -> IntegerSignResult:
 
 def decimal_digit_sum(request: IntegerValueRequest) -> IntegerValueResult:
     return IntegerValueResult(
-        value=_canonical(sum(int(digit) for digit in str(abs(_int(request.value)))))
+        value=_canonical(sum(int(digit) for digit in request.value.lstrip("-")))
     )
 
 
 def decimal_digit_count(request: IntegerValueRequest) -> IntegerValueResult:
-    return IntegerValueResult(value=_canonical(len(str(abs(_int(request.value))))))
+    return IntegerValueResult(value=_canonical(len(request.value.lstrip("-"))))
 
 
 def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
+    _require_bounded_base_expansion(request.value, request.base)
     from sympy.ntheory import digits as sympy_digits
 
     value = _int(request.value)
@@ -97,14 +94,30 @@ def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
     )
 
 
+def _require_bounded_base_expansion(value: str, base: int) -> None:
+    """Reject inputs that necessarily exceed the bounded positional output."""
+
+    magnitude = value.lstrip("-")
+    maximum_value = format_canonical_integer(base**MAX_BASE_DIGITS)
+    if len(magnitude) > len(maximum_value) or (
+        len(magnitude) == len(maximum_value) and magnitude >= maximum_value
+    ):
+        raise ValueError(
+            f"base expansion exceeds the {MAX_BASE_DIGITS}-digit result bound"
+        )
+
+
 def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
     from sympy import integer_nthroot
 
-    if request.value < 0 and request.degree % 2 == 0:
+    value = _int(request.value)
+    if value < 0 and request.degree % 2 == 0:
         raise ValueError("even root of a negative integer is not integral-real")
-    root, exact = integer_nthroot(abs(request.value), request.degree)
+    root, exact = integer_nthroot(abs(value), request.degree)
+    if value < 0 and not exact:
+        root += 1
     return IntegerNthRootResult(
-        root=_canonical(-root if request.value < 0 else root),
+        root=_canonical(-root if value < 0 else root),
         exact=exact,
     )
 
@@ -181,11 +194,15 @@ def maximum(request: RationalPairRequest) -> RationalValueResult:
 
 
 def floor(request: RationalValueRequest) -> RationalIntegerResult:
-    return RationalIntegerResult(value=str(math.floor(_fraction(request.value))))
+    return RationalIntegerResult(
+        value=format_canonical_integer(math.floor(_fraction(request.value)))
+    )
 
 
 def ceiling(request: RationalValueRequest) -> RationalIntegerResult:
-    return RationalIntegerResult(value=str(math.ceil(_fraction(request.value))))
+    return RationalIntegerResult(
+        value=format_canonical_integer(math.ceil(_fraction(request.value)))
+    )
 
 
 def continued_fraction(
@@ -197,7 +214,7 @@ def continued_fraction(
     value = _fraction(request.value)
     terms = sympy_continued_fraction(SympyRational(value.numerator, value.denominator))
     return RationalContinuedFractionResult(
-        terms=tuple(str(int(term)) for term in terms)
+        terms=tuple(format_canonical_integer(int(term)) for term in terms)
     )
 
 

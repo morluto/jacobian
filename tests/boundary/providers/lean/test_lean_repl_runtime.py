@@ -12,6 +12,7 @@ from jacobian.lean_frontend.repl import (
     LeanReplPolicy,
     PersistentLeanRepl,
 )
+from jacobian.lean_frontend.repl_protocol import LeanReplProofStepResponse
 
 _FAKE_REPL = r"""
 import json
@@ -39,10 +40,14 @@ while True:
         assert request.get("env") == 0
         response = {
             "env": env,
-            "sorries": [{"proofState": proof_state}],
+            "sorries": [{"goal": "⊢ True", "proofState": proof_state}],
         }
         env += 1
         proof_state += 1
+    elif "pickleTo" in request:
+        assert request["proofState"] == proof_state - 1
+        pathlib.Path(request["pickleTo"]).write_text("pickled")
+        response = {}
     else:
         assert request["proofState"] == proof_state - 1
         response = {
@@ -72,7 +77,9 @@ def test_persistent_repl_reuses_import_then_restarts_at_request_limit(
     repl.close()
 
     assert all(
-        response[1]["proofStatus"] == "Completed" for response in (first, second, third)
+        isinstance(response[1], LeanReplProofStepResponse)
+        and response[1].proof_status == "Completed"
+        for response in (first, second, third)
     )
     assert starts.read_text() == "xx"
 
@@ -94,10 +101,34 @@ def test_validated_execution_inspects_state_before_requested_tactic(
     )
     repl.close()
 
-    assert command["sorries"]
-    assert validation["proofState"] == 1
-    assert transition["proofState"] == 2
+    assert command.sorries
+    assert validation.proof_state == 1
+    assert isinstance(transition, LeanReplProofStepResponse)
+    assert transition.proof_state == 2
     assert starts.read_text() == "x"
+
+
+def test_persistent_repl_accepts_empty_pickle_acknowledgement(
+    tmp_path: Path,
+) -> None:
+    starts = tmp_path / "starts"
+    pickle_path = tmp_path / "proof-state.pickle"
+    repl = PersistentLeanRepl(
+        command=(sys.executable, "-u", "-c", _FAKE_REPL, str(starts)),
+        cwd=tmp_path,
+        base_command="import Mathlib",
+        policy=LeanReplPolicy(max_requests=1, max_age_seconds=60, max_rss_kb=0),
+    )
+
+    _, transition = repl.execute(
+        command="example : True := by sorry",
+        tactic="trivial",
+        pickle_path=pickle_path,
+    )
+    repl.close()
+
+    assert isinstance(transition, LeanReplProofStepResponse)
+    assert pickle_path.read_text() == "pickled"
 
 
 def test_persistent_repl_kills_a_timed_out_process(tmp_path: Path) -> None:
@@ -125,7 +156,7 @@ def test_persistent_repl_kills_a_process_that_exceeds_rss_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "jacobian.bounded_process._linux_process_tree_rss_bytes",
+        "jacobian.bounded_process._linux_process_tree_memory_bytes",
         lambda _pid: 2 * 1024,
     )
     repl = PersistentLeanRepl(
@@ -168,7 +199,7 @@ def test_persistent_repl_enforces_rss_during_exchange_not_only_before(
         return 1024 if call_count <= 2 else 4 * 1024
 
     monkeypatch.setattr(
-        "jacobian.bounded_process._linux_process_tree_rss_bytes",
+        "jacobian.bounded_process._linux_process_tree_memory_bytes",
         fake_rss,
     )
     repl = PersistentLeanRepl(
@@ -334,3 +365,56 @@ def test_runtime_close_retries_failed_sessions_and_rejects_new_execution(
             tactic="skip",
             environment=LeanEnvironment.CORE,
         )
+
+
+def test_runtime_close_continues_after_keyboard_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = LeanExplorationReplRuntime(tmp_path, {})
+
+    class FakeSession:
+        def __init__(self, *, interrupt: bool) -> None:
+            self.interrupt = interrupt
+            self.close_calls = 0
+
+        def execute(
+            self,
+            *,
+            command: str,
+            tactic: str,
+            pickle_path: Path | None = None,
+        ) -> tuple[dict[str, object], dict[str, object]]:
+            return {}, {}
+
+        def close(self) -> None:
+            self.close_calls += 1
+            if self.interrupt:
+                raise KeyboardInterrupt("injected session close interrupt")
+
+    sessions = [FakeSession(interrupt=True), FakeSession(interrupt=False)]
+    monkeypatch.setattr(
+        runtime, "_create_session", lambda _environment: sessions.pop(0)
+    )
+    runtime.execute(command="first", tactic="skip", environment=LeanEnvironment.CORE)
+    runtime.execute(
+        command="second", tactic="skip", environment=LeanEnvironment.MATHLIB
+    )
+    interrupted, closed = tuple(
+        runtime._sessions[environment]
+        for environment in (LeanEnvironment.CORE, LeanEnvironment.MATHLIB)
+    )
+
+    with pytest.raises(
+        BaseExceptionGroup, match="Lean exploration sessions failed to close"
+    ) as exc:
+        runtime.close()
+
+    assert interrupted.close_calls == 1
+    assert closed.close_calls == 1
+    assert [str(failure) for failure in exc.value.exceptions] == [
+        "injected session close interrupt",
+    ]
+
+    interrupted.interrupt = False
+    runtime.close()

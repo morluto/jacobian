@@ -41,13 +41,13 @@ def _verify(tmp_path, submission):
 
 
 def test_oracle_and_alternative_tail_family(tmp_path):
-    assert _verify(tmp_path / "oracle", _oracle())["reward"] == 1.0
+    assert _verify(tmp_path / "oracle", _oracle()).reward == 1.0
     alt = _oracle()
     alt["result"]["n"] = 8
     alt["result"]["tail_singletons"] = list(range(20, 28))
     alt["result"]["summand_values"] = [{"numerator": 1, "denominator": 1}] * 8
     alt["result"]["partial_sum_lower_bound"] = 8
-    assert _verify(tmp_path / "alt", alt)["reward"] == 1.0
+    assert _verify(tmp_path / "alt", alt).reward == 1.0
 
 
 def test_scope_and_assurance_attacks_fail(tmp_path):
@@ -57,7 +57,7 @@ def test_scope_and_assurance_attacks_fail(tmp_path):
     ]:
         submission = copy.deepcopy(_oracle())
         mutate(submission)
-        assert _verify(tmp_path / name, submission)["reward"] == 0
+        assert _verify(tmp_path / name, submission).reward == 0
 
 
 def test_accepts_unordered_valid_witnesses(tmp_path):
@@ -71,7 +71,7 @@ def test_accepts_unordered_valid_witnesses(tmp_path):
     submission["result"]["truncated_checkpoints"] = list(
         reversed(submission["result"]["truncated_checkpoints"])
     )
-    assert _verify(tmp_path, submission)["reward"] == 1.0
+    assert _verify(tmp_path, submission).reward == 1.0
 
 
 def test_accepts_equivalent_unreduced_rationals(tmp_path):
@@ -80,4 +80,4 @@ def test_accepts_equivalent_unreduced_rationals(tmp_path):
     checkpoint = submission["result"]["truncated_checkpoints"][0]["value"]
     checkpoint["numerator"] *= 2
     checkpoint["denominator"] *= 2
-    assert _verify(tmp_path, submission)["reward"] == 1.0
+    assert _verify(tmp_path, submission).reward == 1.0

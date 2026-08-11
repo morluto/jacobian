@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "radical": {
+      "items": {
+        "$ref": "#/$defs/rational"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "rational": {
+      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "NONMONIC_FORMULA_REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_DEGREE_EIGHT_POLYNOMIAL",
+        "EXACT_FACTOR_FORMULA_AUDIT_ONLY",
+        "LEHMER_PROBLEM_NOT_ASSESSED"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "corrected_mahler_measure": {
+          "$ref": "#/$defs/radical"
+        },
+        "factors": {
+          "items": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "flawed_monic_result": {
+          "$ref": "#/$defs/radical"
+        },
+        "leading_coefficient": {
+          "$ref": "#/$defs/rational"
+        },
+        "outside_contributions": {
+          "items": {
+            "$ref": "#/$defs/radical"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "factors",
+        "outside_contributions",
+        "flawed_monic_result",
+        "leading_coefficient",
+        "corrected_mahler_measure"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "mahler-leading-coefficient-audit-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/mahler-leading-coefficient-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

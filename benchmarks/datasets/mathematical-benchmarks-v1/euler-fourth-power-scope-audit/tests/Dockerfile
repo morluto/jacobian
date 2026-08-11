@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="aa6e4ffb6c704131ec0f8c27c4bc7ea636171fa2678aed1bf03dbad44f7b8a2c"
+LABEL jacobian.checksum="421ad7bc9fed8b1d26c9ddd2251f74cf275a967f9324ff20e8797cc3b4957e83"
 LABEL jacobian.task="jacobian/euler-fourth-power-scope-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

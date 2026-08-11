@@ -53,40 +53,40 @@ def test_oracle_and_reordered_equivalent_output_pass(tmp_path: Path) -> None:
     witness = submission["result"]["maximum_witness_cyclic"]
     submission["result"]["maximum_witness_cyclic"] = witness[2:] + witness[:2]
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_reversed_cyclic_witness_passes(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["result"]["maximum_witness_cyclic"].reverse()
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 1.0
+    assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_wrong_count_and_nonmaximum_witness_fail(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["result"]["convex_subset_counts"][3]["count"] += 1
     _write(app, submission)
-    assert _run(app, logs)["mathematics"] == 0.0
+    assert _run(app, logs).details["mathematics"] == 0.0
 
     app, logs, submission = _case(tmp_path / "witness")
     submission["result"]["maximum_witness_cyclic"][0] = "P00"
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_scope_and_false_certification_fail_closed(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     submission["scope"] = "general-happy-ending-conjecture"
     _write(app, submission)
-    assert _run(app, logs)["aggregate_reward"] == 0.0
+    assert _run(app, logs).details["aggregate_reward"] == 0.0
 
     app, logs, submission = _case(tmp_path / "verified")
     submission["claimed_assurance"] = "VERIFIED"
     _write(app, submission)
     reward = _run(app, logs)
-    assert reward["false_certification"] is True
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["false_certification"] is True
+    assert reward.details["aggregate_reward"] == 0.0
 
 
 def test_input_and_evidence_tampering_fail_closed(tmp_path: Path) -> None:
@@ -95,10 +95,10 @@ def test_input_and_evidence_tampering_fail_closed(tmp_path: Path) -> None:
     frozen["points"][0]["x"] += 1
     (app / "input.json").write_text(json.dumps(frozen))
     _write(app, submission)
-    assert _run(app, logs)["input_binding"] == 0.0
+    assert _run(app, logs).details["input_binding"] == 0.0
 
     app, logs, submission = _case(tmp_path / "evidence")
     (app / "evidence/answer.txt").write_text("{}\n")
     reward = _run(app, logs)
-    assert reward["evidence"] == 0.0
-    assert reward["aggregate_reward"] == 0.0
+    assert reward.details["evidence"] == 0.0
+    assert reward.details["aggregate_reward"] == 0.0

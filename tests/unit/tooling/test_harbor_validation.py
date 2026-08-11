@@ -29,6 +29,18 @@ def test_validate_task_topology_passes_for_minimal_task(
     assert validate_task_topology(suite, task) == []
 
 
+def test_validate_task_topology_binds_verifier_support(
+    tmp_path: Path, patched_root: Path
+) -> None:
+    suite, task = _make_suite_with_task(tmp_path)
+    support = task / "tests" / "verifier_support.py"
+    support.write_text("# changed verifier support\n")
+
+    failures = validate_task_topology(suite, task)
+
+    assert any("verifier checksum label is stale" in failure for failure in failures)
+
+
 def test_validate_task_topology_reports_missing_readme(
     tmp_path: Path, patched_root: Path
 ) -> None:

@@ -7,6 +7,7 @@ from typing import Any
 from verifier_support import (
     false_verified_claim,
     load_submission_raw,
+    normalize_reward_file,
     read_evidence_json,
     strict_submission_contract,
     valid_sha256_uri,
@@ -325,6 +326,7 @@ def main() -> None:
             }
         )
     )
+    normalize_reward_file(out / "reward.json")
 
 
 if __name__ == "__main__":

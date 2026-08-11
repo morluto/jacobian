@@ -578,7 +578,8 @@ def canonicalize_capability(request: dict[str, Any]) -> dict[str, Any]:
         elif encoded == best_bytes:
             best_mappings.append(mapping)
 
-    assert best_payload is not None
+    if best_payload is None:
+        raise RuntimeError("no valid graph path payload was found")
     chosen_mapping = best_mappings[0]
     orbit_sets: list[set[str]] = [{vertex} for vertex in vertices]
     for canonical_name in canonical_names:

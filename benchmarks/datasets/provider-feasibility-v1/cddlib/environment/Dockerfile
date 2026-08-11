@@ -16,6 +16,7 @@ WORKDIR /app
 COPY __init__.py /opt/benchmarks/__init__.py
 COPY tooling/__init__.py /opt/benchmarks/tooling/__init__.py
 COPY tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY tooling/spike_utils.py /opt/benchmarks/tooling/spike_utils.py
 COPY datasets/provider-feasibility-v1/cddlib/environment/input.json datasets/provider-feasibility-v1/cddlib/environment/pin.json datasets/provider-feasibility-v1/cddlib/environment/spike.py datasets/provider-feasibility-v1/cddlib/environment/submission_schema.json /app/
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/opt

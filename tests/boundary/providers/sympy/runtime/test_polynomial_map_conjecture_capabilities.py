@@ -5,7 +5,6 @@ from pathlib import Path
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus, InputStatus
@@ -63,14 +62,12 @@ def test_public_jacobian_counterexample_fixture_replays_both_claim_bindings(
     keller_result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.keller_condition.verify",
-            mode=CapabilityMode.VERIFY,
             input={"map": keller["map"]},
         )
     )
     obstruction_result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.refute_by_collision",
-            mode=CapabilityMode.VERIFY,
             input={
                 "map": obstruction["map"],
                 "first_point": obstruction["first_point"],
@@ -94,7 +91,6 @@ def test_keller_condition_verifies_the_published_style_exact_map(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.keller_condition.verify",
-            mode=CapabilityMode.VERIFY,
             input={"map": _identity_map()},
         )
     )
@@ -115,7 +111,6 @@ def test_keller_condition_verifies_a_false_conclusion_for_nonconstant_determinan
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.keller_condition.verify",
-            mode=CapabilityMode.VERIFY,
             input={"map": _square_map()},
         )
     )
@@ -133,7 +128,6 @@ def test_collision_refutes_two_sided_inverse(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.refute_by_collision",
-            mode=CapabilityMode.VERIFY,
             input={
                 "map": _square_map(),
                 "first_point": [_rational(-1)],
@@ -158,7 +152,6 @@ def test_collision_inverse_obstruction_fails_closed_for_wrong_image(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.refute_by_collision",
-            mode=CapabilityMode.VERIFY,
             input={
                 "map": _square_map(),
                 "first_point": [_rational(-1)],

@@ -19,6 +19,25 @@ def test_exact_rational_operations() -> None:
     assert arithmetic.reciprocal(Fraction(-2, 3)) == Fraction(-3, 2)
 
 
+def test_integerize_and_normalize_exact_rational_vectors() -> None:
+    values = (Fraction(-1, 2), Fraction(3, 4), Fraction(-1, 8))
+
+    assert arithmetic.integerize_rational_vector(values) == (-4, 6, -1)
+    assert arithmetic.primitive_integer_vector(values) == (4, -6, 1)
+
+
+def test_integerize_rational_vector_uses_one_lcm_for_mixed_denominators() -> None:
+    values = (Fraction(1, 6), Fraction(1, 4), Fraction(1, 9), Fraction(5, 18))
+
+    assert arithmetic.integerize_rational_vector(values) == (6, 9, 4, 10)
+    assert arithmetic.primitive_integer_vector(values) == (6, 9, 4, 10)
+
+
+def test_primitive_integer_vector_rejects_zero_vector() -> None:
+    with pytest.raises(ValueError, match="nonzero"):
+        arithmetic.primitive_integer_vector((Fraction(0), Fraction(0)))
+
+
 @pytest.mark.parametrize(
     "operation", [arithmetic.reciprocal, lambda x: arithmetic.quotient(1, x)]
 )

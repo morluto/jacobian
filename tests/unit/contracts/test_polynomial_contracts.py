@@ -13,9 +13,11 @@ from jacobian.contracts.polynomials import (
     PolynomialCollisionPayload,
     PolynomialCollisionRequest,
     PolynomialCollisionSearchRequest,
+    PolynomialCollisionVerifyRequest,
     PolynomialEvaluationRequest,
     PolynomialJacobianRequest,
     PolynomialMapEvaluation,
+    PolynomialMapInverseCollisionVerifyRequest,
     RationalFunctionArtifact,
     RationalFunctionIdentityRequest,
     RationalPolynomialMap,
@@ -77,21 +79,72 @@ def test_evaluation_request_enforces_map_point_dimension() -> None:
         )
 
 
-def test_evaluation_artifact_enforces_point_image_dimension() -> None:
-    with pytest.raises(ValidationError, match="point and image dimensions"):
-        PolynomialMapEvaluation.model_validate(
-            {
-                "map_uri": "artifact://sha256/" + "a" * 64,
-                "point": {"values": [_rational()]},
-                "image": [_rational(), _rational()],
-                "backend": "sympy",
-                "backend_version": "1.14.0",
-            }
-        )
+def test_evaluation_artifact_accepts_rectangular_map_image() -> None:
+    evaluation = PolynomialMapEvaluation.model_validate(
+        {
+            "map_uri": "artifact://sha256/" + "a" * 64,
+            "point": {"values": [_rational()]},
+            "image": [_rational(), _rational()],
+            "backend": "sympy",
+            "backend_version": "1.14.0",
+        }
+    )
+
+    assert len(evaluation.point.values) == 1
+    assert len(evaluation.image) == 2
+
+
+def test_polynomial_map_point_contracts_accept_five_dimensions() -> None:
+    point = [_rational()] * 5
+    second_point = [_rational(1), *([_rational()] * 4)]
+    image = [_rational()] * 5
+    polynomial_map = _identity_map(5)
+
+    request = PolynomialEvaluationRequest.model_validate(
+        {"map": polynomial_map, "point": point}
+    )
+    evaluation = PolynomialMapEvaluation.model_validate(
+        {
+            "map_uri": "artifact://sha256/" + "a" * 64,
+            "point": {"values": point},
+            "image": image,
+            "backend": "sympy",
+            "backend_version": "1.14.0",
+        }
+    )
+    collision = PolynomialCollisionVerifyRequest.model_validate(
+        {
+            "map": polynomial_map,
+            "first_point": point,
+            "second_point": second_point,
+            "claimed_image": image,
+        }
+    )
+    inverse_collision = PolynomialMapInverseCollisionVerifyRequest.model_validate(
+        {
+            "map": polynomial_map,
+            "first_point": point,
+            "second_point": second_point,
+            "claimed_image": image,
+        }
+    )
+    payload = PolynomialCollisionPayload.model_validate(
+        {
+            "first_point": point,
+            "second_point": second_point,
+            "image": image,
+        }
+    )
+
+    assert len(request.point) == 5
+    assert len(evaluation.image) == 5
+    assert len(collision.claimed_image) == 5
+    assert len(inverse_collision.claimed_image) == 5
+    assert len(payload.image) == 5
 
 
 def test_collision_payload_enforces_all_dimensions() -> None:
-    with pytest.raises(ValidationError, match="dimensions must agree"):
+    with pytest.raises(ValidationError, match="points must have matching dimensions"):
         PolynomialCollisionPayload.model_validate(
             {
                 "first_point": [_rational()],
@@ -157,12 +210,70 @@ def test_jacobian_request_rejects_excessive_symbolic_expansion() -> None:
         PolynomialJacobianRequest.model_validate({"map": polynomial_map})
 
 
-def test_source_map_rejects_exponents_reserved_for_derived_artifacts() -> None:
+def test_shared_map_accepts_operation_expensive_exponents() -> None:
     polynomial_map = _identity_map()
     polynomial_map["coordinates"][0]["terms"][0]["exponents"] = [33]
 
-    with pytest.raises(ValidationError, match="source polynomial exponents"):
-        RationalPolynomialMap.model_validate(polynomial_map)
+    polynomial_map_value = RationalPolynomialMap.model_validate(polynomial_map)
+    assert polynomial_map_value.coordinates[0].terms[0].exponents == (33,)
+
+    with pytest.raises(ValidationError, match="32-degree operation budget"):
+        PolynomialJacobianRequest.model_validate({"map": polynomial_map})
+
+
+def test_shared_polynomial_map_is_not_limited_to_square_maps() -> None:
+    polynomial_map = _identity_map()
+    polynomial_map["coordinates"].append({"terms": []})
+
+    value = RationalPolynomialMap.model_validate(polynomial_map)
+    assert len(value.coordinates) == 2
+
+
+def test_canonical_sparse_value_still_rejects_duplicate_exponents() -> None:
+    with pytest.raises(ValidationError, match="exponent tuples must be unique"):
+        SparseRationalPolynomial.model_validate(
+            {
+                "terms": [
+                    {"coefficient": _rational(1), "exponents": [1]},
+                    {"coefficient": _rational(2), "exponents": [1]},
+                ]
+            }
+        )
+
+
+def test_canonical_sparse_value_still_rejects_zero_terms() -> None:
+    with pytest.raises(ValidationError, match="zero polynomial terms must be omitted"):
+        SparseRationalPolynomial.model_validate(
+            {
+                "terms": [
+                    {"coefficient": _rational(0), "exponents": [0]},
+                ]
+            }
+        )
+
+
+def test_shared_polynomial_representation_exceeds_gcd_input_budget() -> None:
+    from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
+    from jacobian.contracts.polynomials import RationalPolynomial
+
+    coefficient = "9" * 257
+    polynomial = RationalPolynomial.model_validate(
+        {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": coefficient, "den": "1"},
+                        "exponents": [1],
+                    }
+                ]
+            },
+        }
+    )
+    assert polynomial.polynomial.terms[0].coefficient.num == coefficient
+
+    with pytest.raises(ValidationError, match="256-digit"):
+        PolynomialGcdRequest(left=polynomial, right=polynomial)
 
 
 def test_bounded_rational_scalars_deduplicate_equivalents() -> None:

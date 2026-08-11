@@ -37,7 +37,7 @@ def test_accepts_reversed_operator_orientation(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
+    assert accepted.details["correctness"] == 1.0
 
 
 def test_rejects_corrupted_composition(tmp_path: Path) -> None:
@@ -47,5 +47,5 @@ def test_rejects_corrupted_composition(tmp_path: Path) -> None:
     _rewrite(app, submission)
 
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

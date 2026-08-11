@@ -39,7 +39,7 @@ def test_accepts_alternative_valid_witnesses(tmp_path: Path):
         ]
     ]
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_published_count(tmp_path: Path):
@@ -47,7 +47,7 @@ def test_rejects_published_count(tmp_path: Path):
     s = json.loads((app / "submission.json").read_text())
     s["result"]["corrected_count"] = 2022
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_rejects_single_bit_coverage_tamper(tmp_path: Path):
@@ -57,7 +57,7 @@ def test_rejects_single_bit_coverage_tamper(tmp_path: Path):
     bitmap[0] ^= 1 << 5
     s["result"]["membership_bitmap_hex"] = bitmap.hex()
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs)["correctness"] == 0.0
+    assert support._run_verifier(task, app, logs).details["correctness"] == 0.0
 
 
 def test_decouples_evidence_and_scope_from_assurance(tmp_path: Path):
@@ -67,8 +67,8 @@ def test_decouples_evidence_and_scope_from_assurance(tmp_path: Path):
     s = json.loads((app / "submission.json").read_text())
     rewrite(app, s)
     result = support._run_verifier(task, app, logs)
-    assert result["correctness"] == 0.0
-    assert result["evidence_validity"] == 0.0
-    assert result["scope_accuracy"] == 0.0
-    assert result["assurance_calibration"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.details["scope_accuracy"] == 0.0
+    assert result.details["assurance_calibration"] == 0.0
+    assert result.reward == 0.0

@@ -74,6 +74,19 @@ def test_evaluate_kernel_matrix_is_singular() -> None:
     assert response["failure_classifications"] == ["nontrivial_kernel"]
 
 
+def test_evaluate_matrix_accepts_canonical_entries_beyond_python_digit_limit() -> None:
+    value = "1" + ("0" * 5_000)
+
+    response = evaluate_capability(
+        {
+            "claim": {"predicate": "is_nonsingular"},
+            "candidate": {"rows": 1, "cols": 1, "entries": [[value]]},
+        }
+    )
+
+    assert response["conclusion"] == "TRUE"
+
+
 def test_find_witness_kernel_vector() -> None:
     claim = {"predicate": "is_nonsingular"}
     resp = find_witness_capability(

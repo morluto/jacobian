@@ -30,7 +30,7 @@ def test_accepts_complete_powerset_classification(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 1.0
+    assert support._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_sampling_count(tmp_path: Path) -> None:
@@ -38,7 +38,7 @@ def test_rejects_sampling_count(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["cases"][0]["checked_subsets"] = 5
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_rejects_wrong_collision_witness(tmp_path: Path) -> None:
@@ -46,4 +46,4 @@ def test_rejects_wrong_collision_witness(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["cases"][2]["first_failure"] = [4]
     _rewrite(app, submission)
-    assert support._run_verifier(task, app, logs)["reward"] == 0.0
+    assert support._run_verifier(task, app, logs).reward == 0.0

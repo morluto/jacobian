@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 from typing import Annotated, Literal, Self
 
 from pydantic import (
@@ -15,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from jacobian.canonical import sha256_digest
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
@@ -52,10 +52,6 @@ _ALLOWED_COMMANDS = frozenset(
     }
 )
 _ALETHE_HOLE_MARKER = b":rule hole"
-
-
-def _sha256(value: bytes) -> str:
-    return f"sha256:{hashlib.sha256(value).hexdigest()}"
 
 
 def _decode_base64(value: str) -> bytes:
@@ -270,7 +266,7 @@ class SmtProblemArtifact(ContractModel):
     @model_validator(mode="after")
     def require_exact_profile_input(self) -> Self:
         _validate_single_query_profile(self.smtlib_text, self.logic)
-        if self.smtlib_digest != _sha256(self.smtlib_text.encode("ascii")):
+        if self.smtlib_digest != sha256_digest(self.smtlib_text.encode("ascii")):
             raise ValueError("SMT-LIB digest does not match the exact input bytes")
         return self
 
@@ -284,7 +280,7 @@ class SmtProblemArtifact(ContractModel):
         return cls(
             logic=logic,
             smtlib_text=smtlib_text,
-            smtlib_digest=_sha256(smtlib_text.encode("ascii")),
+            smtlib_digest=sha256_digest(smtlib_text.encode("ascii")),
         )
 
     def raw_bytes(self) -> bytes:
@@ -325,7 +321,7 @@ class SmtAletheProofArtifact(ContractModel):
         proof = _decode_base64(self.proof_base64)
         if self.proof_base64 != base64.b64encode(proof).decode("ascii"):
             raise ValueError("proof bytes must use canonical base64")
-        if self.proof_digest != _sha256(proof):
+        if self.proof_digest != sha256_digest(proof):
             raise ValueError("Alethe proof digest does not match the preserved bytes")
         holes = proof.count(_ALETHE_HOLE_MARKER)
         if self.alethe_hole_count != holes or self.contains_holes != (holes > 0):
@@ -359,7 +355,7 @@ class SmtAletheProofArtifact(ContractModel):
         return cls(
             problem=problem,
             proof_base64=base64.b64encode(proof).decode("ascii"),
-            proof_digest=_sha256(proof),
+            proof_digest=sha256_digest(proof),
             alethe_hole_count=holes,
             contains_holes=holes > 0,
             producer=producer,

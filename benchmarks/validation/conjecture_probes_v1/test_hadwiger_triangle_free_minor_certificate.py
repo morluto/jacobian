@@ -65,19 +65,19 @@ def test_evidence_result_requires_exact_json_types(tmp_path):
     coloring[0] = True
     _write_evidence(app, s, {**s["result"], "four_coloring": coloring})
     r = run(app, logs)
-    assert r["mathematics"] == 1.0 and r["evidence"] == 0.0
-    assert r["aggregate_reward"] == 0.0
+    assert r.details["mathematics"] == 1.0 and r.details["evidence"] == 0.0
+    assert r.details["aggregate_reward"] == 0.0
     # An integral float must not compare equal to the integer invariant.
     app, logs, s = case(tmp_path / "float")
     _write_evidence(app, s, {**s["result"], "chromatic_number": 4.0})
     r = run(app, logs)
-    assert r["mathematics"] == 1.0 and r["evidence"] == 0.0
-    assert r["aggregate_reward"] == 0.0
+    assert r.details["mathematics"] == 1.0 and r.details["evidence"] == 0.0
+    assert r.details["aggregate_reward"] == 0.0
 
 
 def test_oracle_and_relabeling_pass(tmp_path):
     app, logs, _ = case(tmp_path)
-    assert run(app, logs)["aggregate_reward"] == 1.0
+    assert run(app, logs).details["aggregate_reward"] == 1.0
     app, logs, s = case(tmp_path / "perm")
     perm = list(reversed(range(11)))
     s["result"]["edges"] = sorted(
@@ -91,29 +91,29 @@ def test_oracle_and_relabeling_pass(tmp_path):
         [perm[v] for v in branch] for branch in s["result"]["branch_sets"]
     ]
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 1.0
+    assert run(app, logs).details["aggregate_reward"] == 1.0
 
 
 def test_bad_coloring_and_disconnected_branch_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["result"]["four_coloring"][1] = s["result"]["four_coloring"][0]
     write(app, s)
-    assert run(app, logs)["mathematics"] == 0.0
+    assert run(app, logs).details["mathematics"] == 0.0
     app, logs, s = case(tmp_path / "branch")
     s["result"]["branch_sets"][2] = [2, 5]
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_triangle_and_duplicate_edge_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["result"]["edges"][0] = [0, 2]
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
     app, logs, s = case(tmp_path / "dup")
     s["result"]["edges"][-1] = s["result"]["edges"][0]
     write(app, s)
-    assert run(app, logs)["aggregate_reward"] == 0.0
+    assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_malformed_assurance_keeps_diagnostics(tmp_path):
@@ -124,12 +124,12 @@ def test_malformed_assurance_keeps_diagnostics(tmp_path):
     write(app, s)
     r = run(app, logs)
     assert (
-        r["mathematics"] == 1.0
-        and r["evidence"] == 1.0
-        and r["scope"] == 1.0
-        and r["assurance"] == 0.0
-        and r["aggregate_reward"] == 0.0
-        and "error" not in r
+        r.details["mathematics"] == 1.0
+        and r.details["evidence"] == 1.0
+        and r.details["scope"] == 1.0
+        and r.details["assurance"] == 0.0
+        and r.details["aggregate_reward"] == 0.0
+        and "error" not in r.details
     )
 
 
@@ -142,12 +142,12 @@ def test_nonfinite_json_rejected_in_raw_parse(tmp_path):
     )
     r = run(app, logs)
     assert (
-        r["mathematics"] == 0.0
-        and r["evidence"] == 0.0
-        and r["scope"] == 0.0
-        and r["assurance"] == 0.0
-        and r["aggregate_reward"] == 0.0
-        and "error" not in r
+        r.details["mathematics"] == 0.0
+        and r.details["evidence"] == 0.0
+        and r.details["scope"] == 0.0
+        and r.details["assurance"] == 0.0
+        and r.details["aggregate_reward"] == 0.0
+        and "error" not in r.details
     )
 
 
@@ -155,12 +155,12 @@ def test_false_verified_and_tampered_input_fail(tmp_path):
     app, logs, s = case(tmp_path)
     s["claimed_assurance"] = "VERIFIED"
     write(app, s)
-    assert run(app, logs)["false_certification"] is True
+    assert run(app, logs).details["false_certification"] is True
     app, logs, _ = case(tmp_path / "input")
     (app / "input.json").write_text("{}\n")
     r = run(app, logs)
     assert (
-        r["input_binding"] == 0.0
-        and r["mathematics"] == 1.0
-        and r["aggregate_reward"] == 0.0
+        r.details["input_binding"] == 0.0
+        and r.details["mathematics"] == 1.0
+        and r.details["aggregate_reward"] == 0.0
     )

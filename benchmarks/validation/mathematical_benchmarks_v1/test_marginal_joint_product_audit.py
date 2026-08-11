@@ -29,8 +29,8 @@ def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
             ]
         ),
     )
-    assert result["scope_accuracy"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["scope_accuracy"] == 1.0
+    assert result.reward == 1.0
 
 
 def _product(entries):
@@ -45,7 +45,7 @@ def _product(entries):
 
 
 def test_oracle_passes(tmp_path: Path) -> None:
-    assert _run(tmp_path)["reward"] == 1.0
+    assert _run(tmp_path).reward == 1.0
 
 
 def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
@@ -61,17 +61,17 @@ def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> 
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
     (app / "input.json").write_text("{}")
     result = support._run_verifier(task, app, logs)
-    assert result["input_binding"] == 0.0
-    assert result["correctness"] == 1.0
-    assert result["reward"] == 0.0
+    assert result.details["input_binding"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.reward == 0.0
 
 
 def test_zero_mass_product_entries_are_normalized(tmp_path: Path) -> None:
@@ -85,7 +85,7 @@ def test_zero_mass_product_entries_are_normalized(tmp_path: Path) -> None:
         entries.append({"value": missing, "mass": "0"})
         entries.sort(key=lambda entry: entry["value"])
 
-    assert _run(tmp_path, mutate)["reward"] == 1.0
+    assert _run(tmp_path, mutate).reward == 1.0
 
 
 def test_accepts_alternative_nonproduct_coupling(tmp_path: Path) -> None:
@@ -112,35 +112,35 @@ def test_accepts_alternative_nonproduct_coupling(tmp_path: Path) -> None:
             if pre.get(value, 0) != lim.get(value, 0)
         )
 
-    assert _run(tmp_path, mutate)["reward"] == 1.0
+    assert _run(tmp_path, mutate).reward == 1.0
 
 
 def test_rejects_prelimit_dependence(tmp_path: Path) -> None:
     def mutate(submission):
         submission["result"]["prelimit_joint"][0]["mass"] = "1/50"
 
-    assert _run(tmp_path, mutate)["reward"] == 0.0
+    assert _run(tmp_path, mutate).reward == 0.0
 
 
 def test_rejects_wrong_limit_marginal(tmp_path: Path) -> None:
     def mutate(submission):
         submission["result"]["limit_joint"][0]["mass"] = "1/5"
 
-    assert _run(tmp_path, mutate)["reward"] == 0.0
+    assert _run(tmp_path, mutate).reward == 0.0
 
 
 def test_rejects_corrupted_product_pushforward(tmp_path: Path) -> None:
     def mutate(submission):
         submission["result"]["limit_product_distribution"][0]["mass"] = "1/10"
 
-    assert _run(tmp_path, mutate)["reward"] == 0.0
+    assert _run(tmp_path, mutate).reward == 0.0
 
 
 def test_rejects_noncanonical_mass(tmp_path: Path) -> None:
     def mutate(submission):
         submission["result"]["prelimit_joint"][0]["mass"] = "2/200"
 
-    assert _run(tmp_path, mutate)["reward"] == 0.0
+    assert _run(tmp_path, mutate).reward == 0.0
 
 
 def test_rejects_false_verified_claim(tmp_path: Path) -> None:
@@ -148,8 +148,8 @@ def test_rejects_false_verified_claim(tmp_path: Path) -> None:
         submission["claimed_assurance"] = "VERIFIED"
 
     result = _run(tmp_path, mutate)
-    assert result["false_certification"] is True
-    assert result["reward"] == 0.0
+    assert result.details["false_certification"] is True
+    assert result.reward == 0.0
 
 
 def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
@@ -164,8 +164,8 @@ def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_contradictory_keyword_evidence_is_rejected(tmp_path: Path) -> None:
@@ -179,8 +179,8 @@ def test_contradictory_keyword_evidence_is_rejected(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_equivalent_evidence_phrasing_is_accepted(tmp_path: Path) -> None:
@@ -195,8 +195,8 @@ def test_equivalent_evidence_phrasing_is_accepted(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
@@ -214,15 +214,15 @@ def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
     submission["evidence"][0]["sha256"] = support._digest(evidence)
     support._write_json(app / "submission.json", submission)
     result = support._run_verifier(task, app, logs)
-    assert result["evidence_validity"] == 1.0
-    assert result["reward"] == 1.0
+    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_bad_scope_preserves_math_diagnostic(tmp_path: Path) -> None:
     result = _run(tmp_path, lambda s: s.__setitem__("scope", "wrong"))
-    assert result["correctness"] == 1.0
-    assert result["scope_accuracy"] == 0.0
-    assert result["reward"] == 0.0
+    assert result.details["correctness"] == 1.0
+    assert result.details["scope_accuracy"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_unattainable_zero_mass_product_value_is_rejected(tmp_path: Path) -> None:
@@ -231,4 +231,4 @@ def test_unattainable_zero_mass_product_value_is_rejected(tmp_path: Path) -> Non
         entries.append({"value": 26, "mass": "0"})
         entries.sort(key=lambda entry: entry["value"])
 
-    assert _run(tmp_path, mutate)["reward"] == 0.0
+    assert _run(tmp_path, mutate).reward == 0.0

@@ -8,6 +8,7 @@ from verifier_support import (
     ASSURANCE_LEVELS,
     false_verified_claim,
     load_submission,
+    normalize_reward_file,
     resolve_evidence,
     strict_submission_contract,
 )
@@ -389,6 +390,7 @@ def main() -> None:
     destination.write_text(
         json.dumps(_evaluate(load_submission()), sort_keys=True) + "\n"
     )
+    normalize_reward_file(destination)
 
 
 if __name__ == "__main__":

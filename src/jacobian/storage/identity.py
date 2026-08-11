@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import Final
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
+from jacobian.canonical import CanonicalLimits, canonicalize_json, sha256_digest
 from jacobian.contracts.artifacts import ArtifactManifest
 from jacobian.storage.errors import ArtifactNotFoundError
 
@@ -33,10 +33,6 @@ class _ArtifactIdentity:
     manifest_digest: str
     manifest: ArtifactManifest
     manifest_bytes: bytes
-
-
-def sha256_digest(data: bytes) -> str:
-    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
 def uri_from_digest(digest: str) -> str:
@@ -143,6 +139,5 @@ __all__ = [
     "artifact_identity",
     "digest_from_uri",
     "framed_digest",
-    "sha256_digest",
     "uri_from_digest",
 ]

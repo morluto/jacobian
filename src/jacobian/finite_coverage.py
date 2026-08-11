@@ -24,7 +24,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
     CapabilityRelationship,
@@ -237,7 +236,6 @@ class FiniteCoverageVerifyAdapter:
                 ),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(FiniteCoverageVerifyRequest),
             output_schema=model_schema(FiniteCoverageVerifyOutput),
             tags=("finite", "coverage", "verification", "paged-archive"),
@@ -248,7 +246,6 @@ class FiniteCoverageVerifyAdapter:
                         "Verify that two pages cover a three-item finite scope "
                         "exactly once."
                     ),
-                    mode=CapabilityMode.VERIFY,
                     input=FiniteCoverageVerifyRequest.model_validate(
                         {
                             "canonicalizer_id": "finite.string.nfc@1",
@@ -455,7 +452,8 @@ class FiniteCoverageVerifyAdapter:
             summary="finite exactly-once coverage replay certificate",
         )
         checker_id = self.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError("checker is not installed")
         checked = self.verification.verify_certificate(
             certificate_uri=certificate.artifact_uri,
             checker_id=checker_id,
@@ -520,7 +518,6 @@ class FiniteCoverageVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

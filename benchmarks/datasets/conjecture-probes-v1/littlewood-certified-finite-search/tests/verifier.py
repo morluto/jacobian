@@ -11,6 +11,7 @@ from typing import Any
 from verifier_support import (
     evidence_list_is_bound,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -88,6 +89,7 @@ def reward(v):
     p = Path("/logs/verifier")
     p.mkdir(parents=True, exist_ok=True)
     (p / "reward.json").write_text(json.dumps(v, sort_keys=True))
+    normalize_reward_file(p / "reward.json")
 
 
 def main():

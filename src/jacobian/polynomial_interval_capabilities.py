@@ -32,8 +32,6 @@ from fractions import Fraction
 from math import comb
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
-from pydantic import ValidationError
-
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
@@ -46,7 +44,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -69,12 +66,11 @@ from jacobian.contracts.polynomial_intervals import (
 )
 from jacobian.contracts.results import (
     Conclusion,
-    ContractModel,
-    Execution,
     ExecutionStatus,
     Verification,
 )
 from jacobian.domains._examples import example
+from jacobian.polynomials._support import _computed_result, _validate_request
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 from jacobian.providers import LazyLoader
 from jacobian.registry import CheckerRegistry
@@ -281,7 +277,6 @@ class PolynomialIntervalEncloseAdapter:
                 ),
                 checker_ids=checker_ids,
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialIntervalEnclosureRequest),
             output_schema=model_schema(PolynomialIntervalEnclosureOutput),
             tags=(
@@ -317,6 +312,7 @@ class PolynomialIntervalEncloseAdapter:
             request.input,
             code="INVALID_POLYNOMIAL_INTERVAL_ENCLOSURE_REQUEST",
             operation="interval enclosure",
+            error_factory=_interval_error,
         )
         started = time.monotonic()
         polynomial = validated.polynomial
@@ -419,7 +415,10 @@ class PolynomialIntervalEnclosureVerifyAdapter:
     def __init__(self, resources: PolynomialIntervalResources) -> None:
         self.resources = resources
         checker_id = resources.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError(
+                "polynomial interval verify adapter requires an authorized checker"
+            )
         self._descriptor = CapabilityDescriptor(
             capability_id="polynomial.interval.enclosure.verify",
             version="1",
@@ -442,7 +441,6 @@ class PolynomialIntervalEnclosureVerifyAdapter:
                 ),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialIntervalEnclosureVerifyRequest),
             output_schema=model_schema(PolynomialIntervalEnclosureVerifyOutput),
             tags=(
@@ -465,10 +463,16 @@ class PolynomialIntervalEnclosureVerifyAdapter:
             request.input,
             code="INVALID_POLYNOMIAL_INTERVAL_ENCLOSURE_VERIFY_REQUEST",
             operation="interval enclosure verification",
+            error_factory=_interval_error,
         )
         installation = self.resources.installation
         checker_id = installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise _interval_error(
+                "POLYNOMIAL_INTERVAL_CHECKER_UNAVAILABLE",
+                "interval_enclosure_verification",
+                "The independent interval enclosure checker is not installed in this runtime.",
+            )
         polynomial = validated.polynomial
         interval = validated.interval
         polynomial_artifact = self.resources.artifacts.put(
@@ -551,9 +555,14 @@ class PolynomialIntervalEnclosureVerifyAdapter:
             and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
-        conclusion = cast(
-            Literal["TRUE", "FALSE", "UNKNOWN"],
-            checked.conclusion.value,
+        conclusion: Literal["TRUE", "FALSE", "UNKNOWN"] = (
+            "TRUE"
+            if verified and checked.conclusion is Conclusion.TRUE
+            else (
+                "FALSE"
+                if verified and checked.conclusion is Conclusion.FALSE
+                else "UNKNOWN"
+            )
         )
         record_uri = checked.verification_record_uri if verified else None
         output = PolynomialIntervalEnclosureVerifyOutput(
@@ -582,7 +591,6 @@ class PolynomialIntervalEnclosureVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -666,23 +674,6 @@ class PolynomialIntervalEnclosureVerifyAdapter:
         )
 
 
-def _validate_request[RequestModel: ContractModel](
-    model: type[RequestModel],
-    payload: object,
-    *,
-    code: str,
-    operation: str,
-) -> RequestModel:
-    try:
-        return model.model_validate(payload)
-    except ValidationError as exc:
-        raise _interval_error(
-            code,
-            "request_validation",
-            f"The complete polynomial {operation} request is invalid.",
-        ) from exc
-
-
 def _bernstein_coefficients(
     polynomial: UnivariateRationalPolynomial,
     interval: RationalInterval,
@@ -731,45 +722,6 @@ def _rational(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
         num=format_canonical_integer(value.numerator),
         den=format_canonical_integer(value.denominator),
-    )
-
-
-def _computed_result(
-    *,
-    descriptor: CapabilityDescriptor,
-    request: CapabilityRequest,
-    started: float,
-    output: dict[str, Any],
-    scope: CapabilityScope,
-    relationships: tuple[CapabilityRelationship, ...],
-    artifact_uris: tuple[str, ...],
-    completeness_basis: str,
-    assurance_basis: str,
-) -> CapabilityResult:
-    return CapabilityResult(
-        capability_id=descriptor.capability_id,
-        capability_version=descriptor.version,
-        mode=request.mode,
-        execution=Execution(
-            status=ExecutionStatus.COMPLETED,
-            runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-        ),
-        output=output,
-        scope=scope,
-        completeness=CapabilityCompleteness(
-            status=CapabilityCompletenessStatus.COMPLETE,
-            basis=(
-                f"{completeness_basis}; no mathematical conclusion or "
-                "independent verification is claimed"
-            ),
-            assurance_level=CapabilityAssuranceLevel.COMPUTED,
-        ),
-        relationships=relationships,
-        assurance=CapabilityAssurance(
-            level=CapabilityAssuranceLevel.COMPUTED,
-            basis=assurance_basis,
-        ),
-        artifact_uris=artifact_uris,
     )
 
 

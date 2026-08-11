@@ -1,6 +1,6 @@
 {
   "contract": "jacobian.gudhi-persistence-spike/v1",
-  "pin_sha256": "sha256:329e57f50ad88ddbf2f6a3fe7cbbb0b5121be7c92a01d3a0b57db9241b1e6813",
+  "pin_sha256": "sha256:3decd51546ff618689114fb57eff03e1abc50133207e50fcba5c473583c02f4f",
   "provider": "gudhi",
   "report_assurance": "OBSERVED_PROVIDER_BEHAVIOR_WITH_INDEPENDENT_REPLAY",
   "report_conclusion": "SPIKE_PASSED_PRODUCTION_DEFERRED",

@@ -15,9 +15,11 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryRequest,
     CapabilityInputKind,
     CapabilityInvocationExample,
-    CapabilityMode,
 )
 from jacobian.runtime.model import JacobianRuntime
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "DISCOVERY"
 
 
 def test_installed_capability_discovery_is_compact_deterministic_and_transparent(
@@ -39,7 +41,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
                 description="Find a finite algebra that falsifies a target law.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.EXPLORE,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("counterexample", "bounded-search"),
@@ -47,7 +48,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
                     CapabilityInvocationExample(
                         name="small",
                         description="Use a small integer fixture.",
-                        mode=CapabilityMode.EXPLORE,
                         input={"value": 2},
                     ),
                 ),
@@ -63,7 +63,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
                 description="Independently check a proposed graph coloring.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.VERIFY,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("graph", "checker"),
@@ -74,7 +73,6 @@ def test_installed_capability_discovery_is_compact_deterministic_and_transparent
     request = CapabilityDiscoveryRequest(
         query="find a counterexample to associativity",
         domain="fixture-algebra",
-        mode=CapabilityMode.EXPLORE,
         limit=10,
     )
     first = core.capabilities.discover(request)
@@ -109,7 +107,6 @@ def test_discovery_distinguishes_unknown_domain_from_lexical_absence(
                 description="Compute one exact finite event probability.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.EXPLORE,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("probability", "exact"),
@@ -142,9 +139,9 @@ def test_discovery_distinguishes_unknown_domain_from_lexical_absence(
 
 
 def test_discovery_recognizes_hidden_installed_domains_without_returning_them(
-    authorized_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    discovered = authorized_complete_runtime.core.capabilities.discover(
+    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
         CapabilityDiscoveryRequest(domain="artifact")
     )
 
@@ -156,9 +153,9 @@ def test_discovery_recognizes_hidden_installed_domains_without_returning_them(
 
 
 def test_storage_primitive_is_catalogued_but_not_discovered(
-    authorized_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    capabilities = authorized_complete_runtime.core.capabilities
+    capabilities = attached_complete_runtime_read_only.core.capabilities
     catalog_ids = {
         descriptor.capability_id for descriptor in capabilities.catalog().capabilities
     }
@@ -172,12 +169,12 @@ def test_storage_primitive_is_catalogued_but_not_discovered(
 
 
 def test_bounded_search_producers_advertise_produced_artifact_types(
-    authorized_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
     descriptors = {
         descriptor.capability_id: descriptor
         for descriptor in (
-            authorized_complete_runtime.core.capabilities.catalog().capabilities
+            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
         )
     }
     induced_tree = descriptors["graph.induced_tree.maximum.compute"]
@@ -187,24 +184,22 @@ def test_bounded_search_producers_advertise_produced_artifact_types(
 
 
 def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
-    authorized_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
     descriptors = {
         descriptor.capability_id: descriptor
         for descriptor in (
-            authorized_complete_runtime.core.capabilities.catalog().capabilities
+            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
         )
     }
-    produced = descriptors["poset.finite.materialize"].produced_artifact_types
-    accepted = descriptors["poset.width.compute"].accepted_artifact_types
-    assert produced
-    assert produced == accepted
+    assert descriptors["poset.finite.compute"].produced_artifact_types == ()
+    assert descriptors["poset.width.compute"].accepted_artifact_types == ()
 
 
 def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
-    authorized_complete_runtime: JacobianRuntime,
+    attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    runtime = authorized_complete_runtime
+    runtime = attached_complete_runtime_read_only
 
     strong = runtime.core.capabilities.discover(
         CapabilityDiscoveryRequest(
@@ -282,7 +277,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
                 description="Replay one structured formal proof certificate.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.VERIFY,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("proof", "verify"),
@@ -327,7 +321,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
     explicitly_structured = capability_core_services.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="formal UNSAT proof",
-            mode=CapabilityMode.VERIFY,
             input_kind=CapabilityInputKind.STRUCTURED_REQUEST,
             limit=20,
         )
@@ -340,7 +333,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
     formal_intent = capability_core_services.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="formal UNSAT proof",
-            mode=CapabilityMode.VERIFY,
         )
     )
     assert formal_intent.resolved_input_kind is None
@@ -351,7 +343,6 @@ def test_discovery_rejects_unsupported_natural_language_proof_routes(
     formal_trace = capability_core_services.core.capabilities.discover(
         CapabilityDiscoveryRequest(
             query="verify an LRAT proof trace",
-            mode=CapabilityMode.VERIFY,
         )
     )
     assert formal_trace.resolved_input_kind is None
@@ -377,7 +368,6 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
                 description="Accept formal proposition syntax.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.EXPLORE,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("formal", "proposition"),
@@ -394,7 +384,6 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
                 description="Accept one exact bound proof artifact.",
                 provider="tests",
                 provider_runtime=TEST_RUNTIME,
-                modes=(CapabilityMode.VERIFY,),
                 input_schema=schema,
                 output_schema=schema,
                 tags=("proof", "artifact"),
@@ -419,7 +408,6 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
     typed = service.discover(
         CapabilityDiscoveryRequest(
             query="proof artifact",
-            mode=CapabilityMode.VERIFY,
             input_kind=CapabilityInputKind.TYPED_ARTIFACT,
             artifact_type=proof_schema_uri,
         )
@@ -492,7 +480,6 @@ def test_descriptor_artifact_contract_requires_typed_artifact_input() -> None:
             description="Invalid routing metadata fixture.",
             provider="tests",
             provider_runtime=TEST_RUNTIME,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={"type": "object"},
             output_schema={"type": "object"},
             accepted_artifact_types=(proof_schema_uri,),
@@ -509,7 +496,6 @@ def test_descriptor_artifact_contract_requires_typed_artifact_input() -> None:
             description="Typed artifact routing requires an exact stored schema.",
             provider="tests",
             provider_runtime=TEST_RUNTIME,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={"type": "object"},
             output_schema={"type": "object"},
             accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
@@ -527,7 +513,6 @@ def test_capability_registration_rejects_an_invalid_invocation_example(
             description="Advertises an example that violates its input schema.",
             provider="tests",
             provider_runtime=TEST_RUNTIME,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={
                 "type": "object",
                 "properties": {"value": {"type": "integer"}},
@@ -539,7 +524,6 @@ def test_capability_registration_rejects_an_invalid_invocation_example(
                 CapabilityInvocationExample(
                     name="invalid",
                     description="This value has the wrong type.",
-                    mode=CapabilityMode.EXPLORE,
                     input={"value": "not-an-integer"},
                 ),
             ),

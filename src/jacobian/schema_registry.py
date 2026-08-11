@@ -131,12 +131,11 @@ class SchemaRegistry:
 
         registration = (name, version, canonical_schema)
         transaction_identity = self.store.transaction_identity
-        registrations = self._registrations
-        if transaction_identity is not None:
-            registrations = self._pending.setdefault(
-                transaction_identity,
-                _PendingRegistrations(),
-            ).registrations
+        if transaction_identity is None:
+            registrations = self._registrations
+        else:
+            pending = self._pending.get(transaction_identity)
+            registrations = pending.registrations if pending is not None else {}
         cached_uri = registrations.get(registration)
         if cached_uri is not None:
             return cached_uri
@@ -155,11 +154,16 @@ class SchemaRegistry:
             version=version,
             definition=schema,
         )
-        registrations[registration] = schema_uri
         if transaction_identity is None:
+            self._registrations[registration] = schema_uri
             self._schema_bytes[schema_uri] = canonical_schema
         else:
-            self._pending[transaction_identity].schemas[schema_uri] = canonical_schema
+            pending = self._pending.setdefault(
+                transaction_identity,
+                _PendingRegistrations(),
+            )
+            pending.registrations[registration] = schema_uri
+            pending.schemas[schema_uri] = canonical_schema
         return schema_uri
 
     def register_model(
@@ -179,10 +183,21 @@ class SchemaRegistry:
         """
 
         self._reconcile_pending()
+        canonical_schema = _model_schema_bytes(model)
+        schema = cast(dict[str, Any], loads_strict_json(canonical_schema))
+        self._ensure_model_contract_available(
+            self.store.descriptor_uri(
+                kind="schema",
+                name=name,
+                version=version,
+                definition=schema,
+            ),
+            model,
+        )
         schema_uri = self._register_canonical(
             name=name,
             version=version,
-            canonical_schema=_model_schema_bytes(model),
+            canonical_schema=canonical_schema,
         )
         self._bind_model_contract(schema_uri, model)
         if producer_only:
@@ -214,16 +229,35 @@ class SchemaRegistry:
         schema_uri: str,
         model: type[BaseModel],
     ) -> None:
+        self._ensure_model_contract_available(schema_uri, model)
         transaction_identity = self.store.transaction_identity
-        model_contracts = self._model_contracts
         if transaction_identity is not None:
             model_contracts = self._pending[transaction_identity].model_contracts
-        registered = model_contracts.get(schema_uri)
+        else:
+            model_contracts = self._model_contracts
+        model_contracts[schema_uri] = model
+
+    def _ensure_model_contract_available(
+        self,
+        schema_uri: str,
+        model: type[BaseModel],
+    ) -> None:
+        committed = self._model_contracts.get(schema_uri)
+        if committed is not None and committed is not model:
+            raise SchemaRegistryError(
+                "one schema URI cannot use multiple model-backed contracts"
+            )
+        transaction_identity = self.store.transaction_identity
+        if transaction_identity is None:
+            return
+        pending = self._pending.get(transaction_identity)
+        registered = (
+            pending.model_contracts.get(schema_uri) if pending is not None else None
+        )
         if registered is not None and registered is not model:
             raise SchemaRegistryError(
                 "one schema URI cannot use multiple model-backed contracts"
             )
-        model_contracts[schema_uri] = model
 
     def resolve(self, schema_uri: str) -> dict[str, Any]:
         """Load a previously registered schema definition."""
@@ -262,6 +296,9 @@ class SchemaRegistry:
         active_identity = self.store.transaction_identity
         for transaction_identity, pending in tuple(self._pending.items()):
             if transaction_identity == active_identity:
+                continue
+            if not pending.schemas:
+                del self._pending[transaction_identity]
                 continue
             witness_uri = next(iter(pending.schemas))
             try:

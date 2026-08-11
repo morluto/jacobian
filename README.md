@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="docs/explanation/hero-image.md"><img src="docs/assets/jacobian-hero.jpg" width="100%" alt="An archival-style black-and-white photograph of a mathematician working at a chalkboard, with a constant Jacobian determinant and three distinct inputs mapping to one output."></a>
+  <img src="docs/assets/jacobian-hero.jpg" width="100%" alt="An archival-style black-and-white photograph of a mathematician working at a chalkboard, with a constant Jacobian determinant and three distinct inputs mapping to one output.">
 </p>
 
 <h1 align="center">Jacobian</h1>
@@ -26,14 +26,78 @@ an MCP server and is also available as a CLI and Python library. Agents can use
 it to compute invariants, search for examples or counterexamples, work with
 solver artifacts, and check formal proofs.
 
-The important part is that Jacobian does not treat every successful computation
-as a proof.
+## Quickstart
 
-It exposes focused mathematical operations through a common interface. An
-agent decides which operations to use and in what order. Results stay visible
-as typed values or durable artifacts.
+For a one-time setup:
 
-## A small example
+```sh
+npx jacobian setup
+```
+
+For a guided user-local install:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | sh
+```
+
+The installer resolves an npm release to an exact version, installs the small
+launcher without lifecycle scripts, configures selected MCP clients, and
+verifies the local server. The Python package environment is approximately 160
+MB; if Python 3.12 is not already available, uv's managed Python adds about 110
+MB. Add `--defer-runtime` to postpone both until first use:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | \
+  sh -s -- --client codex --yes --defer-runtime
+```
+
+For repeated use:
+
+```sh
+npm install -g jacobian
+jacobian setup
+jacobian upgrade
+jacobian doctor
+```
+
+For the Python distribution:
+
+```sh
+python -m pip install jacobian
+```
+
+The launcher supports Claude, Codex, Cursor, Gemini, and OpenCode. It requires
+Node.js 18 or newer plus Python 3.12/3.13 or
+[`uv`](https://docs.astral.sh/uv/); the guided installer can install its pinned
+`uv` release after confirmation. Run `jacobian mcp` to start the server
+directly.
+
+The Python distribution contains the mathematical kernel, CLI, and MCP server.
+The npm package is a sub-100 KB thin launcher and MCP client installer for that
+same implementation; it is not a separate JavaScript API. It bundles one TOML
+parser for fail-closed Codex configuration updates and runs no install-time
+scripts. The larger download is the local Python mathematical runtime, not a
+JavaScript dependency tree.
+
+To run the exact code in a clone, follow
+[Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).
+
+## A simple counterexample
+
+Here is a small counterexample an agent can reason about directly:
+
+```text
+Claim: every prime is odd
+Agent checks: 2 is prime and even
+Counterexample: 2
+Conclusion: the claim is false
+```
+
+Here `2` is a witness: the actual example that disproves the claim. For a much
+larger search, Jacobian can preserve the candidate and the exact checks used to
+establish it.
+
+## A checked counterexample
 
 Suppose an agent is testing the claim **“`F` is injective.”**
 
@@ -54,61 +118,6 @@ remains `UNKNOWN`. Absence of a witness is not proof.
 
 The [introductory tutorial](docs/tutorials/first-verified-result.md) shows the
 same boundary in a runnable graph example.
-
-## Quickstart
-
-For a guided user-local install:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | sh
-```
-
-The installer resolves an npm release to an exact version, installs the small
-launcher without lifecycle scripts, configures selected MCP clients, and
-verifies the local server. The Python package environment is approximately 160
-MB; if Python 3.12 is not already available, uv's managed Python adds about 110
-MB. Add `--defer-runtime` to postpone both until first use:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | \
-  sh -s -- --client codex --yes --defer-runtime
-```
-
-For a one-off setup without a persistent launcher:
-
-```sh
-npx jacobian setup
-```
-
-For repeated use:
-
-```sh
-npm install -g jacobian
-jacobian setup
-jacobian upgrade
-jacobian doctor
-```
-
-For the Python distribution:
-
-```sh
-python -m pip install jacobian
-```
-
-The launcher supports Claude, Codex, Cursor, Gemini, and OpenCode. It requires
-Node.js 18 or newer plus Python 3.12 or
-[`uv`](https://docs.astral.sh/uv/); the guided installer can install its pinned
-`uv` release after confirmation. Run `jacobian mcp` to start the server
-directly.
-
-The Python distribution contains the mathematical kernel, CLI, and MCP server.
-The npm package is a sub-100 KB thin launcher and MCP client installer for that
-same implementation; it is not a separate JavaScript API. The npm tarball has
-no npm runtime dependencies. The larger download is the local Python
-mathematical runtime, not a JavaScript dependency tree.
-
-To run the exact code in a clone, follow
-[Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).
 
 ## Available mathematics
 
@@ -180,9 +189,6 @@ research may change experimental contracts between releases.
   Lean setup
 - [Remote deployment](docs/how-to/deploy-remote-mcp.md) — HTTP deployment and
   authentication
-
-The background to the repository artwork is documented in
-[About the hero image](docs/explanation/hero-image.md).
 
 ## Contributing
 

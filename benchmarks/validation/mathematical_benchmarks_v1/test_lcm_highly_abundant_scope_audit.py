@@ -26,8 +26,8 @@ def test_accepts_alternative_earlier_index(tmp_path: Path) -> None:
     )
     support._write_json(app / "submission.json", submission)
     accepted = support._run_verifier(task, app, logs)
-    assert accepted["correctness"] == 1.0
-    assert accepted["reward"] == pytest.approx(1.0)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(
@@ -52,5 +52,5 @@ def test_rejects_corrupted_or_overclaimed_certificates(
     target[path[-1]] = replacement
     support._write_json(app / "submission.json", submission)
     rejected = support._run_verifier(task, app, logs)
-    assert rejected["correctness"] == 0.0
-    assert rejected["reward"] == 0.0
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

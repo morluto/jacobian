@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import hashlib
 from fractions import Fraction
-from math import gcd
 from typing import Any, Literal, cast
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.contracts.capabilities import (
     CapabilityInvocationExample,
-    CapabilityMode,
 )
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.jacobian_syzygy import (
@@ -26,8 +24,17 @@ from jacobian.contracts.polynomials import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-from jacobian.domains.polynomial._support import materialized_polynomial_operation
-from jacobian.domains.polynomial.operations import _poly, _rational, _symbols, _wire
+from jacobian.domains.polynomial._support import (
+    materialized_polynomial_operation,
+    polynomial_operation,
+)
+from jacobian.domains.polynomial.conversions import (
+    rational_from_sympy,
+    rational_polynomial_from_sympy,
+    rational_polynomial_to_sympy,
+    symbols_for_variables,
+)
+from jacobian.math.arithmetic import primitive_integer_vector
 
 
 def _homogeneous_basis(degree: int) -> tuple[tuple[int, int, int], ...]:
@@ -67,24 +74,10 @@ def _matrix_digest(
 
 def _primitive_kernel(vector: Any) -> tuple[Fraction, ...]:
     fractions = tuple(Fraction(value) for value in vector)
-    denominator_lcm = 1
-    for fraction_value in fractions:
-        denominator_lcm = (
-            denominator_lcm
-            * fraction_value.denominator
-            // gcd(denominator_lcm, fraction_value.denominator)
-        )
-    integers = tuple(
-        value.numerator * (denominator_lcm // value.denominator) for value in fractions
-    )
-    divisor = 0
-    for integer in integers:
-        divisor = gcd(divisor, abs(integer))
-    if divisor == 0:
-        raise RuntimeError("symbolic nullspace returned a zero basis vector")
-    primitive = tuple(value // divisor for value in integers)
-    if next(value for value in primitive if value) < 0:
-        primitive = tuple(-value for value in primitive)
+    try:
+        primitive = primitive_integer_vector(fractions)
+    except ValueError as exc:
+        raise RuntimeError("symbolic nullspace returned a zero basis vector") from exc
     return tuple(Fraction(value) for value in primitive)
 
 
@@ -133,6 +126,8 @@ def _coefficient_matrix(
         for basis_index, multiplier_exponents in enumerate(source_basis):
             column = component * len(source_basis) + basis_index
             for partial_exponents, coefficient in partial.terms():
+                if coefficient == 0:
+                    continue
                 target_exponents = cast(
                     tuple[int, int, int],
                     tuple(
@@ -158,9 +153,29 @@ def _coefficient_matrix(
 def compute_graded_jacobian_syzygy(
     request: GradedJacobianSyzygyRequest,
 ) -> GradedJacobianSyzygyResult:
+    if request.coefficient_map_detail != "CERTIFICATES":
+        raise ValueError(
+            "full sparse coefficient maps are available through the explicit "
+            "jacobian syzygy coefficient-ledger capability"
+        )
+    return _compute_graded_jacobian_syzygy(request)
+
+
+def materialize_graded_jacobian_syzygy_coefficients(
+    request: GradedJacobianSyzygyRequest,
+) -> GradedJacobianSyzygyResult:
+    """Retain the full sparse coefficient maps as explicit evidence."""
+    return _compute_graded_jacobian_syzygy(
+        request.model_copy(update={"coefficient_map_detail": "SPARSE_ENTRIES"})
+    )
+
+
+def _compute_graded_jacobian_syzygy(
+    request: GradedJacobianSyzygyRequest,
+) -> GradedJacobianSyzygyResult:
     if request.polynomial is not None:
         variables = cast(tuple[str, str, str], request.polynomial.variables)
-        source = _poly(request.polynomial)
+        source = rational_polynomial_to_sympy(request.polynomial)
         source_kind: Literal[
             "EXPANDED_POLYNOMIAL", "LABELLED_LINEAR_FACTOR_PRODUCT"
         ] = "EXPANDED_POLYNOMIAL"
@@ -172,7 +187,7 @@ def compute_graded_jacobian_syzygy(
         if linear_factors is None or factor_variables is None:
             raise ValueError("linear-factor input is incomplete")
         variables = factor_variables
-        generators = _symbols(variables)
+        generators = symbols_for_variables(variables)
         source = Poly(1, *generators, domain="QQ")
         for factor in linear_factors:
             source *= Poly(
@@ -216,7 +231,7 @@ def compute_graded_jacobian_syzygy(
             rank_minor = GradedJacobianRankMinor(
                 row_indices=row_indices,
                 column_indices=column_indices,
-                determinant=_rational(determinant),
+                determinant=rational_from_sympy(determinant),
             )
         nullity = matrix.cols - rank
         maps.append(
@@ -237,7 +252,7 @@ def compute_graded_jacobian_syzygy(
                         GradedJacobianMapEntry(
                             row=row,
                             column=column,
-                            coefficient=_rational(value),
+                            coefficient=rational_from_sympy(value),
                         )
                         for row, column, value in entries
                     )
@@ -285,13 +300,16 @@ def compute_graded_jacobian_syzygy(
     return GradedJacobianSyzygyResult(
         variables=variables,
         source_kind=source_kind,
-        expanded_polynomial=_wire(source, variables),
+        expanded_polynomial=rational_polynomial_from_sympy(source, variables),
         homogeneous_degree=source_degree,
         searched_through_degree=searched_through,
         coefficient_map_detail=request.coefficient_map_detail,
         partial_derivatives=cast(
             tuple[RationalPolynomial, RationalPolynomial, RationalPolynomial],
-            tuple(_wire(partial, variables) for partial in partials),
+            tuple(
+                rational_polynomial_from_sympy(partial, variables)
+                for partial in partials
+            ),
         ),
         degree_maps=tuple(maps),
         status="FOUND" if first_degree is not None else "NONE_THROUGH_BOUND",
@@ -300,7 +318,7 @@ def compute_graded_jacobian_syzygy(
     )
 
 
-GRADED_JACOBIAN_SYZYGY_CAPABILITY = materialized_polynomial_operation(
+GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
     "polynomial.jacobian_syzygy.minimum_degree.compute",
     "Compute the first graded Jacobian syzygy degree",
     (
@@ -308,7 +326,9 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = materialized_polynomial_operation(
         "or as a labelled product of linear forms, exactly construct every "
         "graded map (QQ[x,y,z]_q)^3 -> QQ[x,y,z]_(q+deg(h)-1) from q=0, "
         "report rank certificates, and stop at the first nonzero kernel or the "
-        "declared finite degree bound. Full sparse maps are optional."
+        "declared finite degree bound. Sparse polynomial terms must have "
+        "nonzero coefficients and unique exponent tuples in descending "
+        "lexicographic order. Full sparse maps are optional."
     ),
     GradedJacobianSyzygyRequest,
     GradedJacobianSyzygyResult,
@@ -321,14 +341,42 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = materialized_polynomial_operation(
     "rank",
     "kernel",
     "exact",
-    version="3",
+    version="4",
     invocation_examples=(
+        CapabilityInvocationExample(
+            name="sparse-homogeneous-polynomial",
+            description=(
+                "Supply h=x^2+y^2+z^2 with unique nonzero terms in descending "
+                "lexicographic exponent order."
+            ),
+            input={
+                "polynomial": {
+                    "variables": ["x", "y", "z"],
+                    "polynomial": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [2, 0, 0],
+                            },
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [0, 2, 0],
+                            },
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [0, 0, 2],
+                            },
+                        ]
+                    },
+                },
+                "max_degree": 0,
+            },
+        ),
         CapabilityInvocationExample(
             name="labelled-linear-factor-product",
             description=(
                 "Bind h=x*y*z directly to three labelled rational linear factors."
             ),
-            mode=CapabilityMode.EXPLORE,
             input={
                 "linear_factors": [
                     {
@@ -364,5 +412,30 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = materialized_polynomial_operation(
     relation_id="polynomial.jacobian_syzygy.minimum_degree.relation",
 )
 
+JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY = materialized_polynomial_operation(
+    "polynomial.jacobian_syzygy.coefficients.materialize",
+    "Materialize graded Jacobian syzygy coefficient ledger",
+    (
+        "Retain every sparse entry in the bounded graded Jacobian coefficient "
+        "maps, together with the compact syzygy summary and rank certificates."
+    ),
+    GradedJacobianSyzygyRequest,
+    GradedJacobianSyzygyResult,
+    materialize_graded_jacobian_syzygy_coefficients,
+    "polynomial",
+    "jacobian",
+    "syzygy",
+    "coefficient-ledger",
+    "evidence",
+    relation_id="polynomial.jacobian_syzygy.coefficients.relation",
+    resource_reason=(
+        "the full sparse graded coefficient ledger is retained as explicit bulk "
+        "evidence for independent replay"
+    ),
+)
 
-__all__ = ["GRADED_JACOBIAN_SYZYGY_CAPABILITY"]
+
+__all__ = [
+    "GRADED_JACOBIAN_SYZYGY_CAPABILITY",
+    "JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY",
+]

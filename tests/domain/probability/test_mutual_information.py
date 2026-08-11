@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 from tests.support.rationals import rational_payload as _q
 
-from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.domains.probability.operations import (
     _require_bounded_mutual_information_product,
 )
@@ -126,7 +126,6 @@ def test_independent_checker_rejects_tampered_ratio(
     rejected = probability_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="probability.joint.mutual_information.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": _PX, "candidate": candidate},
         )
     )

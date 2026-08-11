@@ -57,19 +57,18 @@ def _modular_identity_payload() -> dict[str, object]:
 
 
 def test_modular_polynomial_identity_uses_independent_python_flint_replay(
-    authorized_complete_runtime,
+    number_theory_services,
 ) -> None:
     producer_id = "modular.polynomial_identity.compute"
     verifier_id = "modular.polynomial_identity.verify"
     payload = _modular_identity_payload()
-    computed = authorized_complete_runtime.core.capabilities.invoke(
+    computed = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(capability_id=producer_id, input=payload)
     )
 
-    verified = authorized_complete_runtime.core.capabilities.invoke(
+    verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -82,10 +81,10 @@ def test_modular_polynomial_identity_uses_independent_python_flint_replay(
 
 
 def test_modular_polynomial_identity_verifier_rejects_perturbed_coefficient(
-    authorized_complete_runtime,
+    number_theory_services,
 ) -> None:
     payload = _modular_identity_payload()
-    computed = authorized_complete_runtime.core.capabilities.invoke(
+    computed = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_identity.compute",
             input=payload,
@@ -95,10 +94,9 @@ def test_modular_polynomial_identity_verifier_rejects_perturbed_coefficient(
     forged["identical"] = False
     forged["residual"] = [{"coefficient": 1, "exponents": [0]}]
 
-    rejected = authorized_complete_runtime.core.capabilities.invoke(
+    rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_identity.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged},
         )
     )
@@ -110,7 +108,7 @@ def test_modular_polynomial_identity_verifier_rejects_perturbed_coefficient(
 
 
 def test_modular_polynomial_identity_replays_both_declared_term_budgets(
-    authorized_complete_runtime,
+    number_theory_services,
 ) -> None:
     payload = {
         "modulus": 101,
@@ -122,15 +120,14 @@ def test_modular_polynomial_identity_replays_both_declared_term_budgets(
             {"coefficient": "1", "exponents": [index]} for index in range(32)
         ],
     }
-    computed = authorized_complete_runtime.core.capabilities.invoke(
+    computed = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_identity.compute", input=payload
         )
     )
-    verified = authorized_complete_runtime.core.capabilities.invoke(
+    verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_identity.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )

@@ -35,7 +35,7 @@ Payloads:
 - For expression normalization, inspect the known
   `polynomial.expression.normalize` contract directly.
 - `matrix.determinant.verify` for an independent check:
-  `{"determinant_uri":"<determinant_uri from compute output>"}`.
+  `{"input":<same determinant payload>,"candidate":<producer output.result>}`.
 - `combinatorics.cyclic_difference_set.extension.decide`:
   `{"base_elements":["1","2","4","8","13"],"target_order":7}`.
   `combinatorics.cyclic_difference_set.extension.verify` uses

@@ -23,10 +23,14 @@ from pydantic import ValidationError
 
 from jacobian.adapters.mcp.tools import capability_invoke
 from jacobian.contracts.combinatorics import CyclicDifferenceSetExtensionRequest
-from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
+from jacobian.contracts.matrix_operations import (
+    MatrixDeterminantRequest,
+    MatrixDeterminantResult,
+)
 from jacobian.contracts.number_theory import IntegerPairRequest
 from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
 from jacobian.eval.telemetry import parse_agent_transcript
+from jacobian.exact_domain_checkers import ExactComputedVerificationRequest
 
 _ROOT = Path(__file__).resolve().parents[3]
 
@@ -181,6 +185,18 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert polynomial in skill
     extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
     assert extension_payload in skill
+    determinant_verify_payload = {
+        "input": json.loads(matrix_payload),
+        "candidate": {
+            "determinant": {"num": "1", "den": "1"},
+            "method": "FRACTION_FREE_BAREISS",
+        },
+    }
+    assert (
+        '`{"input":<same determinant payload>,'
+        '"candidate":<producer output.result>}`' in skill
+    )
+    assert "determinant_uri" not in skill
     run_parameters = signature(capability_invoke).parameters
     assert tuple(run_parameters) == ("capability_id", "payload", "ctx")
     assert run_parameters["ctx"].kind is Parameter.KEYWORD_ONLY
@@ -192,6 +208,9 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert '"candidate":<producer output.result>' in skill
     IntegerPairRequest.model_validate_json(integer_payload)
     MatrixDeterminantRequest.model_validate_json(matrix_payload)
+    ExactComputedVerificationRequest[
+        MatrixDeterminantRequest, MatrixDeterminantResult
+    ].model_validate(determinant_verify_payload)
     polynomial_value = json.loads(polynomial)
     PolynomialGcdRequest.model_validate(
         {"left": polynomial_value, "right": polynomial_value}

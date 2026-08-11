@@ -99,10 +99,16 @@ def _validation_diagnostic(
     ):
         path_parts.append(field_match.group(1))
     path = _validation_pointer(path_parts)
+    recovery_hint = (
+        reason
+        if validation_type.startswith("jacobian.")
+        and isinstance(domain_reason, str)
+        else diagnostic.hint
+    )
     return CapabilityDiagnostic.model_validate(
         {
             **diagnostic.model_dump(mode="python"),
-            "hint": reason or diagnostic.hint,
+            "hint": recovery_hint,
             "path": diagnostic.path or path,
             "details": {
                 **diagnostic.details,

@@ -18,6 +18,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -193,6 +194,7 @@ class GraphCounterexampleShrinkAdapter:
                 features=("simple-undirected-graph", "single-deletion", "shrink.run"),
                 checker_ids=checker_ids,
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(GraphCounterexampleShrinkRequest),
             output_schema=model_schema(GraphCounterexampleShrinkOutput),
             tags=("graph", "counterexample", "shrinking", "local-minimality"),
@@ -320,6 +322,7 @@ class GraphCounterexampleShrinkAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=shrunk.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

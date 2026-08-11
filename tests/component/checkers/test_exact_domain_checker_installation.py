@@ -7,10 +7,7 @@ from tests.support.artifacts import artifact_uri as _uri
 
 import jacobian.exact_domain_checkers as exact_domain_checkers
 from jacobian.contracts.capabilities import CapabilityProviderAvailability
-from jacobian.contracts.graph_invariant_operations import (
-    GraphInvariantRequest,
-    GraphMaximumMatchingRequest,
-)
+from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
 from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphMinimumSpanningTreeRequest,
@@ -30,7 +27,6 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
-    PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialResultantRequest,
     PolynomialSquareFreeRequest,
@@ -121,7 +117,6 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
         "polynomial.compute.resultant",
         "polynomial.compute.discriminant",
         "polynomial.compute.square_free_decomposition",
-        "polynomial.factor.compute",
     )
     matrix_ids = (
         "matrix.multiply.compute",
@@ -155,7 +150,6 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
                 PolynomialResultantRequest,
                 PolynomialDiscriminantRequest,
                 PolynomialSquareFreeRequest,
-                PolynomialFactorRequest,
             ),
             polynomial_ids,
             character="e",
@@ -180,7 +174,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
             character="7",
         ),
         graph_invariants=_installed(
-            (GraphInvariantRequest, GraphMaximumMatchingRequest),
+            (GraphInvariantRequest,),
             graph_ids[3:],
             character="8",
         ),
@@ -249,7 +243,6 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
                 PolynomialResultantRequest,
                 PolynomialDiscriminantRequest,
                 PolynomialSquareFreeRequest,
-                PolynomialFactorRequest,
             ),
             (
                 "polynomial.jacobian_syzygy.minimum_degree.compute",
@@ -257,7 +250,6 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
                 "polynomial.compute.resultant",
                 "polynomial.compute.discriminant",
                 "polynomial.compute.square_free_decomposition",
-                "polynomial.factor.compute",
             ),
             character="e",
         ),
@@ -293,7 +285,6 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
             PolynomialResultantRequest,
             PolynomialDiscriminantRequest,
             PolynomialSquareFreeRequest,
-            PolynomialFactorRequest,
         ),
         (
             "polynomial.jacobian_syzygy.minimum_degree.compute",
@@ -301,7 +292,6 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
             "polynomial.compute.resultant",
             "polynomial.compute.discriminant",
             "polynomial.compute.square_free_decomposition",
-            "polynomial.factor.compute",
         ),
         character="e",
     )
@@ -335,7 +325,7 @@ def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
         character="7",
     )
     graph_invariants = _installed(
-        (GraphInvariantRequest, GraphMaximumMatchingRequest),
+        (GraphInvariantRequest,),
         (
             "graph.invariant.diameter.compute",
             "graph.invariant.radius.compute",

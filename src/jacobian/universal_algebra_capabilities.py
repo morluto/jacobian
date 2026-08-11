@@ -24,6 +24,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
+    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRelationship,
@@ -224,6 +225,7 @@ class UniversalAlgebraEvaluateLawsAdapter:
                     else ()
                 ),
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(UniversalAlgebraEvaluationRequest),
             output_schema=model_schema(UniversalAlgebraEvaluationOutput),
             tags=(
@@ -355,6 +357,7 @@ class UniversalAlgebraEvaluateLawsAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -428,6 +431,7 @@ class UniversalAlgebraSearchCountermodelAdapter:
                 "jacobian.z3",
                 features=("finite-magma-countermodel-search",),
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(UniversalAlgebraCountermodelSearchRequest),
             output_schema=model_schema(UniversalAlgebraCountermodelSearchOutput),
             tags=(
@@ -444,6 +448,7 @@ class UniversalAlgebraSearchCountermodelAdapter:
                         "Search order-two commutative magmas for a counterexample "
                         "to associativity."
                     ),
+                    mode=CapabilityMode.EXPLORE,
                     input=UniversalAlgebraCountermodelSearchRequest.model_validate(
                         {
                             "order": 2,
@@ -566,6 +571,7 @@ class UniversalAlgebraSearchCountermodelAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -631,6 +637,7 @@ class FiniteMagmaTableEnumerateAdapter:
                 "jacobian.finite-table",
                 features=("finite-magma-table-enumeration",),
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(FiniteMagmaTableEnumerationRequest),
             output_schema=model_schema(FiniteMagmaTableEnumerationOutput),
             tags=("universal-algebra", "finite-model", "enumeration"),
@@ -703,6 +710,7 @@ class FiniteMagmaTableEnumerateAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),

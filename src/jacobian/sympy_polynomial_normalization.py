@@ -20,6 +20,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
+    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRelationship,
@@ -188,6 +189,7 @@ class SympyPolynomialExpressionNormalizeAdapter:
             ),
             provider="jacobian.sympy",
             provider_runtime=runtime,
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialExpressionNormalizeRequest),
             output_schema=model_schema(PolynomialExpressionNormalizeOutput),
             tags=(
@@ -204,6 +206,7 @@ class SympyPolynomialExpressionNormalizeAdapter:
                     description=(
                         "Normalize x + x to canonical sparse coefficients over QQ."
                     ),
+                    mode=CapabilityMode.EXPLORE,
                     input=PolynomialExpressionNormalizeRequest.model_validate(
                         {
                             "expression": {
@@ -351,6 +354,7 @@ class SympyPolynomialExpressionNormalizeAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=run.execution_status,
                 runtime_ms=run.runtime_ms,

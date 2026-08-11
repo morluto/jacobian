@@ -17,6 +17,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryRemoveFiltersRecoveryPath,
     CapabilityDiscoveryRemoveUnknownDomainRecoveryPath,
     CapabilityDiscoveryResult,
+    CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
     CapabilityRelationship,
@@ -37,6 +38,7 @@ def _descriptor(capability_id: str) -> dict[str, object]:
         "title": capability_id,
         "description": "A bounded test capability.",
         "provider": "test",
+        "modes": ["EXPLORE"],
         "input_schema": {"type": "object"},
         "output_schema": {"type": "object"},
     }
@@ -97,6 +99,7 @@ def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:
                 "capability_id": "integer.compute.gcd",
                 "title": "Compute gcd",
                 "description": "Compute one exact gcd.",
+                "modes": ["EXPLORE"],
             }
         ],
         "total_matches": 2,
@@ -130,6 +133,21 @@ def test_catalog_rejects_duplicate_or_nondeterministic_capability_ids() -> None:
         )
 
 
+def test_explore_lane_cannot_claim_verified_assurance() -> None:
+    with pytest.raises(ValidationError, match="exploration lane"):
+        CapabilityResult(
+            capability_id="example.solve",
+            capability_version="1",
+            mode=CapabilityMode.EXPLORE,
+            execution=Execution(status=ExecutionStatus.COMPLETED),
+            assurance=CapabilityAssurance(
+                level=CapabilityAssuranceLevel.VERIFIED,
+                basis="untrusted adapter claim",
+                verification_record_uri=RECORD_URI,
+            ),
+        )
+
+
 def test_nonverified_assurance_cannot_smuggle_a_record_uri() -> None:
     with pytest.raises(ValidationError, match="only verified"):
         CapabilityAssurance(
@@ -144,6 +162,7 @@ def test_verified_result_publishes_its_record_as_a_first_class_artifact() -> Non
         CapabilityResult(
             capability_id="example.verify",
             capability_version="1",
+            mode=CapabilityMode.VERIFY,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             assurance=CapabilityAssurance(
                 level=CapabilityAssuranceLevel.VERIFIED,
@@ -155,6 +174,7 @@ def test_verified_result_publishes_its_record_as_a_first_class_artifact() -> Non
     result = CapabilityResult(
         capability_id="example.verify",
         capability_version="1",
+        mode=CapabilityMode.VERIFY,
         execution=Execution(status=ExecutionStatus.COMPLETED),
         assurance=CapabilityAssurance(
             level=CapabilityAssuranceLevel.VERIFIED,
@@ -173,6 +193,7 @@ def test_complete_result_requires_an_explicit_scope() -> None:
         CapabilityResult(
             capability_id="graph.enumerate.nonisomorphic",
             capability_version="1",
+            mode=CapabilityMode.EXPLORE,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             completeness=CapabilityCompleteness(
                 status=CapabilityCompletenessStatus.COMPLETE,
@@ -191,6 +212,7 @@ def test_failed_execution_cannot_claim_completeness() -> None:
         CapabilityResult(
             capability_id="graph.enumerate.nonisomorphic",
             capability_version="1",
+            mode=CapabilityMode.EXPLORE,
             execution=Execution(status=ExecutionStatus.TIMEOUT),
             scope=CapabilityScope(
                 description="simple graphs on five vertices",
@@ -217,6 +239,7 @@ def test_verified_relationship_must_use_result_checker_record() -> None:
         CapabilityResult(
             capability_id="claim.derive.specialization",
             capability_version="1",
+            mode=CapabilityMode.VERIFY,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             relationships=(
                 CapabilityRelationship(
@@ -243,6 +266,7 @@ def test_discharged_obligation_requires_verified_result() -> None:
         CapabilityResult(
             capability_id="case.partition.finite",
             capability_version="1",
+            mode=CapabilityMode.EXPLORE,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             obligations=(
                 CapabilityObligation(

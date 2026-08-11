@@ -6,17 +6,18 @@ trying to do. Start with a tutorial when learning the system, use a how-to
 guide for a specific task, consult reference material for exact contracts, and
 read the explanations for design rationale.
 
-Jacobian is a **toolbox of atomic math tools** for AI agents: find them with
-`math.find`, run them with `math.run`, get **mathematical results**, and
-compose those values across turns. Checker tools are optional **additional**
-catalog IDs—separate from producers. Catalog entries are often still called
-*capabilities* in the API. The [product model](explanation/product-blueprint.md)
-and [Search and execute](explanation/architecture.md#search-and-execute) define
-the contract.
+Jacobian exposes composable mathematical capabilities through an MCP server,
+CLI, and Python library. Capabilities have mathematically atomic,
+agent-visible outcomes; agents compose them into research strategies. Optional
+workflows preserve intermediate artifacts, and only operator-authorized
+independent checkers may promote exact evidence to a verified result. The
+[product model](explanation/product-blueprint.md) defines the capability
+contract and ownership boundaries.
 
 The current 0.6 architecture is pre-stable. Current reference documents and the
-installed catalog define supported tools. Evaluations guide portfolio quality;
-they do not grant formal authority.
+installed catalog define the supported capabilities and interfaces.
+Evaluations guide portfolio behavior and maintenance; they do not grant
+verification authority.
 
 ## Project control documents
 
@@ -26,8 +27,8 @@ These documents track the current product contract and its ongoing evolution:
 | --- | --- | --- |
 | What product is Jacobian building? | [Product model](explanation/product-blueprint.md) | Active product direction |
 | What does the system currently look like? | [Architecture](explanation/architecture.md) | Current implementation and trust boundaries |
+| What direction is the project taking? | [Product goals](explanation/goals.md) | Rolling goals pursued in parallel |
 | What is installed now? | [Tool surface](reference/tools.md) and runtime `capability://catalog` | Current interface rules and installation-specific inventory |
-| What work is open? | GitHub issues (e.g. architecture epics) | Implementation priorities live in issues, not a parallel goals doc |
 
 ## Tutorials
 
@@ -45,13 +46,14 @@ and build toward a complete result.
 How-to guides assume you already understand Jacobian's basic model and need to
 complete a specific task.
 
-- [Discover, invoke, and check domain math tools](how-to/invoke-domain-capabilities.md)
+- [Discover, invoke, and verify domain capabilities](how-to/invoke-domain-capabilities.md)
 - [Configure an agent from a source checkout](how-to/setup-agent-from-source.md)
 - [Install optional backends](how-to/install-optional-backends.md)
 - [Troubleshoot Z3 installation on macOS](how-to/troubleshoot-z3-macos.md)
 - [Run the Codex visibility evaluation](how-to/run-codex-visibility-evaluation.md)
 - [Deploy the remote MCP server](how-to/deploy-remote-mcp.md)
 - [Author a Harbor benchmark task](how-to/author-harbor-benchmark-task.md)
+- [Migrate the benchmark portfolio](how-to/migrate-agent-workflow-benchmark.md)
 - [Run agent evaluations](how-to/run-agent-evaluations.md)
 
 ## Reference
@@ -88,32 +90,38 @@ installed capability inventory and exact operation schemas.
 
 ## Explanation
 
-- [Product model](explanation/product-blueprint.md) — what the product is
-- [Architecture](explanation/architecture.md) — host shape, search/execute,
-  ownership and durable execution
+Explanation documents describe why Jacobian has its current boundaries and
+how its major parts fit together.
 
-Do not add parallel “direction”, “goals”, or portfolio-planning novels under
-`explanation/`. Product intent lives in those two documents; open work lives
-in GitHub issues.
+- [Architecture](explanation/architecture.md)
+- [Product model](explanation/product-blueprint.md)
+- [Product goals](explanation/goals.md)
+- [About the hero image](explanation/hero-image.md)
+- [Durable search runtime](explanation/search-runtime.md)
 
 ## Contributing
 
 Read [CONTRIBUTING.md](../CONTRIBUTING.md) before changing code or public
-documentation.
+documentation. The
+[atomic capability portfolio](contributing/atomic-capability-portfolio.md)
+records the formal-first backend research, ordering, installation tradeoffs,
+and evaluation gates used to decide which mathematical slices to build next.
 
-Harbor benchmark authoring and verifier work uses the repository-local
-[`harbor-benchmarks`](../.agents/skills/harbor-benchmarks/SKILL.md) skill.
-For hosted operation, follow
+Harbor benchmark authoring and verifier work is encoded in the repository-local
+[`harbor-benchmarks`](../.agents/skills/harbor-benchmarks/SKILL.md) skill. Use
+the exact task gate for routine benchmark changes; control/treatment model runs
+are explicit operator-run evidence exercises. For hosted operation, follow
 [Deploy the remote MCP server](how-to/deploy-remote-mcp.md); ignored `tmp/`
-records are host evidence, not source of truth.
+records are evidence from one host, not maintained instructions.
 
-When adding a document, place it by reader need:
+When adding a document, place it according to the reader's need:
 
-- `tutorials/` — guided learning
-- `how-to/` — one task
-- `reference/` — contracts and lookup
-- `explanation/` — only product model and architecture unless a feature needs
-  a dedicated operational reference that does not fit architecture
+- `tutorials/` for a guided learning experience;
+- `how-to/` for completing one task;
+- `reference/` for contracts and lookup material;
+- `explanation/` for design context and decisions; and
+- `contributing/` for maintainer-facing research and planning records.
 
-Do not mix product intent with supported release behavior. Concrete work lives
-in GitHub issues.
+Do not mix active direction with supported behavior. Product goals guide
+priorities; only an applicable specification or conformance document defines a
+release contract.

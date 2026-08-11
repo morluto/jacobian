@@ -2,7 +2,6 @@
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.geometry import (
-    ConvexPolygonTriangulationRequest,
     PointPairRequest,
     PointSetRequest,
     PointTripleRequest,
@@ -13,10 +12,6 @@ from jacobian.contracts.geometry import (
 
 _ENTRYPOINT = "jacobian_checkers.exact_geometry"
 _OPERATIONS = (
-    (
-        "geometry.polygon.triangulation.minimum_weight.compute",
-        ConvexPolygonTriangulationRequest,
-    ),
     ("geometry.points.compute.convex_hull", PointSetRequest),
     ("geometry.points.compute.squared_distance", PointPairRequest),
     ("geometry.segment.compute.midpoint", PointPairRequest),

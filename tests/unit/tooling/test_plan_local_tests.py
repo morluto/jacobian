@@ -192,54 +192,104 @@ def test_plan_preserves_both_sides_of_rename(monkeypatch) -> None:
     ]
 
 
-_PLAN_MANIFEST_STUB = """\
-version = 1
-
-[local_planning]
-infrastructure_prefixes = [".github/", "Makefile", "make/", "pyproject.toml", "uv.lock", "tools/", ".pre-commit-config.yaml", ".jscpd.json", "tests/topology.toml", "tests/plan_manifest.toml"]
-high_impact_paths = ["src/jacobian/__init__.py", "tests/conftest.py", "pyproject.toml", "uv.lock"]
-"""
-
-
 def _planner_tree(tmp_path: Path, monkeypatch) -> ModuleType:
     planner = _load_script_module(
         f"plan_local_tests_{tmp_path.name}", "plan-local-tests"
     )
     monkeypatch.setattr(planner, "ROOT", tmp_path)
-    manifest = tmp_path / "tests" / "plan_manifest.toml"
-    manifest.parent.mkdir(parents=True, exist_ok=True)
-    manifest.write_text(_PLAN_MANIFEST_STUB, encoding="utf-8")
-    monkeypatch.setattr(planner, "PLAN_MANIFEST", manifest)
+    monkeypatch.setattr(
+        planner,
+        "OWNERSHIP",
+        tmp_path / ".github" / "local-test-ownership.json",
+    )
     return planner
 
 
-def _append_exact_override(manifest: Path, path: str, selectors: list[str]) -> None:
-    lines = [
-        "",
-        "[[local_planning.exact_overrides]]",
-        f'path = "{path}"',
-        "selectors = [",
-        *(f'  "{selector}",' for selector in selectors),
-        "]",
-        "",
-    ]
-    with manifest.open("a", encoding="utf-8") as handle:
-        handle.write("\n".join(lines))
-
-
-def test_plan_falls_back_for_changed_source_without_exact_ownership(
+def test_plan_selects_tests_that_directly_import_changed_leaf_module(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
     source = tmp_path / "src/jacobian/leaf.py"
+    direct = tmp_path / "tests/unit/test_leaf.py"
+    unrelated = tmp_path / "tests/unit/test_other.py"
     source.parent.mkdir(parents=True)
+    direct.parent.mkdir(parents=True)
     source.write_text("VALUE = 1\n", encoding="utf-8")
+    direct.write_text("from jacobian.leaf import VALUE\n", encoding="utf-8")
+    unrelated.write_text("import jacobian.other\n", encoding="utf-8")
+
+    tests, fallback = planner.exact_tests([planner.Change("M", "src/jacobian/leaf.py")])
+
+    assert tests == ["tests/unit/test_leaf.py"]
+    assert fallback is None
+
+
+def test_plan_falls_back_when_source_dependency_makes_impact_transitive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    planner = _planner_tree(tmp_path, monkeypatch)
+    leaf = tmp_path / "src/jacobian/leaf.py"
+    consumer = tmp_path / "src/jacobian/consumer.py"
+    test = tmp_path / "tests/unit/test_consumer.py"
+    leaf.parent.mkdir(parents=True)
+    test.parent.mkdir(parents=True)
+    leaf.write_text("VALUE = 1\n", encoding="utf-8")
+    consumer.write_text("from jacobian.leaf import VALUE\n", encoding="utf-8")
+    test.write_text("import jacobian.consumer\n", encoding="utf-8")
 
     tests, fallback = planner.exact_tests([planner.Change("M", "src/jacobian/leaf.py")])
 
     assert tests == []
-    assert fallback == ("src/jacobian/leaf.py: no exact ownership; use lane fallback")
+    assert fallback is not None
+    assert "transitive impact is ambiguous" in fallback
+
+
+def test_plan_treats_package_prefix_import_as_transitive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    planner = _planner_tree(tmp_path, monkeypatch)
+    package = tmp_path / "src/jacobian/domain/__init__.py"
+    consumer = tmp_path / "src/jacobian/consumer.py"
+    test = tmp_path / "tests/unit/test_consumer.py"
+    package.parent.mkdir(parents=True)
+    test.parent.mkdir(parents=True)
+    package.write_text("VALUE = 1\n", encoding="utf-8")
+    consumer.write_text("import jacobian.domain.child\n", encoding="utf-8")
+    test.write_text("import jacobian.consumer\n", encoding="utf-8")
+
+    tests, fallback = planner.exact_tests(
+        [planner.Change("M", "src/jacobian/domain/__init__.py")]
+    )
+
+    assert tests == []
+    assert fallback is not None
+    assert "transitive impact is ambiguous" in fallback
+
+
+def test_plan_resolves_relative_source_imports_as_transitive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    planner = _planner_tree(tmp_path, monkeypatch)
+    leaf = tmp_path / "src/jacobian/domain/leaf.py"
+    consumer = tmp_path / "src/jacobian/domain/consumer.py"
+    test = tmp_path / "tests/unit/test_consumer.py"
+    leaf.parent.mkdir(parents=True)
+    test.parent.mkdir(parents=True)
+    leaf.write_text("VALUE = 1\n", encoding="utf-8")
+    consumer.write_text("from .leaf import VALUE\n", encoding="utf-8")
+    test.write_text("import jacobian.domain.consumer\n", encoding="utf-8")
+
+    tests, fallback = planner.exact_tests(
+        [planner.Change("M", "src/jacobian/domain/leaf.py")]
+    )
+
+    assert tests == []
+    assert fallback is not None
+    assert "transitive impact is ambiguous" in fallback
 
 
 def test_plan_falls_back_for_delete_rename_and_untracked_changes(
@@ -261,10 +311,13 @@ def test_plan_rejects_non_exact_ownership_override(
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    _append_exact_override(
-        planner.PLAN_MANIFEST,
-        "generated/schema.json",
-        ["tests/unit/contracts/test_schema.py"],
+    manifest = tmp_path / ".github/local-test-ownership.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        '{"version": 1, "overrides": {'
+        '"generated/schema.json": ["tests/unit/contracts/test_schema.py"]'
+        "}}",
+        encoding="utf-8",
     )
     test = tmp_path / "tests/unit/contracts/test_schema.py"
     test.parent.mkdir(parents=True)
@@ -300,10 +353,13 @@ def test_plan_uses_explicit_ownership_override_for_exact_nodes(
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    _append_exact_override(
-        planner.PLAN_MANIFEST,
-        "generated/schema.json",
-        ["tests/unit/contracts/test_schema.py::test_public_schema"],
+    manifest = tmp_path / ".github/local-test-ownership.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        '{"version": 1, "overrides": {'
+        '"generated/schema.json": ["tests/unit/contracts/test_schema.py::test_public_schema"]'
+        "}}",
+        encoding="utf-8",
     )
     test = tmp_path / "tests/unit/contracts/test_schema.py"
     test.parent.mkdir(parents=True)
@@ -390,44 +446,32 @@ def test_plan_keeps_a_changed_test_as_an_exact_node_selector(
     assert fallback is None
 
 
-def test_plan_discards_exact_selectors_when_a_mixed_change_needs_fallback(
+def test_plan_resolves_relative_imports_from_package_initializers(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    test = tmp_path / "tests/unit/test_leaf.py"
-    test.parent.mkdir(parents=True)
-    test.write_text("def test_leaf(): pass\n", encoding="utf-8")
+    package = tmp_path / "src/jacobian/pkg"
+    leaf = package / "leaf.py"
+    initializer = package / "__init__.py"
+    direct = tmp_path / "tests/unit/test_leaf.py"
+    package_user = tmp_path / "tests/unit/test_package.py"
+    package.mkdir(parents=True)
+    direct.parent.mkdir(parents=True)
+    leaf.write_text("VALUE = 1\n", encoding="utf-8")
+    initializer.write_text("from .leaf import VALUE\n", encoding="utf-8")
+    direct.write_text("from jacobian.pkg.leaf import VALUE\n", encoding="utf-8")
+    package_user.write_text("from jacobian.pkg import VALUE\n", encoding="utf-8")
 
     selected, fallback = planner.exact_tests(
-        [
-            planner.Change("M", "tests/unit/test_leaf.py"),
-            planner.Change("D", "src/jacobian/leaf.py"),
-        ]
+        [planner.Change("M", "src/jacobian/pkg/leaf.py")]
     )
 
     assert selected == []
-    assert fallback == "src/jacobian/leaf.py: D changes are not exact"
-
-
-def test_plan_falls_back_for_high_impact_and_infrastructure_paths(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    planner = _planner_tree(tmp_path, monkeypatch)
-    conftest = tmp_path / "tests/unit/conftest.py"
-    conftest.parent.mkdir(parents=True)
-    conftest.write_text("import pytest\n", encoding="utf-8")
-
-    for path in (
-        "tests/conftest.py",
-        "tests/unit/conftest.py",
-        "tests/plan_manifest.toml",
-        "src/jacobian/__init__.py",
-    ):
-        selected, fallback = planner.exact_tests([planner.Change("M", path)])
-        assert selected == []
-        assert fallback == f"{path}: shared infrastructure has broad impact"
+    assert fallback == (
+        "src/jacobian/pkg/leaf.py: imported by src/jacobian/pkg/__init__.py; "
+        "transitive impact is ambiguous"
+    )
 
 
 def test_plan_fails_closed_for_unknown_path_and_invalid_manifest(
@@ -435,29 +479,14 @@ def test_plan_fails_closed_for_unknown_path_and_invalid_manifest(
     monkeypatch,
 ) -> None:
     planner = _planner_tree(tmp_path, monkeypatch)
-    planner.PLAN_MANIFEST.write_text(
-        _PLAN_MANIFEST_STUB + '\nexact_overrides = "broken"\n',
-        encoding="utf-8",
-    )
+    manifest = tmp_path / ".github/local-test-ownership.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text("{broken", encoding="utf-8")
 
     tests, fallback = planner.exact_tests([planner.Change("M", "mystery.asset")])
 
     assert tests == []
-    assert fallback == (
-        "tests/plan_manifest.toml: invalid local_planning.exact_overrides"
-    )
-
-
-def test_plan_falls_back_for_paths_without_exact_ownership(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    planner = _planner_tree(tmp_path, monkeypatch)
-
-    tests, fallback = planner.exact_tests([planner.Change("M", "mystery.asset")])
-
-    assert tests == []
-    assert fallback == "mystery.asset: no exact ownership; use lane fallback"
+    assert fallback == ".github/local-test-ownership.json: invalid manifest"
 
 
 def test_plan_focused_tests_keep_independent_gates(
@@ -482,52 +511,6 @@ def test_plan_focused_tests_keep_independent_gates(
     assert "make test-component" not in output
 
 
-def test_execute_refuses_a_focused_selection_without_a_unique_lane(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    planner = _load_script_module("plan_local_tests_execute_guard", "plan-local-tests")
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "plan-local-tests",
-            "--paths",
-            "src/jacobian/example.py",
-            "--execute",
-        ],
-    )
-    monkeypatch.setattr(
-        planner,
-        "classify",
-        lambda paths: {
-            "classification": "selective",
-            "run-unit": "true",
-            "run-python": "true",
-            "run-deploy": "false",
-        },
-    )
-    monkeypatch.setattr(
-        planner,
-        "exact_tests",
-        lambda entries: (["tests/unit/test_example.py"], None),
-    )
-    monkeypatch.setattr(planner, "focused_commands", lambda tests: [])
-    monkeypatch.setattr(
-        planner,
-        "execute_commands",
-        lambda commands, base: pytest.fail("unsafe focused selection was executed"),
-    )
-
-    with pytest.raises(SystemExit) as exited:
-        planner.main()
-
-    assert exited.value.code != 0
-    assert "cannot execute: selected tests have no unique topology lane" in (
-        capsys.readouterr().err
-    )
-
-
 def _plan(**selected: bool) -> dict[str, str]:
     plan = {
         "classification": "selective",
@@ -547,7 +530,7 @@ def test_planned_commands_selects_docs_linkcheck_for_docs_paths() -> None:
     planner = _load_script_module("plan_local_tests_docs_gate", "plan-local-tests")
 
     commands = planner.planned_commands(
-        [planner.Change("M", "docs/explanation/product-blueprint.md")],
+        [planner.Change("M", "docs/explanation/goals.md")],
         _plan(docs=True),
         [],
         None,
@@ -646,23 +629,7 @@ def test_planned_commands_uses_check_static_for_infrastructure_with_focused_test
     assert "make test-unit TESTS=tests/unit/test_plan_local_tests.py" in commands
     assert all("security" not in command for command in commands)
     assert all("duplicate" not in command for command in commands)
-    assert "make npm-test" in commands
-
-
-def test_planned_commands_honors_npm_gate_for_python_facing_changes() -> None:
-    planner = _load_script_module(
-        "plan_local_tests_python_npm_gate", "plan-local-tests"
-    )
-
-    commands = planner.planned_commands(
-        [planner.Change("M", "src/jacobian/adapters/mcp/server.py")],
-        _plan(npm=True, python=True),
-        [],
-        None,
-        False,
-    )
-
-    assert commands == ["make lint typecheck", "make npm-test"]
+    assert all("npm-test" not in command for command in commands)
 
 
 def test_planned_commands_mixed_infra_and_python_uses_check_static(
@@ -703,7 +670,7 @@ def test_planned_commands_adds_docs_gate_alongside_ordinary_python(
 
     commands = planner.planned_commands(
         [
-            planner.Change("M", "docs/explanation/product-blueprint.md"),
+            planner.Change("M", "docs/explanation/goals.md"),
             planner.Change("M", "src/jacobian/leaf.py"),
         ],
         _plan(unit=True, static=True, docs=True, python=True),
@@ -725,7 +692,7 @@ def test_planned_commands_appends_deploy_gate_last() -> None:
         [planner.Change("M", "deploy/install.sh")],
         _plan(process=True),
         [],
-        "deploy/install.sh: no exact ownership; use lane fallback",
+        "deploy/install.sh: no exact Python ownership evidence",
         True,
     )
 

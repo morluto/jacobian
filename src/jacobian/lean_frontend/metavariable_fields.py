@@ -27,6 +27,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
+    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
@@ -73,6 +74,7 @@ class LeanMetavariableFieldsAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanMetavariableFieldsRequest.model_json_schema(),
             output_schema=LeanMetavariableFieldsOutput.model_json_schema(),
             tags=("lean", "proof-state", "metavariable", "exploration"),
@@ -259,6 +261,7 @@ class LeanMetavariableFieldsAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),

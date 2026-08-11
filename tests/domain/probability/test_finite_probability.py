@@ -4,7 +4,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.rationals import rational_payload as _rational
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
@@ -22,6 +21,10 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         tmp_path / "state", build_finite_probability_bundle()
     ) as services:
         yield services
+
+
+def _rational(num: int, den: int = 1) -> dict[str, str]:
+    return {"num": str(num), "den": str(den)}
 
 
 def _complex(
@@ -344,34 +347,6 @@ def test_multivariate_gaussian_polynomial_moment_uses_independence(
     assert result.output["result"]["moment"] == _complex(12)
     assert result.output["result"]["expansion_path_count"] == 16
     assert result.output["result"]["expanded_monomial_count"] == 5
-
-
-def test_gaussian_polynomial_rejects_nonlexicographic_terms_with_recovery_detail(
-    domain_services: DomainTestServices,
-) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
-            input={
-                "polynomial": {
-                    "variable_count": 2,
-                    "terms": [
-                        {"coefficient": _complex(1), "exponents": [1, 0]},
-                        {"coefficient": _complex(1), "exponents": [0, 1]},
-                    ],
-                },
-                "order": 2,
-            },
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.ERROR
-    diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "INVALID_FINITE_PROBABILITY_REQUEST"
-    assert diagnostic.hint is not None
-    assert "lexicographic exponent-vector order" in diagnostic.hint
-    assert "[1, 0] then [0, 1]" in diagnostic.hint
-    assert result.artifact_uris == ()
 
 
 def test_gaussian_polynomial_zero_order_is_the_constant_one(

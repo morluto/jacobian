@@ -19,11 +19,11 @@ from jacobian.search import SearchError
 
 
 def test_search_run_checkpoints_strategy_neutral_lineage(
-    search_services,
+    fresh_complete_runtime,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(search_services)
+    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
 
-    handle = search_services.application.search.start(
+    handle = fresh_complete_runtime.services.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -31,7 +31,7 @@ def test_search_run_checkpoints_strategy_neutral_lineage(
             batch_size=4,
         )
     )
-    snapshot = search_services.application.search.wait(
+    snapshot = fresh_complete_runtime.services.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -50,13 +50,13 @@ def test_search_run_checkpoints_strategy_neutral_lineage(
     assert snapshot.checkpoint_uri is not None
     assert snapshot.archive_uri is not None
     assert set(
-        search_services.core.store.get(snapshot.archive_uri).manifest.parents
+        fresh_complete_runtime.core.store.get(snapshot.archive_uri).manifest.parents
     ) == {
         claim_uri,
         plugin_id,
         snapshot.checkpoint_uri,
     }
-    events = search_services.application.search.events(handle.experiment_uri)
+    events = fresh_complete_runtime.services.search.events(handle.experiment_uri)
     assert events[0].event_type == "REQUEST_ACCEPTED"
     assert events[-1].event_type == "COMPLETED"
     proposer_event = next(
@@ -67,10 +67,10 @@ def test_search_run_checkpoints_strategy_neutral_lineage(
 
 
 def test_concurrent_retries_create_one_search_invocation(
-    search_services,
+    fresh_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(search_services)
+    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
     request = _request(
         claim_uri,
         plugin_id,
@@ -81,7 +81,7 @@ def test_concurrent_retries_create_one_search_invocation(
     with ThreadPoolExecutor(max_workers=8) as pool:
         handles = tuple(
             pool.map(
-                lambda _index: search_services.application.search.start(request),
+                lambda _index: fresh_complete_runtime.services.search.start(request),
                 range(8),
             )
         )
@@ -89,7 +89,7 @@ def test_concurrent_retries_create_one_search_invocation(
     experiment_uris = {handle.experiment_uri for handle in handles}
     assert len(experiment_uris) == 1
     experiment_uri = experiment_uris.pop()
-    snapshot = search_services.application.search.wait(
+    snapshot = fresh_complete_runtime.services.search.wait(
         experiment_uri, timeout_seconds=30
     )
     assert snapshot.accounting.proposed_candidates == 4
@@ -97,21 +97,23 @@ def test_concurrent_retries_create_one_search_invocation(
     def fail_if_resolved(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("durable retries must not re-resolve plugin code")
 
-    monkeypatch.setattr(search_services.core.plugins, "resolve", fail_if_resolved)
-    retried = search_services.application.search.start(request)
+    monkeypatch.setattr(
+        fresh_complete_runtime.core.plugins, "resolve", fail_if_resolved
+    )
+    retried = fresh_complete_runtime.services.search.start(request)
     assert retried.experiment_uri == experiment_uri
 
     event_types = [
         event.event_type
-        for event in search_services.application.search.events(experiment_uri)
+        for event in fresh_complete_runtime.services.search.events(experiment_uri)
     ]
     assert event_types.count("REQUEST_ACCEPTED") == 1
     assert event_types.count("REQUEST_REUSED") == 8
 
 
-def test_search_lifecycle_events_are_append_only(search_services) -> None:
-    claim_uri, plugin_id = _install_search_plugin(search_services)
-    handle = search_services.application.search.start(
+def test_search_lifecycle_events_are_append_only(fresh_complete_runtime) -> None:
+    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
+    handle = fresh_complete_runtime.services.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -119,10 +121,12 @@ def test_search_lifecycle_events_are_append_only(search_services) -> None:
             batch_size=4,
         )
     )
-    search_services.application.search.wait(handle.experiment_uri, timeout_seconds=30)
+    fresh_complete_runtime.services.search.wait(
+        handle.experiment_uri, timeout_seconds=30
+    )
 
     with (
-        sqlite3.connect(search_services.core.store.db_path) as connection,
+        sqlite3.connect(fresh_complete_runtime.core.store.db_path) as connection,
         pytest.raises(
             sqlite3.IntegrityError,
             match="append-only",
@@ -141,14 +145,14 @@ def test_search_lifecycle_events_are_append_only(search_services) -> None:
         )
 
 
-def test_idempotency_key_cannot_be_rebound(search_services) -> None:
-    claim_uri, plugin_id = _install_search_plugin(search_services)
+def test_idempotency_key_cannot_be_rebound(fresh_complete_runtime) -> None:
+    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
     first = _request(
         claim_uri,
         plugin_id,
         idempotency_key="search-rebind-001",
     )
-    search_services.application.search.start(first)
+    fresh_complete_runtime.services.search.start(first)
 
     with pytest.raises(
         SearchError,
@@ -157,7 +161,7 @@ def test_idempotency_key_cannot_be_rebound(search_services) -> None:
             r"Reuse the original request or choose a new idempotency key\."
         ),
     ):
-        search_services.application.search.start(
+        fresh_complete_runtime.services.search.start(
             first.model_copy(
                 update={
                     "initial_state": {"cursor": 2},
@@ -167,15 +171,15 @@ def test_idempotency_key_cannot_be_rebound(search_services) -> None:
 
 
 def test_search_pauses_and_resumes_without_duplicate_lineage(
-    search_services,
+    fresh_complete_runtime,
 ) -> None:
     claim_uri, plugin_id = _install_search_plugin(
-        search_services,
+        fresh_complete_runtime,
         proposer_entrypoint=(
             "tests.support.search_entrypoints:propose_fixture_values_slowly"
         ),
     )
-    handle = search_services.application.search.start(
+    handle = fresh_complete_runtime.services.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -183,17 +187,17 @@ def test_search_pauses_and_resumes_without_duplicate_lineage(
         )
     )
 
-    pause = search_services.application.search.pause(handle.experiment_uri)
+    pause = fresh_complete_runtime.services.search.pause(handle.experiment_uri)
     assert pause.accepted is True
-    paused = search_services.application.search.wait(
+    paused = fresh_complete_runtime.services.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
     assert paused.state is ExperimentState.PAUSED
     before_pages = paused.archive_page_uris
 
-    resumed = search_services.application.search.resume(handle.experiment_uri)
+    resumed = fresh_complete_runtime.services.search.resume(handle.experiment_uri)
     assert resumed.accepted is True
-    completed = search_services.application.search.wait(
+    completed = fresh_complete_runtime.services.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 

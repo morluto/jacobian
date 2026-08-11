@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -19,6 +18,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
+    CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
     CapabilityProviderAvailability,
@@ -48,70 +48,6 @@ from jacobian.operations import (
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import ArtifactIntegrityError, ArtifactNotFoundError
 from jacobian.storage.repository import ArtifactRepository
-
-
-def _validation_pointer(parts: list[object]) -> str | None:
-    """Return a bounded RFC 6901 pointer without echoing oversized keys."""
-    encoded: list[str] = []
-    for part in parts:
-        component = str(part)
-        if len(component) > 64:
-            component = "<invalid-key>"
-        encoded.append(component.replace("~", "~0").replace("/", "~1"))
-    pointer = "/" + "/".join(encoded) if encoded else None
-    return pointer if pointer is None or len(pointer) <= 512 else None
-
-
-def _validation_diagnostic(
-    diagnostic: CapabilityDiagnostic,
-    exc: ValidationError,
-) -> CapabilityDiagnostic:
-    """Add bounded recovery context without exposing rejected input values."""
-    raw_errors = exc.errors(include_url=False)
-    errors = exc.errors(include_url=False, include_input=False)
-    if not errors:
-        return diagnostic
-    first = errors[0]
-    path_parts = list(first.get("loc", ()))
-    raw_reason = str(first.get("msg", "invalid value"))
-    validation_type = str(first.get("type", "value_error"))
-    context = first.get("ctx")
-    context_error = context.get("error") if isinstance(context, dict) else None
-    domain_reason = (
-        context.get("jacobian_validation_reason")
-        if isinstance(context, dict)
-        else None
-    )
-    if validation_type.startswith("jacobian.") and isinstance(domain_reason, str):
-        reason = domain_reason[:128]
-    elif isinstance(context_error, (ValueError, AssertionError)):
-        reason = validation_type.replace("_", " ")[:128]
-    else:
-        reason = raw_reason[:128]
-    rejected_container = raw_errors[0].get("input")
-    field_match = re.match(r"(?:Value error, )?([a-z][a-z0-9_]*)\b", raw_reason)
-    if (
-        path_parts
-        and
-        field_match is not None
-        and isinstance(rejected_container, dict)
-        and field_match.group(1) in rejected_container
-    ):
-        path_parts.append(field_match.group(1))
-    path = _validation_pointer(path_parts)
-    return CapabilityDiagnostic.model_validate(
-        {
-            **diagnostic.model_dump(mode="python"),
-            "hint": reason or diagnostic.hint,
-            "path": diagnostic.path or path,
-            "details": {
-                **diagnostic.details,
-                "validation_error_count": len(errors),
-                "validation_reason": reason,
-                "validation_type": validation_type,
-            },
-        }
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +88,7 @@ def _execution_failure_result(
     return CapabilityResult(
         capability_id=operation.capability_id,
         capability_version=operation.version,
+        mode=request.mode,
         execution=Execution(
             status=outcome.status,
             runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -175,9 +112,29 @@ def _enriched_invalid_request(
     base: CapabilityDiagnostic,
     exc: ValidationError,
 ) -> CapabilityDiagnostic:
-    """Add bounded, redacted Pydantic context to a bundle diagnostic."""
+    """Copy *base* and surface the first Pydantic error's location and message.
 
-    return _validation_diagnostic(base, exc)
+    Used only when no per-operation ``invalid_request`` is set, so the
+    generic bundle diagnostic gains a precise ``path`` (from the Pydantic
+    ``loc``) and ``hint`` (from the validator's own message) without
+    changing its ``code`` or ``stage``.
+    """
+
+    errors = exc.errors()
+    if not errors:
+        return base
+    first = errors[0]
+    loc = first.get("loc", ())
+    path = "/".join(str(part) for part in loc) if loc else None
+    msg = str(first.get("msg", ""))
+    if msg.startswith("Value error, "):
+        msg = msg[len("Value error, ") :]
+    return base.model_copy(
+        update={
+            "path": path,
+            "hint": msg if msg else base.hint,
+        }
+    )
 
 
 class OperationInstaller:
@@ -304,6 +261,7 @@ class ComputedOperationAdapter:
             description=operation.description,
             provider=_operation_runtime(operation, bundle).provider,
             provider_runtime=_operation_runtime(operation, bundle),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             read_only=True,
@@ -352,6 +310,7 @@ class ComputedOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -398,6 +357,7 @@ class MaterializedOperationAdapter:
             description=operation.description,
             provider=_operation_runtime(operation, bundle).provider,
             provider_runtime=_operation_runtime(operation, bundle),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(self.output_model),
             tags=operation.tags,
@@ -513,6 +473,7 @@ class MaterializedOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -562,6 +523,7 @@ class BoundedSearchOperationAdapter:
             description=operation.description,
             provider=_operation_runtime(operation, bundle).provider,
             provider_runtime=_operation_runtime(operation, bundle),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(operation.request_model),
             output_schema=model_schema(operation.result_model),
             tags=operation.tags,
@@ -648,6 +610,7 @@ class BoundedSearchOperationAdapter:
         return CapabilityResult(
             capability_id=self.operation.capability_id,
             capability_version=self.operation.version,
+            mode=request.mode,
             execution=Execution(
                 status=(
                     interrupted_outcome.status

@@ -67,6 +67,19 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 "polynomial.gcd.verify",
             } <= capability_ids
 
+            producer = await _tool(
+                client,
+                "math.find",
+                {"capability_id": "polynomial.compute.gcd"},
+            )
+            verifier = await _tool(
+                client,
+                "math.find",
+                {"capability_id": "polynomial.gcd.verify"},
+            )
+            assert producer["capability"]["modes"] == ["EXPLORE"]
+            assert verifier["capability"]["modes"] == ["VERIFY"]
+
             gcd_input = {
                 "left": _polynomial(-1, 0, 1),
                 "right": _polynomial(0, 1, 1),
@@ -76,6 +89,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 "math.run",
                 {
                     "capability_id": "polynomial.compute.gcd",
+                    "mode": "EXPLORE",
                     "payload": gcd_input,
                 },
             )
@@ -88,6 +102,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
+                    "mode": "VERIFY",
                     "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
@@ -113,6 +128,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
+                    "mode": "VERIFY",
                     "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
@@ -142,6 +158,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 "math.run",
                 {
                     "capability_id": "polynomial.compute.gcd",
+                    "mode": "EXPLORE",
                     "payload": gcd_input,
                 },
             )
@@ -154,6 +171,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 "math.run",
                 {
                     "capability_id": "polynomial.gcd.verify",
+                    "mode": "VERIFY",
                     "payload": {
                         "input": gcd_input,
                         "candidate": computed["output"]["result"],
@@ -178,11 +196,18 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
     async def validate(client: Client) -> dict[str, Any]:
         capability_ids = await _catalog(client)
         assert "lean.proof_edit.validate" in capability_ids
+        descriptor = await _tool(
+            client,
+            "math.find",
+            {"capability_id": "lean.proof_edit.validate"},
+        )
+        assert descriptor["capability"]["modes"] == ["VERIFY"]
         return await _tool(
             client,
             "math.run",
             {
                 "capability_id": "lean.proof_edit.validate",
+                "mode": "VERIFY",
                 "payload": {
                     "environment": "CORE",
                     "statement": "True",

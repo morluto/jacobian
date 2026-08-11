@@ -19,13 +19,12 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
-def test_arithmetic_capabilities_return_exact_results(
-    domain_services: DomainTestServices,
-) -> None:
-    cases = (
+@pytest.mark.parametrize(
+    ("capability_id", "payload", "expected"),
+    (
         (
             "integer.compute.nth_root",
-            {"value": "65", "degree": 3},
+            {"value": 65, "degree": 3},
             {"root": "4", "exact": False},
         ),
         (
@@ -38,14 +37,20 @@ def test_arithmetic_capabilities_return_exact_results(
             {"value": "-10", "base": 2},
             {"sign": -1, "base": 2, "digits": ["1", "0", "1", "0"]},
         ),
+    ),
+)
+def test_arithmetic_capabilities_return_exact_results(
+    domain_services: DomainTestServices,
+    capability_id: str,
+    payload: dict[str, object],
+    expected: dict[str, object],
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(capability_id=capability_id, input=payload)
     )
-    for capability_id, payload, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
-        )
 
-        assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
-        assert result.output["result"] == expected, capability_id
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == expected
 
 
 def test_rational_product_formats_results_above_python_digit_limit(
@@ -65,32 +70,6 @@ def test_rational_product_formats_results_above_python_digit_limit(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["result"] == {"value": {"num": "1" + "0" * 5000, "den": "1"}}
-
-
-@pytest.mark.parametrize(
-    ("value", "degree", "expected"),
-    (
-        ("729000000", 3, {"root": "900", "exact": True}),
-        ("729000001", 3, {"root": "900", "exact": False}),
-        ("-729000000", 3, {"root": "-900", "exact": True}),
-        ("-9", 3, {"root": "-3", "exact": False}),
-    ),
-)
-def test_integer_nth_root_accepts_canonical_integers_above_small_scalar_bound(
-    domain_services: DomainTestServices,
-    value: str,
-    degree: int,
-    expected: dict[str, object],
-) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.nth_root",
-            input={"value": value, "degree": degree},
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["result"] == expected
 
 
 def test_rational_difference_accepts_contract_sized_components(

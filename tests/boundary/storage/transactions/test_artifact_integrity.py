@@ -463,6 +463,7 @@ def test_store_keeps_filesystem_paths_local(
             raise OSError("simulated filesystem failure at /private/provider/blob/path")
         original_mkdir(
             path,
+            mode=mode,
             parents=parents,
             exist_ok=exist_ok,
         )

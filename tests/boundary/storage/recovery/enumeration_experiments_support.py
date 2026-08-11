@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from tests.support.services import ReferenceTestServices
-
 from jacobian.contracts.plugins import PluginManifest
+from jacobian.runtime.model import JacobianRuntime
 
 
 def _claim(
-    runtime: ReferenceTestServices,
+    runtime: JacobianRuntime,
     *,
     reference_name: str,
     predicate: str,
     parameters: dict[str, object],
 ) -> tuple[str, str]:
-    reference = runtime.references[reference_name]
+    reference = runtime.portfolio.references[reference_name]
     claim = runtime.core.artifacts.put(
         schema_uri=reference.claim_schema_uri,
         semantics_uri=reference.semantics_uri,
@@ -38,17 +37,17 @@ def _claim(
 
 
 def _install_matrix_enumerator_plugin(
-    runtime: ReferenceTestServices,
+    runtime: JacobianRuntime,
     *,
     entrypoint: str,
     evaluator_entrypoint: str = "jacobian.plugins.matrices:evaluate_capability",
 ) -> str:
-    matrix = runtime.references["matrices"]
+    matrix = runtime.portfolio.references["matrices"]
     enumerator = runtime.core.plugins.register_implementation(entrypoint)
     evaluator = runtime.core.plugins.register_implementation(evaluator_entrypoint)
     manifest = runtime.core.artifacts.put(
-        schema_uri=runtime.application.reference_installer.manifest_schema_uri,
-        semantics_uri=runtime.application.reference_installer.manifest_semantics_uri,
+        schema_uri=runtime.services.reference_installer.manifest_schema_uri,
+        semantics_uri=runtime.services.reference_installer.manifest_semantics_uri,
         payload=PluginManifest(
             domain_id="jacobian.integer-matrices",
             domain_version="1",
@@ -74,11 +73,11 @@ def _install_matrix_enumerator_plugin(
 
 
 def _matrix_claim_for_plugin(
-    runtime: ReferenceTestServices,
+    runtime: JacobianRuntime,
     *,
     plugin_id: str,
 ) -> str:
-    matrix = runtime.references["matrices"]
+    matrix = runtime.portfolio.references["matrices"]
     claim = runtime.core.artifacts.put(
         schema_uri=matrix.claim_schema_uri,
         semantics_uri=matrix.semantics_uri,
@@ -94,7 +93,7 @@ def _matrix_claim_for_plugin(
             "correspondence_status": "HUMAN_REVIEWED",
         },
     )
-    validation = runtime.application.claims.validate(
+    validation = runtime.services.claims.validate(
         claim_uri=claim.artifact_uri,
         plugin_id=plugin_id,
     )

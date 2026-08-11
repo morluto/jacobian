@@ -13,6 +13,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
+    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -118,6 +119,7 @@ class PolynomialCollisionAdapter:
                     else ()
                 ),
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialCollisionRequest),
             output_schema=model_schema(PolynomialCollisionOutput),
             tags=("polynomial", "map", "collision", "witness", "artifact-composition"),
@@ -314,6 +316,7 @@ class PolynomialCollisionSearchAdapter:
                     else ()
                 ),
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialCollisionSearchRequest),
             output_schema=model_schema(PolynomialCollisionSearchOutput),
             tags=("polynomial", "map", "collision", "bounded-search"),
@@ -554,6 +557,7 @@ class PolynomialCollisionSearchAdapter:
             return CapabilityResult(
                 capability_id=self.descriptor.capability_id,
                 capability_version=self.descriptor.version,
+                mode=request.mode,
                 execution=Execution(
                     status=ExecutionStatus.CANCELLED,
                     runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -627,6 +631,7 @@ class PolynomialCollisionVerifyAdapter:
                 features=("exact-rational-collision-replay",),
                 checker_ids=(checker_id,),
             ),
+            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialCollisionVerifyRequest),
             output_schema=model_schema(PolynomialCollisionVerifyOutput),
             tags=("polynomial", "map", "collision", "verification"),
@@ -713,6 +718,7 @@ class PolynomialCollisionVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -778,6 +784,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
                 features=("exact-rational-collision", "inverse-obstruction"),
                 checker_ids=(checker_id,),
             ),
+            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialMapInverseCollisionVerifyRequest),
             output_schema=model_schema(PolynomialMapInverseCollisionVerifyOutput),
             tags=("polynomial", "map", "inverse", "collision", "verification"),
@@ -868,6 +875,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

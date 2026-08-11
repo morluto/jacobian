@@ -143,6 +143,7 @@ def _capability_resolution_failure(
 ) -> CapabilityResult | None:
     policy_reasons = dispatch.policy.denial_reasons(
         descriptor,
+        mode=request.mode,
     )
     if policy_reasons:
         result = resolution_failure(
@@ -167,6 +168,25 @@ def _capability_resolution_failure(
                 },
             ),
             context={"capability_policy": dispatch.policy.definition},
+        )
+        return result.model_copy(update=provider_provenance(descriptor))
+    if request.mode not in descriptor.modes:
+        result = resolution_failure(
+            request=request,
+            capability_version=descriptor.version,
+            diagnostic=CapabilityDiagnostic(
+                code="UNSUPPORTED_MODE",
+                stage="capability_resolution",
+                message=(
+                    f"Capability {request.capability_id!r} does not support "
+                    f"{request.mode.value} mode."
+                ),
+                hint=(
+                    "Call math.find for this capability, then retry "
+                    "with one of its advertised modes."
+                ),
+            ),
+            context={"available_modes": [mode.value for mode in descriptor.modes]},
         )
         return result.model_copy(update=provider_provenance(descriptor))
     return None
@@ -250,6 +270,7 @@ def _adapter_result_identity_failure(
     if (
         result.capability_id != descriptor.capability_id
         or result.capability_version != descriptor.version
+        or result.mode is not request.mode
     ):
         return failed_result(
             descriptor=descriptor,
@@ -258,7 +279,7 @@ def _adapter_result_identity_failure(
                 code="ADAPTER_RESULT_INVALID",
                 stage="adapter_execution",
                 message="The adapter returned a result with a mismatched identity.",
-                hint="The capability adapter produced a result for a different capability.",
+                hint="The capability adapter produced a result for a different capability or mode.",
             ),
         )
     if result.provider is not None and result.provider != descriptor.provider:
@@ -332,6 +353,7 @@ def failed_result(
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
+        mode=request.mode,
         execution=Execution(status=ExecutionStatus.ERROR, detail=diagnostic.message),
         output={"error": diagnostic.model_dump(mode="json", exclude_none=True)},
         diagnostics=(diagnostic,),
@@ -397,6 +419,7 @@ def resolution_failure(
     return CapabilityResult(
         capability_id=request.capability_id,
         capability_version=capability_version,
+        mode=request.mode,
         execution=Execution(status=ExecutionStatus.ERROR, detail=diagnostic.message),
         output={
             "error": diagnostic.model_dump(mode="json", exclude_none=True),

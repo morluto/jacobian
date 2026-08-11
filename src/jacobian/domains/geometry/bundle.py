@@ -24,12 +24,9 @@ def build_geometry_bundle() -> DomainBundle:
         schema_namespace="jacobian.geometry",
         semantics=DomainSemantics(
             name="jacobian.exact-rational-plane-geometry",
-            version="3",
+            version="2",
             definition={
-                "description": (
-                    "Euclidean plane geometry over exact rational coordinates, "
-                    "including bounded exact rational-weight convex triangulation"
-                ),
+                "description": "Euclidean plane geometry over exact rational coordinates",
                 "degeneracy": "operation-specific and fail-closed",
                 "assurance": (
                     "computed producers; selected results admit separately "

@@ -10,6 +10,7 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityDescriptor,
     CapabilityInstallTier,
+    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -41,6 +42,7 @@ class UnavailableAdapter:
             license_id="MIT",
             diagnostic="The fixture executable is not installed.",
         ),
+        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )
@@ -220,6 +222,7 @@ def test_invocation_binds_descriptor_runtime_to_result_provenance(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=descriptor.capability_id,
+            mode=CapabilityMode.EXPLORE,
             input={},
         )
     )
@@ -244,6 +247,7 @@ def test_runtime_contract_accepts_a_bound_completed_result() -> None:
     result = CapabilityResult(
         capability_id="fixture.identity",
         capability_version="1",
+        mode=CapabilityMode.EXPLORE,
         execution=Execution(status=ExecutionStatus.COMPLETED),
         assurance=CapabilityAssurance(
             level=CapabilityAssuranceLevel.COMPUTED,

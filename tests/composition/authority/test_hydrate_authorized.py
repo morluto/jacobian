@@ -10,9 +10,6 @@ from tests.support.state import copy_template
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-# Composition-lane admission category for architecture ratchets.
-COMPOSITION_ADMISSION = "AUTHORITY"
-
 
 def _verify_ids(runtime: JacobianRuntime) -> set[str]:
     return {

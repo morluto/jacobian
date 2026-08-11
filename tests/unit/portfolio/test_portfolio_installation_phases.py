@@ -105,20 +105,10 @@ class _UnauthorizedContext:
 
 
 def test_reference_phase_derives_authority_from_its_context() -> None:
-    installed: dict[str, object] = {}
-
-    class _ReferenceInstaller:
-        def install_all(self, *, authorize_checker: bool = True) -> dict[str, object]:
-            installed["authorize_checker"] = authorize_checker
-            return {"graph_paths": object()}
-
     context = _UnauthorizedContext()
     application = cast(
         ApplicationServices,
-        SimpleNamespace(
-            core=SimpleNamespace(plugins=object()),
-            reference_installer=_ReferenceInstaller(),
-        ),
+        SimpleNamespace(core=SimpleNamespace(plugins=object())),
     )
     result = PortfolioInstallation()
 
@@ -127,8 +117,7 @@ def test_reference_phase_derives_authority_from_its_context() -> None:
         cast(ProviderAvailabilityResolver, object()),
     ).install(application, result)
 
-    assert installed["authorize_checker"] is False
-    assert set(result.references) == {"graph_paths"}
+    assert result.references == {}
     assert result.lean_checkers == {}
     assert context.registered == []
 

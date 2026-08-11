@@ -23,6 +23,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
+    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
@@ -145,6 +146,7 @@ class LeanProofAxiomsAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanProofAxiomsInspectRequest.model_json_schema(),
             output_schema=LeanProofAxiomsInspectOutput.model_json_schema(),
             read_only=True,
@@ -153,6 +155,7 @@ class LeanProofAxiomsAdapter:
                 CapabilityInvocationExample(
                     name="inspect_true",
                     description="Inspect a proof of True without making a trust decision.",
+                    mode=CapabilityMode.EXPLORE,
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -265,6 +268,7 @@ class LeanProofAxiomsAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=int((time.monotonic() - started) * 1000),

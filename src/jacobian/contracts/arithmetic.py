@@ -68,9 +68,9 @@ class IntegerBaseDigitsRequest(ContractModel):
 
 
 class IntegerNthRootRequest(ContractModel):
-    """One canonical integer and a positive root degree."""
+    """One non-negative integer and a positive root degree."""
 
-    value: CanonicalInteger
+    value: int = Field(ge=0, le=_MAX_NONNEGATIVE)
     degree: int = Field(ge=1, le=_MAX_NONNEGATIVE)
 
 

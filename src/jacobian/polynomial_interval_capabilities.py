@@ -44,6 +44,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -277,6 +278,7 @@ class PolynomialIntervalEncloseAdapter:
                 ),
                 checker_ids=checker_ids,
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialIntervalEnclosureRequest),
             output_schema=model_schema(PolynomialIntervalEnclosureOutput),
             tags=(
@@ -441,6 +443,7 @@ class PolynomialIntervalEnclosureVerifyAdapter:
                 ),
                 checker_ids=(checker_id,),
             ),
+            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialIntervalEnclosureVerifyRequest),
             output_schema=model_schema(PolynomialIntervalEnclosureVerifyOutput),
             tags=(
@@ -591,6 +594,7 @@ class PolynomialIntervalEnclosureVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

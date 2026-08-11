@@ -21,6 +21,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -175,6 +176,7 @@ class PolynomialSystemSolutionAdapter:
                 features=("polynomial-system", "solution", "exact-rational"),
                 checker_ids=(checker_id,),
             ),
+            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialSystemSolutionRequest),
             output_schema=model_schema(PolynomialSystemSolutionOutput),
             tags=("polynomial", "system", "solution", "verification"),
@@ -325,6 +327,7 @@ class PolynomialSystemSolutionAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

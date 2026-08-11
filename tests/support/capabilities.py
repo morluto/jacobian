@@ -2,29 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 
 from jacobian.contracts.capabilities import (
+    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.runtime.services import CoreServices
-
-
-class CapabilityRuntime(Protocol):
-    """The minimal public invocation surface used by capability tests."""
-
-    @property
-    def core(self) -> CoreServices: ...
+from jacobian.runtime.model import JacobianRuntime
 
 
 def invoke_capability(
-    runtime: CapabilityRuntime,
+    runtime: JacobianRuntime,
     capability_id: str,
     payload: dict[str, Any],
+    *,
+    mode: CapabilityMode = CapabilityMode.EXPLORE,
 ) -> CapabilityResult:
     """Invoke one capability through the public request envelope."""
 
     return runtime.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
+        CapabilityRequest(capability_id=capability_id, mode=mode, input=payload)
     )

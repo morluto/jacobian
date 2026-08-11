@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
+    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -55,6 +56,7 @@ class GraphExplicitConstructionAdapter:
                 "jacobian.networkx",
                 features=("simple-undirected-graphs", "canonical-materialization"),
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(GraphExplicitConstructionRequest),
             output_schema=model_schema(GraphExplicitConstructionOutput),
             tags=("graph", "construction", "explicit", "artifact-materialization"),
@@ -64,6 +66,7 @@ class GraphExplicitConstructionAdapter:
                     description=(
                         "Materialize a path while allowing noncanonical caller order."
                     ),
+                    mode=CapabilityMode.EXPLORE,
                     input={
                         "vertices": ["c", "a", "b"],
                         "edges": [["b", "a"], ["c", "b"]],
@@ -137,6 +140,7 @@ class GraphExplicitConstructionAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms(started),

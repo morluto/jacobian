@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 from jacobian.atomic_capability_builders import AdapterFactory, SchemaBuilder
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityMode,
 )
 from jacobian.contracts.discovery import (
     ExperimentCancelResult,
@@ -47,6 +48,7 @@ def build_experiment_adapters(
                 "Compute a plugin-defined canonical representative without "
                 "self-certification."
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "structure_uri": artifact_uri,
@@ -61,7 +63,6 @@ def build_experiment_adapters(
             ),
             output_schema=model_schema(StructureCanonicalizationResult),
             invoke=lambda p: application.structures.canonicalize(**p),
-            artifact_references=lambda v: _structure_references(v),
             unverified_assurance_level=CapabilityAssuranceLevel.HEURISTIC,
             unverified_basis="plugin canonicalization is not independently verified",
             tags=("structure", "canonicalization"),
@@ -73,6 +74,7 @@ def build_experiment_adapters(
                 "Start one durable candidate-enumeration experiment; it cannot "
                 "self-certify."
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "claim_uri": artifact_uri,
@@ -100,6 +102,7 @@ def build_experiment_adapters(
                 "Read the durable state and accounting of one enumeration or "
                 "search experiment."
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {"experiment_uri": experiment_uri},
                 required=("experiment_uri",),
@@ -117,6 +120,7 @@ def build_experiment_adapters(
             description=(
                 "Wait for a bounded interval and return the latest experiment snapshot."
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {
                     "experiment_uri": experiment_uri,
@@ -144,6 +148,7 @@ def build_experiment_adapters(
             description=(
                 "Request cancellation of one running enumeration or search experiment."
             ),
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=schema(
                 {"experiment_uri": experiment_uri},
                 required=("experiment_uri",),
@@ -155,10 +160,3 @@ def build_experiment_adapters(
             tags=("experiment", "control"),
         ),
     )
-
-
-def _structure_references(value: Any) -> tuple[str, ...]:
-    refs: list[str] = [value.structure_uri]
-    if value.canonical_uri is not None:
-        refs.append(value.canonical_uri)
-    return tuple(refs)

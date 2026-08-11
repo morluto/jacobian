@@ -8,6 +8,7 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
@@ -74,6 +75,7 @@ def _verify(runtime: DomainTestServices, proof_uri: str):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="smt.unsat_proof.verify",
+            mode=CapabilityMode.VERIFY,
             input={"proof_uri": proof_uri},
         )
     )

@@ -20,6 +20,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -179,6 +180,7 @@ class GraphIsomorphismAdapter:
                 features=("graph", "isomorphism", "direct-witness"),
                 checker_ids=(installation.checker_id,),
             ),
+            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(GraphIsomorphismVerifyRequest),
             output_schema=model_schema(GraphIsomorphismVerifyOutput),
             tags=("graph", "isomorphism", "verification"),
@@ -326,6 +328,7 @@ class GraphIsomorphismAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

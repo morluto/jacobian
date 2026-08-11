@@ -55,6 +55,8 @@ class CapabilityDiscoveryMixin:
         lexical_candidates: list[CapabilityDiscoveryMatch] = []
         ranked: list[tuple[int, CapabilityDiscoveryMatch]] = []
         for descriptor in descriptors:
+            if request.mode is not None and request.mode not in descriptor.modes:
+                continue
             if normalized_domain is not None and not matches_domain(
                 descriptor,
                 normalized_domain,
@@ -79,6 +81,7 @@ class CapabilityDiscoveryMixin:
                 capability_id=descriptor.capability_id,
                 title=descriptor.title,
                 description=descriptor.description,
+                modes=descriptor.modes,
                 tags=descriptor.tags,
                 matched_on=matched_on,
                 matched_terms=matched_terms,
@@ -142,6 +145,7 @@ class CapabilityDiscoveryMixin:
             domain=normalized_domain,
             domain_filter_status=domain_filter_status,
             domain_filter_basis=domain_filter_basis,
+            mode=request.mode,
             resolved_input_kind=resolved_input_kind,
             artifact_type=request.artifact_type,
             routing_status=routing_status,

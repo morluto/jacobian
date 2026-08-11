@@ -4,6 +4,7 @@ from jacobian.capability_discovery import discovery_relevance
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInstallTier,
+    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -28,6 +29,7 @@ def test_discovery_phrase_matching_respects_token_boundaries() -> None:
         description="Inspect some paragraph of structured text.",
         provider="tests",
         provider_runtime=runtime,
+        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object"},
         output_schema={"type": "object"},
     )

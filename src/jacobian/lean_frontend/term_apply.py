@@ -20,6 +20,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityInvocationExample,
+    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
@@ -54,6 +55,7 @@ class LeanTermApplyAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanTermApplyRequest.model_json_schema(),
             output_schema=LeanTermApplyOutput.model_json_schema(),
             tags=("lean", "term", "proof-state", "exploration"),
@@ -70,6 +72,7 @@ class LeanTermApplyAdapter:
                         "state for True via `exact True.intro`; a completed "
                         "transition still requires lean.check."
                     ),
+                    mode=CapabilityMode.EXPLORE,
                     input=LeanTermApplyRequest.model_validate(
                         {
                             "environment": "CORE",
@@ -115,6 +118,7 @@ class LeanTermApplyAdapter:
         delegated = self._proof_state.invoke(
             CapabilityRequest(
                 capability_id=self._proof_state.descriptor.capability_id,
+                mode=request.mode,
                 input={
                     "state_uri": validated.state_uri,
                     "environment": validated.environment.value,
@@ -150,6 +154,7 @@ class LeanTermApplyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=delegated.mode,
             execution=delegated.execution,
             output=output.model_dump(mode="json"),
             scope=delegated.scope,

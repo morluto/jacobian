@@ -14,6 +14,7 @@ import pytest
 
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.capabilities import (
+    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
@@ -94,6 +95,7 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     opened = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -112,6 +114,7 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     reopened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -124,6 +127,7 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     inspected = inspect.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.inspect",
+            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "state_uri": open_state_uri},
         )
     )
@@ -135,6 +139,7 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     fields = metavariable.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.metavariable_fields",
+            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "state_uri": open_state_uri},
         )
     )

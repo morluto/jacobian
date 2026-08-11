@@ -17,6 +17,7 @@ import pytest
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
+    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.lean import LeanEnvironment
@@ -234,6 +235,7 @@ def _stored_input_state_uri(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": environment.value,
                 "statement": "True",
@@ -270,6 +272,7 @@ def _invoke_stored_state_consumer(
     adapter.invoke(
         CapabilityRequest(
             capability_id=capability_id,
+            mode=CapabilityMode.EXPLORE,
             input=request_input,
         )
     )
@@ -299,6 +302,7 @@ def test_term_apply_elaborates_exact_term_and_returns_successor(
     result = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -328,6 +332,7 @@ def test_term_apply_rejects_multiline_term(
         term_apply.invoke(
             CapabilityRequest(
                 capability_id="lean.term.apply",
+                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",
@@ -355,6 +360,7 @@ def test_term_apply_fails_closed_on_rejected_term(
     result = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "n = 0",
@@ -389,6 +395,7 @@ def test_inspect_returns_recorded_goals_without_replay(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "(P Q : Prop) → P ∧ Q",
@@ -402,6 +409,7 @@ def test_inspect_returns_recorded_goals_without_replay(
     result = inspect.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.inspect",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "state_uri": successor_uri,
@@ -435,6 +443,7 @@ def test_inspect_rejects_stale_state(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "statement": "True", "tactic": "skip"},
         )
     )
@@ -451,6 +460,7 @@ def test_inspect_rejects_stale_state(
         inspect.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.inspect",
+                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "state_uri": stale.artifact_uri,
@@ -514,6 +524,7 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -535,6 +546,7 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     result = metavariable.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.metavariable_fields",
+            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "state_uri": state_uri},
         )
     )
@@ -568,6 +580,7 @@ def test_metavariable_fields_reject_completed_state(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "statement": "True", "tactic": "trivial"},
         )
     )
@@ -576,6 +589,7 @@ def test_metavariable_fields_reject_completed_state(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
+                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "state_uri": state_uri},
             )
         )
@@ -595,6 +609,7 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -621,6 +636,7 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
+                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "state_uri": state_uri},
             )
         )
@@ -709,6 +725,7 @@ def test_term_apply_rejects_sorry_at_own_boundary(
         term_apply.invoke(
             CapabilityRequest(
                 capability_id="lean.term.apply",
+                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",
@@ -729,6 +746,7 @@ def test_term_apply_rejects_admit_at_own_boundary(
         term_apply.invoke(
             CapabilityRequest(
                 capability_id="lean.term.apply",
+                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",
@@ -865,6 +883,7 @@ def test_inspect_adapter_available_without_lean_runtime(
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.inspect",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "state_uri": state.artifact_uri,
@@ -997,6 +1016,7 @@ def test_metavariable_fields_rejects_stale_state_before_replay(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
+                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "state_uri": stale.artifact_uri,
@@ -1054,6 +1074,7 @@ def test_inspect_rejects_forged_environment_metadata(
         inspect.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.inspect",
+                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": environment.value,
                     "state_uri": forged.artifact_uri,
@@ -1085,6 +1106,7 @@ def test_term_apply_output_is_validated_through_typed_model(
     result = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -1121,6 +1143,7 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
+            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "(P Q : Prop) → P ∧ Q",
@@ -1143,6 +1166,7 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
+                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "state_uri": state_uri},
             )
         )

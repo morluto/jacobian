@@ -1,10 +1,7 @@
 """Independent checker declarations owned by the graph-optimization domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.graph_invariant_operations import (
-    GraphInvariantRequest,
-    GraphMaximumMatchingRequest,
-)
+from jacobian.contracts.graph_invariant_operations import GraphInvariantRequest
 from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphMinimumSpanningTreeRequest,
@@ -162,7 +159,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
     ),
     ExactReplayCheckerDeclaration(
         "graph.invariant.maximum_matching.compute",
-        GraphMaximumMatchingRequest,
+        GraphInvariantRequest,
         "check_graph_maximum_matching",
         "graph.maximum-matching.tutte-berge-v1",
         entrypoint_module=_GRAPH_ENTRYPOINT,

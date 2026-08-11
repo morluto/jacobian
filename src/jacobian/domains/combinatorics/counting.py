@@ -1,7 +1,6 @@
 """Counting-owned exact combinatorics capabilities."""
 
 from jacobian.contracts.combinatorics import (
-    BinomialRequest,
     IntegerListRequest,
     IntegerResult,
     NonnegativeIntegerRequest,
@@ -65,14 +64,12 @@ COUNTING_CAPABILITIES = (
     combinatorics_operation(
         "combinatorics.compute.binomial",
         "Compute binomial coefficient",
-        "Compute the exact integer binomial coefficient n choose k, counting "
-        "k-element subsets of an n-element set.",
-        BinomialRequest,
+        "Count k-element subsets of an n-element set.",
+        NonnegativePairRequest,
         IntegerResult,
         binomial,
         "combinatorics",
         "counting",
-        "number-theory",
         invocation_examples=(
             example("binomial_5_choose_2", "Compute 5 choose 2.", {"n": 5, "k": 2}),
         ),

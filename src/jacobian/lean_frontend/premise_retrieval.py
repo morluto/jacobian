@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -55,6 +56,7 @@ class LeanPremiseRetrievalAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanPremiseRetrievalRequest.model_json_schema(),
             output_schema=LeanPremiseRetrievalOutput.model_json_schema(),
             tags=("lean", "mathlib", "premise-retrieval", "exploration"),
@@ -164,6 +166,7 @@ class LeanPremiseRetrievalAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),

@@ -56,6 +56,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             {
                 "query": "find a graph counterexample",
                 "domain": "graph",
+                "mode": "EXPLORE",
             },
             {
                 "kind": "discovery",
@@ -77,6 +78,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             "math.run",
             {
                 "capability_id": "graph.search.atlas",
+                "mode": "EXPLORE",
                 "payload": {"order": 7},
             },
             {
@@ -102,6 +104,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             "kind": "discovery",
             "query": "find a graph counterexample",
             "domain": "graph",
+            "mode": "EXPLORE",
             "capability_id": None,
             "match_ids": [
                 "graph.search.atlas",
@@ -112,6 +115,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             "kind": "capability",
             "query": None,
             "domain": None,
+            "mode": None,
             "capability_id": "graph.search.atlas",
             "match_ids": [],
         },
@@ -220,6 +224,7 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
             "tool": "math.run",
             "arguments": {
                 "capability_id": "graph.search.atlas",
+                "mode": "EXPLORE",
                 "payload": {"order": 2},
             },
             "status": "completed",

@@ -50,6 +50,7 @@ def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=descriptor.capability_id,
+            mode=example.mode,
             input=example.input,
         )
     )
@@ -176,10 +177,9 @@ def test_degenerate_geometry_fails_before_artifact_writes(domain_services) -> No
     assert collinear_circle.artifact_uris == ()
 
 
-def test_closed_segment_intersection_preserves_degenerate_classification(
-    domain_services,
-) -> None:
-    cases = (
+@pytest.mark.parametrize(
+    ("first", "second", "expected"),
+    (
         (
             _segment(_point(0, 0), _point(2, 2)),
             _segment(_point(0, 2), _point(2, 0)),
@@ -230,24 +230,29 @@ def test_closed_segment_intersection_preserves_degenerate_classification(
                 "overlap": None,
             },
         ),
-    )
-    for first, second, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.segments.intersection.compute",
-                input={"first": first, "second": second},
-            )
-        )
-
-        assert result.execution.status is ExecutionStatus.COMPLETED, expected
-        assert result.output["result"] == expected
-        assert result.artifact_uris == ()
-
-
-def test_simple_polygon_decision_exposes_first_exact_violation(
+    ),
+)
+def test_closed_segment_intersection_preserves_degenerate_classification(
     domain_services,
+    first: dict[str, object],
+    second: dict[str, object],
+    expected: dict[str, object],
 ) -> None:
-    cases = (
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.segments.intersection.compute",
+            input={"first": first, "second": second},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"] == expected
+    assert result.artifact_uris == ()
+
+
+@pytest.mark.parametrize(
+    ("points", "is_simple", "witness_status"),
+    (
         (
             [_point(0, 0), _point(2, 0), _point(2, 2), _point(0, 2)],
             True,
@@ -263,51 +268,58 @@ def test_simple_polygon_decision_exposes_first_exact_violation(
             False,
             "OVERLAP",
         ),
-    )
-    for points, is_simple, witness_status in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.simple.decide",
-                input={"points": points},
-            )
-        )
-
-        assert result.execution.status is ExecutionStatus.COMPLETED, points
-        assert result.output["result"]["is_simple"] is is_simple, points
-        witness = result.output["result"]["witness"]
-        assert (None if witness is None else witness["intersection"]["status"]) == (
-            witness_status
-        ), points
-
-
-def test_simple_polygon_point_classification_is_exact_and_boundary_aware(
+    ),
+)
+def test_simple_polygon_decision_exposes_first_exact_violation(
     domain_services,
+    points: list[dict[str, object]],
+    is_simple: bool,
+    witness_status: str | None,
 ) -> None:
-    cases = (
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.simple.decide",
+            input={"points": points},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["is_simple"] is is_simple
+    witness = result.output["result"]["witness"]
+    assert (None if witness is None else witness["intersection"]["status"]) == (
+        witness_status
+    )
+
+
+@pytest.mark.parametrize(
+    ("point", "classification"),
+    (
         (_point(1, 1), "INSIDE"),
         (_point(2, 1), "BOUNDARY"),
         (_point(3, 1), "OUTSIDE"),
-    )
+    ),
+)
+def test_simple_polygon_point_classification_is_exact_and_boundary_aware(
+    domain_services,
+    point: dict[str, object],
+    classification: str,
+) -> None:
     polygon = [_point(0, 0), _point(2, 0), _point(2, 2), _point(0, 2)]
-    for point, classification in cases:
-        forward = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.point.classify",
-                input={"polygon": {"points": polygon}, "point": point},
-            )
+    forward = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.point.classify",
+            input={"polygon": {"points": polygon}, "point": point},
         )
-        reverse = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.point.classify",
-                input={
-                    "polygon": {"points": list(reversed(polygon))},
-                    "point": point,
-                },
-            )
+    )
+    reverse = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.point.classify",
+            input={"polygon": {"points": list(reversed(polygon))}, "point": point},
         )
+    )
 
-        assert forward.output["result"]["classification"] == classification, point
-        assert reverse.output["result"] == forward.output["result"], point
+    assert forward.output["result"]["classification"] == classification
+    assert reverse.output["result"] == forward.output["result"]
 
 
 def test_point_classification_rejects_non_simple_polygon_before_writes(
@@ -335,21 +347,24 @@ def test_point_classification_rejects_non_simple_polygon_before_writes(
     assert result.artifact_uris == ()
 
 
-def test_polygon_ring_rejects_repeated_closure_or_zero_edge_before_writes(
-    domain_services,
-) -> None:
-    cases = (
+@pytest.mark.parametrize(
+    "points",
+    (
         [_point(0, 0), _point(2, 0), _point(0, 2), _point(0, 0)],
         [_point(0, 0), _point(2, 0), _point(2, 0), _point(0, 2)],
-    )
-    for points in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.simple.decide",
-                input={"points": points},
-            )
+    ),
+)
+def test_polygon_ring_rejects_repeated_closure_or_zero_edge_before_writes(
+    domain_services,
+    points: list[dict[str, object]],
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.simple.decide",
+            input={"points": points},
         )
+    )
 
-        assert result.execution.status is ExecutionStatus.ERROR, points
-        assert result.diagnostics[0].code == "INVALID_GEOMETRY_REQUEST", points
-        assert result.artifact_uris == (), points
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_GEOMETRY_REQUEST"
+    assert result.artifact_uris == ()

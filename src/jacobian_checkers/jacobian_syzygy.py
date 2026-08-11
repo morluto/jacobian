@@ -565,6 +565,10 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
         "first_syzygy_degree": first_degree,
         "kernel_witness": kernel_witness,
         "completion": "COMPLETE_THROUGH_BOUND",
+        "verification_capability_id": (
+            "polynomial.jacobian_syzygy.minimum_degree.verify"
+        ),
+        "verification_input_field": "result_uri",
     }
 
 

@@ -20,6 +20,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
+    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
@@ -125,6 +126,7 @@ class JacobianDegreeSliceMaterializeAdapter:
             ),
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
+            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(JacobianDegreeSliceMaterializeRequest),
             output_schema=model_schema(JacobianDegreeSliceMaterializeOutput),
             tags=("polynomial", "jacobian", "degree-slice", "rabinowitsch", "exact"),
@@ -163,6 +165,7 @@ class JacobianDegreeSliceMaterializeAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -205,6 +208,7 @@ class NullstellensatzVerificationAdapter:
             ),
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
+            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(NullstellensatzVerificationRequest),
             output_schema=model_schema(NullstellensatzVerificationOutput),
             tags=(
@@ -368,6 +372,7 @@ class NullstellensatzVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=(
                 checked.execution
                 if checked is not None

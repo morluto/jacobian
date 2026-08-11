@@ -5,15 +5,19 @@ from pathlib import Path
 
 import pytest
 from tests.support.capabilities import invoke_capability
-from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.domains.matrix_lattice.hnf import _parse_hnf_worker_result
+from jacobian.exact_domain_checkers import install_exact_domain_verification
+from jacobian.operation_installation import OperationInstaller
+from jacobian.runtime import CheckerAuthorityMode
 
 
 def _matrix(entries: list[list[int]]) -> dict[str, object]:
@@ -28,10 +32,28 @@ def _matrix(entries: list[list[int]]) -> dict[str, object]:
 
 @pytest.fixture
 def hnf_services(tmp_path: Path):
-    with open_exact_domain_services(
-        tmp_path,
-        build_matrix_bundle(),
+    bundle = build_matrix_bundle()
+    with open_domain_services(
+        tmp_path, checker_authority=CheckerAuthorityMode.NONE
     ) as services:
+        installed = OperationInstaller(
+            services.core.store,
+            services.core.schemas,
+            services.core.artifacts,
+        ).install(bundle)
+        for adapter in installed.adapters:
+            services.installation.register_capability(adapter)
+        adapters, _ = install_exact_domain_verification(
+            services.core.store,
+            services.core.schemas,
+            services.core.artifacts,
+            services.installation.verification,
+            services.core.checkers,
+            bundles={"matrix": (bundle, installed)},
+            authorize=True,
+        )
+        for adapter in adapters:
+            services.installation.register_capability(adapter)
         yield services
 
 
@@ -102,6 +124,7 @@ def test_hnf_checker_replays_the_retained_certificate(hnf_services) -> None:
     verified = hnf_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.normal_form.hermite.verify",
+            mode=CapabilityMode.VERIFY,
             input={"result_uri": computed.output["result_uri"]},
         )
     )

@@ -26,6 +26,7 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityInstallTier,
+    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -566,6 +567,7 @@ class ExactComputedVerificationAdapter:
             description=verification_description,
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
+            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(
                 ExactDomainResultVerificationRequest
                 if stored_result_input
@@ -628,6 +630,7 @@ class ExactComputedVerificationAdapter:
             return CapabilityResult(
                 capability_id=self.descriptor.capability_id,
                 capability_version=self.descriptor.version,
+                mode=request.mode,
                 execution=Execution(status=ExecutionStatus.COMPLETED),
                 output=output.model_dump(mode="json"),
                 scope=CapabilityScope(
@@ -770,6 +773,7 @@ class ExactComputedVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -873,6 +877,7 @@ class ExactComputedVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
+            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

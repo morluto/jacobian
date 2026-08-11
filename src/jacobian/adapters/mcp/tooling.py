@@ -20,6 +20,7 @@ from jacobian.adapters.mcp.projections import (
 )
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
+    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -361,6 +362,7 @@ def _response_size(value: Any) -> int:
 def _log_capability_attempt(
     *,
     capability_id: str,
+    mode: CapabilityMode,
     started: float,
     argument_digest: str,
     request_digest: str,
@@ -385,7 +387,7 @@ def _log_capability_attempt(
     codes = ",".join(diagnostic_codes[:8]) or "none"
     _LOGGER.info(
         "MCP capability attempt request_digest=%s trace_digest=%s trace_source=%s "
-        "capability_id=%s capability_version=%s "
+        "capability_id=%s capability_version=%s mode=%s "
         "execution_status=%s assurance=%s diagnostic_codes=%s "
         "attempt_duration_ms=%.3f operation_runtime_ms=%s "
         "response_bytes=%d argument_digest=%s",
@@ -394,6 +396,7 @@ def _log_capability_attempt(
         trace_source,
         capability_id,
         capability_version,
+        mode.value,
         execution_status or "ERROR",
         assurance,
         codes,
@@ -409,27 +412,29 @@ async def _invoke_capability_attempt(
     *,
     capability_id: str,
     payload: dict[str, Any],
+    mode: CapabilityMode,
     ctx: Any | None,
 ) -> CapabilityResult:
     started = time.monotonic()
     argument_digest = _argument_digest(
         {
             "capability_id": capability_id,
+            "mode": mode.value,
             "payload": payload,
         }
     )
     trace_digest, trace_source = _request_trace_digest(ctx)
     request_digest = _request_id_digest(ctx)
     cancellation_event = threading.Event()
-    request = CapabilityRequest(
-        capability_id=capability_id,
-        input=payload,
-    )
     try:
         result = await _run_blocking(
             _invoke_capability_with_cancellation,
             runtime,
-            request,
+            CapabilityRequest(
+                capability_id=capability_id,
+                mode=mode,
+                input=payload,
+            ),
             cancellation_event,
             on_cancel=cancellation_event.set,
         )
@@ -438,6 +443,7 @@ async def _invoke_capability_attempt(
         if isinstance(drained, CapabilityResult):
             _log_capability_attempt(
                 capability_id=capability_id,
+                mode=mode,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -448,6 +454,7 @@ async def _invoke_capability_attempt(
         else:
             _log_capability_attempt(
                 capability_id=capability_id,
+                mode=mode,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -460,6 +467,7 @@ async def _invoke_capability_attempt(
     except Exception:
         _log_capability_attempt(
             capability_id=capability_id,
+            mode=mode,
             started=started,
             argument_digest=argument_digest,
             request_digest=request_digest,
@@ -471,6 +479,7 @@ async def _invoke_capability_attempt(
         raise
     _log_capability_attempt(
         capability_id=capability_id,
+        mode=mode,
         started=started,
         argument_digest=argument_digest,
         request_digest=request_digest,

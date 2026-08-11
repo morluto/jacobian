@@ -130,14 +130,9 @@ def _graph_case(
     )
 
 
-def test_checker_timeout_and_cancellation_are_non_conclusions(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _, service, checker_id, claim_uri, candidate_uri, witness_uri, _ = _graph_case(
-        tmp_path
-    )
-    cases = (
+@pytest.mark.parametrize(
+    ("stopped", "expected_status"),
+    [
         (
             ProcessResult(
                 termination=ProcessTermination.TIMED_OUT,
@@ -160,24 +155,33 @@ def test_checker_timeout_and_cancellation_are_non_conclusions(
             ),
             ExecutionStatus.CANCELLED,
         ),
+    ],
+)
+def test_checker_timeout_and_cancellation_are_non_conclusions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stopped: ProcessResult,
+    expected_status: ExecutionStatus,
+) -> None:
+    _, service, checker_id, claim_uri, candidate_uri, witness_uri, _ = _graph_case(
+        tmp_path
     )
-    for stopped, expected_status in cases:
-        monkeypatch.setattr(
-            "jacobian.verification.service.execute_process",
-            lambda *_args, _stopped=stopped, **_kwargs: _stopped,
-        )
+    monkeypatch.setattr(
+        "jacobian.verification.service.execute_process",
+        lambda *_args, **_kwargs: stopped,
+    )
 
-        result = service.verify_witness(
-            claim_uri=claim_uri,
-            candidate_uri=candidate_uri,
-            witness_uri=witness_uri,
-            checker_id=checker_id,
-        )
+    result = service.verify_witness(
+        claim_uri=claim_uri,
+        candidate_uri=candidate_uri,
+        witness_uri=witness_uri,
+        checker_id=checker_id,
+    )
 
-        assert result.execution.status is expected_status
-        assert result.conclusion is Conclusion.UNKNOWN, expected_status
-        assert result.assurance.verification is Verification.UNVERIFIED, expected_status
-        assert result.verification_record_uri is None, expected_status
+    assert result.execution.status is expected_status
+    assert result.conclusion is Conclusion.UNKNOWN
+    assert result.assurance.verification is Verification.UNVERIFIED
+    assert result.verification_record_uri is None
 
 
 def test_checker_failure_does_not_expose_internal_exception_text(

@@ -14,15 +14,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
+from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.exact_domain_checkers import install_exact_domain_verification
+from jacobian.operation_installation import OperationInstaller
 
 
 def _matrix(rows: list[list[int]]) -> dict[str, object]:
@@ -36,11 +39,31 @@ def _matrix(rows: list[list[int]]) -> dict[str, object]:
 @pytest.fixture
 def pilot_matrix_runtime(tmp_path: Path):
     """Open a runtime with only the pilot matrix bundle and its ExactReplay checkers."""
-
-    with open_exact_domain_services(
+    with open_domain_services(
         tmp_path,
         build_matrix_bundle(),
+        checker_authority=__import__(
+            "jacobian.runtime",
+            fromlist=["CheckerAuthorityMode"],
+        ).CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
+        bundle = build_matrix_bundle()
+        installed = OperationInstaller(
+            services.core.store,
+            services.core.schemas,
+            services.core.artifacts,
+        ).install(bundle)
+        adapters, _installation = install_exact_domain_verification(
+            services.core.store,
+            services.core.schemas,
+            services.core.artifacts,
+            services.installation.verification,
+            services.core.checkers,
+            bundles={"matrix": (bundle, installed)},
+            authorize=True,
+        )
+        for adapter in adapters:
+            services.installation.register_capability(adapter)
         yield services
 
 
@@ -91,6 +114,7 @@ def test_pilot_provides_matrix_determinant_verify_without_legacy(
     verified = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
+            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": _matrix([[1, 2], [3, 4]])},
                 "candidate": computed.output["result"],
@@ -115,6 +139,7 @@ def test_pilot_provides_matrix_rank_verify_without_legacy(
     verified = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
+            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": _matrix([[1, 2, 3], [2, 4, 6], [0, 1, 1]])},
                 "candidate": computed.output["result"],

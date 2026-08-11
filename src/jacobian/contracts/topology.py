@@ -15,7 +15,6 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.certified_snf import (
@@ -261,15 +260,7 @@ class FiniteSimplicialComplex(ContractModel):
             closure_size=closure_size,
         )
         if value != expected_digest:
-            raise PydanticCustomError(
-                "jacobian.stale_complex_digest",
-                "complex_digest does not bind the canonical complex",
-                {
-                    "jacobian_validation_reason": (
-                        "complex_digest does not bind the canonical complex"
-                    )
-                },
-            )
+            raise ValueError("complex_digest does not bind the canonical complex")
         return value
 
     @model_validator(mode="after")

@@ -29,7 +29,17 @@ def test_profiles_share_locked_sync_contracts() -> None:
         "lean",
         "external-proof",
     )
-    assert profiles.sync_arguments("core") == ("sync", "--locked", "--dev")
+    assert profiles.sync_arguments("core") == (
+        "sync",
+        "--locked",
+        "--only-group",
+        "dev-core",
+    )
+    assert profiles.sync_arguments("core", development=False) == (
+        "sync",
+        "--locked",
+        "--no-dev",
+    )
     for name in ("full-python", "lean", "external-proof"):
         assert profiles.sync_arguments(name) == (
             "sync",

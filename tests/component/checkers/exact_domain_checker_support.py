@@ -26,6 +26,7 @@ from jacobian_checkers.exact_domain_operations import (
     check_matrix_smith_normal_form,
     check_modular_polynomial_residue_image,
     check_polynomial_discriminant,
+    check_polynomial_factorization,
     check_polynomial_gcd,
     check_polynomial_resultant,
     check_polynomial_square_free,
@@ -274,6 +275,24 @@ _POLY_CASES: tuple[
                 ],
                 "reconstructed": _poly(-1, 1, 1, -1),
                 "normalization": "MONIC_FACTORS",
+            },
+        ),
+    ),
+    (
+        check_polynomial_factorization,
+        _request(
+            "polynomial.factor.compute",
+            "polynomial.factorization.flint-replay",
+            {"polynomial": _poly(1, -2, 1)},
+            {
+                "coefficient": _q(1),
+                "factors": [
+                    {"factor": _poly(-1, 1), "multiplicity": 2},
+                ],
+                "reconstructed": _poly(1, -2, 1),
+                "normalization": "CONTENT_AND_MONIC_IRREDUCIBLES",
+                "irreducibility_assurance": "UNVERIFIED",
+                "product_reconstruction": "EXACT",
             },
         ),
     ),

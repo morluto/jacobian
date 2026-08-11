@@ -9,9 +9,12 @@ from typing import Any
 
 import pytest
 
-from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomials import _support as polynomial_support
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def _term(coefficient: int, exponents: list[int]) -> dict[str, Any]:
@@ -89,9 +92,9 @@ def test_triangular_automorphism_is_found_and_verified(
 
 
 def test_degree_below_required_returns_bounded_no_candidate(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    result = authorized_complete_runtime.core.capabilities.invoke(_request(degree=1))
+    result = attached_complete_runtime.core.capabilities.invoke(_request(degree=1))
 
     assert result.output["status"] == "NO_CANDIDATE_WITHIN_ANSATZ"
     assert result.output["candidate_inverse_map"] is None
@@ -99,7 +102,7 @@ def test_degree_below_required_returns_bounded_no_candidate(
 
 
 def test_redundant_explicit_ansatz_is_underdetermined(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     identity = {
         "map_schema_version": "1",
@@ -128,7 +131,7 @@ def test_redundant_explicit_ansatz_is_underdetermined(
         },
     )
 
-    result = authorized_complete_runtime.core.capabilities.invoke(request)
+    result = attached_complete_runtime.core.capabilities.invoke(request)
 
     assert result.output["status"] == "UNDERDETERMINED"
     assert result.output["candidate_inverse_map"] is None
@@ -136,13 +139,13 @@ def test_redundant_explicit_ansatz_is_underdetermined(
 
 
 def test_zero_timeout_and_unknown_budget_are_explicit(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
 
-    timeout = authorized_complete_runtime.core.capabilities.invoke(
+    timeout = attached_complete_runtime.core.capabilities.invoke(
         _request(degree=2, timeout_ms=0)
     )
-    exhausted = authorized_complete_runtime.core.capabilities.invoke(
+    exhausted = attached_complete_runtime.core.capabilities.invoke(
         _request(degree=2, max_unknowns=1)
     )
 
@@ -199,13 +202,13 @@ def _install_stubborn_solver(
 
 
 def test_timeout_kills_stubborn_solver_without_unbounded_wait(
-    authorized_complete_runtime,
+    attached_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     process = _StubbornProcess()
     _install_stubborn_solver(monkeypatch, process)
 
-    result = authorized_complete_runtime.core.capabilities.invoke(_request(degree=2))
+    result = attached_complete_runtime.core.capabilities.invoke(_request(degree=2))
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.output["status"] == "TIMEOUT"
@@ -225,12 +228,12 @@ def test_timeout_kills_stubborn_solver_without_unbounded_wait(
 
 
 def test_unknown_solver_is_unsupported_without_truth_claim(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
     payload = deepcopy(_request(degree=2).input)
     payload["solver"] = "unknown.exact_solver"
 
-    result = authorized_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.candidate_synthesize",
             input=payload,
@@ -243,10 +246,10 @@ def test_unknown_solver_is_unsupported_without_truth_claim(
 
 
 def test_full_support_and_coefficient_order_are_deterministic(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    first = authorized_complete_runtime.core.capabilities.invoke(_request(degree=2))
-    second = authorized_complete_runtime.core.capabilities.invoke(_request(degree=2))
+    first = attached_complete_runtime.core.capabilities.invoke(_request(degree=2))
+    second = attached_complete_runtime.core.capabilities.invoke(_request(degree=2))
 
     assert first.output["ansatz"] == second.output["ansatz"]
     assert (
@@ -275,16 +278,14 @@ def test_full_support_and_coefficient_order_are_deterministic(
     "mutation",
     ["variable_order", "coefficient_domain"],
 )
-def test_ring_mismatches_fail_closed(
-    authorized_complete_runtime, mutation: str
-) -> None:
+def test_ring_mismatches_fail_closed(attached_complete_runtime, mutation: str) -> None:
     payload = deepcopy(_request(degree=2).input)
     if mutation == "variable_order":
         payload["source_variables"] = ["y", "x"]
     else:
         payload["forward_map"]["domain"] = "RR"
 
-    result = authorized_complete_runtime.core.capabilities.invoke(
+    result = attached_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.candidate_synthesize",
             input=payload,
@@ -306,7 +307,6 @@ def test_corrupted_found_candidate_does_not_verify(
     checked = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "forward_map": _triangular_forward(),
                 "inverse_map": corrupted,

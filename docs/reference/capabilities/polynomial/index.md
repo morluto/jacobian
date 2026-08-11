@@ -1,6 +1,6 @@
 # Polynomial capability references
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 - [Bounded Gaussian polynomial moments](gaussian-polynomial-moments.md)
 - [Typed polynomial expression normalization](polynomial-expression-normalization.md)

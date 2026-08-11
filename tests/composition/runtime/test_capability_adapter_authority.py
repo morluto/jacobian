@@ -27,7 +27,6 @@ from jacobian.atomic_capabilities import AtomicServiceAdapter
 from jacobian.capability_service import CapabilityError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.conjectures import ParameterRegion
@@ -35,6 +34,9 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime import create_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.schema_registry import model_schema
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def test_external_adapter_invocation_is_recorded_and_retrievable(
@@ -98,24 +100,22 @@ def test_unknown_capability_returns_an_actionable_result(
     assert result.output["available_capability_ids"]
 
 
-def test_unsupported_capability_mode_lists_available_modes(
+def test_tool_id_owns_role(
     capability_core_services: DomainTestServices,
 ) -> None:
+    """Tool identity determines role; no client mode switch."""
     core = capability_core_services.core
     capability_core_services.installation.register_capability(ComputedAdapter())
 
     result = core.capabilities.invoke(
         CapabilityRequest(
             capability_id="example.double",
-            mode=CapabilityMode.VERIFY,
             input={"value": 21},
         )
     )
 
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "UNSUPPORTED_MODE"
-    assert "math.find" in (result.diagnostics[0].hint or "")
-    assert result.output["available_modes"] == ["EXPLORE"]
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["value"] == 42
 
 
 def test_invalid_capability_input_does_not_echo_payload(
@@ -204,7 +204,6 @@ def test_atomic_adapter_with_invalid_evidence_returns_a_typed_failure(
         capability_id="example.invalid-evidence",
         title="Return invalid evidence",
         description="Exercise malformed atomic service evidence.",
-        modes=(CapabilityMode.EXPLORE,),
         input_schema={"type": "object", "additionalProperties": False},
         output_schema=model_schema(ParameterRegion),
         invoke=lambda _payload: InvalidEvidenceValue(evidence=[]),
@@ -281,7 +280,6 @@ def test_adapter_cannot_promote_without_a_local_verification_record(
         core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="example.forged",
-                mode=CapabilityMode.VERIFY,
                 input={},
             )
         )
@@ -310,8 +308,7 @@ def test_verified_relationship_must_match_checker_selected_endpoints(
     runtime = authorized_complete_runtime
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="case.partition.finite",
-            mode=CapabilityMode.VERIFY,
+            capability_id="case.partition.finite.verify",
             input={
                 "universe": ["a", "b"],
                 "cases": [
@@ -338,7 +335,6 @@ def test_verified_relationship_must_match_checker_selected_endpoints(
         runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=forged.descriptor.capability_id,
-                mode=CapabilityMode.VERIFY,
                 input={},
             )
         )
@@ -350,8 +346,7 @@ def test_verified_relationship_must_match_checker_selected_obligation(
     runtime = authorized_complete_runtime
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
-            capability_id="case.partition.finite",
-            mode=CapabilityMode.VERIFY,
+            capability_id="case.partition.finite.verify",
             input={
                 "universe": ["a"],
                 "cases": [{"case_id": "only", "members": ["a"]}],
@@ -376,7 +371,6 @@ def test_verified_relationship_must_match_checker_selected_obligation(
         runtime.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=forged.descriptor.capability_id,
-                mode=CapabilityMode.VERIFY,
                 input={},
             )
         )

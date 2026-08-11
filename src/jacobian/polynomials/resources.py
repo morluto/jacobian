@@ -12,8 +12,6 @@ from jacobian.verification import VerificationService
 @dataclass(frozen=True, slots=True)
 class PolynomialInstallation:
     semantics_uri: str
-    polynomial_semantics_uri: str
-    factorization_semantics_uri: str
     identity_semantics_uri: str
     rational_function_identity_semantics_uri: str
     inverse_semantics_uri: str
@@ -35,8 +33,6 @@ class PolynomialInstallation:
     inverse_synthesis_schema_uri: str
     witness_schema_uri: str
     certificate_schema_uri: str
-    polynomial_schema_uri: str
-    factorization_schema_uri: str
     collision_checker_id: str | None
     jacobian_checker_id: str | None
     keller_checker_id: str | None

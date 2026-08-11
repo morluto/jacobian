@@ -10,7 +10,6 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityInputKind,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -21,6 +20,9 @@ from jacobian.contracts.sat import SatResourceBudget
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification import CheckerExecutionError
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def _producer() -> CapabilityProviderRuntime:
@@ -58,7 +60,6 @@ def _verify(runtime: JacobianRuntime, assignment_uri: str):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.model.verify",
-            mode=CapabilityMode.VERIFY,
             input={"assignment_uri": assignment_uri},
         )
     )

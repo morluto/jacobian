@@ -28,6 +28,9 @@ from jacobian.runtime.services import ApplicationServices, CoreServices
 from jacobian.search import SearchError, SearchService
 from jacobian.storage.errors import StorageClosedError
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "LIFECYCLE"
+
 
 def test_runtime_uses_one_schema_registry_instance(attached_complete_runtime) -> None:
     assert (

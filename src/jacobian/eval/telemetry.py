@@ -404,9 +404,6 @@ def _build_capability_description(
             if isinstance(arguments.get("domain"), str)
             else None
         ),
-        "mode": (
-            arguments.get("mode") if isinstance(arguments.get("mode"), str) else None
-        ),
         "capability_id": (
             arguments.get("capability_id")
             if isinstance(arguments.get("capability_id"), str)

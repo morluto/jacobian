@@ -1,6 +1,6 @@
 {
   "name": "jacobian",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "mcpName": "io.github.morluto/jacobian",
   "description": "Composable mathematical capabilities for AI agents, exposed through MCP and a CLI",
   "license": "MIT",

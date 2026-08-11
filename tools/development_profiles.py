@@ -99,7 +99,10 @@ def sync_arguments(name: str, *, development: bool = True) -> tuple[str, ...]:
     """Return locked uv sync arguments for a profile."""
 
     selected = profile(name)
-    arguments = ["sync", "--locked", "--dev" if development else "--no-dev"]
+    if name == "core" and development:
+        arguments = ["sync", "--locked", "--only-group", "dev-core"]
+    else:
+        arguments = ["sync", "--locked", "--dev" if development else "--no-dev"]
     if selected.all_extras:
         arguments.append("--all-extras")
     return tuple(arguments)

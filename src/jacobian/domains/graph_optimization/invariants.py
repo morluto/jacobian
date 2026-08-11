@@ -23,6 +23,7 @@ from jacobian.contracts.graph_invariant_operations import (
     GraphGirthResult,
     GraphIndependenceNumberResult,
     GraphInvariantRequest,
+    GraphMaximumMatchingRequest,
     GraphMaximumMatchingResult,
     GraphRadiusResult,
     GraphSpanningTreeCountResult,
@@ -55,6 +56,15 @@ _INVALID_REQUEST = CapabilityDiagnostic(
     stage="graph_invariant_input_validation",
     message="Input does not satisfy the bounded finite simple-graph contract.",
     hint="Supply a canonical simple graph with at most 32 vertices.",
+)
+
+_INVALID_MAXIMUM_MATCHING_REQUEST = CapabilityDiagnostic(
+    code="INVALID_GRAPH_MAXIMUM_MATCHING_REQUEST",
+    stage="graph_maximum_matching_input_validation",
+    message=(
+        "Input does not satisfy the bounded finite simple-graph matching contract."
+    ),
+    hint="Supply a simple graph with at most 64 vertices and 2,016 edges.",
 )
 
 
@@ -254,6 +264,25 @@ def _maximum_matching(graph: Any) -> GraphMaximumMatchingResult:
             upper_bound=cardinality,
         ),
     )
+
+
+def _maximum_matching_execute(
+    request: GraphMaximumMatchingRequest,
+) -> ComputedOutcome[GraphMaximumMatchingResult]:
+    import networkx as nx
+
+    try:
+        graph = cast(Any, build_simple_graph(request.graph))
+        return ComputedSuccess(_maximum_matching(graph))
+    except (ArithmeticError, nx.NetworkXError, TypeError, ValueError) as exc:
+        return ComputedNotApplicable(
+            CapabilityDiagnostic(
+                code="GRAPH_INVARIANT_NOT_APPLICABLE",
+                stage="graph_invariant_computation",
+                message=str(exc),
+                hint="Check the invariant's graph preconditions.",
+            )
+        )
 
 
 def _triangle_count(graph: Any) -> GraphTriangleCountResult:
@@ -743,16 +772,20 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
             ),
         ),
     ),
-    _computed(
-        "graph.invariant.maximum_matching.compute",
-        "Maximum matching",
-        "Compute an exact maximum-cardinality matching and its edge witness.",
-        GraphMaximumMatchingResult,
-        _maximum_matching,
-        "matching",
-        "maximum",
-        "exact",
-        version="2",
+    ComputedOperation(
+        capability_id="graph.invariant.maximum_matching.compute",
+        title="Maximum matching",
+        description=(
+            "Compute an exact maximum-cardinality matching and a Tutte-Berge "
+            "upper-bound certificate for one simple graph of at most 64 vertices."
+        ),
+        request_model=GraphMaximumMatchingRequest,
+        result_model=GraphMaximumMatchingResult,
+        implementation=_maximum_matching_execute,
+        relation_id="graph.invariant.maximum_matching.relation",
+        tags=("graph", "invariant", "matching", "maximum", "exact"),
+        invalid_request=_INVALID_MAXIMUM_MATCHING_REQUEST,
+        version="3",
         invocation_examples=(
             example(
                 "triangle_with_tail",

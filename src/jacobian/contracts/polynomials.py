@@ -7,7 +7,7 @@ from itertools import permutations
 from math import prod
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, ValidationInfo, model_validator
 
 from jacobian.contracts.common import ArtifactUri, CheckerUri
 from jacobian.contracts.exact import (
@@ -36,6 +36,16 @@ MAX_POLYNOMIAL_EXPONENT = 32_768
 _MAX_JACOBIAN_SOURCE_EXPONENT = 32
 _MAX_JACOBIAN_PRODUCT_TERM_ESTIMATE = 1024
 _MAX_COMPOSITION_DERIVED_EXPONENT = 127
+_CANONICALIZATION_PREFLIGHT_CONTEXT_KEY = "polynomial_canonicalization_preflight"
+
+
+def canonicalization_preflight_active(info: ValidationInfo) -> bool:
+    """Whether validation is checking request shape before exact cancellation."""
+
+    return bool(
+        isinstance(info.context, dict)
+        and info.context.get(_CANONICALIZATION_PREFLIGHT_CONTEXT_KEY) is True
+    )
 
 
 def require_polynomial_budget(
@@ -198,10 +208,11 @@ class PolynomialEvaluationRequest(ContractModel):
     )
 
     @model_validator(mode="after")
-    def require_point_dimension(self) -> Self:
+    def require_point_dimension(self, info: ValidationInfo) -> Self:
         if len(self.point) != len(self.map.variables):
             raise ValueError("evaluation point dimension must match the polynomial map")
-        require_polynomial_map_budget(self.map, label="polynomial evaluation map")
+        if not canonicalization_preflight_active(info):
+            require_polynomial_map_budget(self.map, label="polynomial evaluation map")
         return self
 
 
@@ -209,10 +220,12 @@ class PolynomialJacobianRequest(ContractModel):
     map: RationalPolynomialMap
 
     @model_validator(mode="after")
-    def require_bounded_determinant_expansion(self) -> Self:
+    def require_bounded_determinant_expansion(self, info: ValidationInfo) -> Self:
         dimension = len(self.map.variables)
         if len(self.map.coordinates) != dimension:
             raise ValueError("Jacobian determinant requires a square polynomial map")
+        if canonicalization_preflight_active(info):
+            return self
         require_polynomial_map_budget(self.map, label="Jacobian source map")
         derivative_term_counts = tuple(
             tuple(
@@ -241,64 +254,12 @@ class PolynomialKellerConditionVerifyRequest(ContractModel):
     map: RationalPolynomialMap
 
     @model_validator(mode="after")
-    def require_square_map(self) -> Self:
+    def require_square_map(self, info: ValidationInfo) -> Self:
         if len(self.map.coordinates) != len(self.map.variables):
             raise ValueError("Keller-condition verification requires a square map")
-        require_polynomial_map_budget(self.map, label="Keller-condition map")
+        if not canonicalization_preflight_active(info):
+            require_polynomial_map_budget(self.map, label="Keller-condition map")
         return self
-
-
-class PolynomialFactorRequest(ContractModel):
-    variable: PolynomialVariable
-    polynomial: SparseRationalPolynomial
-
-    @model_validator(mode="after")
-    def require_univariate_terms(self) -> Self:
-        if any(len(term.exponents) != 1 for term in self.polynomial.terms):
-            raise ValueError("factorization currently supports univariate polynomials")
-        if len(self.polynomial.terms) > 512:
-            raise ValueError("factorization exceeds the 512-term operation budget")
-        for term in self.polynomial.terms:
-            require_bounded_rational(
-                term.coefficient,
-                max_digits=256,
-                label="factorization coefficient",
-            )
-            if term.exponents[0] > 127:
-                raise ValueError(
-                    "factorization exceeds the degree-127 operation budget"
-                )
-        return self
-
-
-class PolynomialFactorRecord(ContractModel):
-    factor: SparseRationalPolynomial
-    multiplicity: int = Field(ge=1, le=127)
-
-
-class PolynomialFactorizationArtifact(ContractModel):
-    factorization_schema_version: Literal["1"] = "1"
-    variable: PolynomialVariable
-    source_polynomial_uri: ArtifactUri
-    coefficient: CanonicalRational
-    factors: tuple[PolynomialFactorRecord, ...] = Field(max_length=1024)
-    reconstructed: SparseRationalPolynomial
-    backend: Literal["sympy"] = "sympy"
-    backend_version: str = Field(min_length=1, max_length=64)
-
-
-class PolynomialFactorOutput(ContractModel):
-    source_polynomial_uri: ArtifactUri
-    factorization_uri: ArtifactUri
-    variable: PolynomialVariable
-    coefficient: CanonicalRational
-    factors: tuple[PolynomialFactorRecord, ...]
-    reconstructed: SparseRationalPolynomial
-    exactness: Literal["EXACT"] = "EXACT"
-    product_reconstruction: Literal["EXACT"] = "EXACT"
-    irreducibility_verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: str
 
 
 class PolynomialCollisionRequest(ContractModel):
@@ -352,7 +313,7 @@ class RationalFunctionIdentityRequest(ContractModel):
     right: SparseRationalFunction
 
     @model_validator(mode="after")
-    def require_matching_bounded_fraction_field(self) -> Self:
+    def require_matching_bounded_fraction_field(self, info: ValidationInfo) -> Self:
         if len(set(self.variables)) != len(self.variables):
             raise ValueError("rational-function variables must be unique")
         dimension = len(self.variables)
@@ -368,6 +329,8 @@ class RationalFunctionIdentityRequest(ContractModel):
             for term in polynomial.terms
         ):
             raise ValueError("every monomial must match the declared variable order")
+        if canonicalization_preflight_active(info):
+            return self
         for polynomial in polynomials:
             require_sparse_polynomial_budget(
                 polynomial,
@@ -479,13 +442,15 @@ class PolynomialMapInverseVerifyRequest(ContractModel):
     target_variables: tuple[PolynomialVariable, ...] = Field(min_length=1, max_length=4)
 
     @model_validator(mode="after")
-    def require_compatible_ordered_rings(self) -> Self:
+    def require_compatible_ordered_rings(self, info: ValidationInfo) -> Self:
         _validate_ring_variable_alignment(
             self.forward_map,
             self.inverse_map,
             self.source_variables,
             self.target_variables,
         )
+        if canonicalization_preflight_active(info):
+            return self
         for outer, inner in (
             (self.inverse_map, self.forward_map),
             (self.forward_map, self.inverse_map),
@@ -528,7 +493,6 @@ def _validate_ansatz_ring_alignment(
         raise ValueError("source and target dimensions must agree")
     if len(forward_map.coordinates) != len(target_variables):
         raise ValueError("forward map coordinate count must match target_variables")
-    require_polynomial_map_budget(forward_map, label="inverse synthesis forward map")
     if len(set(source_variables)) != len(source_variables):
         raise ValueError("source variables must be unique")
     if len(set(target_variables)) != len(target_variables):
@@ -564,12 +528,17 @@ class PolynomialMapInverseSynthesisRequest(ContractModel):
     limits: PolynomialInverseSynthesisLimits
 
     @model_validator(mode="after")
-    def require_bounded_square_qq_ansatz(self) -> Self:
+    def require_bounded_square_qq_ansatz(self, info: ValidationInfo) -> Self:
         _validate_ansatz_ring_alignment(
             self.forward_map,
             self.source_variables,
             self.target_variables,
         )
+        if not canonicalization_preflight_active(info):
+            require_polynomial_map_budget(
+                self.forward_map,
+                label="inverse synthesis forward map",
+            )
         if self.inverse_degree_bound > self.limits.max_inverse_degree:
             raise ValueError("inverse_degree_bound exceeds the declared degree limit")
         if self.support_mode is PolynomialInverseSupportMode.EXPLICIT:
@@ -679,8 +648,9 @@ class PolynomialCollisionSearchRequest(ContractModel):
     max_denominator: int = Field(ge=1, le=8)
 
     @model_validator(mode="after")
-    def require_bounded_grid(self) -> Self:
-        require_polynomial_map_budget(self.map, label="collision search map")
+    def require_bounded_grid(self, info: ValidationInfo) -> Self:
+        if not canonicalization_preflight_active(info):
+            require_polynomial_map_budget(self.map, label="collision search map")
         if (
             bounded_rational_grid_size(
                 self.max_abs_numerator,
@@ -701,13 +671,22 @@ class PolynomialCollisionSearchStopReason(StrEnum):
 
 class PolynomialCollisionVerifyRequest(ContractModel):
     map: RationalPolynomialMap
-    first_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    second_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    claimed_image: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    first_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    second_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    claimed_image: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
 
     @model_validator(mode="after")
-    def require_collision_dimensions_and_distinct_points(self) -> Self:
-        require_polynomial_map_budget(self.map, label="collision verification map")
+    def require_collision_dimensions_and_distinct_points(
+        self, info: ValidationInfo
+    ) -> Self:
+        if not canonicalization_preflight_active(info):
+            require_polynomial_map_budget(self.map, label="collision verification map")
         dimension = len(self.map.variables)
         if not (
             len(self.first_point)
@@ -725,16 +704,23 @@ class PolynomialMapInverseCollisionVerifyRequest(ContractModel):
     """Use one exact collision to refute a two-sided polynomial inverse."""
 
     map: RationalPolynomialMap
-    first_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    second_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    first_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    second_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
     claimed_image: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        max_length=4,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
     )
 
     @model_validator(mode="after")
-    def require_collision_dimensions_and_distinct_points(self) -> Self:
-        require_polynomial_map_budget(self.map, label="inverse collision map")
+    def require_collision_dimensions_and_distinct_points(
+        self, info: ValidationInfo
+    ) -> Self:
+        if not canonicalization_preflight_active(info):
+            require_polynomial_map_budget(self.map, label="inverse collision map")
         dimension = len(self.map.variables)
         if not (
             len(self.first_point)
@@ -752,7 +738,9 @@ class PolynomialMapEvaluation(ContractModel):
     evaluation_schema_version: Literal["1"] = "1"
     map_uri: ArtifactUri
     point: RationalPolynomialPoint
-    image: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    image: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
     backend: Literal["sympy"] = "sympy"
     backend_version: str = Field(min_length=1, max_length=64)
 
@@ -920,9 +908,15 @@ class PolynomialKellerConditionReplayPayload(ContractModel):
 
 
 class PolynomialCollisionPayload(ContractModel):
-    first_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    second_point: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
-    image: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
+    first_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    second_point: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    image: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
 
     @model_validator(mode="after")
     def require_matching_point_dimensions(self) -> Self:

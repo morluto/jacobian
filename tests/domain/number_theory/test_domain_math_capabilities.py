@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts import number_theory as number_theory_contracts
@@ -11,7 +12,6 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
     CapabilityDiscoveryRequest,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.number_theory import (
@@ -22,9 +22,6 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.operation_installation import OperationInstaller
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
@@ -327,28 +324,10 @@ def _permutation_trinomial_payload() -> dict[str, object]:
 def test_extension_field_permutation_map_is_complete_and_verified(
     tmp_path: Path,
 ) -> None:
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "verified-extension-field",
         build_number_theory_bundle(),
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as domain_services:
-        bundle = build_number_theory_bundle()
-        installed = OperationInstaller(
-            domain_services.core.store,
-            domain_services.core.schemas,
-            domain_services.core.artifacts,
-        ).install(bundle)
-        adapters, _installation = install_exact_domain_verification(
-            domain_services.core.store,
-            domain_services.core.schemas,
-            domain_services.core.artifacts,
-            domain_services.installation.verification,
-            domain_services.core.checkers,
-            bundles={"number_theory": (bundle, installed)},
-            authorize=True,
-        )
-        for adapter in adapters:
-            domain_services.installation.register_capability(adapter)
         payload = _permutation_trinomial_payload()
         computed = domain_services.core.capabilities.invoke(
             CapabilityRequest(
@@ -378,7 +357,6 @@ def test_extension_field_permutation_map_is_complete_and_verified(
         verified = domain_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="finite_field.polynomial_map.fibers.verify",
-                mode=CapabilityMode.VERIFY,
                 input={"input": payload, "candidate": computed.output["result"]},
             )
         )
@@ -512,3 +490,58 @@ def test_modular_polynomial_residue_image_is_discoverable_by_intent(
         "modular.polynomial_residue_image.compute"
     )
     assert discovered.matches[0].has_invocation_examples is True
+
+
+def test_number_theory_resource_atomics_are_exact_computed(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
+        (
+            "integer.compute.prime_count",
+            {"n": 100},
+            {"value": "25"},
+        ),
+        (
+            "integer.compute.floor_square_root",
+            {"n": 10},
+            {"root": 3},
+        ),
+        (
+            "integer.compute.floor_square_root",
+            {"n": 1_000_000_000_000},
+            {"root": 1_000_000},
+        ),
+        (
+            "number_theory.compute.legendre_symbol",
+            {"a": 2, "prime": 7},
+            {"a": 2, "prime": 7, "symbol": 1},
+        ),
+        (
+            "number_theory.compute.factorial_valuation",
+            {"n": 10, "base": 12},
+            {"n": 10, "base": 12, "valuation": 4},
+        ),
+    )
+    for capability_id, payload, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
+        )
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
+        assert result.output["result"] == expected
+
+
+def test_legendre_symbol_rejects_non_prime_before_conclusion(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="number_theory.compute.legendre_symbol",
+            input={"a": 2, "prime": 9},
+        )
+    )
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
+    assert result.artifact_uris == ()
+    assert result.diagnostics[0].code == "NUMBER_THEORY_OPERATION_NOT_APPLICABLE"
+    assert result.assurance.verification_record_uri is None

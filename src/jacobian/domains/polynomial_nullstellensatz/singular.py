@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRelationship,
     CapabilityRequest,
@@ -349,7 +348,6 @@ class SingularNullstellensatzCertificateAdapter:
             ),
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(NullstellensatzCertificateRequest),
             output_schema=model_schema(NullstellensatzCertificateOutput),
             tags=(
@@ -378,7 +376,6 @@ class SingularNullstellensatzCertificateAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=status,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
@@ -512,7 +509,6 @@ class SingularNullstellensatzCertificateAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),

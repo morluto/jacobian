@@ -11,6 +11,30 @@ from filelock import FileLock
 
 TemplateBuilder = Callable[[Path], None]
 
+# Linux's FICLONE ioctl copies a regular file into a distinct inode that shares
+# unchanged extents copy-on-write.  This is safe for our private test states:
+# unlike a hard link, a later mutation cannot change the template's inode or
+# link count.  Filesystems that do not support reflinks retain copy2's portable
+# byte-copy behavior.
+_FICLONE = 0x40049409
+
+
+def _copy_file(source: str, destination: str) -> str:
+    """Copy one template file, preferring a distinct-inode reflink on Linux."""
+
+    try:
+        import fcntl
+
+        with (
+            Path(source).open("rb") as source_file,
+            Path(destination).open("wb") as target,
+        ):
+            fcntl.ioctl(target.fileno(), _FICLONE, source_file.fileno())
+    except (ImportError, OSError):
+        return shutil.copy2(source, destination)
+    shutil.copystat(source, destination)
+    return destination
+
 
 def quiesce_sqlite_template(root: Path) -> None:
     """Checkpoint and leave a copied runtime template in rollback-journal mode.
@@ -111,5 +135,5 @@ def copy_template(template: Path, destination: Path) -> Path:
     if destination.exists():
         raise FileExistsError(f"mutable test state already exists: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(template, destination)
+    shutil.copytree(template, destination, copy_function=_copy_file)
     return destination

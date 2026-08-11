@@ -8,11 +8,14 @@ from jacobian.contracts.polynomial_operations import (
     PolynomialBezoutIdentity,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
+    PolynomialFactorizationResult,
+    PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialGcdResult,
     PolynomialGroebnerBasisRequest,
     PolynomialGroebnerBasisResult,
     PolynomialInvariantValue,
+    PolynomialIrreducibleFactor,
     PolynomialResultantRequest,
     PolynomialResultantResult,
     PolynomialScalarValue,
@@ -133,6 +136,48 @@ def polynomial_square_free_decomposition(
         for factor, multiplicity in sorted(canonical_factors, key=lambda item: item[1])
     )
     return PolynomialSquareFreeDecompositionResult(
+        coefficient=rational_from_sympy(coefficient),
+        factors=factors,
+        reconstructed=_result_polynomial(reconstructed, request.polynomial.variables),
+    )
+
+
+def _irreducible_factor_sort_key(
+    record: PolynomialIrreducibleFactor,
+) -> tuple[int, int, tuple[tuple[tuple[int, ...], str, str], ...]]:
+    return (
+        record.multiplicity,
+        max(
+            (sum(term.exponents) for term in record.factor.polynomial.terms),
+            default=0,
+        ),
+        tuple(
+            (term.exponents, term.coefficient.num, term.coefficient.den)
+            for term in record.factor.polynomial.terms
+        ),
+    )
+
+
+def polynomial_factorization(
+    request: PolynomialFactorRequest,
+) -> PolynomialFactorizationResult:
+    source = rational_polynomial_to_sympy(request.polynomial)
+    coefficient, canonical_factors, reconstructed = kernels.polynomial_factorization(
+        source
+    )
+    factors = tuple(
+        sorted(
+            (
+                PolynomialIrreducibleFactor(
+                    factor=_result_polynomial(factor, request.polynomial.variables),
+                    multiplicity=multiplicity,
+                )
+                for factor, multiplicity in canonical_factors
+            ),
+            key=_irreducible_factor_sort_key,
+        )
+    )
+    return PolynomialFactorizationResult(
         coefficient=rational_from_sympy(coefficient),
         factors=factors,
         reconstructed=_result_polynomial(reconstructed, request.polynomial.variables),

@@ -121,7 +121,7 @@ INTEGER_CAPABILITIES = (
             example(
                 "non_exact_cube_root",
                 "Floor cube root of 65.",
-                {"value": 65, "degree": 3},
+                {"value": "65", "degree": 3},
             ),
         ),
     ),

@@ -226,10 +226,6 @@ class GradedJacobianSyzygyResult(ContractModel):
     first_syzygy_degree: StrictInt | None = Field(default=None, ge=0, le=8)
     kernel_witness: GradedJacobianKernelWitness | None = None
     completion: Literal["COMPLETE_THROUGH_BOUND"] = "COMPLETE_THROUGH_BOUND"
-    verification_capability_id: Literal[
-        "polynomial.jacobian_syzygy.minimum_degree.verify"
-    ] = "polynomial.jacobian_syzygy.minimum_degree.verify"
-    verification_input_field: Literal["result_uri"] = "result_uri"
 
     @model_validator(mode="after")
     def bind_first_kernel_and_finite_scope(self) -> Self:

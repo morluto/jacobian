@@ -5,7 +5,6 @@ from tests.support.capabilities import invoke_capability as _invoke
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatProofArtifact
@@ -55,7 +54,6 @@ def test_cadical_text_proof_replays_in_pinned_drat_trim(
             "cnf_uri": cnf.artifact_uri,
             "resource_budget": {"wall_seconds": 5},
         },
-        mode=CapabilityMode.EXPLORE,
     )
     assert produced.execution.status is ExecutionStatus.COMPLETED
     assert produced.output["status"] == "PROOF_PRODUCED"
@@ -65,7 +63,6 @@ def test_cadical_text_proof_replays_in_pinned_drat_trim(
         authorized_complete_runtime,
         "sat.unsat_proof.verify",
         {"proof_uri": proof_uri},
-        mode=CapabilityMode.VERIFY,
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED_UNSAT"
@@ -85,7 +82,6 @@ def test_cadical_text_proof_replays_in_pinned_drat_trim(
         authorized_complete_runtime,
         "sat.unsat_proof.verify",
         {"proof_uri": empty_proof.artifact_uri},
-        mode=CapabilityMode.VERIFY,
     )
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
@@ -103,7 +99,6 @@ def test_cadical_text_proof_replays_in_pinned_drat_trim(
         authorized_complete_runtime,
         "sat.unsat_proof.verify",
         {"proof_uri": unsupported_contradiction.artifact_uri},
-        mode=CapabilityMode.VERIFY,
     )
     assert unsupported_replay.output["status"] == "REJECTED"
     assert unsupported_replay.output["conclusion"] == "UNKNOWN"
@@ -119,7 +114,6 @@ def test_cadical_text_proof_replays_in_pinned_drat_trim(
         authorized_complete_runtime,
         "sat.unsat_proof.verify",
         {"proof_uri": concatenated_proof.artifact_uri},
-        mode=CapabilityMode.VERIFY,
     )
     assert concatenated_replay.output["status"] == "REJECTED"
     assert concatenated_replay.output["conclusion"] == "UNKNOWN"
@@ -139,7 +133,6 @@ def test_cadical_text_proof_replays_in_pinned_drat_trim(
         authorized_complete_runtime,
         "sat.unsat_proof.verify",
         {"proof_uri": cross_bound.artifact_uri},
-        mode=CapabilityMode.VERIFY,
     )
     assert cross_replay.output["status"] == "REJECTED"
     assert cross_replay.output["conclusion"] == "UNKNOWN"

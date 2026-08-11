@@ -19,7 +19,6 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -120,7 +119,6 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "MATHLIB",
                 "name_contains": "irrational_sqrt_two",
@@ -160,7 +158,6 @@ def test_exhausted_search_reports_computed_complete_coverage() -> None:
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "MATHLIB",
                 "type_pattern": {"constants": ["Jacobian.DoesNotExist"]},
@@ -191,7 +188,6 @@ def test_inspect_adapter_returns_docs_without_promoting_the_theorem() -> None:
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
-            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "declaration_name": "Nat.add"},
         )
     )
@@ -245,7 +241,6 @@ def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> No
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.dependencies",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "root_declaration": "Nat.add_assoc",
@@ -273,7 +268,6 @@ def test_missing_declaration_is_an_explicit_failed_operation() -> None:
         adapter.invoke(
             CapabilityRequest(
                 capability_id="lean.declaration.inspect",
-                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "declaration_name": "Missing.name"},
             )
         )

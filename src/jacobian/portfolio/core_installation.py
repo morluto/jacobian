@@ -6,6 +6,10 @@ from dataclasses import dataclass
 
 from jacobian.atomic_capabilities import install_atomic_capabilities
 from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
+from jacobian.contracts.capabilities import (
+    CapabilityCatalogRelationship,
+    CapabilityCatalogRelationshipKind,
+)
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.finite_partition import install_finite_partition
@@ -35,6 +39,28 @@ class CoreApplicationInstaller:
     """Install core application adapters and domain-dependent checkers."""
 
     context: InstallationContext
+
+    def _register_polynomial_system_relationships(
+        self, *, verifier_installed: bool
+    ) -> None:
+        if not verifier_installed:
+            return
+        self.context.register_checker_relationship(
+            "polynomial.system.rational_solution.search",
+            CapabilityCatalogRelationship(
+                capability_id="polynomial.system.solution.verify",
+                kind=CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+                relationship="independently verify a found exact assignment",
+            ),
+        )
+        self.context.register_checker_relationship(
+            "polynomial.system.solution.verify",
+            CapabilityCatalogRelationship(
+                capability_id="polynomial.system.rational_solution.search",
+                kind=CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER,
+                relationship="search for an exact assignment accepted by this verifier",
+            ),
+        )
 
     def _install_graph_capabilities(
         self,
@@ -174,6 +200,9 @@ class CoreApplicationInstaller:
                 ctx.artifacts,
                 result.polynomial_system,
             )
+        )
+        self._register_polynomial_system_relationships(
+            verifier_installed=polynomial_system_adapter is not None
         )
 
         universal_adapters, result.universal_algebra = (

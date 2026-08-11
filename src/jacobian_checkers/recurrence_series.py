@@ -521,7 +521,12 @@ def _replay_polynomial_coefficient_recurrence_table(
         and result["checked_index_end"] == len(values) - 1
         and type(result["satisfies_recurrence"]) is bool
         and result["satisfies_recurrence"] == (not failures)
-        and result["first_failure_index"] == (failures[0] if failures else None)
+        and (
+            result["first_failure_index"] is None
+            if not failures
+            else type(result["first_failure_index"]) is int
+            and result["first_failure_index"] == failures[0]
+        )
     )
 
 

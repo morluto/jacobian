@@ -297,6 +297,17 @@ def test_submitted_table_checker_accepts_failures_and_rejects_forged_success() -
         is True
     )
 
+    boolean_index = copy.deepcopy(request)
+    boolean_result = boolean_index["candidate"]["payload"]
+    boolean_result["first_failure_index"] = True
+    boolean_index["candidate"]["payload_digest"] = _digest(boolean_result)
+    assert (
+        check_polynomial_coefficient_recurrence_table_residuals(boolean_index)[
+            "accepted"
+        ]
+        is False
+    )
+
     forged = copy.deepcopy(request)
     forged_result = forged["candidate"]["payload"]
     forged_result["residuals"][-1]["value"] = _q(0)

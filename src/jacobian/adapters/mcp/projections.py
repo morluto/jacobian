@@ -53,9 +53,17 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
         ("sat.cnf.materialize", "materialize the exact input CNF"),
         ("sat.model.verify", "independently verify the named assignment"),
     ),
+    "sat.model.verify": (
+        ("sat.cnf.materialize", "materialize the exact input CNF"),
+        ("sat.model.find", "produce a candidate named assignment"),
+    ),
     "sat.unsat_proof.find": (
         ("sat.cnf.materialize", "materialize the exact input CNF"),
         ("sat.unsat_proof.verify", "independently verify the retained DRAT proof"),
+    ),
+    "sat.unsat_proof.verify": (
+        ("sat.cnf.materialize", "materialize the exact input CNF"),
+        ("sat.unsat_proof.find", "produce an addition-only DRAT candidate"),
     ),
     "smt.unsat_proof.find": (
         ("smt.unsat_proof.verify", "independently verify compatible proof evidence"),
@@ -63,6 +71,9 @@ _RELATED_CAPABILITIES: dict[str, tuple[tuple[str, str], ...]] = {
             "sat.cnf.materialize",
             "materialize named Boolean CNF for finite colorings and forbidden patterns",
         ),
+    ),
+    "smt.unsat_proof.verify": (
+        ("smt.unsat_proof.find", "produce compatible proof evidence"),
     ),
 }
 

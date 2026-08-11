@@ -89,6 +89,25 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
                 }
             ]
 
+            enclosure_description = await client.call_tool(
+                "math.find",
+                {
+                    "capability_id": "polynomial.interval.enclose",
+                    "view": "CONTRACT",
+                },
+            )
+            assert isinstance(enclosure_description.structured_content, dict)
+            enclosure_contract = enclosure_description.structured_content
+            assert enclosure_contract["related_capabilities"] == [
+                {
+                    "capability_id": "polynomial.interval.enclosure.verify",
+                    "kind": "INDEPENDENT_VERIFIER",
+                    "relationship": (
+                        "independently verify this exact interval enclosure"
+                    ),
+                }
+            ]
+
             positivity_description = await client.call_tool(
                 "math.find",
                 {

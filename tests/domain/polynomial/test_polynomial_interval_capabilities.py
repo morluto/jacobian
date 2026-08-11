@@ -9,6 +9,7 @@ import pytest
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
+    CapabilityCatalogRelationshipKind,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
@@ -57,6 +58,24 @@ def test_verify_adapter_rejects_missing_authorized_checker(installation) -> None
 
     with pytest.raises(RuntimeError, match="requires an authorized checker"):
         PolynomialIntervalEnclosureVerifyAdapter(resources)
+
+
+def test_installation_declares_reciprocal_checker_navigation(installation) -> None:
+    _adapters, installed, _store = installation
+    relationships = installed.catalog_relationships
+
+    assert [item.source_capability_id for item in relationships] == [
+        "polynomial.interval.enclose",
+        "polynomial.interval.enclosure.verify",
+    ]
+    assert [item.related_capability.capability_id for item in relationships] == [
+        "polynomial.interval.enclosure.verify",
+        "polynomial.interval.enclose",
+    ]
+    assert [item.related_capability.kind for item in relationships] == [
+        CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+        CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER,
+    ]
 
 
 def test_enclose_capability_computes_a_valid_bernstein_enclosure(

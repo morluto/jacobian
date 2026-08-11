@@ -58,7 +58,6 @@ class ResourceCapabilityInstaller:
         for interval_adapter in interval_adapters:
             if interval_adapter is not None:
                 ctx.register_capability(interval_adapter)
-
         positivity_adapters, result.polynomial_positivity = (
             install_polynomial_positivity_capabilities(
                 ctx.store,
@@ -72,7 +71,10 @@ class ResourceCapabilityInstaller:
         for positivity_adapter in positivity_adapters:
             if positivity_adapter is not None:
                 ctx.register_capability(positivity_adapter)
-        for relationship in result.polynomial_positivity.catalog_relationships:
+        for relationship in (
+            *result.polynomial_interval.catalog_relationships,
+            *result.polynomial_positivity.catalog_relationships,
+        ):
             ctx.register_checker_relationship(
                 relationship.source_capability_id,
                 relationship.related_capability,

@@ -129,14 +129,7 @@ def test_complete_runtime_fixtures_are_registered_only_by_owning_tiers() -> None
         for name in full_fixture_names:
             assert name in namespace, f"{path} missing {name}"
 
-    mcp = runpy.run_path(str(ROOT / "boundary" / "mcp" / "conftest.py"))
-    assert "pytest_plugins" not in mcp
-    assert "attached_complete_runtime" in mcp
-    assert "complete_portfolio_template" in mcp
-    assert "fresh_complete_runtime" not in mcp
-    assert "authorized_complete_runtime" not in mcp
-
-    for tier in ("component", "domain", "unit"):
+    for tier in ("boundary/mcp", "component", "domain", "unit"):
         confest = ROOT / tier / "conftest.py"
         if not confest.exists():
             continue

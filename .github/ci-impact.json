@@ -57,9 +57,7 @@
       "providers": [
         "cvc5",
         "external_sat",
-        "flint",
-        "graph",
-        "sympy"
+        "flint"
       ]
     },
     "lean": {
@@ -663,9 +661,7 @@
       "patterns": [
         "tests/boundary/providers/cvc5/**",
         "tests/boundary/providers/external_sat/**",
-        "tests/boundary/providers/flint/**",
-        "tests/boundary/providers/graph/**",
-        "tests/boundary/providers/sympy/**"
+        "tests/boundary/providers/flint/**"
       ],
       "suites": [
         "provider",

@@ -122,12 +122,9 @@ def inventory_modules(root: Path) -> tuple[ModuleInventory, ...]:
         fixtures, has_verify, resources = _source_signals(tree, source)
         ordered = tuple(sorted(fixtures))
         unjustified = (
-            (
-                "authorized_complete_runtime" in fixtures
-                or "authorized_complete_runtime_read_only" in fixtures
-            )
-            and not has_verify
-        )
+            "authorized_complete_runtime" in fixtures
+            or "authorized_complete_runtime_read_only" in fixtures
+        ) and not has_verify
         setup_weight = sum(_FIXTURE_SETUP_WEIGHT.get(name, 0) for name in ordered)
         rows.append(
             ModuleInventory(
@@ -162,22 +159,20 @@ def _render_text(rows: Iterable[ModuleInventory]) -> str:
                 ]
             )
         )
-    interesting = [
-        row
-        for row in materialized
-        if row.complete_runtime_fixtures or row.resource_imports
-    ]
+    runtime_rows = [row for row in materialized if row.complete_runtime_fixtures]
+    resource_rows = [row for row in materialized if row.resource_imports]
     unjustified = [row for row in materialized if row.unjustified_authorized]
     heaviest = sorted(
-        (row for row in interesting if row.setup_weight > 0),
+        (row for row in runtime_rows if row.setup_weight > 0),
         key=lambda row: (-row.setup_weight, row.path),
     )[:10]
     lines.append("")
     lines.append(
         f"# modules={len(materialized)} "
-        f"with_complete_runtime={len(interesting)} "
+        f"with_complete_runtime={len(runtime_rows)} "
+        f"with_resource_imports={len(resource_rows)} "
         f"unjustified_authorized={len(unjustified)} "
-        f"setup_weight_total={sum(row.setup_weight for row in interesting)}"
+        f"setup_weight_total={sum(row.setup_weight for row in runtime_rows)}"
     )
     if heaviest:
         lines.append("# heaviest_complete_runtime_paths:")

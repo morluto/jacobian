@@ -14,6 +14,34 @@ MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
 
 
+def test_math_find_discovers_supported_real_function_enclosures(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            for query in (
+                "certified square root interval",
+                "rigorous logarithm bound",
+                "exponential enclosure",
+                "sine enclosure",
+                "cosine enclosure",
+            ):
+                discovered = await client.call_tool(
+                    "math.find",
+                    {"query": query, "domain": "analysis", "limit": 5},
+                )
+                assert isinstance(discovered.structured_content, dict)
+                assert any(
+                    match["capability_id"]
+                    == "analysis.real_function.point_enclosure.compute"
+                    for match in discovered.structured_content["matches"]
+                )
+
+    asyncio.run(scenario())
+
+
 def test_math_find_exposes_bounded_examples_and_actionable_contract_text(
     tmp_path: Path,
 ) -> None:

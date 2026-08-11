@@ -186,7 +186,8 @@ POINT_ENCLOSURE_CAPABILITIES = (
         title="Enclose a real function at a rational point",
         description=(
             "Use pinned Arb ball arithmetic to enclose one supported real "
-            "function at one exact rational point within a wall-clock budget."
+            "function (square root, logarithm, exponential, sine, or cosine) "
+            "at one exact rational point within a wall-clock budget."
         ),
         request_model=ArbPointEnclosureRequest,
         result_model=ArbPointEnclosureResult,
@@ -200,7 +201,23 @@ POINT_ENCLOSURE_CAPABILITIES = (
             "Arb returned no finite enclosure or did not complete within "
             "the declared bounded execution"
         ),
-        tags=("analysis", "validated", "arb", "enclosure", "bounded"),
+        tags=(
+            "analysis",
+            "validated",
+            "arb",
+            "enclosure",
+            "bounded",
+            "square-root",
+            "sqrt",
+            "logarithm",
+            "log",
+            "exponential",
+            "exp",
+            "sine",
+            "sin",
+            "cosine",
+            "cos",
+        ),
         invocation_examples=(
             example(
                 "sqrt_zero",

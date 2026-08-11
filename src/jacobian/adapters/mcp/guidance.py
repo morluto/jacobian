@@ -52,9 +52,10 @@ Examples:
 """
 
 MATH_RUN_DESCRIPTION = """\
-Run one installed math tool by ID with its typed `payload`. Read the mathematical
-value in `output` first, then execution status. If the payload shape is unknown,
-use math.find with view CONTRACT.
+Run one installed math tool by ID with its typed `payload`. Check execution status
+before treating `output` as mathematical evidence. For a completed run, also inspect
+conclusion, completeness, and assurance before using the mathematical value. If the
+payload shape is unknown, use math.find with view CONTRACT.
 
 Ordinary tools return calculations. Independent checking uses a separate checker
 tool ID (for example `polynomial.identity.verify` or `case.partition.finite.verify`),

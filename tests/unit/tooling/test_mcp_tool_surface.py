@@ -56,3 +56,12 @@ def test_guidance_rejects_verification_transfer_to_derived_claims() -> None:
     combined = "\n".join((SERVER_INSTRUCTIONS, MATH_RUN_DESCRIPTION))
     assert "does not verify a model-derived conclusion" in combined
     assert "record must be bound to the exact final claim" in combined
+
+
+def test_math_run_guidance_checks_execution_before_using_output() -> None:
+    guidance = MATH_RUN_DESCRIPTION.lower()
+
+    status_position = guidance.index("check execution status")
+    output_position = guidance.index("treating `output` as mathematical evidence")
+    assert status_position < output_position
+    assert "conclusion, completeness, and assurance" in guidance

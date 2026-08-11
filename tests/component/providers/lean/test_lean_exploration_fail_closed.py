@@ -8,7 +8,6 @@ import pytest
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -86,7 +85,6 @@ def test_typed_goal_extraction_failure_is_a_structured_non_conclusion(
         LeanProofStateAdapter(resources).invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.apply_tactic",
-                mode=CapabilityMode.EXPLORE,
                 input={"statement": "True", "tactic": "skip"},
             )
         )

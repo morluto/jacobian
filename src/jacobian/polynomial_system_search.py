@@ -17,7 +17,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -53,7 +52,6 @@ class PolynomialSystemRationalSearchAdapter:
                 "jacobian.exact-polynomial-system-search",
                 features=("bounded-rational-enumeration",),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=PolynomialSystemRationalSearchRequest.model_json_schema(),
             output_schema=PolynomialSystemRationalSearchOutput.model_json_schema(),
             tags=("polynomial", "system", "solution", "bounded-search"),
@@ -155,7 +153,6 @@ class PolynomialSystemRationalSearchAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),

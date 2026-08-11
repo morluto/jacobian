@@ -7,6 +7,7 @@ from operator import mul
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.combinatorics import (
+    BinomialRequest,
     FibonacciPairRequest,
     FibonacciPairResult,
     IntegerListRequest,
@@ -45,7 +46,7 @@ def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
     return _integer_result(sympy.subfactorial(n))
 
 
-def binomial(request: NonnegativePairRequest) -> IntegerResult:
+def binomial(request: BinomialRequest) -> IntegerResult:
     import math
 
     pair = request

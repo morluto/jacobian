@@ -2,9 +2,11 @@
 
 [Documentation home](../index.md)
 
-This tutorial searches pinned Mathlib metadata, inspects the selected theorem,
-then submits a small proof to the independent `lean.check` boundary. Retrieval
-remains `COMPUTED`; only successful runtime replay returns `VERIFIED`.
+This tutorial **finds and runs ordinary Lean tools** (search/inspect
+declarations), then runs the separate **checker tool** `lean.check`. Search and
+inspect return declaration **values**; only the checker accepts or rejects a
+proof. Runnable snippets may still pass a legacy `mode` field until
+[#1143](https://github.com/morluto/jacobian/issues/1143).
 
 ## Prerequisites
 
@@ -46,7 +48,7 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "lean.declaration.search",
-                "mode": "EXPLORE",
+                "mode": "EXPLORE",  # legacy wire; see #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "name_contains": "irrational_sqrt_two",
@@ -54,16 +56,17 @@ async def main() -> None:
                 },
             },
         )
+        # Ordinary tools: primary result is declaration metadata (values).
         declaration_name = searched["output"]["declarations"][0]["name"]
-        assert searched["assurance"]["level"] == "COMPUTED"
-        assert searched["assurance"]["verification_record_uri"] is None
+        assert searched["execution"]["status"] == "COMPLETED"
+        assert declaration_name
 
         inspected = await tool(
             client,
             "math.run",
             {
                 "capability_id": "lean.declaration.inspect",
-                "mode": "EXPLORE",
+                "mode": "EXPLORE",  # legacy wire; see #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "declaration_name": declaration_name,
@@ -76,12 +79,13 @@ async def main() -> None:
             == searched["output"]["environment_digest"]
         )
 
+        # Separate checker tool — not a mode on search/inspect.
         checked = await tool(
             client,
             "math.run",
             {
                 "capability_id": "lean.check",
-                "mode": "VERIFY",
+                "mode": "VERIFY",  # legacy wire until #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "statement": "Irrational (Real.sqrt 2)",
@@ -90,7 +94,6 @@ async def main() -> None:
             },
         )
         assert checked["output"]["conclusion"] == "TRUE"
-        assert checked["assurance"]["level"] == "VERIFIED"
         assert checked["output"]["verification_record_uri"] is not None
 
 

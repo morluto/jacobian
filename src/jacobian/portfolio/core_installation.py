@@ -93,7 +93,11 @@ class CoreApplicationInstaller:
         for claim_adapter in application.claim_decomposition_adapters:
             self.context.register_capability(claim_adapter)
 
-        finite_partition_adapter, result.finite_partition = install_finite_partition(
+        (
+            finite_partition_adapter,
+            finite_partition_verify,
+            result.finite_partition,
+        ) = install_finite_partition(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
@@ -102,6 +106,8 @@ class CoreApplicationInstaller:
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
         self.context.register_capability(finite_partition_adapter)
+        if finite_partition_verify is not None:
+            self.context.register_capability(finite_partition_verify)
         finite_coverage_adapter, result.finite_coverage = install_finite_coverage(
             ctx.store,
             ctx.schemas,

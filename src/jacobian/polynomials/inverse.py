@@ -15,7 +15,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -81,7 +80,6 @@ class PolynomialMapInverseSynthesizeAdapter:
                 "jacobian.sympy",
                 features=("polynomial-map-inverse-ansatz", "exact-equation-solving"),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialMapInverseSynthesisRequest),
             output_schema=model_schema(PolynomialMapInverseSynthesisOutput),
             tags=("polynomial", "map", "inverse", "synthesis", "exact-rational"),
@@ -92,7 +90,6 @@ class PolynomialMapInverseSynthesizeAdapter:
                         "Synthesize and independently check the degree-two "
                         "inverse of (x + y^2, y)."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input=PolynomialMapInverseSynthesisRequest.model_validate(
                         {
                             "forward_map": {
@@ -413,7 +410,6 @@ class PolynomialMapInverseSynthesizeAdapter:
                 verified = PolynomialMapInverseVerifyAdapter(self.resources).invoke(
                     CapabilityRequest(
                         capability_id="polynomial.map.inverse.verify",
-                        mode=CapabilityMode.VERIFY,
                         input=verify_request.model_dump(mode="json"),
                     )
                 )
@@ -548,7 +544,6 @@ class PolynomialMapInverseSynthesizeAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=(
                     ExecutionStatus.TIMEOUT
@@ -622,7 +617,6 @@ class PolynomialMapInverseVerifyAdapter:
                 features=("polynomial-map-composition", "two-sided-inverse"),
                 checker_ids=((checker_id,) if checker_id is not None else ()),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialMapInverseVerifyRequest),
             output_schema=model_schema(PolynomialMapInverseVerifyOutput),
             tags=("polynomial", "map", "inverse", "verification", "exact-rational"),
@@ -633,7 +627,6 @@ class PolynomialMapInverseVerifyAdapter:
                         "Independently verify the identity map as its own "
                         "two-sided inverse over QQ."
                     ),
-                    mode=CapabilityMode.VERIFY,
                     input=PolynomialMapInverseVerifyRequest.model_validate(
                         {
                             "forward_map": {
@@ -721,7 +714,6 @@ class PolynomialMapInverseVerifyAdapter:
                 checked = identity_adapter.invoke(
                     CapabilityRequest(
                         capability_id="polynomial.identity.verify",
-                        mode=CapabilityMode.VERIFY,
                         input=PolynomialIdentityRequest(
                             variables=variables,
                             left=residual,
@@ -856,7 +848,6 @@ class PolynomialMapInverseVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=aggregate_checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

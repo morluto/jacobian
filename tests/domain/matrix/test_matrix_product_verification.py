@@ -7,7 +7,6 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -46,7 +45,6 @@ def test_square_zero_product_is_computed_then_independently_verified(
     verified = matrix_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.multiply.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": _square_input(),
                 "candidate": computed.output["result"],
@@ -72,7 +70,6 @@ def test_matrix_product_verifier_rejects_a_false_product_without_a_record(
     rejected = matrix_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.multiply.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": _square_input(),
                 "candidate": false_candidate,

@@ -74,6 +74,9 @@ class Lane:
     required_provider: str | None
     timing_sharding: bool
     ci: Mapping[str, bool]
+    execution_profile: str = ""
+    process_supervision: bool = False
+    setup_affinity: str = ""
 
 
 @dataclass(frozen=True)
@@ -199,6 +202,9 @@ def _validate_lane_fields(raw: dict[str, Any], index: int) -> dict[str, Any]:
         "provider": provider,
         "timing": timing,
         "ci": ci,
+        "execution_profile": raw.get("execution_profile", ""),
+        "process_supervision": raw.get("process_supervision", False),
+        "setup_affinity": raw.get("setup_affinity", ""),
     }
 
 
@@ -219,6 +225,22 @@ def _validate_workers_distribution(name: str, workers: Any, distribution: Any) -
         raise TopologyError(f"lane {name}: workers=0 requires distribution='none'")
     if workers > 0 and distribution == "none":
         raise TopologyError(f"lane {name}: workers>0 requires an xdist distribution")
+
+
+def _validate_execution_profile_fields(
+    name: str,
+    *,
+    execution_profile: Any,
+    process_supervision: Any,
+    setup_affinity: Any,
+) -> tuple[str, bool, str]:
+    if not isinstance(execution_profile, str):
+        raise TopologyError(f"lane {name}.execution_profile must be a string")
+    if not isinstance(process_supervision, bool):
+        raise TopologyError(f"lane {name}.process_supervision must be boolean")
+    if not isinstance(setup_affinity, str):
+        raise TopologyError(f"lane {name}.setup_affinity must be a string")
+    return execution_profile, process_supervision, setup_affinity
 
 
 def _validate_lane_constraints(
@@ -247,6 +269,14 @@ def _validate_lane_constraints(
         raise TopologyError(f"lane {name}.timing_sharding must be boolean")
     if not _ci_ok(ci):
         raise TopologyError(f"lane {name}.ci must define {_CI_TARGETS} as booleans")
+    execution_profile, process_supervision, setup_affinity = (
+        _validate_execution_profile_fields(
+            name,
+            execution_profile=fields["execution_profile"],
+            process_supervision=fields["process_supervision"],
+            setup_affinity=fields["setup_affinity"],
+        )
+    )
     names.add(name)
     return Lane(
         name,
@@ -259,6 +289,9 @@ def _validate_lane_constraints(
         provider,
         timing,
         dict(ci),
+        execution_profile,
+        process_supervision,
+        setup_affinity,
     )
 
 
@@ -437,6 +470,14 @@ def _print_dry_run(
     print(f"# distribution: {distribution}")
     print(f"# timeout_seconds: {lane.timeout_seconds}")
     print(f"# timing_sharding: {'true' if lane.timing_sharding else 'false'}")
+    if lane.execution_profile:
+        print(f"# execution_profile: {lane.execution_profile}")
+    print(
+        f"# process_supervision: "
+        f"{'true' if lane.process_supervision else 'false'}"
+    )
+    if lane.setup_affinity:
+        print(f"# setup_affinity: {lane.setup_affinity}")
     if selectors:
         print(f"# selectors: {len(selectors)}")
     print(shlex.join(command))

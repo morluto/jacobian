@@ -6,7 +6,6 @@ from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -62,7 +61,6 @@ def test_public_small_graph_reliability_reaches_checker_bound_results(
                 capability_id=(
                     "probability.graph_reliability.connection_probability.verify"
                 ),
-                mode=CapabilityMode.VERIFY,
                 input={
                     "input": case["request"],
                     "candidate": computed.output["result"],

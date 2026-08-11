@@ -17,12 +17,11 @@ def log_invocation(result: CapabilityResult, started: float) -> None:
     )
     _LOGGER.info(
         (
-            "capability invocation capability_id=%s version=%s mode=%s "
+            "capability invocation capability_id=%s version=%s "
             "status=%s assurance=%s elapsed_ms=%d diagnostics=%s"
         ),
         result.capability_id,
         result.capability_version,
-        result.mode.value,
         result.execution.status.value,
         result.assurance.level.value,
         elapsed_ms,
@@ -30,7 +29,6 @@ def log_invocation(result: CapabilityResult, started: float) -> None:
         extra={
             "jacobian_capability_id": result.capability_id,
             "jacobian_capability_version": result.capability_version,
-            "jacobian_mode": result.mode.value,
             "jacobian_execution_status": result.execution.status.value,
             "jacobian_assurance_level": result.assurance.level.value,
             "jacobian_elapsed_ms": elapsed_ms,

@@ -26,6 +26,7 @@ from jacobian.contracts.exact import (
 from jacobian.contracts.results import ContractModel
 
 _MAX_N = 1_000
+MAX_BINOMIAL_N = 10_000
 _MAX_PARTS = 256
 _MAX_PARTITION_N = 30
 _MAX_ENUMERATED_PARTITIONS = 10_000
@@ -391,6 +392,13 @@ class NonnegativeIntegerRequest(ContractModel):
 class NonnegativePairRequest(ContractModel):
     n: StrictInt = Field(ge=0, le=_MAX_N)
     k: StrictInt = Field(ge=0, le=_MAX_N)
+
+
+class BinomialRequest(ContractModel):
+    """A wider safe bound for Python's efficient exact ``math.comb`` path."""
+
+    n: StrictInt = Field(ge=0, le=MAX_BINOMIAL_N)
+    k: StrictInt = Field(ge=0, le=MAX_BINOMIAL_N)
 
 
 class IntegerSidonRequest(ContractModel):

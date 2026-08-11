@@ -347,3 +347,78 @@ class GeometryConvexHullResult(ContractModel):
 class GeometryCircleResult(ContractModel):
     center: RationalPoint2D
     radius_squared: CanonicalRational
+
+
+class WeightedPolygonDiagonal(ContractModel):
+    first: StrictInt = Field(ge=0, le=31)
+    second: StrictInt = Field(ge=0, le=31)
+    weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_canonical_positive_pair(self) -> Self:
+        if self.first >= self.second:
+            raise ValueError("weighted diagonal endpoints must be strictly increasing")
+        if self.weight.as_fraction() < 0:
+            raise ValueError("weighted diagonal cost must be nonnegative")
+        return self
+
+
+class ConvexPolygonTriangulationRequest(ContractModel):
+    polygon: PolygonRequest
+    diagonal_weights: tuple[WeightedPolygonDiagonal, ...] = Field(
+        min_length=1, max_length=464
+    )
+    objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
+
+    @model_validator(mode="after")
+    def require_strict_convexity_and_complete_weights(self) -> Self:
+        points = tuple(_point_key(point) for point in self.polygon.points)
+        if not 4 <= len(points) <= 32:
+            raise ValueError("weighted triangulation supports 4 to 32 vertices")
+        turns = tuple(
+            _cross(
+                _subtract(points[(index + 1) % len(points)], points[index]),
+                _subtract(points[(index + 2) % len(points)], points[index]),
+            )
+            for index in range(len(points))
+        )
+        if any(turn <= 0 for turn in turns):
+            raise ValueError("weighted triangulation requires strict CCW convexity")
+        expected = {
+            (first, second)
+            for first in range(len(points))
+            for second in range(first + 1, len(points))
+            if second != first + 1 and (first, second) != (0, len(points) - 1)
+        }
+        actual = {(item.first, item.second) for item in self.diagonal_weights}
+        if len(actual) != len(self.diagonal_weights) or actual != expected:
+            raise ValueError("diagonal weights must cover every non-hull pair exactly")
+        pairs = tuple((item.first, item.second) for item in self.diagonal_weights)
+        if pairs != tuple(sorted(pairs)):
+            raise ValueError("diagonal weights must use lexicographic pair order")
+        return self
+
+
+class PolygonTriangle(ContractModel):
+    vertices: tuple[StrictInt, StrictInt, StrictInt]
+
+
+class TriangulationSplitEntry(ContractModel):
+    start: StrictInt = Field(ge=0, le=31)
+    end: StrictInt = Field(ge=0, le=31)
+    split: StrictInt = Field(ge=0, le=31)
+    optimum: CanonicalRational
+
+
+class ConvexPolygonTriangulationResult(ContractModel):
+    vertex_count: StrictInt = Field(ge=4, le=32)
+    diagonals: tuple[WeightedPolygonDiagonal, ...] = Field(min_length=1, max_length=29)
+    triangles: tuple[PolygonTriangle, ...] = Field(min_length=2, max_length=30)
+    split_table: tuple[TriangulationSplitEntry, ...] = Field(
+        min_length=3, max_length=496
+    )
+    optimum: CanonicalRational
+    objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
+    tie_break: Literal["LOWEST_SPLIT_INDEX"] = "LOWEST_SPLIT_INDEX"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+    verification: Literal["UNVERIFIED"] = "UNVERIFIED"

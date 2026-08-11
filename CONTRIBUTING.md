@@ -1,18 +1,18 @@
 # Contributing to Jacobian
 
-Jacobian is a pre-stable 0.6.0 capability workbench. It exposes composable mathematical
-capabilities that AI agents use to investigate conjectures and other
-mathematically specified problems. Contributions should preserve mathematically
-atomic, agent-visible outcomes, agent-owned composition, and the boundary
-between heuristic search or evaluation and independently verified evidence.
+Jacobian is a pre-stable 0.6.0 **math toolbox for agents**: atomic tools behind
+`math.find` / `math.run`, math-first results, agent-owned composition, and
+optional checker tools as **separate catalog IDs** (not dual-mode producers).
+Contributions should preserve that product model—see
+[product-blueprint](docs/explanation/product-blueprint.md) and
+[architecture](docs/explanation/architecture.md).
 
 ## Before changing code
 
 Read the [documentation home](docs/index.md), the
-[product goals](docs/explanation/goals.md), and the
+[product model](docs/explanation/product-blueprint.md), and the
 [testing strategy](docs/reference/testing-strategy.md).
-Use the installed catalog and current reference documents for present
-capability membership.
+Use the installed catalog and current references for present tool membership.
 
 ## Contributor quick path
 
@@ -188,7 +188,8 @@ Domain-owned capability references live in `docs/reference/capabilities/<domain>
 Adding an operation or provider does not require editing a central documentation
 list.
 
-Keep rolling product goals separate from supported release behavior.
+Keep product intent (product model / architecture) separate from supported
+release behavior.
 For hosted MCP changes, update and validate
 [`docs/how-to/deploy-remote-mcp.md`](docs/how-to/deploy-remote-mcp.md) together
 with any affected files under `deploy/`. Do not promote ignored `tmp/`
@@ -227,9 +228,8 @@ hypotheses, name the affected public contract or conformance case, include a
 minimal reproduction or failing test where practical, and state whether the
 change can affect artifact identity, checker authority, evidence binding, or
 experiment integrity. Do not prescribe a solver or backend unless the
-requirement depends on it. Do not open umbrella issues that restate product
-goals; product goals become issues only when the problem and success criteria
-are concrete.
+requirement depends on it. Do not open umbrella issues that only restate the
+product model; open issues when the problem and success criteria are concrete.
 
 ## Test ownership and selection
 
@@ -239,6 +239,16 @@ matching `make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_provider(name)`, `performance`,
 `property`, and `destructive_process`. They do not replace directory ownership.
 
+Lane execution and CI path-impact rules are authored in
+[`tests/plan_manifest.toml`](tests/plan_manifest.toml) and compiled to
+[`tests/topology.toml`](tests/topology.toml) and
+[`.github/ci-impact.json`](.github/ci-impact.json) via `make compile-test-plan`.
+Do not hand-edit the generated projections. Prefer the hydration ladder in the
+[testing strategy](docs/reference/testing-strategy.md): domain services before
+`attached_complete_runtime` before `authorized_complete_runtime` before
+`fresh_complete_runtime`. Inventory complete-runtime usage with
+`make test-runtime-inventory`.
+
 Tests may reuse concept-specific helpers under `tests/support`, but must not
 import helpers from a sibling semantic lane. Keep fixtures in the narrowest
 directory or module that needs them, and keep support modules to ordinary data
@@ -247,8 +257,7 @@ builders or one stable test concept rather than hidden setup.
 The [testing strategy](docs/reference/testing-strategy.md) is the authoritative
 source for the change matrix, the canonical lane commands, planning entry
 points, CI classification, shard scheduling, marker policy, and the
-specialist-lane escalation rules. CI change impact is declared in
-[`.github/ci-impact.json`](.github/ci-impact.json); its matching rules are
-additive, so a path may require several suites. Integration timing history is a
+specialist-lane escalation rules. Compiled impact matching rules are additive,
+so a path may require several suites. Integration timing history is a
 scheduling hint produced by successful `main` runs; it is not committed state,
 and missing or invalid history falls back to equal-weight sharding.

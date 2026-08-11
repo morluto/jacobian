@@ -11,7 +11,6 @@ import jacobian.providers.flint_runtime as flint_runtime
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -130,7 +129,6 @@ def test_descriptor_provider_must_match_runtime_identity() -> None:
             description="Increment one integer.",
             provider="tests.other",
             provider_runtime=_runtime(),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema={"type": "object"},
             output_schema={"type": "object"},
         )

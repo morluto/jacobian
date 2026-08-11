@@ -1,4 +1,4 @@
-"""Finite case partition capability with independent replay."""
+"""Finite case partition tools: produce a partition, optionally check it."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
-    CapabilityMode,
     CapabilityObligation,
     CapabilityObligationStatus,
     CapabilityRelationship,
@@ -43,6 +42,72 @@ from jacobian.verification import VerificationService
 
 _ARTIFACT_PATTERN = r"^artifact://sha256/[0-9a-f]{64}$"
 
+_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "universe": {
+            "type": "array",
+            "items": {"type": "string"},
+            "uniqueItems": True,
+        },
+        "cases": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "case_id": {"type": "string", "minLength": 1},
+                    "members": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "uniqueItems": True,
+                    },
+                },
+                "required": ["case_id", "members"],
+                "additionalProperties": False,
+            },
+        },
+        "require_disjoint": {"type": "boolean"},
+    },
+    "required": ["universe", "cases"],
+    "additionalProperties": False,
+}
+
+_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "scope_uri": {"type": "string", "pattern": _ARTIFACT_PATTERN},
+        "claim_uri": {"type": "string", "pattern": _ARTIFACT_PATTERN},
+        "partition_uri": {"type": "string", "pattern": _ARTIFACT_PATTERN},
+        "certificate_uri": {
+            "type": ["string", "null"],
+            "pattern": _ARTIFACT_PATTERN,
+        },
+        "verification_record_uri": {
+            "type": ["string", "null"],
+            "pattern": _ARTIFACT_PATTERN,
+        },
+        "missing": {"type": "array", "items": {"type": "string"}},
+        "outside": {"type": "array", "items": {"type": "string"}},
+        "overlaps": {"type": "array", "items": {"type": "string"}},
+        "duplicate_case_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "scope_uri",
+        "claim_uri",
+        "partition_uri",
+        "certificate_uri",
+        "verification_record_uri",
+        "missing",
+        "outside",
+        "overlaps",
+        "duplicate_case_ids",
+    ],
+    "additionalProperties": False,
+}
+
 
 @dataclass(frozen=True, slots=True)
 class FinitePartitionInstallation:
@@ -62,7 +127,11 @@ def install_finite_partition(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[FinitePartitionAdapter, FinitePartitionInstallation]:
+) -> tuple[
+    FinitePartitionAdapter,
+    FinitePartitionVerifyAdapter | None,
+    FinitePartitionInstallation,
+]:
     semantics_uri = store.register_descriptor(
         kind="semantics",
         name="jacobian.finite-enumerated-partition",
@@ -155,127 +224,54 @@ def install_finite_partition(
         ),
         authorize=authorize_checker,
     )
-    checker_id = registration.checker_id
     installation = FinitePartitionInstallation(
-        checker_id=checker_id,
+        checker_id=registration.checker_id,
         semantics_uri=semantics_uri,
         scope_schema_uri=scope_schema_uri,
         claim_schema_uri=claim_schema_uri,
         partition_schema_uri=partition_schema_uri,
         certificate_schema_uri=certificate_schema_uri,
     )
-    return (
-        FinitePartitionAdapter(artifacts, store, verification, installation),
-        installation,
-    )
+    producer = FinitePartitionAdapter(artifacts, store, installation)
+    checker: FinitePartitionVerifyAdapter | None = None
+    if installation.checker_id is not None:
+        checker = FinitePartitionVerifyAdapter(
+            artifacts, store, verification, installation
+        )
+    return producer, checker, installation
 
 
 class FinitePartitionAdapter:
-    """Propose or independently verify a finite partition."""
+    """Materialize a finite partition (ordinary math tool)."""
 
     def __init__(
         self,
         artifacts: ArtifactService,
         store: ArtifactRepository,
-        verification: VerificationService,
         installation: FinitePartitionInstallation,
     ) -> None:
         self.artifacts = artifacts
         self.store = store
-        self.verification = verification
         self.installation = installation
-        modes = (
-            (CapabilityMode.EXPLORE, CapabilityMode.VERIFY)
-            if installation.checker_id is not None
-            else (CapabilityMode.EXPLORE,)
-        )
         self._descriptor = CapabilityDescriptor(
             capability_id="case.partition.finite",
             version="1",
             title="Partition an explicit finite domain",
             description=(
-                "Materialize named cases over an explicit finite scope and optionally "
-                "replay exact coverage and disjointness with an authorized checker. "
-                "Members and case labels are opaque caller-supplied strings; the "
-                "checker does not establish their mathematical meaning or that the "
-                "supplied universe exhausts an external domain."
+                "Materialize named cases over an explicit finite scope. "
+                "Members and case labels are opaque caller-supplied strings. "
+                "Independent coverage replay is the separate tool "
+                "case.partition.finite.verify when a checker is authorized."
             ),
             provider="jacobian.finite",
             provider_runtime=known_provider_runtime(
                 "jacobian.finite",
                 features=("finite-partition",),
-                checker_ids=(
-                    (installation.checker_id,)
-                    if installation.checker_id is not None
-                    else ()
-                ),
+                checker_ids=(),
             ),
-            modes=modes,
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "universe": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "uniqueItems": True,
-                    },
-                    "cases": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "case_id": {"type": "string", "minLength": 1},
-                                "members": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "uniqueItems": True,
-                                },
-                            },
-                            "required": ["case_id", "members"],
-                            "additionalProperties": False,
-                        },
-                    },
-                    "require_disjoint": {"type": "boolean"},
-                },
-                "required": ["universe", "cases"],
-                "additionalProperties": False,
-            },
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "scope_uri": {"type": "string", "pattern": _ARTIFACT_PATTERN},
-                    "claim_uri": {"type": "string", "pattern": _ARTIFACT_PATTERN},
-                    "partition_uri": {"type": "string", "pattern": _ARTIFACT_PATTERN},
-                    "certificate_uri": {
-                        "type": ["string", "null"],
-                        "pattern": _ARTIFACT_PATTERN,
-                    },
-                    "verification_record_uri": {
-                        "type": ["string", "null"],
-                        "pattern": _ARTIFACT_PATTERN,
-                    },
-                    "missing": {"type": "array", "items": {"type": "string"}},
-                    "outside": {"type": "array", "items": {"type": "string"}},
-                    "overlaps": {"type": "array", "items": {"type": "string"}},
-                    "duplicate_case_ids": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                },
-                "required": [
-                    "scope_uri",
-                    "claim_uri",
-                    "partition_uri",
-                    "certificate_uri",
-                    "verification_record_uri",
-                    "missing",
-                    "outside",
-                    "overlaps",
-                    "duplicate_case_ids",
-                ],
-                "additionalProperties": False,
-            },
-            tags=("cases", "finite", "coverage", "verification"),
+            input_schema=_INPUT_SCHEMA,
+            output_schema=_OUTPUT_SCHEMA,
+            tags=("cases", "finite", "coverage"),
             invocation_examples=(
                 example(
                     "singleton_partition",
@@ -294,219 +290,345 @@ class FinitePartitionAdapter:
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
         started = time.monotonic()
-        universe = [str(item) for item in request.input["universe"]]
-        cases = [
-            {
-                "case_id": str(case["case_id"]),
-                "members": [str(member) for member in case["members"]],
-            }
-            for case in request.input["cases"]
-        ]
-        require_disjoint = bool(request.input.get("require_disjoint", True))
-        scope = self.artifacts.put(
-            schema_uri=self.installation.scope_schema_uri,
-            semantics_uri=self.installation.semantics_uri,
-            payload={"scope_schema_version": "1", "elements": universe},
-            summary="explicit finite case scope",
-        )
-        claim = self.artifacts.put(
-            schema_uri=self.installation.claim_schema_uri,
-            semantics_uri=self.installation.semantics_uri,
-            payload={
-                "claim_schema_version": "1",
-                "predicate": "finite_partition",
-                "require_disjoint": require_disjoint,
-            },
-            parents=(scope.artifact_uri,),
-            summary="finite partition coverage obligation",
-        )
-        partition = self.artifacts.put(
-            schema_uri=self.installation.partition_schema_uri,
-            semantics_uri=self.installation.semantics_uri,
-            payload={"partition_schema_version": "1", "cases": cases},
-            parents=(scope.artifact_uri, claim.artifact_uri),
-            summary="proposed finite partition",
-        )
-        missing, outside, overlaps, duplicate_case_ids = _partition_diagnostics(
-            universe, cases
-        )
-        certificate_uri = None
-        record_uri = None
-        verified = False
-        verification_result: ResultEnvelope | None = None
-        artifact_uris = [scope.artifact_uri, claim.artifact_uri, partition.artifact_uri]
-        if request.mode is CapabilityMode.VERIFY:
-            certificate_uri, verification_result = self._verify(
-                scope_uri=scope.artifact_uri,
-                claim_uri=claim.artifact_uri,
-                partition_uri=partition.artifact_uri,
-            )
-            record_uri = verification_result.verification_record_uri
-            verified = (
-                verification_result.assurance.verification is Verification.VERIFIED
-            )
-            artifact_uris.append(certificate_uri)
-            if record_uri is not None:
-                artifact_uris.append(record_uri)
-        assurance_level = (
-            CapabilityAssuranceLevel.VERIFIED
-            if verified
-            else CapabilityAssuranceLevel.COMPUTED
-        )
-        relationship_status = (
-            CapabilityRelationshipStatus.VERIFIED
-            if verified
-            else CapabilityRelationshipStatus.PROPOSED
-        )
-        obligation_status = (
-            CapabilityObligationStatus.DISCHARGED
-            if verified
-            else CapabilityObligationStatus.OPEN
-        )
-        execution_status = (
-            verification_result.execution.status
-            if verification_result is not None
-            else ExecutionStatus.COMPLETED
-        )
-        complete = (
-            execution_status is ExecutionStatus.COMPLETED
-            and not missing
-            and not outside
-            and not duplicate_case_ids
-            and (not require_disjoint or not overlaps)
-        )
-        verified_replay_basis = (
-            "authorized checker replayed equality-based coverage and required "
-            "disjointness within the caller-supplied universe"
-            if require_disjoint
-            else (
-                "authorized checker replayed equality-based coverage within the "
-                "caller-supplied universe; disjointness was not required"
-            )
-        )
-        return CapabilityResult(
+        material = _materialize(self.artifacts, self.installation, request.input)
+        return _partition_result(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
-            execution=Execution(
-                status=execution_status,
-                runtime_ms=int((time.monotonic() - started) * 1000),
-                detail=(
-                    verification_result.execution.detail
-                    if verification_result is not None
-                    else None
-                ),
-            ),
-            output={
-                "scope_uri": scope.artifact_uri,
-                "claim_uri": claim.artifact_uri,
-                "partition_uri": partition.artifact_uri,
-                "certificate_uri": certificate_uri,
-                "verification_record_uri": record_uri,
-                "missing": missing,
-                "outside": outside,
-                "overlaps": overlaps,
-                "duplicate_case_ids": duplicate_case_ids,
-            },
-            scope=CapabilityScope(
-                description=(
-                    "the exact caller-supplied finite universe; external-domain "
-                    "completeness and member semantics are not checked"
-                ),
-                parameters={"element_count": len(universe)},
-                artifact_uri=scope.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if complete
-                    else CapabilityCompletenessStatus.PARTIAL
-                ),
-                basis=(
-                    f"{verified_replay_basis}; it did not check external-domain "
-                    "completeness or member/case semantics"
-                    if verified
-                    else "generator-side membership accounting; not independently checked"
-                ),
-                assurance_level=assurance_level,
-                verification_record_uri=record_uri if verified else None,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="case.relation.partitions",
-                    source_artifact_uris=(scope.artifact_uri,),
-                    target_artifact_uris=(partition.artifact_uri,),
-                    status=relationship_status,
-                    obligation_uris=(claim.artifact_uri,),
-                    verification_record_uri=record_uri if verified else None,
-                ),
-            ),
-            obligations=(
-                CapabilityObligation(
-                    obligation_uri=claim.artifact_uri,
-                    status=obligation_status,
-                    verification_record_uri=record_uri if verified else None,
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=assurance_level,
-                basis=(
-                    f"{verified_replay_basis}; external-domain completeness and "
-                    "member/case semantics were not checked"
-                    if verified
-                    else "partition was proposed and inspected by its generator only"
-                ),
-                verification_record_uri=record_uri if verified else None,
-            ),
-            artifact_uris=tuple(artifact_uris),
+            started=started,
+            material=material,
+            verification_result=None,
+            certificate_uri=None,
         )
 
-    def _verify(
+
+class FinitePartitionVerifyAdapter:
+    """Independently check a finite partition (separate checker tool)."""
+
+    def __init__(
         self,
-        *,
-        scope_uri: str,
-        claim_uri: str,
-        partition_uri: str,
-    ) -> tuple[str, ResultEnvelope]:
-        checker_id = self.installation.checker_id
-        if checker_id is None:
+        artifacts: ArtifactService,
+        store: ArtifactRepository,
+        verification: VerificationService,
+        installation: FinitePartitionInstallation,
+    ) -> None:
+        if installation.checker_id is None:
             raise ValueError("finite partition checker is not authorized")
-        scope = self.store.get(scope_uri)
-        claim = self.store.get(claim_uri)
-        partition = self.store.get(partition_uri)
-        semantics = self.store.get(self.installation.semantics_uri)
-        bindings = EvidenceBindings(
-            claim_digest=claim.manifest.object_digest,
-            semantics_digest=semantics.manifest.object_digest,
-            candidate_digest=partition.manifest.object_digest,
-            scope_digest=scope.manifest.object_digest,
-        )
-        payload: dict[str, Any] = {
-            "replay": "equality-based finite coverage and conditional disjointness",
-            "relation_id": "case.relation.partitions",
-            "obligation_uri": claim_uri,
-        }
-        envelope = CertificateEnvelope(
-            certificate_type="finite.partition",
-            format_version="1",
-            bindings=bindings,
-            payload_digest=(
-                "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
+        self.artifacts = artifacts
+        self.store = store
+        self.verification = verification
+        self.installation = installation
+        self._descriptor = CapabilityDescriptor(
+            capability_id="case.partition.finite.verify",
+            version="1",
+            title="Verify a finite partition",
+            description=(
+                "Replay equality-based coverage and optional disjointness for a "
+                "caller-supplied finite partition with an authorized checker. "
+                "Does not establish external-domain completeness or member semantics."
             ),
-            payload=payload,
+            provider="jacobian.finite",
+            provider_runtime=known_provider_runtime(
+                "jacobian.finite",
+                features=("finite-partition",),
+                checker_ids=(installation.checker_id,),
+            ),
+            input_schema=_INPUT_SCHEMA,
+            output_schema=_OUTPUT_SCHEMA,
+            tags=("cases", "finite", "coverage", "verification"),
+            invocation_examples=(
+                example(
+                    "singleton_partition_check",
+                    "Check a singleton partition covers its universe.",
+                    {
+                        "universe": ["a"],
+                        "cases": [{"case_id": "all", "members": ["a"]}],
+                    },
+                ),
+            ),
         )
-        certificate = self.artifacts.put(
-            schema_uri=self.installation.certificate_schema_uri,
-            semantics_uri=self.installation.semantics_uri,
-            payload=envelope.model_dump(mode="json"),
-            parents=(claim_uri, partition_uri, scope_uri),
-            summary="finite partition replay certificate",
+
+    @property
+    def descriptor(self) -> CapabilityDescriptor:
+        return self._descriptor
+
+    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        started = time.monotonic()
+        material = _materialize(self.artifacts, self.installation, request.input)
+        certificate_uri, verification_result = _verify_partition(
+            artifacts=self.artifacts,
+            store=self.store,
+            verification=self.verification,
+            installation=self.installation,
+            scope_uri=material.scope_uri,
+            claim_uri=material.claim_uri,
+            partition_uri=material.partition_uri,
         )
-        result = self.verification.verify_certificate(
-            certificate_uri=certificate.artifact_uri,
-            checker_id=checker_id,
+        return _partition_result(
+            capability_id=self.descriptor.capability_id,
+            capability_version=self.descriptor.version,
+            started=started,
+            material=material,
+            verification_result=verification_result,
+            certificate_uri=certificate_uri,
         )
-        return certificate.artifact_uri, result
+
+
+@dataclass(frozen=True, slots=True)
+class _MaterializedPartition:
+    scope_uri: str
+    claim_uri: str
+    partition_uri: str
+    universe: list[str]
+    require_disjoint: bool
+    missing: list[str]
+    outside: list[str]
+    overlaps: list[str]
+    duplicate_case_ids: list[str]
+
+
+def _materialize(
+    artifacts: ArtifactService,
+    installation: FinitePartitionInstallation,
+    payload: dict[str, Any],
+) -> _MaterializedPartition:
+    universe = [str(item) for item in payload["universe"]]
+    cases = [
+        {
+            "case_id": str(case["case_id"]),
+            "members": [str(member) for member in case["members"]],
+        }
+        for case in payload["cases"]
+    ]
+    require_disjoint = bool(payload.get("require_disjoint", True))
+    scope = artifacts.put(
+        schema_uri=installation.scope_schema_uri,
+        semantics_uri=installation.semantics_uri,
+        payload={"scope_schema_version": "1", "elements": universe},
+        summary="explicit finite case scope",
+    )
+    claim = artifacts.put(
+        schema_uri=installation.claim_schema_uri,
+        semantics_uri=installation.semantics_uri,
+        payload={
+            "claim_schema_version": "1",
+            "predicate": "finite_partition",
+            "require_disjoint": require_disjoint,
+        },
+        parents=(scope.artifact_uri,),
+        summary="finite partition coverage obligation",
+    )
+    partition = artifacts.put(
+        schema_uri=installation.partition_schema_uri,
+        semantics_uri=installation.semantics_uri,
+        payload={"partition_schema_version": "1", "cases": cases},
+        parents=(scope.artifact_uri, claim.artifact_uri),
+        summary="proposed finite partition",
+    )
+    missing, outside, overlaps, duplicate_case_ids = _partition_diagnostics(
+        universe, cases
+    )
+    return _MaterializedPartition(
+        scope_uri=scope.artifact_uri,
+        claim_uri=claim.artifact_uri,
+        partition_uri=partition.artifact_uri,
+        universe=universe,
+        require_disjoint=require_disjoint,
+        missing=missing,
+        outside=outside,
+        overlaps=overlaps,
+        duplicate_case_ids=duplicate_case_ids,
+    )
+
+
+def _verify_partition(
+    *,
+    artifacts: ArtifactService,
+    store: ArtifactRepository,
+    verification: VerificationService,
+    installation: FinitePartitionInstallation,
+    scope_uri: str,
+    claim_uri: str,
+    partition_uri: str,
+) -> tuple[str, ResultEnvelope]:
+    checker_id = installation.checker_id
+    if checker_id is None:
+        raise ValueError("finite partition checker is not authorized")
+    scope = store.get(scope_uri)
+    claim = store.get(claim_uri)
+    partition = store.get(partition_uri)
+    semantics = store.get(installation.semantics_uri)
+    bindings = EvidenceBindings(
+        claim_digest=claim.manifest.object_digest,
+        semantics_digest=semantics.manifest.object_digest,
+        candidate_digest=partition.manifest.object_digest,
+        scope_digest=scope.manifest.object_digest,
+    )
+    payload: dict[str, Any] = {
+        "replay": "equality-based finite coverage and conditional disjointness",
+        "relation_id": "case.relation.partitions",
+        "obligation_uri": claim_uri,
+    }
+    envelope = CertificateEnvelope(
+        certificate_type="finite.partition",
+        format_version="1",
+        bindings=bindings,
+        payload_digest=(
+            "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
+        ),
+        payload=payload,
+    )
+    certificate = artifacts.put(
+        schema_uri=installation.certificate_schema_uri,
+        semantics_uri=installation.semantics_uri,
+        payload=envelope.model_dump(mode="json"),
+        parents=(claim_uri, partition_uri, scope_uri),
+        summary="finite partition replay certificate",
+    )
+    result = verification.verify_certificate(
+        certificate_uri=certificate.artifact_uri,
+        checker_id=checker_id,
+    )
+    return certificate.artifact_uri, result
+
+
+def _partition_result(
+    *,
+    capability_id: str,
+    capability_version: str,
+    started: float,
+    material: _MaterializedPartition,
+    verification_result: ResultEnvelope | None,
+    certificate_uri: str | None,
+) -> CapabilityResult:
+    record_uri = (
+        verification_result.verification_record_uri
+        if verification_result is not None
+        else None
+    )
+    verified = (
+        verification_result is not None
+        and verification_result.assurance.verification is Verification.VERIFIED
+    )
+    artifact_uris = [
+        material.scope_uri,
+        material.claim_uri,
+        material.partition_uri,
+    ]
+    if certificate_uri is not None:
+        artifact_uris.append(certificate_uri)
+    if record_uri is not None:
+        artifact_uris.append(record_uri)
+    assurance_level = (
+        CapabilityAssuranceLevel.VERIFIED
+        if verified
+        else CapabilityAssuranceLevel.COMPUTED
+    )
+    relationship_status = (
+        CapabilityRelationshipStatus.VERIFIED
+        if verified
+        else CapabilityRelationshipStatus.PROPOSED
+    )
+    obligation_status = (
+        CapabilityObligationStatus.DISCHARGED
+        if verified
+        else CapabilityObligationStatus.OPEN
+    )
+    execution_status = (
+        verification_result.execution.status
+        if verification_result is not None
+        else ExecutionStatus.COMPLETED
+    )
+    complete = (
+        execution_status is ExecutionStatus.COMPLETED
+        and not material.missing
+        and not material.outside
+        and not material.duplicate_case_ids
+        and (not material.require_disjoint or not material.overlaps)
+    )
+    verified_replay_basis = (
+        "authorized checker replayed equality-based coverage and required "
+        "disjointness within the caller-supplied universe"
+        if material.require_disjoint
+        else (
+            "authorized checker replayed equality-based coverage within the "
+            "caller-supplied universe; disjointness was not required"
+        )
+    )
+    return CapabilityResult(
+        capability_id=capability_id,
+        capability_version=capability_version,
+        execution=Execution(
+            status=execution_status,
+            runtime_ms=int((time.monotonic() - started) * 1000),
+            detail=(
+                verification_result.execution.detail
+                if verification_result is not None
+                else None
+            ),
+        ),
+        output={
+            "scope_uri": material.scope_uri,
+            "claim_uri": material.claim_uri,
+            "partition_uri": material.partition_uri,
+            "certificate_uri": certificate_uri,
+            "verification_record_uri": record_uri,
+            "missing": material.missing,
+            "outside": material.outside,
+            "overlaps": material.overlaps,
+            "duplicate_case_ids": material.duplicate_case_ids,
+        },
+        scope=CapabilityScope(
+            description=(
+                "the exact caller-supplied finite universe; external-domain "
+                "completeness and member semantics are not checked"
+            ),
+            parameters={"element_count": len(material.universe)},
+            artifact_uri=material.scope_uri,
+        ),
+        completeness=CapabilityCompleteness(
+            status=(
+                CapabilityCompletenessStatus.COMPLETE
+                if complete
+                else CapabilityCompletenessStatus.PARTIAL
+            ),
+            basis=(
+                f"{verified_replay_basis}; it did not check external-domain "
+                "completeness or member/case semantics"
+                if verified
+                else "generator-side membership accounting; not independently checked"
+            ),
+            assurance_level=assurance_level,
+            verification_record_uri=record_uri if verified else None,
+        ),
+        relationships=(
+            CapabilityRelationship(
+                relation_id="case.relation.partitions",
+                source_artifact_uris=(material.scope_uri,),
+                target_artifact_uris=(material.partition_uri,),
+                status=relationship_status,
+                obligation_uris=(material.claim_uri,),
+                verification_record_uri=record_uri if verified else None,
+            ),
+        ),
+        obligations=(
+            CapabilityObligation(
+                obligation_uri=material.claim_uri,
+                status=obligation_status,
+                verification_record_uri=record_uri if verified else None,
+            ),
+        ),
+        assurance=CapabilityAssurance(
+            level=assurance_level,
+            basis=(
+                f"{verified_replay_basis}; external-domain completeness and "
+                "member/case semantics were not checked"
+                if verified
+                else "partition was proposed and inspected by its generator only"
+            ),
+            verification_record_uri=record_uri if verified else None,
+        ),
+        artifact_uris=tuple(artifact_uris),
+    )
 
 
 def _partition_diagnostics(

@@ -4,44 +4,25 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
 def combinatorics_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install additive-combinatorics operations and exact checkers only."""
 
-    bundle = build_combinatorics_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_combinatorics_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"combinatorics": (bundle, installed.installed["combinatorics"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
@@ -73,7 +54,6 @@ def test_additive_decisions_are_independently_verified(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -101,7 +81,6 @@ def test_fixed_order_negative_result_is_verified_inline(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -127,7 +106,6 @@ def test_fixed_order_positive_witness_is_independently_verified(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.cyclic_difference_set.extension.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -151,7 +129,6 @@ def test_inline_checker_rejects_a_contract_valid_false_sidon_result(
     rejected = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.integer_set.sidon.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": different.output["result"]},
         )
     )

@@ -8,7 +8,6 @@ import pytest
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -68,7 +67,6 @@ def test_proof_hole_inspection_ignores_strings_and_identifiers(
         result = adapter.invoke(
             CapabilityRequest(
                 capability_id="lean.proof.axioms.inspect",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",

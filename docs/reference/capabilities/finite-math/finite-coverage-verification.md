@@ -1,6 +1,6 @@
 # Bounded finite coverage verification
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 `finite.coverage.verify` verifies that a bounded paged archive contains every
 member of an explicit finite scope exactly once. It is a distinct verification

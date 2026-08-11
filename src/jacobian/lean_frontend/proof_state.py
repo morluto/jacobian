@@ -18,7 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -67,7 +66,6 @@ class LeanProofStateAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanProofStateRequest.model_json_schema(),
             output_schema=LeanProofStateOutput.model_json_schema(),
             tags=("lean", "proof-state", "tactic", "exploration"),
@@ -78,7 +76,6 @@ class LeanProofStateAdapter:
                         "Apply trivial to a replayable proof state for True; "
                         "a completed transition still requires lean.check."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input=LeanProofStateRequest.model_validate(
                         {
                             "environment": "CORE",
@@ -390,7 +387,6 @@ class LeanProofStateAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),

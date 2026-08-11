@@ -6,7 +6,6 @@ from typing import Any
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
@@ -67,7 +66,6 @@ def test_topology_results_are_independently_verified(
         verified = topology_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=derive_verification_capability_id(producer_id),
-                mode=CapabilityMode.VERIFY,
                 input={
                     "input": producer_input,
                     "candidate": _result_payload(computed),
@@ -106,7 +104,6 @@ def test_topology_checker_rejects_forged_cycle_evidence(
     rejected = topology_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
-            mode=CapabilityMode.VERIFY,
             input={"input": _producer_input, "candidate": forged_candidate},
         )
     )
@@ -137,7 +134,6 @@ def test_integral_homology_has_a_dedicated_independent_verifier(
     verified = topology_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="topology.simplicial_homology.integral.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": integral_input, "candidate": _result_payload(computed)},
         )
     )
@@ -180,7 +176,6 @@ def test_integral_homology_checker_rejects_a_forged_free_generator(
     rejected = topology_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="topology.simplicial_homology.integral.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": integral_input, "candidate": forged_candidate},
         )
     )

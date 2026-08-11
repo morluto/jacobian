@@ -5,44 +5,25 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
 def number_theory_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install number theory and its exact checkers without a portfolio."""
 
-    bundle = build_number_theory_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_number_theory_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"number_theory": (bundle, installed.installed["number_theory"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
@@ -74,7 +55,6 @@ def test_prime_factorization_result_uses_independent_python_flint_replay(
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": computed.output["result"]},
         )
     )
@@ -114,7 +94,6 @@ def test_prime_factorization_verifier_rejects_incomplete_factor_list(
     rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.prime_factorization.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": forged_candidate},
         )
     )
@@ -143,7 +122,6 @@ def test_powerful_number_result_uses_independent_python_flint_replay(
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": computed.output["result"]},
         )
     )
@@ -182,7 +160,6 @@ def test_powerful_number_verifier_rejects_schema_valid_wrong_factor_product(
     rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="integer.powerful.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_payload, "candidate": forged_candidate},
         )
     )
@@ -209,7 +186,6 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": producer_payload,
                 "candidate": computed.output["result"],
@@ -248,7 +224,6 @@ def test_modular_residue_verifier_replays_its_materialized_lineage(
     rejected = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="modular.polynomial_residue_image.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": _modular_residue_payload(coefficient="3"),
                 "candidate": computed.output["result"],

@@ -4,19 +4,16 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import build_geometry_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.config import CheckerAuthorityMode
 
 ZERO = {"num": "0", "den": "1"}
@@ -32,50 +29,95 @@ PXY = {"x": TWO, "y": TWO}
 def geometry_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install geometry and its exact checkers without the full portfolio."""
 
-    bundle = build_geometry_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_geometry_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"geometry": (bundle, installed.installed["geometry"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
 def test_geometry_checker_availability_does_not_grant_authority(
     tmp_path: Path,
 ) -> None:
-    bundle = build_geometry_bundle()
-    with open_domain_services(tmp_path / "state") as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
+    with open_exact_domain_services(
+        tmp_path / "state",
+        build_geometry_bundle(),
+        checker_authority=CheckerAuthorityMode.NONE,
+    ) as services:
+        catalog_ids = {
+            item.capability_id
+            for item in services.core.capabilities.catalog().capabilities
+        }
+        assert any(
+            item.endswith(".compute") or ".decide" in item for item in catalog_ids
         )
-        adapters, installation = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"geometry": (bundle, installed.installed["geometry"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
+        assert not any(item.endswith(".verify") for item in catalog_ids)
+        assert not services.installation.authorizes_bundled_checkers
 
-        assert adapters == ()
-        assert all(
-            checker_id is None for checker_id in installation.checker_ids.values()
+
+def _weighted_square() -> dict[str, object]:
+    return {
+        "polygon": {"points": [P0, PX, PXY, PY]},
+        "diagonal_weights": [
+            {"first": 0, "second": 2, "weight": ONE},
+            {"first": 1, "second": 3, "weight": TWO},
+        ],
+        "objective": "NON_HULL_DIAGONAL_WEIGHT_SUM",
+    }
+
+
+def test_minimum_weight_triangulation_charges_one_diagonal_once(
+    geometry_services: DomainTestServices,
+) -> None:
+    payload = _weighted_square()
+    computed = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.compute",
+            input=payload,
         )
+    )
+
+    assert computed.output["result"]["optimum"] == ONE
+    assert computed.output["result"]["diagonals"] == [
+        {"first": 0, "second": 2, "weight": ONE}
+    ]
+    assert computed.output["result"]["triangles"] == [
+        {"vertices": [0, 1, 2]},
+        {"vertices": [0, 2, 3]},
+    ]
+
+    verified = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.verify",
+            input={"input": payload, "candidate": computed.output["result"]},
+        )
+    )
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+
+
+def test_triangulation_checker_rejects_double_counted_cost(
+    geometry_services: DomainTestServices,
+) -> None:
+    payload = _weighted_square()
+    computed = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.compute",
+            input=payload,
+        )
+    )
+    forged = dict(computed.output["result"])
+    forged["optimum"] = TWO
+
+    rejected = geometry_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="geometry.polygon.triangulation.minimum_weight.verify",
+            input={"input": payload, "candidate": forged},
+        )
+    )
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
 
 
 _GEOMETRY_CASES = (
@@ -130,7 +172,6 @@ def test_selected_geometry_results_verify_through_public_dispatch(
         verified = geometry_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=derive_verification_capability_id(operation_id),
-                mode=CapabilityMode.VERIFY,
                 input={"input": payload, "candidate": computed.output["result"]},
             )
         )
@@ -155,7 +196,6 @@ def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
     rejected = geometry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.points.squared_distance.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"first": P0, "second": PXY},
                 "candidate": {"value": {"num": "7", "den": "1"}},
@@ -182,7 +222,6 @@ def test_schema_valid_false_simple_polygon_decision_is_rejected(
     rejected = geometry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="geometry.polygon.simple.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"points": [P0, PXY, PY, PX]},
                 "candidate": {

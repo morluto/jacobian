@@ -22,30 +22,30 @@ Keep decomposition and routing decisions agent-owned; composing already-known
 supporting operations remains allowed when clearer.
 Do not call Jacobian for definitions, formatting, or non-execution tasks.
 
-No discovery for stable producers: `{"capability_id":"<id>","mode":"EXPLORE","payload":<JSON>}`
-(not `COMPUTE`/`input`). Payloads:
+No discovery for stable producers: `{"capability_id":"<id>","input":<JSON>}`.
+Payloads:
 
 - `integer.compute.gcd`, `integer.compute.lcm`, or `integer.compute.extended_gcd`:
   `{"left":"84","right":"30"}`.
 - `matrix.determinant.compute` or `matrix.rank.compute`:
   `{"matrix":{"domain":"QQ","entries":[[{"num":"1","den":"1"}]]}}`.
-- `polynomial.compute.gcd` in `EXPLORE` mode: payload keys are `left` and
+- `polynomial.compute.gcd`: payload keys are `left` and
   `right`; each value has shape
   `{"polynomial_schema_version":"1","domain":"QQ","variables":["x"],"polynomial":{"terms":[{"coefficient":{"num":"1","den":"1"},"exponents":[2]}]}}`.
 - For expression normalization, inspect the known
   `polynomial.expression.normalize` contract directly.
-- `matrix.determinant.verify` in `VERIFY` mode for an independent check:
+- `matrix.determinant.verify` for an independent check:
   `{"determinant_uri":"<determinant_uri from compute output>"}`.
 - `combinatorics.cyclic_difference_set.extension.decide`:
   `{"base_elements":["1","2","4","8","13"],"target_order":7}`.
   `combinatorics.cyclic_difference_set.extension.verify` uses
-  `{"input":<same payload>,"candidate":<producer output.result>}` in `VERIFY` mode.
+  `{"input":<same payload>,"candidate":<producer output.result>}`.
 
 For other outcomes, query `math.find` by plain-language outcome; no ID is
 required. Use low `limit` only for query search, never with `capability_id`. For
 a selected operation's schema, call
-`math.find({"capability_id":"<exact-id>","view":"CONTRACT"})`; never send
-`mode: "CONTRACT"` to `math.run` or put `CONTRACT` in a query. A card's
+`math.find({"capability_id":"<exact-id>","view":"CONTRACT"})`; never put
+`CONTRACT` in a query. A card's
 `invocation_example`, or required top-level fields, may be enough.
 
 Add no domain filter unless its installed spelling is known. Follow exposed
@@ -60,8 +60,9 @@ obligations plus artifact and verification-record URIs.
 Keep representation, decomposition, composition, iteration, verification
 timing, and stopping decisions agent-owned.
 
-Model-authored work is not independent evidence. Use installed `VERIFY` when
-requested; a writable path or schema alone is not authorization. Task-level
+Model-authored work is not independent evidence. Use installed checker tools
+(`*.verify`, `lean.check`, …) when independent verification is requested; a
+writable path or schema alone is not authorization. Task-level
 `VERIFIED` requires exact record bytes, result assurance `VERIFIED`, required
 task authorization and bindings are preserved, and a contract-authorized
 checker identity, digest, or Jacobian record type. Otherwise claim the highest

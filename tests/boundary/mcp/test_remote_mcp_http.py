@@ -144,7 +144,6 @@ async def _remote_tenant_scenario(port: int) -> None:
                 "math.run",
                 {
                     "capability_id": "fixture.increment",
-                    "mode": "EXPLORE",
                     "payload": {"value": 4},
                 },
             )

@@ -61,6 +61,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         "polynomial.compute.resultant",
         "polynomial.compute.discriminant",
         "polynomial.compute.square_free_decomposition",
+        "polynomial.factor.compute",
         "polynomial.groebner_basis.compute",
     } <= installed_ids
 
@@ -291,11 +292,11 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
 
 
 def test_groebner_result_preserves_advertised_input_variable_bound(
-    attached_complete_runtime,
+    polynomial_services,
 ) -> None:
     variables = ["a", "b", "c", "d", "e"]
     result = _invoke(
-        attached_complete_runtime,
+        polynomial_services,
         "polynomial.groebner_basis.compute",
         {
             "generators": [

@@ -14,7 +14,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -77,7 +76,6 @@ class PolynomialMapEvaluationAdapter:
                 "jacobian.sympy",
                 features=("rational-polynomial-evaluation",),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialEvaluationRequest),
             output_schema=model_schema(PolynomialEvaluationOutput),
             tags=("polynomial", "map", "evaluation", "exact-computation"),
@@ -182,7 +180,6 @@ class PolynomialJacobianAdapter:
                     else ()
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialJacobianRequest),
             output_schema=model_schema(PolynomialJacobianOutput),
             tags=("polynomial", "jacobian", "determinant", "exact-computation"),
@@ -370,7 +367,6 @@ class PolynomialKellerConditionVerifyAdapter:
                 features=("exact-rational-keller-condition",),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialKellerConditionVerifyRequest),
             output_schema=model_schema(PolynomialKellerConditionVerifyOutput),
             tags=("polynomial", "map", "jacobian", "Keller", "verification"),
@@ -381,7 +377,6 @@ class PolynomialKellerConditionVerifyAdapter:
                         "Verify the identity map's constant nonzero Jacobian "
                         "determinant over QQ."
                     ),
-                    mode=CapabilityMode.VERIFY,
                     input=PolynomialKellerConditionVerifyRequest.model_validate(
                         {
                             "map": {
@@ -427,7 +422,6 @@ class PolynomialKellerConditionVerifyAdapter:
         jacobian_result = PolynomialJacobianAdapter(self.resources).invoke(
             CapabilityRequest(
                 capability_id="polynomial.map.compute_jacobian",
-                mode=CapabilityMode.EXPLORE,
                 input={"map": validated.map.model_dump(mode="json")},
             )
         )
@@ -514,7 +508,6 @@ class PolynomialKellerConditionVerifyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

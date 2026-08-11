@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from tools.test_plan.runtime_owners import allows_create_runtime
+
 _TEST_FILE = "test_*.py"
 _TOPOLOGY_CANDIDATES = (Path("tests/topology.toml"), Path("topology.toml"))
 
@@ -63,6 +65,39 @@ _DOMAIN_PREFIX = PurePosixPath("tests/domain")
 _COMPOSITION_PREFIX = PurePosixPath("tests/composition")
 _BOUNDARY_PREFIX = PurePosixPath("tests/boundary")
 _E2E_PREFIXES = (PurePosixPath("tests/e2e"),)
+
+# Ordinary domain fixtures must use the typed verified-domain seam rather than
+# reassembling install_exact_domain_verification by hand.
+_EXACT_DOMAIN_INSTALL_ALLOWLIST = frozenset(
+    {
+        "src/jacobian/portfolio/core_installation.py",
+        "src/jacobian/exact_domain_checkers.py",
+        "tests/support/exact_domain.py",
+        "tests/component/checkers/test_exact_domain_checker_installation.py",
+    }
+)
+
+_COMPOSITION_ADMISSION_CATEGORIES = frozenset(
+    {
+        "AUTHORITY",
+        "WIRING",
+        "LIFECYCLE",
+        "DISCOVERY",
+        "REFERENCE",
+        "MIXED",
+    }
+)
+_COMPLETE_RUNTIME_FIXTURE_NAMES = frozenset(
+    {
+        "fresh_complete_runtime",
+        "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
+        "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
+        "complete_portfolio_template",
+        "authorized_portfolio_template",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -166,17 +201,13 @@ class ArchitecturePolicyError(RuntimeError):
         super().__init__(report.render())
 
 
-def _collect_lane_entries(raw_lanes: Any, *, list_mode: bool) -> list[tuple[str, Any]]:
-    """Collect ``(name, value)`` lane entries from either TOML shape."""
+def _collect_lane_entries(raw_lanes: list[Any]) -> list[tuple[str, Any]]:
+    """Collect ``(name, value)`` lane entries from the compiled ``[[lanes]]`` array."""
     entries: list[tuple[str, Any]] = []
-    if list_mode:
-        for value in raw_lanes:
-            if not isinstance(value, dict) or not isinstance(value.get("name"), str):
-                continue
-            entries.append((value["name"], value))
-    else:
-        for name, value in raw_lanes.items():
-            entries.append((str(name), value))
+    for value in raw_lanes:
+        if not isinstance(value, dict) or not isinstance(value.get("name"), str):
+            continue
+        entries.append((value["name"], value))
     return entries
 
 
@@ -196,12 +227,7 @@ def _lanes_from_entries(
 
 
 def load_topology_manifest(path: Path) -> TopologyManifest | None:
-    """Read a topology manifest, accepting the two common TOML shapes.
-
-    The target manifest uses ``[lanes.<name>]`` tables.  Supporting an array of
-    ``[[lanes]]`` records keeps the checker useful while the manifest is being
-    introduced, without adding a second execution or selection mechanism.
-    """
+    """Read a topology manifest using the compiled ``[[lanes]]`` array shape."""
 
     if not path.is_file():
         return None
@@ -210,22 +236,11 @@ def load_topology_manifest(path: Path) -> TopologyManifest | None:
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise ValueError(f"cannot read topology manifest {path}: {exc}") from exc
 
-    raw_lanes = raw.get("lanes", {})
-    if isinstance(raw_lanes, dict):
-        entries = _collect_lane_entries(raw_lanes, list_mode=False)
-    elif isinstance(raw_lanes, list):
-        entries = _collect_lane_entries(raw_lanes, list_mode=True)
-    else:
-        entries = []
+    raw_lanes = raw.get("lanes", [])
+    if not isinstance(raw_lanes, list):
+        raise ValueError(f"topology manifest {path} lanes must be an array")
+    entries = _collect_lane_entries(raw_lanes)
     lanes, lane_tiers = _lanes_from_entries(entries)
-
-    # A few manifests put lane tables at the top level.  Only consume tables
-    # with a path-like field, so unrelated metadata is ignored.
-    if not lanes:
-        top_entries = [
-            (str(name), value) for name, value in raw.items() if isinstance(value, dict)
-        ]
-        lanes, lane_tiers = _lanes_from_entries(top_entries)
     return TopologyManifest(lanes=lanes, path=path, lane_tiers=lane_tiers)
 
 
@@ -289,19 +304,7 @@ def _tier(path: PurePosixPath) -> str | None:
 
 
 def _runtime_allowed(path: PurePosixPath, tier_override: str | None = None) -> bool:
-    if path in {
-        PurePosixPath("tests/support/runtime_templates.py"),
-        PurePosixPath("tests/support/runtime_instances.py"),
-    }:
-        return True
-    tier = tier_override or _tier(path)
-    if tier in {"composition", "e2e"}:
-        return True
-    if tier == "boundary":
-        # Boundary tests are allowed to own complete construction only when
-        # their path names the lifecycle/startup/recovery boundary explicitly.
-        return any(part in {"runtime", "startup", "recovery"} for part in path.parts)
-    return False
+    return allows_create_runtime(path.as_posix(), tier=tier_override)
 
 
 def _provider_allowed(path: PurePosixPath, tier_override: str | None = None) -> bool:
@@ -315,6 +318,36 @@ def _provider_allowed(path: PurePosixPath, tier_override: str | None = None) -> 
 
 def _node_location(path: str, node: ast.AST) -> tuple[str, int, int]:
     return path, getattr(node, "lineno", 1), getattr(node, "col_offset", 0)
+
+
+def _complete_runtime_fixture_import_violations(
+    module: str,
+    relative: str,
+    node: ast.Import | ast.ImportFrom,
+) -> tuple[Violation, ...]:
+    """Complete-runtime fixture bindings stay out of lower-tier modules."""
+
+    if module != "tests.support.complete_runtime_fixtures":
+        return ()
+    owners = (
+        "tests/composition/conftest.py",
+        "tests/e2e/conftest.py",
+        "tests/boundary/storage/conftest.py",
+        "tests/boundary/providers/conftest.py",
+        "tests/boundary/mcp/conftest.py",
+        "tests/support/complete_runtime_fixtures.py",
+    )
+    if relative in owners:
+        return ()
+    return (
+        Violation(
+            relative,
+            "complete-runtime-fixture-import",
+            "import complete-runtime fixtures only from owning-tier conftest.py",
+            node.lineno,
+            node.col_offset,
+        ),
+    )
 
 
 def _imported_module(node: ast.Import | ast.ImportFrom) -> str:
@@ -373,7 +406,9 @@ def _fixture_is_high_cost(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         "complete_portfolio_template",
         "fresh_complete_runtime",
         "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
         "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
     }
 
 
@@ -432,6 +467,9 @@ def _import_violations(
     runtime_import_violation = False
     module = _imported_module(node)
     violations.extend(_conftest_import_violations(module, relative, node))
+    violations.extend(
+        _complete_runtime_fixture_import_violations(module, relative, node)
+    )
     for alias in node.names:
         imported = (
             alias.name.split(".", 1)[0]
@@ -576,6 +614,152 @@ def _conftest_fixture_violations(tree: ast.AST, relative: str) -> list[Violation
     return violations
 
 
+def _non_root_pytest_plugins_violations(
+    tree: ast.AST, relative: str
+) -> list[Violation]:
+    """Reject non-root ``pytest_plugins`` (deprecated and session-global)."""
+
+    if relative == "tests/conftest.py" or not relative.endswith("/conftest.py"):
+        return []
+    violations: list[Violation] = []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "pytest_plugins":
+                violations.append(
+                    Violation(
+                        relative,
+                        "non-root-pytest-plugins",
+                        "declare complete-runtime fixtures in the owning conftest "
+                        "instead of non-root pytest_plugins",
+                        node.lineno,
+                        node.col_offset,
+                    )
+                )
+    return violations
+
+
+def _exact_domain_install_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _exact_domain_install_violations(tree: ast.AST, relative: str) -> list[Violation]:
+    """Ordinary tests must use open_exact_domain_services, not the low-level recipe."""
+
+    if relative in _EXACT_DOMAIN_INSTALL_ALLOWLIST:
+        return []
+    if not relative.startswith("tests/"):
+        return []
+    message = (
+        "use tests.support.exact_domain.open_exact_domain_services "
+        "instead of copying install_exact_domain_verification"
+    )
+    violations: list[Violation] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "jacobian.exact_domain_checkers"
+            and any(
+                alias.name == "install_exact_domain_verification"
+                for alias in node.names
+            )
+        ):
+            violations.append(
+                Violation(
+                    relative,
+                    "exact-domain-install-recipe",
+                    message,
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+        elif (
+            isinstance(node, ast.Call)
+            and _exact_domain_install_name(node.func)
+            == "install_exact_domain_verification"
+        ):
+            violations.append(
+                Violation(
+                    relative,
+                    "exact-domain-install-recipe",
+                    message,
+                    node.lineno,
+                    node.col_offset,
+                )
+            )
+    return violations
+
+
+def _uses_complete_runtime_fixture(tree: ast.AST) -> bool:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for arg in (*node.args.args, *node.args.kwonlyargs):
+                if arg.arg in _COMPLETE_RUNTIME_FIXTURE_NAMES:
+                    return True
+        elif isinstance(node, ast.Name) and node.id in _COMPLETE_RUNTIME_FIXTURE_NAMES:
+            return True
+    return False
+
+
+def _composition_admission_value(tree: ast.AST) -> tuple[str | None, int | None]:
+    if not isinstance(tree, ast.Module):
+        return None, None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name) or target.id != "COMPOSITION_ADMISSION":
+            continue
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            return node.value.value, node.lineno
+        return None, node.lineno
+    return None, None
+
+
+def _composition_admission_violations(tree: ast.AST, relative: str) -> list[Violation]:
+    """Composition modules that hydrate a complete runtime must declare admission."""
+
+    path = PurePosixPath(relative)
+    if not _is_under(path, _COMPOSITION_PREFIX):
+        return []
+    if path.name == "conftest.py" or not path.name.startswith("test_"):
+        return []
+    if not _uses_complete_runtime_fixture(tree):
+        return []
+    value, line = _composition_admission_value(tree)
+    if value is None:
+        return [
+            Violation(
+                relative,
+                "composition-admission-missing",
+                (
+                    "declare COMPOSITION_ADMISSION as one of "
+                    f"{sorted(_COMPOSITION_ADMISSION_CATEGORIES)} when using "
+                    "complete-runtime fixtures"
+                ),
+                line or 1,
+            )
+        ]
+    if value not in _COMPOSITION_ADMISSION_CATEGORIES:
+        return [
+            Violation(
+                relative,
+                "composition-admission-invalid",
+                (
+                    f"COMPOSITION_ADMISSION={value!r} is not one of "
+                    f"{sorted(_COMPOSITION_ADMISSION_CATEGORIES)}"
+                ),
+                line,
+            )
+        ]
+    return []
+
+
 def _file_violations(
     file_path: Path,
     project_root: Path,
@@ -622,6 +806,9 @@ def _file_violations(
             )
     if relative == "tests/conftest.py":
         violations.extend(_conftest_fixture_violations(tree, relative))
+    violations.extend(_non_root_pytest_plugins_violations(tree, relative))
+    violations.extend(_exact_domain_install_violations(tree, relative))
+    violations.extend(_composition_admission_violations(tree, relative))
     return violations
 
 

@@ -24,6 +24,26 @@ def _as_runtime(services: DomainTestServices) -> JacobianRuntime:
     return cast(JacobianRuntime, services)
 
 
+def test_sat_verifier_navigation_is_reciprocal() -> None:
+    from jacobian.adapters.mcp import projections
+
+    assert {item[0] for item in projections._RELATED_CAPABILITIES["sat.model.verify"]} == {
+        "sat.cnf.materialize",
+        "sat.model.find",
+    }
+    assert {
+        item[0]
+        for item in projections._RELATED_CAPABILITIES["sat.unsat_proof.verify"]
+    } == {
+        "sat.cnf.materialize",
+        "sat.unsat_proof.find",
+    }
+    assert {
+        item[0]
+        for item in projections._RELATED_CAPABILITIES["smt.unsat_proof.verify"]
+    } == {"smt.unsat_proof.find"}
+
+
 def test_math_find_compacts_related_capabilities_deterministically(
     projection_catalog: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,

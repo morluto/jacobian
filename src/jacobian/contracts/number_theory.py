@@ -308,6 +308,92 @@ class FiniteFieldPolynomialTerm(ContractModel):
     exponent: StrictInt = Field(ge=0, le=_MAX_EXTENSION_EXPONENT)
 
 
+def _finite_field_polynomial_remainder(
+    dividend: list[int], divisor: list[int], p: int
+) -> list[int]:
+    remainder = [value % p for value in dividend]
+    while remainder and remainder[-1] == 0:
+        remainder.pop()
+    while len(remainder) >= len(divisor):
+        shift = len(remainder) - len(divisor)
+        factor = remainder[-1] * pow(divisor[-1], -1, p) % p
+        for index, coefficient in enumerate(divisor):
+            remainder[index + shift] = (
+                remainder[index + shift] - factor * coefficient
+            ) % p
+        while remainder and remainder[-1] == 0:
+            remainder.pop()
+    return remainder
+
+
+def _finite_field_polynomial_gcd(
+    left: list[int], right: list[int], p: int
+) -> list[int]:
+    left = [value % p for value in left]
+    right = [value % p for value in right]
+    while left and left[-1] == 0:
+        left.pop()
+    while right and right[-1] == 0:
+        right.pop()
+    while right:
+        left, right = right, _finite_field_polynomial_remainder(left, right, p)
+    if not left:
+        return []
+    inverse = pow(left[-1], -1, p)
+    return [(coefficient * inverse) % p for coefficient in left]
+
+
+def _finite_field_polynomial_power_of_x(
+    exponent: int, modulus: list[int], p: int
+) -> list[int]:
+    result = [1]
+    base = [0, 1]
+    while exponent:
+        if exponent & 1:
+            product = [0] * (len(result) + len(base) - 1)
+            for left_index, left in enumerate(result):
+                for right_index, right in enumerate(base):
+                    product[left_index + right_index] += left * right
+            result = _finite_field_polynomial_remainder(product, modulus, p)
+        square = [0] * (2 * len(base) - 1)
+        for left_index, left in enumerate(base):
+            for right_index, right in enumerate(base):
+                square[left_index + right_index] += left * right
+        base = _finite_field_polynomial_remainder(square, modulus, p)
+        exponent //= 2
+    return result
+
+
+def _finite_field_modulus_is_irreducible(coefficients: tuple[int, ...], p: int) -> bool:
+    degree = len(coefficients) - 1
+    modulus = list(coefficients)
+    prime_divisors = {
+        divisor
+        for divisor in range(2, degree + 1)
+        if degree % divisor == 0
+        and all(divisor % candidate for candidate in range(2, math.isqrt(divisor) + 1))
+    }
+    for divisor in prime_divisors:
+        power = _finite_field_polynomial_power_of_x(
+            p ** (degree // divisor), modulus, p
+        )
+        difference = power + [0] * max(0, 2 - len(power))
+        difference[1] = (difference[1] - 1) % p
+        if len(_finite_field_polynomial_gcd(modulus, difference, p)) > 1:
+            return False
+    final = _finite_field_polynomial_power_of_x(p**degree, modulus, p)
+    final += [0] * max(0, 2 - len(final))
+    final[1] = (final[1] - 1) % p
+    return not _finite_field_polynomial_remainder(final, modulus, p)
+
+
+def _require_irreducible_finite_field_modulus(
+    coefficients: tuple[int, ...], p: int
+) -> None:
+    if not _finite_field_modulus_is_irreducible(coefficients, p):
+        raise ValueError("extension modulus must be irreducible over the prime field")
+
+
 class FiniteFieldPolynomialMapRequest(ContractModel):
     """A bounded polynomial map on ``F_p[t]/(modulus)``."""
 
@@ -332,6 +418,9 @@ class FiniteFieldPolynomialMapRequest(ContractModel):
             for coefficient in self.modulus_coefficients_ascending
         ):
             raise ValueError("modulus coefficients must be canonical residues")
+        _require_irreducible_finite_field_modulus(
+            self.modulus_coefficients_ascending, p
+        )
         if p**degree > _MAX_EXTENSION_FIELD_ORDER:
             raise ValueError("extension field exceeds the 20,000-element bound")
         if any(len(term.coefficient) != degree for term in self.terms):

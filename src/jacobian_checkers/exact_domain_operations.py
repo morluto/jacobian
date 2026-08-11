@@ -19,6 +19,7 @@ try:
 except (
     ImportError,
     OSError,
+    RuntimeError,
 ):  # The standard-library finite-field replay needs no FLINT.
     flint = None  # type: ignore[assignment]
     fmpq = fmpq_mat = fmpq_poly = fmpz = fmpz_mat = None  # type: ignore[misc,assignment]

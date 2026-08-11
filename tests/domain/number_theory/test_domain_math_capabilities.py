@@ -401,14 +401,18 @@ def test_extension_field_map_reports_first_collision(
 def test_extension_field_map_rejects_reducible_modulus_without_artifacts(
     domain_services: DomainTestServices,
 ) -> None:
+    payload = {
+        "characteristic": 3,
+        "modulus_coefficients_ascending": [2, 0, 1],
+        "terms": [{"coefficient": [1, 0], "exponent": 1}],
+    }
+    with pytest.raises(ValidationError, match="must be irreducible"):
+        FiniteFieldPolynomialMapRequest.model_validate(payload)
+
     computed = domain_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="finite_field.polynomial_map.fibers.compute",
-            input={
-                "characteristic": 3,
-                "modulus_coefficients_ascending": [2, 0, 1],
-                "terms": [{"coefficient": [1, 0], "exponent": 1}],
-            },
+            input=payload,
         )
     )
     assert computed.execution.status is ExecutionStatus.ERROR

@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.rationals import rational_payload
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
@@ -24,10 +25,6 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
-def _rational(num: int, den: int = 1) -> dict[str, str]:
-    return {"num": str(num), "den": str(den)}
-
-
 def test_arb_point_enclosure_materializes_exact_dyadics_and_obligation(
     domain_services: DomainTestServices,
 ) -> None:
@@ -38,7 +35,7 @@ def test_arb_point_enclosure_materializes_exact_dyadics_and_obligation(
             capability_id="analysis.real_function.point_enclosure.compute",
             input={
                 "function": "EXP",
-                "argument": _rational(1, 3),
+                "argument": rational_payload(1, 3),
                 "precision_bits": 128,
                 "wall_seconds": 10,
             },
@@ -72,7 +69,7 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
             capability_id="analysis.real_function.point_enclosure.compute",
             input={
                 "function": "LOG",
-                "argument": _rational(-1),
+                "argument": rational_payload(-1),
                 "wall_seconds": 10,
             },
         )
@@ -96,7 +93,7 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
             capability_id="analysis.real_function.point_enclosure.compute",
             input={
                 "function": "SIN",
-                "argument": _rational(1),
+                "argument": rational_payload(1),
                 "wall_seconds": 1,
             },
         )

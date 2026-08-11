@@ -7,6 +7,14 @@ import sys
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
+from jacobian.domains.number_theory.factorization_kernels import (
+    compute_radical,
+    decide_powerful,
+    decide_squarefree,
+    enumerate_divisors,
+    enumerate_proper_divisors,
+    factorize_primes,
+)
 from jacobian.domains.number_theory.factorization_protocol import (
     PROTOCOL,
     DivisorsWorkerRequest,
@@ -24,14 +32,6 @@ from jacobian.domains.number_theory.factorization_protocol import (
     SquarefreeWorkerRequest,
     SquarefreeWorkerResponse,
     parse_factorization_worker_request,
-)
-from jacobian.domains.number_theory.operations import (
-    compute_radical,
-    decide_powerful,
-    decide_squarefree,
-    enumerate_divisors,
-    enumerate_proper_divisors,
-    factorize_primes,
 )
 
 

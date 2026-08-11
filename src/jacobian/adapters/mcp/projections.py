@@ -26,7 +26,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryRemoveUnknownDomainRecoveryPath,
     CapabilityDiscoveryRequest,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -241,7 +240,6 @@ def _discovery_operation_card(
     if descriptor.invocation_examples:
         example = descriptor.invocation_examples[0]
         candidate = {
-            "mode": example.mode.value,
             "payload": example.input,
         }
         if (
@@ -261,9 +259,6 @@ def _discovery_operation_card(
         "produced_artifact_types": list(descriptor.produced_artifact_types),
         "output_schema_summary": _output_schema_summary(descriptor.output_schema),
         "scope": "EXACT_SUPPLIED_INPUT_OR_CLAIM",
-        "assurance_ceiling": (
-            "VERIFIED" if CapabilityMode.VERIFY in descriptor.modes else "COMPUTED"
-        ),
         "provider_availability": (
             runtime.availability.value if runtime is not None else "UNKNOWN"
         ),
@@ -350,7 +345,6 @@ def _discovery_recovery_paths(
         value is not None
         for value in (
             request.domain,
-            request.mode,
             request.input_kind,
             request.artifact_type,
         )
@@ -396,7 +390,6 @@ def _capability_descriptor_view(
             "description": descriptor.description,
             "provider": descriptor.provider,
             "provider_runtime": runtime_summary,
-            "modes": [mode.value for mode in descriptor.modes],
             "tags": list(descriptor.tags),
             "accepted_input_kinds": [
                 kind.value for kind in descriptor.accepted_input_kinds
@@ -429,7 +422,6 @@ def _capability_descriptor_view(
         "description": descriptor.description,
         "provider": descriptor.provider,
         "provider_runtime": runtime_summary,
-        "modes": [mode.value for mode in descriptor.modes],
         "accepted_input_kinds": [
             kind.value for kind in descriptor.accepted_input_kinds
         ],
@@ -458,7 +450,6 @@ def _capability_discovery_response(
     *,
     query: str | None,
     domain: str | None,
-    mode: CapabilityMode | None,
     input_kind: CapabilityInputKind | None,
     artifact_type: str | None,
     limit: int | None,
@@ -468,7 +459,6 @@ def _capability_discovery_response(
     discovery_request = CapabilityDiscoveryRequest(
         query=query,
         domain=domain,
-        mode=mode,
         input_kind=input_kind,
         artifact_type=artifact_type,
         limit=limit if limit is not None else 5,
@@ -484,7 +474,7 @@ def _capability_discovery_response(
                 "message": "The capability discovery cursor is not in this result set.",
                 "hint": (
                     "Restart discovery without a cursor, or reuse the same query, "
-                    "domain, mode, input_kind, artifact_type, and limit that produced "
+                    "domain, input_kind, artifact_type, and limit that produced "
                     "next_cursor."
                 ),
             }

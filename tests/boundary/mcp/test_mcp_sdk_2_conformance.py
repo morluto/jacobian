@@ -56,7 +56,6 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert set(invoke.input_schema["properties"]) == {
                 "capability_id",
                 "payload",
-                "mode",
             }
             assert invoke.output_schema == CapabilityResult.model_json_schema()
             find = next(tool for tool in listed.tools if tool.name == "math.find")
@@ -105,7 +104,6 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                     {
                         "capability_id": "polynomial.expression.normalize",
                         "payload": {},
-                        "mode": "EXPLORE",
                         "reasoning_run_id": "retired",
                     },
                 )
@@ -140,7 +138,6 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 "math.run",
                 {
                     "capability_id": "polynomial.expression.normalize",
-                    "mode": "EXPLORE",
                     "payload": contract["invocations"][0]["arguments"]["payload"],
                 },
             )

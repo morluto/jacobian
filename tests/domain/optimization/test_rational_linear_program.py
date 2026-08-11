@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from tests.support.rationals import rational_payload as _rational
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
@@ -23,10 +24,6 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         tmp_path / "state", build_rational_optimization_bundle()
     ) as services:
         yield services
-
-
-def _rational(num: int, den: int = 1) -> dict[str, str]:
-    return {"num": str(num), "den": str(den)}
 
 
 def test_rational_lp_produces_inspectable_primal_dual_certificate(

@@ -35,56 +35,32 @@ def test_python_313_uses_the_narrow_compatibility_smoke() -> None:
     assert "make test\n" not in compatibility
 
 
-def test_makefile_changes_do_not_route_to_unrelated_provider_lanes() -> None:
+@pytest.mark.parametrize(
+    ("rule_name", "expected_suites", "excluded_suites"),
+    (
+        ("makefile", {"static", "build"}, {"lean", "npm", "provider"}),
+        (
+            "domain-mathematical-sources",
+            {"unit", "component", "domain", "static", "build"},
+            {"storage", "process", "mcp", "e2e", "lean", "npm"},
+        ),
+        (
+            "benchmark-ci-automation",
+            {"unit", "process", "static", "build"},
+            {"domain", "composition", "storage", "mcp", "e2e"},
+        ),
+    ),
+)
+def test_ci_impact_rules_keep_their_declared_lane_boundaries(
+    rule_name: str,
+    expected_suites: set[str],
+    excluded_suites: set[str],
+) -> None:
     manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
-    rule = next(rule for rule in manifest["rules"] if rule["name"] == "makefile")
+    rule = next(rule for rule in manifest["rules"] if rule["name"] == rule_name)
 
-    # Command-index edits stay narrow; lane topology lives in tools/ and
-    # tests/topology.toml under test-topology-runners.
-    assert set(rule["suites"]) == {"static", "build"}
-    assert not {"lean", "npm", "provider"}.intersection(rule["suites"])
-
-
-def test_makefile_exposes_separate_local_and_hosted_plans() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
-
-    assert "ci-plan:" in makefile
-    assert "test-plan:" in makefile
-    assert "include make/harbor.mk" in makefile
-    assert "harbor-plan:" in harbor
-
-
-def test_domain_mathematical_sources_skip_storage_mcp_and_e2e() -> None:
-    manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
-    rule = next(
-        rule
-        for rule in manifest["rules"]
-        if rule["name"] == "domain-mathematical-sources"
-    )
-
-    assert set(rule["suites"]) == {
-        "unit",
-        "component",
-        "domain",
-        "static",
-        "build",
-    }
-    assert not {"storage", "process", "mcp", "e2e", "lean", "npm"}.intersection(
-        rule["suites"]
-    )
-
-
-def test_benchmark_ci_changes_do_not_trigger_product_semantic_lanes() -> None:
-    manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
-    rule = next(
-        rule for rule in manifest["rules"] if rule["name"] == "benchmark-ci-automation"
-    )
-
-    assert set(rule["suites"]) == {"unit", "process", "static", "build"}
-    assert not {"domain", "composition", "storage", "mcp", "e2e"}.intersection(
-        rule["suites"]
-    )
+    assert set(rule["suites"]) == expected_suites
+    assert not excluded_suites.intersection(rule["suites"])
 
 
 def test_global_timeout_is_not_a_pytest_deadline() -> None:

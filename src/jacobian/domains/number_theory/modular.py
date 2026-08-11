@@ -20,7 +20,7 @@ from jacobian.domains.number_theory._support import (
 from jacobian.domains.number_theory.discrete_logarithm import (
     DISCRETE_LOGARITHM_CAPABILITY,
 )
-from jacobian.domains.number_theory.operations import (
+from jacobian.domains.number_theory.modular_operations import (
     compute_jacobi_symbol,
     compute_modular_inverse,
     compute_modular_polynomial_residue_image,

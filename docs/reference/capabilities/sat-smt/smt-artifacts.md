@@ -8,8 +8,6 @@
 - Verification operation: `smt.unsat_proof.verify` for the pinned zero-hole
   `QF_UF` compatibility profile when an operator-authorized Carcara runtime is
   installed
-- Related plan:
-  [Atomic capability portfolio](../../../contributing/atomic-capability-portfolio.md#wave-3-theory-bounded-smt-proof-slice)
 
 Jacobian's first SMT slice preserves one exact quantifier-free SMT-LIB query
 and the raw Alethe bytes emitted by cvc5. It does not expose a broad

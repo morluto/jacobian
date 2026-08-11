@@ -26,7 +26,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
@@ -75,7 +74,6 @@ class LeanProofStateInspectAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanProofStateInspectRequest.model_json_schema(),
             output_schema=LeanProofStateInspectOutput.model_json_schema(),
             read_only=True,
@@ -139,7 +137,6 @@ class LeanProofStateInspectAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),

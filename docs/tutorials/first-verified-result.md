@@ -2,15 +2,17 @@
 
 [Documentation home](../index.md)
 
-This tutorial uses Jacobian's public MCP surface to find and independently
-verify an omitted graph path. It makes each mathematical operation visible:
-materialize two artifacts, validate the claim, evaluate the candidate, find a
-witness, and replay that witness with an authorized checker.
+This tutorial uses Jacobian's public MCP surface—**search and execute**—to find
+and independently check an omitted graph path. It makes each mathematical tool
+visible: materialize two artifacts, validate the claim, evaluate the candidate,
+find a witness, and replay that witness with a **separate checker tool**.
 
 This is a teaching sequence, not a required research workflow. Agents may
-compose, repeat, compare, or abandon the same capabilities in other orders.
-Jacobian supplies the operations, artifacts, and trust boundary; the agent
-supplies the strategy.
+compose, repeat, compare, or abandon the same tools in other orders. Jacobian
+supplies the tools, artifacts, and trust boundary; the agent supplies the
+strategy. Runnable snippets may still pass a legacy `mode` field required by
+today's wire contract; that field is not the product model
+([#1143](https://github.com/morluto/jacobian/issues/1143)).
 
 ## Prerequisites
 
@@ -25,7 +27,7 @@ On macOS, see
 [Troubleshoot Z3 installation on macOS](../how-to/troubleshoot-z3-macos.md) if environment setup
 falls back to a source build.
 
-## Run the capability sequence
+## Run the tool sequence
 
 Save the following as `first_verified_result.py`:
 
@@ -79,7 +81,7 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "artifact.put",
-                "mode": "EXPLORE",
+                "mode": "EXPLORE",  # legacy wire; see #1143
                 "payload": {
                     "schema_uri": graph["claim_schema_uri"],
                     "semantics_uri": graph["semantics_uri"],
@@ -167,11 +169,8 @@ async def main() -> None:
             },
         )
         evaluated = evaluation["output"]["items"][0]["result"]
-        print(
-            "evaluation:",
-            evaluated["conclusion"],
-            evaluation["assurance"]["level"],
-        )
+        print("evaluation conclusion:", evaluated["conclusion"])
+        assert evaluation["execution"]["status"] == "COMPLETED"
 
         found = await tool(
             client,
@@ -196,7 +195,7 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "witness.verify",
-                "mode": "VERIFY",
+                "mode": "VERIFY",  # legacy wire; see #1143
                 "payload": {
                     "claim_uri": claim_uri,
                     "candidate_uri": candidate_uri,
@@ -205,12 +204,9 @@ async def main() -> None:
                 },
             },
         )
-        print(
-            "verification:",
-            verified["output"]["conclusion"],
-            verified["assurance"]["level"],
-        )
+        print("checker conclusion:", verified["output"]["conclusion"])
         print("witness:", witness_uri)
+        assert verified["output"]["conclusion"] is not None
 
 
 asyncio.run(main())

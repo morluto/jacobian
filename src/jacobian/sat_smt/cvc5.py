@@ -24,7 +24,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -212,7 +211,6 @@ class Cvc5UnsatProofFindAdapter:
             ),
             provider="cvc5",
             provider_runtime=backend.runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(SmtUnsatProofFindRequest),
             output_schema=model_schema(SmtUnsatProofFindOutput),
             tags=(
@@ -233,7 +231,6 @@ class Cvc5UnsatProofFindAdapter:
                         "Minimal valid request shape for a bounded arithmetic "
                         "contradiction."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input={
                         "logic": "QF_LIA",
                         "smtlib_text": (
@@ -368,7 +365,6 @@ def _completed_result(
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
         execution=Execution(
             status=ExecutionStatus.COMPLETED,
             runtime_ms=run.runtime_ms,
@@ -402,7 +398,6 @@ def _failed_result(
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
         execution=Execution(
             status=run.execution_status,
             runtime_ms=run.runtime_ms,

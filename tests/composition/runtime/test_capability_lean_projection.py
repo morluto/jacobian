@@ -10,10 +10,12 @@ from tests.support.provider_lean import (
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.runtime.model import JacobianRuntime
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 @pytest.mark.skipif(
@@ -28,7 +30,6 @@ def test_lean_capability_returns_bound_verified_result(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.check",
-            mode=CapabilityMode.VERIFY,
             input={
                 "statement": "1 + 1 = 2",
                 "proof": "rfl",
@@ -55,7 +56,6 @@ def test_lean_capability_projects_repairable_checker_diagnostics(
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.check",
-            mode=CapabilityMode.VERIFY,
             input={
                 "statement": "1 + 1 = 2",
                 "proof": "sorry",

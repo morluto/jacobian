@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-runtime-inventory compile-test-plan compile-test-plan-check architecture docs-command-check docs-linkcheck
 
 PROFILE ?= core
 
@@ -60,7 +60,16 @@ typecheck: ## Run strict static type checking.
 	$(UV_RUN) mypy
 
 test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
-	$(UV_RUN) python tools/check_test_architecture.py .
+	$(UV_RUN) python -m tools.check_test_architecture .
+
+test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
+	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified
+
+compile-test-plan: ## Regenerate topology.toml and ci-impact.json from plan_manifest.toml.
+	$(UV_RUN) python -m tools.test_plan.compile --write
+
+compile-test-plan-check: ## Fail when topology or impact projections are stale.
+	$(UV_RUN) python -m tools.test_plan.compile --check
 
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
 	$(UV_RUN) python tools/check_architecture.py

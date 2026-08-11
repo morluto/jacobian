@@ -39,7 +39,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -628,7 +627,6 @@ class LeanStatementProposalAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanStatementProposalRequest.model_json_schema(),
             output_schema=LeanStatementProposalOutput.model_json_schema(),
             tags=("lean", "statement", "elaboration", "proposal", "proposition"),
@@ -643,7 +641,6 @@ class LeanStatementProposalAdapter:
                         "Elaborate the proposition True in the pinned CORE "
                         "environment without assessing its truth."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input=LeanStatementProposalRequest.model_validate(
                         {
                             "operation": "ELABORATE_PROPOSITION",
@@ -752,7 +749,6 @@ class LeanStatementProposalAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -811,7 +807,6 @@ class LeanStatementCompareAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanStatementComparisonRequest.model_json_schema(),
             output_schema=LeanStatementComparisonOutput.model_json_schema(),
             tags=("lean", "statement", "comparison", "axiom-set"),
@@ -922,7 +917,6 @@ class LeanStatementCompareAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from math import comb
 from typing import Any, Literal
 
 from pydantic import ValidationError
@@ -1024,7 +1023,31 @@ def _syzygy_checker_supports(payload: dict[str, Any]) -> bool:
         term_count = len(terms)
     elif isinstance(factors, list):
         homogeneous_degree = len(factors)
-        term_count = comb(homogeneous_degree + 2, 2)
+        support = {(0, 0, 0)}
+        for factor in factors:
+            coefficients = (
+                factor.get("coefficients") if isinstance(factor, dict) else None
+            )
+            if not isinstance(coefficients, list) or len(coefficients) != 3:
+                return False
+            active_variables = tuple(
+                index
+                for index, coefficient in enumerate(coefficients)
+                if isinstance(coefficient, dict) and coefficient.get("num") != "0"
+            )
+            if not active_variables:
+                return False
+            support = {
+                tuple(
+                    exponent + (1 if variable == index else 0)
+                    for index, exponent in enumerate(monomial)
+                )
+                for monomial in support
+                for variable in active_variables
+            }
+        term_count = len(support)
+        if len(support) == 1 and sum(value > 0 for value in next(iter(support))) < 3:
+            maximum_degree = 0
     else:
         return False
     replay_cells = sum(

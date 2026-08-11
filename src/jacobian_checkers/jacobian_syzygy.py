@@ -583,10 +583,6 @@ def _expected_result(source: dict[str, Any], *, operation_id: str) -> dict[str, 
         "kernel_witness": kernel_witness,
         "completion": "COMPLETE_THROUGH_BOUND",
     }
-    if operation_id == "polynomial.jacobian_syzygy.coefficients.materialize":
-        result["verification_capability_id"] = (
-            "polynomial.jacobian_syzygy.coefficients.verify"
-        )
     return result
 
 

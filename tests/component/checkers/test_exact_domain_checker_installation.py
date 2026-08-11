@@ -84,12 +84,42 @@ def _installed(
 
 def test_syzygy_checker_support_accepts_bounded_linear_factor_input() -> None:
     payload = {
-        "linear_factors": [{"coefficients": ["1", "0", "1"]}] * 9,
+        "linear_factors": [
+            {
+                "coefficients": [
+                    {"num": "1", "den": "1"},
+                    {"num": "0", "den": "1"},
+                    {"num": "1", "den": "1"},
+                ]
+            }
+        ]
+        * 9,
         "max_degree": 5,
     }
 
     assert exact_domain_checkers._checker_supports(
         "polynomial.jacobian_syzygy.minimum_degree.compute", payload
+    )
+
+
+def test_syzygy_checker_support_uses_actual_repeated_factor_support() -> None:
+    payload = {
+        "linear_factors": [
+            {
+                "label": str(index),
+                "coefficients": [
+                    {"num": "1", "den": "1"},
+                    {"num": "0", "den": "1"},
+                    {"num": "0", "den": "1"},
+                ],
+            }
+            for index in range(6)
+        ],
+        "max_degree": 8,
+    }
+
+    assert exact_domain_checkers._checker_supports(
+        "polynomial.jacobian_syzygy.coefficients.materialize", payload
     )
 
 

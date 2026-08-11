@@ -273,7 +273,7 @@ def test_submitted_p_recursive_table_requires_one_checked_step(
         )
     )
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["error"]["code"] == "INVALID_REQUEST"
+    assert result.output["error"]["code"] == "INVALID_COMBINATORICS_REQUEST"
 
 
 def test_polynomial_coefficient_recurrence_rejects_singular_required_step(

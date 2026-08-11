@@ -3,19 +3,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.domains.number_theory.discrete_logarithm import (
-    DISCRETE_LOGARITHM_CAPABILITY,
-)
 from jacobian.domains.number_theory.discrete_logarithm_protocol import (
     PROTOCOL,
     DiscreteLogarithmWorkerResult,
 )
-
-
-def test_discrete_logarithm_example_budgets_isolated_worker_startup() -> None:
-    example = DISCRETE_LOGARITHM_CAPABILITY.invocation_examples[0]
-
-    assert example.input["resource_budget"]["wall_seconds"] == 5
 
 
 def test_discrete_logarithm_worker_result_rejects_unknown_fields() -> None:

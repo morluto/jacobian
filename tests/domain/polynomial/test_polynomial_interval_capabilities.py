@@ -11,7 +11,6 @@ from tests.support.polynomials import univariate_term as _term
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
@@ -69,7 +68,6 @@ def test_enclose_capability_computes_a_valid_bernstein_enclosure(
     result = enclose.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.enclose",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                 "interval": _interval("0", "1"),
@@ -107,7 +105,6 @@ def test_enclose_capability_handles_a_quadratic_on_a_shifted_interval(
     result = enclose.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.enclose",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": _polynomial("x", [_term(1, 2)]),
                 "interval": _interval("-1", "1"),
@@ -132,11 +129,10 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     enclose, verify = adapters
     assert verify is not None
 
-    # First compute the enclosure via EXPLORE, then verify the claimed values.
+    # First compute the enclosure, then verify the claimed values.
     enclose_result = enclose.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.enclose",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                 "interval": _interval("0", "1"),
@@ -148,7 +144,6 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     result = verify.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.enclosure.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                 "interval": _interval("0", "1"),
@@ -181,7 +176,6 @@ def test_verify_capability_rejects_a_false_enclosure(installation) -> None:
     result = verify.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.enclosure.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                 "interval": _interval("0", "1"),
@@ -210,7 +204,6 @@ def test_enclose_capability_rejects_a_degenerate_interval(installation) -> None:
         enclose.invoke(
             CapabilityRequest(
                 capability_id="polynomial.interval.enclose",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "polynomial": _polynomial("x", [_term(1, 0)]),
                     "interval": _interval("1", "1"),

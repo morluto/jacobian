@@ -11,19 +11,16 @@ from typing import Any
 
 import pytest
 import sympy
+from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.matrix_lattice import build_matrix_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.operation_installation import OperationInstaller
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
 from jacobian.verification import VerificationService
 
@@ -70,32 +67,14 @@ def _open_matrix_runtime(
     *,
     install_checker: bool,
 ) -> Iterator[_MatrixRuntime]:
-    authority = (
-        CheckerAuthorityMode.INSTALL_BUNDLED
-        if install_checker
-        else CheckerAuthorityMode.NONE
-    )
-    with open_domain_services(
-        root, build_matrix_bundle(), checker_authority=authority
-    ) as services:
-        bundle = build_matrix_bundle()
-        installed = OperationInstaller(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-        ).install(bundle)
-        if install_checker:
-            adapters, _installation = install_exact_domain_verification(
-                services.core.store,
-                services.core.schemas,
-                services.core.artifacts,
-                services.installation.verification,
-                services.core.checkers,
-                bundles={"matrix": (bundle, installed)},
-                authorize=True,
+    if install_checker:
+        with open_exact_domain_services(root, build_matrix_bundle()) as services:
+            yield _MatrixRuntime(
+                core=services.core,
+                verification=services.installation.verification,
             )
-            for adapter in adapters:
-                services.installation.register_capability(adapter)
+        return
+    with open_domain_services(root, build_matrix_bundle()) as services:
         yield _MatrixRuntime(
             core=services.core,
             verification=services.installation.verification,
@@ -168,7 +147,6 @@ def test_matrix_determinant_verify_independently_recomputes_exact_value(
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -197,7 +175,6 @@ def test_matrix_determinant_verify_rejects_wrong_bound_value(
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": {
@@ -238,7 +215,6 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
     timed_out = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -291,7 +267,6 @@ def test_matrix_rank_verify_independently_recomputes_inline_candidate(
     verified = matrix_checker_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],

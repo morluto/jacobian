@@ -4,6 +4,9 @@ import pytest
 
 from jacobian.artifacts import ArtifactValidationError
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "REFERENCE"
+
 pytestmark = pytest.mark.xdist_group("reference-claim-schemas")
 
 
@@ -31,12 +34,12 @@ def _claim_payload(
 
 
 def test_path_closure_claim_requires_simple_path_semantics(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    reference = authorized_complete_runtime.portfolio.references["graph_paths"]
+    reference = attached_complete_runtime.portfolio.references["graph_paths"]
 
     with pytest.raises(ArtifactValidationError, match="simple"):
-        authorized_complete_runtime.core.artifacts.put(
+        attached_complete_runtime.core.artifacts.put(
             schema_uri=reference.claim_schema_uri,
             semantics_uri=reference.semantics_uri,
             payload=_claim_payload(
@@ -49,12 +52,12 @@ def test_path_closure_claim_requires_simple_path_semantics(
 
 
 def test_maxdet_claim_requires_a_bounded_matrix_scope(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    reference = authorized_complete_runtime.portfolio.references["matrices"]
+    reference = attached_complete_runtime.portfolio.references["matrices"]
 
     with pytest.raises(ArtifactValidationError, match="scope"):
-        authorized_complete_runtime.core.artifacts.put(
+        attached_complete_runtime.core.artifacts.put(
             schema_uri=reference.claim_schema_uri,
             semantics_uri=reference.semantics_uri,
             payload=_claim_payload(
@@ -67,12 +70,12 @@ def test_maxdet_claim_requires_a_bounded_matrix_scope(
 
 
 def test_graph_candidate_schema_rejects_incomplete_arc(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    reference = authorized_complete_runtime.portfolio.references["graph_paths"]
+    reference = attached_complete_runtime.portfolio.references["graph_paths"]
 
     with pytest.raises(ArtifactValidationError):
-        authorized_complete_runtime.core.artifacts.put(
+        attached_complete_runtime.core.artifacts.put(
             schema_uri=reference.candidate_schema_uri,
             semantics_uri=reference.semantics_uri,
             payload={
@@ -83,12 +86,12 @@ def test_graph_candidate_schema_rejects_incomplete_arc(
 
 
 def test_erdos_straus_claim_requires_a_bounded_range(
-    authorized_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    reference = authorized_complete_runtime.portfolio.references["erdos_straus"]
+    reference = attached_complete_runtime.portfolio.references["erdos_straus"]
 
     with pytest.raises(ArtifactValidationError, match="upper_bound"):
-        authorized_complete_runtime.core.artifacts.put(
+        attached_complete_runtime.core.artifacts.put(
             schema_uri=reference.claim_schema_uri,
             semantics_uri=reference.semantics_uri,
             payload=_claim_payload(

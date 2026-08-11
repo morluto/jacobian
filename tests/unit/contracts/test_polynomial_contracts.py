@@ -229,6 +229,29 @@ def test_shared_polynomial_map_is_not_limited_to_square_maps() -> None:
     assert len(value.coordinates) == 2
 
 
+def test_canonical_sparse_value_still_rejects_duplicate_exponents() -> None:
+    with pytest.raises(ValidationError, match="exponent tuples must be unique"):
+        SparseRationalPolynomial.model_validate(
+            {
+                "terms": [
+                    {"coefficient": _rational(1), "exponents": [1]},
+                    {"coefficient": _rational(2), "exponents": [1]},
+                ]
+            }
+        )
+
+
+def test_canonical_sparse_value_still_rejects_zero_terms() -> None:
+    with pytest.raises(ValidationError, match="zero polynomial terms must be omitted"):
+        SparseRationalPolynomial.model_validate(
+            {
+                "terms": [
+                    {"coefficient": _rational(0), "exponents": [0]},
+                ]
+            }
+        )
+
+
 def test_shared_polynomial_representation_exceeds_gcd_input_budget() -> None:
     from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
     from jacobian.contracts.polynomials import RationalPolynomial

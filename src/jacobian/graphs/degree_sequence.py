@@ -18,7 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -78,7 +77,6 @@ class GraphDegreeSequenceAdapter:
                     else ()
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=GraphDegreeSequenceRequest.model_json_schema(),
             output_schema=GraphDegreeSequenceOutput.model_json_schema(),
             tags=(
@@ -234,7 +232,6 @@ class GraphDegreeSequenceAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms(started),

@@ -809,6 +809,66 @@ def check_polynomial_square_free(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _factor_sort_key(
+    factor: Any, multiplicity: int
+) -> tuple[int, int, tuple[tuple[int, ...], Any]]:
+    coefficients = tuple(factor.coeffs())
+    degree = max(len(coefficients) - 1, 0)
+    return (multiplicity, degree, coefficients)
+
+
+def _factorization(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(source) != {"polynomial"} or set(result) != {
+        "coefficient",
+        "factors",
+        "reconstructed",
+        "normalization",
+        "irreducibility_assurance",
+        "product_reconstruction",
+    }:
+        return False
+    if (
+        result["normalization"] != "CONTENT_AND_MONIC_IRREDUCIBLES"
+        or result["irreducibility_assurance"] != "UNVERIFIED"
+        or result["product_reconstruction"] != "EXACT"
+    ):
+        return False
+    polynomial = _polynomial(source["polynomial"])
+    coefficient, expected = polynomial.factor()
+    factors = result["factors"]
+    if not isinstance(factors, list):
+        return False
+    declared = []
+    for item in factors:
+        if not isinstance(item, dict) or set(item) != {"factor", "multiplicity"}:
+            return False
+        _same_polynomial_variable(source["polynomial"], item["factor"])
+        declared.append((_polynomial(item["factor"]), item["multiplicity"]))
+    _same_polynomial_variable(source["polynomial"], result["reconstructed"])
+    normalized_expected = []
+    normalized_coefficient = coefficient
+    for factor, multiplicity in expected:
+        leading = factor.leading_coefficient()
+        normalized_expected.append((factor / leading, multiplicity))
+        normalized_coefficient *= leading**multiplicity
+    normalized_expected.sort(key=lambda item: _factor_sort_key(item[0], item[1]))
+    declared.sort(key=lambda item: _factor_sort_key(item[0], item[1]))
+    return (
+        _q(result["coefficient"]) == normalized_coefficient
+        and declared == normalized_expected
+        and _polynomial(result["reconstructed"]) == polynomial
+    )
+
+
+def check_polynomial_factorization(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="polynomial.factor.compute",
+        witness_format="polynomial.factorization.flint-replay",
+        replay=_factorization,
+    )
+
+
 def _matrix_source(source: dict[str, Any], *, integer: bool = False) -> Any:
     if set(source) != {"matrix"}:
         raise ValueError("matrix request is malformed")
@@ -1077,6 +1137,7 @@ __all__ = [
     "check_matrix_rref",
     "check_matrix_smith_normal_form",
     "check_polynomial_discriminant",
+    "check_polynomial_factorization",
     "check_polynomial_gcd",
     "check_polynomial_resultant",
     "check_polynomial_square_free",

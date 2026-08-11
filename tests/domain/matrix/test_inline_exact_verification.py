@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
@@ -41,7 +41,6 @@ def test_inline_exact_replay_persists_only_its_bound_record(
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": _matrix()},
                 "candidate": computed.output["result"],
@@ -106,7 +105,6 @@ def test_inline_exact_rejects_bounded_accepted_checker_decisions(
     checked = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": _matrix()},
                 "candidate": computed.output["result"],

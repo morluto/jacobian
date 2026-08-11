@@ -1,0 +1,89 @@
+{
+  "schema_version": "1",
+  "study_id": "canonical-input-recovery-pr1",
+  "evidence_class": "public-host-local-semantic-tool-observation",
+  "causal_claim_authorized": false,
+  "harbor_execution_claimed": false,
+  "source_base_revision": "614fdc40511d41bf88607cb0c6cc7c1e6cb91667",
+  "model": {
+    "model_id": "gpt-5.4-mini",
+    "reasoning_effort": "medium",
+    "codex_cli_version": "codex-cli 0.147.0"
+  },
+  "agent_instructions": "Work only in the current directory. Read instruction.md, input.json, and submission_schema.json. Treat the current directory as /app and write submission.json plus every required evidence file there. Use the available Jacobian mathematical tools when they provide useful exact intermediate results, but choose your own mathematical route and tool order. Comply with the external reasoning-log protocol exposed by the Jacobian server. Do not use web search or inspect files outside the current directory. The task-owned verifier runs only after you exit, so independently check the terminal mathematical object, scope, completeness, evidence bindings, and assurance before finishing.",
+  "conditions": [
+    {
+      "id": "upstream",
+      "description": "Latest upstream Jacobian main without the candidate semantic changes."
+    },
+    {
+      "id": "canonicalization",
+      "description": "Upstream plus exact canonical sparse polynomial-map input normalization at capability boundaries."
+    },
+    {
+      "id": "canonicalization-recovery",
+      "description": "Canonicalization plus typed recovery semantics, only if the first two conditions justify a separate recovery change."
+    }
+  ],
+  "tasks": [
+    {
+      "dataset": "symbolic-coordination-v1",
+      "task_id": "symbolic-coordination-semantic-equivalence-01",
+      "harbor_task_digest": "799301c8118daf0c9328aafaace67e904eba0679bffd06ea44ff3c120137df4e",
+      "selection_basis": "Duplicate, reordered, cancelling, and zero sparse terms with renamed source and target variables."
+    },
+    {
+      "dataset": "symbolic-coordination-v1",
+      "task_id": "symbolic-coordination-semantic-equivalence-02",
+      "harbor_task_digest": "3e12d6a7959fdfc475251ac7e2a8ba5e8ca3ccd8868d12157711d981b536e1d2",
+      "selection_basis": "Affine duplicate terms with exact cancellation and renamed source and target variables."
+    },
+    {
+      "dataset": "symbolic-coordination-v1",
+      "task_id": "symbolic-coordination-semantic-equivalence-03",
+      "harbor_task_digest": "a43b3ff05f551628f6609df3910e63da846309391cb508f48ef0ed478ea27e35",
+      "selection_basis": "Equivalent reordered sparse inverse encoding."
+    }
+  ],
+  "execution": {
+    "repetitions_per_task": 3,
+    "ordering": "declared-task-order-then-repetition",
+    "timeout_seconds_per_rollout": 600,
+    "sandbox": "workspace-write",
+    "reasoning_log_mode": "REQUIRED",
+    "web_search": "disabled",
+    "wrong_answer_retries": 0,
+    "terminal_reward": "unchanged-task-owned-clean-room-verifier-only",
+    "tool_call_reward": 0
+  },
+  "primary_metric": "exact_terminal_verifier_acceptance",
+  "secondary_metrics": [
+    "valid_normalization_or_checker_invocation",
+    "schema_and_request_validation_failure_count",
+    "recovery_after_rejected_handoff",
+    "repeated_or_unnecessary_call_count",
+    "false_certification",
+    "scope_and_completeness_correctness"
+  ],
+  "invariants": [
+    "Do not change task files, prompts, verifier code, model, reasoning effort, timeout, or repetition count between conditions.",
+    "The canonicalization change may only parse exact rational terms, combine identical exponent vectors, cancel exact zero coefficients, remove zero terms, and deterministically order the canonical output.",
+    "Typed recovery semantics may expose state and permissible local corrections but cannot prescribe mathematical strategy, weaken validation, or authorize a checker.",
+    "Do not rerun a completed rollout to obtain a preferred result.",
+    "Do not interpret timeout, execution failure, incomplete search, or missing evidence as a mathematical conclusion."
+  ],
+  "stop_rules": [
+    "Stop after the three frozen conditions or earlier if canonicalization is not implemented safely.",
+    "Do not implement recovery unless upstream and canonicalization trajectories contain a repeated recoverable handoff failure that typed state can address.",
+    "Do not add benchmark cases, trajectory-value machinery, RL work, or prose-only affordance changes."
+  ],
+  "excluded_evidence": [
+    {
+      "task_id": "polynomial-normalization",
+      "reason": "Its README declares verification_record_schema.json agent-visible, but the environment Dockerfile does not copy that file; it remains excluded until fixed separately."
+    }
+  ],
+  "environment_limitations": [
+    "No Docker-compatible runtime is installed, so the frozen runs are host-local public-workspace observations and are not Harbor executions."
+  ]
+}

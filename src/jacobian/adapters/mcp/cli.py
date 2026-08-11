@@ -7,8 +7,6 @@ from pathlib import Path
 
 from jacobian import __version__
 
-_CAPABILITY_MODES = ("EXPLORE", "VERIFY")
-
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -99,20 +97,6 @@ def _parser() -> argparse.ArgumentParser:
             help=help_text,
         )
     parser.add_argument(
-        "--allow-mode",
-        action="append",
-        default=[],
-        choices=_CAPABILITY_MODES,
-        help="allow only this capability mode; repeatable",
-    )
-    parser.add_argument(
-        "--deny-mode",
-        action="append",
-        default=[],
-        choices=_CAPABILITY_MODES,
-        help="deny capabilities with this mode; repeatable",
-    )
-    parser.add_argument(
         "--max-tenant-runtimes",
         type=int,
         default=32,
@@ -145,7 +129,6 @@ def main() -> None:
 
     from jacobian.adapters.mcp.server import create_server
     from jacobian.capability_service import CapabilityPolicy
-    from jacobian.contracts.capabilities import CapabilityMode
 
     capability_policy = CapabilityPolicy(
         profile=args.capability_policy_profile,
@@ -155,8 +138,6 @@ def main() -> None:
         denied_domains=frozenset(args.denied_domains),
         allowed_tags=frozenset(args.allowed_tags),
         denied_tags=frozenset(args.denied_tags),
-        allowed_modes=frozenset(CapabilityMode(value) for value in args.allow_mode),
-        denied_modes=frozenset(CapabilityMode(value) for value in args.deny_mode),
     )
     if args.transport == "stdio":
         if (

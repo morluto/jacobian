@@ -23,6 +23,9 @@ from jacobian.contracts.capabilities import (
 from jacobian.domains.builtins import build_builtin_domain_bundles
 from jacobian.storage.repository import ArtifactRepository
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _relationship(target: str) -> CapabilityCatalogRelationship:
     return CapabilityCatalogRelationship(
@@ -39,6 +42,9 @@ def test_all_authorized_exact_checker_pairs_are_reciprocal(
         descriptor.capability_id: descriptor
         for descriptor in authorized_complete_runtime.core.capabilities.catalog().capabilities
     }
+    assert any(
+        descriptor.provider_runtime.checker_ids != () for descriptor in catalog.values()
+    )
     authoritative_pairs = {
         (declaration.capability_id, declaration.verification_capability_id)
         for bundle in build_builtin_domain_bundles()

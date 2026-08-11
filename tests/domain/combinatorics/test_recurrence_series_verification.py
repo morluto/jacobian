@@ -5,21 +5,17 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 _RECURRENCE_CONVENTION = "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
 _P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
@@ -29,25 +25,10 @@ _P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM
 def combinatorics_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install combinatorics and its independent exact checkers only."""
 
-    bundle = build_combinatorics_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_combinatorics_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"combinatorics": (bundle, installed.installed["combinatorics"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
@@ -100,7 +81,6 @@ def test_recurrence_and_series_results_are_independently_verified(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(capability_id),
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": payload,
                 "candidate": computed.output["result"],
@@ -137,7 +117,6 @@ def test_checker_rejects_contract_valid_false_results(
     rejected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(capability_id),
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged_candidate},
         )
     )
@@ -187,7 +166,6 @@ def test_checker_replays_a_result_above_python_default_integer_digit_limit(
     verified = combinatorics_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="combinatorics.recurrence.linear.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": recurrence_input,
                 "candidate": computed.output["result"],

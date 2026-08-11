@@ -32,66 +32,37 @@ SERVER_INSTRUCTIONS = (
 )
 
 MATH_FIND_DESCRIPTION = """\
-Use this when a task may benefit from a specialized exact mathematical operation, even
-if shell code could also calculate the answer. Relevant outcomes include matrix
-determinants, polynomial or symbolic computation, structural analysis, examples or
-counterexamples, bounded search, formal-environment inspection, and requested
-independent verification. Search Jacobian by desired local mathematical outcome, or
-inspect one exact operation contract. A capability ID is not required for search or
-browse.
+Search or inspect installed math tools by desired outcome or exact ID. Use when a
+task may benefit from exact computation, search, structural analysis, or a separate
+checker tool—even if shell code could also calculate the answer.
 
-Available forms:
-- Pass `query` as a plain-language description of the desired local mathematical
-  outcome. The response contains compact operation cards with accepted inputs, output
-  summary, availability, scope, assurance ceiling, factual relationships, and one
-  size-bounded validated invocation example when available.
-- Optionally filter with `domain` and `mode`. `limit` is between 1 and 20 and defaults
-  to 5; a smaller requested limit returns less model context.
-- Omit all arguments to browse a compact installed catalog.
-- When `next_cursor` is present, pass it back with the same filters and limit to
-  continue without loading the complete catalog.
-- Ranking is deterministic retrieval over published IDs, titles, descriptions, and
-  tags. Match fields and terms are returned; candidates are not recommendations.
-- Pass `capability_id` to inspect the exact operation. SUMMARY is compact, CONTRACT
-  adds the validation-equivalent input schema and validated invocation examples, and
-  FULL adds complete provider and audit metadata.
+Forms:
+- `query`: plain-language mathematical outcome (compact tool cards).
+- Optional `domain` filter; `limit` 1-20 (default 5).
+- Omit arguments to browse; follow `next_cursor` with the same filters to continue.
+- Ranking is deterministic lexical retrieval; matches are not recommendations.
+- `capability_id`: exact inspect (SUMMARY / CONTRACT / FULL views).
 
-Weak or empty results do not imply impossibility. They include unranked recovery paths
-for query reformulation, filter removal, browsing, and catalog inspection. Every exact
-response states the operation's scope rule.
+Checker tools are separate IDs (often `*.verify`), not a switch on producers.
 
 Examples:
-- `{"query":"compute an exact matrix determinant","domain":"matrix","mode":"EXPLORE","limit":3}`
-- `{"query":"find a counterexample to associativity","domain":"universal_algebra","mode":"EXPLORE","limit":3}`
-- `{"query":"eliminate this denominator using the defining relations"}`
-- `{}`
-- `{"capability_id":"polynomial.compute.gcd"}`
+- `{"query":"compute an exact matrix determinant","domain":"matrix","limit":3}`
+- `{"query":"find a counterexample to associativity","domain":"universal_algebra"}`
 - `{"capability_id":"polynomial.compute.gcd","view":"CONTRACT"}`
 """
 
 MATH_RUN_DESCRIPTION = """\
-Use this to run one selected Jacobian operation with its typed payload. If the payload
-shape is unfamiliar, math.find can return the exact CONTRACT. EXPLORE returns proposed,
-heuristic, or computed evidence; VERIFY is valid only for an installed checker-backed
-contract.
+Run one installed math tool by ID with its typed `payload`. Read the mathematical
+value in `output` first, then execution status. If the payload shape is unknown,
+use math.find with view CONTRACT.
 
-The typed `CapabilityResult` keeps execution, scope, completeness, mathematical
-conclusion, assurance, obligations, diagnostics, relationships, and artifacts distinct.
-
-COMPLETED does not by itself establish a mathematical conclusion. One invocation
-covers only its exact supplied input or claim, and repeated finite or bounded calls do
-not widen that scope. Follow returned `artifact://` references when durable evidence
-or a size-separated result is provided.
-
-A verification record is claim-bound. Verification of an input, premise,
-factorization, or related artifact does not promote a conclusion derived by the model
-to `VERIFIED`; the checker record must bind the exact final claim.
+Ordinary tools return calculations. Independent checking uses a separate checker
+tool ID (for example `polynomial.identity.verify` or `case.partition.finite.verify`),
+not a switch on the producer. Failed or incomplete runs are not mathematical conclusions.
 
 Examples:
-- `{"capability_id":"integer.compute.gcd","mode":"EXPLORE","payload":{"left":"84","right":"30"}}`
-- `{"capability_id":"polynomial.identity.verify","mode":"VERIFY","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
-
-These are valid envelopes, not a required research strategy.
+- `{"capability_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}`
+- `{"capability_id":"polynomial.identity.verify","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
 """
 
 OPERATING_GUIDE = """\
@@ -113,11 +84,11 @@ independent checking. An installed capability ID is not required for search or b
 
 ## Search, browse, inspect, and run
 
-Search with `math.find(query=...)`, optionally filtered by `domain` and
-`mode`. Results are compact candidates ranked by deterministic matches against
-published descriptor metadata; `matched_on` and `matched_terms` make that retrieval
-visible. Ranking is not a recommendation. Follow `next_cursor` with unchanged filters
-and limit when a discovery result is truncated. Omit all arguments to browse.
+Search with `math.find(query=...)`, optionally filtered by `domain`. Results are
+compact candidates ranked by deterministic matches against published descriptor
+metadata; `matched_on` and `matched_terms` make that retrieval visible. Ranking is
+not a recommendation. Follow `next_cursor` with unchanged filters and limit when a
+discovery result is truncated. Omit all arguments to browse.
 
 The same tool accepts `capability_id` for exact inspection. SUMMARY is the compact
 projection, CONTRACT adds the validation-equivalent input schema and examples, and
@@ -137,15 +108,15 @@ Weak or empty discovery results expose query reformulation, filter removal, brow
 and catalog-inspection paths. They do not establish operation absence or mathematical
 impossibility.
 
-## Exploration and verification
+## Producers and checkers
 
-`EXPLORE` returns proposed, heuristic, or computed evidence. Search, generation,
-evaluation, solver output, and retrieved memory are not proof.
+Ordinary producer tools return proposed, heuristic, or computed evidence. Search,
+generation, evaluation, solver output, and retrieved memory are not proof.
 
-`VERIFY` may return `VERIFIED` only when an operator-authorized independent checker
-accepts evidence bound to the exact claim, semantics, candidate, scope, certificate
-format, and checker identity. Only assurance level `VERIFIED` with a local
-verification record is verified.
+A separate checker tool (often a `*.verify` ID) may return `VERIFIED` only when an
+operator-authorized independent checker accepts evidence bound to the exact claim,
+semantics, candidate, scope, certificate format, and checker identity. Only assurance
+level `VERIFIED` with a local verification record is verified.
 
 Verification does not transfer across model-authored deductions. A record accepting
 premises, inputs, factorizations, or related artifacts does not verify a derived
@@ -218,7 +189,7 @@ Use Jacobian to look for an independent checking path for this claim:
 {claim}
 </claim>
 {artifact_context}
-1. Search with `math.find(query=..., mode="VERIFY")`.
+1. Search with `math.find(query=...)` for a checker tool (often a `*.verify` ID).
 2. Treat an empty result as checker unavailability, not evidence for or against the
    claim.
 3. Describe the selected exact capability. Confirm that its semantics, scope,

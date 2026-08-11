@@ -1,6 +1,8 @@
 """Polygon-owned exact geometry capabilities."""
 
 from jacobian.contracts.geometry import (
+    ConvexPolygonTriangulationRequest,
+    ConvexPolygonTriangulationResult,
     GeometryRationalResult,
     PolygonPointClassificationResult,
     PolygonRequest,
@@ -14,6 +16,7 @@ from jacobian.domains.geometry.operations import (
     signed_area,
     simple_polygon,
 )
+from jacobian.domains.geometry.triangulation import minimum_weight_triangulation
 
 _UNIT_SQUARE = [
     {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
@@ -23,6 +26,23 @@ _UNIT_SQUARE = [
 ]
 
 POLYGON_CAPABILITIES = (
+    geometry_operation(
+        "geometry.polygon.triangulation.minimum_weight.compute",
+        "Compute an exact minimum-weight convex-polygon triangulation",
+        (
+            "Compute the deterministic minimum triangulation of a strict CCW "
+            "convex rational polygon under a complete exact rational weight for "
+            "each non-hull diagonal, charging every selected diagonal once."
+        ),
+        ConvexPolygonTriangulationRequest,
+        ConvexPolygonTriangulationResult,
+        minimum_weight_triangulation,
+        "geometry",
+        "polygon",
+        "triangulation",
+        "optimization",
+        relation_id="geometry.polygon.triangulation.minimum_weight.relation",
+    ),
     geometry_operation(
         "geometry.polygon.compute.signed_area",
         "Compute polygon signed area",

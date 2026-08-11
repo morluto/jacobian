@@ -19,7 +19,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -139,7 +138,6 @@ class SmtUnsatProofVerificationAdapter:
             ),
             provider="carcara",
             provider_runtime=descriptor_runtime,
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(SmtUnsatProofVerificationRequest),
             output_schema=model_schema(SmtUnsatProofVerificationOutput),
             tags=(
@@ -288,7 +286,6 @@ class SmtUnsatProofVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

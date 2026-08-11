@@ -1,6 +1,6 @@
-# Lean capability references
+# Lean tool references
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 - [Lean declaration discovery](lean-declaration-discovery.md)
 - [Lean formal intermediates](lean-formal-intermediates.md)

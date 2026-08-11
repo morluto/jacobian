@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import Conclusion
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def test_degree_sequence_realization_materializes_replayable_graph(
@@ -26,7 +28,6 @@ def test_degree_sequence_realization_materializes_replayable_graph(
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "certificate_uri": result.output["certificate_uri"],
                 "checker_id": result.output["checker_id"],
@@ -59,7 +60,6 @@ def test_degree_sequence_non_graphical_result_has_replayable_obstruction(
     verified = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="certificate.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "certificate_uri": result.output["certificate_uri"],
                 "checker_id": result.output["checker_id"],

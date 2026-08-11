@@ -32,7 +32,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiscoveryRequest,
     CapabilityId,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityResult,
 )
@@ -75,7 +74,6 @@ class _RelatedCapability(_MCPOutputModel):
 
 
 class _DiscoveryInvocationExample(_MCPOutputModel):
-    mode: CapabilityMode
     payload: dict[str, Any]
 
 
@@ -86,7 +84,6 @@ class _CapabilityDiscoveryOperationCard(CapabilityDiscoveryMatch):
     output_schema_summary: _SchemaSummary
     input_schema_summary: _SchemaSummary | None = None
     scope: Literal["EXACT_SUPPLIED_INPUT_OR_CLAIM"]
-    assurance_ceiling: Literal["COMPUTED", "VERIFIED"]
     provider_availability: CapabilityProviderAvailability | Literal["UNKNOWN"]
     related_capabilities: tuple[_RelatedCapability, ...]
     invocation_example: _DiscoveryInvocationExample | None = None
@@ -109,7 +106,6 @@ class _CapabilityDescriptorProjection(_MCPOutputModel):
     description: str
     provider: str
     provider_runtime: _ProviderRuntimeProjection | None
-    modes: tuple[CapabilityMode, ...]
     tags: tuple[str, ...] | None = None
     accepted_input_kinds: tuple[CapabilityInputKind, ...]
     accepted_artifact_types: tuple[ArtifactUri, ...]
@@ -127,7 +123,6 @@ class _CapabilityScopeRule(_MCPOutputModel):
 
 class _CapabilityInvocationArguments(_MCPOutputModel):
     capability_id: CapabilityId
-    mode: CapabilityMode
     payload: dict[str, Any]
 
 
@@ -196,7 +191,6 @@ class _CapabilityDiscoveryResult(_CapabilityDiscoveryFields):
     domain: str | None = None
     domain_filter_status: Literal["UNFILTERED", "MATCHED", "UNKNOWN"]
     domain_filter_basis: str
-    mode: CapabilityMode | None = None
     resolved_input_kind: CapabilityInputKind | None = None
     artifact_type: str | None = None
     routing_status: Literal["UNFILTERED", "ROUTES_FOUND", "NO_ROUTE"]
@@ -320,14 +314,12 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
                         "capability_id",
                         "title",
                         "description",
-                        "modes",
                         "accepted_input_kinds",
                         "accepted_artifact_types",
                         "produced_artifact_types",
                         "input_schema_summary",
                         "output_schema_summary",
                         "scope",
-                        "assurance_ceiling",
                         "provider_availability",
                         "related_capabilities",
                         "invocation_example",
@@ -359,7 +351,6 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
             "capability_id",
             "title",
             "description",
-            "modes",
             "accepted_input_kinds",
             "accepted_artifact_types",
             "produced_artifact_types",
@@ -449,23 +440,26 @@ def _bounded_run_result(
 
 
 def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
+    """Agent-visible projection: mathematical value first, then status."""
     payload = result.model_dump(mode="json")
-    return {
-        key: payload[key]
-        for key in (
-            "capability_id",
-            "mode",
-            "execution",
-            "output",
-            "scope",
-            "completeness",
-            "relationships",
-            "obligations",
-            "assurance",
-            "diagnostics",
-            "artifact_uris",
-        )
+    projection: dict[str, Any] = {
+        "capability_id": payload["capability_id"],
+        "output": payload["output"],
+        "execution": payload["execution"],
     }
+    for key in (
+        "diagnostics",
+        "artifact_uris",
+        "scope",
+        "completeness",
+        "relationships",
+        "obligations",
+        "assurance",
+    ):
+        value = payload.get(key)
+        if value not in (None, [], (), {}):
+            projection[key] = value
+    return projection
 
 
 async def capability_describe(
@@ -497,10 +491,6 @@ async def capability_describe(
                 "polynomial, or lean."
             ),
         ),
-    ] = None,
-    mode: Annotated[
-        CapabilityMode | None,
-        Field(description="Optional EXPLORE or VERIFY capability filter."),
     ] = None,
     input_kind: Annotated[
         CapabilityInputKind | None,
@@ -534,7 +524,7 @@ async def capability_describe(
             pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
             description=(
                 "Opaque continuation ID from next_cursor. Reuse the same query, "
-                "domain, mode, input kind, artifact type, and limit."
+                "domain, input kind, artifact type, and limit."
             ),
         ),
     ] = None,
@@ -555,7 +545,6 @@ async def capability_describe(
         search_arguments = (
             query,
             domain,
-            mode,
             input_kind,
             artifact_type,
             limit,
@@ -566,7 +555,7 @@ async def capability_describe(
         ):
             raise ValueError(
                 "capability_id is an exact lookup and cannot be combined with query, "
-                "domain, mode, input_kind, artifact_type, limit, or cursor. Use either "
+                "domain, input_kind, artifact_type, limit, or cursor. Use either "
                 "discovery arguments or one exact capability_id in this call."
             )
         if capability_id is None:
@@ -579,7 +568,6 @@ async def capability_describe(
                 active_runtime,
                 query=query,
                 domain=domain,
-                mode=mode,
                 input_kind=input_kind,
                 artifact_type=artifact_type,
                 limit=limit,
@@ -646,7 +634,6 @@ async def capability_describe(
                     "tool": "math.run",
                     "arguments": {
                         "capability_id": descriptor.capability_id,
-                        "mode": example.mode.value,
                         "payload": example.input,
                     },
                 }
@@ -677,16 +664,15 @@ async def capability_describe(
 async def capability_invoke(
     capability_id: CapabilityId,
     payload: dict[str, Any],
-    mode: CapabilityMode = CapabilityMode.EXPLORE,
     *,
     ctx: Context[AppState, Any],
 ) -> CapabilityRunToolResult:
+    """Run one math tool. Role comes from the tool ID."""
     with _runtime(ctx) as active_runtime:
         result = await _invoke_capability_attempt(
             active_runtime,
             capability_id=capability_id,
             payload=payload,
-            mode=mode,
             ctx=ctx,
         )
         result = _bounded_run_result(active_runtime, result)

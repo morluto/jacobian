@@ -9,7 +9,6 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
 )
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.graph_optimization import (
@@ -217,7 +216,6 @@ MINIMUM_SPANNING_TREE_CAPABILITY: ComputedOperation[
             description=(
                 "Compute an exact minimum spanning tree and its cycle checks."
             ),
-            mode=CapabilityMode.EXPLORE,
             input={
                 "graph": {
                     "vertices": ["a", "b", "c", "d"],

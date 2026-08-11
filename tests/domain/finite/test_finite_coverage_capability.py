@@ -137,3 +137,14 @@ def test_finite_coverage_rejects_nfc_collisions_in_scope(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output["error"]["code"] == "DUPLICATE_FINITE_SCOPE_KEY"
+
+
+def test_finite_coverage_is_unavailable_without_authorized_checker(
+    unauthorized_finite_coverage_services: FiniteCoverageTestServices,
+) -> None:
+    result = unauthorized_finite_coverage_services.services.core.capabilities.invoke(
+        _request(["alpha"], [["alpha"]])
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "UNKNOWN_CAPABILITY"

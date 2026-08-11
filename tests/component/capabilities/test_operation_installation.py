@@ -342,17 +342,8 @@ def test_synthetic_bundle_fails_closed_before_artifact_writes(
     assert result.artifact_uris == ()
 
 
-@pytest.mark.parametrize(
-    "status",
-    (
-        ExecutionStatus.ERROR,
-        ExecutionStatus.TIMEOUT,
-        ExecutionStatus.CANCELLED,
-    ),
-)
 def test_computed_adapter_preserves_operational_failure_status(
     operation_services,
-    status: ExecutionStatus,
 ) -> None:
     bundle = _synthetic_bundle()
     diagnostic = CapabilityDiagnostic(
@@ -360,23 +351,35 @@ def test_computed_adapter_preserves_operational_failure_status(
         stage="synthetic_computation",
         message="The synthetic operation did not complete.",
     )
-    failed = replace(
-        bundle.capabilities[0],
-        implementation=lambda _request: OperationExecutionFailure(status, diagnostic),
+    statuses = (
+        ExecutionStatus.ERROR,
+        ExecutionStatus.TIMEOUT,
+        ExecutionStatus.CANCELLED,
     )
-    _install(operation_services, replace(bundle, capabilities=(failed,)))
-
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.compute.double",
-            input={"value": 2},
+    failed_operations = tuple(
+        replace(
+            bundle.capabilities[0],
+            capability_id=f"synthetic.compute.failure.{status.value.lower()}",
+            implementation=lambda _request, _status=status: OperationExecutionFailure(
+                _status, diagnostic
+            ),
         )
+        for status in statuses
     )
+    _install(operation_services, replace(bundle, capabilities=failed_operations))
 
-    assert result.execution.status is status
-    assert result.diagnostics == (diagnostic,)
-    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
-    assert result.artifact_uris == ()
+    for status, operation in zip(statuses, failed_operations, strict=True):
+        result = operation_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=operation.capability_id,
+                input={"value": 2},
+            )
+        )
+
+        assert result.execution.status is status
+        assert result.diagnostics == (diagnostic,), status
+        assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC, status
+        assert result.artifact_uris == (), status
 
 
 def test_computed_failure_rejects_conclusive_status() -> None:

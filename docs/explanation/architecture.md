@@ -256,6 +256,46 @@ verification obligations remain visible; artifacts are materialized only when
 durable identity, independent retrieval, replay, resumability, evidence
 binding, or size-separated transport requires them.
 
+### Mathematical value and backend layers
+
+Shared Pydantic mathematical contracts own provider-independent value identity:
+the exact parent or coefficient domain, axes, basis, ordering, canonical
+representation, and other facts that change mathematical interpretation.
+Backend-native objects are computational representations of those values, not
+composition, wire, or persistence identities.
+
+```text
+jacobian.contracts
+    shared mathematical values
+             │
+             ▼
+jacobian.domains.<domain>
+    explicit contract ↔ backend conversions
+    typed mathematical kernels
+             │
+       ┌─────┴──────────────┐
+       ▼                    ▼
+jacobian.math        operation declarations
+native facade                 │
+                              ▼
+                        math.find / math.run
+```
+
+Conversions between a shared contract and SymPy, FLINT, NetworkX, or another
+maintained backend are explicit and domain-owned. The native API and catalog
+operations call the same typed kernels; neither calls through the other.
+Provider selection, invocation provenance, persistence, MCP transport, and
+checker assurance remain outside the mathematical value. A change of backend
+therefore does not change value identity unless it also changes mathematical
+meaning or canonicalization.
+
+This is a dependency direction, not a universal algebra framework. Jacobian
+does not add a second semantic type system, unrestricted backend wrapper,
+automatic coercion graph, or generic conversion language above its maintained
+libraries. Mathematical transformations such as basis change, restriction of
+scalars, quotient reduction, and nontrivial reindexing remain explicit
+domain-owned operations.
+
 ### Domain operation library
 
 Built-in mathematical producers live in explicit domain packages. A package

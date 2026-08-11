@@ -1,0 +1,143 @@
+"""Whole-portfolio discovery and catalog projection contracts."""
+
+from __future__ import annotations
+
+from jacobian.contracts.capabilities import CapabilityDiscoveryRequest
+from jacobian.runtime.model import JacobianRuntime
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "DISCOVERY"
+
+
+def test_discovery_recognizes_hidden_installed_domains_without_returning_them(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
+        CapabilityDiscoveryRequest(domain="artifact")
+    )
+
+    assert discovered.domain == "artifact"
+    assert discovered.domain_filter_status == "MATCHED"
+    assert "matches at least one installed capability" in discovered.domain_filter_basis
+    assert discovered.matches == ()
+    assert "artifact" not in discovered.available_domains
+
+
+def test_bounded_search_producers_advertise_produced_artifact_types(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in (
+            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
+        )
+    }
+    induced_tree = descriptors["graph.induced_tree.maximum.compute"]
+    assert induced_tree.produced_artifact_types, (
+        "bounded-search producers must advertise their materialized result schema"
+    )
+
+
+def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    descriptors = {
+        descriptor.capability_id: descriptor
+        for descriptor in (
+            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
+        )
+    }
+    assert descriptors["poset.finite.compute"].produced_artifact_types == ()
+    assert descriptors["poset.width.compute"].accepted_artifact_types == ()
+
+
+def test_discovery_distinguishes_strong_weak_and_absent_lexical_fit(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    capabilities = attached_complete_runtime_read_only.core.capabilities
+
+    strong = capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="graded Jacobian syzygy minimum degree",
+            limit=3,
+        )
+    )
+    assert strong.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert strong.matches[0].capability_id == (
+        "polynomial.jacobian_syzygy.minimum_degree.compute"
+    )
+    assert strong.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert strong.matches[0].query_coverage_milli == 1000
+
+    gaussian = capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="exact fixed order Gaussian polynomial moment Wick contraction",
+            limit=3,
+        )
+    )
+    assert gaussian.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert gaussian.matches[0].capability_id == (
+        "probability.gaussian_polynomial.moment.compute"
+    )
+    assert gaussian.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert "does not establish an identity for every order" in (
+        gaussian.matches[0].description
+    )
+
+    reliability = capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="exact small graph reliability terminal connection probability",
+            limit=3,
+        )
+    )
+    assert reliability.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert reliability.matches[0].capability_id == (
+        "probability.graph_reliability.connection_probability.compute"
+    )
+
+    symmetry = capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query=(
+                "declared graph automorphism generators vertex edge orbit "
+                "symmetry compression"
+            ),
+            limit=3,
+        )
+    )
+    assert symmetry.portfolio_fit == "STRONG_CANDIDATES_FOUND"
+    assert symmetry.matches[0].capability_id == (
+        "graph.symmetry.generator_orbits.compute"
+    )
+
+    absent = capabilities.discover(
+        CapabilityDiscoveryRequest(query="quuxonium frobnicator", limit=3)
+    )
+    assert absent.matches == ()
+    assert absent.portfolio_fit == "NO_LEXICAL_MATCHES"
+
+
+def test_domain_intents_discover_poset_and_topology_operations(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    capabilities = attached_complete_runtime_read_only.core.capabilities
+    cases = (
+        (
+            "maximum antichain and minimum chain decomposition of a finite poset",
+            "poset.width.compute",
+        ),
+        (
+            "compute the width of a finite partially ordered set",
+            "poset.width.compute",
+        ),
+        (
+            "homology of a finite simplicial complex over F_2",
+            "topology.simplicial_homology.compute",
+        ),
+    )
+    for query, capability_id in cases:
+        discovered = capabilities.discover(
+            CapabilityDiscoveryRequest(query=query, limit=5)
+        )
+
+        assert discovered.matches[0].capability_id == capability_id, query
+        assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE", query

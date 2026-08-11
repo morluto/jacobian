@@ -259,20 +259,9 @@ def test_binding_and_lineage_attacks_are_rejected_before_drat_trim(
     assert not marker.exists()
 
 
-@pytest.mark.parametrize(
-    "proof_bytes",
-    [
-        b"-1 0\n0\n1 0\n",
-        b"1 -1 0\n0\n",
-        b"1 1 0\n0\n",
-        b"1 0 2\n",
-        b"\xff 0\n",
-    ],
-)
 def test_malformed_or_concatenated_proof_is_rejected_before_drat_trim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    proof_bytes: bytes,
     proof_request_factory: ProofRequestFactory,
 ) -> None:
     executable, marker = _fake_checker(
@@ -281,10 +270,17 @@ def test_malformed_or_concatenated_proof_is_rejected_before_drat_trim(
     )
     _install_runtime_environment(monkeypatch, executable)
 
-    decision = check_unsat_proof(proof_request_factory(proof_bytes))
+    for proof_bytes in (
+        b"-1 0\n0\n1 0\n",
+        b"1 -1 0\n0\n",
+        b"1 1 0\n0\n",
+        b"1 0 2\n",
+        b"\xff 0\n",
+    ):
+        decision = check_unsat_proof(proof_request_factory(proof_bytes))
 
-    assert decision["accepted"] is False
-    assert decision["conclusion"] == "UNKNOWN"
+        assert decision["accepted"] is False, proof_bytes
+        assert decision["conclusion"] == "UNKNOWN", proof_bytes
     assert not marker.exists()
 
 

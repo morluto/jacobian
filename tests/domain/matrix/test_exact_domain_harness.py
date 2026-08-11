@@ -5,10 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.support.exact_domain import (
-    VerifiedDomainTestSpec,
-    open_exact_domain_services,
-)
+from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -33,7 +30,7 @@ def test_open_exact_domain_services_respects_absent_authority(
 ) -> None:
     with open_exact_domain_services(
         tmp_path / "state",
-        VerifiedDomainTestSpec(bundle=build_matrix_bundle()),
+        build_matrix_bundle(),
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         catalog_ids = {

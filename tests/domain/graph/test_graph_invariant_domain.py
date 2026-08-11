@@ -43,9 +43,10 @@ _TRIANGLE_TAIL = {
 }
 
 
-@pytest.mark.parametrize(
-    ("capability_id", "expected"),
-    [
+def test_graph_invariant_family_boundaries_and_witnesses(
+    domain_services,
+) -> None:
+    cases = [
         ("graph.invariant.girth.compute", {"girth": 3, "has_cycle": True}),
         (
             "graph.invariant.diameter.compute",
@@ -64,27 +65,16 @@ _TRIANGLE_TAIL = {
             "graph.invariant.spanning_tree_count.compute",
             {"spanning_tree_count": 3, "connected": True},
         ),
-    ],
-    ids=[
-        "girth",
-        "diameter",
-        "edge_connectivity",
-        "vertex_connectivity",
-        "is_eulerian",
-        "spanning_tree_count",
-    ],
-)
-def test_graph_invariant_family_boundaries_and_witnesses(
-    domain_services,
-    capability_id: str,
-    expected: dict[str, object],
-) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input={"graph": _TRIANGLE_TAIL})
-    )
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["result"] == expected
-    assert result.artifact_uris == ()
+    ]
+    for capability_id, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=capability_id, input={"graph": _TRIANGLE_TAIL}
+            )
+        )
+        assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
+        assert result.output["result"] == expected, capability_id
+        assert result.artifact_uris == (), capability_id
 
 
 def test_maximum_matching_and_star_conventions(domain_services) -> None:
@@ -288,39 +278,36 @@ def test_graph_backends_with_inconsistent_independence_results_fail_closed(
     assert caught.value.diagnostic.code == "INCONSISTENT_INDEPENDENCE_RESULT"
 
 
-@pytest.mark.parametrize(
-    ("capability_id", "optimum"),
-    [
-        ("graph.invariant.clique_number.compute", 2),
-        ("graph.invariant.independence_number.compute", 2),
-    ],
-    ids=["clique_number", "independence_number"],
-)
 def test_np_hard_invariants_are_budgeted_and_carry_obligations(
     domain_services,
-    capability_id: str,
-    optimum: int,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
-            input={
-                "graph": _CYCLE_5,
-                "resource_budget": {
-                    "wall_seconds": 5,
-                    "max_solver_calls": 33,
-                    "max_order": 32,
+    cases = [
+        ("graph.invariant.clique_number.compute", 2),
+        ("graph.invariant.independence_number.compute", 2),
+    ]
+    for capability_id, optimum in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=capability_id,
+                input={
+                    "graph": _CYCLE_5,
+                    "resource_budget": {
+                        "wall_seconds": 5,
+                        "max_solver_calls": 33,
+                        "max_order": 32,
+                    },
                 },
-            },
+            )
         )
-    )
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["status"] == "EXACT"
-    assert result.output["optimum_value"] == optimum
-    assert len(result.output["witness_vertices"]) == optimum
-    assert len(result.artifact_uris) == 3
-    obligation = domain_services.core.store.get(result.obligations[0].obligation_uri)
-    assert obligation.payload["claimed_value"] == optimum
+        assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
+        assert result.output["status"] == "EXACT", capability_id
+        assert result.output["optimum_value"] == optimum, capability_id
+        assert len(result.output["witness_vertices"]) == optimum, capability_id
+        assert len(result.artifact_uris) == 3, capability_id
+        obligation = domain_services.core.store.get(
+            result.obligations[0].obligation_uri
+        )
+        assert obligation.payload["claimed_value"] == optimum, capability_id
 
 
 def test_graph_invariant_resource_atomics_are_exact_computed(

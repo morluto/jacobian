@@ -114,7 +114,10 @@ checker tools →  optional independent check of specific claims
 Shared mathematical objects (matrices, polynomials, graphs, …) are canonical
 values. Object validity is not a promise that every tool will accept them under
 every budget. Small results stay inline; do not materialize only to pass
-between ordinary tools.
+between ordinary tools. Their mathematical identity is independent of the
+operation or backend that produced them, the invocation record, and whether
+the value travels inline, through a request-local reference, or as a durable
+artifact.
 
 “Investigate this conjecture” is an **agent workflow** over many tool calls,
 not one primitive. Jacobian does not add top-level MCP tools for workflows.

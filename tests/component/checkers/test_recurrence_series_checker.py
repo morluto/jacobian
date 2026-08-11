@@ -9,6 +9,9 @@ from tests.support.artifacts import artifact_uri as _uri
 from tests.support.artifacts import canonical_digest as _digest
 from tests.support.rationals import rational_payload as _q
 
+from jacobian.contracts.combinatorics import (
+    PolynomialCoefficientRecurrenceTableResult,
+)
 from jacobian_checkers.recurrence_series import (
     check_linear_recurrence_evaluation,
     check_polynomial_coefficient_recurrence_evaluation,
@@ -326,3 +329,28 @@ def test_submitted_table_checker_accepts_failures_and_rejects_forged_success() -
         check_polynomial_coefficient_recurrence_table_residuals(forged)["accepted"]
         is False
     )
+
+
+def test_submitted_table_result_rejects_oversized_residual_ledger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.contracts.combinatorics.MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES",
+        256,
+    )
+    huge = {"num": "1" + "0" * 63, "den": "1"}
+    with pytest.raises(ValueError, match="durable artifact limit"):
+        PolynomialCoefficientRecurrenceTableResult.model_validate(
+            {
+                "coefficient_convention": _P_RECURSIVE_CONVENTION,
+                "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+                "recurrence_order": 1,
+                "term_count": 5,
+                "checked_index_start": 1,
+                "checked_index_end": 4,
+                "residuals": [{"index": index, "value": huge} for index in range(1, 5)],
+                "satisfies_recurrence": False,
+                "first_failure_index": 1,
+            }
+        )

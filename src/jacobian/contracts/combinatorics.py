@@ -1214,6 +1214,7 @@ class PolynomialCoefficientRecurrenceTableResult(ContractModel):
             raise ValueError(
                 "first_failure_index must identify the first nonzero residual"
             )
+        _validate_result_artifact_size(self.model_dump(mode="json"))
         return self
 
 

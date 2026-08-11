@@ -35,6 +35,9 @@ from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
     CapabilityAssuranceLevel,
+    CapabilityCatalogRelationship,
+    CapabilityCatalogRelationshipKind,
+    CapabilityCatalogRelationshipRegistration,
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
@@ -118,6 +121,7 @@ class PolynomialPositivityInstallation:
     claim_schema_uri: str
     certificate_schema_uri: str
     checker_id: str | None
+    catalog_relationships: tuple[CapabilityCatalogRelationshipRegistration, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +221,28 @@ def install_polynomial_positivity_capabilities(
         )
         .checker_id
     )
+    catalog_relationships = (
+        (
+            CapabilityCatalogRelationshipRegistration(
+                source_capability_id="polynomial.interval.positivity.decide",
+                related_capability=CapabilityCatalogRelationship(
+                    capability_id="polynomial.interval.positivity.verify",
+                    kind=CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+                    relationship="independently verify this exact positivity decision",
+                ),
+            ),
+            CapabilityCatalogRelationshipRegistration(
+                source_capability_id="polynomial.interval.positivity.verify",
+                related_capability=CapabilityCatalogRelationship(
+                    capability_id="polynomial.interval.positivity.decide",
+                    kind=(CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER),
+                    relationship="produce the exact decision accepted by this verifier",
+                ),
+            ),
+        )
+        if checker_id is not None
+        else ()
+    )
     installation = PolynomialPositivityInstallation(
         semantics_uri=semantics_uri,
         polynomial_semantics_uri=polynomial_semantics_uri,
@@ -225,6 +251,7 @@ def install_polynomial_positivity_capabilities(
         claim_schema_uri=claim_schema_uri,
         certificate_schema_uri=certificate_schema_uri,
         checker_id=checker_id,
+        catalog_relationships=catalog_relationships,
     )
     resources = PolynomialPositivityResources(
         store=store,

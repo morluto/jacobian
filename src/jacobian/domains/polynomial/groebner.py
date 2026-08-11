@@ -183,7 +183,7 @@ POLYNOMIAL_GROEBNER_CAPABILITY = BoundedSearchOperation(
                     }
                 ],
                 "monomial_order": "lex",
-                "resource_budget": {"wall_seconds": 1},
+                "resource_budget": {"wall_seconds": 10},
             },
         ),
     ),

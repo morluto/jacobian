@@ -73,6 +73,18 @@ from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification import VerificationService
 
+_DIAGNOSTIC_MESSAGE_MAX_LENGTH = 1024
+
+
+def _bounded_diagnostic_message(exc: Exception) -> str:
+    """Keep validation detail actionable without invalidating the diagnostic."""
+    message = str(exc)
+    if len(message) <= _DIAGNOSTIC_MESSAGE_MAX_LENGTH:
+        return message
+    suffix = "... [validation detail truncated]"
+    return f"{message[: _DIAGNOSTIC_MESSAGE_MAX_LENGTH - len(suffix)]}{suffix}"
+
+
 _LOGGER = logging.getLogger(__name__)
 _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS = frozenset({"python-flint"})
 _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
@@ -937,7 +949,7 @@ class ExactComputedVerificationAdapter:
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_INPUT",
                     stage="request_validation",
-                    message=str(exc),
+                    message=_bounded_diagnostic_message(exc),
                     hint=(
                         "input must satisfy the producer request contract and "
                         "candidate must satisfy its result contract."
@@ -991,7 +1003,7 @@ class ExactComputedVerificationAdapter:
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_RESULT",
                     stage="artifact_resolution",
-                    message=str(exc),
+                    message=_bounded_diagnostic_message(exc),
                     path="result_uri",
                     hint="Pass the result_uri returned by this exact producer.",
                 )

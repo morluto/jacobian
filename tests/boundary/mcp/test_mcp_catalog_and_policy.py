@@ -144,6 +144,32 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                 item["capability_id"] for item in materialize["related_capabilities"]
             }.issuperset(expected_sat_ids - {"sat.cnf.materialize"})
 
+            reciprocal_relationships = {
+                "sat.model.verify": {
+                    "sat.cnf.materialize",
+                    "sat.model.find",
+                },
+                "sat.unsat_proof.verify": {
+                    "sat.cnf.materialize",
+                    "sat.unsat_proof.find",
+                },
+                "smt.unsat_proof.verify": {"smt.unsat_proof.find"},
+            }
+            for verifier_id, expected_related in reciprocal_relationships.items():
+                if verifier_id not in all_ids:
+                    continue
+                verifier_description = await client.call_tool(
+                    "math.find",
+                    {"capability_id": verifier_id, "view": "CONTRACT"},
+                )
+                assert isinstance(verifier_description.structured_content, dict)
+                assert {
+                    item["capability_id"]
+                    for item in verifier_description.structured_content.get(
+                        "related_capabilities", []
+                    )
+                }.issuperset(expected_related.intersection(all_ids))
+
             first_page = await client.call_tool(
                 "math.find",
                 {"limit": 20},

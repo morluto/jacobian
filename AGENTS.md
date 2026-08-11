@@ -76,6 +76,12 @@ representations differ. Cover producer-to-consumer compatibility and canonical
 or backend-native round trips in tests. Architecture checks must reject internal
 JSON round-trips and unsafe canonical conversions.
 
+Shared Pydantic mathematical contracts own provider-independent value identity.
+Domain-owned conversions connect them to backend-native computational values,
+and typed kernels sit below both capability operations and `jacobian.math`. Do
+not add a universal backend wrapper, automatic coercion framework, generic
+conversion language, or second semantic type system above maintained libraries.
+
 Canonical decimal strings are wire and persistence values, not computational
 values. Use the canonical conversion API before calling backends or constructing
 results. Do not directly apply `int()` or `str()` to canonical components or

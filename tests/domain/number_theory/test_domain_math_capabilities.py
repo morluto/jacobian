@@ -156,6 +156,24 @@ def test_modular_polynomial_identity_result_rejects_duplicate_variables() -> Non
         )
 
 
+def test_modular_polynomial_identity_result_binds_residual_to_normalized_sides() -> (
+    None
+):
+    with pytest.raises(ValidationError, match="normalized modular difference"):
+        ModularPolynomialIdentityResult.model_validate(
+            {
+                "semantics_version": "modular-polynomial-identity.v1",
+                "modulus": 5,
+                "variable_order": ["x"],
+                "normalized_left": [{"coefficient": 1, "exponents": [0]}],
+                "normalized_right": [{"coefficient": 2, "exponents": [0]}],
+                "residual": [],
+                "identical": True,
+                "comparison_scope": "FORMAL_COEFFICIENTWISE_IDENTITY",
+            }
+        )
+
+
 @pytest.mark.parametrize("modulus", (4, 8, 7))
 def test_modular_polynomial_identity_combines_duplicates_and_detects_difference(
     domain_services: DomainTestServices,

@@ -564,6 +564,23 @@ class ModularPolynomialIdentityResult(ContractModel):
                 raise ValueError("normalized term exponents must be canonical")
         if self.identical != (not self.residual):
             raise ValueError("identity decision must match the canonical residual")
+        coefficients = {
+            term.exponents: term.coefficient for term in self.normalized_left
+        }
+        for term in self.normalized_right:
+            coefficients[term.exponents] = (
+                coefficients.get(term.exponents, 0) - term.coefficient
+            ) % self.modulus
+        expected_residual = tuple(
+            NormalizedModularPolynomialTerm(
+                coefficient=coefficient,
+                exponents=exponents,
+            )
+            for exponents, coefficient in sorted(coefficients.items())
+            if coefficient
+        )
+        if self.residual != expected_residual:
+            raise ValueError("residual must equal the normalized modular difference")
         return self
 
 

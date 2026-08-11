@@ -56,7 +56,6 @@ def test_graph6_h24_decode_is_exact_and_independently_replayed(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.encoding.graph6.decode.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": decoded},
         )
     )
@@ -82,7 +81,6 @@ def test_graph6_checker_rejects_wrong_bit_order_result(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.encoding.graph6.decode.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged},
         )
     )

@@ -118,6 +118,8 @@ def _run(
             operation_id=operation_id,
             witness_format=witness_format,
         )
+        if not isinstance(source, dict) or not isinstance(result, dict):
+            return _reject("malformed, unsupported, or mismatched checker request")
         if not replay(source, result):
             return _reject("declared result does not match independent Fraction replay")
         return _accept(operation_id)

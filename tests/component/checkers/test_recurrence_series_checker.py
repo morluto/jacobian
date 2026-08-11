@@ -308,6 +308,14 @@ def test_submitted_table_checker_accepts_failures_and_rejects_forged_success() -
         is False
     )
 
+    non_object = copy.deepcopy(request)
+    non_object_result = list(result)
+    non_object["candidate"]["payload"] = non_object_result
+    non_object["candidate"]["payload_digest"] = _digest(non_object_result)
+    rejected = check_polynomial_coefficient_recurrence_table_residuals(non_object)
+    assert rejected["accepted"] is False
+    assert rejected["conclusion"] == "UNKNOWN"
+
     forged = copy.deepcopy(request)
     forged_result = forged["candidate"]["payload"]
     forged_result["residuals"][-1]["value"] = _q(0)

@@ -606,6 +606,7 @@ def _validate_request[RequestModel: ContractModel](
     code: str,
     operation: str,
     error_factory: Callable[[str, str, str], CapabilityInvocationError] | None = None,
+    preserve_validation_constraint: bool = False,
 ) -> RequestModel:
     try:
         structural_payload = _normalize_sparse_polynomial_inputs(
@@ -622,6 +623,32 @@ def _validate_request[RequestModel: ContractModel](
         )
         return model.model_validate(canonical_payload)
     except (ValidationError, ValueError) as exc:
+        if preserve_validation_constraint and isinstance(exc, ValidationError):
+            errors = exc.errors(
+                include_url=False,
+                include_context=False,
+                include_input=False,
+            )
+            if errors:
+                first_error = errors[0]
+                path = ".".join(str(part) for part in first_error["loc"])[:512]
+                hint = str(first_error["msg"]).removeprefix("Value error, ")[:1024]
+                raise CapabilityInvocationError(
+                    CapabilityDiagnostic(
+                        code=code,
+                        stage="request_validation",
+                        message=f"The complete polynomial {operation} request is invalid.",
+                        path=path or None,
+                        hint=hint,
+                        details={
+                            "validation_error": {
+                                "type": str(first_error["type"])[:128],
+                                "path": path,
+                                "message": hint,
+                            }
+                        },
+                    )
+                ) from exc
         raise (error_factory or _polynomial_error)(
             code,
             "request_validation",

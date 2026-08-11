@@ -100,6 +100,50 @@ def test_jacobian_represents_derived_exponents_above_the_source_limit(
     assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 
 
+def test_jacobian_over_budget_diagnostic_reports_estimate_and_limit(
+    attached_complete_runtime,
+) -> None:
+    dimension = 4
+    exponents = [[degree, 1, 1, 1] for degree in range(32, 12, -1)]
+    polynomial = {
+        "terms": [
+            {
+                "coefficient": {"num": "1", "den": "1"},
+                "exponents": monomial,
+            }
+            for monomial in exponents
+        ]
+    }
+    polynomial_map = {
+        "map_schema_version": "1",
+        "domain": "QQ",
+        "variables": ["w", "x", "y", "z"],
+        "coordinates": [polynomial] * dimension,
+    }
+
+    result = attached_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.map.compute_jacobian",
+            input={"map": polynomial_map},
+        )
+    )
+
+    assert result.execution.status.value == "ERROR"
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "INVALID_POLYNOMIAL_JACOBIAN_REQUEST"
+    assert diagnostic.path is None
+    assert diagnostic.hint == (
+        "Jacobian determinant expansion term estimate 3840000 exceeds "
+        "the exact operation budget of 1024"
+    )
+    assert diagnostic.details["validation_error"] == {
+        "type": "value_error",
+        "path": "",
+        "message": diagnostic.hint,
+    }
+    assert result.artifact_uris == ()
+
+
 def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
     authorized_complete_runtime,
 ) -> None:

@@ -168,7 +168,9 @@ class PolynomialJacobianAdapter:
             title="Compute a polynomial-map Jacobian",
             description=(
                 "Compute the exact Jacobian matrix and determinant of one sparse "
-                "square polynomial map over QQ."
+                "square polynomial map over QQ. Before execution, reject maps whose "
+                "Leibniz determinant-product term estimate exceeds 1024; this is a "
+                "pre-expansion cost bound, not a bound on the simplified result."
             ),
             provider="jacobian.sympy",
             provider_runtime=known_provider_runtime(
@@ -216,6 +218,7 @@ class PolynomialJacobianAdapter:
             request.input,
             code="INVALID_POLYNOMIAL_JACOBIAN_REQUEST",
             operation="Jacobian computation",
+            preserve_validation_constraint=True,
         )
         started = time.monotonic()
         polynomial_map = validated.map

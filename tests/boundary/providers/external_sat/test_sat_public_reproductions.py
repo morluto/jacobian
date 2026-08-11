@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.boundary.providers.external_sat.external_sat_support import (
+    open_verified_external_sat_services,
+)
 from tests.support.provider_external_sat import external_sat_toolchain_available
 
 from jacobian.contracts.capabilities import (
@@ -53,49 +56,49 @@ def _load_cases() -> list[dict[str, Any]]:
 
 
 def test_sat_public_reproductions_reach_checker_bound_results(
-    authorized_complete_runtime,
+    tmp_path: Path,
 ) -> None:
-
-    for case in _load_cases():
-        cnf = authorized_complete_runtime.core.sat.put_cnf(
-            variable_names=tuple(case["variable_names"]),
-            clauses=tuple(tuple(clause) for clause in case["clauses"]),
-        )
-        if case["expected_status"] == "SATISFIABLE":
-            find_id = "sat.model.find"
-            verify_id = "sat.model.verify"
-            evidence_field = "assignment_uri"
-        else:
-            find_id = "sat.unsat_proof.find"
-            verify_id = "sat.unsat_proof.verify"
-            evidence_field = "proof_uri"
-
-        found = authorized_complete_runtime.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=find_id,
-                input={
-                    "cnf_uri": cnf.artifact_uri,
-                    "resource_budget": {"wall_seconds": 5},
-                },
+    with open_verified_external_sat_services(tmp_path / "state") as runtime:
+        for case in _load_cases():
+            cnf = runtime.core.sat.put_cnf(
+                variable_names=tuple(case["variable_names"]),
+                clauses=tuple(tuple(clause) for clause in case["clauses"]),
             )
-        )
-        assert found.execution.status is ExecutionStatus.COMPLETED
-        assert found.output["conclusion"] == "UNKNOWN"
-        evidence_uri = found.output[evidence_field]
-        assert evidence_uri is not None
-        if case["expected_status"] == "SATISFIABLE":
-            assert found.output["assignment"] is not None
+            if case["expected_status"] == "SATISFIABLE":
+                find_id = "sat.model.find"
+                verify_id = "sat.model.verify"
+                evidence_field = "assignment_uri"
+            else:
+                find_id = "sat.unsat_proof.find"
+                verify_id = "sat.unsat_proof.verify"
+                evidence_field = "proof_uri"
 
-        verified = authorized_complete_runtime.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=verify_id,
-                input={evidence_field: evidence_uri},
+            found = runtime.core.capabilities.invoke(
+                CapabilityRequest(
+                    capability_id=find_id,
+                    input={
+                        "cnf_uri": cnf.artifact_uri,
+                        "resource_budget": {"wall_seconds": 5},
+                    },
+                )
             )
-        )
-        assert verified.execution.status is ExecutionStatus.COMPLETED
-        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-        assert verified.output["conclusion"] == "TRUE"
-        assert verified.output["cnf_uri"] == cnf.artifact_uri
-        assert verified.output[evidence_field] == evidence_uri
-        assert verified.assurance.verification_record_uri is not None
-        assert case["required_capabilities"] == [find_id, verify_id]
+            assert found.execution.status is ExecutionStatus.COMPLETED
+            assert found.output["conclusion"] == "UNKNOWN"
+            evidence_uri = found.output[evidence_field]
+            assert evidence_uri is not None
+            if case["expected_status"] == "SATISFIABLE":
+                assert found.output["assignment"] is not None
+
+            verified = runtime.core.capabilities.invoke(
+                CapabilityRequest(
+                    capability_id=verify_id,
+                    input={evidence_field: evidence_uri},
+                )
+            )
+            assert verified.execution.status is ExecutionStatus.COMPLETED
+            assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+            assert verified.output["conclusion"] == "TRUE"
+            assert verified.output["cnf_uri"] == cnf.artifact_uri
+            assert verified.output[evidence_field] == evidence_uri
+            assert verified.assurance.verification_record_uri is not None
+            assert case["required_capabilities"] == [find_id, verify_id]

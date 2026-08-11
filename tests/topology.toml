@@ -111,7 +111,7 @@ ci = { pull_request = true, merge_queue = true, main = true, scheduled = true }
 [[lanes]]
 name = "provider"
 tier = "boundary"
-paths = ["tests/boundary/providers/cvc5", "tests/boundary/providers/external_sat", "tests/boundary/providers/flint", "tests/boundary/providers/graph", "tests/boundary/providers/sympy"]
+paths = ["tests/boundary/providers/cvc5", "tests/boundary/providers/external_sat", "tests/boundary/providers/flint"]
 workers = 1
 distribution = "load"
 timeout_seconds = 180

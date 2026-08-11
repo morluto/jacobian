@@ -19,9 +19,10 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
-@pytest.mark.parametrize(
-    ("capability_id", "payload", "expected"),
-    (
+def test_arithmetic_capabilities_return_exact_results(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
         (
             "integer.compute.nth_root",
             {"value": "65", "degree": 3},
@@ -37,20 +38,14 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
             {"value": "-10", "base": 2},
             {"sign": -1, "base": 2, "digits": ["1", "0", "1", "0"]},
         ),
-    ),
-)
-def test_arithmetic_capabilities_return_exact_results(
-    domain_services: DomainTestServices,
-    capability_id: str,
-    payload: dict[str, object],
-    expected: dict[str, object],
-) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
     )
+    for capability_id, payload, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(capability_id=capability_id, input=payload)
+        )
 
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["result"] == expected
+        assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
+        assert result.output["result"] == expected, capability_id
 
 
 def test_rational_product_formats_results_above_python_digit_limit(

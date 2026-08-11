@@ -21,6 +21,17 @@ def finite_coverage_services(
 
 
 @pytest.fixture
+def unauthorized_finite_coverage_services(
+    tmp_path: Path,
+) -> Iterator[FiniteCoverageTestServices]:
+    with open_finite_coverage_services(
+        tmp_path / "state",
+        authorize_checker=False,
+    ) as services:
+        yield services
+
+
+@pytest.fixture
 def finite_partition_services(
     tmp_path: Path,
 ) -> Iterator[FinitePartitionTestServices]:

@@ -84,11 +84,6 @@ def test_observation_failures_require_authoritative_completion_counts() -> None:
                 "repetition": 0,
                 "task_digest": None,
                 "status": "COMPLETED",
-                "reasoning_protocol": {
-                    "mode": "OFF",
-                    "status": "NOT_REQUIRED",
-                    "requirement_status": "COMPLETE",
-                },
             }
         ],
         payload={

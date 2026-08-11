@@ -99,6 +99,16 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
     )
 
 
+def test_agent_eval_docs_exclude_host_codex_from_the_control_protocol() -> None:
+    guide = (ROOT / "docs" / "how-to" / "run-agent-evaluations.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "fresh temporary `CODEX_HOME`" in guide
+    assert "direct host `codex exec`" in guide
+    assert "control must have empty `skills` and `mcp_servers`" in guide
+
+
 def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> None:
     proxy_job = _read_json(OBSERVATION_PROXY_JOB)
     proxy_control = _read_json(CONTROL_PROXY_JOB)

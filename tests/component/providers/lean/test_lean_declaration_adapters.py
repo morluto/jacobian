@@ -19,13 +19,19 @@ from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
 )
 from jacobian.contracts.lean import LeanDependencyGraphArtifact, LeanEnvironment
+from jacobian.lean_frontend.declaration_protocol import (
+    LeanDeclarationBackendResult,
+    LeanDeclarationDependenciesQuery,
+    LeanDeclarationQuery,
+    LeanDeclarationResultEnvelope,
+    LeanDeclarationSearchQuery,
+)
 from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackend,
     LeanDeclarationBackendError,
@@ -51,16 +57,24 @@ _RUNTIME = CapabilityProviderRuntime(
 @dataclass
 class FakeBackend(LeanDeclarationBackend):
     response: dict[str, Any]
-    calls: list[tuple[LeanEnvironment, dict[str, Any]]] = field(default_factory=list)
+    calls: list[tuple[LeanEnvironment, LeanDeclarationQuery]] = field(
+        default_factory=list
+    )
 
     def environment_digest(self, _environment: LeanEnvironment) -> str:
         return _DIGEST
 
     def query(
-        self, environment: LeanEnvironment, payload: dict[str, Any]
-    ) -> dict[str, Any]:
-        self.calls.append((environment, payload))
-        return self.response
+        self, environment: LeanEnvironment, query: LeanDeclarationQuery
+    ) -> LeanDeclarationBackendResult:
+        self.calls.append((environment, query))
+        payload = LeanDeclarationResultEnvelope.model_validate(
+            {"request_id": "test", "payload": self.response}
+        ).payload
+        return LeanDeclarationBackendResult(
+            environment_digest=_DIGEST,
+            payload=payload,
+        )
 
 
 class MissingDeclarationBackend:
@@ -68,8 +82,8 @@ class MissingDeclarationBackend:
         return _DIGEST
 
     def query(
-        self, _environment: LeanEnvironment, _payload: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, _environment: LeanEnvironment, _query: LeanDeclarationQuery
+    ) -> LeanDeclarationBackendResult:
         raise LeanDeclarationBackendError(
             "LEAN_DECLARATION_NOT_FOUND",
             "Lean did not find the exact declaration 'Missing.name'.",
@@ -105,7 +119,6 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "MATHLIB",
                 "name_contains": "irrational_sqrt_two",
@@ -122,18 +135,14 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
         result.scope.parameters["matching"]
         == "case-sensitive name substring and exact constants occurring in the elaborated type"
     )
-    assert backend.calls[0][1] == {
-        "operation": "search",
-        "declaration_name": None,
-        "name_contains": "irrational_sqrt_two",
-        "type_constants": [],
-        "namespace_prefixes": [],
-        "target_module_prefixes": [],
-        "kinds": [],
-        "limit": 1,
-        "max_depth": 0,
-        "max_nodes": 1,
-    }
+    assert backend.calls[0][1] == LeanDeclarationSearchQuery(
+        name_contains="irrational_sqrt_two",
+        type_constants=(),
+        namespace_prefixes=(),
+        target_module_prefixes=(),
+        kinds=(),
+        limit=1,
+    )
 
 
 def test_exhausted_search_reports_computed_complete_coverage() -> None:
@@ -149,7 +158,6 @@ def test_exhausted_search_reports_computed_complete_coverage() -> None:
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "MATHLIB",
                 "type_pattern": {"constants": ["Jacobian.DoesNotExist"]},
@@ -180,7 +188,6 @@ def test_inspect_adapter_returns_docs_without_promoting_the_theorem() -> None:
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
-            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "declaration_name": "Nat.add"},
         )
     )
@@ -234,7 +241,6 @@ def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> No
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.dependencies",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "root_declaration": "Nat.add_assoc",
@@ -248,9 +254,10 @@ def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> No
     assert result.output["edges"][0]["kinds"] == ["TYPE", "VALUE"]
     assert result.output["closure_complete"] is False
     assert result.output["dependency_graph_uri"] in result.artifact_uris
-    assert backend.calls[0][1]["operation"] == "dependencies"
-    assert backend.calls[0][1]["max_depth"] == 1
-    assert backend.calls[0][1]["max_nodes"] == 20
+    sent = backend.calls[0][1]
+    assert isinstance(sent, LeanDeclarationDependenciesQuery)
+    assert sent.max_depth == 1
+    assert sent.max_nodes == 20
 
 
 def test_missing_declaration_is_an_explicit_failed_operation() -> None:
@@ -261,7 +268,6 @@ def test_missing_declaration_is_an_explicit_failed_operation() -> None:
         adapter.invoke(
             CapabilityRequest(
                 capability_id="lean.declaration.inspect",
-                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "declaration_name": "Missing.name"},
             )
         )

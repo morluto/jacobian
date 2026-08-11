@@ -27,18 +27,15 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
 )
 from jacobian.contracts.lean_metavariable_fields import (
-    LeanElaborationContext,
     LeanMetavariableFieldsArtifact,
     LeanMetavariableFieldsOutput,
     LeanMetavariableFieldsRequest,
-    LeanStructuredMetavariable,
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend._state_validation import _load_validated_proof_state
@@ -76,7 +73,6 @@ class LeanMetavariableFieldsAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanMetavariableFieldsRequest.model_json_schema(),
             output_schema=LeanMetavariableFieldsOutput.model_json_schema(),
             tags=("lean", "proof-state", "metavariable", "exploration"),
@@ -219,23 +215,7 @@ class LeanMetavariableFieldsAdapter:
                     ),
                 )
             )
-        try:
-            structured = tuple(
-                LeanStructuredMetavariable.model_validate(mvar)
-                for mvar in payload["structured_metavariables"]
-            )
-            elaboration = LeanElaborationContext.model_validate(
-                payload["elaboration_context"]
-            )
-        except (KeyError, TypeError, ValidationError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED",
-                    stage="metavariable_field_extraction",
-                    message=("Lean returned invalid structured metavariable fields."),
-                    hint="Retry with smaller goal/context bounds.",
-                )
-            ) from exc
+        structured = payload.structured_metavariables
         if len(structured) != len(bound_state.normalized_goals):
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -258,16 +238,9 @@ class LeanMetavariableFieldsAdapter:
             state_uri=validated.state_uri,
             state_digest=bound_state.state_digest,
             structured_metavariables=structured,
-            elaboration_context=elaboration,
-            coercion_provenance=payload.get("coercion_provenance", "UNAVAILABLE"),
-            coercion_provenance_basis=str(
-                payload.get(
-                    "coercion_provenance_basis",
-                    "maintained Lean.Meta.Coe APIs operate on expressions "
-                    "during elaboration; a pickled proof state retains no "
-                    "per-metavariable coercion log",
-                )
-            ),
+            elaboration_context=payload.elaboration_context,
+            coercion_provenance=payload.coercion_provenance,
+            coercion_provenance_basis=payload.coercion_provenance_basis,
             lean_version=installation.lean_version,
             lean_commit=installation.lean_commit,
             mathlib_commit=installation.mathlib_commit,
@@ -286,7 +259,6 @@ class LeanMetavariableFieldsAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),

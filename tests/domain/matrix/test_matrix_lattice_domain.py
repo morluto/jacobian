@@ -181,6 +181,52 @@ def test_exact_matrix_domain_results_and_lineage(
                 "convention": "POSITIVE_DIVISIBILITY_DIAGONAL",
             },
         ),
+        (
+            "matrix.rational_linear_system.solve",
+            {
+                "matrix": {
+                    "domain": "QQ",
+                    "entries": [
+                        [
+                            {"num": "1", "den": "1"},
+                            {"num": "2", "den": "1"},
+                        ],
+                        [
+                            {"num": "3", "den": "1"},
+                            {"num": "4", "den": "1"},
+                        ],
+                    ],
+                },
+                "rhs": [
+                    {"num": "5", "den": "1"},
+                    {"num": "11", "den": "1"},
+                ],
+            },
+            {
+                "solution": [
+                    {"num": "1", "den": "1"},
+                    {"num": "2", "den": "1"},
+                ],
+                "convention": "UNIQUE_SOLUTION_OVER_QQ",
+            },
+        ),
+        (
+            "matrix.adjugate.compute",
+            {
+                "matrix": {
+                    "domain": "ZZ",
+                    "entries": [["1", "2"], ["3", "4"]],
+                }
+            },
+            {
+                "adjugate": {
+                    "matrix_schema_version": "1",
+                    "domain": "ZZ",
+                    "entries": [["4", "-2"], ["-3", "1"]],
+                },
+                "convention": "CLASSICAL_ADJUGATE",
+            },
+        ),
     )
 
     for capability_id, payload, expected in cases:

@@ -17,7 +17,6 @@ import pytest
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.lean import LeanEnvironment
@@ -29,16 +28,24 @@ from jacobian.lean_frontend.exploration import (
     _Resources,
     install_lean_exploration_capabilities,
 )
+from jacobian.lean_frontend.helper_protocol import (
+    LeanMetavariableFieldsHelperPayload,
+)
 from jacobian.lean_frontend.metavariable_fields import LeanMetavariableFieldsAdapter
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
 from jacobian.lean_frontend.proof_state_inspect import LeanProofStateInspectAdapter
+from jacobian.lean_frontend.repl_protocol import (
+    LeanReplCommandResponse,
+    LeanReplProofStepResponse,
+    LeanReplValidatedExecution,
+)
 from jacobian.lean_frontend.term_apply import LeanTermApplyAdapter
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
-_ReplResponses = tuple[dict[str, object], dict[str, object], dict[str, object]]
+_ReplResponses = LeanReplValidatedExecution
 
 
 def _installation(environment: LeanEnvironment) -> LeanCheckerInstallation:
@@ -116,11 +123,21 @@ def _responses(
         "goals": after,
     }
     if error is not None:
-        tactic["messages"] = [{"severity": "error", "data": error}]
+        tactic["messages"] = [
+            {
+                "pos": {"line": 0, "column": 0},
+                "severity": "error",
+                "data": error,
+            }
+        ]
     return (
-        {"env": 0, "sorries": [{"proofState": 0}]},
-        {"proofState": 1, "proofStatus": "Goals", "goals": before},
-        tactic,
+        LeanReplCommandResponse.model_validate(
+            {"env": 0, "sorries": [{"goal": "⊢ True", "proofState": 0}]}
+        ),
+        LeanReplProofStepResponse.model_validate(
+            {"proofState": 1, "proofStatus": "Goals", "goals": before}
+        ),
+        LeanReplProofStepResponse.model_validate(tactic),
     )
 
 
@@ -134,11 +151,11 @@ def _stub_apply_runtime(
     def _execute_clean(**kwargs: object) -> _ReplResponses:
         del kwargs
         payload = responses()
-        goals = payload[2].get("goals", [])
-        if not isinstance(goals, list):
-            raise TypeError("stub tactic response goals must be a list")
+        tactic_response = payload[2]
+        if not isinstance(tactic_response, LeanReplProofStepResponse):
+            raise TypeError("stub tactic response must be a proof response")
         last_goals.clear()
-        last_goals.extend(str(goal) for goal in goals)
+        last_goals.extend(tactic_response.goals)
         return payload
 
     def _fake_extract(
@@ -181,19 +198,21 @@ def _stub_metavariable_runtime(
         *,
         pickle_path: Path,
         request: Any,
-    ) -> dict[str, Any]:
+    ) -> LeanMetavariableFieldsHelperPayload:
         del _resources, pickle_path, request
-        return {
-            "expression_serialization": "LEAN_PRETTY_PRINTED_EXPR",
-            "structured_metavariables": structured,
-            "elaboration_context": elaboration,
-            "coercion_provenance": "UNAVAILABLE",
-            "coercion_provenance_basis": (
-                "maintained Lean.Meta.Coe APIs operate on expressions during "
-                "elaboration; a pickled proof state retains no per-metavariable "
-                "coercion log"
-            ),
-        }
+        return LeanMetavariableFieldsHelperPayload.model_validate(
+            {
+                "expression_serialization": "LEAN_PRETTY_PRINTED_EXPR",
+                "structured_metavariables": structured,
+                "elaboration_context": elaboration,
+                "coercion_provenance": "UNAVAILABLE",
+                "coercion_provenance_basis": (
+                    "maintained Lean.Meta.Coe APIs operate on expressions during "
+                    "elaboration; a pickled proof state retains no per-metavariable "
+                    "coercion log"
+                ),
+            }
+        )
 
     monkeypatch.setattr(adapter.resources.repl, "execute_clean", _execute_clean)
     monkeypatch.setattr(
@@ -215,7 +234,6 @@ def _stored_input_state_uri(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": environment.value,
                 "statement": "True",
@@ -252,7 +270,6 @@ def _invoke_stored_state_consumer(
     adapter.invoke(
         CapabilityRequest(
             capability_id=capability_id,
-            mode=CapabilityMode.EXPLORE,
             input=request_input,
         )
     )
@@ -282,7 +299,6 @@ def test_term_apply_elaborates_exact_term_and_returns_successor(
     result = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -312,7 +328,6 @@ def test_term_apply_rejects_multiline_term(
         term_apply.invoke(
             CapabilityRequest(
                 capability_id="lean.term.apply",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",
@@ -340,7 +355,6 @@ def test_term_apply_fails_closed_on_rejected_term(
     result = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "n = 0",
@@ -375,7 +389,6 @@ def test_inspect_returns_recorded_goals_without_replay(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "(P Q : Prop) → P ∧ Q",
@@ -389,7 +402,6 @@ def test_inspect_returns_recorded_goals_without_replay(
     result = inspect.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.inspect",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "state_uri": successor_uri,
@@ -423,7 +435,6 @@ def test_inspect_rejects_stale_state(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "statement": "True", "tactic": "skip"},
         )
     )
@@ -440,7 +451,6 @@ def test_inspect_rejects_stale_state(
         inspect.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.inspect",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "state_uri": stale.artifact_uri,
@@ -504,7 +514,6 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -526,7 +535,6 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     result = metavariable.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.metavariable_fields",
-            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "state_uri": state_uri},
         )
     )
@@ -560,7 +568,6 @@ def test_metavariable_fields_reject_completed_state(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "statement": "True", "tactic": "trivial"},
         )
     )
@@ -569,7 +576,6 @@ def test_metavariable_fields_reject_completed_state(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
-                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "state_uri": state_uri},
             )
         )
@@ -589,7 +595,6 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -616,7 +621,6 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
-                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "state_uri": state_uri},
             )
         )
@@ -705,7 +709,6 @@ def test_term_apply_rejects_sorry_at_own_boundary(
         term_apply.invoke(
             CapabilityRequest(
                 capability_id="lean.term.apply",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",
@@ -726,7 +729,6 @@ def test_term_apply_rejects_admit_at_own_boundary(
         term_apply.invoke(
             CapabilityRequest(
                 capability_id="lean.term.apply",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "statement": "True",
@@ -792,7 +794,7 @@ def test_helper_result_envelope_still_parses_normally() -> None:
         b'"LEAN_PRETTY_PRINTED_EXPR","typed_goals":[]}}\n',
         request_id="req1",
     )
-    assert payload["expression_serialization"] == "LEAN_PRETTY_PRINTED_EXPR"
+    assert payload.expression_serialization == "LEAN_PRETTY_PRINTED_EXPR"
 
 
 # ---------------------------------------------------------------------------
@@ -863,7 +865,6 @@ def test_inspect_adapter_available_without_lean_runtime(
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.inspect",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "state_uri": state.artifact_uri,
@@ -996,7 +997,6 @@ def test_metavariable_fields_rejects_stale_state_before_replay(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": "CORE",
                     "state_uri": stale.artifact_uri,
@@ -1054,7 +1054,6 @@ def test_inspect_rejects_forged_environment_metadata(
         inspect.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.inspect",
-                mode=CapabilityMode.EXPLORE,
                 input={
                     "environment": environment.value,
                     "state_uri": forged.artifact_uri,
@@ -1086,7 +1085,6 @@ def test_term_apply_output_is_validated_through_typed_model(
     result = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -1123,7 +1121,6 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
     opened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "(P Q : Prop) → P ∧ Q",
@@ -1146,7 +1143,6 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
         metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
-                mode=CapabilityMode.EXPLORE,
                 input={"environment": "CORE", "state_uri": state_uri},
             )
         )

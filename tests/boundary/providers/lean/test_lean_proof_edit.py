@@ -9,7 +9,6 @@ from tests.support.provider_lean import (
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
     CapabilityRequest,
 )
 
@@ -28,7 +27,6 @@ def test_exact_proof_edit_is_bound_to_authorized_lean_check(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.proof_edit.validate",
-            mode=CapabilityMode.VERIFY,
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -67,7 +65,6 @@ def test_proof_edit_rejects_holes_before_checker_invocation(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.proof_edit.validate",
-            mode=CapabilityMode.VERIFY,
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -88,7 +85,6 @@ def test_rejected_edit_keeps_checker_evidence_without_becoming_accepted(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.proof_edit.validate",
-            mode=CapabilityMode.VERIFY,
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -112,7 +108,6 @@ def test_valid_edit_is_not_accepted_when_original_baseline_is_invalid(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.proof_edit.validate",
-            mode=CapabilityMode.VERIFY,
             input={
                 "environment": "CORE",
                 "statement": "True",

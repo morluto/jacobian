@@ -20,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
@@ -100,7 +99,6 @@ class GraphPropertyAdapter:
                 "jacobian.networkx",
                 features=("graph-properties", "simple-undirected-graphs"),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=input_schema,
             output_schema=model_schema(GraphInvariantBatchOutput),
             tags=("graph", "properties", "exact-computation"),
@@ -185,7 +183,6 @@ class GraphPropertyAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms(started),

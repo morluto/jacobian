@@ -68,6 +68,7 @@ from jacobian.verification._helpers import (
     _CHECKER_DIAGNOSTICS_TOO_LARGE,
     _CHECKER_INVALID_DECISION,
     _CHECKER_OUTPUT_TOO_LARGE,
+    _CHECKER_STOPPED,
     _CHECKER_TIMEOUT,
     _CHECKER_UNREADABLE_RESPONSE,
     _checker_failure_detail,
@@ -75,6 +76,12 @@ from jacobian.verification._helpers import (
     _environment_digest,
     _verification_input_failure_detail,
     _verification_storage_failure_detail,
+)
+from jacobian.verification.checker_protocol import (
+    CheckerWorkerDecisionError,
+    CheckerWorkerFailure,
+    CheckerWorkerProtocolError,
+    parse_checker_worker_response,
 )
 from jacobian.worker_environment import worker_environment
 
@@ -392,8 +399,14 @@ class VerificationService:
         provider_runtime: CapabilityProviderRuntime | None,
     ) -> CheckerDecision:
         try:
-            response = loads_strict_json(completed.stdout)
+            response = parse_checker_worker_response(
+                loads_strict_json(completed.stdout)
+            )
         except CanonicalizationError as exc:
+            raise CheckerExecutionError(_CHECKER_UNREADABLE_RESPONSE) from exc
+        except CheckerWorkerDecisionError as exc:
+            raise CheckerExecutionError(_CHECKER_INVALID_DECISION) from exc
+        except CheckerWorkerProtocolError as exc:
             raise CheckerExecutionError(_CHECKER_UNREADABLE_RESPONSE) from exc
         if completed.returncode != 0:
             _LOGGER.warning(
@@ -401,10 +414,15 @@ class VerificationService:
                 response,
                 completed.stderr,
             )
+            detail = (
+                _checker_failure_detail(response)
+                if isinstance(response, CheckerWorkerFailure)
+                else _CHECKER_STOPPED
+            )
+            raise CheckerExecutionError(detail)
+        if isinstance(response, CheckerWorkerFailure):
             raise CheckerExecutionError(_checker_failure_detail(response))
-        if not isinstance(response, dict):
-            raise CheckerExecutionError(_CHECKER_UNREADABLE_RESPONSE)
-        if response.get("measured_checker_digest") != expected_digest:
+        if response.measured_checker_digest != expected_digest:
             _LOGGER.warning(
                 "checker worker measured an unexpected implementation: %r",
                 response,
@@ -413,21 +431,13 @@ class VerificationService:
         expected_runtime_digest = (
             provider_runtime.digest if provider_runtime is not None else None
         )
-        if response.get("measured_runtime_digest") != expected_runtime_digest:
+        if response.measured_runtime_digest != expected_runtime_digest:
             _LOGGER.warning(
                 "checker worker measured an unexpected external runtime: %r",
                 response,
             )
             raise CheckerExecutionError(_CHECKER_CHANGED)
-        try:
-            return CheckerDecision.model_validate(response.get("decision"))
-        except ValidationError as exc:
-            _LOGGER.warning(
-                "checker returned an invalid decision: %r",
-                response,
-                exc_info=exc,
-            )
-            raise CheckerExecutionError(_CHECKER_INVALID_DECISION) from exc
+        return response.decision
 
     def verify_witness(
         self,

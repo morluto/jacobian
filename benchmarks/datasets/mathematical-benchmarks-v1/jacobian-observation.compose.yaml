@@ -20,8 +20,6 @@ services:
       - --port
       - "8000"
       - --allow-anonymous
-      - --reasoning-log-mode
-      - ${JACOBIAN_REASONING_LOG_MODE:-off}
       - --state-dir
       - /state
     volumes:

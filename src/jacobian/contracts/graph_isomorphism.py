@@ -88,3 +88,28 @@ class GraphIsomorphismVerifyOutput(ContractModel):
     verification_record_uri: ArtifactUri | None = None
     checker_id: CheckerUri | None = None
     coverage: Literal["EXHAUSTIVE", "UNKNOWN"]
+
+    @model_validator(mode="after")
+    def preserve_truth_and_checker_assurance(self) -> Self:
+        expected = {
+            "TRUE": True,
+            "FALSE": False,
+            "UNKNOWN": None,
+        }[self.conclusion]
+        if self.is_isomorphism is not expected:
+            raise ValueError("is_isomorphism must preserve TRUE, FALSE, and UNKNOWN")
+        if self.coverage == "EXHAUSTIVE":
+            if (
+                self.conclusion == "UNKNOWN"
+                or self.verification_record_uri is None
+                or self.checker_id is None
+            ):
+                raise ValueError(
+                    "exhaustive isomorphism verification requires a decisive "
+                    "checker-backed record"
+                )
+        elif self.conclusion != "UNKNOWN" or self.verification_record_uri is not None:
+            raise ValueError(
+                "unknown coverage cannot carry a conclusion or verification record"
+            )
+        return self

@@ -34,7 +34,6 @@ from jacobian.capability_verification import CapabilityVerificationMixin
 from jacobian.contracts.capabilities import (
     CapabilityCatalogRelationship,
     CapabilityDescriptor,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -57,24 +56,16 @@ class CapabilityPolicy:
     denied_domains: frozenset[str] = frozenset()
     allowed_tags: frozenset[str] = frozenset()
     denied_tags: frozenset[str] = frozenset()
-    allowed_modes: frozenset[CapabilityMode] = frozenset()
-    denied_modes: frozenset[CapabilityMode] = frozenset()
 
     def __post_init__(self) -> None:
         if self.profile not in {"DEFAULT", "COMPUTE_VERIFY_NO_RETRIEVAL"}:
             raise ValueError(f"unknown capability policy profile: {self.profile!r}")
-        if any(
-            not isinstance(mode, CapabilityMode)
-            for mode in self.allowed_modes | self.denied_modes
-        ):
-            raise ValueError("capability policy modes must be CapabilityMode values")
         if self.profile == "COMPUTE_VERIFY_NO_RETRIEVAL":
             object.__setattr__(self, "denied_tags", self.denied_tags | {"retrieval"})
         for allowed, denied, label in (
             (self.allowed_capability_ids, self.denied_capability_ids, "capability IDs"),
             (self.allowed_domains, self.denied_domains, "domains"),
             (self.allowed_tags, self.denied_tags, "tags"),
-            (self.allowed_modes, self.denied_modes, "modes"),
         ):
             overlap = allowed & denied
             if overlap:
@@ -104,8 +95,6 @@ class CapabilityPolicy:
             "denied_domains": sorted(self.denied_domains),
             "allowed_tags": sorted(self.allowed_tags),
             "denied_tags": sorted(self.denied_tags),
-            "allowed_modes": sorted(mode.value for mode in self.allowed_modes),
-            "denied_modes": sorted(mode.value for mode in self.denied_modes),
             "checker_authorization_affected": False,
         }
 
@@ -120,23 +109,11 @@ class CapabilityPolicy:
     def project(self, descriptor: CapabilityDescriptor) -> CapabilityDescriptor | None:
         if self.denial_reasons(descriptor):
             return None
-        visible_modes = tuple(
-            mode
-            for mode in descriptor.modes
-            if (not self.allowed_modes or mode in self.allowed_modes)
-            and mode not in self.denied_modes
-        )
-        return (
-            descriptor.model_copy(update={"modes": visible_modes})
-            if visible_modes
-            else None
-        )
+        return descriptor
 
     def denial_reasons(
         self,
         descriptor: CapabilityDescriptor,
-        *,
-        mode: CapabilityMode | None = None,
     ) -> tuple[str, ...]:
         capability_id = descriptor.capability_id
         domain = _normalize_domain(_capability_domain(descriptor))
@@ -162,11 +139,6 @@ class CapabilityPolicy:
             reasons.append("tag_not_allowed")
         if tags & {_normalize_domain(value) for value in self.denied_tags}:
             reasons.append("tag_denied")
-        if mode is not None:
-            if self.allowed_modes and mode not in self.allowed_modes:
-                reasons.append("mode_not_allowed")
-            if mode in self.denied_modes:
-                reasons.append("mode_denied")
         return tuple(reasons)
 
 

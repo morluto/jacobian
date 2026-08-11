@@ -19,6 +19,7 @@ from jacobian.storage.errors import (
     ArtifactIntegrityError,
     StorageError,
 )
+from jacobian.verification.checker_protocol import CheckerWorkerFailure
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,10 +75,14 @@ def _environment_digest(
     return _digest_bytes(canonicalize_json(identity))
 
 
-def _checker_failure_detail(response: Any) -> str:
-    if isinstance(response, dict) and response.get("error_code") == "SOURCE_CHANGED":
-        return _CHECKER_CHANGED
-    return _CHECKER_STOPPED
+def _checker_failure_detail(response: CheckerWorkerFailure) -> str:
+    match response.error_code:
+        case "SOURCE_CHANGED":
+            return _CHECKER_CHANGED
+        case "RESPONSE_INVALID":
+            return _CHECKER_INVALID_DECISION
+        case "EXECUTION_FAILED" | "INVALID_REQUEST" | "MALFORMED_RUNTIME":
+            return _CHECKER_STOPPED
 
 
 def _verification_input_failure_detail(exc: Exception) -> str:

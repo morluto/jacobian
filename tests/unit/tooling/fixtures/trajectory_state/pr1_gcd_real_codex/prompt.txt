@@ -1,1 +1,0 @@
-Use the available Jacobian mathematical tools to compute the exact gcd of 84 and 30. Comply with the external reasoning-log protocol exposed by the server. Give a concise final answer and do not use shell commands.

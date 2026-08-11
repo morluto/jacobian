@@ -1,6 +1,6 @@
 # Matrix capability references
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 ## Shared matrix values
 

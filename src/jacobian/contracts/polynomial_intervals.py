@@ -16,13 +16,14 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 
 from jacobian.contracts.common import ArtifactUri, CheckerUri
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.polynomials import (
     PolynomialVariable,
     SparseRationalPolynomial,
+    canonicalization_preflight_active,
 )
 from jacobian.contracts.results import ContractModel
 
@@ -52,12 +53,14 @@ class UnivariateRationalPolynomial(ContractModel):
     polynomial: SparseRationalPolynomial
 
     @model_validator(mode="after")
-    def require_univariate_and_bounded(self) -> Self:
+    def require_univariate_and_bounded(self, info: ValidationInfo) -> Self:
         if any(len(term.exponents) != 1 for term in self.polynomial.terms):
             raise ValueError(
                 "every term of a univariate polynomial must use a one-dimensional "
                 "exponent tuple"
             )
+        if canonicalization_preflight_active(info):
+            return self
         if any(
             term.exponents[0] < 0 or term.exponents[0] > _MAX_DEGREE
             for term in self.polynomial.terms
@@ -145,9 +148,12 @@ class PolynomialIntervalEnclosureVerifyRequest(ContractModel):
     claimed_hi: CanonicalRational
 
     @model_validator(mode="after")
-    def require_claimed_enclosure_consistency(self) -> Self:
+    def require_claimed_enclosure_consistency(self, info: ValidationInfo) -> Self:
         degree = self.polynomial.degree
-        if len(self.claimed_bernstein_coefficients) != degree + 1:
+        if (
+            not canonicalization_preflight_active(info)
+            and len(self.claimed_bernstein_coefficients) != degree + 1
+        ):
             raise ValueError(
                 "claimed Bernstein coefficient count must equal degree + 1"
             )

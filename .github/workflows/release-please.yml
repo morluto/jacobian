@@ -61,27 +61,52 @@ jobs:
         with:
           version: "0.11.28"
           enable-cache: false
+      - id: node
+        name: Load npm Node version
+        if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
+        run: echo "node-version=$(.github/scripts/manage-test-timings node-version npm)" >> "$GITHUB_OUTPUT"
       - if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
-        name: Synchronize release lockfile
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ steps.node.outputs.node-version }}
+          package-manager-cache: false
+      - if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
+        name: Synchronize release lockfiles
         env:
           RELEASE_BRANCH: release-please--branches--main--components--jacobian
         run: |
+          set -euo pipefail
+
+          # Regenerate uv.lock against the bumped pyproject.toml.
           uv lock
-          unexpected_files="$(git diff --name-only | grep -v '^uv\.lock$' || true)"
+
+          # Regenerate npm/package-lock.json against the bumped npm/package.json.
+          # --package-lock-only rewrites the lockfile without touching node_modules;
+          # --ignore-scripts and --no-fund/--no-audit keep it offline and quiet.
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
+            --prefix npm
+
+          unexpected_files="$(git diff --name-only | grep -vE '^(uv\.lock|npm/package-lock\.json)$' || true)"
           if [[ -n "$unexpected_files" ]]; then
-            echo "uv lock changed unexpected files:" >&2
+            echo "lockfile sync changed unexpected files:" >&2
             echo "$unexpected_files" >&2
             git diff >&2
             exit 1
           fi
-          if git diff --quiet -- uv.lock; then
-            echo "uv.lock is already synchronized"
+
+          # Fail rather than committing a drifted release tree. This is the
+          # release-side guard for issue #1014: the CI-side guard lives in
+          # .github/scripts/check-release-consistency.
+          python .github/scripts/check-release-consistency
+
+          if git diff --quiet -- uv.lock npm/package-lock.json; then
+            echo "uv.lock and npm/package-lock.json are already synchronized"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add uv.lock
-          git commit -m "chore(release): synchronize uv lock"
+          git add uv.lock npm/package-lock.json
+          git commit -m "chore(release): synchronize uv and npm lockfiles"
           git push origin "HEAD:$RELEASE_BRANCH"
       - name: Dispatch release candidate CI
         if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'

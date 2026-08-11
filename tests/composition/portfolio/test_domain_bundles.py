@@ -22,6 +22,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.combinatorics import (
+    BinomialRequest,
     CyclicDifferenceSetExtensionRequest,
     CyclicPerfectDifferenceSetRequest,
     FibonacciPairRequest,
@@ -99,6 +100,7 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (CombNonnegIntRequest, {"n": 5}),
     (FibonacciPairRequest, {"n": 5}),
     (CombNonnegPairRequest, {"n": 5, "k": 2}),
+    (BinomialRequest, {"n": 5, "k": 2}),
     (CombIntegerListRequest, {"values": ["2", "1", "1"]}),
     (IntegerSidonRequest, {"elements": ["1", "2", "4"]}),
     (CyclicPerfectDifferenceSetRequest, {"modulus": 7, "residues": [0, 1, 3]}),

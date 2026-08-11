@@ -40,39 +40,9 @@ from jacobian.providers.flint_runtime import (  # noqa: E402
     python_flint_provider_runtime,
 )
 from jacobian.runtime import CheckerAuthorityMode, create_runtime  # noqa: E402
+from tools.development_profiles import PROFILE_NAMES, PROFILES  # noqa: E402
 
-PROFILES = ("core", "full-python", "lean", "external-proof")
-_PROFILE_PROVIDERS = {
-    "core": ("networkx", "sympy", "z3"),
-    "full-python": (
-        "networkx",
-        "sympy",
-        "z3",
-        "python-flint",
-        "python-flint-hnf",
-        "cvc5",
-    ),
-    "lean": (
-        "networkx",
-        "sympy",
-        "z3",
-        "python-flint",
-        "python-flint-hnf",
-        "cvc5",
-        "lean",
-    ),
-    "external-proof": (
-        "networkx",
-        "sympy",
-        "z3",
-        "python-flint",
-        "python-flint-hnf",
-        "cvc5",
-        "cadical",
-        "drat-trim",
-        "carcara",
-    ),
-}
+_PROFILE_PROVIDERS = {name: selected.providers for name, selected in PROFILES.items()}
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -354,7 +324,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
-    parser.add_argument("--profile", choices=PROFILES, required=True)
+    parser.add_argument("--profile", choices=PROFILE_NAMES, required=True)
     parser.add_argument("--expected-revision", required=True)
     parser.add_argument("--provider-path", required=True)
     parser.add_argument("--project-environment", default="")

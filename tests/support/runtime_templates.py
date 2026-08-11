@@ -1,7 +1,7 @@
-"""Session-scoped immutable complete-runtime templates.
+"""Session-scoped immutable complete-runtime template builders.
 
-Only storage and complete-runtime boundary tests should register this plugin.
-Runtime instances are defined separately so fixture ownership stays explicit.
+Owning-tier conftests wrap these helpers as local ``@pytest.fixture`` definitions.
+Do not register this module through ``pytest_plugins``.
 """
 
 from __future__ import annotations
@@ -19,11 +19,13 @@ from tests.support.state import (
 )
 
 
-def _template_target(
+def template_target(
     tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,
     name: str,
 ) -> tuple[Path, FileLock | None]:
+    """Resolve the shared or worker-local template publication target."""
+
     shared = worker_template_target(tmp_path_factory, request, name)
     if shared is not None:
         return shared
@@ -32,14 +34,13 @@ def _template_target(
     return target, None
 
 
-@pytest.fixture(scope="session")
-def complete_portfolio_template(
+def build_complete_portfolio_template(
     tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,
 ) -> Path:
     """Publish one immutable fully materialized portfolio snapshot."""
 
-    target, lock = _template_target(
+    target, lock = template_target(
         tmp_path_factory,
         request,
         "complete-portfolio-template",
@@ -53,14 +54,13 @@ def complete_portfolio_template(
     return publish_template(target, build, lock=lock)
 
 
-@pytest.fixture(scope="session")
-def authorized_portfolio_template(
+def build_authorized_portfolio_template(
     tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,
 ) -> Path:
     """Publish one immutable snapshot with bundled checker authority."""
 
-    target, lock = _template_target(
+    target, lock = template_target(
         tmp_path_factory,
         request,
         "authorized-portfolio-template",

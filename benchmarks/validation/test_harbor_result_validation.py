@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from benchmarks.tooling.validate_harbor_results import (
     _AUGMENTED_DIGEST_MANIFEST,
+    _augmented_digest_manifest_path,
+    _augmented_job_identity,
     _augmented_job_name,
     _validate_augmented_digest_manifest,
     _validate_payload,
@@ -14,6 +17,49 @@ from benchmarks.tooling.validate_harbor_results import (
 
 _DIGEST = "a" * 64
 _DURABLE_DIGEST = f"sha256:{_DIGEST}"
+_JOB_CONFIG_DIGEST = f"sha256:{'c' * 64}"
+_HARBOR_VERSION = "0.20.0"
+_ATTEMPT_ID = "1" * 16
+_DOCKER_BUILD_MODE = "buildkit"
+_DOCKER_SERVER_VERSION = "27.5.1"
+_DOCKER_COMPOSE_VERSION = "2.32.4"
+
+
+def _identity(dataset: str, digests: dict[str, str]) -> str:
+    return _augmented_job_identity(
+        dataset=dataset,
+        digests=digests,
+        job_config_digest=_JOB_CONFIG_DIGEST,
+        harbor_version=_HARBOR_VERSION,
+        execution_args=(),
+        docker_build_mode=_DOCKER_BUILD_MODE,
+        docker_server_version=_DOCKER_SERVER_VERSION,
+        docker_compose_version=_DOCKER_COMPOSE_VERSION,
+    )
+
+
+def _manifest(
+    *,
+    dataset: str,
+    job_identity: str,
+    job_name: str,
+    tasks: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema_version": "2",
+        "dataset": dataset,
+        "job_identity": job_identity,
+        "job_name": job_name,
+        "attempt_id": _ATTEMPT_ID,
+        "prepared_at_ns": 0,
+        "harbor_version": _HARBOR_VERSION,
+        "job_config_digest": _JOB_CONFIG_DIGEST,
+        "execution_args": [],
+        "docker_build_mode": _DOCKER_BUILD_MODE,
+        "docker_server_version": _DOCKER_SERVER_VERSION,
+        "docker_compose_version": _DOCKER_COMPOSE_VERSION,
+        "tasks": tasks,
+    }
 
 
 def _trial(*, reward: object = 1.0, **trial_overrides: object) -> dict:
@@ -198,22 +244,22 @@ def test_changed_augmented_task_digest_rejects_old_trial() -> None:
 def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
     dataset = "provider-feasibility-v1"
     current_digest = f"sha256:{'b' * 64}"
-    job_name = _augmented_job_name(
-        dataset=dataset, digests={"example-task": current_digest}
-    )
+    current_digests = {"example-task": current_digest}
+    job_identity = _identity(dataset, current_digests)
+    job_name = _augmented_job_name(job_identity=job_identity, attempt_id=_ATTEMPT_ID)
     result = tmp_path / job_name / "result.json"
     result.parent.mkdir()
     result.write_text("{}", encoding="utf-8")
     assert not _AUGMENTED_DIGEST_MANIFEST.startswith(".")
-    manifest = tmp_path / _AUGMENTED_DIGEST_MANIFEST
+    manifest = _augmented_digest_manifest_path(tmp_path, job_name)
     manifest.write_text(
         json.dumps(
-            {
-                "dataset": dataset,
-                "job_name": job_name,
-                "prepared_at_ns": 0,
-                "tasks": [{"task": "example-task", "digest": f"sha256:{'a' * 64}"}],
-            }
+            _manifest(
+                dataset=dataset,
+                job_identity=job_identity,
+                job_name=job_name,
+                tasks=[{"task": "example-task", "digest": f"sha256:{'a' * 64}"}],
+            )
         ),
         encoding="utf-8",
     )
@@ -222,7 +268,14 @@ def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
         manifest_path=manifest,
         result_path=result,
         dataset=dataset,
-        expected_digests={"example-task": current_digest},
+        expected_digests=current_digests,
+        expected_job_identity=job_identity,
+        expected_harbor_version=_HARBOR_VERSION,
+        expected_job_config_digest=_JOB_CONFIG_DIGEST,
+        expected_execution_args=(),
+        expected_docker_build_mode=_DOCKER_BUILD_MODE,
+        expected_docker_server_version=_DOCKER_SERVER_VERSION,
+        expected_docker_compose_version=_DOCKER_COMPOSE_VERSION,
     )
 
     assert failures == ["augmented task digest mismatch for example-task"]
@@ -233,22 +286,26 @@ def test_changed_augmented_digest_cannot_resume_stale_job(tmp_path) -> None:
     old_digest = f"sha256:{'a' * 64}"
     current_digest = f"sha256:{'b' * 64}"
     current_digests = {"example-task": current_digest}
-    current_job_name = _augmented_job_name(dataset=dataset, digests=current_digests)
+    current_identity = _identity(dataset, current_digests)
+    current_job_name = _augmented_job_name(
+        job_identity=current_identity, attempt_id=_ATTEMPT_ID
+    )
+    stale_identity = _identity(dataset, {"example-task": old_digest})
     stale_job_name = _augmented_job_name(
-        dataset=dataset, digests={"example-task": old_digest}
+        job_identity=stale_identity, attempt_id=_ATTEMPT_ID
     )
     result = tmp_path / stale_job_name / "result.json"
     result.parent.mkdir()
     result.write_text("{}", encoding="utf-8")
-    manifest = tmp_path / _AUGMENTED_DIGEST_MANIFEST
+    manifest = _augmented_digest_manifest_path(tmp_path, current_job_name)
     manifest.write_text(
         json.dumps(
-            {
-                "dataset": dataset,
-                "job_name": current_job_name,
-                "prepared_at_ns": 0,
-                "tasks": [{"task": "example-task", "digest": current_digest}],
-            }
+            _manifest(
+                dataset=dataset,
+                job_identity=current_identity,
+                job_name=current_job_name,
+                tasks=[{"task": "example-task", "digest": current_digest}],
+            )
         ),
         encoding="utf-8",
     )
@@ -258,6 +315,47 @@ def test_changed_augmented_digest_cannot_resume_stale_job(tmp_path) -> None:
         result_path=result,
         dataset=dataset,
         expected_digests=current_digests,
+        expected_job_identity=current_identity,
+        expected_harbor_version=_HARBOR_VERSION,
+        expected_job_config_digest=_JOB_CONFIG_DIGEST,
+        expected_execution_args=(),
+        expected_docker_build_mode=_DOCKER_BUILD_MODE,
+        expected_docker_server_version=_DOCKER_SERVER_VERSION,
+        expected_docker_compose_version=_DOCKER_COMPOSE_VERSION,
     )
 
-    assert failures == ["Harbor result is not bound to its augmented task identity"]
+    assert failures == ["Harbor result is not bound to its augmented task attempt"]
+
+
+def test_same_experiment_identity_uses_distinct_attempt_names() -> None:
+    identity = _identity(
+        "provider-feasibility-v1", {"example-task": f"sha256:{'a' * 64}"}
+    )
+
+    first = _augmented_job_name(job_identity=identity, attempt_id="1" * 16)
+    second = _augmented_job_name(job_identity=identity, attempt_id="2" * 16)
+
+    assert first != second
+    assert first.startswith(f"jacobian-oracle-{identity.removeprefix('sha256:')[:32]}-")
+    jobs_dir = Path("jobs")
+    assert _augmented_digest_manifest_path(
+        jobs_dir, first
+    ) != _augmented_digest_manifest_path(jobs_dir, second)
+
+
+def test_execution_configuration_changes_experiment_identity() -> None:
+    digests = {"example-task": f"sha256:{'a' * 64}"}
+    baseline = _identity("provider-feasibility-v1", digests)
+
+    changed = _augmented_job_identity(
+        dataset="provider-feasibility-v1",
+        digests=digests,
+        job_config_digest=_JOB_CONFIG_DIGEST,
+        harbor_version=_HARBOR_VERSION,
+        execution_args=("--n-concurrent", "2"),
+        docker_build_mode=_DOCKER_BUILD_MODE,
+        docker_server_version=_DOCKER_SERVER_VERSION,
+        docker_compose_version=_DOCKER_COMPOSE_VERSION,
+    )
+
+    assert changed != baseline

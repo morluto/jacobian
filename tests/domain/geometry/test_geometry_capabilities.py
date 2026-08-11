@@ -50,7 +50,6 @@ def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=descriptor.capability_id,
-            mode=example.mode,
             input=example.input,
         )
     )

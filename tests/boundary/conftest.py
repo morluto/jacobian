@@ -6,8 +6,8 @@ SQLite store.  Fixtures are function scoped unless the value is an immutable
 provider identity.  Process fixtures expose launchers so a test can choose the
 exact command while teardown still owns every child it started.
 
-Runtime fixtures are registered only by the storage and provider subtrees that
-consume them; process and MCP tests remain independent of complete-runtime
+Runtime fixtures are registered by the storage, provider, and MCP subtrees that
+consume them; process tests remain independent of complete-runtime
 construction.
 """
 

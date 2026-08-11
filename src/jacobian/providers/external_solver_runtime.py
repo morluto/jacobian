@@ -20,6 +20,7 @@ from jacobian.process_policy import (
 )
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
+    ProviderRuntimeErrorCode,
     _platform_tag,
     _sha256_file,
     _unavailable_runtime,
@@ -67,10 +68,16 @@ def cadical_provider_runtime(
             )
         )
         if completed.termination is not ProcessTermination.EXITED:
-            raise ProviderRuntimeError("CaDiCaL version probe did not match the pin")
+            raise ProviderRuntimeError(
+                "CaDiCaL version probe did not match the pin",
+                code=ProviderRuntimeErrorCode.IDENTITY_CHANGED,
+            )
         version = completed.stdout.decode("ascii").strip()
         if completed.returncode != 0 or version != CADICAL_VERSION:
-            raise ProviderRuntimeError("CaDiCaL version probe did not match the pin")
+            raise ProviderRuntimeError(
+                "CaDiCaL version probe did not match the pin",
+                code=ProviderRuntimeErrorCode.IDENTITY_CHANGED,
+            )
         digest = _sha256_file(resolved)
     except (OSError, UnicodeDecodeError, ProviderRuntimeError):
         return _unavailable_runtime(
@@ -177,10 +184,16 @@ def drat_trim_provider_runtime(
             )
             or not isinstance(manifest.get("executable_sha256"), str)
         ):
-            raise ProviderRuntimeError("DRAT-trim provenance is invalid")
+            raise ProviderRuntimeError(
+                "DRAT-trim provenance is invalid",
+                code=ProviderRuntimeErrorCode.MALFORMED_RUNTIME,
+            )
         digest = _sha256_file(resolved)
         if manifest["executable_sha256"] != digest:
-            raise ProviderRuntimeError("DRAT-trim executable digest changed")
+            raise ProviderRuntimeError(
+                "DRAT-trim executable digest changed",
+                code=ProviderRuntimeErrorCode.IDENTITY_CHANGED,
+            )
         completed = execute_process(
             ProcessRequest(
                 executable=str(resolved),
@@ -198,7 +211,10 @@ def drat_trim_provider_runtime(
             or completed.returncode != 0
             or b"usage: drat-trim" not in completed.stdout
         ):
-            raise ProviderRuntimeError("DRAT-trim health probe failed")
+            raise ProviderRuntimeError(
+                "DRAT-trim health probe failed",
+                code=ProviderRuntimeErrorCode.READINESS_FAILED,
+            )
     except (OSError, ProviderRuntimeError, ValueError):
         return _unavailable_runtime(
             provider="drat-trim",
@@ -271,10 +287,16 @@ def carcara_provider_runtime(
             )
             or not isinstance(manifest.get("executable_sha256"), str)
         ):
-            raise ProviderRuntimeError("Carcara provenance is invalid")
+            raise ProviderRuntimeError(
+                "Carcara provenance is invalid",
+                code=ProviderRuntimeErrorCode.MALFORMED_RUNTIME,
+            )
         digest = _sha256_file(resolved)
         if manifest["executable_sha256"] != digest:
-            raise ProviderRuntimeError("Carcara executable digest changed")
+            raise ProviderRuntimeError(
+                "Carcara executable digest changed",
+                code=ProviderRuntimeErrorCode.IDENTITY_CHANGED,
+            )
         environment = worker_environment(locale="C")
         version = execute_process(
             ProcessRequest(
@@ -319,7 +341,10 @@ def carcara_provider_runtime(
             or help_result.stderr
             or any(flag not in help_result.stdout for flag in required_help)
         ):
-            raise ProviderRuntimeError("Carcara health probe failed")
+            raise ProviderRuntimeError(
+                "Carcara health probe failed",
+                code=ProviderRuntimeErrorCode.READINESS_FAILED,
+            )
     except (OSError, ProviderRuntimeError, ValueError):
         return _unavailable_runtime(
             provider="carcara",

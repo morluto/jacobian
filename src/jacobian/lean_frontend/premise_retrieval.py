@@ -16,7 +16,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
     CapabilityScope,
@@ -40,6 +39,7 @@ from jacobian.lean_frontend.exploration import (
     _validate_source_parts,
 )
 from jacobian.lean_frontend.repl import _response_errors
+from jacobian.lean_frontend.repl_protocol import LeanReplProofStepResponse
 
 
 class LeanPremiseRetrievalAdapter:
@@ -55,7 +55,6 @@ class LeanPremiseRetrievalAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanPremiseRetrievalRequest.model_json_schema(),
             output_schema=LeanPremiseRetrievalOutput.model_json_schema(),
             tags=("lean", "mathlib", "premise-retrieval", "exploration"),
@@ -125,7 +124,9 @@ class LeanPremiseRetrievalAdapter:
                 tactic=suggestion,
                 declaration_names=tuple(sorted(set(_DECLARATION.findall(suggestion)))),
                 tactic_replayed=(
-                    index == 1 and tactic_response.get("proofStatus") == "Completed"
+                    index == 1
+                    and isinstance(tactic_response, LeanReplProofStepResponse)
+                    and tactic_response.proof_status == "Completed"
                 ),
             )
             for index, suggestion in enumerate(suggestions, start=1)
@@ -163,7 +164,6 @@ class LeanPremiseRetrievalAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),

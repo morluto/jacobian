@@ -20,6 +20,15 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
 )
 from jacobian.contracts.lean import LeanEnvironment
+from jacobian.lean_frontend.declaration_protocol import (
+    LeanDeclarationBackendResult,
+    LeanDeclarationInspectPayload,
+    LeanDeclarationInspectQuery,
+    LeanDeclarationPayload,
+    LeanDeclarationQuery,
+    LeanDeclarationSearchPayload,
+    LeanDeclarationSearchQuery,
+)
 from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
     LeanSubprocessDeclarationBackend,
@@ -39,10 +48,54 @@ _RUNTIME = CapabilityProviderRuntime(
 )
 
 
+def _search_query() -> LeanDeclarationSearchQuery:
+    return LeanDeclarationSearchQuery(
+        name_contains="Nat",
+        type_constants=(),
+        namespace_prefixes=(),
+        target_module_prefixes=("Init",),
+        kinds=(),
+        limit=10,
+    )
+
+
+def _inspect_query() -> LeanDeclarationInspectQuery:
+    return LeanDeclarationInspectQuery(
+        declaration_name="Nat.add",
+        target_module_prefixes=("Init",),
+    )
+
+
+def _search_payload() -> LeanDeclarationSearchPayload:
+    return LeanDeclarationSearchPayload(
+        operation="search",
+        declarations=(),
+        scanned_declarations=0,
+        stop_reason="EXHAUSTED",
+    )
+
+
+def _inspect_payload() -> LeanDeclarationInspectPayload:
+    return LeanDeclarationInspectPayload.model_validate(
+        {
+            "operation": "inspect",
+            "declaration": {
+                "name": "Nat.add",
+                "type": "Nat → Nat → Nat",
+                "kind": "DEFINITION",
+                "namespace": "Nat",
+                "docstring": None,
+                "source": None,
+                "match_reasons": [],
+            },
+        }
+    )
+
+
 @dataclass
 class RecordingSession:
-    responses: list[dict[str, Any] | LeanDeclarationBackendError]
-    requests: list[dict[str, Any]] = field(default_factory=list)
+    responses: list[LeanDeclarationPayload | LeanDeclarationBackendError]
+    requests: list[LeanDeclarationQuery] = field(default_factory=list)
     closed: bool = False
     active: int = 0
     max_active: int = 0
@@ -52,14 +105,14 @@ class RecordingSession:
     activity_lock: threading.Lock = field(default_factory=threading.Lock)
 
     def request(
-        self, payload: dict[str, Any], *, timeout_seconds: int
-    ) -> dict[str, Any]:
+        self, query: LeanDeclarationQuery, *, timeout_seconds: int
+    ) -> LeanDeclarationPayload:
         del timeout_seconds
         with self.activity_lock:
             self.active += 1
             self.max_active = max(self.max_active, self.active)
         try:
-            self.requests.append(payload)
+            self.requests.append(query)
             if self.request_started is not None:
                 self.request_started.set()
             if self.release_request is not None:
@@ -139,19 +192,19 @@ def test_subprocess_backend_reuses_one_pinned_session_per_environment(
 ) -> None:
     session = RecordingSession(
         responses=[
-            {"operation": "search", "declarations": []},
-            {"operation": "inspect", "declaration": {"name": "Nat.add"}},
+            _search_payload(),
+            _inspect_payload(),
         ]
     )
     backend, _ = _recording_backend(tmp_path, [session])
-    searched = backend.query(LeanEnvironment.CORE, {"operation": "search"})
-    inspected = backend.query(LeanEnvironment.CORE, {"operation": "inspect"})
+    searched = backend.query(LeanEnvironment.CORE, _search_query())
+    inspected = backend.query(LeanEnvironment.CORE, _inspect_query())
     assert len(backend.started_sessions) == 1
-    assert [request["operation"] for request in session.requests] == [
+    assert [request.operation for request in session.requests] == [
         "search",
         "inspect",
     ]
-    assert searched["_environment_digest"] == inspected["_environment_digest"]
+    assert searched.environment_digest == inspected.environment_digest
     backend.close()
     assert session.closed
 
@@ -159,9 +212,9 @@ def test_subprocess_backend_reuses_one_pinned_session_per_environment(
 def test_subprocess_backend_finalizer_closes_sessions_after_garbage_collection(
     tmp_path: Path,
 ) -> None:
-    session = RecordingSession(responses=[{"operation": "search", "declarations": []}])
+    session = RecordingSession(responses=[_search_payload()])
     backend, _ = _recording_backend(tmp_path, [session])
-    backend.query(LeanEnvironment.CORE, {"operation": "search"})
+    backend.query(LeanEnvironment.CORE, _search_query())
     sessions = backend._sessions
     reference = weakref.ref(backend)
 
@@ -174,9 +227,9 @@ def test_subprocess_backend_finalizer_closes_sessions_after_garbage_collection(
 
 
 def test_subprocess_backend_close_detaches_finalizer(tmp_path: Path) -> None:
-    session = RecordingSession(responses=[{"operation": "search", "declarations": []}])
+    session = RecordingSession(responses=[_search_payload()])
     backend, _ = _recording_backend(tmp_path, [session])
-    backend.query(LeanEnvironment.CORE, {"operation": "search"})
+    backend.query(LeanEnvironment.CORE, _search_query())
 
     backend.close()
 
@@ -191,23 +244,21 @@ def test_subprocess_backend_serializes_concurrent_session_requests(
     release_request = threading.Event()
     session = RecordingSession(
         responses=[
-            {"operation": "search", "declarations": []},
-            {"operation": "search", "declarations": []},
+            _search_payload(),
+            _search_payload(),
         ],
         request_started=request_started,
         release_request=release_request,
     )
     backend, _ = _recording_backend(tmp_path, [session])
     with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(
-            backend.query, LeanEnvironment.CORE, {"operation": "search"}
-        )
+        first = executor.submit(backend.query, LeanEnvironment.CORE, _search_query())
         assert request_started.wait(timeout=1)
         second_started = threading.Event()
 
-        def query_second() -> dict[str, Any]:
+        def query_second() -> LeanDeclarationBackendResult:
             second_started.set()
-            return backend.query(LeanEnvironment.CORE, {"operation": "search"})
+            return backend.query(LeanEnvironment.CORE, _search_query())
 
         second = executor.submit(query_second)
         assert second_started.wait(timeout=1)
@@ -222,11 +273,11 @@ def test_subprocess_backend_serializes_concurrent_session_requests(
 def test_subprocess_backend_rejects_result_if_environment_changes_during_query(
     tmp_path: Path,
 ) -> None:
-    session = RecordingSession(responses=[{"operation": "search"}])
+    session = RecordingSession(responses=[_search_payload()])
     backend, executable = _recording_backend(tmp_path, [session])
     session.after_request = lambda: executable.write_bytes(b"changed executable")
     with pytest.raises(LeanDeclarationBackendError) as raised:
-        backend.query(LeanEnvironment.CORE, {"operation": "search"})
+        backend.query(LeanEnvironment.CORE, _search_query())
     assert raised.value.code == "LEAN_ENVIRONMENT_CHANGED"
     assert session.closed
 
@@ -241,15 +292,15 @@ def test_subprocess_backend_discards_timed_out_session_before_retry(
             )
         ]
     )
-    replacement = RecordingSession(responses=[{"operation": "search"}])
+    replacement = RecordingSession(responses=[_search_payload()])
     backend, _ = _recording_backend(tmp_path, [timed_out, replacement])
     with pytest.raises(LeanDeclarationBackendError) as raised:
-        backend.query(LeanEnvironment.CORE, {"operation": "search"})
-    result = backend.query(LeanEnvironment.CORE, {"operation": "search"})
+        backend.query(LeanEnvironment.CORE, _search_query())
+    result = backend.query(LeanEnvironment.CORE, _search_query())
     assert raised.value.code == "LEAN_QUERY_TIMEOUT"
     assert timed_out.closed
     assert len(backend.started_sessions) == 2
-    assert result["operation"] == "search"
+    assert result.payload.operation == "search"
     backend.close()
 
 

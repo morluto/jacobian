@@ -54,6 +54,6 @@ make harbor-oracle-task DATASET=symbolic-coordination-v1 TASKS="<task ids>"
 make harbor-check
 ```
 
-PR1 contains no comparison job, model run, post-solution audit, reasoning-log
-analysis, or training contract. Product-surface observations that did not block
+PR1 contains no comparison job, model run, post-solution audit, or training
+contract. Product-surface observations that did not block
 the pilot are recorded in [deferred capability gaps](CAPABILITY_GAPS.md).

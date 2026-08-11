@@ -6,6 +6,10 @@ from dataclasses import dataclass
 
 from jacobian.atomic_capabilities import install_atomic_capabilities
 from jacobian.conjecture_ingestion import ConjectureIngestionInstallation
+from jacobian.contracts.capabilities import (
+    CapabilityCatalogRelationship,
+    CapabilityCatalogRelationshipKind,
+)
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.finite_partition import install_finite_partition
@@ -108,6 +112,22 @@ class CoreApplicationInstaller:
         self.context.register_capability(finite_partition_adapter)
         if finite_partition_verify is not None:
             self.context.register_capability(finite_partition_verify)
+            self.context.register_checker_relationship(
+                "case.partition.finite",
+                CapabilityCatalogRelationship(
+                    capability_id="case.partition.finite.verify",
+                    kind=CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
+                    relationship="independently verify the finite partition",
+                ),
+            )
+            self.context.register_checker_relationship(
+                "case.partition.finite.verify",
+                CapabilityCatalogRelationship(
+                    capability_id="case.partition.finite",
+                    kind=(CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER),
+                    relationship="materialize a finite partition accepted by this verifier",
+                ),
+            )
         finite_coverage_adapter, result.finite_coverage = install_finite_coverage(
             ctx.store,
             ctx.schemas,

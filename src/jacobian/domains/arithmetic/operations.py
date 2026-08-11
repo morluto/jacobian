@@ -38,29 +38,6 @@ from jacobian.contracts.rationals import (
 )
 from jacobian.math import arithmetic as native_arithmetic
 
-__all__ = [
-    "absolute_value",
-    "base_digits",
-    "ceiling",
-    "continued_fraction",
-    "decimal_digit_count",
-    "decimal_digit_sum",
-    "difference",
-    "equal",
-    "floor",
-    "less_than",
-    "maximum",
-    "minimum",
-    "negation",
-    "nth_root",
-    "product",
-    "quotient",
-    "rational_absolute_value",
-    "reciprocal",
-    "sign",
-    "sum_rationals",
-]
-
 
 def _int(value: str) -> int:
     return parse_canonical_integer(value)
@@ -133,11 +110,14 @@ def _require_bounded_base_expansion(value: str, base: int) -> None:
 def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
     from sympy import integer_nthroot
 
-    if request.value < 0 and request.degree % 2 == 0:
+    value = _int(request.value)
+    if value < 0 and request.degree % 2 == 0:
         raise ValueError("even root of a negative integer is not integral-real")
-    root, exact = integer_nthroot(abs(request.value), request.degree)
+    root, exact = integer_nthroot(abs(value), request.degree)
+    if value < 0 and not exact:
+        root += 1
     return IntegerNthRootResult(
-        root=_canonical(-root if request.value < 0 else root),
+        root=_canonical(-root if value < 0 else root),
         exact=exact,
     )
 

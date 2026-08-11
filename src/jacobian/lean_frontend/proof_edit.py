@@ -18,7 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
@@ -110,7 +109,6 @@ class LeanProofEditAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.VERIFY,),
             input_schema=LeanProofEditRequest.model_json_schema(),
             output_schema=LeanProofEditOutput.model_json_schema(),
             tags=("lean", "proof-edit", "validation", "checker"),
@@ -198,7 +196,6 @@ class LeanProofEditAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.result.execution.model_copy(
                 update={"runtime_ms": int((time.monotonic() - started) * 1000)}
             ),

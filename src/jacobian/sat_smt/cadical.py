@@ -22,7 +22,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -359,7 +358,6 @@ class CadicalModelFindAdapter:
             ),
             provider="cadical",
             provider_runtime=backend.runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(SatExplorationRequest),
             output_schema=model_schema(SatModelFindOutput),
             tags=(
@@ -494,7 +492,6 @@ class CadicalUnsatProofFindAdapter:
             ),
             provider="cadical",
             provider_runtime=backend.runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(SatExplorationRequest),
             output_schema=model_schema(SatUnsatProofFindOutput),
             tags=(
@@ -614,7 +611,6 @@ def _completed_result(
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
         execution=Execution(
             status=ExecutionStatus.COMPLETED,
             runtime_ms=run.runtime_ms,
@@ -648,7 +644,6 @@ def _failed_result(
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
-        mode=request.mode,
         execution=Execution(
             status=run.execution_status,
             runtime_ms=run.runtime_ms,

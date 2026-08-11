@@ -14,13 +14,11 @@ import pytest
 
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.capabilities import (
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
-from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.providers.lean_runtime import lean_provider_runtime
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
@@ -81,15 +79,7 @@ def _live_adapters(tmp_path: Path):
         schemas,
         artifacts,
         installations,
-        jacobian_provider_runtime(
-            "jacobian.lean4",
-            features=(
-                "clean-replay",
-                "immutable-proof-state",
-                "term-apply",
-                "metavariable-fields",
-            ),
-        ),
+        runtime,
     )
     return adapters  # (proof_state, premise, term_apply, inspect, metavariable)
 
@@ -104,7 +94,6 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     opened = term_apply.invoke(
         CapabilityRequest(
             capability_id="lean.term.apply",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -123,7 +112,6 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     reopened = proof_state.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.apply_tactic",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "statement": "P → P",
@@ -136,7 +124,6 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     inspected = inspect.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.inspect",
-            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "state_uri": open_state_uri},
         )
     )
@@ -148,7 +135,6 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     fields = metavariable.invoke(
         CapabilityRequest(
             capability_id="lean.proof_state.metavariable_fields",
-            mode=CapabilityMode.EXPLORE,
             input={"environment": "CORE", "state_uri": open_state_uri},
         )
     )

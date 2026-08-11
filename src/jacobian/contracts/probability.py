@@ -127,6 +127,10 @@ class GaussianPolynomial(ContractModel):
     terms: tuple[GaussianPolynomialTerm, ...] = Field(
         min_length=1,
         max_length=MAX_GAUSSIAN_POLYNOMIAL_TERMS,
+        description=(
+            "Nonzero sparse terms ordered lexicographically by their complete "
+            "exponent vectors, for example [0, 1] before [1, 0]."
+        ),
     )
 
     @model_validator(mode="after")
@@ -136,10 +140,13 @@ class GaussianPolynomial(ContractModel):
             raise ValueError(
                 "every Gaussian polynomial exponent vector must match variable_count"
             )
-        if any(left >= right for left, right in pairwise(exponents)):
-            raise ValueError(
-                "Gaussian polynomial terms must use strictly increasing exponent order"
-            )
+        for left, right in pairwise(exponents):
+            if left >= right:
+                raise ValueError(
+                    "Gaussian polynomial terms must use strictly increasing "
+                    "lexicographic exponent-vector order; first offending adjacent "
+                    f"pair is {list(left)} then {list(right)}"
+                )
         return self
 
 

@@ -20,9 +20,6 @@ from fractions import Fraction
 from math import comb
 from typing import Any
 
-__all__ = ["check_enclosure"]
-
-
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _VARIABLE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 _MAX_DEGREE = 64

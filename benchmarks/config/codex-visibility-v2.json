@@ -57,6 +57,15 @@
       "require_verified": false
     },
     {
+      "case_id": "latent-fixed-order-difference-set-extension",
+      "cue_level": "LATENT",
+      "prompt": "For the integer set {1,2,4,8,13}, decide exactly whether its reduced residues are contained in a cyclic perfect difference set of order 7, and report the exact candidate-space size covered by the decision.",
+      "expected_capability_ids": [
+        "combinatorics.cyclic_difference_set.extension.decide"
+      ],
+      "require_verified": false
+    },
+    {
       "case_id": "latent-independent-verification",
       "cue_level": "LATENT",
       "prompt": "Compute and independently verify the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. State the determinant and the assurance level supported by the evidence.",

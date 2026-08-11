@@ -10,7 +10,7 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.domains._examples import example
 from jacobian.domains.number_theory._support import number_theory_operation
-from jacobian.domains.number_theory.operations import (
+from jacobian.domains.number_theory.derived_operations import (
     compute_factorial_valuation,
     compute_floor_square_root,
     compute_legendre_symbol,

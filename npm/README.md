@@ -15,7 +15,7 @@ installs, registers, and forwards.
 ## Requirements
 
 - Node.js >= 18
-- Python 3.12 or `uv` on `$PATH` (the launcher installs the exactly matching
+- Python 3.12/3.13 or `uv` on `$PATH` (the launcher installs the exactly matching
   kernel from PyPI on first use)
 
 ## Install
@@ -49,14 +49,14 @@ npm install -g jacobian
 ## Usage
 
 ```sh
-jacobian setup [--client <id>...] [--all] [--yes] [--dry-run] [--json]
+jacobian setup [--client <id>...] [--all] [--yes] [--dry-run] [--json] [--plain]
                [--source <checkout> --state-dir <path> --profile <name>]
   Configure MCP clients to use Jacobian.
 jacobian upgrade
   Resolve the latest npm bootstrap, then refresh the launcher-managed Python package.
-jacobian doctor [--json]
-  Verify the MCP handshake and tool catalog.
-jacobian remove [--client <id>...] [--all] [--yes] [--json]
+jacobian doctor [--client <id>...] [--all] [--json]
+  Verify configured launchers, the MCP handshake, and the tool catalog.
+jacobian remove [--client <id>...] [--all] [--yes] [--dry-run] [--json] [--plain]
   Remove Jacobian from MCP client configs.
 jacobian mcp
   Run the Jacobian MCP server over stdio.
@@ -65,6 +65,14 @@ jacobian <command> [args...]
 ```
 
 Supported clients: `claude`, `cursor`, `opencode`, `codex`, `gemini`.
+
+Setup validates external runtime prerequisites and every selected client file
+before writing. Its preflight discloses the launcher, exact target paths, and
+the deferred Python environment, package-index access, and approximate install
+size. Non-interactive setup requires explicit clients plus `--yes`; `--json`
+reports contain only redacted public plan fields. Run the tailored `doctor`
+command printed after setup to validate those client entries and execute the
+configured launcher.
 
 Codex setup also installs a small `jacobian-math` skill under
 `~/.codex/skills`. Codex does not guarantee that MCP server instructions are

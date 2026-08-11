@@ -233,4 +233,6 @@ class FiniteCoverageVerifyOutput(ContractModel):
             raise ValueError("only exactly-once coverage may carry a true conclusion")
         if self.conclusion == "TRUE" and self.verification_record_uri is None:
             raise ValueError("true coverage requires a verification record")
+        if self.conclusion == "UNKNOWN" and self.verification_record_uri is not None:
+            raise ValueError("unknown coverage cannot carry a verification record")
         return self

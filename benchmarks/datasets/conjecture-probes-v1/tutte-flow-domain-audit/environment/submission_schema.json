@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "balances": {
+      "items": {
+        "maximum": 4,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 10,
+      "minItems": 10,
+      "type": "array"
+    },
+    "flow": {
+      "items": {
+        "maximum": 4,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 15,
+      "minItems": 15,
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "CONSERVATION_ONLY_IS_UNSOUND_AND_REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_PETERSEN_GRAPH_INSTANCE",
+        "MODULAR_FLOW_DOMAIN_AUDIT_ONLY",
+        "TUTTE_FIVE_FLOW_CONJECTURE_NOT_ASSESSED"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "flawed_balances": {
+          "$ref": "#/$defs/balances"
+        },
+        "flawed_flow": {
+          "$ref": "#/$defs/flow"
+        },
+        "repair_balances": {
+          "$ref": "#/$defs/balances"
+        },
+        "repair_flow": {
+          "$ref": "#/$defs/flow"
+        },
+        "zero_edge_index": {
+          "maximum": 14,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "flawed_flow",
+        "flawed_balances",
+        "zero_edge_index",
+        "repair_flow",
+        "repair_balances"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "petersen-nowhere-zero-five-flow-audit-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/tutte-flow-domain-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

@@ -14,7 +14,6 @@ from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -88,7 +87,6 @@ def test_sympy_normalization_timeout_is_operational(
         attached_complete_runtime,
         "polynomial.expression.normalize",
         {"expression": _expression(_variable("x"), variables=["x"])},
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.output["status"] == "NO_NORMALIZATION_PRODUCED"
@@ -136,7 +134,6 @@ def test_sympy_worker_gets_only_fixed_environment_and_budget(
             "expression": _expression(_variable("x"), variables=["x"]),
             "resource_budget": {"wall_seconds": 7},
         },
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.output["status"] == "NORMALIZATION_PRODUCED"
     assert observed["timeout_seconds"] == 7.0
@@ -186,7 +183,6 @@ def test_normalization_output_is_discarded_if_runtime_identity_changes(
         attached_complete_runtime,
         "polynomial.expression.normalize",
         {"expression": _expression(_variable("x"), variables=["x"])},
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output["status"] == "NO_NORMALIZATION_PRODUCED"
@@ -212,7 +208,6 @@ def test_invalid_worker_protocol_retains_no_normalization_evidence(
         attached_complete_runtime,
         "polynomial.expression.normalize",
         {"expression": _expression(_variable("x"), variables=["x"])},
-        mode=CapabilityMode.EXPLORE,
     )
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output["status"] == "NO_NORMALIZATION_PRODUCED"

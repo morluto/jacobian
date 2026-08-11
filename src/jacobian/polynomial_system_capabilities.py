@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Literal, cast
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -21,7 +21,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -158,7 +157,10 @@ class PolynomialSystemSolutionAdapter:
     def __init__(self, resources: PolynomialSystemResources) -> None:
         self.resources = resources
         checker_id = resources.installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise RuntimeError(
+                "polynomial system solution adapter requires an authorized checker"
+            )
         self._descriptor = CapabilityDescriptor(
             capability_id="polynomial.system.solution.verify",
             version="1",
@@ -173,7 +175,6 @@ class PolynomialSystemSolutionAdapter:
                 features=("polynomial-system", "solution", "exact-rational"),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialSystemSolutionRequest),
             output_schema=model_schema(PolynomialSystemSolutionOutput),
             tags=("polynomial", "system", "solution", "verification"),
@@ -207,7 +208,17 @@ class PolynomialSystemSolutionAdapter:
             ) from exc
         installation = self.resources.installation
         checker_id = installation.checker_id
-        assert checker_id is not None
+        if checker_id is None:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="POLYNOMIAL_SYSTEM_CHECKER_UNAVAILABLE",
+                    stage="solution_verification",
+                    message=(
+                        "The independent polynomial-system checker is not installed "
+                        "in this runtime."
+                    ),
+                )
+            )
         equation_residuals, inequation_values = _evaluate_request(validated)
         system = self.resources.artifacts.put(
             schema_uri=installation.system_schema_uri,
@@ -275,9 +286,14 @@ class PolynomialSystemSolutionAdapter:
             and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
-        conclusion = cast(
-            Literal["TRUE", "FALSE", "UNKNOWN"],
-            checked.conclusion.value,
+        conclusion: Literal["TRUE", "FALSE", "UNKNOWN"] = (
+            "TRUE"
+            if verified and checked.conclusion is Conclusion.TRUE
+            else (
+                "FALSE"
+                if verified and checked.conclusion is Conclusion.FALSE
+                else "UNKNOWN"
+            )
         )
         satisfies = {
             "TRUE": True,
@@ -309,7 +325,6 @@ class PolynomialSystemSolutionAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

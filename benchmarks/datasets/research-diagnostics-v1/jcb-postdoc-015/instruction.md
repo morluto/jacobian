@@ -15,9 +15,10 @@ checkable finite core:
 - the exact number of candidate supersets examined for each fixed order.
 
 Write that evidence to `evidence/finite-core.json` and bind its SHA-256 digest
-in `submission.json`. Follow the exact schemas in `input.json` and
-`submission_schema.json`. The fixed-order checks must cover every candidate,
-not a sample. The public universal result may be reported, but this task does
+in `submission.json`. Follow `submission_schema.json` for the submission and
+the separate agent-visible `/app/evidence_schema.json` for the complete
+`evidence/finite-core.json` body. The fixed-order checks must cover every
+candidate, not a sample. The public universal result may be reported, but this task does
 not supply its projective-geometric or formal obstruction certificate: set
 `universal_obstruction_replayed` to `false` and do not claim that the three
 finite searches prove the universal statement.

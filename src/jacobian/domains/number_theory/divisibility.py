@@ -15,8 +15,7 @@ from jacobian.domains._examples import example
 from jacobian.domains.number_theory._support import (
     number_theory_operation,
 )
-from jacobian.domains.number_theory.factorization import FACTORIZATION_CAPABILITIES
-from jacobian.domains.number_theory.operations import (
+from jacobian.domains.number_theory.divisibility_operations import (
     compute_aliquot_sum,
     compute_divisor_count,
     compute_divisor_sum,
@@ -33,6 +32,7 @@ from jacobian.domains.number_theory.operations import (
     decide_perfect,
     decide_square,
 )
+from jacobian.domains.number_theory.factorization import FACTORIZATION_CAPABILITIES
 
 DIVISIBILITY_CAPABILITIES = (
     *FACTORIZATION_CAPABILITIES,

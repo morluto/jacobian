@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityAdapter, CapabilityService
+from jacobian.contracts.capabilities import CapabilityCatalogRelationship
 from jacobian.operation_installation import OperationInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -33,6 +34,7 @@ class InstallationContext:
     operations: OperationInstaller
     checker_authority: CheckerAuthorityMode
     register_capability: Callable[[CapabilityAdapter], None]
+    register_checker_relationship: Callable[[str, CapabilityCatalogRelationship], None]
 
     @property
     def authorizes_bundled_checkers(self) -> bool:
@@ -68,6 +70,14 @@ def create_installation_context(
         if adapter.descriptor.capability_id not in excluded:
             core.capabilities.register(adapter)
 
+    def register_checker_relationship(
+        source_capability_id: str,
+        relationship: CapabilityCatalogRelationship,
+    ) -> None:
+        core.capabilities._register_catalog_relationship(
+            source_capability_id, relationship
+        )
+
     return InstallationContext(
         store=core.store,
         schemas=core.schemas,
@@ -78,4 +88,5 @@ def create_installation_context(
         operations=core.operations,
         checker_authority=options.checker_authority,
         register_capability=register,
+        register_checker_relationship=register_checker_relationship,
     )

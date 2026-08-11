@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime.model import JacobianRuntime
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def _graph_uri(
@@ -56,7 +58,6 @@ def test_graph_isomorphism_verifies_a_valid_bijection(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.isomorphism.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(authorized_complete_runtime, {"a": "x", "b": "z", "c": "y"}),
         )
     )
@@ -82,7 +83,6 @@ def test_graph_isomorphism_verifies_a_negative_result(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.isomorphism.verify",
-            mode=CapabilityMode.VERIFY,
             input=_input(authorized_complete_runtime, {"a": "x", "b": "y", "c": "z"}),
         )
     )
@@ -109,7 +109,6 @@ def test_graph_isomorphism_keeps_checker_rejection_unknown(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.isomorphism.verify",
-            mode=CapabilityMode.VERIFY,
             input=request_input,
         )
     )
@@ -131,7 +130,6 @@ def test_graph_isomorphism_accepts_graph_atlas_artifact_handoff(
     searched = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.search.atlas",
-            mode=CapabilityMode.EXPLORE,
             input={"order": 3, "constraints": {"connected": True}, "limit": 1},
         )
     )
@@ -142,7 +140,6 @@ def test_graph_isomorphism_accepts_graph_atlas_artifact_handoff(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.isomorphism.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "left_graph_uri": graph_uri,
                 "right_graph_uri": graph_uri,
@@ -181,7 +178,6 @@ def test_graph_isomorphism_accepts_valid_unsorted_graph_artifacts(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.isomorphism.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "left_graph_uri": left_graph_uri,
                 "right_graph_uri": right_graph_uri,
@@ -221,7 +217,6 @@ def test_graph_isomorphism_rejects_incompatible_graph_artifact(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.isomorphism.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "left_graph_uri": wrong_artifact.artifact_uri,
                 "right_graph_uri": right_graph_uri,

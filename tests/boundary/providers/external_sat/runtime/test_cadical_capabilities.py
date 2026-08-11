@@ -10,7 +10,6 @@ from tests.support.provider_external_sat import drat_trim_runtime_available
 from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
@@ -82,7 +81,6 @@ def _invoke(
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=capability_id,
-            mode=CapabilityMode.EXPLORE,
             input={
                 "cnf_uri": cnf_uri,
                 "resource_budget": budget,
@@ -137,7 +135,6 @@ def test_model_find_materializes_only_an_unverified_bound_assignment(
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.model.verify",
-            mode=CapabilityMode.VERIFY,
             input={"assignment_uri": assignment_uri},
         )
     )
@@ -244,7 +241,6 @@ def test_cadical_deletion_heavy_proof_replays_in_strict_checker(
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.unsat_proof.verify",
-            mode=CapabilityMode.VERIFY,
             input={"proof_uri": proof_uri},
         )
     )

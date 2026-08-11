@@ -15,12 +15,19 @@ from jacobian.lean_frontend.exploration import (
     install_lean_exploration_capabilities,
 )
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
+from jacobian.lean_frontend.repl_protocol import (
+    LeanReplCommandResponse,
+    LeanReplErrorResponse,
+    LeanReplProofResponse,
+    LeanReplProofStepResponse,
+    LeanReplValidatedExecution,
+)
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
-_ReplResponses = tuple[dict[str, object], dict[str, object], dict[str, object]]
+_ReplResponses = LeanReplValidatedExecution
 
 
 def _installation(environment: LeanEnvironment) -> LeanCheckerInstallation:
@@ -78,11 +85,21 @@ def _responses(
         "goals": after,
     }
     if error is not None:
-        tactic["messages"] = [{"severity": "error", "data": error}]
+        tactic["messages"] = [
+            {
+                "pos": {"line": 0, "column": 0},
+                "severity": "error",
+                "data": error,
+            }
+        ]
     return (
-        {"env": 0, "sorries": [{"proofState": 0}]},
-        {"proofState": 1, "proofStatus": "Goals", "goals": before},
-        tactic,
+        LeanReplCommandResponse.model_validate(
+            {"env": 0, "sorries": [{"goal": "⊢ True", "proofState": 0}]}
+        ),
+        LeanReplProofStepResponse.model_validate(
+            {"proofState": 1, "proofStatus": "Goals", "goals": before}
+        ),
+        LeanReplProofStepResponse.model_validate(tactic),
     )
 
 
@@ -105,11 +122,9 @@ def _stub_lean_runtime(
         del kwargs
         payload = responses()
         tactic_response = payload[2]
-        goals = tactic_response.get("goals", [])
-        if not isinstance(goals, list):
-            raise TypeError("stub tactic response goals must be a list")
         last_goals.clear()
-        last_goals.extend(str(goal) for goal in goals)
+        if isinstance(tactic_response, LeanReplProofStepResponse):
+            last_goals.extend(tactic_response.goals)
         return payload
 
     def _fake_extract(
@@ -233,16 +248,13 @@ def test_apply_tactic_returns_rejection_without_successor(
     ("tactic_response", "expected_message"),
     (
         (
-            {
-                "proofState": 2,
-                "proofStatus": "Goals",
-                "goals": [],
-                "error": "tactic protocol error",
-            },
+            LeanReplErrorResponse(message="tactic protocol error"),
             "tactic protocol error",
         ),
         (
-            {"proofState": 2, "proofStatus": "failed", "goals": []},
+            LeanReplProofStepResponse.model_validate(
+                {"proofState": 2, "proofStatus": "failed", "goals": []}
+            ),
             "Lean tactic returned proof status 'failed'",
         ),
     ),
@@ -250,7 +262,7 @@ def test_apply_tactic_returns_rejection_without_successor(
 def test_rejected_transition_persists_all_protocol_diagnostics(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    tactic_response: dict[str, object],
+    tactic_response: LeanReplProofResponse,
     expected_message: str,
 ) -> None:
     adapter = _adapter(tmp_path)
@@ -258,8 +270,12 @@ def test_rejected_transition_persists_all_protocol_diagnostics(
         monkeypatch,
         adapter,
         lambda: (
-            {"env": 0, "sorries": [{"proofState": 0}]},
-            {"proofState": 1, "proofStatus": "Goals", "goals": ["⊢ True"]},
+            LeanReplCommandResponse.model_validate(
+                {"env": 0, "sorries": [{"goal": "⊢ True", "proofState": 0}]}
+            ),
+            LeanReplProofStepResponse.model_validate(
+                {"proofState": 1, "proofStatus": "Goals", "goals": ["⊢ True"]}
+            ),
             tactic_response,
         ),
     )

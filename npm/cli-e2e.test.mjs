@@ -144,10 +144,9 @@ test("npx jacobian setup manages the Codex visibility skill safely", async () =>
     assert.equal(setupReport.results[0].visibilitySkill.status, "create");
     const managedSkill = await readFile(skillPath, "utf8");
     assert.match(managedSkill, /name: jacobian-math/);
-    assert.match(managedSkill, /matrix determinants/);
     assert.match(
       managedSkill,
-      /Trigger on relevant math tasks even when the user does not name Jacobian/,
+      /description: .*matrix determinants.*even when unnamed\./,
     );
 
     const remove = await runNpx(

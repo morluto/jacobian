@@ -105,10 +105,20 @@ class _UnauthorizedContext:
 
 
 def test_reference_phase_derives_authority_from_its_context() -> None:
+    installed: dict[str, object] = {}
+
+    class _ReferenceInstaller:
+        def install_all(self, *, authorize_checker: bool = True) -> dict[str, object]:
+            installed["authorize_checker"] = authorize_checker
+            return {"graph_paths": object()}
+
     context = _UnauthorizedContext()
     application = cast(
         ApplicationServices,
-        SimpleNamespace(core=SimpleNamespace(plugins=object())),
+        SimpleNamespace(
+            core=SimpleNamespace(plugins=object()),
+            reference_installer=_ReferenceInstaller(),
+        ),
     )
     result = PortfolioInstallation()
 
@@ -117,7 +127,8 @@ def test_reference_phase_derives_authority_from_its_context() -> None:
         cast(ProviderAvailabilityResolver, object()),
     ).install(application, result)
 
-    assert result.references == {}
+    assert installed["authorize_checker"] is False
+    assert set(result.references) == {"graph_paths"}
     assert result.lean_checkers == {}
     assert context.registered == []
 
@@ -144,3 +155,37 @@ def test_portfolio_close_releases_every_owned_lean_resource_once() -> None:
     result.close()
 
     assert closed == ["declarations", "exploration", "verification"]
+
+
+def test_portfolio_close_continues_after_keyboard_interrupt() -> None:
+    closed: list[str] = []
+
+    class InterruptingResource:
+        def close(self) -> None:
+            closed.append("declarations")
+            raise KeyboardInterrupt("declarations close interrupted")
+
+    class Resource:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def close(self) -> None:
+            closed.append(self.name)
+
+    result = PortfolioInstallation()
+    result.lean_declarations = cast(Any, InterruptingResource())
+    result.lean_exploration = cast(
+        Any,
+        SimpleNamespace(repl=Resource("exploration")),
+    )
+    result.lean = cast(Any, Resource("verification"))
+
+    with pytest.raises(
+        BaseExceptionGroup, match="portfolio resources failed to close"
+    ) as exc:
+        result.close()
+
+    assert closed == ["declarations", "exploration", "verification"]
+    assert [str(failure) for failure in exc.value.exceptions] == [
+        "declarations close interrupted",
+    ]

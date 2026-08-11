@@ -81,6 +81,15 @@ class ExactComputedVerificationOutput(ContractModel):
     verification_record_uri: ArtifactUri | None = None
     detail: str
 
+    @model_validator(mode="after")
+    def verified_status_binds_a_decisive_record(self) -> Self:
+        verified = self.status == "VERIFIED"
+        if verified != (self.conclusion == "TRUE"):
+            raise ValueError("only VERIFIED output may carry a true conclusion")
+        if verified != (self.verification_record_uri is not None):
+            raise ValueError("only VERIFIED output may carry a verification record")
+        return self
+
 
 class ExactDomainResultVerificationRequest(ContractModel):
     """Exact replay input for a producer whose result is already durable."""

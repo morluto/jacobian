@@ -8,7 +8,6 @@ from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, WitnessEnvelope
 from jacobian.contracts.polynomials import (
-    PolynomialFactorizationArtifact,
     PolynomialIdentityClaim,
     PolynomialInjectivityClaim,
     PolynomialJacobian,
@@ -23,7 +22,6 @@ from jacobian.contracts.polynomials import (
     RationalFunctionIdentityClaim,
     RationalPolynomial,
     RationalPolynomialMap,
-    SparseRationalPolynomial,
 )
 from jacobian.polynomials.collision import (
     PolynomialCollisionAdapter,
@@ -36,7 +34,6 @@ from jacobian.polynomials.evaluation import (
     PolynomialKellerConditionVerifyAdapter,
     PolynomialMapEvaluationAdapter,
 )
-from jacobian.polynomials.factor import PolynomialFactorAdapter
 from jacobian.polynomials.identity import PolynomialIdentityAdapter
 from jacobian.polynomials.inverse import (
     PolynomialMapInverseSynthesizeAdapter,
@@ -69,7 +66,6 @@ def install_polynomial_capabilities(
         PolynomialCollisionSearchAdapter,
         PolynomialCollisionVerifyAdapter,
         PolynomialMapInverseCollisionVerifyAdapter,
-        PolynomialFactorAdapter,
         PolynomialMapInverseSynthesizeAdapter,
         PolynomialMapInverseVerifyAdapter,
     ],
@@ -146,36 +142,6 @@ def install_polynomial_capabilities(
             "synthesis_scope": "bounded polynomial coefficient ansatz only",
             "bounded_no_candidate": "does not prove noninvertibility",
             "rational_map_inverses": "unsupported",
-        },
-    )
-    polynomial_semantics_uri = store.register_descriptor(
-        kind="semantics",
-        name="jacobian.univariate-rational-polynomial",
-        version="1",
-        definition={
-            "description": (
-                "univariate sparse polynomials over QQ with canonical reduced "
-                "rational coefficients"
-            ),
-            "domain": "QQ",
-            "maximum_terms": 1024,
-        },
-    )
-    factorization_semantics_uri = store.register_descriptor(
-        kind="semantics",
-        name="jacobian.univariate-rational-polynomial-factorization",
-        version="1",
-        definition={
-            "description": (
-                "a rational coefficient and multiplicity-bearing irreducible "
-                "factors over QQ whose product reconstructs one source polynomial"
-            ),
-            "domain": "QQ",
-            "zero_representation": {
-                "coefficient": {"num": "0", "den": "1"},
-                "factors": [],
-            },
-            "irreducibility_assurance": "unverified",
         },
     )
     map_schema_uri = schemas.register(
@@ -267,16 +233,6 @@ def install_polynomial_capabilities(
         name="jacobian.certificate-envelope",
         version="1",
         schema=model_schema(CertificateEnvelope),
-    )
-    polynomial_schema_uri = schemas.register(
-        name="jacobian.sparse-rational-polynomial",
-        version="1",
-        schema=model_schema(SparseRationalPolynomial),
-    )
-    factorization_schema_uri = schemas.register(
-        name="jacobian.polynomial-factorization",
-        version="1",
-        schema=model_schema(PolynomialFactorizationArtifact),
     )
     collision_checker_id = (
         CheckerInstaller(checkers)
@@ -417,8 +373,6 @@ def install_polynomial_capabilities(
     )
     installation = PolynomialInstallation(
         semantics_uri=semantics_uri,
-        polynomial_semantics_uri=polynomial_semantics_uri,
-        factorization_semantics_uri=factorization_semantics_uri,
         identity_semantics_uri=identity_semantics_uri,
         rational_function_identity_semantics_uri=(
             rational_function_identity_semantics_uri
@@ -444,8 +398,6 @@ def install_polynomial_capabilities(
         inverse_synthesis_schema_uri=inverse_synthesis_schema_uri,
         witness_schema_uri=witness_schema_uri,
         certificate_schema_uri=certificate_schema_uri,
-        polynomial_schema_uri=polynomial_schema_uri,
-        factorization_schema_uri=factorization_schema_uri,
         collision_checker_id=collision_checker_id,
         jacobian_checker_id=jacobian_checker_id,
         keller_checker_id=keller_checker_id,
@@ -487,7 +439,6 @@ def install_polynomial_capabilities(
                 if inverse_collision_checker_id is not None
                 else ()
             ),
-            PolynomialFactorAdapter(resources),
             PolynomialMapInverseSynthesizeAdapter(resources),
             *(
                 (PolynomialMapInverseVerifyAdapter(resources),)

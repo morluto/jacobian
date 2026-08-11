@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import comb
 from typing import Any, Literal
 
@@ -18,13 +18,15 @@ from jacobian.checker_operations import CheckerOperation, ExactReplayCheckerDecl
 from jacobian.contracts.capabilities import (
     CapabilityAssurance,
     CapabilityAssuranceLevel,
+    CapabilityCatalogRelationship,
+    CapabilityCatalogRelationshipKind,
+    CapabilityCatalogRelationshipRegistration,
     CapabilityCompleteness,
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -98,6 +100,7 @@ class ExactDomainCheckerInstallation:
     provider_runtimes: dict[str, CapabilityProviderRuntime]
     witness_schema_uri: str | None = None
     diagnostics: tuple[CapabilityDiagnostic, ...] = ()
+    catalog_relationships: tuple[CapabilityCatalogRelationshipRegistration, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,6 +372,7 @@ def install_exact_domain_verification(
     ):
         return (), installation
     adapters: list[CapabilityAdapter] = []
+    catalog_relationships: list[CapabilityCatalogRelationshipRegistration] = []
     result_models = {
         operation.capability_id: operation.result_model
         for bundle, _installed_bundle in bundles.values()
@@ -405,6 +409,38 @@ def install_exact_domain_verification(
                 stored_result_input=declaration.capability_id in stored_producers,
             )
         )
+        verifier_id = declaration.verification_capability_id
+        if verifier_id is None:
+            raise ValueError("exact replay declaration has no verifier capability ID")
+        catalog_relationships.extend(
+            (
+                CapabilityCatalogRelationshipRegistration(
+                    source_capability_id=declaration.capability_id,
+                    related_capability=CapabilityCatalogRelationship(
+                        capability_id=verifier_id,
+                        kind=(CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER),
+                        relationship=(
+                            "independently verify this exact producer result"
+                        ),
+                    ),
+                ),
+                CapabilityCatalogRelationshipRegistration(
+                    source_capability_id=verifier_id,
+                    related_capability=CapabilityCatalogRelationship(
+                        capability_id=declaration.capability_id,
+                        kind=(
+                            CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER
+                        ),
+                        relationship=(
+                            "produce the exact result accepted by this verifier"
+                        ),
+                    ),
+                ),
+            )
+        )
+    installation = replace(
+        installation, catalog_relationships=tuple(catalog_relationships)
+    )
     return tuple(adapters), installation
 
 
@@ -519,7 +555,6 @@ class ExactComputedVerificationAdapter:
             description=verification_description,
             provider=provider_runtime.provider,
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(
                 ExactDomainResultVerificationRequest
                 if stored_result_input
@@ -582,7 +617,6 @@ class ExactComputedVerificationAdapter:
             return CapabilityResult(
                 capability_id=self.descriptor.capability_id,
                 capability_version=self.descriptor.version,
-                mode=request.mode,
                 execution=Execution(status=ExecutionStatus.COMPLETED),
                 output=output.model_dump(mode="json"),
                 scope=CapabilityScope(
@@ -725,7 +759,6 @@ class ExactComputedVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -829,7 +862,6 @@ class ExactComputedVerificationAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

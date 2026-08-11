@@ -7,20 +7,27 @@ import sys
 from fractions import Fraction
 from typing import Any
 
+from pydantic import ValidationError
+
 from jacobian.canonical import (
+    CanonicalizationError,
     canonicalize_json,
     format_canonical_integer,
     loads_strict_json,
 )
-
-SOLUTION_PROTOCOL = "jacobian.rational-linear-solution-worker/v1"
-INCONSISTENCY_PROTOCOL = "jacobian.rational-linear-inconsistency-worker/v1"
-
-
-def _rational(value: object) -> Fraction:
-    if not isinstance(value, dict) or set(value) != {"num", "den"}:
-        raise ValueError("invalid rational")
-    return Fraction(int(value["num"]), int(value["den"]))
+from jacobian.contracts.exact import CanonicalRational
+from jacobian.domains.rational_linear.protocol import (
+    RationalLinearCertificateProduced,
+    RationalLinearInconsistencyWorkerRequest,
+    RationalLinearInconsistencyWorkerResponse,
+    RationalLinearNoCertificateProduced,
+    RationalLinearNoSolutionProduced,
+    RationalLinearSolutionProduced,
+    RationalLinearSolutionWorkerResponse,
+    RationalLinearWorkerFailure,
+    RationalLinearWorkerRequest,
+    parse_rational_linear_worker_request,
+)
 
 
 def _solve(
@@ -48,19 +55,27 @@ def _solve(
     return values
 
 
-def _run(payload: dict[str, Any]) -> dict[str, object]:
-    protocol = payload.get("protocol")
-    if protocol not in {SOLUTION_PROTOCOL, INCONSISTENCY_PROTOCOL}:
-        raise ValueError("invalid protocol")
-    system = payload["system"]
-    matrix = system["coefficients"]["entries"]
-    rhs = system["rhs"]
-    coefficients = [[_rational(value) for value in row] for row in matrix]
-    bounds = [_rational(value) for value in rhs]
+def _canonical_rational(value: Any) -> CanonicalRational:
+    """Convert a backend-native fmpq through the canonical wire representation."""
+
+    return CanonicalRational(
+        num=format_canonical_integer(int(value.numerator)),
+        den=format_canonical_integer(int(value.denominator)),
+    )
+
+
+def _run(
+    worker_request: RationalLinearWorkerRequest,
+) -> RationalLinearSolutionWorkerResponse | RationalLinearInconsistencyWorkerResponse:
+    system = worker_request.request.system
+    coefficients = [
+        [value.as_fraction() for value in row] for row in system.coefficients.entries
+    ]
+    bounds = [value.as_fraction() for value in system.rhs]
     flint: Any = importlib.import_module("flint")
     if getattr(flint, "__version__", None) != "0.9.0":
         raise ValueError("unsupported Python-FLINT version")
-    if protocol == INCONSISTENCY_PROTOCOL:
+    if isinstance(worker_request, RationalLinearInconsistencyWorkerRequest):
         row_count = len(coefficients)
         column_count = len(coefficients[0])
         dual = [
@@ -70,51 +85,58 @@ def _run(payload: dict[str, Any]) -> dict[str, object]:
         dual.append(bounds)
         values = _solve(dual, [Fraction(0)] * column_count + [Fraction(1)], flint)
         if values is None:
-            return {"status": "NO_CERTIFICATE_PRODUCED"}
-        return {
-            "status": "CERTIFICATE_PRODUCED",
-            "left_witness": [
-                {
-                    "num": format_canonical_integer(value.numerator),
-                    "den": format_canonical_integer(value.denominator),
-                }
-                for value in values
-            ],
-            "rhs_pairing": {"num": "1", "den": "1"},
-        }
+            return RationalLinearNoCertificateProduced(
+                protocol="jacobian.rational-linear-inconsistency-worker/v1",
+                status="NO_CERTIFICATE_PRODUCED",
+            )
+        return RationalLinearCertificateProduced(
+            protocol="jacobian.rational-linear-inconsistency-worker/v1",
+            status="CERTIFICATE_PRODUCED",
+            left_witness=tuple(_canonical_rational(value) for value in values),
+            rhs_pairing=CanonicalRational(num="1", den="1"),
+        )
     values = _solve(coefficients, bounds, flint)
     if values is None:
-        return {"status": "NO_SOLUTION_PRODUCED"}
-    return {
-        "status": "SOLUTION_PRODUCED",
-        "values": [
-            {
-                "num": format_canonical_integer(value.numerator),
-                "den": format_canonical_integer(value.denominator),
-            }
-            for value in values
-        ],
-    }
+        return RationalLinearNoSolutionProduced(
+            protocol="jacobian.rational-linear-solution-worker/v1",
+            status="NO_SOLUTION_PRODUCED",
+        )
+    return RationalLinearSolutionProduced(
+        protocol="jacobian.rational-linear-solution-worker/v1",
+        status="SOLUTION_PRODUCED",
+        values=tuple(_canonical_rational(value) for value in values),
+    )
 
 
 def main() -> int:
+    worker_request: RationalLinearWorkerRequest | None = None
     try:
-        payload = loads_strict_json(sys.stdin.buffer.read())
-        if not isinstance(payload, dict):
-            raise ValueError("invalid request")
-        result = _run(payload)
-        protocol = payload["protocol"]
+        worker_request = parse_rational_linear_worker_request(
+            loads_strict_json(sys.stdin.buffer.read())
+        )
+        result = _run(worker_request)
         sys.stdout.buffer.write(
-            canonicalize_json({"protocol": protocol, **result}) + b"\n"
+            canonicalize_json(result.model_dump(mode="json")) + b"\n"
         )
         return 0
-    except Exception as exc:  # pragma: no cover - process boundary
-        protocol = SOLUTION_PROTOCOL
+    except (CanonicalizationError, ValidationError):
+        failure = RationalLinearWorkerFailure(
+            status="ERROR",
+            error_code="INVALID_REQUEST",
+        )
         sys.stdout.buffer.write(
-            canonicalize_json(
-                {"protocol": protocol, "status": "ERROR", "error": type(exc).__name__}
-            )
-            + b"\n"
+            canonicalize_json(failure.model_dump(mode="json")) + b"\n"
+        )
+        return 2
+    except Exception:  # pragma: no cover - process boundary
+        failure = RationalLinearWorkerFailure(
+            status="ERROR",
+            error_code=(
+                "INVALID_REQUEST" if worker_request is None else "EXECUTION_FAILED"
+            ),
+        )
+        sys.stdout.buffer.write(
+            canonicalize_json(failure.model_dump(mode="json")) + b"\n"
         )
         return 2
 

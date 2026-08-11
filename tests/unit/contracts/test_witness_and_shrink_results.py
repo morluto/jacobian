@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 from tests.support.artifacts import artifact_uri as _uri
 
-from jacobian.contracts.shrinking import ShrinkResult
+from jacobian.contracts.shrinking import ShrinkResult, ShrinkStep
 from jacobian.contracts.witness_search import (
     PluginWitnessResponse,
     WitnessFindResult,
@@ -73,6 +73,31 @@ def test_plugin_may_only_propose_none_certified_with_a_certificate() -> None:
         }
     )
     assert proposed.certificate_uri == _uri("7")
+
+
+def test_accepted_shrink_step_requires_a_completed_checker_record() -> None:
+    with pytest.raises(ValidationError, match="accepted shrink step"):
+        ShrinkStep(
+            index=0,
+            reducer="delete_vertex",
+            from_uri=_uri("1"),
+            proposed_uri=_uri("2"),
+            accepted=True,
+            execution_status="COMPLETED",
+            input_status="ACCEPTED",
+        )
+
+    with pytest.raises(ValidationError, match="rejected shrink step"):
+        ShrinkStep(
+            index=0,
+            reducer="delete_vertex",
+            from_uri=_uri("1"),
+            proposed_uri=_uri("2"),
+            accepted=False,
+            execution_status="COMPLETED",
+            input_status="REJECTED",
+            verification_record_uri=_uri("3"),
+        )
 
 
 @pytest.mark.parametrize("minimality", ["ONE_STEP", "BOUNDED_GLOBAL", "PROVED_GLOBAL"])

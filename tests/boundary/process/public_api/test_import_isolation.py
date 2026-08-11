@@ -45,7 +45,6 @@ def test_native_matrices_does_not_import_capabilities_or_provider_loading() -> N
             "jacobian.operation_installation",
             "jacobian.provider_runtime",
             "jacobian.providers",
-            "jacobian.reasoning_log",
             "jacobian.runtime",
             "jacobian.store",
         ),

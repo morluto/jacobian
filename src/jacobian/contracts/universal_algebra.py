@@ -274,7 +274,6 @@ class UniversalAlgebraCertificateVerificationPayload(ContractModel):
 
 class UniversalAlgebraVerificationHandoff(ContractModel):
     capability_id: Literal["certificate.verify"] = "certificate.verify"
-    mode: Literal["VERIFY"] = "VERIFY"
     payload: UniversalAlgebraCertificateVerificationPayload
 
 

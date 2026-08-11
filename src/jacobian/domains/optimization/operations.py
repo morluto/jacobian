@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
-
-from pydantic import ValidationError
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import (
-    CanonicalizationError,
     canonicalize_json,
     loads_strict_json,
 )
@@ -22,6 +18,11 @@ from jacobian.contracts.validated_analysis import (
     RationalLinearProgramResult,
 )
 from jacobian.domains._examples import example
+from jacobian.domains.optimization.protocol import (
+    PROTOCOL,
+    RationalOptimizationWorkerRequest,
+    parse_optimization_worker_response,
+)
 from jacobian.operations import (
     BoundedSearchIncomplete,
     BoundedSearchInterrupted,
@@ -39,19 +40,23 @@ from jacobian.worker_environment import worker_environment
 _WORKER_MODULE = "jacobian.domains.optimization.worker"
 
 
-def _run_worker(payload: dict[str, Any], *, wall_seconds: int) -> dict[str, Any]:
+def _run_worker(request: RationalLinearProgramRequest) -> RationalLinearProgramResult:
+    worker_request = RationalOptimizationWorkerRequest(
+        protocol=PROTOCOL,
+        request=request,
+    )
     completed = execute_process(
         ProcessRequest(
             executable=sys.executable,
             arguments=("-I", "-m", _WORKER_MODULE),
-            stdin_bytes=canonicalize_json(payload),
-            timeout_seconds=float(wall_seconds),
+            stdin_bytes=canonicalize_json(worker_request.model_dump(mode="json")),
+            timeout_seconds=float(request.wall_seconds),
             environment=worker_environment(locale="C"),
             cwd=str(Path.cwd()),
             stdout_limit_bytes=2_000_000,
             stderr_limit_bytes=64_000,
             resource_limits=ProcessResourceLimits(
-                cpu_seconds=wall_seconds + 1,
+                cpu_seconds=request.wall_seconds + 1,
                 address_space_bytes=1024 * 1024 * 1024,
             ),
         )
@@ -64,21 +69,14 @@ def _run_worker(payload: dict[str, Any], *, wall_seconds: int) -> dict[str, Any]
     ):
         raise RuntimeError("rational optimization worker failed")
     value = loads_strict_json(completed.stdout)
-    if not isinstance(value, dict):
-        raise RuntimeError("rational optimization worker returned a non-object")
-    return value
+    return parse_optimization_worker_response(value).result
 
 
 def _linear_program(
     request: RationalLinearProgramRequest,
 ) -> BoundedSearchOutcome[RationalLinearProgramResult]:
     try:
-        result = RationalLinearProgramResult.model_validate(
-            _run_worker(
-                request.model_dump(mode="json"),
-                wall_seconds=request.wall_seconds,
-            )
-        )
+        result = _run_worker(request)
     except TimeoutError:
         detail = (
             "The exact rational LP worker exceeded the declared wall-clock "
@@ -93,7 +91,7 @@ def _linear_program(
                 message=detail,
             ),
         )
-    except (OSError, RuntimeError, CanonicalizationError, ValidationError):
+    except (OSError, RuntimeError, ValueError):
         detail = (
             "The exact rational LP worker failed or returned malformed "
             "output; no feasibility or optimality conclusion is available."

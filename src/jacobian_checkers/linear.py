@@ -12,11 +12,6 @@ from typing import Any
 
 from jacobian_checkers.bound_artifacts import bound_request
 
-__all__ = [
-    "check_rational_inconsistency",
-    "check_rational_solution",
-]
-
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _VARIABLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 MAX_LINEAR_DIMENSION = 32

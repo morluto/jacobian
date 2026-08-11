@@ -566,7 +566,7 @@ def _expected_result(source: dict[str, Any], *, operation_id: str) -> dict[str, 
             )
             break
     searched_through = first_degree if first_degree is not None else max_degree
-    return {
+    result = {
         "result_schema_version": "1",
         "variables": list(variables),
         "source_kind": source_kind,
@@ -582,13 +582,12 @@ def _expected_result(source: dict[str, Any], *, operation_id: str) -> dict[str, 
         "first_syzygy_degree": first_degree,
         "kernel_witness": kernel_witness,
         "completion": "COMPLETE_THROUGH_BOUND",
-        "verification_capability_id": (
-            "polynomial.jacobian_syzygy.coefficients.verify"
-            if operation_id == "polynomial.jacobian_syzygy.coefficients.materialize"
-            else "polynomial.jacobian_syzygy.minimum_degree.verify"
-        ),
-        "verification_input_field": "result_uri",
     }
+    if operation_id == "polynomial.jacobian_syzygy.coefficients.materialize":
+        result["verification_capability_id"] = (
+            "polynomial.jacobian_syzygy.coefficients.verify"
+        )
+    return result
 
 
 def _check_graded_jacobian_syzygy(

@@ -20,6 +20,7 @@ from benchmarks.tooling.codex_visibility import (
 from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from pydantic import ValidationError
 
+from jacobian.contracts.combinatorics import CyclicDifferenceSetExtensionRequest
 from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
 from jacobian.contracts.number_theory import IntegerPairRequest
 from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
@@ -160,7 +161,10 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
         "matrix.determinant.compute",
         "matrix.rank.compute",
         "polynomial.compute.gcd",
+        "polynomial.expression.normalize",
         "matrix.determinant.verify",
+        "combinatorics.cyclic_difference_set.extension.decide",
+        "combinatorics.cyclic_difference_set.extension.verify",
     ):
         assert f"`{capability_id}`" in skill
     integer_payload = '{"left":"84","right":"30"}'
@@ -173,12 +177,19 @@ def test_codex_skill_keeps_bounded_stable_direct_run_contracts() -> None:
     assert integer_payload in skill
     assert matrix_payload in skill
     assert polynomial in skill
+    extension_payload = '{"base_elements":["1","2","4","8","13"],"target_order":7}'
+    assert extension_payload in skill
+    assert '"input":<JSON>' in skill
+    assert "No discovery for stable producers" in skill
+    assert "never with `capability_id`" in skill
+    assert '"candidate":<producer output.result>' in skill
     IntegerPairRequest.model_validate_json(integer_payload)
     MatrixDeterminantRequest.model_validate_json(matrix_payload)
     polynomial_value = json.loads(polynomial)
     PolynomialGcdRequest.model_validate(
         {"left": polynomial_value, "right": polynomial_value}
     )
+    CyclicDifferenceSetExtensionRequest.model_validate_json(extension_payload)
     assert len(skill.encode("utf-8")) <= 4 * 1024
 
 
@@ -195,18 +206,27 @@ def test_codex_skill_routes_exact_outcomes_without_catalog_projection() -> None:
     assert "Do not enumerate, filter, or print `ALL_TOOLS`" in skill_flat
     assert "text(r.structuredContent ?? r)" in skill
     assert 'math.find({"capability_id":"<exact-id>","view":"CONTRACT"})' in skill
-    assert 'never send `mode: "CONTRACT"` to `math.run`' in skill_flat
+    assert "never put `CONTRACT` in a query" in skill_flat
+    assert "`matrix.determinant.verify` for an independent check" in skill_flat
     assert "never reconstruct or paraphrase such a record" in skill_flat
     assert "required task authorization and bindings are preserved" in skill_flat
+    assert "a writable path or schema alone is not authorization" in skill_flat
+    assert "claim the highest lower permitted assurance" in skill_flat
+    assert "even if Jacobian returned `VERIFIED`" in skill_flat
     for guidance in (
         "Keep decomposition and routing decisions agent-owned",
         "composing already-known supporting operations remains allowed",
-        "follow those fields",
+        "Follow exposed recovery paths",
         "retry within the task resource bounds",
         "continue with other installed routes",
         "completeness, and open obligations",
+        "check payload fields against the intended object",
+        "compare it with the submitted input",
+        "does not replace server validation or evidence binding",
+        "Account for each requested outcome in the final comparison",
+        "does not verify another result or their comparison",
     ):
-        assert guidance in skill
+        assert guidance in skill_flat
 
 
 def test_visibility_classification_records_adoption_without_grading_shell(

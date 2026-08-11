@@ -1,6 +1,6 @@
 # Replayable Lean proof-state transitions
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 `lean.proof_state.apply_tactic` is the canonical implementation covering the
 `lean.tactic.apply` inventory operation. Version 2 applies one bounded tactic

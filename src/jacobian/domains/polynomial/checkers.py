@@ -4,6 +4,7 @@ from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.jacobian_syzygy import GradedJacobianSyzygyRequest
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
+    PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialResultantRequest,
     PolynomialSquareFreeRequest,
@@ -25,8 +26,8 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify a first graded Jacobian syzygy degree",
         verification_description=(
             "Independently reconstruct every bounded homogeneous coefficient map, "
-            "rank ledger, nonzero minor, and first kernel from a stored producer "
-            "result."
+            "rank ledger, nonzero minor, and first kernel from the exact producer "
+            "input and the complete, unmodified producer output.result object."
         ),
         verification_tags=(
             "verification",
@@ -87,6 +88,12 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         PolynomialSquareFreeRequest,
         "check_polynomial_square_free",
         "polynomial.square-free.flint-replay",
+    ),
+    ExactReplayCheckerDeclaration(
+        "polynomial.factor.compute",
+        PolynomialFactorRequest,
+        "check_polynomial_factorization",
+        "polynomial.factorization.flint-replay",
     ),
 )
 

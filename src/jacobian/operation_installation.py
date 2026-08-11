@@ -72,7 +72,7 @@ def _validation_diagnostic(
     if not errors:
         return diagnostic
     first = errors[0]
-    path_parts = list(first.get("loc", ()))
+    path_parts: list[object] = list(first.get("loc", ()))
     raw_reason = str(first.get("msg", "invalid value"))
     validation_type = str(first.get("type", "value_error"))
     context = first.get("ctx")
@@ -96,10 +96,14 @@ def _validation_diagnostic(
     ):
         path_parts.append(field_match.group(1))
     path = _validation_pointer(path_parts)
+    recovery_hint: str | None
     if validation_type.startswith("jacobian.") and isinstance(domain_reason, str):
         recovery_hint = reason
     elif isinstance(domain_reason, str):
         recovery_hint = f"{diagnostic.hint} {domain_reason}"
+    elif isinstance(context_error, (ValueError, AssertionError)):
+        safe_reason = str(context_error).split("; first offending", maxsplit=1)[0]
+        recovery_hint = f"{diagnostic.hint} {safe_reason[:128]}"
     else:
         recovery_hint = diagnostic.hint
     return CapabilityDiagnostic.model_validate(

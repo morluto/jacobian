@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import Any, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
-from jacobian.contracts.claims import flatten_claim_spec
+from jacobian.contracts.claims import ClaimSpec, flatten_claim_spec
+from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.plugin_protocol import PluginRequestContext
 from jacobian.contracts.results import ContractModel
 
@@ -148,34 +149,25 @@ class GraphCanonicalizeRequest(PluginRequestContext):
     structure: GraphPathCandidate
 
 
-class GraphShrinkTarget(ContractModel):
-    graph_schema_version: Literal["1"] = "1"
-    vertices: tuple[str, ...] = Field(min_length=1, max_length=256)
-    edges: tuple[tuple[str, str], ...] = Field(max_length=32_640)
-
-    @model_validator(mode="after")
-    def validate_simple_graph(self) -> Self:
-        vertices = set(self.vertices)
-        if len(vertices) != len(self.vertices):
-            raise ValueError("graph vertices must be unique")
-        if any(left == right for left, right in self.edges):
-            raise ValueError("graph edges must not contain self-loops")
-        if any(
-            left not in vertices or right not in vertices for left, right in self.edges
-        ):
-            raise ValueError("graph edges must reference declared vertices")
-        normalized = {tuple(sorted(edge)) for edge in self.edges}
-        if len(normalized) != len(self.edges):
-            raise ValueError("graph edges must be unique ignoring orientation")
-        return self
-
-
 class GraphShrinkRequest(PluginRequestContext):
     target_kind: Literal["candidate"] = "candidate"
-    target: GraphShrinkTarget
-    reducers: tuple[Literal["delete_vertex", "delete_edge"], ...]
-    objectives: tuple[Literal["vertices", "edges"], ...]
-    claim: dict[str, Any] = Field(default_factory=dict)
+    target: SimpleUndirectedGraph
+    reducers: tuple[Literal["delete_vertex", "delete_edge"], ...] = Field(min_length=1)
+    objectives: tuple[Literal["vertices", "edges"], ...] = Field(min_length=1)
+    claim: ClaimSpec
+
+    @model_validator(mode="after")
+    def bind_graph_shrinking_contract(self) -> Self:
+        if len(set(self.reducers)) != len(self.reducers):
+            raise ValueError("graph shrink reducers must be unique")
+        if len(set(self.objectives)) != len(self.objectives):
+            raise ValueError("graph shrink objectives must be unique")
+        if (
+            self.claim.domain_id != "jacobian.graph-shrinking"
+            or self.claim.predicate.name != "graph.property.non_bipartite"
+        ):
+            raise ValueError("graph shrinking requires the non-bipartite graph claim")
+        return self
 
 
 __all__ = [
@@ -187,5 +179,4 @@ __all__ = [
     "GraphPathClaim",
     "GraphPathReductionRequest",
     "GraphShrinkRequest",
-    "GraphShrinkTarget",
 ]

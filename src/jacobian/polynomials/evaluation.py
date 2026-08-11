@@ -14,7 +14,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -77,7 +76,6 @@ class PolynomialMapEvaluationAdapter:
                 "jacobian.sympy",
                 features=("rational-polynomial-evaluation",),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialEvaluationRequest),
             output_schema=model_schema(PolynomialEvaluationOutput),
             tags=("polynomial", "map", "evaluation", "exact-computation"),
@@ -182,7 +180,6 @@ class PolynomialJacobianAdapter:
                     else ()
                 ),
             ),
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(PolynomialJacobianRequest),
             output_schema=model_schema(PolynomialJacobianOutput),
             tags=("polynomial", "jacobian", "determinant", "exact-computation"),
@@ -370,7 +367,6 @@ class PolynomialKellerConditionVerifyAdapter:
                 features=("exact-rational-keller-condition",),
                 checker_ids=(checker_id,),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialKellerConditionVerifyRequest),
             output_schema=model_schema(PolynomialKellerConditionVerifyOutput),
             tags=("polynomial", "map", "jacobian", "Keller", "verification"),
@@ -381,7 +377,6 @@ class PolynomialKellerConditionVerifyAdapter:
                         "Verify the identity map's constant nonzero Jacobian "
                         "determinant over QQ."
                     ),
-                    mode=CapabilityMode.VERIFY,
                     input=PolynomialKellerConditionVerifyRequest.model_validate(
                         {
                             "map": {
@@ -427,7 +422,6 @@ class PolynomialKellerConditionVerifyAdapter:
         jacobian_result = PolynomialJacobianAdapter(self.resources).invoke(
             CapabilityRequest(
                 capability_id="polynomial.map.compute_jacobian",
-                mode=CapabilityMode.EXPLORE,
                 input={"map": validated.map.model_dump(mode="json")},
             )
         )
@@ -477,8 +471,13 @@ class PolynomialKellerConditionVerifyAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             checker_id=checker_id,
         )
-        verified = checked.verification_record_uri is not None
-        conclusion = checked.conclusion
+        record_uri = checked.verification_record_uri
+        verified = record_uri is not None
+        conclusion = (
+            checked.conclusion
+            if verified and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+            else Conclusion.UNKNOWN
+        )
         condition = {
             Conclusion.TRUE: True,
             Conclusion.FALSE: False,
@@ -492,7 +491,7 @@ class PolynomialKellerConditionVerifyAdapter:
             claim_uri=claim.artifact_uri,
             certificate_uri=certificate_artifact.artifact_uri,
             determinant=jacobian.determinant,
-            verification_record_uri=checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
         )
         artifact_uris = list(
@@ -504,12 +503,11 @@ class PolynomialKellerConditionVerifyAdapter:
                 )
             )
         )
-        if checked.verification_record_uri is not None:
-            artifact_uris.append(checked.verification_record_uri)
+        if record_uri is not None:
+            artifact_uris.append(record_uri)
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -538,7 +536,7 @@ class PolynomialKellerConditionVerifyAdapter:
                     source_artifact_uris=(map_uri,),
                     target_artifact_uris=(jacobian_uri,),
                     status=CapabilityRelationshipStatus.VERIFIED,
-                    verification_record_uri=checked.verification_record_uri,
+                    verification_record_uri=record_uri,
                 ),
             )
             if verified and conclusion is Conclusion.TRUE
@@ -555,7 +553,7 @@ class PolynomialKellerConditionVerifyAdapter:
                     if verified
                     else "the independent Keller-condition checker did not accept"
                 ),
-                verification_record_uri=checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             artifact_uris=tuple(artifact_uris),
         )

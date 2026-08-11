@@ -520,15 +520,9 @@ def test_compare_rejects_forbidden_statement(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_descriptors_have_correct_ids_and_modes(tmp_path: Path) -> None:
+def test_descriptors_have_correct_ids(tmp_path: Path) -> None:
     propose, compare = _build_adapters(tmp_path)
 
     assert propose.descriptor.capability_id == "lean.statement.propose"
     assert propose.descriptor.version == "2"
     assert compare.descriptor.capability_id == "lean.statement.compare"
-    for adapter in (propose, compare):
-        assert adapter.descriptor.modes == (
-            __import__(
-                "jacobian.contracts.capabilities", fromlist=["CapabilityMode"]
-            ).CapabilityMode.EXPLORE,
-        )

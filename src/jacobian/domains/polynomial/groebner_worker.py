@@ -7,44 +7,44 @@ import sys
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.contracts.polynomial_operations import PolynomialGroebnerBasisRequest
+from jacobian.domains.polynomial.groebner_protocol import (
+    GroebnerWorkerRequest,
+    GroebnerWorkerResultLimitError,
+    GroebnerWorkerResultLimitExceeded,
+    GroebnerWorkerSuccess,
+)
 from jacobian.domains.polynomial.operations import (
     PolynomialOutputBudgetError,
     polynomial_groebner_basis,
 )
 
-PROTOCOL = "jacobian.polynomial.groebner.sympy.v1"
-
 
 def main() -> int:
     try:
-        payload = loads_strict_json(sys.stdin.buffer.read())
-        if not isinstance(payload, dict) or set(payload) != {"protocol", "request"}:
-            raise ValueError("unexpected worker request fields")
-        if payload["protocol"] != PROTOCOL:
-            raise ValueError("unsupported worker protocol")
-        request = PolynomialGroebnerBasisRequest.model_validate(payload["request"])
+        request = GroebnerWorkerRequest.model_validate(
+            loads_strict_json(sys.stdin.buffer.read())
+        ).request
         try:
             result = polynomial_groebner_basis(request)
         except PolynomialOutputBudgetError as error:
             sys.stdout.buffer.write(
                 canonicalize_json(
-                    {
-                        "protocol": PROTOCOL,
-                        "error": {
-                            "code": "POLYNOMIAL_GROEBNER_RESULT_LIMIT_EXCEEDED",
-                            "message": str(error),
-                        },
-                    }
+                    GroebnerWorkerResultLimitExceeded(
+                        protocol="jacobian.polynomial.groebner.sympy.v1",
+                        error=GroebnerWorkerResultLimitError(
+                            code="POLYNOMIAL_GROEBNER_RESULT_LIMIT_EXCEEDED",
+                            message=str(error),
+                        ),
+                    ).model_dump(mode="json")
                 )
             )
             return 0
         sys.stdout.buffer.write(
             canonicalize_json(
-                {
-                    "protocol": PROTOCOL,
-                    "result": result.model_dump(mode="json"),
-                }
+                GroebnerWorkerSuccess(
+                    protocol="jacobian.polynomial.groebner.sympy.v1",
+                    result=result,
+                ).model_dump(mode="json")
             )
         )
         return 0

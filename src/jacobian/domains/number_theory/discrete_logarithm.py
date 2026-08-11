@@ -17,6 +17,10 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.domains.number_theory.discrete_logarithm_protocol import (
+    DiscreteLogarithmWorkerRequest,
+    DiscreteLogarithmWorkerResult,
+)
 from jacobian.operations import (
     BoundedSearchOperation,
     BoundedSearchOutcome,
@@ -26,7 +30,6 @@ from jacobian.operations import (
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
 
-_PROTOCOL = "jacobian.number-theory.discrete-logarithm.sympy.v1"
 _STDOUT_LIMIT = 64_000
 _STDERR_LIMIT = 64_000
 
@@ -59,10 +62,10 @@ def _compute(
                 "jacobian.domains.number_theory.discrete_logarithm_worker",
             ),
             stdin_bytes=canonicalize_json(
-                {
-                    "protocol": _PROTOCOL,
-                    "request": request.model_dump(mode="json"),
-                }
+                DiscreteLogarithmWorkerRequest(
+                    protocol="jacobian.number-theory.discrete-logarithm.sympy.v1",
+                    request=request,
+                ).model_dump(mode="json")
             ),
             timeout_seconds=float(request.resource_budget.wall_seconds),
             environment=worker_environment(locale="C"),
@@ -100,12 +103,9 @@ def _compute(
             "The isolated SymPy discrete-logarithm computation failed.",
         )
     try:
-        payload = loads_strict_json(completed.stdout)
-        if not isinstance(payload, dict) or set(payload) != {"protocol", "result"}:
-            raise ValueError("unexpected worker response fields")
-        if payload["protocol"] != _PROTOCOL:
-            raise ValueError("worker protocol does not match")
-        result = DiscreteLogarithmResult.model_validate(payload["result"])
+        result = DiscreteLogarithmWorkerResult.model_validate(
+            loads_strict_json(completed.stdout)
+        ).result
     except (TypeError, ValueError, ValidationError):
         return _failure(
             ExecutionStatus.ERROR,

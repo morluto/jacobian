@@ -21,19 +21,25 @@ TOPOLOGY = ROOT / "tests" / "topology.toml"
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 from _ci_paths import normalize_paths, path_values  # noqa: E402
+from tools.test_plan.ci_outputs import (  # noqa: E402
+    boolean_run_keys,
+    matrix_lane_names,
+    python_lane_names,
+    suite_names,
+)
 
-# More-specific ownership rules suppress the general python-source catch-all
-# when both match the same path (fnmatch '*' crosses '/').
-_SUPPRESSED_WHEN_PRESENT = {
-    "domain-mathematical-sources": frozenset({"python-source"}),
-    "npm-facing-adapter": frozenset({"python-source"}),
-    "ci-planning-tools": frozenset({"ci-scripts"}),
-    "benchmark-ci-automation": frozenset({"ci-scripts", "ci-automation"}),
-    "topology-runner-tool": frozenset({"test-topology-runners"}),
-    "documentation-command-tool": frozenset({"test-topology-runners"}),
-    "benchmark-static-tool": frozenset({"test-topology-runners"}),
-}
+
+def _suppression_map(manifest: dict[str, Any]) -> dict[str, frozenset[str]]:
+    mapping: dict[str, frozenset[str]] = {}
+    for rule in manifest.get("rules", ()):
+        name = str(rule.get("name", ""))
+        suppresses = rule.get("suppresses", ())
+        if name and isinstance(suppresses, list) and suppresses:
+            mapping[name] = frozenset(str(item) for item in suppresses)
+    return mapping
 
 
 def load_manifest() -> dict[str, Any]:
@@ -71,7 +77,7 @@ def suites_for_path(path: str, manifest: dict[str, Any]) -> set[str]:
     if matching_rules:
         matched_names = {str(rule["name"]) for rule in matching_rules}
         suppressed: set[str] = set()
-        for specific, generals in _SUPPRESSED_WHEN_PRESENT.items():
+        for specific, generals in _suppression_map(manifest).items():
             if specific in matched_names:
                 suppressed.update(generals)
         return {
@@ -140,17 +146,7 @@ def classify(
         deployment_for_path(path, manifest) for path in paths
     )
 
-    python_lanes = (
-        "unit",
-        "component",
-        "domain",
-        "composition",
-        "storage",
-        "process",
-        "mcp",
-        "provider",
-        "e2e",
-    )
+    python_lanes = python_lane_names(manifest)
     selected_python_lanes = tuple(lane for lane in python_lanes if lane in suites)
     if exhaustive:
         classification = "exhaustive"
@@ -170,13 +166,7 @@ def classify(
         classification = "selective"
 
     semantic_lanes = {f"run-{lane}": lane in suites for lane in python_lanes}
-    matrix_lanes = (
-        "component",
-        "storage",
-        "mcp",
-        "provider",
-        "e2e",
-    )
+    matrix_lanes = matrix_lane_names(manifest)
     selected_matrix_lanes = [lane for lane in matrix_lanes if lane in suites]
     plan: dict[str, str] = {
         "classification": classification,
@@ -191,17 +181,14 @@ def classify(
         "run-coverage": str(exhaustive and set(python_lanes) <= suites).lower(),
         "run-compatibility": str(exhaustive and set(python_lanes) <= suites).lower(),
     }
-    for suite in (
-        "lean",
-        "provider",
-        "npm",
-        "static",
-        "build",
-        "security",
-        "duplicate",
-        "docs",
-    ):
+    python_set = set(python_lanes)
+    for suite in suite_names(manifest):
+        if suite in python_set:
+            continue
         plan[f"run-{suite}"] = str(suite in suites).lower()
+    # Ensure every catalog boolean key exists even if suite filtering changes.
+    for key in boolean_run_keys(manifest):
+        plan.setdefault(key, "false")
     return plan
 
 

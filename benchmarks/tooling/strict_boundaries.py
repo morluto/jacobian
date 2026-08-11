@@ -197,7 +197,6 @@ class HeldoutTreatmentCondition(_StrictModel):
     policy_profile: StrictStr
     catalog_digest: StrictStr
     policy_digest: StrictStr
-    reasoning_log_mode: Literal["REQUIRED", "AUDIT", "OFF"] | None = None
 
 
 class HeldoutAgent(_StrictModel):

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["check_partition"]
-
 
 def _reject(detail: str) -> dict[str, Any]:
     return {

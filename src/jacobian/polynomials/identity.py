@@ -12,7 +12,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -66,7 +65,6 @@ class PolynomialIdentityAdapter:
                 features=("polynomial-identity", "exact-rational"),
                 checker_ids=checker_ids,
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(PolynomialIdentityRequest),
             output_schema=model_schema(PolynomialIdentityOutput),
             tags=("polynomial", "identity", "verification", "exact-rational"),
@@ -77,7 +75,6 @@ class PolynomialIdentityAdapter:
                         "Independently verify that two zero polynomials are equal "
                         "in QQ[x]."
                     ),
-                    mode=CapabilityMode.VERIFY,
                     input=PolynomialIdentityRequest.model_validate(
                         {
                             "variables": ["x"],
@@ -170,8 +167,13 @@ class PolynomialIdentityAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             checker_id=checker_id,
         )
-        verified = checked.verification_record_uri is not None
-        conclusion = checked.conclusion
+        record_uri = checked.verification_record_uri
+        verified = record_uri is not None
+        conclusion = (
+            checked.conclusion
+            if verified and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
+            else Conclusion.UNKNOWN
+        )
         identical = {
             Conclusion.TRUE: True,
             Conclusion.FALSE: False,
@@ -184,13 +186,12 @@ class PolynomialIdentityAdapter:
             right_uri=right.artifact_uri,
             claim_uri=claim.artifact_uri,
             certificate_uri=certificate_artifact.artifact_uri,
-            verification_record_uri=checked.verification_record_uri,
+            verification_record_uri=record_uri,
             checker_id=checker_id,
         )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -205,7 +206,7 @@ class PolynomialIdentityAdapter:
                         "every canonical sparse coefficient was replayed independently"
                     ),
                     assurance_level=CapabilityAssuranceLevel.VERIFIED,
-                    verification_record_uri=checked.verification_record_uri,
+                    verification_record_uri=record_uri,
                 )
                 if verified
                 else CapabilityCompleteness(
@@ -219,7 +220,7 @@ class PolynomialIdentityAdapter:
                     source_artifact_uris=(left.artifact_uri,),
                     target_artifact_uris=(right.artifact_uri,),
                     status=CapabilityRelationshipStatus.VERIFIED,
-                    verification_record_uri=checked.verification_record_uri,
+                    verification_record_uri=record_uri,
                 ),
             )
             if conclusion is Conclusion.TRUE and verified
@@ -235,17 +236,13 @@ class PolynomialIdentityAdapter:
                     if verified
                     else "the independent checker did not accept the identity request"
                 ),
-                verification_record_uri=checked.verification_record_uri,
+                verification_record_uri=record_uri,
             ),
             artifact_uris=(
                 left.artifact_uri,
                 right.artifact_uri,
                 claim.artifact_uri,
                 certificate_artifact.artifact_uri,
-                *(
-                    (checked.verification_record_uri,)
-                    if checked.verification_record_uri is not None
-                    else ()
-                ),
+                *((record_uri,) if record_uri is not None else ()),
             ),
         )

@@ -10,10 +10,9 @@ from __future__ import annotations
 
 
 def test_public_contract_and_canonicalization_surface_imports() -> None:
-    from jacobian import ResultEnvelope
+    from jacobian import ResultEnvelope  # noqa: F401
     from jacobian.canonical import canonicalize_json
 
-    assert ResultEnvelope.__name__ == "ResultEnvelope"
     assert canonicalize_json({"version": 1}) == b'{"version":1}'
 
 

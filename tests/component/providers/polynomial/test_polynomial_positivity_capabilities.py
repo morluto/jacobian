@@ -11,7 +11,6 @@ from tests.support.polynomials import univariate_term as _term
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRelationshipStatus,
     CapabilityRequest,
 )
@@ -292,7 +291,6 @@ def test_decide_capability_finds_positive_linear(installation) -> None:
     result = decide.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.positivity.decide",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                 "interval": _interval("0", "1"),
@@ -324,7 +322,6 @@ def test_decide_capability_detects_root_in_interval(installation) -> None:
     result = decide.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.positivity.decide",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
                 "interval": _interval("0", "2"),
@@ -347,7 +344,6 @@ def test_decide_capability_detects_endpoint_root(installation) -> None:
     result = decide.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.positivity.decide",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": _polynomial("x", [_term(1, 1)]),
                 "interval": _interval("0", "1"),
@@ -368,7 +364,6 @@ def test_verify_capability_confirms_positive_decision(installation) -> None:
     decide_result = decide.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.positivity.decide",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                 "interval": _interval("0", "1"),
@@ -380,7 +375,6 @@ def test_verify_capability_confirms_positive_decision(installation) -> None:
     result = verify.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.positivity.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                 "interval": _interval("0", "1"),
@@ -416,7 +410,6 @@ def test_verify_capability_refutes_false_positive_claim(installation) -> None:
     result = verify.invoke(
         CapabilityRequest(
             capability_id="polynomial.interval.positivity.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
                 "interval": _interval("0", "2"),

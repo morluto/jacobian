@@ -1,6 +1,6 @@
 # External conjecture ingestion
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 `dataset.conjecture.ingest` applies a versioned publication policy to one
 external conjecture record before it enters Jacobian research artifacts. The
@@ -59,7 +59,6 @@ is legally correct; operators remain responsible for source review.
 ```json
 {
   "capability_id": "dataset.conjecture.ingest",
-  "mode": "EXPLORE",
   "input": {
     "corpus_id": "davisrbr/openconjecture",
     "corpus_revision": "f665b46c93a6a1d505ef9109417902d7b2973ab8",

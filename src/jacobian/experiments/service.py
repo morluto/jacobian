@@ -54,7 +54,10 @@ from jacobian.experiments.errors import (
 from jacobian.lifecycle import (
     LifecycleTimeoutError,
     ServiceLifecycleState,
+    WorkerLaunchStatus,
+    launch_worker,
     wait_for_worker_quiescence,
+    wait_for_worker_settlement,
 )
 from jacobian.persistence import PersistenceCorruptionError, decode_persisted_model
 from jacobian.plugin_execution import PluginExecutor
@@ -402,26 +405,19 @@ class ExperimentService:
         *,
         lifecycle_reserved: bool = False,
     ) -> None:
-        with self._thread_lock:
-            if self._lifecycle_state is ServiceLifecycleState.CLOSED or (
-                self._lifecycle_state is ServiceLifecycleState.CLOSING
-                and not lifecycle_reserved
-            ):
-                raise ExperimentError("experiment service is closing")
-            current = self._threads.get(experiment_uri)
-            if current is not None and current.is_alive():
-                return
-            thread = threading.Thread(
-                target=self._run_enumeration,
-                args=(experiment_uri,),
-                name=(
-                    "jacobian-enumeration-"
-                    f"{experiment_uri.removeprefix('experiment://')}"
-                ),
-                daemon=True,
-            )
-            self._threads[experiment_uri] = thread
-            thread.start()
+        status = launch_worker(
+            lock=self._thread_lock,
+            lifecycle_state=lambda: self._lifecycle_state,
+            workers=self._threads,
+            worker_id=experiment_uri,
+            target=self._run_enumeration,
+            name=(
+                f"jacobian-enumeration-{experiment_uri.removeprefix('experiment://')}"
+            ),
+            lifecycle_reserved=lifecycle_reserved,
+        )
+        if status is WorkerLaunchStatus.SERVICE_CLOSING:
+            raise ExperimentError("experiment service is closing")
 
     def inspect(self, experiment_uri: str) -> ExperimentSnapshot:
         """Read the latest durable experiment snapshot."""
@@ -465,23 +461,18 @@ class ExperimentService:
     ) -> ExperimentSnapshot:
         """Wait locally for a terminal state, then return its snapshot."""
 
-        deadline = time.monotonic() + timeout_seconds
-        while True:
-            snapshot = self.inspect(experiment_uri)
-            if snapshot.state in _TERMINAL_STATES:
-                return snapshot
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(
-                    "The experiment is still running. Inspect it or wait again with "
-                    "a larger timeout."
-                )
-            with self._thread_lock:
-                thread = self._threads.get(experiment_uri)
-            if thread is not None:
-                thread.join(timeout=min(remaining, 0.05))
-            else:
-                time.sleep(min(remaining, 0.05))
+        return wait_for_worker_settlement(
+            lock=self._thread_lock,
+            workers=self._threads,
+            worker_id=experiment_uri,
+            inspect=self.inspect,
+            is_settled=lambda snapshot: snapshot.state in _TERMINAL_STATES,
+            timeout_seconds=timeout_seconds,
+            timeout_message=(
+                "The experiment is still running. Inspect it or wait again with a "
+                "larger timeout."
+            ),
+        )
 
     def cancel(self, experiment_uri: str) -> ExperimentCancelResult:
         """Request cooperative cancellation without deleting committed artifacts."""

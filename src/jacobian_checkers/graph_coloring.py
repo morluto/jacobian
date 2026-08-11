@@ -7,9 +7,6 @@ import json
 import re
 from typing import Any
 
-__all__ = ["check_encoding"]
-
-
 _ARTIFACT_URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _MAX_VERTICES = 32

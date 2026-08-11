@@ -22,12 +22,14 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.combinatorics import (
+    BinomialRequest,
     CyclicDifferenceSetExtensionRequest,
     CyclicPerfectDifferenceSetRequest,
     FibonacciPairRequest,
     IntegerPartitionEnumerationRequest,
     IntegerSidonRequest,
     LinearRecurrenceEvaluationRequest,
+    PolynomialCoefficientRecurrenceEvaluationRequest,
     RationalGeneratingFunctionCoefficientsRequest,
 )
 from jacobian.contracts.combinatorics import (
@@ -99,6 +101,7 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (CombNonnegIntRequest, {"n": 5}),
     (FibonacciPairRequest, {"n": 5}),
     (CombNonnegPairRequest, {"n": 5, "k": 2}),
+    (BinomialRequest, {"n": 5, "k": 2}),
     (CombIntegerListRequest, {"values": ["2", "1", "1"]}),
     (IntegerSidonRequest, {"elements": ["1", "2", "4"]}),
     (CyclicPerfectDifferenceSetRequest, {"modulus": 7, "residues": [0, 1, 3]}),
@@ -137,6 +140,23 @@ _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
             "coefficient_convention": "ASCENDING_POWERS_OF_X",
             "expansion_point": "0",
             "truncation_order": 6,
+        },
+    ),
+    (
+        PolynomialCoefficientRecurrenceEvaluationRequest,
+        {
+            "coefficient_polynomials": [
+                [{"num": "1", "den": "1"}],
+                [{"num": "-1", "den": "1"}],
+            ],
+            "initial_values": [{"num": "1", "den": "1"}],
+            "coefficient_convention": (
+                "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+            ),
+            "polynomial_convention": "ASCENDING_POWERS_OF_N",
+            "scope": "PREFIX",
+            "term_count": 6,
+            "indices": [],
         },
     ),
     (

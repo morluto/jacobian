@@ -20,7 +20,6 @@ from jacobian.plugin_execution import PluginExecutor
 from jacobian.plugins.registry import PluginRegistry
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.polytope import PolytopeService
-from jacobian.reasoning_log import ReasoningLogService
 from jacobian.references import ReferenceInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactService
@@ -49,7 +48,6 @@ class CoreServices:
     plugins: PluginRegistry
     checkers: CheckerRegistry
     capabilities: CapabilityService
-    reasoning_log: ReasoningLogService
 
     def close(self) -> None:
         self.store.close()
@@ -80,14 +78,21 @@ class ApplicationServices:
     def close(self) -> None:
         """Quiesce application-owned workers before foundational teardown."""
 
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         for close in (self.search.close, self.experiments.close):
             try:
                 close()
-            except Exception as exc:
+            except BaseException as exc:
                 failures.append(exc)
         if failures:
-            raise ExceptionGroup("application services did not quiesce", failures)
+            exception_failures = [
+                failure for failure in failures if isinstance(failure, Exception)
+            ]
+            if len(exception_failures) == len(failures):
+                raise ExceptionGroup(
+                    "application services did not quiesce", exception_failures
+                )
+            raise BaseExceptionGroup("application services did not quiesce", failures)
 
 
 def build_application_services(core: CoreServices) -> ApplicationServices:

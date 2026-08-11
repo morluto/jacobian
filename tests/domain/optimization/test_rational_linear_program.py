@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from tests.support.rationals import rational_payload as _rational
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
@@ -23,10 +24,6 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         tmp_path / "state", build_rational_optimization_bundle()
     ) as services:
         yield services
-
-
-def _rational(num: int, den: int = 1) -> dict[str, str]:
-    return {"num": str(num), "den": str(den)}
 
 
 def test_rational_lp_produces_inspectable_primal_dual_certificate(
@@ -138,12 +135,8 @@ def test_invalid_rational_lp_never_reaches_backend_worker(
 ) -> None:
     from jacobian.domains.optimization import operations
 
-    def unexpected_worker(
-        _payload: dict[str, object],
-        *,
-        wall_seconds: int,
-    ) -> dict[str, object]:
-        raise AssertionError(f"worker unexpectedly called with {wall_seconds=}")
+    def unexpected_worker(_request: object) -> object:
+        raise AssertionError("worker unexpectedly called")
 
     monkeypatch.setattr(operations, "_run_worker", unexpected_worker)
     result = domain_services.core.capabilities.invoke(

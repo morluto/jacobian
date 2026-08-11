@@ -68,6 +68,25 @@ class ShrinkStep(ContractModel):
     objectives: dict[str, Any] = Field(default_factory=dict)
     detail: str = ""
 
+    @model_validator(mode="after")
+    def bind_acceptance_to_verified_proposal(self) -> Self:
+        canonicalize_json(self.objectives)
+        if self.accepted:
+            if (
+                self.proposed_uri is None
+                or self.execution_status is not ExecutionStatus.COMPLETED
+                or self.input_status is not InputStatus.ACCEPTED
+                or self.verification_record_uri is None
+            ):
+                raise ValueError(
+                    "an accepted shrink step requires a completed accepted proposal record"
+                )
+        elif self.verification_record_uri is not None:
+            raise ValueError(
+                "a rejected shrink step cannot carry a verification record"
+            )
+        return self
+
 
 class ShrinkResult(ContractModel):
     schema_version: Literal["1"] = "1"

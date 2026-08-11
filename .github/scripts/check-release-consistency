@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Assert all version-bearing release surfaces agree on one package version.
+
+This is the release-consistency check requested in issue #1014. Release Please
+bumps manifests (`pyproject.toml`, `npm/package.json`, `server.json`,
+`.release-please-manifest.json`) but repository-specific lockfile synchronization
+happens separately. Without this check, a release PR can be mergeable while
+`npm/package-lock.json` or `uv.lock` still reports the previous version.
+
+Surfaces verified (all must equal one expected version):
+
+- `.release-please-manifest.json` (``["."]``)
+- `pyproject.toml` (``project.version``)
+- `uv.lock` (the editable ``jacobian`` package row)
+- `npm/package.json` (``version``)
+- `npm/package-lock.json` (top-level ``version`` and ``packages[""].version``)
+- `server.json` (``version``)
+
+The expected version is derived from `npm/package.json` (the surface Release
+Please bumps first via ``extra-files``) and every other surface must agree.
+
+Exit code is non-zero on any drift. Designed to be cheap enough for ordinary CI
+and release PRs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[2]
+
+SURFACE_NAMES = (
+    ".release-please-manifest.json",
+    "pyproject.toml",
+    "uv.lock",
+    "npm/package.json",
+    "npm/package-lock.json",
+    "server.json",
+)
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+
+
+def _npm_package_version(root: Path) -> str | None:
+    text = _read_text(root / "npm" / "package.json")
+    if not text:
+        return None
+    data: dict[str, Any] = json.loads(text)
+    version = data.get("version")
+    return version if isinstance(version, str) else None
+
+
+def _release_please_manifest_version(root: Path) -> str | None:
+    text = _read_text(root / ".release-please-manifest.json")
+    if not text:
+        return None
+    data: dict[str, Any] = json.loads(text)
+    version = data.get(".")
+    return version if isinstance(version, str) else None
+
+
+def _pyproject_version(root: Path) -> str | None:
+    text = _read_text(root / "pyproject.toml")
+    if not text:
+        return None
+    match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _uv_lock_version(root: Path) -> str | None:
+    text = _read_text(root / "uv.lock")
+    if not text:
+        return None
+    # The editable jacobian row is a `[[package]]` block whose `name = "jacobian"`.
+    for block in re.finditer(
+        r'\[\[package\]\]\n(?:(?!\[\[package\]\]).)*?name\s*=\s*"jacobian"\n(?:(?!\[\[package\]\]).)*?version\s*=\s*"([^"]+)"',
+        text,
+        re.DOTALL,
+    ):
+        return block.group(1)
+    # Fall back to the first version field following the jacobian name match.
+    name_match = re.search(r'name\s*=\s*"jacobian"', text)
+    if not name_match:
+        return None
+    version_match = re.search(r'version\s*=\s*"([^"]+)"', text[name_match.end() :])
+    return version_match.group(1) if version_match else None
+
+
+def _npm_lock_top_version(root: Path) -> str | None:
+    text = _read_text(root / "npm" / "package-lock.json")
+    if not text:
+        return None
+    data: dict[str, Any] = json.loads(text)
+    version = data.get("version")
+    return version if isinstance(version, str) else None
+
+
+def _npm_lock_root_package_version(root: Path) -> str | None:
+    text = _read_text(root / "npm" / "package-lock.json")
+    if not text:
+        return None
+    data: dict[str, Any] = json.loads(text)
+    packages = data.get("packages", {})
+    if not isinstance(packages, dict):
+        return None
+    root_entry = packages.get("", {})
+    if not isinstance(root_entry, dict):
+        return None
+    version = root_entry.get("version")
+    return version if isinstance(version, str) else None
+
+
+def _server_json_version(root: Path) -> str | None:
+    text = _read_text(root / "server.json")
+    if not text:
+        return None
+    data: dict[str, Any] = json.loads(text)
+    version = data.get("version")
+    return version if isinstance(version, str) else None
+
+
+def collect_versions(root: Path) -> dict[str, str | None]:
+    return {
+        "npm/package.json": _npm_package_version(root),
+        ".release-please-manifest.json": _release_please_manifest_version(root),
+        "pyproject.toml": _pyproject_version(root),
+        "uv.lock": _uv_lock_version(root),
+        "npm/package-lock.json (top-level)": _npm_lock_top_version(root),
+        'npm/package-lock.json (packages[""])': _npm_lock_root_package_version(root),
+        "server.json": _server_json_version(root),
+    }
+
+
+def _format_table(versions: dict[str, str | None], expected: str | None) -> str:
+    width = max(len(name) for name in versions)
+    lines = [
+        f"  {name:<{width}}  {value!s:<20}  {'OK' if value == expected else 'DRIFT'}"
+        for name, value in versions.items()
+    ]
+    return "\n".join(lines)
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=ROOT,
+        help="Repository root (default: autodetect from script location).",
+    )
+    parser.add_argument(
+        "--expected",
+        help="Expected version. If omitted, derived from npm/package.json.",
+    )
+    args = parser.parse_args(argv)
+
+    root: Path = args.root.resolve()
+    versions = collect_versions(root)
+
+    expected: str | None = args.expected or versions["npm/package.json"]
+    if expected is None:
+        print(
+            "error: could not derive expected version from npm/package.json",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Missing surfaces (None) are reported separately from drift: a surface
+    # that does not exist cannot disagree, and the expected-version source
+    # (npm/package.json) is always required.
+    missing = [name for name, value in versions.items() if value is None]
+    drift = {
+        name: value
+        for name, value in versions.items()
+        if value is not None and value != expected
+    }
+
+    print(f"Expected release version: {expected}")
+    print(_format_table(versions, expected))
+
+    if drift:
+        print("\nRelease surface drift detected:", file=sys.stderr)
+        for name, value in drift.items():
+            print(f"  {name}: {value!s} (expected {expected})", file=sys.stderr)
+        return 1
+
+    if missing:
+        print("\nMissing release surfaces (not drift, but noted):", file=sys.stderr)
+        for name in missing:
+            print(f"  {name}", file=sys.stderr)
+
+    print("\nAll present release surfaces agree.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

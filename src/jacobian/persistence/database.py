@@ -319,9 +319,12 @@ class StateDatabase:
                 close_error = exc
             self._state.connection = None
         if checkpoint_error is not None:
-            raise StateDatabaseError(
-                "could not checkpoint state database"
-            ) from checkpoint_error
+            error = StateDatabaseError("could not checkpoint state database")
+            if close_error is not None:
+                error.add_note(
+                    f"state database handle cleanup also failed: {close_error}"
+                )
+            raise error from checkpoint_error
         if close_error is not None:
             raise close_error
 

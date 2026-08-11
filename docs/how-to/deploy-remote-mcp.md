@@ -15,11 +15,9 @@ Clients may read installed descriptors from `capability://catalog` and inspect
 exact contracts before invoking mathematical operations, which remain behind
 namespaced capability IDs.
 
-`--reasoning-log-mode off` is the default. Use `required` to enforce the
-operational `reasoning.write` protocol (PLAN → BEFORE_TOOL → invoke →
-AFTER_TOOL → FINAL) and expose the `reasoning.write` tool, or `audit` for
-staged fail-open observation. These modes do not change capability assurance
-or checker authority.
+The tool names and schemas do not vary with deployment configuration.
+Evaluation harnesses may observe MCP traffic, but they do not add fields to
+`math.run` or impose a production research workflow.
 
 ## Install from a clone
 

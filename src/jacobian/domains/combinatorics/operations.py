@@ -7,6 +7,7 @@ from operator import mul
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.combinatorics import (
+    BinomialRequest,
     FibonacciPairRequest,
     FibonacciPairResult,
     IntegerListRequest,
@@ -18,28 +19,6 @@ from jacobian.contracts.combinatorics import (
     RationalResult,
 )
 from jacobian.contracts.exact import CanonicalRational
-
-__all__ = [
-    "bell",
-    "bernoulli",
-    "binomial",
-    "catalan",
-    "central_binomial",
-    "compositions",
-    "derangements",
-    "double_factorial",
-    "enumerate_integer_partitions",
-    "factorial",
-    "fibonacci",
-    "fibonacci_pair",
-    "lucas",
-    "motzkin",
-    "multinomial",
-    "partition_number",
-    "permutations",
-    "stirling_first",
-    "stirling_second",
-]
 
 
 def _integer_result(value: int) -> IntegerResult:
@@ -67,7 +46,7 @@ def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
     return _integer_result(sympy.subfactorial(n))
 
 
-def binomial(request: NonnegativePairRequest) -> IntegerResult:
+def binomial(request: BinomialRequest) -> IntegerResult:
     import math
 
     pair = request

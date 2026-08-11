@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "counts": {
+      "items": {
+        "maximum": 12,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 15,
+      "minItems": 15,
+      "type": "array"
+    },
+    "cycle": {
+      "items": {
+        "maximum": 9,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 9,
+      "minItems": 5,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "cycles": {
+      "items": {
+        "$ref": "#/$defs/cycle"
+      },
+      "maxItems": 12,
+      "minItems": 4,
+      "type": "array"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claimed_assurance": {
+      "enum": [
+        "UNVERIFIED",
+        "COMPUTED",
+        "CHECKED",
+        "VERIFIED"
+      ]
+    },
+    "completeness": {
+      "const": "COMPLETE"
+    },
+    "conclusion": {
+      "const": "UNION_COVERAGE_IS_INSUFFICIENT_AND_REPAIRED"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "limitations": {
+      "const": [
+        "ONE_PETERSEN_GRAPH_INSTANCE",
+        "MULTIPLICITY_CONTRACT_AUDIT_ONLY",
+        "CYCLE_DOUBLE_COVER_CONJECTURE_NOT_ASSESSED"
+      ]
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "flawed_cycles": {
+          "$ref": "#/$defs/cycles"
+        },
+        "flawed_multiplicities": {
+          "$ref": "#/$defs/counts"
+        },
+        "non_double_edge_indices": {
+          "items": {
+            "maximum": 14,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "repair_cycles": {
+          "$ref": "#/$defs/cycles"
+        },
+        "repair_multiplicities": {
+          "$ref": "#/$defs/counts"
+        }
+      },
+      "required": [
+        "flawed_cycles",
+        "flawed_multiplicities",
+        "non_double_edge_indices",
+        "repair_cycles",
+        "repair_multiplicities"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "const": "petersen-cycle-double-cover-audit-v1",
+      "type": "string"
+    },
+    "task_id": {
+      "const": "jacobian/cycle-double-cover-multiplicity-audit"
+    }
+  },
+  "required": [
+    "task_id",
+    "conclusion",
+    "result",
+    "claimed_assurance",
+    "scope",
+    "completeness",
+    "evidence",
+    "limitations"
+  ],
+  "type": "object"
+}

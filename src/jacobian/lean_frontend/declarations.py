@@ -24,13 +24,24 @@ from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.lean import (
     LeanDeclarationInspectOutput,
     LeanDeclarationInspectRequest,
-    LeanDeclarationRecord,
     LeanDeclarationSearchOutput,
     LeanDeclarationSearchRequest,
-    LeanDeclarationSearchStopReason,
     LeanDependencyGraphArtifact,
     LeanDependencyGraphRequest,
     LeanEnvironment,
+)
+from jacobian.lean_frontend.declaration_protocol import (
+    LeanDeclarationBackendResult,
+    LeanDeclarationDependenciesPayload,
+    LeanDeclarationDependenciesQuery,
+    LeanDeclarationErrorEnvelope,
+    LeanDeclarationInspectPayload,
+    LeanDeclarationInspectQuery,
+    LeanDeclarationPayload,
+    LeanDeclarationQuery,
+    LeanDeclarationResultEnvelope,
+    LeanDeclarationSearchPayload,
+    LeanDeclarationSearchQuery,
 )
 from jacobian.process_policy import (
     ProcessRequest,
@@ -63,8 +74,8 @@ class LeanDeclarationBackend(Protocol):
     def query(
         self,
         environment: LeanEnvironment,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]: ...
+        query: LeanDeclarationQuery,
+    ) -> LeanDeclarationBackendResult: ...
 
 
 class LeanDeclarationBackendError(RuntimeError):
@@ -79,10 +90,10 @@ class LeanDeclarationBackendError(RuntimeError):
 class _DeclarationQuerySession(Protocol):
     def request(
         self,
-        payload: dict[str, Any],
+        query: LeanDeclarationQuery,
         *,
         timeout_seconds: int,
-    ) -> dict[str, Any]: ...
+    ) -> LeanDeclarationPayload: ...
 
     def close(self) -> None: ...
 
@@ -128,17 +139,17 @@ class _ReusableLeanQuerySession:
 
     def request(
         self,
-        payload: dict[str, Any],
+        query: LeanDeclarationQuery,
         *,
         timeout_seconds: int,
-    ) -> dict[str, Any]:
+    ) -> LeanDeclarationPayload:
         if self._closed:
             raise _query_failed()
         self._check_index_identity()
         request_id = uuid.uuid4().hex
+        wire_query = self._catalog_query(query)
         wire_payload = {
-            **payload,
-            **self._catalog_fields(payload),
+            **wire_query.model_dump(mode="json"),
             "request_id": request_id,
         }
         try:
@@ -195,7 +206,7 @@ class _ReusableLeanQuerySession:
             result.stdout,
             expected_request_id=request_id,
         )
-        self._record_or_check_index(payload)
+        self._record_or_check_index(query)
         return output
 
     def close(self) -> None:
@@ -214,8 +225,8 @@ class _ReusableLeanQuerySession:
         if current_digest != self._index_digest:
             raise _index_changed()
 
-    def _record_or_check_index(self, payload: dict[str, Any]) -> None:
-        if payload.get("operation") != "search":
+    def _record_or_check_index(self, query: LeanDeclarationQuery) -> None:
+        if not isinstance(query, LeanDeclarationSearchQuery):
             return
         try:
             current_digest = _sha256_file(self._index_path)
@@ -227,23 +238,22 @@ class _ReusableLeanQuerySession:
         elif current_digest != self._index_digest:
             raise _index_changed()
 
-    def _catalog_fields(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _catalog_query(
+        self,
+        query: LeanDeclarationQuery,
+    ) -> LeanDeclarationQuery:
         if (
-            payload.get("operation") != "search"
+            not isinstance(query, LeanDeclarationSearchQuery)
             or self._index_digest is None
-            or payload.get("name_contains") is None
+            or query.name_contains is None
         ):
-            return {
-                "candidate_names": [],
-                "candidate_scan_positions": [],
-                "scanned_declarations_total": None,
-            }
-        target_modules = tuple(payload.get("target_module_prefixes", ()))
-        namespaces = tuple(payload.get("namespace_prefixes", ()))
-        kinds = set(payload.get("kinds", ()))
-        name_contains = str(payload["name_contains"])
-        type_constants = tuple(payload.get("type_constants", ()))
-        limit = int(payload["limit"])
+            return query
+        target_modules = query.target_module_prefixes
+        namespaces = query.namespace_prefixes
+        kinds = set(query.kinds)
+        name_contains = query.name_contains
+        type_constants = query.type_constants
+        limit = query.limit
         candidates: list[str] = []
         positions: list[int] = []
         candidate_bytes = 0
@@ -271,18 +281,17 @@ class _ReusableLeanQuerySession:
                             len(candidates) > _MAX_CATALOG_CANDIDATES
                             or candidate_bytes > _MAX_CATALOG_NAME_BYTES
                         ):
-                            return {
-                                "candidate_names": [],
-                                "candidate_scan_positions": [],
-                                "scanned_declarations_total": None,
-                            }
+                            return query
         except (OSError, StopIteration, ValueError) as exc:
             raise _index_changed() from exc
-        return {
-            "candidate_names": candidates,
-            "candidate_scan_positions": positions,
-            "scanned_declarations_total": scanned,
-        }
+        return LeanDeclarationSearchQuery.model_validate(
+            {
+                **query.model_dump(mode="json"),
+                "candidate_names": candidates,
+                "candidate_scan_positions": positions,
+                "scanned_declarations_total": scanned,
+            }
+        )
 
     def _validate_index_header(self) -> None:
         with self._index_path.open(encoding="utf-8") as stream:
@@ -404,13 +413,13 @@ class LeanSubprocessDeclarationBackend:
         environment: LeanEnvironment,
         entry: _SessionEntry,
         environment_digest: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
+        query: LeanDeclarationQuery,
+    ) -> LeanDeclarationPayload:
         """Run one bounded request, mapping not-found errors to environment changes."""
 
         try:
             output = entry.session.request(
-                payload,
+                query,
                 timeout_seconds=self._query_timeout_seconds(environment),
             )
         except LeanDeclarationBackendError as exc:
@@ -459,8 +468,8 @@ class LeanSubprocessDeclarationBackend:
     def query(
         self,
         environment: LeanEnvironment,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
+        query: LeanDeclarationQuery,
+    ) -> LeanDeclarationBackendResult:
         with self._session_locks[environment]:
             environment_digest = self.environment_digest(environment)
             entry = self._resolve_session(environment, environment_digest)
@@ -468,11 +477,13 @@ class LeanSubprocessDeclarationBackend:
                 environment,
                 entry,
                 environment_digest,
-                payload,
+                query,
             )
             self._validate_session_unchanged(environment, environment_digest)
-            output["_environment_digest"] = environment_digest
-            return output
+            return LeanDeclarationBackendResult(
+                environment_digest=environment_digest,
+                payload=output,
+            )
 
     def close(self) -> None:
         """Terminate all active query sessions."""
@@ -622,122 +633,92 @@ class LeanDeclarationService:
         query: LeanDeclarationSearchRequest,
     ) -> LeanDeclarationSearchOutput:
         type_constants = (
-            list(query.type_pattern.constants) if query.type_pattern is not None else []
+            query.type_pattern.constants if query.type_pattern is not None else ()
         )
-        raw = self.backend.query(
+        result = self.backend.query(
             query.environment,
-            {
-                "operation": "search",
-                "declaration_name": None,
-                "name_contains": query.name_contains,
-                "type_constants": type_constants,
-                "namespace_prefixes": list(query.namespace_prefixes),
-                "target_module_prefixes": (
-                    ["Init"] if query.environment is LeanEnvironment.CORE else []
+            LeanDeclarationSearchQuery(
+                name_contains=query.name_contains,
+                type_constants=type_constants,
+                namespace_prefixes=query.namespace_prefixes,
+                target_module_prefixes=(
+                    ("Init",) if query.environment is LeanEnvironment.CORE else ()
                 ),
-                "kinds": [kind.value for kind in query.kinds],
-                "limit": query.result_limit,
-                "max_depth": 0,
-                "max_nodes": 1,
-            },
+                kinds=query.kinds,
+                limit=query.result_limit,
+            ),
         )
-        _require_operation(raw, "search")
-        environment_digest = (
-            raw["_environment_digest"]
-            if "_environment_digest" in raw
-            else self.backend.environment_digest(query.environment)
-        )
+        payload = result.payload
+        if not isinstance(payload, LeanDeclarationSearchPayload):
+            raise _protocol_error()
         try:
             return LeanDeclarationSearchOutput(
                 environment=query.environment,
-                environment_digest=environment_digest,
+                environment_digest=result.environment_digest,
                 query=query,
-                declarations=tuple(
-                    LeanDeclarationRecord.model_validate(item)
-                    for item in raw["declarations"]
-                ),
-                scanned_declarations=raw["scanned_declarations"],
-                stop_reason=LeanDeclarationSearchStopReason(raw["stop_reason"]),
+                declarations=payload.declarations,
+                scanned_declarations=payload.scanned_declarations,
+                stop_reason=payload.stop_reason,
             )
-        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        except (ValueError, ValidationError) as exc:
             raise _protocol_error() from exc
 
     def inspect(
         self,
         query: LeanDeclarationInspectRequest,
     ) -> LeanDeclarationInspectOutput:
-        raw = self.backend.query(
+        result = self.backend.query(
             query.environment,
-            {
-                "operation": "inspect",
-                "declaration_name": query.declaration_name,
-                "name_contains": None,
-                "type_constants": [],
-                "namespace_prefixes": [],
-                "target_module_prefixes": (
-                    ["Init"] if query.environment is LeanEnvironment.CORE else []
+            LeanDeclarationInspectQuery(
+                declaration_name=query.declaration_name,
+                target_module_prefixes=(
+                    ("Init",) if query.environment is LeanEnvironment.CORE else ()
                 ),
-                "kinds": [],
-                "limit": 1,
-                "max_depth": 0,
-                "max_nodes": 1,
-            },
+            ),
         )
-        _require_operation(raw, "inspect")
-        environment_digest = (
-            raw["_environment_digest"]
-            if "_environment_digest" in raw
-            else self.backend.environment_digest(query.environment)
-        )
+        payload = result.payload
+        if not isinstance(payload, LeanDeclarationInspectPayload):
+            raise _protocol_error()
         try:
             return LeanDeclarationInspectOutput(
                 environment=query.environment,
-                environment_digest=environment_digest,
+                environment_digest=result.environment_digest,
                 query=query,
-                declaration=LeanDeclarationRecord.model_validate(raw["declaration"]),
+                declaration=payload.declaration,
             )
-        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        except (ValueError, ValidationError) as exc:
             raise _protocol_error() from exc
 
     def dependencies(
         self,
         query: LeanDependencyGraphRequest,
     ) -> LeanDependencyGraphArtifact:
-        raw = self.backend.query(
+        result = self.backend.query(
             query.environment,
-            {
-                "operation": "dependencies",
-                "declaration_name": query.root_declaration,
-                "name_contains": None,
-                "type_constants": [],
-                "namespace_prefixes": [],
-                "target_module_prefixes": (
-                    ["Init"] if query.environment is LeanEnvironment.CORE else []
+            LeanDeclarationDependenciesQuery(
+                declaration_name=query.root_declaration,
+                target_module_prefixes=(
+                    ("Init",) if query.environment is LeanEnvironment.CORE else ()
                 ),
-                "kinds": [],
-                "limit": 1,
-                "max_depth": query.max_depth,
-                "max_nodes": query.max_nodes,
-            },
+                max_depth=query.max_depth,
+                max_nodes=query.max_nodes,
+            ),
         )
-        _require_operation(raw, "dependencies")
-        environment_digest = (
-            raw["_environment_digest"]
-            if "_environment_digest" in raw
-            else self.backend.environment_digest(query.environment)
-        )
+        payload = result.payload
+        if not isinstance(payload, LeanDeclarationDependenciesPayload):
+            raise _protocol_error()
         try:
             return LeanDependencyGraphArtifact(
                 environment=query.environment,
-                environment_digest=environment_digest,
+                environment_digest=result.environment_digest,
                 query=query,
-                nodes=raw["nodes"],
-                edges=raw["edges"],
-                frontier=raw["frontier"],
-                node_budget_exhausted=raw["node_budget_exhausted"],
-                closure_complete=raw["closure_complete"],
+                nodes=payload.nodes,
+                edges=payload.edges,
+                frontier=payload.frontier,
+                node_budget_exhausted=payload.node_budget_exhausted,
+                closure_complete=payload.closure_complete,
             )
-        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        except (ValueError, ValidationError) as exc:
             raise _protocol_error() from exc
 
 
@@ -762,7 +743,7 @@ def _parse_process_response(
     stdout: bytes,
     *,
     expected_request_id: str,
-) -> dict[str, Any]:
+) -> LeanDeclarationPayload:
     try:
         lines = stdout.decode("utf-8").splitlines()
     except UnicodeDecodeError as exc:
@@ -782,7 +763,7 @@ def _parse_session_response(
     line: str,
     *,
     expected_request_id: str,
-) -> dict[str, Any]:
+) -> LeanDeclarationPayload:
     if line.startswith(_RESULT_PREFIX):
         response_kind = "result"
         serialized = line.removeprefix(_RESULT_PREFIX)
@@ -792,26 +773,24 @@ def _parse_session_response(
     else:
         raise _protocol_error()
     try:
-        envelope = loads_strict_json(serialized)
+        decoded = loads_strict_json(serialized)
     except CanonicalizationError as exc:
         raise _protocol_error() from exc
-    if not isinstance(envelope, dict) or envelope.get("request_id") != (
-        expected_request_id
-    ):
-        raise _protocol_error()
     if response_kind == "result":
-        if set(envelope) != {"request_id", "payload"} or not isinstance(
-            envelope["payload"], dict
-        ):
+        try:
+            envelope = LeanDeclarationResultEnvelope.model_validate(decoded)
+        except ValidationError as exc:
+            raise _protocol_error() from exc
+        if envelope.request_id != expected_request_id:
             raise _protocol_error()
-        return envelope["payload"]
-    if (
-        set(envelope) != {"request_id", "code", "message"}
-        or not isinstance(envelope["code"], str)
-        or not isinstance(envelope["message"], str)
-    ):
+        return envelope.payload
+    try:
+        error = LeanDeclarationErrorEnvelope.model_validate(decoded)
+    except ValidationError as exc:
+        raise _protocol_error() from exc
+    if error.request_id != expected_request_id:
         raise _protocol_error()
-    if envelope["code"] == "LEAN_DECLARATION_NOT_FOUND":
+    if error.code == "LEAN_DECLARATION_NOT_FOUND":
         raise LeanDeclarationBackendError(
             "LEAN_DECLARATION_NOT_FOUND",
             "Lean did not find the exact requested declaration.",
@@ -820,11 +799,6 @@ def _parse_session_response(
         "LEAN_QUERY_FAILED",
         "Lean could not complete declaration discovery in the selected environment.",
     )
-
-
-def _require_operation(payload: dict[str, Any], expected: str) -> None:
-    if payload.get("operation") != expected:
-        raise _protocol_error()
 
 
 def _protocol_error() -> LeanDeclarationBackendError:
@@ -862,10 +836,9 @@ def _index_changed() -> LeanDeclarationBackendError:
     )
 
 
-def _prefix_matches(value: str, prefixes: tuple[Any, ...]) -> bool:
+def _prefix_matches(value: str, prefixes: tuple[str, ...]) -> bool:
     return not prefixes or any(
-        isinstance(prefix, str) and (value == prefix or value.startswith(f"{prefix}."))
-        for prefix in prefixes
+        value == prefix or value.startswith(f"{prefix}.") for prefix in prefixes
     )
 
 

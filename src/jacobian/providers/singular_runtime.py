@@ -20,6 +20,7 @@ from jacobian.process_policy import (
 )
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
+    ProviderRuntimeErrorCode,
     _platform_tag,
     _sha256_file,
     _unavailable_runtime,
@@ -67,7 +68,10 @@ def singular_provider_runtime(
             or version_match is None
             or version_match.group("version") != SINGULAR_VERSION
         ):
-            raise ProviderRuntimeError("Singular version probe did not match the pin")
+            raise ProviderRuntimeError(
+                "Singular version probe did not match the pin",
+                code=ProviderRuntimeErrorCode.IDENTITY_CHANGED,
+            )
         digest = _sha256_file(resolved)
     except (OSError, UnicodeDecodeError, ProviderRuntimeError):
         return _unavailable_runtime(

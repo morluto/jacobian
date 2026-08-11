@@ -47,6 +47,24 @@ def test_timeout_is_represented_as_unknown_unverified_execution() -> None:
     assert result.model_dump(mode="json")["execution"]["status"] == "TIMEOUT"
 
 
+def test_unverified_result_cannot_smuggle_a_verification_record() -> None:
+    with pytest.raises(ValidationError, match="unverified result"):
+        ResultEnvelope.model_validate(
+            {
+                "execution": {"status": "COMPLETED"},
+                "input": {"status": "ACCEPTED"},
+                "conclusion": "UNKNOWN",
+                "assurance": {
+                    "arithmetic": "SYMBOLIC",
+                    "method": "HEURISTIC",
+                    "coverage": "NOT_APPLICABLE",
+                    "verification": "UNVERIFIED",
+                },
+                "verification_record_uri": "artifact://sha256/" + "f" * 64,
+            }
+        )
+
+
 @pytest.mark.parametrize(
     ("conclusion", "arithmetic", "method", "coverage"),
     [

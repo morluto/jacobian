@@ -11,7 +11,6 @@ from tests.support.rationals import rational_payload as _q
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityCompletenessStatus,
-    CapabilityMode,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomial_expression_capabilities import (
@@ -84,13 +83,11 @@ def test_independent_checker_verifies_full_ast_relation(tmp_path: Path) -> None:
         runtime,
         "polynomial.expression.normalize",
         {"expression": _difference_of_squares_plus_half_x()},
-        mode=CapabilityMode.EXPLORE,
     )
     verified = _invoke(
         runtime,
         "polynomial.expression_normalization.verify",
         {"normalization_uri": computed.output["normalization_uri"]},
-        mode=CapabilityMode.VERIFY,
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED_NORMALIZATION"
@@ -125,7 +122,6 @@ def test_independent_checker_rejects_wrong_bound_coefficients(tmp_path: Path) ->
         runtime,
         "polynomial.expression_normalization.verify",
         {"normalization_uri": candidate.artifact_uri},
-        mode=CapabilityMode.VERIFY,
     )
     assert rejected.execution.status is ExecutionStatus.COMPLETED
     assert rejected.output["status"] == "REJECTED"
@@ -142,7 +138,6 @@ def test_normalization_checker_timeout_is_operational(
         runtime,
         "polynomial.expression.normalize",
         {"expression": _expression(_variable("x"), variables=["x"])},
-        mode=CapabilityMode.EXPLORE,
     )
     monkeypatch.setattr(
         "jacobian.verification.service.execute_process",
@@ -159,7 +154,6 @@ def test_normalization_checker_timeout_is_operational(
         runtime,
         "polynomial.expression_normalization.verify",
         {"normalization_uri": computed.output["normalization_uri"]},
-        mode=CapabilityMode.VERIFY,
     )
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.output["status"] == "TIMEOUT"

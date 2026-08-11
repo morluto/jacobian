@@ -13,6 +13,9 @@ from jacobian.contracts.matrices import RationalMatrix
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.storage.models import StoredArtifact
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "WIRING"
+
 
 def _witness_schema_uri(runtime: JacobianRuntime) -> str:
     return runtime.core.schemas.register_model(

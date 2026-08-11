@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Self
+
+from pydantic import model_validator
+
 from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.results import ContractModel
 
@@ -21,3 +25,9 @@ class MaterializedOperationOutput[PreviewT: ContractModel](ContractModel):
     preview: PreviewT | None = None
     preview_complete: bool = False
     backend_version: str
+
+    @model_validator(mode="after")
+    def complete_preview_requires_a_value(self) -> Self:
+        if self.preview_complete and self.preview is None:
+            raise ValueError("a complete materialized preview requires a preview")
+        return self

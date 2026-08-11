@@ -118,7 +118,6 @@
         "id": {"const": "C2"},
         "role": {"const": "PRIMARY_TREATMENT"},
         "jacobian_enabled": {"const": true},
-        "reasoning_log_mode": {"enum": ["REQUIRED", "AUDIT", "OFF"]},
         "image": {"type": "string", "pattern": "^[^@]+@sha256:[0-9a-f]{64}$"},
         "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "platform": {"type": "string", "pattern": "^[a-z0-9_]+/[a-z0-9_]+$"},

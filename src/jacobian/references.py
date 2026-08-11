@@ -57,8 +57,8 @@ class ReferenceInstallation:
 
 @dataclass(frozen=True, slots=True)
 class PolytopeCheckerInstallation:
-    witness_checker_id: str
-    certificate_checker_id: str
+    witness_checker_id: str | None
+    certificate_checker_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,10 +116,14 @@ class ReferenceInstaller:
             definition={"description": "untrusted domain capability metadata"},
         )
 
-    def install_all(self) -> dict[str, ReferenceInstallation]:
-        graph = self.install_graph_paths()
-        matrix = self.install_matrices()
-        erdos_straus = self.install_erdos_straus()
+    def install_all(
+        self,
+        *,
+        authorize_checker: bool = True,
+    ) -> dict[str, ReferenceInstallation]:
+        graph = self.install_graph_paths(authorize_checker=authorize_checker)
+        matrix = self.install_matrices(authorize_checker=authorize_checker)
+        erdos_straus = self.install_erdos_straus(authorize_checker=authorize_checker)
         return {
             graph.name: graph,
             matrix.name: matrix,
@@ -272,7 +276,11 @@ class ReferenceInstaller:
             )
         return installations, provider_runtime
 
-    def install_graph_paths(self) -> ReferenceInstallation:
+    def install_graph_paths(
+        self,
+        *,
+        authorize_checker: bool = True,
+    ) -> ReferenceInstallation:
         domain = "jacobian.graph-paths"
         semantics = self.store.register_descriptor(
             kind="semantics",
@@ -339,59 +347,65 @@ class ReferenceInstaller:
             candidate_schema_uri=candidate_schema,
             capabilities=capabilities,
         )
-        witness_checkers = {
-            "graph.omitted_path": self._authorize_checker(
-                name="graph omitted-path witness checker",
-                entrypoint=("jacobian_checkers.graph_paths:check_omitted_path"),
-                evidence_kind="WITNESS",
-                format_id="graph.omitted_path",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            ),
-            "graph.odd_cycle": self._authorize_checker(
-                name="graph odd-cycle witness checker",
-                entrypoint="jacobian_checkers.graph_paths:check_odd_cycle",
-                evidence_kind="WITNESS",
-                format_id="graph.odd_cycle",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            ),
-            "graph.2coloring": self._authorize_checker(
-                name="graph two-coloring witness checker",
-                entrypoint="jacobian_checkers.graph_paths:check_two_coloring",
-                evidence_kind="WITNESS",
-                format_id="graph.2coloring",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            ),
-        }
-        certificate_checkers = {
-            "graph.path_enumeration": self._authorize_checker(
-                name="graph path-enumeration certificate checker",
-                entrypoint=("jacobian_checkers.graph_paths:check_path_enumeration"),
-                evidence_kind="CERTIFICATE",
-                format_id="graph.path_enumeration",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            )
-        }
-        preservation_checkers = {
-            "graph.counterexample_preservation": self._authorize_checker(
-                name="graph counterexample preservation checker",
-                entrypoint=(
-                    "jacobian_checkers.graph_paths:check_counterexample_preservation"
+        if authorize_checker:
+            witness_checkers = {
+                "graph.omitted_path": self._authorize_checker(
+                    name="graph omitted-path witness checker",
+                    entrypoint=("jacobian_checkers.graph_paths:check_omitted_path"),
+                    evidence_kind="WITNESS",
+                    format_id="graph.omitted_path",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
                 ),
-                evidence_kind="PRESERVATION",
-                format_id="graph.counterexample_preservation",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            )
-        }
+                "graph.odd_cycle": self._authorize_checker(
+                    name="graph odd-cycle witness checker",
+                    entrypoint="jacobian_checkers.graph_paths:check_odd_cycle",
+                    evidence_kind="WITNESS",
+                    format_id="graph.odd_cycle",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                ),
+                "graph.2coloring": self._authorize_checker(
+                    name="graph two-coloring witness checker",
+                    entrypoint="jacobian_checkers.graph_paths:check_two_coloring",
+                    evidence_kind="WITNESS",
+                    format_id="graph.2coloring",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                ),
+            }
+            certificate_checkers = {
+                "graph.path_enumeration": self._authorize_checker(
+                    name="graph path-enumeration certificate checker",
+                    entrypoint=("jacobian_checkers.graph_paths:check_path_enumeration"),
+                    evidence_kind="CERTIFICATE",
+                    format_id="graph.path_enumeration",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                )
+            }
+            preservation_checkers = {
+                "graph.counterexample_preservation": self._authorize_checker(
+                    name="graph counterexample preservation checker",
+                    entrypoint=(
+                        "jacobian_checkers.graph_paths:"
+                        "check_counterexample_preservation"
+                    ),
+                    evidence_kind="PRESERVATION",
+                    format_id="graph.counterexample_preservation",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                )
+            }
+        else:
+            witness_checkers = {}
+            certificate_checkers = {}
+            preservation_checkers = {}
         return ReferenceInstallation(
             name="graph_paths",
             domain_id=domain,
@@ -403,15 +417,19 @@ class ReferenceInstaller:
             candidate_schema_uri=candidate_schema,
             witness_schema_uri=self.witness_schema_uri,
             certificate_schema_uri=self.certificate_schema_uri,
-            witness_checker_ids=witness_checkers,
-            certificate_checker_ids=certificate_checkers,
-            preservation_checker_ids=preservation_checkers,
+            witness_checker_ids=self._compact_checker_ids(witness_checkers),
+            certificate_checker_ids=self._compact_checker_ids(certificate_checkers),
+            preservation_checker_ids=self._compact_checker_ids(preservation_checkers),
             transformation_checker_ids={},
             representation_schema_uris={},
             representation_semantics_uris={},
         )
 
-    def install_matrices(self) -> ReferenceInstallation:
+    def install_matrices(
+        self,
+        *,
+        authorize_checker: bool = True,
+    ) -> ReferenceInstallation:
         domain = "jacobian.integer-matrices"
         semantics = self.store.register_descriptor(
             kind="semantics",
@@ -505,63 +523,71 @@ class ReferenceInstaller:
             candidate_schema_uri=candidate_schema,
             capabilities=capabilities,
         )
-        witness_checkers = {
-            "matrix.kernel_vector": self._authorize_checker(
-                name="matrix rational-kernel witness checker",
-                entrypoint=("jacobian_checkers.matrices:check_kernel_vector"),
-                evidence_kind="WITNESS",
-                format_id="matrix.kernel_vector",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            ),
-            "matrix.maximizer": self._authorize_checker(
-                name="matrix maximum-determinant witness checker",
-                entrypoint=("jacobian_checkers.matrices:check_maximizer_witness"),
-                evidence_kind="WITNESS",
-                format_id="matrix.maximizer",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            ),
-        }
-        certificate_checkers = {
-            "matrix.maxdet_enumeration": self._authorize_checker(
-                name="matrix max-determinant enumeration checker",
-                entrypoint=("jacobian_checkers.matrices:check_maxdet_enumeration"),
-                evidence_kind="CERTIFICATE",
-                format_id="matrix.maxdet_enumeration",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            )
-        }
-        preservation_checkers = {
-            "matrix.singular_preservation": self._authorize_checker(
-                name="matrix singularity preservation checker",
-                entrypoint=("jacobian_checkers.matrices:check_singular_preservation"),
-                evidence_kind="PRESERVATION",
-                format_id="matrix.singular_preservation",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            )
-        }
-        transformation_checkers = {
-            "matrix.row_major": self._authorize_checker(
-                name="matrix row-major transformation checker",
-                entrypoint=(
-                    "jacobian_checkers.matrices:check_row_major_transformation"
+        if authorize_checker:
+            witness_checkers = {
+                "matrix.kernel_vector": self._authorize_checker(
+                    name="matrix rational-kernel witness checker",
+                    entrypoint=("jacobian_checkers.matrices:check_kernel_vector"),
+                    evidence_kind="WITNESS",
+                    format_id="matrix.kernel_vector",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
                 ),
-                evidence_kind="TRANSFORMATION",
-                format_id="matrix.row_major",
-                claim_schema=self.transformation_claim_schema_uri,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-                target_schema=row_major_schema,
-                target_semantics=row_major_semantics,
-            )
-        }
+                "matrix.maximizer": self._authorize_checker(
+                    name="matrix maximum-determinant witness checker",
+                    entrypoint=("jacobian_checkers.matrices:check_maximizer_witness"),
+                    evidence_kind="WITNESS",
+                    format_id="matrix.maximizer",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                ),
+            }
+            certificate_checkers = {
+                "matrix.maxdet_enumeration": self._authorize_checker(
+                    name="matrix max-determinant enumeration checker",
+                    entrypoint=("jacobian_checkers.matrices:check_maxdet_enumeration"),
+                    evidence_kind="CERTIFICATE",
+                    format_id="matrix.maxdet_enumeration",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                )
+            }
+            preservation_checkers = {
+                "matrix.singular_preservation": self._authorize_checker(
+                    name="matrix singularity preservation checker",
+                    entrypoint=(
+                        "jacobian_checkers.matrices:check_singular_preservation"
+                    ),
+                    evidence_kind="PRESERVATION",
+                    format_id="matrix.singular_preservation",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                )
+            }
+            transformation_checkers = {
+                "matrix.row_major": self._authorize_checker(
+                    name="matrix row-major transformation checker",
+                    entrypoint=(
+                        "jacobian_checkers.matrices:check_row_major_transformation"
+                    ),
+                    evidence_kind="TRANSFORMATION",
+                    format_id="matrix.row_major",
+                    claim_schema=self.transformation_claim_schema_uri,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                    target_schema=row_major_schema,
+                    target_semantics=row_major_semantics,
+                )
+            }
+        else:
+            witness_checkers = {}
+            certificate_checkers = {}
+            preservation_checkers = {}
+            transformation_checkers = {}
         return ReferenceInstallation(
             name="matrices",
             domain_id=domain,
@@ -573,15 +599,21 @@ class ReferenceInstaller:
             candidate_schema_uri=candidate_schema,
             witness_schema_uri=self.witness_schema_uri,
             certificate_schema_uri=self.certificate_schema_uri,
-            witness_checker_ids=witness_checkers,
-            certificate_checker_ids=certificate_checkers,
-            preservation_checker_ids=preservation_checkers,
-            transformation_checker_ids=transformation_checkers,
+            witness_checker_ids=self._compact_checker_ids(witness_checkers),
+            certificate_checker_ids=self._compact_checker_ids(certificate_checkers),
+            preservation_checker_ids=self._compact_checker_ids(preservation_checkers),
+            transformation_checker_ids=self._compact_checker_ids(
+                transformation_checkers
+            ),
             representation_schema_uris={"row_major": row_major_schema},
             representation_semantics_uris={"row_major": row_major_semantics},
         )
 
-    def install_erdos_straus(self) -> ReferenceInstallation:
+    def install_erdos_straus(
+        self,
+        *,
+        authorize_checker: bool = True,
+    ) -> ReferenceInstallation:
         domain = "jacobian.erdos-straus"
         semantics = self.store.register_descriptor(
             kind="semantics",
@@ -633,17 +665,22 @@ class ReferenceInstaller:
             candidate_schema_uri=candidate_schema,
             capabilities=capabilities,
         )
-        witness_checkers = {
-            "erdos_straus.decomposition_table": self._authorize_checker(
-                name="bounded Erdős-Straus decomposition-table checker",
-                entrypoint=("jacobian_checkers.erdos_straus:check_decomposition_table"),
-                evidence_kind="WITNESS",
-                format_id="erdos_straus.decomposition_table",
-                claim_schema=claim_schema,
-                semantics=semantics,
-                candidate_schema=candidate_schema,
-            )
-        }
+        if authorize_checker:
+            witness_checkers = {
+                "erdos_straus.decomposition_table": self._authorize_checker(
+                    name="bounded Erdős-Straus decomposition-table checker",
+                    entrypoint=(
+                        "jacobian_checkers.erdos_straus:check_decomposition_table"
+                    ),
+                    evidence_kind="WITNESS",
+                    format_id="erdos_straus.decomposition_table",
+                    claim_schema=claim_schema,
+                    semantics=semantics,
+                    candidate_schema=candidate_schema,
+                )
+            }
+        else:
+            witness_checkers = {}
         return ReferenceInstallation(
             name="erdos_straus",
             domain_id=domain,
@@ -655,13 +692,23 @@ class ReferenceInstaller:
             candidate_schema_uri=candidate_schema,
             witness_schema_uri=self.witness_schema_uri,
             certificate_schema_uri=self.certificate_schema_uri,
-            witness_checker_ids=witness_checkers,
+            witness_checker_ids=self._compact_checker_ids(witness_checkers),
             certificate_checker_ids={},
             preservation_checker_ids={},
             transformation_checker_ids={},
             representation_schema_uris={},
             representation_semantics_uris={},
         )
+
+    @staticmethod
+    def _compact_checker_ids(
+        values: dict[str, str | None],
+    ) -> dict[str, str]:
+        return {
+            key: checker_id
+            for key, checker_id in values.items()
+            if checker_id is not None
+        }
 
     def _capabilities(
         self,
@@ -718,32 +765,32 @@ class ReferenceInstaller:
         target_schema: str | None = None,
         target_semantics: str | None = None,
         provider_runtime: CapabilityProviderRuntime | None = None,
-    ) -> str:
-        return (
-            CheckerInstaller(self.checkers)
-            .install(
-                CheckerOperation(
-                    name=name,
-                    entrypoint=entrypoint,
-                    evidence_kind=EvidenceKind(evidence_kind),
-                    format_id=format_id,
-                    format_version="1",
-                    claim_schema_uris=(claim_schema,),
-                    semantics_uris=(semantics,),
-                    candidate_schema_uris=(candidate_schema,),
-                    target_schema_uris=(
-                        (target_schema,) if target_schema is not None else ()
-                    ),
-                    target_semantics_uris=(
-                        (target_semantics,) if target_semantics is not None else ()
-                    ),
-                    provider_runtime=provider_runtime,
-                    reason="bundled reference checker",
+    ) -> str | None:
+        installed = CheckerInstaller(self.checkers).install(
+            CheckerOperation(
+                name=name,
+                entrypoint=entrypoint,
+                evidence_kind=EvidenceKind(evidence_kind),
+                format_id=format_id,
+                format_version="1",
+                claim_schema_uris=(claim_schema,),
+                semantics_uris=(semantics,),
+                candidate_schema_uris=(candidate_schema,),
+                target_schema_uris=(
+                    (target_schema,) if target_schema is not None else ()
                 ),
-                authorize=not self.checkers.bind_existing_when_omitted,
-            )
-            .require_checker_id()
+                target_semantics_uris=(
+                    (target_semantics,) if target_semantics is not None else ()
+                ),
+                provider_runtime=provider_runtime,
+                reason="bundled reference checker",
+            ),
+            authorize=not self.checkers.bind_existing_when_omitted,
         )
+        if self.checkers.bind_existing_when_omitted:
+            # Hydrate may omit checkers that were never authorized on this store.
+            return installed.checker_id
+        return installed.require_checker_id()
 
 
 def reference_catalog(

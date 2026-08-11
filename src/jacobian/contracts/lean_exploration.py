@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian.contracts.common import ArtifactUri, Sha256Digest
 from jacobian.contracts.lean import LeanEnvironment
@@ -62,7 +62,7 @@ class LeanProofStateArtifact(ContractModel):
     tactic_prefix: tuple[str, ...] = Field(max_length=64)
     normalized_goals: tuple[LeanNormalizedGoal, ...] = Field(max_length=128)
     state_digest: Sha256Digest
-    completed: bool
+    completed: StrictBool
     imports: tuple[str, ...]
     lean_version: str
     lean_commit: str
@@ -88,7 +88,13 @@ class LeanProofSuccessorState(ContractModel):
     state_uri: ArtifactUri
     state_digest: Sha256Digest
     normalized_goals: tuple[LeanNormalizedGoal, ...] = Field(max_length=128)
-    completed: bool
+    completed: StrictBool
+
+    @model_validator(mode="after")
+    def bind_completion_to_goals(self) -> Self:
+        if self.completed != (not self.normalized_goals):
+            raise ValueError("successor completion differs from normalized goals")
+        return self
 
 
 class LeanProofStateTransitionArtifact(ContractModel):
@@ -106,8 +112,8 @@ class LeanProofStateTransitionArtifact(ContractModel):
     typed_goals: tuple[LeanTypedGoal, ...]
     goal_count: int = Field(ge=0)
     successor_states: tuple[LeanProofSuccessorState, ...] = Field(max_length=1)
-    accepted: bool
-    completed: bool
+    accepted: StrictBool
+    completed: StrictBool
     messages: tuple[str, ...]
     diagnostics: tuple[LeanTacticDiagnostic, ...]
     lean_version: str

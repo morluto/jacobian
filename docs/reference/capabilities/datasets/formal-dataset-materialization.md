@@ -1,6 +1,6 @@
 # Formal-dataset materialization
 
-[Documentation home](../../../index.md) · [Capability surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 `dataset.formal.materialize` converts one pinned MiniF2F or ProofNet row into a
 content-addressed replay artifact. It is a deterministic ingestion boundary,
@@ -25,7 +25,6 @@ than interpreted heuristically.
 ```json
 {
   "capability_id": "dataset.formal.materialize",
-  "mode": "EXPLORE",
   "input": {
     "dataset_revision": "3a5dceb842b916345a4d7bb7dc4c1dbd4b98aa",
     "sample_id": "mathd_algebra_1",

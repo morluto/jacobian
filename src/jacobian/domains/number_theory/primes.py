@@ -11,7 +11,7 @@ from jacobian.domains._examples import example
 from jacobian.domains.number_theory._support import (
     number_theory_operation,
 )
-from jacobian.domains.number_theory.operations import (
+from jacobian.domains.number_theory.prime_operations import (
     compute_euler_totient,
     compute_mobius,
     compute_next_prime,

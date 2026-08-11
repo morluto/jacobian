@@ -9,9 +9,6 @@ import re
 import time
 from typing import Any
 
-__all__ = ["check_lrat"]
-
-
 _URI = re.compile(r"^artifact://sha256/[0-9a-f]{64}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 

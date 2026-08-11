@@ -6,6 +6,27 @@ HARBOR_PROJECT_PYTHON ?= uv run --locked --with harbor==$(HARBOR_VERSION) --with
 # worker-local. Oracle/adapter Make targets remain serial.
 HARBOR_VALIDATION_WORKERS ?= 2
 HARBOR_VALIDATION_TOTAL_WORKERS ?= 4
+HARBOR_ORACLE_LOCK ?= benchmarks/results/.harbor-oracle.lock
+HARBOR_ORACLE_DOCKER_BUILD_MODE ?= auto
+
+# Compose Bake can reuse the wrong same-named Dockerfile with the BuildKit
+# bundled by pre-23 Docker engines. Keep modern BuildKit, but fail over to the
+# classic builder on older daemons and bind the resolved runtime into evidence.
+define _resolve_harbor_oracle_docker_build_mode
+docker_server_version="$$(docker version --format '{{.Server.Version}}')"; \
+docker_compose_version="$$(docker compose version --short)"; \
+docker_build_mode="$(HARBOR_ORACLE_DOCKER_BUILD_MODE)"; \
+if [ "$$docker_build_mode" = "auto" ]; then \
+	docker_server_major="$${docker_server_version%%.*}"; \
+	case "$$docker_server_major" in ''|*[!0-9]*) echo "unable to parse Docker server version: $$docker_server_version" >&2; exit 2;; esac; \
+	if [ "$$docker_server_major" -lt 23 ]; then docker_build_mode="legacy"; else docker_build_mode="buildkit"; fi; \
+fi; \
+case "$$docker_build_mode" in \
+	legacy) export DOCKER_BUILDKIT=0 COMPOSE_BAKE=false;; \
+	buildkit) export DOCKER_BUILDKIT=1 COMPOSE_BAKE=true;; \
+	*) echo "HARBOR_ORACLE_DOCKER_BUILD_MODE must be auto, legacy, or buildkit" >&2; exit 2;; \
+esac;
+endef
 
 .PHONY: harbor-plan harbor-prepare-task harbor-validate-task harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-host-validation harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke
 
@@ -141,9 +162,17 @@ harbor-oracle: ## Check contracts, then run an explicitly scoped dataset Oracle.
 
 harbor-oracle-task: harbor-check-task ## Check selected leaf tasks, then run their exact Oracle.
 	@test -f "benchmarks/datasets/$(DATASET)/jobs/oracle.json" || { echo "unknown dataset or missing Oracle job: $(DATASET)" >&2; exit 2; }
+	@mkdir -p "$(dir $(HARBOR_ORACLE_LOCK))"
+	@exec 9>"$(HARBOR_ORACLE_LOCK)"; flock 9; \
+	$(_resolve_harbor_oracle_docker_build_mode) \
 	job_name="$$( $(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--prepare --dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
+		--job-config "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
+		--execution-args="$(EVAL_ARGS)" \
+		--docker-build-mode "$$docker_build_mode" \
+		--docker-server-version "$$docker_server_version" \
+		--docker-compose-version "$$docker_compose_version" \
 		--tasks $(TASKS) )" && \
 	$(HARBOR_RUNNER) run \
 		-c "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
@@ -154,6 +183,11 @@ harbor-oracle-task: harbor-check-task ## Check selected leaf tasks, then run the
 	$(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
+		--job-config "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
+		--execution-args="$(EVAL_ARGS)" \
+		--docker-build-mode "$$docker_build_mode" \
+		--docker-server-version "$$docker_server_version" \
+		--docker-compose-version "$$docker_compose_version" \
 		--result "benchmarks/results/$(DATASET)-oracle/$$job_name/result.json" \
 		--tasks $(TASKS)
 
@@ -161,9 +195,17 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
 	@test -n "$(TASKS)" -o "$(FULL)" = "1" || { echo "TASKS is required; use FULL=1 only for an intentional full-dataset Oracle" >&2; exit 2; }
 	@test -f "benchmarks/datasets/$(DATASET)/jobs/oracle.json" || { echo "unknown dataset or missing Oracle job: $(DATASET)" >&2; exit 2; }
+	@mkdir -p "$(dir $(HARBOR_ORACLE_LOCK))"
+	@exec 9>"$(HARBOR_ORACLE_LOCK)"; flock 9; \
+	$(_resolve_harbor_oracle_docker_build_mode) \
 	job_name="$$( $(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--prepare --dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
+		--job-config "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
+		--execution-args="$(EVAL_ARGS)" \
+		--docker-build-mode "$$docker_build_mode" \
+		--docker-server-version "$$docker_server_version" \
+		--docker-compose-version "$$docker_compose_version" \
 		$(if $(TASKS),--tasks $(TASKS),) )" && \
 	$(HARBOR_RUNNER) run \
 		-c "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
@@ -174,6 +216,11 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 	$(HARBOR_PYTHON) benchmarks/tooling/validate_harbor_results.py \
 		--dataset "$(DATASET)" \
 		--jobs-dir "benchmarks/results/$(DATASET)-oracle" \
+		--job-config "benchmarks/datasets/$(DATASET)/jobs/oracle.json" \
+		--execution-args="$(EVAL_ARGS)" \
+		--docker-build-mode "$$docker_build_mode" \
+		--docker-server-version "$$docker_server_version" \
+		--docker-compose-version "$$docker_compose_version" \
 		--result "benchmarks/results/$(DATASET)-oracle/$$job_name/result.json" \
 		$(if $(TASKS),--tasks $(TASKS),)
 

@@ -68,6 +68,7 @@ from jacobian.verification._helpers import (
     _CHECKER_DIAGNOSTICS_TOO_LARGE,
     _CHECKER_INVALID_DECISION,
     _CHECKER_OUTPUT_TOO_LARGE,
+    _CHECKER_STOPPED,
     _CHECKER_TIMEOUT,
     _CHECKER_UNREADABLE_RESPONSE,
     _checker_failure_detail,
@@ -75,6 +76,12 @@ from jacobian.verification._helpers import (
     _environment_digest,
     _verification_input_failure_detail,
     _verification_storage_failure_detail,
+)
+from jacobian.verification.checker_protocol import (
+    CheckerWorkerDecisionError,
+    CheckerWorkerFailure,
+    CheckerWorkerProtocolError,
+    parse_checker_worker_response,
 )
 from jacobian.worker_environment import worker_environment
 
@@ -87,6 +94,20 @@ class CheckerExecutionError(RuntimeError):
 
 class CheckerExecutionCancelledError(CheckerExecutionError):
     """An authorized checker was cancelled by its caller."""
+
+
+_RECOVERABLE_VERIFICATION_ERRORS: tuple[type[Exception], ...] = (
+    TimeoutError,
+    CheckerExecutionCancelledError,
+    CheckerExecutableChangedError,
+    CheckerRegistryError,
+    SchemaRegistryError,
+    ValueError,
+    ValidationError,
+    ArtifactNotFoundError,
+    StorageError,
+    CheckerExecutionError,
+)
 
 
 class VerificationService:
@@ -289,13 +310,21 @@ class VerificationService:
                 timeout_seconds=timeout_seconds,
             )
             runtime_ms = int((time.monotonic() - started) * 1000)
-            if not decision.accepted:
+            if not decision.accepted or decision.coverage is Coverage.BOUNDED:
+                detail = (
+                    decision.detail
+                    if not decision.accepted
+                    else (
+                        "Inline exact verification cannot bind a bounded scope; the "
+                        "checker must report exhaustive or not-applicable coverage."
+                    )
+                )
                 return ResultEnvelope(
                     execution=Execution(
                         status=ExecutionStatus.COMPLETED, runtime_ms=runtime_ms
                     ),
                     input=InputValidation(
-                        status=InputStatus.REJECTED, errors=(decision.detail,)
+                        status=InputStatus.REJECTED, errors=(detail,)
                     ),
                     conclusion=Conclusion.UNKNOWN,
                     assurance=Assurance(
@@ -360,18 +389,7 @@ class VerificationService:
                 evidence_uris=(record_artifact.artifact_uri,),
                 verification_record_uri=record_artifact.artifact_uri,
             )
-        except (
-            TimeoutError,
-            CheckerExecutionCancelledError,
-            CheckerExecutableChangedError,
-            CheckerRegistryError,
-            SchemaRegistryError,
-            ValueError,
-            ValidationError,
-            ArtifactNotFoundError,
-            StorageError,
-            CheckerExecutionError,
-        ) as exc:
+        except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
 
     def _validate_checker_response(
@@ -381,8 +399,14 @@ class VerificationService:
         provider_runtime: CapabilityProviderRuntime | None,
     ) -> CheckerDecision:
         try:
-            response = loads_strict_json(completed.stdout)
+            response = parse_checker_worker_response(
+                loads_strict_json(completed.stdout)
+            )
         except CanonicalizationError as exc:
+            raise CheckerExecutionError(_CHECKER_UNREADABLE_RESPONSE) from exc
+        except CheckerWorkerDecisionError as exc:
+            raise CheckerExecutionError(_CHECKER_INVALID_DECISION) from exc
+        except CheckerWorkerProtocolError as exc:
             raise CheckerExecutionError(_CHECKER_UNREADABLE_RESPONSE) from exc
         if completed.returncode != 0:
             _LOGGER.warning(
@@ -390,10 +414,15 @@ class VerificationService:
                 response,
                 completed.stderr,
             )
+            detail = (
+                _checker_failure_detail(response)
+                if isinstance(response, CheckerWorkerFailure)
+                else _CHECKER_STOPPED
+            )
+            raise CheckerExecutionError(detail)
+        if isinstance(response, CheckerWorkerFailure):
             raise CheckerExecutionError(_checker_failure_detail(response))
-        if not isinstance(response, dict):
-            raise CheckerExecutionError(_CHECKER_UNREADABLE_RESPONSE)
-        if response.get("measured_checker_digest") != expected_digest:
+        if response.measured_checker_digest != expected_digest:
             _LOGGER.warning(
                 "checker worker measured an unexpected implementation: %r",
                 response,
@@ -402,21 +431,13 @@ class VerificationService:
         expected_runtime_digest = (
             provider_runtime.digest if provider_runtime is not None else None
         )
-        if response.get("measured_runtime_digest") != expected_runtime_digest:
+        if response.measured_runtime_digest != expected_runtime_digest:
             _LOGGER.warning(
                 "checker worker measured an unexpected external runtime: %r",
                 response,
             )
             raise CheckerExecutionError(_CHECKER_CHANGED)
-        try:
-            return CheckerDecision.model_validate(response.get("decision"))
-        except ValidationError as exc:
-            _LOGGER.warning(
-                "checker returned an invalid decision: %r",
-                response,
-                exc_info=exc,
-            )
-            raise CheckerExecutionError(_CHECKER_INVALID_DECISION) from exc
+        return response.decision
 
     def verify_witness(
         self,
@@ -509,18 +530,7 @@ class VerificationService:
                 summary="authorized witness verification",
                 execution_detail=decision.detail,
             )
-        except (
-            TimeoutError,
-            CheckerExecutionCancelledError,
-            CheckerExecutableChangedError,
-            CheckerRegistryError,
-            SchemaRegistryError,
-            ValueError,
-            ValidationError,
-            ArtifactNotFoundError,
-            StorageError,
-            CheckerExecutionError,
-        ) as exc:
+        except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
 
     def verify_certificate(
@@ -623,18 +633,7 @@ class VerificationService:
                 summary="authorized certificate verification",
                 execution_detail=decision.detail,
             )
-        except (
-            TimeoutError,
-            CheckerExecutionCancelledError,
-            CheckerExecutableChangedError,
-            CheckerRegistryError,
-            SchemaRegistryError,
-            ValueError,
-            ValidationError,
-            ArtifactNotFoundError,
-            StorageError,
-            CheckerExecutionError,
-        ) as exc:
+        except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
 
     def verify_transformation(
@@ -757,18 +756,7 @@ class VerificationService:
                 ),
                 summary="authorized transformation verification",
             )
-        except (
-            TimeoutError,
-            CheckerExecutionCancelledError,
-            CheckerExecutableChangedError,
-            CheckerRegistryError,
-            SchemaRegistryError,
-            ValueError,
-            ValidationError,
-            ArtifactNotFoundError,
-            StorageError,
-            CheckerExecutionError,
-        ) as exc:
+        except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
 
     def verify_preservation(
@@ -868,18 +856,7 @@ class VerificationService:
                 parents=(*parent_uris, evidence_artifact.artifact_uri),
                 summary="authorized reduction preservation verification",
             )
-        except (
-            TimeoutError,
-            CheckerExecutionCancelledError,
-            CheckerExecutableChangedError,
-            CheckerRegistryError,
-            SchemaRegistryError,
-            ValueError,
-            ValidationError,
-            ArtifactNotFoundError,
-            StorageError,
-            CheckerExecutionError,
-        ) as exc:
+        except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
 
     def _validate_artifacts(self, artifacts: tuple[StoredArtifact, ...]) -> None:

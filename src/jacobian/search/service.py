@@ -42,7 +42,10 @@ from jacobian.experiment_identity import new_experiment_uri
 from jacobian.lifecycle import (
     LifecycleTimeoutError,
     ServiceLifecycleState,
+    WorkerLaunchStatus,
+    launch_worker,
     wait_for_worker_quiescence,
+    wait_for_worker_settlement,
 )
 from jacobian.persistence import PersistenceCorruptionError, decode_persisted_model
 from jacobian.persistence.recovery import (
@@ -572,23 +575,18 @@ class SearchService:
     ) -> SearchExperimentSnapshot:
         """Wait until the search is paused or terminal."""
 
-        deadline = time.monotonic() + timeout_seconds
-        while True:
-            snapshot = self.inspect(experiment_uri)
-            if snapshot.state in _SETTLED_STATES:
-                return snapshot
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(
-                    "The search is still running. Inspect the experiment or wait "
-                    "again with a larger timeout."
-                )
-            with self._thread_lock:
-                thread = self._threads.get(experiment_uri)
-            if thread is not None:
-                thread.join(timeout=min(remaining, 0.05))
-            else:
-                time.sleep(min(remaining, 0.05))
+        return wait_for_worker_settlement(
+            lock=self._thread_lock,
+            workers=self._threads,
+            worker_id=experiment_uri,
+            inspect=self.inspect,
+            is_settled=lambda snapshot: snapshot.state in _SETTLED_STATES,
+            timeout_seconds=timeout_seconds,
+            timeout_message=(
+                "The search is still running. Inspect the experiment or wait again "
+                "with a larger timeout."
+            ),
+        )
 
     def pause(self, experiment_uri: str) -> ExperimentControlResult:
         """Request a pause at the next committed checkpoint boundary."""
@@ -750,25 +748,17 @@ class SearchService:
         *,
         lifecycle_reserved: bool = False,
     ) -> None:
-        with self._thread_lock:
-            if self._lifecycle_state is ServiceLifecycleState.CLOSED or (
-                self._lifecycle_state is ServiceLifecycleState.CLOSING
-                and not lifecycle_reserved
-            ):
-                raise SearchError("search service is closing")
-            current = self._threads.get(experiment_uri)
-            if current is not None and current.is_alive():
-                return
-            thread = threading.Thread(
-                target=self._run,
-                args=(experiment_uri,),
-                name=(
-                    f"jacobian-search-{experiment_uri.removeprefix('experiment://')}"
-                ),
-                daemon=True,
-            )
-            self._threads[experiment_uri] = thread
-            thread.start()
+        status = launch_worker(
+            lock=self._thread_lock,
+            lifecycle_state=lambda: self._lifecycle_state,
+            workers=self._threads,
+            worker_id=experiment_uri,
+            target=self._run,
+            name=f"jacobian-search-{experiment_uri.removeprefix('experiment://')}",
+            lifecycle_reserved=lifecycle_reserved,
+        )
+        if status is WorkerLaunchStatus.SERVICE_CLOSING:
+            raise SearchError("search service is closing")
 
     def _budget_exhausted(
         self,

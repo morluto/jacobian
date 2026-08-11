@@ -19,7 +19,6 @@ unavailable/diagnostic behavior rather than a silent success.
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import tempfile
 from dataclasses import dataclass
@@ -40,7 +39,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -322,13 +320,10 @@ def _execute_lean_source(
     temp_path: str | None = None
     result: ProcessResult | None = None
     try:
-        fd, temp_path = tempfile.mkstemp(suffix=".lean")
-        try:
-            handle = os.fdopen(fd, "w")
-        except OSError:
-            os.close(fd)
-            raise
-        with handle:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".lean", delete=False
+        ) as handle:
+            temp_path = handle.name
             handle.write(source)
         lean_bin = executable or _lean_executable()
         environment = _lean_process_environment(lean_bin)
@@ -632,7 +627,6 @@ class LeanStatementProposalAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanStatementProposalRequest.model_json_schema(),
             output_schema=LeanStatementProposalOutput.model_json_schema(),
             tags=("lean", "statement", "elaboration", "proposal", "proposition"),
@@ -647,7 +641,6 @@ class LeanStatementProposalAdapter:
                         "Elaborate the proposition True in the pinned CORE "
                         "environment without assessing its truth."
                     ),
-                    mode=CapabilityMode.EXPLORE,
                     input=LeanStatementProposalRequest.model_validate(
                         {
                             "operation": "ELABORATE_PROPOSITION",
@@ -756,7 +749,6 @@ class LeanStatementProposalAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -815,7 +807,6 @@ class LeanStatementCompareAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=LeanStatementComparisonRequest.model_json_schema(),
             output_schema=LeanStatementComparisonOutput.model_json_schema(),
             tags=("lean", "statement", "comparison", "axiom-set"),
@@ -926,7 +917,6 @@ class LeanStatementCompareAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

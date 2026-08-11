@@ -1,8 +1,8 @@
-# Capability references
+# Math tool references
 
-[Documentation home](../../index.md) · [Capability surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md)
 
-Capability-specific reference documents, grouped by owning domain. Adding an
+Domain-owned tool reference documents, grouped by owning domain. Adding an
 operation or provider does not require editing this list; each domain owns its
 own subdirectory.
 

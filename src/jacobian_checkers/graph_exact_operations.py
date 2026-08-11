@@ -1244,7 +1244,7 @@ def _maximum_matching(
 ) -> bool:
     vertices, normalized_edges, adjacency = _finite_simple_graph(
         source,
-        maximum_order=32,
+        maximum_order=64,
     )
     if set(result) != {
         "maximum_matching_cardinality",

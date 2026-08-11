@@ -8,9 +8,6 @@ from typing import Any
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
-__all__ = ["check_rational_function_identity"]
-
-
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _VARIABLE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 _MAX_DIMENSION = 4

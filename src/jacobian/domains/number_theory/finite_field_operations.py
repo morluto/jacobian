@@ -20,9 +20,7 @@ def _require_irreducible_extension(request: FiniteFieldPolynomialMapRequest) -> 
     polynomial = Poly(
         sum(
             coefficient * variable**index
-            for index, coefficient in enumerate(
-                request.modulus_coefficients_ascending
-            )
+            for index, coefficient in enumerate(request.modulus_coefficients_ascending)
         ),
         variable,
         modulus=request.characteristic,
@@ -97,9 +95,7 @@ def compute_finite_field_polynomial_map_fibers(
         value = tuple((encoded // (p**index)) % p for index in range(degree))
         output = evaluator.evaluate(value)
         digest.update(
-            b"".join(
-                coordinate.to_bytes(byte_width, "big") for coordinate in output
-            )
+            b"".join(coordinate.to_bytes(byte_width, "big") for coordinate in output)
         )
         if collision is None and output in first_inputs:
             collision = FiniteFieldCollisionWitness(

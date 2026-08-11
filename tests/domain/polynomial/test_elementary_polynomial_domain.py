@@ -2,7 +2,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -10,6 +9,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture

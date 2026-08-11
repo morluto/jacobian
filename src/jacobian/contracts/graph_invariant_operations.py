@@ -64,6 +64,17 @@ class Graph6DecodeResult(ContractModel):
         return self
 
 
+class GraphMaximumMatchingGraph(ChromaticGraph):
+    """A simple graph bounded for the polynomial-time matching capability."""
+
+    vertices: tuple[GraphVertex, ...] = Field(max_length=64)
+    edges: tuple[tuple[GraphVertex, GraphVertex], ...] = Field(max_length=2_016)
+
+
+class GraphMaximumMatchingRequest(ContractModel):
+    graph: GraphMaximumMatchingGraph
+
+
 GraphDistance = Annotated[StrictInt, Field(ge=0, le=31)] | None
 GraphDistanceRow = Annotated[
     tuple[GraphDistance, ...],
@@ -206,9 +217,9 @@ class GraphSpanningTreeCountResult(ContractModel):
 class GraphTutteBergeCertificate(ContractModel):
     certificate_schema_version: Literal["1"] = "1"
     kind: Literal["TUTTE_BERGE_BARRIER"] = "TUTTE_BERGE_BARRIER"
-    barrier_vertices: tuple[GraphVertex, ...] = Field(max_length=32)
-    odd_component_count: StrictInt = Field(ge=0, le=32)
-    upper_bound: StrictInt = Field(ge=0, le=16)
+    barrier_vertices: tuple[GraphVertex, ...] = Field(max_length=64)
+    odd_component_count: StrictInt = Field(ge=0, le=64)
+    upper_bound: StrictInt = Field(ge=0, le=32)
 
     @model_validator(mode="after")
     def require_canonical_barrier(self) -> Self:
@@ -220,7 +231,7 @@ class GraphTutteBergeCertificate(ContractModel):
 
 
 class GraphMaximumMatchingResult(ContractModel):
-    maximum_matching_cardinality: StrictInt = Field(ge=0, le=16)
+    maximum_matching_cardinality: StrictInt = Field(ge=0, le=32)
     witness_edges: tuple[tuple[GraphVertex, GraphVertex], ...]
     certificate: GraphTutteBergeCertificate
 

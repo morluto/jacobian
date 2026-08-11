@@ -12,7 +12,6 @@ from jacobian.contracts.capabilities import (
     CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityRelationship,
     CapabilityRelationshipStatus,
     CapabilityRequest,
@@ -55,7 +54,6 @@ class RationalFunctionIdentityAdapter:
                 features=("rational-function-identity", "exact-rational"),
                 checker_ids=((checker_id,) if checker_id is not None else ()),
             ),
-            modes=(CapabilityMode.VERIFY,),
             input_schema=model_schema(RationalFunctionIdentityRequest),
             output_schema=model_schema(RationalFunctionIdentityOutput),
             tags=(
@@ -68,7 +66,6 @@ class RationalFunctionIdentityAdapter:
                 CapabilityInvocationExample(
                     name="cancel_common_factor",
                     description="Verify that (x²-1)/(x-1) equals x+1 in QQ(x).",
-                    mode=CapabilityMode.VERIFY,
                     input=RationalFunctionIdentityRequest.model_validate(
                         {
                             "variables": ["x"],
@@ -239,7 +236,6 @@ class RationalFunctionIdentityAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

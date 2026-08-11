@@ -4,6 +4,7 @@ from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.jacobian_syzygy import GradedJacobianSyzygyRequest
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
+    PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialResultantRequest,
     PolynomialSquareFreeRequest,
@@ -59,6 +60,12 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         PolynomialSquareFreeRequest,
         "check_polynomial_square_free",
         "polynomial.square-free.flint-replay",
+    ),
+    ExactReplayCheckerDeclaration(
+        "polynomial.factor.compute",
+        PolynomialFactorRequest,
+        "check_polynomial_factorization",
+        "polynomial.factorization.flint-replay",
     ),
 )
 

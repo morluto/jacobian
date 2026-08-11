@@ -6,20 +6,16 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.posets import build_finite_poset_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 _PRESENTATION = {
     "elements": ["0", "a", "b", "1"],
@@ -37,25 +33,10 @@ _PRESENTATION = {
 def poset_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install finite posets and their independent exact checkers only."""
 
-    bundle = build_finite_poset_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_finite_poset_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={"poset": (bundle, installed.installed["poset"])},
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
@@ -113,7 +94,6 @@ def test_poset_results_are_independently_verified(
     verified = poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
-            mode=CapabilityMode.VERIFY,
             input=(
                 {"input": producer_input, "candidate": computed.output["result"]}
                 if producer_id
@@ -145,7 +125,6 @@ def test_poset_checker_rejects_forged_width_certificate(
     rejected = poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": forged_candidate},
         )
     )

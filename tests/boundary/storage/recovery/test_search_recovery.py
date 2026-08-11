@@ -26,10 +26,10 @@ from jacobian.runtime import create_runtime
 
 
 def test_resume_rejects_archive_page_rebound_to_another_plugin(
-    fresh_complete_runtime,
+    attached_complete_runtime,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
-    handle = fresh_complete_runtime.services.search.start(
+    claim_uri, plugin_id = _install_search_plugin(attached_complete_runtime)
+    handle = attached_complete_runtime.services.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -37,17 +37,17 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
             batch_size=4,
         )
     )
-    completed = fresh_complete_runtime.services.search.wait(
+    completed = attached_complete_runtime.services.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
-    original_page = fresh_complete_runtime.core.store.get(
+    original_page = attached_complete_runtime.core.store.get(
         completed.archive_page_uris[0]
     )
     rebound_page = SearchArchivePage.model_validate(original_page.payload).model_copy(
         update={"plugin_id": claim_uri}
     )
-    stored_rebound_page = fresh_complete_runtime.services.search._put_internal_artifact(
-        schema_uri=fresh_complete_runtime.services.search.archive_page_schema_uri,
+    stored_rebound_page = attached_complete_runtime.services.search._put_internal_artifact(
+        schema_uri=attached_complete_runtime.services.search.archive_page_schema_uri,
         payload=rebound_page.model_dump(mode="json"),
         parents=original_page.manifest.parents,
         summary="search archive page",
@@ -61,7 +61,7 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
             "archive_page_uris": (stored_rebound_page.artifact_uri,),
         }
     )
-    with sqlite3.connect(fresh_complete_runtime.core.store.db_path) as connection:
+    with sqlite3.connect(attached_complete_runtime.core.store.db_path) as connection:
         connection.execute(
             """
             UPDATE search_experiments
@@ -75,9 +75,9 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
             ),
         )
 
-    resumed = fresh_complete_runtime.services.search.resume(handle.experiment_uri)
+    resumed = attached_complete_runtime.services.search.resume(handle.experiment_uri)
     assert resumed.accepted is True
-    recovered = fresh_complete_runtime.services.search.wait(
+    recovered = attached_complete_runtime.services.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -86,11 +86,11 @@ def test_resume_rejects_archive_page_rebound_to_another_plugin(
 
 
 def test_checkpoint_persistence_is_included_in_wall_accounting(
-    fresh_complete_runtime,
+    attached_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
-    original_put = fresh_complete_runtime.services.search._put_internal_artifact
+    claim_uri, plugin_id = _install_search_plugin(attached_complete_runtime)
+    original_put = attached_complete_runtime.services.search._put_internal_artifact
     current_time = 0.0
 
     def clock() -> float:
@@ -100,16 +100,16 @@ def test_checkpoint_persistence_is_included_in_wall_accounting(
         nonlocal current_time
         if (
             kwargs.get("schema_uri")
-            == fresh_complete_runtime.services.search.checkpoint_schema_uri
+            == attached_complete_runtime.services.search.checkpoint_schema_uri
         ):
             current_time += 1
         return original_put(**kwargs)
 
-    monkeypatch.setattr(fresh_complete_runtime.services.search, "_clock", clock)
+    monkeypatch.setattr(attached_complete_runtime.services.search, "_clock", clock)
     monkeypatch.setattr(
-        fresh_complete_runtime.services.search, "_put_internal_artifact", delayed_put
+        attached_complete_runtime.services.search, "_put_internal_artifact", delayed_put
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = attached_complete_runtime.services.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -117,7 +117,7 @@ def test_checkpoint_persistence_is_included_in_wall_accounting(
             batch_size=4,
         )
     )
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = attached_complete_runtime.services.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 
@@ -126,11 +126,11 @@ def test_checkpoint_persistence_is_included_in_wall_accounting(
 
 
 def test_checkpoint_persistence_cannot_complete_past_wall_budget(
-    fresh_complete_runtime,
+    attached_complete_runtime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    claim_uri, plugin_id = _install_search_plugin(fresh_complete_runtime)
-    original_put = fresh_complete_runtime.services.search._put_internal_artifact
+    claim_uri, plugin_id = _install_search_plugin(attached_complete_runtime)
+    original_put = attached_complete_runtime.services.search._put_internal_artifact
     current_time = 0.0
 
     def clock() -> float:
@@ -140,16 +140,16 @@ def test_checkpoint_persistence_cannot_complete_past_wall_budget(
         nonlocal current_time
         if (
             kwargs.get("schema_uri")
-            == fresh_complete_runtime.services.search.checkpoint_schema_uri
+            == attached_complete_runtime.services.search.checkpoint_schema_uri
         ):
             current_time += 5.1
         return original_put(**kwargs)
 
-    monkeypatch.setattr(fresh_complete_runtime.services.search, "_clock", clock)
+    monkeypatch.setattr(attached_complete_runtime.services.search, "_clock", clock)
     monkeypatch.setattr(
-        fresh_complete_runtime.services.search, "_put_internal_artifact", delayed_put
+        attached_complete_runtime.services.search, "_put_internal_artifact", delayed_put
     )
-    handle = fresh_complete_runtime.services.search.start(
+    handle = attached_complete_runtime.services.search.start(
         _request(
             claim_uri,
             plugin_id,
@@ -158,7 +158,7 @@ def test_checkpoint_persistence_cannot_complete_past_wall_budget(
             wall_seconds=5,
         )
     )
-    snapshot = fresh_complete_runtime.services.search.wait(
+    snapshot = attached_complete_runtime.services.search.wait(
         handle.experiment_uri, timeout_seconds=30
     )
 

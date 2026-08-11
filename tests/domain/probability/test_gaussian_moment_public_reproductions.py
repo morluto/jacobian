@@ -6,7 +6,6 @@ from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -57,7 +56,6 @@ def test_public_gaussian_moment_reproductions_reach_checker_bound_results(
         verified = probability_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="probability.gaussian_polynomial.moment.verify",
-                mode=CapabilityMode.VERIFY,
                 input={
                     "input": case["request"],
                     "candidate": computed.output["result"],

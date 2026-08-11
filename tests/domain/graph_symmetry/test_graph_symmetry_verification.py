@@ -5,7 +5,6 @@ from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -53,7 +52,6 @@ def test_graph_symmetry_orbits_are_independently_replayed(
     verified = graph_symmetry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.symmetry.generator_orbits.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": payload,
                 "candidate": computed.output["result"],
@@ -99,7 +97,6 @@ def test_graph_symmetry_checker_rejects_forged_orbit_partition(
     rejected = graph_symmetry_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.symmetry.generator_orbits.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": payload,
                 "candidate": forged_candidate,

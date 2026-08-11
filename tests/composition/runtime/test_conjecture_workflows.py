@@ -26,6 +26,9 @@ from jacobian.contracts.results import ExecutionStatus, Verification
 from jacobian.contracts.search import SearchBudget
 from jacobian.runtime.model import JacobianRuntime
 
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
+
 
 def _install_hypothesis_plugin(
     runtime: JacobianRuntime,

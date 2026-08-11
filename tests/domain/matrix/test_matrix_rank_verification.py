@@ -4,7 +4,6 @@ from tests.support.rationals import rational_payload
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 
@@ -31,7 +30,6 @@ def test_matrix_rank_verify_independently_recomputes_rank(
     verified = matrix_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -48,7 +46,6 @@ def test_matrix_rank_verify_rejects_wrong_rank(matrix_services) -> None:
     rejected = matrix_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": {"matrix": matrix},
                 "candidate": {

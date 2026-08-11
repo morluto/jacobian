@@ -14,7 +14,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityMode,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
@@ -64,7 +63,6 @@ class LeanCheckAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.VERIFY,),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -84,7 +82,6 @@ class LeanCheckAdapter:
                         "Check a finite witness encoded as one let expression without "
                         "adding declarations."
                     ),
-                    mode=CapabilityMode.VERIFY,
                     input={
                         "environment": "CORE",
                         "statement": "let n : Nat := 2; n + n = 4",
@@ -114,7 +111,6 @@ class LeanCheckAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=checked.result.execution,
             output={
                 "conclusion": checked.result.conclusion.value,
@@ -171,7 +167,6 @@ class LeanDeclarationSearchAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(LeanDeclarationSearchRequest),
             output_schema=model_schema(LeanDeclarationSearchOutput),
             read_only=True,
@@ -192,7 +187,6 @@ class LeanDeclarationSearchAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=searched.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -250,7 +244,6 @@ class LeanDeclarationInspectAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(LeanDeclarationInspectRequest),
             output_schema=model_schema(LeanDeclarationInspectOutput),
             read_only=True,
@@ -270,7 +263,6 @@ class LeanDeclarationInspectAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=inspected.model_dump(mode="json"),
             scope=CapabilityScope(
@@ -320,7 +312,6 @@ class LeanDependencyGraphAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            modes=(CapabilityMode.EXPLORE,),
             input_schema=model_schema(LeanDependencyGraphRequest),
             output_schema=model_schema(LeanDependencyGraphOutput),
             read_only=True,
@@ -352,7 +343,6 @@ class LeanDependencyGraphAdapter:
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
-            mode=request.mode,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output=output.model_dump(mode="json"),
             scope=CapabilityScope(

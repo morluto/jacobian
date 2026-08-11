@@ -15,7 +15,6 @@ from tests.support.state import copy_template
 from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.checkers import CheckerDecision
@@ -122,7 +121,6 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.dependencies",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "root_declaration": "Nat.add_comm",
@@ -167,7 +165,6 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
     searched = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "MATHLIB",
                 "name_contains": "irrational_sqrt_two",
@@ -178,7 +175,6 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
     inspected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "MATHLIB",
                 "declaration_name": "irrational_sqrt_two",
@@ -225,7 +221,6 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
     inspected = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "declaration_name": "Nat.add",
@@ -235,7 +230,6 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
     outside_profile = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "environment": "CORE",
                 "name_contains": "Lean.Meta.ppExpr",
@@ -330,7 +324,6 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
                 "math.run",
                 {
                     "capability_id": "lean.check",
-                    "mode": "VERIFY",
                     "payload": {
                         "statement": "∀ n : Nat, n + 0 = n",
                         "proof": (

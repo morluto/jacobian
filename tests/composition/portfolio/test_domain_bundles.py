@@ -22,6 +22,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.combinatorics import (
+    BinomialRequest,
     CyclicDifferenceSetExtensionRequest,
     CyclicPerfectDifferenceSetRequest,
     FibonacciPairRequest,
@@ -95,10 +96,11 @@ ALL_BUNDLES = (
 _REPR: list[tuple[type[ContractModel], dict[str, object]]] = [
     (ArithIntegerValueRequest, {"value": "12"}),
     (IntegerBaseDigitsRequest, {"value": "12", "base": 2}),
-    (IntegerNthRootRequest, {"value": 8, "degree": 3}),
+    (IntegerNthRootRequest, {"value": "8", "degree": 3}),
     (CombNonnegIntRequest, {"n": 5}),
     (FibonacciPairRequest, {"n": 5}),
     (CombNonnegPairRequest, {"n": 5, "k": 2}),
+    (BinomialRequest, {"n": 5, "k": 2}),
     (CombIntegerListRequest, {"values": ["2", "1", "1"]}),
     (IntegerSidonRequest, {"elements": ["1", "2", "4"]}),
     (CyclicPerfectDifferenceSetRequest, {"modulus": 7, "residues": [0, 1, 3]}),

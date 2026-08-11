@@ -5,14 +5,18 @@ from typing import Any
 
 import pytest
 
+import jacobian.polynomials._support as polynomial_support
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
+from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.runtime.model import JacobianRuntime
 from jacobian_checkers.polynomial_maps import check_map_inverse
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def _term(coefficient: int, exponents: list[int]) -> dict[str, Any]:
@@ -48,7 +52,6 @@ def _triangular_maps() -> tuple[dict[str, Any], dict[str, Any]]:
 def _request(forward: dict[str, Any], inverse: dict[str, Any]) -> CapabilityRequest:
     return CapabilityRequest(
         capability_id="polynomial.map.inverse.verify",
-        mode=CapabilityMode.VERIFY,
         input={
             "forward_map": forward,
             "inverse_map": inverse,
@@ -109,6 +112,212 @@ def test_two_sided_triangular_inverse_is_verified(authorized_complete_runtime) -
     assert residuals["forward_after_inverse"] == [{"terms": []}, {"terms": []}]
 
 
+def test_noncanonical_sparse_maps_are_normalized_before_verification(
+    authorized_complete_runtime,
+) -> None:
+    canonical_forward, canonical_inverse = _triangular_maps()
+    forward = deepcopy(canonical_forward)
+    inverse = deepcopy(canonical_inverse)
+    forward["coordinates"][0]["terms"] = [
+        _term(1, [0, 2]),
+        {
+            "coefficient": {"num": "3", "den": "2"},
+            "exponents": [1, 0],
+        },
+        {
+            "coefficient": {"num": "-1", "den": "2"},
+            "exponents": [1, 0],
+        },
+        _term(0, [0, 0]),
+    ]
+    inverse["coordinates"][0]["terms"] = [
+        _term(-1, [0, 2]),
+        {
+            "coefficient": {"num": "2", "den": "3"},
+            "exponents": [1, 0],
+        },
+        {
+            "coefficient": {"num": "1", "den": "3"},
+            "exponents": [1, 0],
+        },
+        _term(0, [0, 0]),
+    ]
+
+    normalized = authorized_complete_runtime.core.capabilities.invoke(
+        _request(forward, inverse)
+    )
+    canonical = authorized_complete_runtime.core.capabilities.invoke(
+        _request(canonical_forward, canonical_inverse)
+    )
+
+    assert normalized.output["inverse_verified"] is True
+    assert normalized.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert normalized.output["forward_map_uri"] == canonical.output["forward_map_uri"]
+    assert normalized.output["inverse_map_uri"] == canonical.output["inverse_map_uri"]
+    assert (
+        authorized_complete_runtime.core.store.get(
+            normalized.output["forward_map_uri"]
+        ).payload
+        == canonical_forward
+    )
+    assert (
+        authorized_complete_runtime.core.store.get(
+            normalized.output["inverse_map_uri"]
+        ).payload
+        == canonical_inverse
+    )
+
+
+def test_sparse_input_normalization_rejects_malformed_terms_before_artifacts(
+    authorized_complete_runtime,
+) -> None:
+    forward, inverse = _triangular_maps()
+    forward["coordinates"][0]["terms"][0]["unexpected"] = True
+
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        _request(forward, inverse)
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_REQUEST"
+    assert result.output["error"]["stage"] == "capability_input_validation"
+    assert result.artifact_uris == ()
+
+
+def test_complete_request_is_rejected_before_duplicate_term_accumulation(
+    authorized_complete_runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    forward, inverse = _triangular_maps()
+    forward["variables"] = ["z", "y"]
+    forward["coordinates"][0]["terms"].append(_term(1, [1, 0]))
+
+    def unexpected_accumulation(value: object) -> SparseRationalPolynomial:
+        raise AssertionError(f"canonical accumulation reached for {value!r}")
+
+    monkeypatch.setattr(
+        polynomial_support,
+        "_canonical_sparse_polynomial",
+        unexpected_accumulation,
+    )
+
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        _request(forward, inverse)
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST"
+    assert result.artifact_uris == ()
+
+
+def test_evaluation_cross_field_error_precedes_duplicate_term_accumulation(
+    authorized_complete_runtime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    polynomial_map, _inverse = _triangular_maps()
+    polynomial_map["coordinates"][0]["terms"].append(_term(1, [1, 0]))
+
+    def unexpected_accumulation(value: object) -> SparseRationalPolynomial:
+        raise AssertionError(f"canonical accumulation reached for {value!r}")
+
+    monkeypatch.setattr(
+        polynomial_support,
+        "_canonical_sparse_polynomial",
+        unexpected_accumulation,
+    )
+
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.map.evaluate",
+            input={
+                "map": polynomial_map,
+                "point": [{"num": "0", "den": "1"}],
+            },
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_EVALUATION_REQUEST"
+    assert result.artifact_uris == ()
+
+
+def test_duplicate_accumulation_rejects_oversized_coefficients(
+    authorized_complete_runtime,
+) -> None:
+    forward, inverse = _triangular_maps()
+    oversized = "9" * 257
+    forward["coordinates"][0]["terms"] = [
+        {"coefficient": {"num": oversized, "den": "1"}, "exponents": [1, 0]},
+        _term(1, [1, 0]),
+    ]
+
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        _request(forward, inverse)
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST"
+    assert result.artifact_uris == ()
+
+
+def test_duplicate_accumulation_rejects_oversized_groups(
+    authorized_complete_runtime,
+) -> None:
+    forward, inverse = _triangular_maps()
+    forward["coordinates"][0]["terms"] = [
+        _term(1, [1, 0])
+        for _ in range(polynomial_support._MAX_CANONICALIZATION_DUPLICATE_TERMS + 1)
+    ]
+
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        _request(forward, inverse)
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST"
+    assert result.artifact_uris == ()
+
+
+def test_cancelled_high_degree_terms_do_not_apply_operation_budget(
+    authorized_complete_runtime,
+) -> None:
+    forward = {
+        "map_schema_version": "1",
+        "domain": "QQ",
+        "variables": ["x"],
+        "coordinates": [
+            {
+                "terms": [
+                    _term(1, [33]),
+                    _term(-1, [33]),
+                    _term(1, [1]),
+                ]
+            }
+        ],
+    }
+    inverse = {
+        "map_schema_version": "1",
+        "domain": "QQ",
+        "variables": ["u"],
+        "coordinates": [{"terms": [_term(1, [1])]}],
+    }
+
+    result = authorized_complete_runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="polynomial.map.inverse.verify",
+            input={
+                "forward_map": forward,
+                "inverse_map": inverse,
+                "source_variables": ["x"],
+                "target_variables": ["u"],
+            },
+        )
+    )
+
+    assert result.output["inverse_verified"] is True
+    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
+
+
 def test_overlapping_variable_names_use_simultaneous_composition(
     authorized_complete_runtime,
 ) -> None:
@@ -134,7 +343,6 @@ def test_overlapping_variable_names_use_simultaneous_composition(
     result = authorized_complete_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="polynomial.map.inverse.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "forward_map": forward,
                 "inverse_map": inverse,
@@ -160,7 +368,6 @@ def test_unrepresentable_composition_is_rejected_before_artifacts(
     }
     request = CapabilityRequest(
         capability_id="polynomial.map.inverse.verify",
-        mode=CapabilityMode.VERIFY,
         input={
             "forward_map": high_degree,
             "inverse_map": deepcopy(high_degree),

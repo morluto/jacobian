@@ -8,7 +8,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -62,12 +61,10 @@ def _invoke(
     services: DomainTestServices,
     capability_id: str,
     payload: dict[str, Any],
-    mode: CapabilityMode,
 ) -> CapabilityResult:
     return services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=capability_id,
-            mode=mode,
             input=payload,
         )
     )
@@ -143,14 +140,12 @@ def test_singular_boundary_fails_closed(
             services,
             MATERIALIZE_CAPABILITY_ID,
             {},
-            CapabilityMode.EXPLORE,
         )
 
         result = _invoke(
             services,
             PRODUCE_CAPABILITY_ID,
             {"system_uri": materialized.output["system_uri"]},
-            CapabilityMode.EXPLORE,
         )
 
         assert result.execution.status.value == expected_status

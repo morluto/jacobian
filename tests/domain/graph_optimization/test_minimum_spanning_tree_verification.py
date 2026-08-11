@@ -5,50 +5,26 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import build_graph_optimization_bundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
 def graph_optimization_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install graph optimization and its exact checkers without a portfolio."""
 
-    bundle = build_graph_optimization_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_graph_optimization_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(bundle,))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={
-                "graph_optimization": (
-                    bundle,
-                    installed.installed["graph_optimization"],
-                )
-            },
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
@@ -91,7 +67,6 @@ def test_weighted_minimum_spanning_tree_is_independently_verified(
     verified = graph_optimization_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -161,7 +136,6 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
     rejected = graph_optimization_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged_candidate},
         )
     )
@@ -191,7 +165,6 @@ def test_disconnected_no_spanning_tree_result_is_completely_replayed(
     verified = graph_optimization_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.spanning_tree.minimum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )

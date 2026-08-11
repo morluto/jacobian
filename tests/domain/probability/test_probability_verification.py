@@ -9,7 +9,6 @@ from tests.support.rationals import rational_payload as _q
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -114,7 +113,6 @@ def test_probability_results_are_independently_replayed(
     verified = probability_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(capability_id),
-            mode=CapabilityMode.VERIFY,
             input={
                 "input": payload,
                 "candidate": computed.output["result"],
@@ -147,7 +145,6 @@ def test_probability_checker_rejects_forged_event_mass(
     rejected = probability_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=("probability.finite_distribution.event_probability.verify"),
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged_candidate},
         )
     )
@@ -185,7 +182,6 @@ def test_probability_checker_rejects_forged_graph_reliability(
             capability_id=(
                 "probability.graph_reliability.connection_probability.verify"
             ),
-            mode=CapabilityMode.VERIFY,
             input={"input": payload, "candidate": forged_candidate},
         )
     )

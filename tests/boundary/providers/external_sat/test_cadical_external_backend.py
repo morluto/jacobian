@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from tests.support.provider_external_sat import cadical_runtime_available
 
-from jacobian.contracts.capabilities import CapabilityMode, CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.providers.external_solver_runtime import (
     CADICAL_VERSION,
@@ -38,7 +38,6 @@ def test_pinned_cadical_produces_a_model_and_text_drat_proof(
     model = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.model.find",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "cnf_uri": satisfiable.artifact_uri,
                 "resource_budget": {"wall_seconds": 5},
@@ -56,7 +55,6 @@ def test_pinned_cadical_produces_a_model_and_text_drat_proof(
     proof = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.unsat_proof.find",
-            mode=CapabilityMode.EXPLORE,
             input={
                 "cnf_uri": unsatisfiable.artifact_uri,
                 "resource_budget": {"wall_seconds": 5},

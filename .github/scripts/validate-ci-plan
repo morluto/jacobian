@@ -14,42 +14,26 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.makefile_catalog import MakefileCatalogError, discover_makefiles
-
-BOOLEAN_KEYS = (
-    "run-python",
-    "run-unit",
-    "run-component",
-    "run-domain",
-    "run-composition",
-    "run-storage",
-    "run-process",
-    "run-mcp",
-    "run-provider",
-    "run-e2e",
-    "run-coverage",
-    "run-compatibility",
-    "run-lean",
-    "run-npm",
-    "run-static",
-    "run-build",
-    "run-security",
-    "run-duplicate",
-    "run-docs",
+from tools.makefile_catalog import (  # noqa: E402
+    MakefileCatalogError,
+    discover_makefiles,
 )
+from tools.test_plan.ci_outputs import (  # noqa: E402
+    boolean_run_keys,
+    matrix_lane_names,
+    python_run_keys,
+)
+
+
+def _impact_manifest() -> dict:
+    return json.loads((ROOT / ".github" / "ci-impact.json").read_text(encoding="utf-8"))
+
+
+_IMPACT = _impact_manifest()
+BOOLEAN_KEYS = boolean_run_keys(_IMPACT)
 PROVIDER_SELECTION_KEY = "provider-selection"
 RUN_DEPLOY_KEY = "run-deploy"
-PYTHON_LANES = (
-    "run-unit",
-    "run-component",
-    "run-domain",
-    "run-composition",
-    "run-storage",
-    "run-process",
-    "run-mcp",
-    "run-provider",
-    "run-e2e",
-)
+PYTHON_LANES = python_run_keys(_IMPACT)
 FUNCTIONAL_KEYS = tuple(
     key
     for key in BOOLEAN_KEYS
@@ -303,7 +287,7 @@ def main() -> None:
     include = matrix["include"]
     if not isinstance(include, list):
         fail("product-lane-matrix include must be an array")
-    matrix_lanes = ("component", "storage", "mcp", "provider", "e2e")
+    matrix_lanes = matrix_lane_names(_IMPACT)
     expected_lanes = [lane for lane in matrix_lanes if plan[f"run-{lane}"] == "true"]
     actual_lanes: list[str] = []
     for entry in include:

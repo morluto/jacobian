@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian.contracts.capabilities import (
-    CapabilityMode,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -16,11 +15,9 @@ def invoke_capability(
     runtime: JacobianRuntime,
     capability_id: str,
     payload: dict[str, Any],
-    *,
-    mode: CapabilityMode = CapabilityMode.EXPLORE,
 ) -> CapabilityResult:
     """Invoke one capability through the public request envelope."""
 
     return runtime.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, mode=mode, input=payload)
+        CapabilityRequest(capability_id=capability_id, input=payload)
     )

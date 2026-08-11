@@ -6,18 +6,19 @@ import pytest
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime.model import JacobianRuntime
+
+# Composition-lane admission category for architecture ratchets.
+COMPOSITION_ADMISSION = "AUTHORITY"
 
 
 def _verify(runtime: JacobianRuntime, cnf_uri: str, proof: bytes, **extra: object):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.lrat.verify",
-            mode=CapabilityMode.VERIFY,
             input={
                 "cnf_uri": cnf_uri,
                 "proof_base64": base64.b64encode(proof).decode("ascii"),

@@ -1,6 +1,6 @@
 # Benchmark contracts
 
-[Documentation home](../../index.md) · [Capability surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md)
 
 All executable benchmark cases are Harbor tasks under their dataset roots
 ([`benchmarks/datasets/`](../../../benchmarks/README.md)). The datasets

@@ -3,8 +3,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from tests.support.capabilities import invoke_capability as _invoke
-from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
@@ -12,6 +10,8 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
 from jacobian.process_policy import ProcessResult, ProcessTermination
+from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture
@@ -61,6 +61,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         "polynomial.compute.resultant",
         "polynomial.compute.discriminant",
         "polynomial.compute.square_free_decomposition",
+        "polynomial.factor.compute",
         "polynomial.groebner_basis.compute",
     } <= installed_ids
 
@@ -291,11 +292,11 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
 
 
 def test_groebner_result_preserves_advertised_input_variable_bound(
-    attached_complete_runtime,
+    polynomial_services,
 ) -> None:
     variables = ["a", "b", "c", "d", "e"]
     result = _invoke(
-        attached_complete_runtime,
+        polynomial_services,
         "polynomial.groebner_basis.compute",
         {
             "generators": [

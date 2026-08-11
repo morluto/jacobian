@@ -3,6 +3,8 @@
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
+    PolynomialFactorizationResult,
+    PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialGcdResult,
     PolynomialResultantRequest,
@@ -14,6 +16,7 @@ from jacobian.domains._examples import example
 from jacobian.domains.polynomial._support import polynomial_operation
 from jacobian.domains.polynomial.operations import (
     polynomial_discriminant,
+    polynomial_factorization,
     polynomial_gcd,
     polynomial_resultant,
     polynomial_square_free_decomposition,
@@ -177,6 +180,46 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
             example(
                 "square_free_x2_minus_one",
                 "Compute the square-free decomposition of x²-1.",
+                {
+                    "polynomial": {
+                        "polynomial_schema_version": "1",
+                        "domain": "QQ",
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "-1", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
+                    }
+                },
+            ),
+        ),
+    ),
+    polynomial_operation(
+        "polynomial.factor.compute",
+        "Factor a univariate rational polynomial",
+        (
+            "Compute a rational content and multiplicity-bearing monic irreducible "
+            "factors over QQ, together with an exact reconstructed product. Factor "
+            "irreducibility is not independently certified by this producer."
+        ),
+        PolynomialFactorRequest,
+        PolynomialFactorizationResult,
+        polynomial_factorization,
+        "polynomial",
+        "factorization",
+        "exact-computation",
+        invocation_examples=(
+            example(
+                "factor_x_squared_minus_one",
+                "Factor x²-1 over QQ.",
                 {
                     "polynomial": {
                         "polynomial_schema_version": "1",

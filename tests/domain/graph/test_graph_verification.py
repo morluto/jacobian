@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
-    CapabilityMode,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -18,45 +18,17 @@ from jacobian.domains.graph_optimization import (
     build_graph_invariant_bundle,
     build_graph_optimization_bundle,
 )
-from jacobian.exact_domain_checkers import install_exact_domain_verification
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @pytest.fixture
 def graph_verification_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install the two graph bundles covered by this verification contract."""
 
-    optimization = build_graph_optimization_bundle()
-    invariants = build_graph_invariant_bundle()
-    with open_domain_services(
+    with open_exact_domain_services(
         tmp_path / "state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+        build_graph_optimization_bundle(),
+        build_graph_invariant_bundle(),
     ) as services:
-        installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=(optimization, invariants))
-        )
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.application.verification,
-            services.core.checkers,
-            bundles={
-                "graph_optimization": (
-                    optimization,
-                    installed.installed["graph_optimization"],
-                ),
-                "graph_invariants": (
-                    invariants,
-                    installed.installed["graph_invariants"],
-                ),
-            },
-            authorize=services.installation.authorizes_bundled_checkers,
-        )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
         yield services
 
 
@@ -148,7 +120,6 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.induced_tree.maximum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": result_uri},
         )
     )
@@ -185,7 +156,6 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.induced_tree.maximum.verify",
-            mode=CapabilityMode.VERIFY,
             input={"result_uri": false_result.artifact_uri},
         )
     )
@@ -218,12 +188,11 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
 
-    assert computed.capability_version == "2"
+    assert computed.capability_version == "3"
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == (
@@ -260,7 +229,6 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.invariant.maximum_matching.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": false_candidate},
         )
     )
@@ -269,6 +237,36 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
+
+
+def test_maximum_matching_verifier_replays_a_64_vertex_certificate(
+    graph_verification_services: DomainTestServices,
+) -> None:
+    vertices = [f"v{index:02d}" for index in range(64)]
+    producer_input = {
+        "graph": {
+            "vertices": vertices,
+            "edges": [
+                [vertices[index], vertices[index + 1]] for index in range(0, 64, 2)
+            ],
+        }
+    }
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.compute",
+            input=producer_input,
+        )
+    )
+
+    verified = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.invariant.maximum_matching.verify",
+            input={"input": producer_input, "candidate": computed.output["result"]},
+        )
+    )
+
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 
 
 @pytest.mark.parametrize(
@@ -311,7 +309,6 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -336,7 +333,6 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=verifier_id,
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": false_candidate},
         )
     )
@@ -371,7 +367,6 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.distance_matrix.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -426,7 +421,6 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.distance_matrix.verify",
-            mode=CapabilityMode.VERIFY,
             input={"input": producer_input, "candidate": false_candidate},
         )
     )

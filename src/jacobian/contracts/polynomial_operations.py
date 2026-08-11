@@ -184,6 +184,76 @@ class PolynomialSquareFreeDecompositionResult(ContractModel):
         return self
 
 
+class PolynomialFactorRequest(ContractModel):
+    """Univariate factorization request over ``QQ``."""
+
+    polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_univariate_factor_budget(self) -> Self:
+        if len(self.polynomial.variables) != 1:
+            raise ValueError("factorization currently supports one variable over QQ")
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=_MAX_GCD_TERMS,
+            maximum_exponent=_MAX_GCD_DEGREE,
+        )
+        return self
+
+
+class PolynomialIrreducibleFactor(ContractModel):
+    factor: RationalPolynomial
+    multiplicity: int = Field(ge=1, le=_MAX_GCD_DEGREE)
+
+
+class PolynomialFactorizationResult(ContractModel):
+    coefficient: CanonicalRational
+    factors: tuple[PolynomialIrreducibleFactor, ...] = Field(max_length=64)
+    reconstructed: RationalPolynomial
+    normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
+        "CONTENT_AND_MONIC_IRREDUCIBLES"
+    )
+    irreducibility_assurance: Literal["UNVERIFIED"] = "UNVERIFIED"
+    product_reconstruction: Literal["EXACT"] = "EXACT"
+
+    @model_validator(mode="after")
+    def require_canonical_irreducible_records(self) -> Self:
+        if any(
+            factor.factor.variables != self.reconstructed.variables
+            for factor in self.factors
+        ):
+            raise ValueError("irreducible factors must use the source ring")
+        ordered = tuple(
+            sorted(
+                self.factors,
+                key=lambda record: (
+                    record.multiplicity,
+                    max(
+                        (
+                            sum(term.exponents)
+                            for term in record.factor.polynomial.terms
+                        ),
+                        default=0,
+                    ),
+                    tuple(
+                        (
+                            term.exponents,
+                            term.coefficient.num,
+                            term.coefficient.den,
+                        )
+                        for term in record.factor.polynomial.terms
+                    ),
+                ),
+            )
+        )
+        if self.factors != ordered:
+            raise ValueError(
+                "irreducible factors must be ordered by multiplicity, degree, "
+                "and sparse term fingerprint"
+            )
+        return self
+
+
 class PolynomialGroebnerBudget(ContractModel):
     """Enforced wall and result limits for one isolated Gröbner computation."""
 
@@ -483,6 +553,8 @@ __all__ = [
     "PolynomialBezoutIdentity",
     "PolynomialDiscriminantRequest",
     "PolynomialDiscriminantResult",
+    "PolynomialFactorRequest",
+    "PolynomialFactorizationResult",
     "PolynomialGcdRequest",
     "PolynomialGcdResult",
     "PolynomialGroebnerBasisObligation",
@@ -490,6 +562,7 @@ __all__ = [
     "PolynomialGroebnerBasisResult",
     "PolynomialGroebnerBudget",
     "PolynomialInvariantValue",
+    "PolynomialIrreducibleFactor",
     "PolynomialPairRequest",
     "PolynomialResultantRequest",
     "PolynomialResultantResult",

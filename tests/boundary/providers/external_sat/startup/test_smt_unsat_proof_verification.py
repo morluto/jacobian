@@ -13,7 +13,6 @@ import jacobian_checkers.smt
 from jacobian.contracts.capabilities import (
     CapabilityAssuranceLevel,
     CapabilityInstallTier,
-    CapabilityMode,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
@@ -166,7 +165,6 @@ def _verify(runtime: JacobianRuntime, proof_uri: str):
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="smt.unsat_proof.verify",
-            mode=CapabilityMode.VERIFY,
             input={"proof_uri": proof_uri},
         )
     )

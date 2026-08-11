@@ -78,9 +78,7 @@ def _validation_diagnostic(
     context = first.get("ctx")
     context_error = context.get("error") if isinstance(context, dict) else None
     domain_reason = (
-        context.get("jacobian_validation_reason")
-        if isinstance(context, dict)
-        else None
+        context.get("jacobian_validation_reason") if isinstance(context, dict) else None
     )
     if validation_type.startswith("jacobian.") and isinstance(domain_reason, str):
         reason = domain_reason[:128]
@@ -92,19 +90,18 @@ def _validation_diagnostic(
     field_match = re.match(r"(?:Value error, )?([a-z][a-z0-9_]*)\b", raw_reason)
     if (
         path_parts
-        and
-        field_match is not None
+        and field_match is not None
         and isinstance(rejected_container, dict)
         and field_match.group(1) in rejected_container
     ):
         path_parts.append(field_match.group(1))
     path = _validation_pointer(path_parts)
-    recovery_hint = (
-        reason
-        if validation_type.startswith("jacobian.")
-        and isinstance(domain_reason, str)
-        else diagnostic.hint
-    )
+    if validation_type.startswith("jacobian.") and isinstance(domain_reason, str):
+        recovery_hint = reason
+    elif isinstance(domain_reason, str):
+        recovery_hint = f"{diagnostic.hint} {domain_reason}"
+    else:
+        recovery_hint = diagnostic.hint
     return CapabilityDiagnostic.model_validate(
         {
             **diagnostic.model_dump(mode="python"),

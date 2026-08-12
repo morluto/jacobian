@@ -544,6 +544,26 @@ def test_lattice_lll_returns_exact_left_transformation(
     assert len(result.artifact_uris) == 2
 
 
+def test_lattice_lll_supports_advertised_one_row_basis(
+    matrix_domain_services: DomainTestServices,
+) -> None:
+    runtime = matrix_domain_services
+    for entries, expected_rank in (([["1"]], 1), ([["3", "-4"]], 1)):
+        result = runtime.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id="lattice.basis.reduce",
+                input={"basis": {"domain": "ZZ", "entries": entries}},
+            )
+        )
+
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        computed = _result_payload(runtime, result)
+        assert computed["reduced_basis"]["entries"] == entries
+        assert computed["transformation"]["entries"] == [["1"]]
+        assert computed["rank"] == expected_rank
+        assert len(result.artifact_uris) == 2
+
+
 def test_lattice_lll_timeout_retains_no_operation_artifacts(
     matrix_domain_services: DomainTestServices,
     monkeypatch: MonkeyPatch,

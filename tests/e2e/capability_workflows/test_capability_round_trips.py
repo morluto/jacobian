@@ -123,6 +123,78 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
     asyncio.run(scenario())
 
 
+def test_polynomial_factor_result_verifies_through_mcp(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        server = create_server(
+            tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+        )
+        async with Client(server, raise_exceptions=True) as client:
+            factor_input = {"polynomial": _polynomial(-1, 0, 1)}
+            computed = await _tool(
+                client,
+                "math.run",
+                {
+                    "capability_id": "polynomial.factor.compute",
+                    "payload": factor_input,
+                },
+            )
+
+            verified = await _tool(
+                client,
+                "math.run",
+                {
+                    "capability_id": "polynomial.factor.verify",
+                    "payload": {
+                        "input": factor_input,
+                        "candidate": computed["output"]["result"],
+                    },
+                },
+            )
+
+            assert verified["output"]["status"] == "VERIFIED"
+            assert verified["output"]["conclusion"] == "TRUE"
+            record_uri = verified["output"]["verification_record_uri"]
+            assert verified["verification_record_uri"] == record_uri
+            assert record_uri in verified["artifact_uris"]
+
+            corrupted_candidate = json.loads(json.dumps(computed["output"]["result"]))
+            corrupted_candidate["coefficient"]["num"] = "2"
+            rejected = await _tool(
+                client,
+                "math.run",
+                {
+                    "capability_id": "polynomial.factor.verify",
+                    "payload": {
+                        "input": factor_input,
+                        "candidate": corrupted_candidate,
+                    },
+                },
+            )
+
+            assert rejected["output"]["status"] == "REJECTED"
+            assert rejected["output"]["conclusion"] == "UNKNOWN"
+            assert rejected["output"]["verification_record_uri"] is None
+            assert rejected["verification_record_uri"] is None
+
+            overbound = await _tool(
+                client,
+                "math.run",
+                {
+                    "capability_id": "polynomial.factor.verify",
+                    "payload": {
+                        "input": {"polynomial": _polynomial(-1, *([0] * 127), 1)},
+                        "candidate": computed["output"]["result"],
+                    },
+                },
+            )
+
+            assert overbound["execution"]["status"] == "ERROR"
+            assert overbound["output"]["error"]["code"] == "INVALID_EXACT_DOMAIN_INPUT"
+            assert overbound["verification_record_uri"] is None
+
+    asyncio.run(scenario())
+
+
 def test_computed_domain_operation_remains_available_without_checker_authority(
     tmp_path: Path,
 ) -> None:

@@ -86,6 +86,8 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
         "polynomial",
         "resultant",
         "elimination",
+        "univariate",
+        "rational",
         invocation_examples=(
             example(
                 "resultant_x2_minus_one_x_minus_two",

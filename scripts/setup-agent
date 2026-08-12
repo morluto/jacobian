@@ -151,7 +151,17 @@ UV_BIN=$(command -v uv)
 PROFILE_SYNC_ARGS=()
 SYNC_FLAG_ARGS=(sync-flags --profile "$PROFILE" --no-dev)
 ((DEV)) && SYNC_FLAG_ARGS=(sync-flags --profile "$PROFILE")
-mapfile -t PROFILE_SYNC_ARGS < <("$PYTHON_PATH" "$REPO_ROOT/tools/development_profiles.py" "${SYNC_FLAG_ARGS[@]}")
+# Bash 3.2 (macOS /bin/bash) has no mapfile; read NUL-delimited tokens instead.
+while IFS= read -r -d '' _sync_arg; do
+  PROFILE_SYNC_ARGS+=("$_sync_arg")
+done < <("$PYTHON_PATH" "$REPO_ROOT/tools/development_profiles.py" "${SYNC_FLAG_ARGS[@]}" --print0)
+# Fallback when an older development_profiles lacks --print0: split on newlines.
+if ((${#PROFILE_SYNC_ARGS[@]} == 0)); then
+  while IFS= read -r _sync_arg; do
+    test -n "$_sync_arg" || continue
+    PROFILE_SYNC_ARGS+=("$_sync_arg")
+  done < <("$PYTHON_PATH" "$REPO_ROOT/tools/development_profiles.py" "${SYNC_FLAG_ARGS[@]}")
+fi
 SYNC=(uv "${PROFILE_SYNC_ARGS[@]}" --project "$REPO_ROOT" --python "$PYTHON_PATH")
 PREPARE=("$PYTHON_PATH" "$REPO_ROOT/tools/development_profiles.py" prepare --profile "$PROFILE" --repo "$REPO_ROOT")
 INIT=(uv run --project "$REPO_ROOT" --locked --no-sync jacobian --state-dir "$STATE_DIR" init)

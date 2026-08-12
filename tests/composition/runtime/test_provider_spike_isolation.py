@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
 from tests.composition.runtime.provider_spike_isolation import (
     assert_unavailable_spike_preserves_catalog,
 )
@@ -82,6 +83,7 @@ SPIKES: tuple[tuple[str, SpikeArguments], ...] = (
 )
 
 
+@pytest.mark.composition_admission("WIRING")
 def test_unavailable_provider_spikes_preserve_complete_runtime_catalog(
     fresh_complete_runtime: Any,
     tmp_path: Path,

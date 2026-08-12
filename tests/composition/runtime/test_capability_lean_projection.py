@@ -21,6 +21,7 @@ COMPOSITION_ADMISSION = "AUTHORITY"
     not pinned_mathlib_runtime_available(),
     reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
 )
+@pytest.mark.composition_admission("AUTHORITY")
 def test_lean_capability_returns_bound_verified_result(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:
@@ -46,6 +47,7 @@ def test_lean_capability_returns_bound_verified_result(
     not pinned_mathlib_runtime_available(),
     reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
 )
+@pytest.mark.composition_admission("AUTHORITY")
 def test_lean_capability_projects_repairable_checker_diagnostics(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:

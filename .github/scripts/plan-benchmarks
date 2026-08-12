@@ -39,6 +39,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 from _ci_paths import normalize_paths, path_values  # noqa: E402
+from tools.benchmark_plan.control_paths import BENCHMARK_CONTROL_PATHS  # noqa: E402
 from benchmarks.tooling.validation_plan import (  # noqa: E402
     full_host_validation,
     host_validation_plan,
@@ -56,28 +57,6 @@ _ORACLE_SCOPE_RANK = {
     "affected-datasets": 2,
     "all": 3,
 }
-BENCHMARK_CONTROL_PATHS = frozenset(
-    {
-        ".github/scripts/_ci_paths.py",
-        ".github/scripts/emit-plan-receipt",
-        ".github/scripts/plan-benchmarks",
-        ".github/scripts/manage-test-timings",
-        ".github/scripts/validate-benchmark-plan",
-        ".github/workflows/benchmarks.yml",
-        ".github/workflows/heldout-benchmarks.yml",
-        "Makefile",
-        "make/harbor.mk",
-        "tools/check_benchmark_adapters.py",
-        "tools/benchmark_pr_status.py",
-        "tools/check_benchmark_contracts.py",
-        "tools/check_benchmark_static.py",
-        "tools/check_harbor_dataset.py",
-        "tools/harbor_task_workflow.py",
-        "tools/pytest_lifecycle.py",
-        "benchmarks/tooling/validation_plan.py",
-        "tools/sync_harbor_verifier_support.py",
-    }
-)
 BENCHMARK_EXECUTION_CONTROL_PATHS = frozenset(
     {
         ".github/scripts/manage-test-timings",

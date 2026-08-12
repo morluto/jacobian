@@ -393,6 +393,10 @@ def pytest_command(
     debugger-friendly serial execution) suppress the lane's configured worker
     pool and distribution so the user's choice is honored rather than
     overridden by the lane defaults that follow it.
+
+    Lanes with ``process_supervision`` request signal-based pytest timeouts so
+    child process groups can be interrupted; the outer tooling runner already
+    starts a new session and kills the process group on deadline.
     """
     lane = topology.lane(lane_name)
     command = [sys.executable, "-m", "pytest"]
@@ -401,7 +405,20 @@ def pytest_command(
     if lane.workers and not selectors and not _has_explicit_xdist_args(extra_args):
         command.extend(["-n", str(lane.workers), "--dist", lane.distribution])
     command.extend(["--timeout", str(lane.timeout_seconds)])
+    if lane.process_supervision and not _has_timeout_method_args(extra_args):
+        command.extend(["--timeout-method", "signal"])
     return command
+
+
+def _has_timeout_method_args(extra_args: list[str] | None) -> bool:
+    if not extra_args:
+        return False
+    for arg in extra_args:
+        if arg in ("--timeout-method",):
+            return True
+        if arg.startswith("--timeout-method="):
+            return True
+    return False
 
 
 def lane_environment(lane: Lane) -> Mapping[str, str]:
@@ -417,9 +434,17 @@ def lane_environment(lane: Lane) -> Mapping[str, str]:
     include: set[str] = {"PATH"}
     for requirement in lane.required_environment:
         include.update(_LANE_ENVIRONMENT_ALLOWLIST.get(requirement, ()))
+    declared = {
+        "JACOBIAN_TEST_LANE": lane.name,
+        "JACOBIAN_EXECUTION_PROFILE": lane.execution_profile or lane.name,
+        "JACOBIAN_SETUP_AFFINITY": lane.setup_affinity or "",
+        "JACOBIAN_PROCESS_SUPERVISION": (
+            "1" if lane.process_supervision else "0"
+        ),
+    }
     return operator_environment(
         include=include,
-        declared={"JACOBIAN_TEST_LANE": lane.name},
+        declared=declared,
     )
 
 
@@ -435,16 +460,26 @@ def run_lane(
     parent streams so failures are not silent.  On non-EXITED terminal
     states (timeout, overflow, start failure) a diagnostic line is emitted
     to stderr before returning a non-zero exit code.
+
+    Process-supervised lanes use a kill-safe outer deadline derived from the
+    lane timeout rather than an unbounded hour-long wrapper.
     """
+    lane = topology.lane(lane_name)
     command = pytest_command(topology, lane_name, selectors, extra_args)
     arguments = command[3:]
-    environment = lane_environment(topology.lane(lane_name))
+    environment = lane_environment(lane)
+    # Supervised lanes: outer watchdog bounds the whole pytest process group.
+    # Keep headroom above per-test timeouts for collection/setup.
+    if lane.process_supervision:
+        timeout_seconds = float(max(lane.timeout_seconds * 40, 600))
+    else:
+        timeout_seconds = 3600.0
     result = run_pytest(
         arguments,
         root=topology.root,
         name=f"topology-{lane_name}",
         environment=environment,
-        timeout_seconds=3600.0,
+        timeout_seconds=timeout_seconds,
     )
     return result.exit_code
 

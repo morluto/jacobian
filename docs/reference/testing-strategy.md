@@ -54,6 +54,39 @@ fixtures are reserved for complete inventory, cross-domain wiring, checker
 authorization, lifecycle, and host boundaries. One operation's request/result
 matrix belongs to its domain or component seam.
 
+### Hydration ladder
+
+Prefer the cheapest production graph that still proves the claim:
+
+1. pure values / unit helpers;
+2. `open_domain_services` / `open_exact_domain_services` (scoped install + receipt);
+3. attached complete-runtime fixtures (immutable template copy);
+4. authorized complete-runtime fixtures (checker authority / verify edges);
+5. fresh complete-runtime fixtures (lifecycle / install ownership).
+
+### Resource contracts and inventory
+
+Fixtures that own SQLite, process groups, MCP, providers, Lean, or complete
+runtimes declare `@resource_fixture` contracts in
+[`tests/support/resource_contracts.py`](../../tests/support/resource_contracts.py).
+Collection enforces the transitive closure via
+[`tests/support/resource_closure_plugin.py`](../../tests/support/resource_closure_plugin.py).
+
+Inspect usage with:
+
+```sh
+make test-runtime-inventory
+```
+
+### Composition admission
+
+Complete-runtime composition tests declare both:
+
+- module-level `COMPOSITION_ADMISSION` for the static architecture ratchet; and
+- per-node `@pytest.mark.composition_admission("…")` for collection policy.
+
+Allowed kinds: `AUTHORITY`, `WIRING`, `LIFECYCLE`, `DISCOVERY`, `REFERENCE`.
+
 The canonical commands are:
 
 ```sh
@@ -251,6 +284,15 @@ and efficiency without rewarding a prescribed tool-call order.
 Harbor tasks, hidden verifiers, and Oracle runs remain evaluation infrastructure
 outside the runtime product. Follow the repository-local `harbor-benchmarks`
 skill and exact task validation path when those files change.
+
+## Dependency profiles
+
+CI may sync a narrow locked group via
+`.github/actions/setup-python-tests` `dependency-profile`
+(`test-core`, `lint`, `typecheck`, `security`, `benchmark`, or the
+`dev`/`contributor` umbrella). Local `make setup` still installs the full
+contributor environment. CVC5 and python-flint remain runtime package
+dependencies.
 
 ## Final validation
 

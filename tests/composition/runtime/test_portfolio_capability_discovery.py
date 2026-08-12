@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jacobian.contracts.capabilities import CapabilityDiscoveryRequest
 from jacobian.runtime.model import JacobianRuntime
 
@@ -9,6 +11,7 @@ from jacobian.runtime.model import JacobianRuntime
 COMPOSITION_ADMISSION = "DISCOVERY"
 
 
+@pytest.mark.composition_admission("DISCOVERY")
 def test_discovery_filters_hidden_and_nonmatching_domains(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
@@ -20,6 +23,7 @@ def test_discovery_filters_hidden_and_nonmatching_domains(
     assert discovered.matches == ()
 
 
+@pytest.mark.composition_admission("DISCOVERY")
 def test_small_bounded_operation_is_published_inline(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
@@ -33,6 +37,7 @@ def test_small_bounded_operation_is_published_inline(
     assert induced_tree.produced_artifact_types == ()
 
 
+@pytest.mark.composition_admission("DISCOVERY")
 def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
@@ -46,6 +51,7 @@ def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
     assert descriptors["poset.width.compute"].accepted_artifact_types == ()
 
 
+@pytest.mark.composition_admission("DISCOVERY")
 def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
@@ -106,6 +112,7 @@ def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
     assert absent.matches == ()
 
 
+@pytest.mark.composition_admission("DISCOVERY")
 def test_discovery_finds_resultant_producer_from_plain_language(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
@@ -130,6 +137,7 @@ def test_discovery_finds_resultant_producer_from_plain_language(
         assert resultant.relevance_score > 0
 
 
+@pytest.mark.composition_admission("DISCOVERY")
 def test_domain_intents_discover_poset_and_topology_operations(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:

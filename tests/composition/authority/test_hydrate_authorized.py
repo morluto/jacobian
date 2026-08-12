@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
 from tests.support.state import copy_template
 
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
@@ -32,6 +33,7 @@ def _audit_count(root: Path) -> int:
     return int(row[0])
 
 
+@pytest.mark.composition_admission("AUTHORITY")
 def test_hydrate_authorized_matches_bundled_authority_without_audit(
     tmp_path: Path,
 ) -> None:
@@ -50,6 +52,7 @@ def test_hydrate_authorized_matches_bundled_authority_without_audit(
         assert _audit_count(attached) == baseline_audit
 
 
+@pytest.mark.composition_admission("AUTHORITY")
 def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> None:
     with create_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
@@ -61,6 +64,7 @@ def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> Non
         assert "matrix.determinant.verify" not in _verify_ids(runtime)
 
 
+@pytest.mark.composition_admission("AUTHORITY")
 def test_authorized_runtime_hydrates_reference_checkers(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:

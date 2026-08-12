@@ -5,12 +5,23 @@ from pathlib import Path
 
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 from tests.support.services import DomainTestServices
 
 from jacobian.domains.graph_symmetry import build_graph_symmetry_bundle
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="exact-domain-graph-symmetry-v1",
+    setup_affinity="sqlite",
+)
 def graph_symmetry_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install graph symmetry and its exact checkers without a portfolio."""
 

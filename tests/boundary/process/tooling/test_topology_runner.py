@@ -143,6 +143,16 @@ def test_full_parallel_lane_retains_configured_workers() -> None:
 
     assert command[command.index("-n") + 1] == "2"
     assert command[command.index("--dist") + 1] == "worksteal"
+    assert command[command.index("--timeout-method") + 1] == "signal"
+
+
+def test_process_supervision_env_and_affinity_are_declared() -> None:
+    topology = load_topology(ROOT / "tests" / "topology.toml")
+    process = lane_environment(topology.lane("process"))
+    assert process["JACOBIAN_PROCESS_SUPERVISION"] == "1"
+    assert process["JACOBIAN_EXECUTION_PROFILE"]
+    unit = lane_environment(topology.lane("unit"))
+    assert unit["JACOBIAN_PROCESS_SUPERVISION"] == "0"
 
 
 def test_explicit_xdist_zero_suppresses_lane_worker_pool() -> None:

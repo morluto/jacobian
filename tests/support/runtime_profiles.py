@@ -3,6 +3,10 @@
 Tests declare the minimum install/authority/mutability they need. Named
 fixtures such as ``attached_complete_runtime`` remain thin wrappers over
 ``runtime_for``.
+
+Every profile field is either honored by ``open_runtime_for`` or rejected.
+Scoped bundle/provider dimensions belong on ``ApplicationInstallPlan`` /
+``open_exact_domain_services``, not on silent complete-template attach.
 """
 
 from __future__ import annotations
@@ -21,8 +25,30 @@ StateAccess = Literal["READ_ONLY", "PRIVATE_MUTABLE", "LIFECYCLE_OWNER"]
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeProfileKey:
+    """Normalized, closed key for every effective complete-runtime dimension."""
+
+    installation: InstallationMode
+    checker_authority: CheckerAuthorityMode
+    state_access: StateAccess
+    version: int = 1
+
+    def digest_material(self) -> str:
+        return (
+            f"{self.version}:{self.installation}:{self.checker_authority.value}:"
+            f"{self.state_access}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeTestProfile:
-    """Minimum complete-runtime facts a test requires."""
+    """Minimum complete-runtime facts a test requires.
+
+    ``bundles``, ``reference_sets``, ``providers``, and ``background_work`` are
+    reserved for scoped ``ApplicationInstallPlan`` compilation. Non-empty values
+    are rejected here so callers cannot describe a narrow profile while still
+    materializing the complete portfolio.
+    """
 
     installation: InstallationMode
     checker_authority: CheckerAuthorityMode
@@ -34,6 +60,34 @@ class RuntimeTestProfile:
 
     def requires_authorized_checkers(self) -> bool:
         return self.checker_authority is not CheckerAuthorityMode.NONE
+
+    def compile(self) -> RuntimeProfileKey:
+        """Compile to a closed profile key or reject unsupported dimensions."""
+
+        unsupported: list[str] = []
+        if self.bundles:
+            unsupported.append("bundles")
+        if self.reference_sets:
+            unsupported.append("reference_sets")
+        if self.providers:
+            unsupported.append("providers")
+        if self.background_work:
+            unsupported.append("background_work")
+        if unsupported:
+            raise ValueError(
+                "RuntimeTestProfile fields "
+                + ", ".join(unsupported)
+                + " are not supported on the complete-runtime path; use "
+                "ApplicationInstallPlan / open_exact_domain_services for scoped "
+                "installs"
+            )
+        if self.installation == "FRESH" and self.state_access != "LIFECYCLE_OWNER":
+            raise ValueError("FRESH installation requires LIFECYCLE_OWNER state access")
+        return RuntimeProfileKey(
+            installation=self.installation,
+            checker_authority=self.checker_authority,
+            state_access=self.state_access,
+        )
 
 
 ATTACHED_COMPUTE = RuntimeTestProfile(
@@ -78,14 +132,13 @@ def open_runtime_for(
     not write artifacts or durable store state through that runtime.
     """
 
-    if profile.installation == "FRESH":
-        if profile.state_access != "LIFECYCLE_OWNER":
-            raise ValueError("FRESH installation requires LIFECYCLE_OWNER state access")
+    key = profile.compile()
+    if key.installation == "FRESH":
         runtime = create_runtime(
             tmp_path / "state",
-            checker_authority=profile.checker_authority,
+            checker_authority=key.checker_authority,
         )
-    elif profile.checker_authority is CheckerAuthorityMode.NONE:
+    elif key.checker_authority is CheckerAuthorityMode.NONE:
         if complete_portfolio_template is None:
             raise ValueError(
                 "ATTACH_TEMPLATE without authority needs complete template"
@@ -98,7 +151,7 @@ def open_runtime_for(
         state = copy_template(authorized_portfolio_template, tmp_path / "state")
         runtime = create_runtime(
             state,
-            checker_authority=profile.checker_authority,
+            checker_authority=key.checker_authority,
         )
     try:
         yield runtime

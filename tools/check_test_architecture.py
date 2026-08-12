@@ -84,7 +84,6 @@ _COMPOSITION_ADMISSION_CATEGORIES = frozenset(
         "LIFECYCLE",
         "DISCOVERY",
         "REFERENCE",
-        "MIXED",
     }
 )
 _COMPLETE_RUNTIME_FIXTURE_NAMES = frozenset(

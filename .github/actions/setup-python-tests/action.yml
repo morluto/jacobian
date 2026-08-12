@@ -1,9 +1,15 @@
 name: Set up Python tests
-description: Install the requested Python and the frozen development environment.
+description: Install the requested Python and a locked dependency profile.
 inputs:
   python-version:
     description: Python minor version to install and select.
     required: true
+  dependency-profile:
+    description: >
+      Locked uv dependency profile. `dev`/`contributor` install the full
+      contributor umbrella. `test-core` installs only the pytest runner stack.
+    required: false
+    default: "dev"
 
 runs:
   using: composite
@@ -15,6 +21,7 @@ runs:
       with:
         version: "0.11.28"
         enable-cache: true
+        cache-suffix: ${{ inputs.dependency-profile }}
         cache-dependency-glob: |
           pyproject.toml
           uv.lock
@@ -22,13 +29,27 @@ runs:
       shell: bash
       env:
         UV_PYTHON: ${{ inputs.python-version }}
-      run: uv sync --locked --dev
+        DEPENDENCY_PROFILE: ${{ inputs.dependency-profile }}
+      run: |
+        set -euo pipefail
+        case "${DEPENDENCY_PROFILE}" in
+          dev|contributor)
+            uv sync --locked --group "${DEPENDENCY_PROFILE}"
+            ;;
+          test-core|lint|typecheck|security|benchmark)
+            uv sync --locked --no-default-groups --group "${DEPENDENCY_PROFILE}"
+            ;;
+          *)
+            echo "unknown dependency-profile: ${DEPENDENCY_PROFILE}" >&2
+            exit 1
+            ;;
+        esac
     - name: Require the requested Python version
       shell: bash
       env:
         UV_PYTHON: ${{ inputs.python-version }}
       run: >-
-        uv run --locked python -c
+        uv run --locked --no-sync python -c
         "import os, sys;
         expected = tuple(map(int, os.environ['UV_PYTHON'].split('.')));
         assert sys.version_info[:2] == expected,

@@ -140,6 +140,30 @@ def inventory_modules(root: Path) -> tuple[ModuleInventory, ...]:
     return tuple(rows)
 
 
+def inventory_registered_contracts() -> dict[str, dict[str, object]]:
+    """Return the live ``@resource_fixture`` registry for DX/audit reports."""
+
+    # Importing complete-runtime fixtures registers their contracts.
+    import tests.domain.certified_snf.conftest
+    import tests.domain.graph_symmetry.conftest
+    import tests.domain.matrix.conftest
+    import tests.domain.probability.conftest
+    import tests.domain.topology.conftest
+    import tests.support.complete_runtime_fixtures  # noqa: F401
+    from tests.support.resource_contracts import registered_resource_fixtures
+
+    return {
+        name: {
+            "resources": sorted(resource.value for resource in contract.resources),
+            "isolation": contract.isolation.value,
+            "profile_key": contract.profile_key,
+            "setup_affinity": contract.setup_affinity,
+            "module": contract.module,
+            "qualname": contract.qualname,
+        }
+        for name, contract in sorted(registered_resource_fixtures().items())
+    }
+
 def _render_text(rows: Iterable[ModuleInventory]) -> str:
     lines = [
         "path\towner\tfixtures\tverify_signal\tresources\tunjustified_authorized\tsetup_weight",
@@ -209,9 +233,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.unjustified_only:
         display = tuple(row for row in rows if row.unjustified_authorized)
     if args.fmt == "json":
-        print(json.dumps([asdict(row) for row in display], indent=2, sort_keys=True))
+        payload: dict[str, object] = {
+            "modules": [asdict(row) for row in display],
+            "resource_contracts": inventory_registered_contracts(),
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
     else:
         print(_render_text(display), end="")
+        contracts = inventory_registered_contracts()
+        print(f"# registered_resource_fixtures={len(contracts)}")
+        for name, meta in contracts.items():
+            resources = ",".join(meta["resources"])  # type: ignore[arg-type]
+            print(
+                f"#   {name}\t{resources}\t"
+                f"profile={meta.get('profile_key') or '-'}\t"
+                f"affinity={meta.get('setup_affinity') or '-'}"
+            )
     if args.fail_on_unjustified and any(row.unjustified_authorized for row in rows):
         return 1
     return 0

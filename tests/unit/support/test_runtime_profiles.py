@@ -66,3 +66,30 @@ def test_fresh_profile_rejects_non_lifecycle_state_access(tmp_path: Path) -> Non
     )
     with pytest.raises(ValueError, match="LIFECYCLE_OWNER"):
         next(open_runtime_for(bad, tmp_path=tmp_path))
+
+
+def test_profile_rejects_scoped_dimensions_on_complete_runtime_path() -> None:
+    """Complete-runtime profiles must not silently ignore narrow dimensions."""
+
+    for kwargs in (
+        {"bundles": frozenset({"matrix"})},
+        {"reference_sets": frozenset({"builtins"})},
+        {"providers": frozenset({"sympy"})},
+        {"background_work": True},
+    ):
+        profile = RuntimeTestProfile(
+            installation="ATTACH_TEMPLATE",
+            checker_authority=CheckerAuthorityMode.NONE,
+            state_access="PRIVATE_MUTABLE",
+            **kwargs,
+        )
+        with pytest.raises(ValueError, match="not supported on the complete-runtime"):
+            profile.compile()
+
+
+def test_default_presets_compile_to_closed_keys() -> None:
+    assert ATTACHED_COMPUTE.compile().installation == "ATTACH_TEMPLATE"
+    assert AUTHORIZED_VERIFY.compile().checker_authority is (
+        CheckerAuthorityMode.HYDRATE_EXISTING
+    )
+    assert FRESH_LIFECYCLE.compile().state_access == "LIFECYCLE_OWNER"

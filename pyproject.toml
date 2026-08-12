@@ -36,14 +36,10 @@ jacobian-mcp = "jacobian.adapters.mcp.cli:main"
 jacobian-remote-mcp = "jacobian.adapters.mcp.remote_cli:main"
 
 [dependency-groups]
-dev-core = [
-    "deptry>=0.21,<1",
+# Lane-scoped groups: CI/local profiles sync only what they need.
+# CVC5/python-flint remain runtime package dependencies (not optional groups).
+test-core = [
     "hypothesis>=6.130,<7",
-    "import-linter>=2,<3",
-    "mypy>=1.15,<3",
-    "pip-audit>=2.9,<3",
-    "pre-commit>=4.4,<5",
-    "pyperf>=2.9,<3",
     "pytest>=8.3,<10",
     "pytest-cov>=6,<8",
     "pytest-randomly==4.1.0",
@@ -51,13 +47,37 @@ dev-core = [
     "pytest-split==0.11.0",
     "pytest-timeout>=2.4,<3",
     "pytest-xdist>=3.6,<4",
+]
+lint = [
+    "deptry>=0.21,<1",
+    "import-linter>=2,<3",
     "ruff==0.16.1",  # pinned to match .pre-commit-config.yaml rev
-    "tomli-w==1.2.0",
-    "types-jsonschema>=4.23,<5",
-    "types-networkx>=3.4,<4",
     "vulture>=2.14,<3",
 ]
+typecheck = [
+    "mypy>=1.15,<3",
+    "types-jsonschema>=4.23,<5",
+    "types-networkx>=3.4,<4",
+]
+security = [
+    "pip-audit>=2.9,<3",
+]
+benchmark = [
+    "pyperf>=2.9,<3",
+]
+dev-core = [
+    { include-group = "test-core" },
+    { include-group = "lint" },
+    { include-group = "typecheck" },
+    { include-group = "security" },
+    { include-group = "benchmark" },
+    "pre-commit>=4.4,<5",
+    "tomli-w==1.2.0",
+]
 dev = [
+    { include-group = "dev-core" },
+]
+contributor = [
     { include-group = "dev-core" },
 ]
 
@@ -82,6 +102,7 @@ markers = [
     "performance: benchmark or timing evidence excluded from correctness lanes",
     "property: property-based invariant tests",
     "destructive_process: test requires child-process isolation and group termination",
+    "composition_admission(kind): per-node complete-runtime admission (AUTHORITY|WIRING|LIFECYCLE|DISCOVERY|REFERENCE)",
 ]
 
 [tool.ruff]

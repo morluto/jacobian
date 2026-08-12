@@ -5,12 +5,23 @@ from pathlib import Path
 
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 from tests.support.services import DomainTestServices
 
 from jacobian.domains.topology import build_topology_bundle
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="exact-domain-topology-v1",
+    setup_affinity="sqlite",
+)
 def topology_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install topology and its exact checkers without a portfolio."""
 

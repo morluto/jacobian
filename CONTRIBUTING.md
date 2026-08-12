@@ -1,6 +1,6 @@
 # Contributing to Jacobian
 
-Jacobian is a pre-stable 0.6.0 **math toolbox for agents**: atomic tools behind
+Jacobian is a pre-stable 0.11.0 **math toolbox for agents**: atomic tools behind
 `math.find` / `math.run`, math-first results, agent-owned composition, and
 optional checker tools as **separate catalog IDs** (not dual-mode producers).
 Contributions should preserve that product model—see

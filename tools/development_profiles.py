@@ -91,11 +91,15 @@ def profile(name: str) -> DevelopmentProfile:
 
 
 def sync_arguments(name: str, *, development: bool = True) -> tuple[str, ...]:
-    """Return locked uv sync arguments for a profile."""
+    """Return locked uv sync arguments for a profile.
+
+    Development profiles install the ``dev``/``contributor`` umbrella (same
+    packages). CI jobs may instead sync a narrower group via
+    ``setup-python-tests`` ``dependency-profile``.
+    """
 
     profile(name)
     return ("sync", "--locked", "--dev" if development else "--no-dev")
-
 
 def _run(arguments: Sequence[str], cwd: Path) -> int:
     from benchmarks.tooling.command_runner import (
@@ -441,6 +445,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--no-dev", action="store_true")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--print0",
+        action="store_true",
+        help="For sync-flags: emit NUL-delimited tokens for Bash 3.2-safe reading",
+    )
     return parser
 
 
@@ -451,7 +460,12 @@ def main() -> int:
         if args.action == "validate":
             return 0
         if args.action == "sync-flags":
-            print("\n".join(sync_arguments(args.profile, development=not args.no_dev)))
+            tokens = sync_arguments(args.profile, development=not args.no_dev)
+            if args.print0:
+                sys.stdout.buffer.write(b"\0".join(token.encode() for token in tokens))
+                sys.stdout.buffer.write(b"\0")
+            else:
+                print("\n".join(tokens))
             return 0
         if args.action == "setup":
             setup_profile(args.repo, args.profile)

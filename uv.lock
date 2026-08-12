@@ -549,6 +549,30 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+benchmark = [
+    { name = "pyperf" },
+]
+contributor = [
+    { name = "deptry" },
+    { name = "hypothesis" },
+    { name = "import-linter" },
+    { name = "mypy" },
+    { name = "pip-audit" },
+    { name = "pre-commit" },
+    { name = "pyperf" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-randomly" },
+    { name = "pytest-repeat" },
+    { name = "pytest-split" },
+    { name = "pytest-timeout" },
+    { name = "pytest-xdist" },
+    { name = "ruff" },
+    { name = "tomli-w" },
+    { name = "types-jsonschema" },
+    { name = "types-networkx" },
+    { name = "vulture" },
+]
 dev = [
     { name = "deptry" },
     { name = "hypothesis" },
@@ -590,6 +614,30 @@ dev-core = [
     { name = "types-jsonschema" },
     { name = "types-networkx" },
     { name = "vulture" },
+]
+lint = [
+    { name = "deptry" },
+    { name = "import-linter" },
+    { name = "ruff" },
+    { name = "vulture" },
+]
+security = [
+    { name = "pip-audit" },
+]
+test-core = [
+    { name = "hypothesis" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-randomly" },
+    { name = "pytest-repeat" },
+    { name = "pytest-split" },
+    { name = "pytest-timeout" },
+    { name = "pytest-xdist" },
+]
+typecheck = [
+    { name = "mypy" },
+    { name = "types-jsonschema" },
+    { name = "types-networkx" },
 ]
 
 [package.metadata]
@@ -609,6 +657,28 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+benchmark = [{ name = "pyperf", specifier = ">=2.9,<3" }]
+contributor = [
+    { name = "deptry", specifier = ">=0.21,<1" },
+    { name = "hypothesis", specifier = ">=6.130,<7" },
+    { name = "import-linter", specifier = ">=2,<3" },
+    { name = "mypy", specifier = ">=1.15,<3" },
+    { name = "pip-audit", specifier = ">=2.9,<3" },
+    { name = "pre-commit", specifier = ">=4.4,<5" },
+    { name = "pyperf", specifier = ">=2.9,<3" },
+    { name = "pytest", specifier = ">=8.3,<10" },
+    { name = "pytest-cov", specifier = ">=6,<8" },
+    { name = "pytest-randomly", specifier = "==4.1.0" },
+    { name = "pytest-repeat", specifier = "==0.9.4" },
+    { name = "pytest-split", specifier = "==0.11.0" },
+    { name = "pytest-timeout", specifier = ">=2.4,<3" },
+    { name = "pytest-xdist", specifier = ">=3.6,<4" },
+    { name = "ruff", specifier = "==0.16.1" },
+    { name = "tomli-w", specifier = "==1.2.0" },
+    { name = "types-jsonschema", specifier = ">=4.23,<5" },
+    { name = "types-networkx", specifier = ">=3.4,<4" },
+    { name = "vulture", specifier = ">=2.14,<3" },
+]
 dev = [
     { name = "deptry", specifier = ">=0.21,<1" },
     { name = "hypothesis", specifier = ">=6.130,<7" },
@@ -650,6 +720,28 @@ dev-core = [
     { name = "types-jsonschema", specifier = ">=4.23,<5" },
     { name = "types-networkx", specifier = ">=3.4,<4" },
     { name = "vulture", specifier = ">=2.14,<3" },
+]
+lint = [
+    { name = "deptry", specifier = ">=0.21,<1" },
+    { name = "import-linter", specifier = ">=2,<3" },
+    { name = "ruff", specifier = "==0.16.1" },
+    { name = "vulture", specifier = ">=2.14,<3" },
+]
+security = [{ name = "pip-audit", specifier = ">=2.9,<3" }]
+test-core = [
+    { name = "hypothesis", specifier = ">=6.130,<7" },
+    { name = "pytest", specifier = ">=8.3,<10" },
+    { name = "pytest-cov", specifier = ">=6,<8" },
+    { name = "pytest-randomly", specifier = "==4.1.0" },
+    { name = "pytest-repeat", specifier = "==0.9.4" },
+    { name = "pytest-split", specifier = "==0.11.0" },
+    { name = "pytest-timeout", specifier = ">=2.4,<3" },
+    { name = "pytest-xdist", specifier = ">=3.6,<4" },
+]
+typecheck = [
+    { name = "mypy", specifier = ">=1.15,<3" },
+    { name = "types-jsonschema", specifier = ">=4.23,<5" },
+    { name = "types-networkx", specifier = ">=3.4,<4" },
 ]
 
 [[package]]

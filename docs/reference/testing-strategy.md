@@ -237,6 +237,17 @@ at 1 KiB, 100 KiB, 1 MiB, and 10 MiB with concurrency 1, 4, and 16, including
 crash/restart, backup/restore, and bounded reads. Performance evidence never
 substitutes for correctness.
 
+Run the disposable carrier comparison with:
+
+```sh
+uv run python tools/benchmark_storage_blobs.py --iterations 16 \
+  --output storage-blob-benchmark.json
+```
+
+The spike is decision evidence, not a selectable runtime backend. Its rollback,
+restart, bounded-read, and backup/restore checks must all pass before latency or
+throughput can justify replacing the current two-store recovery protocol.
+
 Hosting tests keep local and remote ownership separate. Remote authentication,
 tenants, admission, leases, eviction, and quarantine must not enter the local
 server. Provider tests prove that importing `jacobian.math` performs no probe,

@@ -211,9 +211,8 @@ checker authorization out of plugins and search code.
   mathematical conclusion.
 - Include every first-class artifact reference, including verification records,
   in the result's `artifact_uris`.
-- An unavailable optional native or formal provider must remove only the
-  affected capabilities. A missing or mismatched maintained Python backend is
-  a broken installation and must fail runtime construction clearly.
+- An unavailable optional provider must remove only the affected capabilities;
+  unrelated kernel startup and catalog entries remain available.
 - Keep `deep_review.md` local; it is ignored and is not design source material.
 - Keep worked cases in reference scenarios and benchmarks.
 
@@ -224,6 +223,9 @@ development workflow. For Harbor task authoring and verifier changes, use the
 repository-local [`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md)
 skill and its exact task validation path. Control/treatment model evaluations
 are explicit operator-run evidence exercises, not routine development gates.
+For source-grounded held-out reliability probes based on recently resolved
+conjectures, use
+[`recent-conjecture-evaluations`](.agents/skills/recent-conjecture-evaluations/SKILL.md).
 
 For remote MCP operation, use
 [Deploy the remote MCP server](docs/how-to/deploy-remote-mcp.md) and the

@@ -45,6 +45,19 @@ _DEFAULT_CORE_MAX_RSS_KB = 7 * 1024 * 1024
 _DEFAULT_MATHLIB_MAX_RSS_KB = 9 * 1024 * 1024
 
 
+def _resolve_elan_executable() -> Path | None:
+    """Resolve the operator-installed elan executable at bootstrap."""
+
+    candidate = shutil.which("elan")
+    if candidate is None:
+        return None
+    try:
+        resolved = Path(candidate).resolve(strict=True)
+    except OSError:
+        return None
+    return resolved if resolved.is_file() else None
+
+
 def _repl_process_environment(runtime: Path) -> dict[str, str]:
     overrides = dict(
         lean_mathlib_git_config(runtime)
@@ -427,7 +440,7 @@ class LeanExplorationReplRuntime:
             self._closing = False
 
     def _create_session(self, environment: LeanEnvironment) -> PersistentLeanRepl:
-        elan = shutil.which("elan")
+        elan = _resolve_elan_executable()
         if elan is None:
             raise RuntimeError("elan is unavailable")
         installation = self._installations[environment]
@@ -456,7 +469,7 @@ class LeanExplorationReplRuntime:
             policy = replace(policy, timeout_seconds=min(policy.timeout_seconds, 30))
         return PersistentLeanRepl(
             command=(
-                elan,
+                str(elan),
                 "run",
                 f"leanprover/lean4:v{installation.lean_version}",
                 "lake",

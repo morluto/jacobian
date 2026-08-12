@@ -46,6 +46,7 @@ from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationSearchPayload,
     LeanDeclarationSearchQuery,
 )
+from jacobian.lean_frontend.repl import _resolve_elan_executable
 from jacobian.lean_frontend.repl_protocol import (
     LeanReplCommandResponse,
     LeanReplErrorResponse,
@@ -845,7 +846,7 @@ class LeanSubprocessDeclarationBackend:
                 "LEAN_ENVIRONMENT_UNAVAILABLE",
                 "The pinned Lean REPL project is unavailable.",
             )
-        elan = shutil.which("elan")
+        elan = _resolve_elan_executable()
         repl = (
             self.mathlib_runtime
             / ".lake"
@@ -863,7 +864,7 @@ class LeanSubprocessDeclarationBackend:
             )
         return (
             [
-                str(Path(elan).resolve(strict=True)),
+                str(elan),
                 "run",
                 f"leanprover/lean4:v{self.provider_runtime.version}",
                 "lake",

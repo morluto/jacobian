@@ -234,6 +234,32 @@ def test_portable_semantic_digest_excludes_only_the_deployment_root() -> None:
     ) == lean_portable_semantic_runtime_digest(second)
 
 
+def test_persistent_declaration_backend_uses_pinned_adjacent_lake(
+    tmp_path: Path,
+) -> None:
+    toolchain_bin = tmp_path / "toolchain" / "bin"
+    toolchain_bin.mkdir(parents=True)
+    lean = toolchain_bin / "lean"
+    lake = toolchain_bin / "lake"
+    lean.write_bytes(b"lean")
+    lake.write_bytes(b"lake")
+    runtime = tmp_path / "mathlib-runtime"
+    repl = runtime / ".lake/packages/repl/.lake/build/bin/repl"
+    repl.parent.mkdir(parents=True)
+    repl.write_bytes(b"repl")
+    backend = LeanSubprocessDeclarationBackend(
+        lean_executable=lean,
+        mathlib_runtime=runtime,
+        provider_runtime=_RUNTIME,
+        session_backend="persistent",
+    )
+
+    command, cwd = backend._persistent_command()
+
+    assert command == [str(lake.resolve()), "env", str(repl.resolve())]
+    assert cwd == runtime
+
+
 def test_mathlib_declaration_environment_authorizes_manifest_checkouts(
     tmp_path: Path,
 ) -> None:

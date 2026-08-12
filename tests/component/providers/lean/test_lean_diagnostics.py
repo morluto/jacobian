@@ -7,7 +7,7 @@ from jacobian.contracts.lean import (
     LeanDiagnosticSource,
     LeanEnvironment,
 )
-from jacobian.contracts.results import ResultEnvelope
+from jacobian.contracts.results import VerificationResult
 from jacobian.lean_frontend.diagnostics import checker_diagnostics, repl_diagnostics
 from jacobian.lean_frontend.repl_protocol import (
     LeanReplCommandResponse,
@@ -50,8 +50,8 @@ def _proof_step(*, error: str | None = None) -> LeanReplProofStepResponse:
     return LeanReplProofStepResponse.model_validate(payload)
 
 
-def _rejected_checker_result(detail: str) -> ResultEnvelope:
-    return ResultEnvelope.model_validate(
+def _rejected_checker_result(detail: str) -> VerificationResult:
+    return VerificationResult.model_validate(
         {
             "execution": {"status": "COMPLETED"},
             "input": {"status": "REJECTED", "errors": [detail]},

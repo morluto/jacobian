@@ -21,7 +21,7 @@ from jacobian.contracts.common import ArtifactUri, CheckerUri
 from jacobian.contracts.results import (
     ContractModel,
     ExecutionStatus,
-    ResultEnvelope,
+    VerificationResult,
 )
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
@@ -79,34 +79,33 @@ class _VerificationProjection:
                 checker_ids=(self.checker_id,),
             ),
             input_schema=model_schema(request_model),
-            output_schema=model_schema(ResultEnvelope),
+            output_schema=model_schema(VerificationResult),
             read_only=False,
             tags=(*self.tags, "verification"),
         )
 
     def result(
         self,
-        request: CapabilityRequest,
-        envelope: ResultEnvelope,
+        result: VerificationResult,
     ) -> CapabilityResult:
         verified = (
-            envelope.execution.status is ExecutionStatus.COMPLETED
-            and envelope.verification_record_uri is not None
+            result.execution.status is ExecutionStatus.COMPLETED
+            and result.verification_record_uri is not None
         )
-        references = set(envelope.evidence_uris)
-        if envelope.scope_uri is not None:
-            references.add(envelope.scope_uri)
-        if envelope.verification_record_uri is not None:
-            references.add(envelope.verification_record_uri)
-            record = self.verification.store.get(envelope.verification_record_uri)
+        references = set(result.evidence_uris)
+        if result.scope_uri is not None:
+            references.add(result.scope_uri)
+        if result.verification_record_uri is not None:
+            references.add(result.verification_record_uri)
+            record = self.verification.store.get(result.verification_record_uri)
             references.update(record.manifest.parents)
         return CapabilityResult(
             capability_id=self.capability_id,
             capability_version="1",
-            execution=envelope.execution,
-            output=envelope.model_dump(mode="json"),
+            execution=result.execution,
+            output=result.model_dump(mode="json"),
             verification_record_uri=(
-                envelope.verification_record_uri if verified else None
+                result.verification_record_uri if verified else None
             ),
             artifact_uris=tuple(sorted(references)),
         )
@@ -132,11 +131,11 @@ class CertificateVerificationAdapter:
             raise CapabilityInvocationError(
                 enriched_invalid_request(_INVALID_REPLAY_REQUEST, exc)
             ) from exc
-        envelope = self.projection.verification.verify_certificate(
+        result = self.projection.verification.verify_certificate(
             certificate_uri=validated.certificate_uri,
             checker_id=self.projection.checker_id,
         )
-        return self.projection.result(request, envelope)
+        return self.projection.result(result)
 
 
 class WitnessVerificationAdapter:
@@ -159,13 +158,13 @@ class WitnessVerificationAdapter:
             raise CapabilityInvocationError(
                 enriched_invalid_request(_INVALID_REPLAY_REQUEST, exc)
             ) from exc
-        envelope = self.projection.verification.verify_witness(
+        result = self.projection.verification.verify_witness(
             claim_uri=validated.claim_uri,
             candidate_uri=validated.candidate_uri,
             witness_uri=validated.witness_uri,
             checker_id=self.projection.checker_id,
         )
-        return self.projection.result(request, envelope)
+        return self.projection.result(result)
 
 
 def certificate_verification_adapter(

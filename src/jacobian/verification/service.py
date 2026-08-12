@@ -40,7 +40,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
     InputStatus,
     InputValidation,
-    ResultEnvelope,
+    VerificationResult,
 )
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.process_policy import (
@@ -258,7 +258,7 @@ class VerificationService:
         witness_format: str,
         request: dict[str, Any],
         timeout_seconds: float | None = None,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         """Verify exact inline values without materializing them as artifacts.
 
         Only an accepted immutable record is persisted.  The record binds the
@@ -320,7 +320,7 @@ class VerificationService:
                         "checker must report exhaustive or not-applicable coverage."
                     )
                 )
-                return ResultEnvelope(
+                return VerificationResult(
                     execution=Execution(
                         status=ExecutionStatus.COMPLETED, runtime_ms=runtime_ms
                     ),
@@ -362,7 +362,7 @@ class VerificationService:
                 parents=(semantics_uri,),
                 summary="authorized inline exact verification",
             )
-            return ResultEnvelope(
+            return VerificationResult(
                 execution=Execution(
                     status=ExecutionStatus.COMPLETED,
                     runtime_ms=runtime_ms,
@@ -436,7 +436,7 @@ class VerificationService:
         timeout_seconds: float | None = None,
         include_artifact_metadata: bool = False,
         include_semantics_artifact: bool = False,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         """Replay a bound witness with the explicitly selected checker."""
 
         started = time.monotonic()
@@ -508,7 +508,7 @@ class VerificationService:
         timeout_seconds: float | None = None,
         include_artifact_metadata: bool = False,
         supporting_artifact_uris: tuple[str, ...] = (),
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         """Run a specified compatible checker or uniquely select one."""
 
         started = time.monotonic()
@@ -843,7 +843,7 @@ class VerificationService:
         *,
         started: float,
         timeout_seconds: float | None,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         """Run one resolved plan and commit only a valid accepted decision."""
 
         request_digest = _digest_bytes(canonicalize_json(plan.request))
@@ -901,8 +901,8 @@ class VerificationService:
         candidate_digest: str,
         evidence_uri: str,
         semantics_digest: str | None = None,
-    ) -> ResultEnvelope:
-        return ResultEnvelope(
+    ) -> VerificationResult:
+        return VerificationResult(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms,
@@ -969,7 +969,7 @@ class VerificationService:
         semantics_digest: str | None = None,
         scope_uri: str | None = None,
         execution_detail: str | None = None,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         record_artifact = self._commit_verification_record(
             checker_id=checker.checker_id,
             checker_digest=checker.executable_digest,
@@ -979,7 +979,7 @@ class VerificationService:
             parents=parents,
             summary=summary,
         )
-        return ResultEnvelope(
+        return VerificationResult(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms,
@@ -999,7 +999,7 @@ class VerificationService:
         self,
         exc: BaseException,
         started: float,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         if isinstance(exc, TimeoutError):
             return self._operational_failure(
                 status=ExecutionStatus.TIMEOUT,
@@ -1111,8 +1111,8 @@ class VerificationService:
                 summary=summary,
             )
 
-    def _rejected_input(self, detail: str, *, started: float) -> ResultEnvelope:
-        return ResultEnvelope(
+    def _rejected_input(self, detail: str, *, started: float) -> VerificationResult:
+        return VerificationResult(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=int((time.monotonic() - started) * 1000),
@@ -1130,8 +1130,8 @@ class VerificationService:
         status: ExecutionStatus,
         detail: str,
         started: float,
-    ) -> ResultEnvelope:
-        return ResultEnvelope(
+    ) -> VerificationResult:
+        return VerificationResult(
             execution=Execution(
                 status=status,
                 runtime_ms=int((time.monotonic() - started) * 1000),

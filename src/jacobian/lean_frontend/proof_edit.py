@@ -26,7 +26,7 @@ from jacobian.contracts.lean_proof_edit import (
 from jacobian.contracts.results import (
     Conclusion,
     ExecutionStatus,
-    ResultEnvelope,
+    VerificationResult,
 )
 from jacobian.lean_frontend.service import LeanService
 from jacobian.schema_registry import SchemaRegistry
@@ -231,7 +231,7 @@ class LeanProofEditAdapter:
         )
 
 
-def _is_verified(result: ResultEnvelope) -> bool:
+def _is_verified(result: VerificationResult) -> bool:
     return (
         result.execution.status is ExecutionStatus.COMPLETED
         and result.conclusion is Conclusion.TRUE

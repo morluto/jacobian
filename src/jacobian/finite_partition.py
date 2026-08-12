@@ -21,7 +21,7 @@ from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.results import (
     Execution,
     ExecutionStatus,
-    ResultEnvelope,
+    VerificationResult,
 )
 from jacobian.domains._examples import example
 from jacobian.provider_runtime import known_provider_runtime
@@ -439,7 +439,7 @@ def _verify_partition(
     scope_uri: str,
     claim_uri: str,
     partition_uri: str,
-) -> tuple[str, ResultEnvelope]:
+) -> tuple[str, VerificationResult]:
     checker_id = installation.checker_id
     if checker_id is None:
         raise ValueError("finite partition checker is not authorized")
@@ -487,7 +487,7 @@ def _partition_result(
     capability_version: str,
     started: float,
     material: _MaterializedPartition,
-    verification_result: ResultEnvelope | None,
+    verification_result: VerificationResult | None,
     certificate_uri: str | None,
 ) -> CapabilityResult:
     record_uri = (

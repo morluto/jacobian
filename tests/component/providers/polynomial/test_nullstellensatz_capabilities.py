@@ -21,7 +21,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
     InputStatus,
     InputValidation,
-    ResultEnvelope,
+    VerificationResult,
 )
 from jacobian.domains.polynomial_nullstellensatz.core import (
     MATERIALIZE_CAPABILITY_ID,
@@ -332,7 +332,7 @@ def test_checker_timeout_never_verifies(
         monkeypatch.setattr(
             services.application.verification,
             "verify_certificate",
-            lambda **_kwargs: ResultEnvelope(
+            lambda **_kwargs: VerificationResult(
                 execution=Execution(status=ExecutionStatus.TIMEOUT),
                 input=InputValidation(status=InputStatus.ACCEPTED),
                 conclusion=Conclusion.UNKNOWN,

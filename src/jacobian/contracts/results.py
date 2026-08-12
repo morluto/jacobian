@@ -77,8 +77,8 @@ class InputValidation(ContractModel):
         return self
 
 
-class ResultEnvelope(ContractModel):
-    """Separate execution, input, conclusion, and verification evidence."""
+class VerificationResult(ContractModel):
+    """Internal result of one separately authorized checker execution."""
 
     schema_version: Literal["1"] = "1"
     execution: Execution

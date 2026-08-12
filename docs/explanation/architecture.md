@@ -206,6 +206,12 @@ subject, candidate, evidence, protocol, semantics, scope, certificate format,
 and checker identity. Independent checker execution does not import or call the
 producer, proposal, search, or evaluation path it certifies.
 
+`VerificationResult` is the internal typed outcome of that checker execution,
+not a generic mathematical result envelope. Capability adapters project it
+once into the ordinary operation response. Ordinary producers do not use it,
+so checker input validity, conclusions, and evidence bindings do not become
+knobs on every mathematical value.
+
 ## Values, carriers, and composition
 
 Composition distinguishes four identities:

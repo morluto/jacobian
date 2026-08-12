@@ -13,7 +13,7 @@ from jacobian.contracts.results import (
     ContractModel,
     Execution,
     InputValidation,
-    ResultEnvelope,
+    VerificationResult,
 )
 
 
@@ -93,7 +93,7 @@ class LeanVerifyResult(ContractModel):
     claim_uri: ArtifactUri
     candidate_uri: ArtifactUri
     certificate_uri: ArtifactUri
-    result: ResultEnvelope
+    result: VerificationResult
     diagnostics: tuple[LeanDiagnostic, ...] = ()
     cache_hit: bool = False
 

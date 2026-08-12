@@ -13,8 +13,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken
 
+from jacobian.adapters.mcp.context import (
+    AppState,
+    AuthenticationError,
+    RuntimeLease,
+    TenantRuntimeLimitError,
+    _configured_root,
+)
+from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.capability_service import CapabilityPolicy
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
@@ -22,14 +31,6 @@ from jacobian.runtime.model import JacobianRuntime
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 DEFAULT_MAX_TENANT_RUNTIMES = 32
 DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS = 900.0
-
-
-class AuthenticationError(PermissionError):
-    """A remote request lacks a usable authenticated tenant subject."""
-
-
-class TenantRuntimeLimitError(RuntimeError):
-    """The server cannot admit another in-memory tenant runtime."""
 
 
 class TenantRuntimeRouterClosedError(RuntimeError):
@@ -441,3 +442,60 @@ def _parse_token_record(index: int, record: Any) -> StaticTokenGrant:
         )
     except ValueError as exc:
         raise ValueError(f"token grant {index}: {exc}") from exc
+
+
+def create_remote_server(
+    state_dir: str | Path | None = None,
+    *,
+    checker_authority: CheckerAuthorityMode | None = None,
+    allow_anonymous: bool = False,
+    anonymous_tenant_id: str = "anonymous",
+    token_verifier: Any | None = None,
+    auth: Any | None = None,
+    capability_policy: CapabilityPolicy | None = None,
+    max_tenant_runtimes: int | None = None,
+    tenant_idle_timeout_seconds: float | None = None,
+) -> MCPServer[AppState]:
+    """Create one remote host routing requests to isolated tenant runtimes."""
+
+    from mcp.server.auth.middleware.auth_context import get_access_token
+
+    from jacobian.adapters.mcp.server import (
+        _build_server,
+        _selected_checker_authority,
+    )
+
+    router = TenantRuntimeRouter(
+        _configured_root(state_dir),
+        checker_authority=_selected_checker_authority(checker_authority),
+        allow_anonymous=allow_anonymous,
+        anonymous_tenant_id=anonymous_tenant_id,
+        capability_policy=capability_policy,
+        max_tenant_runtimes=(
+            DEFAULT_MAX_TENANT_RUNTIMES
+            if max_tenant_runtimes is None
+            else max_tenant_runtimes
+        ),
+        idle_timeout_seconds=(
+            DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS
+            if tenant_idle_timeout_seconds is None
+            else tenant_idle_timeout_seconds
+        ),
+    )
+
+    def acquire_runtime() -> RuntimeLease:
+        access_token = get_access_token()
+        subject = access_token.subject if access_token is not None else None
+        lease = router.lease_for(subject)
+        return RuntimeLease(lease.runtime, lease.release)
+
+    state = AppState(
+        acquire_runtime=acquire_runtime,
+        worker_registry=MCPBlockingWorkerRegistry(),
+    )
+    return _build_server(
+        state=state,
+        close_owner=router.close,
+        token_verifier=token_verifier,
+        auth=auth,
+    )

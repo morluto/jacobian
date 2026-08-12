@@ -337,6 +337,7 @@ def _record_describe_and_attempt(
     arguments: object,
     *,
     successful: bool,
+    response: Mapping[str, Any] | None,
 ) -> None:
     if tool == "math.find":
         request = arguments.get("request") if isinstance(arguments, Mapping) else None
@@ -350,23 +351,104 @@ def _record_describe_and_attempt(
         arguments.get("capability_id") if isinstance(arguments, Mapping) else None
     )
     payload = arguments.get("payload") if isinstance(arguments, Mapping) else None
-    telemetry.capability_attempts.append(
-        {
-            "capability_id": capability_id if isinstance(capability_id, str) else None,
-            "input": payload,
-            "successful": successful,
-        }
-    )
+    attempt = {
+        "capability_id": capability_id if isinstance(capability_id, str) else None,
+        "input": payload,
+        "successful": successful,
+    }
+    diagnostic_codes = _capability_diagnostic_codes(response)
+    if diagnostic_codes:
+        attempt["diagnostic_codes"] = diagnostic_codes
+    diagnostics = _capability_diagnostics(response)
+    if diagnostics:
+        attempt["diagnostics"] = diagnostics
+    telemetry.capability_attempts.append(attempt)
     if isinstance(capability_id, str):
         telemetry.capability_attempt_ids.append(capability_id)
+
+
+def _capability_diagnostic_codes(
+    response: Mapping[str, Any] | None,
+) -> list[str]:
+    if not isinstance(response, Mapping):
+        return []
+    codes: list[str] = []
+    diagnostics = response.get("diagnostics")
+    if isinstance(diagnostics, list):
+        codes.extend(
+            diagnostic["code"]
+            for diagnostic in diagnostics
+            if isinstance(diagnostic, Mapping)
+            and isinstance(diagnostic.get("code"), str)
+        )
+    output = response.get("output")
+    error = output.get("error") if isinstance(output, Mapping) else None
+    if isinstance(error, Mapping) and isinstance(error.get("code"), str):
+        codes.append(error["code"])
+    return list(dict.fromkeys(codes))
+
+
+def _bounded_capability_diagnostic(diagnostic: Mapping[str, Any]) -> dict[str, Any]:
+    retained = {
+        key: diagnostic[key]
+        for key in ("code", "phase", "stage", "path")
+        if isinstance(diagnostic.get(key), str)
+    }
+    details = diagnostic.get("details")
+    validation_errors = (
+        details.get("validation_errors") if isinstance(details, Mapping) else None
+    )
+    if isinstance(validation_errors, list):
+        retained_errors = [
+            {
+                key: error[key]
+                for key in ("path", "reason", "type")
+                if isinstance(error.get(key), str)
+            }
+            for error in validation_errors
+            if isinstance(error, Mapping)
+        ]
+        if retained_errors:
+            retained["details"] = {"validation_errors": retained_errors}
+    return retained
+
+
+def _capability_diagnostics(
+    response: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not isinstance(response, Mapping):
+        return []
+    candidates: list[Mapping[str, Any]] = []
+    diagnostics = response.get("diagnostics")
+    if isinstance(diagnostics, list):
+        candidates.extend(
+            diagnostic for diagnostic in diagnostics if isinstance(diagnostic, Mapping)
+        )
+    output = response.get("output")
+    error = output.get("error") if isinstance(output, Mapping) else None
+    if isinstance(error, Mapping):
+        candidates.append(error)
+    retained: list[dict[str, Any]] = []
+    seen: set[bytes] = set()
+    for candidate in candidates:
+        bounded = _bounded_capability_diagnostic(candidate)
+        if not isinstance(bounded.get("code"), str):
+            continue
+        identity = canonicalize_json(bounded)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        retained.append(bounded)
+    return retained
 
 
 def _mcp_call_failed(
     item: Mapping[str, Any],
     result: object,
-    text_response: Mapping[str, Any] | None,
+    response: Mapping[str, Any] | None,
     status: object,
 ) -> bool:
+    execution = response.get("execution") if isinstance(response, Mapping) else None
     return bool(
         (isinstance(status, str) and status in {"error", "failed"})
         or item.get("error")
@@ -375,8 +457,11 @@ def _mcp_call_failed(
             and (result.get("isError") is True or result.get("is_error") is True)
         )
         or (
-            isinstance(text_response, Mapping)
-            and isinstance(text_response.get("error"), Mapping)
+            isinstance(response, Mapping) and isinstance(response.get("error"), Mapping)
+        )
+        or (
+            isinstance(execution, Mapping)
+            and execution.get("status") in {"CANCELLED", "ERROR", "TIMEOUT"}
         )
         or _contains_value(
             item,
@@ -489,12 +574,13 @@ def _process_mcp_tool_call(
     result = item.get("result")
     response = structured_response or text_response
     status = item.get("status")
-    failed = _mcp_call_failed(item, result, text_response, status)
+    failed = _mcp_call_failed(item, result, response, status)
     _record_describe_and_attempt(
         telemetry,
         tool,
         arguments,
         successful=not failed,
+        response=response,
     )
     if failed:
         telemetry.tool_error_count += 1

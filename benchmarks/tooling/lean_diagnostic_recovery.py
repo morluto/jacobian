@@ -101,6 +101,28 @@ class RecoveryCondition(BaseModel):
     description: str = Field(min_length=1)
 
 
+class RecoveryDiagnosticEvidenceExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: str = Field(pattern=r"^(?:LEAN|INVALID_LEAN)_[A-Z0-9_]+$")
+    path: str | None = None
+    validation_error_paths: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def require_unique_validation_paths(self) -> Self:
+        if len(set(self.validation_error_paths)) != len(self.validation_error_paths):
+            raise ValueError("expected validation-error paths must be unique")
+        return self
+
+
+class RecoveryDiagnosticProbe(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    capability_id: str = Field(min_length=1)
+    payload: dict[str, Any]
+    expected_diagnostic_evidence: RecoveryDiagnosticEvidenceExpectation
+
+
 class RecoveryCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -108,6 +130,8 @@ class RecoveryCase(BaseModel):
     injected_capability_id: str = Field(min_length=1)
     injected_payload: dict[str, Any]
     expected_diagnostic_codes: tuple[str, ...] = Field(min_length=1)
+    expected_diagnostic_evidence: RecoveryDiagnosticEvidenceExpectation | None = None
+    diagnostic_probe: RecoveryDiagnosticProbe | None = None
     terminal_capability_id: str = Field(min_length=1)
     terminal_immutable_input_fields: tuple[str, ...] = Field(min_length=1)
     prompt: str = Field(min_length=1)
@@ -119,10 +143,19 @@ class RecoveryCase(BaseModel):
         ):
             raise ValueError("expected diagnostic codes must be unique")
         if any(
-            not code.startswith("LEAN_") or not code.replace("_", "").isalnum()
+            not code.startswith(("LEAN_", "INVALID_LEAN_"))
+            or not code.replace("_", "").isalnum()
             for code in self.expected_diagnostic_codes
         ):
             raise ValueError("expected diagnostic codes must be stable Lean codes")
+        if (
+            self.expected_diagnostic_evidence is not None
+            and self.expected_diagnostic_evidence.code
+            not in self.expected_diagnostic_codes
+        ):
+            raise ValueError(
+                "expected diagnostic evidence code must be an expected diagnostic code"
+            )
         if len(set(self.terminal_immutable_input_fields)) != len(
             self.terminal_immutable_input_fields
         ):
@@ -273,6 +306,111 @@ def _diagnostic_codes(invocation: Mapping[str, Any]) -> tuple[str, ...]:
     )
 
 
+def _invocation_diagnostics(
+    invocation: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], ...]:
+    output = invocation.get("output")
+    diagnostics = output.get("diagnostics") if isinstance(output, Mapping) else None
+    if not isinstance(diagnostics, list):
+        return ()
+    return tuple(value for value in diagnostics if isinstance(value, Mapping))
+
+
+def _attempt_diagnostic_codes(attempt: Mapping[str, Any]) -> tuple[str, ...]:
+    values = attempt.get("diagnostic_codes")
+    if not isinstance(values, list):
+        return ()
+    return tuple(value for value in values if isinstance(value, str))
+
+
+def _attempt_diagnostics(
+    attempt: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], ...]:
+    values = attempt.get("diagnostics")
+    if not isinstance(values, list):
+        return ()
+    return tuple(value for value in values if isinstance(value, Mapping))
+
+
+def _failed_request_rejection_codes(
+    attempt: Mapping[str, Any],
+) -> tuple[str, ...]:
+    if attempt.get("successful") is True:
+        return ()
+    return tuple(
+        code
+        for code in _attempt_diagnostic_codes(attempt)
+        if code.startswith("INVALID_LEAN_")
+    )
+
+
+def _diagnostic_evidence_observed(
+    *,
+    expected_codes: set[str],
+    expectation: RecoveryDiagnosticEvidenceExpectation | None,
+    codes: tuple[str, ...],
+    diagnostics: tuple[Mapping[str, Any], ...],
+) -> bool:
+    if expectation is None:
+        return bool(expected_codes & set(codes))
+    if expectation.code not in codes:
+        return False
+    for diagnostic in diagnostics:
+        if diagnostic.get("code") != expectation.code:
+            continue
+        if expectation.path is not None and diagnostic.get("path") != expectation.path:
+            continue
+        details = diagnostic.get("details")
+        validation_errors = (
+            details.get("validation_errors") if isinstance(details, Mapping) else None
+        )
+        if not isinstance(validation_errors, list):
+            validation_errors = []
+        observed_paths = {
+            error.get("path")
+            for error in validation_errors
+            if isinstance(error, Mapping) and isinstance(error.get("path"), str)
+        }
+        if set(expectation.validation_error_paths).issubset(observed_paths):
+            return True
+    return False
+
+
+def _injection_diagnostic_evidence_observed(
+    case: RecoveryCase,
+    *,
+    codes: tuple[str, ...],
+    diagnostics: tuple[Mapping[str, Any], ...],
+) -> bool:
+    return _diagnostic_evidence_observed(
+        expected_codes=set(case.expected_diagnostic_codes),
+        expectation=case.expected_diagnostic_evidence,
+        codes=codes,
+        diagnostics=diagnostics,
+    )
+
+
+def _diagnostic_probe_evidence_observed(
+    case: RecoveryCase,
+    attempts: tuple[Mapping[str, Any], ...],
+) -> bool | None:
+    probe = case.diagnostic_probe
+    if probe is None:
+        return None
+    expectation = probe.expected_diagnostic_evidence
+    return any(
+        attempt.get("capability_id") == probe.capability_id
+        and attempt.get("input") == probe.payload
+        and _diagnostic_evidence_observed(
+            expected_codes={expectation.code},
+            expectation=expectation,
+            codes=_attempt_diagnostic_codes(attempt),
+            diagnostics=_attempt_diagnostics(attempt),
+        )
+        for attempt in attempts
+    )
+
+
 def _diagnostic_rejection_evidence(diagnostics: object) -> list[str]:
     evidence: list[str] = []
     if isinstance(diagnostics, list):
@@ -381,6 +519,90 @@ def _terminal_preserves_claim(
     )
 
 
+type _AttemptRecord = tuple[Mapping[str, Any], Mapping[str, Any] | None]
+
+
+def _is_exact_injection(case: RecoveryCase, item: Mapping[str, Any]) -> bool:
+    return bool(
+        item.get("capability_id") == case.injected_capability_id
+        and item.get("input") == case.injected_payload
+    )
+
+
+def _invocation_matches_attempt(
+    attempt: Mapping[str, Any],
+    invocation: Mapping[str, Any],
+) -> bool:
+    return bool(
+        invocation.get("capability_id") == attempt.get("capability_id")
+        and invocation.get("input") == attempt.get("input")
+    )
+
+
+def _pair_attempts_with_invocations(
+    attempts: tuple[Mapping[str, Any], ...],
+    invocations: tuple[Mapping[str, Any], ...],
+) -> tuple[_AttemptRecord, ...]:
+    records: list[_AttemptRecord] = []
+    invocation_cursor = 0
+    aligned = True
+    for attempt in attempts:
+        invocation = None
+        if attempt.get("successful") is True:
+            if invocation_cursor < len(invocations):
+                candidate = invocations[invocation_cursor]
+                if aligned and _invocation_matches_attempt(attempt, candidate):
+                    invocation = candidate
+                else:
+                    # Attempts and completed invocations originate from the same
+                    # ordered transcript. Once their identities diverge, their
+                    # later positional relationship is ambiguous: do not shift a
+                    # later proof rejection onto an earlier malformed response.
+                    aligned = False
+            invocation_cursor += 1
+        records.append((attempt, invocation))
+    return tuple(records)
+
+
+def _qualifying_injection(
+    case: RecoveryCase,
+    records: tuple[_AttemptRecord, ...],
+) -> tuple[int | None, tuple[str, ...], tuple[Mapping[str, Any], ...]]:
+    expected_codes = set(case.expected_diagnostic_codes)
+    for index, (attempt, invocation) in enumerate(records):
+        if not _is_exact_injection(case, attempt):
+            continue
+        if invocation is not None and _proof_invocation_rejected(invocation):
+            return (
+                index,
+                _diagnostic_codes(invocation),
+                _invocation_diagnostics(invocation),
+            )
+        request_codes = _failed_request_rejection_codes(attempt)
+        if expected_codes & set(request_codes):
+            return (
+                index,
+                _attempt_diagnostic_codes(attempt),
+                _attempt_diagnostics(attempt),
+            )
+    return None, (), ()
+
+
+def _repeated_rejection_count(records: tuple[_AttemptRecord, ...]) -> int:
+    rejection_fingerprints: list[tuple[str, str]] = []
+    for attempt, invocation in records:
+        rejected = bool(
+            (invocation is not None and _proof_invocation_rejected(invocation))
+            or (invocation is None and _failed_request_rejection_codes(attempt))
+        )
+        if rejected:
+            rejection_fingerprints.append(_rejection_fingerprint(attempt))
+    return sum(
+        fingerprint in rejection_fingerprints[:index]
+        for index, fingerprint in enumerate(rejection_fingerprints)
+    )
+
+
 def classify_recovery(
     case: RecoveryCase,
     telemetry: Mapping[str, Any],
@@ -396,57 +618,27 @@ def classify_recovery(
         if isinstance(attempt, Mapping)
     )
 
-    def is_exact_injection(item: Mapping[str, Any]) -> bool:
-        return bool(
-            item.get("capability_id") == case.injected_capability_id
-            and item.get("input") == case.injected_payload
-        )
+    injection_payload_exact = any(
+        _is_exact_injection(case, attempt) for attempt in attempts
+    )
+    injection_first_attempt = bool(attempts and _is_exact_injection(case, attempts[0]))
+    attempt_records = _pair_attempts_with_invocations(attempts, invocations)
+    qualifying_index, qualifying_codes, qualifying_diagnostics = _qualifying_injection(
+        case, attempt_records
+    )
 
-    exact_attempts = tuple(
-        attempt for attempt in attempts if is_exact_injection(attempt)
-    )
-    injection_payload_exact = bool(exact_attempts)
-    injection_first_attempt = bool(attempts and is_exact_injection(attempts[0]))
-    successful_exact_attempt = any(
-        attempt.get("successful") is True for attempt in exact_attempts
-    )
-    injection_invocation_index = next(
-        (
-            index
-            for index, invocation in enumerate(invocations)
-            if successful_exact_attempt and is_exact_injection(invocation)
-        ),
-        None,
-    )
-    injection_invocation = (
-        invocations[injection_invocation_index]
-        if injection_invocation_index is not None
-        else None
-    )
     terminal = tuple(
         invocation
-        for invocation in (
-            invocations[injection_invocation_index + 1 :]
-            if injection_invocation_index is not None
+        for _attempt, invocation in (
+            attempt_records[qualifying_index + 1 :]
+            if qualifying_index is not None
             else ()
         )
-        if invocation.get("capability_id") == case.terminal_capability_id
+        if invocation is not None
+        and invocation.get("capability_id") == case.terminal_capability_id
     )
-    first_codes = (
-        _diagnostic_codes(injection_invocation)
-        if injection_invocation is not None
-        else ()
-    )
-    expected_codes = set(case.expected_diagnostic_codes)
-    rejection_fingerprints = [
-        _rejection_fingerprint(invocation)
-        for invocation in invocations
-        if _proof_invocation_rejected(invocation)
-    ]
-    repeated_errors = sum(
-        fingerprint in rejection_fingerprints[:index]
-        for index, fingerprint in enumerate(rejection_fingerprints)
-    )
+    repeated_errors = _repeated_rejection_count(attempt_records)
+    probe_evidence = _diagnostic_probe_evidence_observed(case, attempts)
     usage = telemetry.get("usage")
     return {
         "injection_attempted": any(
@@ -455,15 +647,19 @@ def classify_recovery(
         ),
         "injection_payload_exact": injection_payload_exact,
         "injection_first_attempt": injection_first_attempt,
-        "injection_rejected": bool(
-            injection_invocation is not None
-            and _proof_invocation_rejected(injection_invocation)
+        "injection_rejected": qualifying_index is not None,
+        "observed_diagnostic_codes": list(qualifying_codes),
+        "enriched_diagnostic_observed": (
+            probe_evidence
+            if probe_evidence is not None
+            else _injection_diagnostic_evidence_observed(
+                case,
+                codes=qualifying_codes,
+                diagnostics=qualifying_diagnostics,
+            )
         ),
-        "observed_diagnostic_codes": list(first_codes),
-        "enriched_diagnostic_observed": bool(expected_codes & set(first_codes)),
         "repair_success": bool(
-            injection_invocation is not None
-            and _proof_invocation_rejected(injection_invocation)
+            qualifying_index is not None
             and any(
                 _terminal_preserves_claim(case, invocation)
                 and _terminal_accepted(invocation)

@@ -52,11 +52,3 @@ passive artifact-envelope parsing.
 Acceptance reports exhaustive finite replay. A rejection means only that the
 submitted result was not verified; it never establishes another diameter,
 radius, or connectivity claim.
-
-## Compatibility
-
-The producer request and result schemas are unchanged. Existing version `2`
-artifacts remain valid candidates when their exact schemas and semantics are
-available locally. The catalog delta consists only of the two dedicated
-verification capability IDs and their operator-authorized checker
-registrations.

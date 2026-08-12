@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Current implementation reference; contracts are experimental
+- Status: Experimental contracts
 - Domain: `probability`
 - Producer backend: pinned Python-FLINT exact rational arithmetic
 - Checker backend: Python standard-library `Fraction`, isolated from the producer

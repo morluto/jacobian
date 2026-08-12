@@ -10,8 +10,8 @@ operations, also use the
 
 ## Product Constraints
 
-Jacobian is a **toolbox of atomic math tools** for agents, not a workflow
-engine and not a trust-OS with explore/verify research phases.
+Jacobian is a **toolbox of atomic math tools** for agents. It is not a workflow
+engine: the agent owns decomposition, sequencing, checker choice, and stopping.
 
 | Agent verb | MCP tool | Meaning |
 | --- | --- | --- |
@@ -25,9 +25,9 @@ Not a required sequence: agents may run a known ID, search first, or re-find
 mid-investigation.
 
 **Results are math-first.** Ordinary tools return calculations (GCD, matrix,
-path, factors, …) plus execution status. They do not primarily return
-HEURISTIC/COMPUTED/VERIFIED slogans. Optional envelope fields may exist on the
-wire during migration; do not design new behavior around them as the product.
+path, factors, …) plus execution status. Do not add generic assurance,
+completeness, scope, or obligation knobs to ordinary results; bounded status
+belongs in the domain result that defines it.
 
 **Checker tools are additional tools.** Independent check is a **separate
 catalog ID** (e.g. `….verify`, `lean.check`), not a role on the producer. **No
@@ -52,8 +52,12 @@ Design against the portfolio. Reuse values/artifacts; prefer composable
 primitives over paper-shaped mega-tools. Domain-owned tool IDs over generic
 verb taxonomies or new top-level MCP tools.
 
-Prefer thin adapters to maintained mathematical systems. Pin versions when
-reproducibility, certificates, or verification depend on them.
+Prefer thin adapters to maintained mathematical systems. Wrap Jacobian's
+semantics, not an entire backend API: one public function has one canonical
+semantic input, validates the domain it promises, and delegates the algorithm
+through a private backend module without silently changing domains or parents.
+Pin versions when reproducibility, certificates, or verification depend on
+them.
 Do not reimplement proof kernels, elaborators, tactic engines, solver engines,
 computer algebra algorithms, or graph canonicalization when a maintained
 backend provides the needed operation.
@@ -109,6 +113,15 @@ publication binding only when inline transport is insufficient. Publication
 owns transport only; it does not own mathematical validation, applicability,
 provider selection, effects, parsing, or checker authority.
 
+Construct wire envelopes only at the final capability or protocol projection.
+Mathematical functions, typed operation executors, artifact services, and
+checker services return their owned typed values or terminal states; they do
+not construct `CapabilityResult`. Do not hide artifact writes inside an
+`OperationSpec.execute` callable to satisfy this rule. When an operation needs
+a domain-specific durable schema or parent closure, keep that publication in a
+narrow named domain publisher and pass its typed projection to the one final
+envelope constructor.
+
 At the MCP boundary, prefer MCP Python SDK 2.0 high-level typed returns. Return
 Pydantic result models directly and let the SDK derive the output schema,
 validate results, and populate `content` and `structured_content`. Use an
@@ -127,6 +140,15 @@ global operation registries, recursive package discovery, import-time
 registration, or mechanical wrappers for backend functions. Producers remain
 capped at `COMPUTED`; domain-owned checker declarations do not authorize
 themselves.
+
+`DomainBundle` is a semantic declaration, not an installation escape hatch. It
+must not own installer callbacks, runtime services, storage collaborators, or
+dependency-resolution policy. A capability family that genuinely needs a
+special artifact/checker lifecycle is an explicitly named portfolio component
+at the composition root; do not add a generic knob to every ordinary bundle for
+one exceptional installer. An operation may bind a typed computational backend
+that owns no runtime, storage, publication, installation, or checker authority;
+that backend is part of execution, not application lifecycle.
 
 Keep availability, recommendations, compatibility, and verification authority
 separate. Experimental contracts may break between versions; compatibility
@@ -199,17 +221,17 @@ redeploy; an unchanged catalog does not prove that the backend restarted.
 This is a Python 3.12 project managed with `uv`; the base image ships Python 3.12
 and Node but not `uv`. The startup update script installs `uv` (to
 `~/.local/bin`, added to `PATH` via `.bashrc`/`.profile`) and runs
-`uv sync --locked --dev`, so dependencies (including the `flint`/`smt` dev-group
-backends `python-flint`, `cvc5`, `z3-solver`) are already installed when a
-session starts. Standard dev, test, lint, and build commands live in the
-`Makefile` (`make help`) and `CONTRIBUTING.md`; use those rather than duplicating
-them.
+`uv sync --locked --dev`. The base dependency set includes the pinned SymPy,
+NetworkX, Python-FLINT, Z3, and cvc5 providers. Standard dev, test, lint, and
+build commands live in the `Makefile` (`make help`) and `CONTRIBUTING.md`; use
+those rather than duplicating them.
 
 Non-obvious caveats:
 
 - If a fresh non-login shell can't find `uv`, run `export PATH="$HOME/.local/bin:$PATH"`.
-- Optional backends are absent by default and their capabilities are correctly
-  omitted: `lean.check` prints `lean.check is not installed` on `init`/startup
+- Optional native and formal backends are absent by default and their
+  capabilities are correctly omitted: `lean.check` prints
+  `lean.check is not installed` on `init`/startup
   (the pinned Lean 4.31.0 toolchain is not installed), and external solver
   executables (`cadical`, `drat-trim`, `carcara`) are not on `PATH`. This does
   not break the kernel, catalog, or the core test suites. Only install Lean/elan
@@ -232,9 +254,10 @@ Non-obvious caveats:
   suites must be reproduced with the owning focused test before it is treated
   as a product defect.
 - Quick end-to-end smoke of the product surface: `uv run jacobian --state-dir .jacobian init`
-  (CLI), or start the MCP server with
-  `uv run jacobian-mcp --transport streamable-http --host 127.0.0.1 --port 8000 --allow-anonymous`
-  (remote transports require `--allow-anonymous` or `--auth-tokens-file`; stdio is
-  the default transport). The runnable
+  (CLI), `uv run jacobian-mcp` for one local stdio server, or
+  `uv run jacobian-remote-mcp --host 127.0.0.1 --port 8000 --allow-anonymous`
+  for an explicit remote test host. Remote hosting requires `--allow-anonymous`
+  or `--auth-tokens-file`; those options are intentionally absent from the local
+  entry point. The runnable
   `docs/tutorials/first-verified-result.md` script demonstrates one end-to-end
   investigation that includes discovery and independent verification.

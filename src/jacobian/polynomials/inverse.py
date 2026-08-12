@@ -41,6 +41,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.polynomials._support import (
+    PolynomialOperationResult,
     _inverse_candidate_map,
     _inverse_coefficient_system,
     _inverse_residual_term_bound,
@@ -402,15 +403,10 @@ class PolynomialMapInverseSynthesizeAdapter:
             left_residuals, right_residuals = _map_inverse_residuals(verify_request)
             status = PolynomialInverseSynthesisStatus.FOUND
             try:
-                verified = PolynomialMapInverseVerifyAdapter(self.resources).invoke(
-                    CapabilityRequest(
-                        capability_id="polynomial.map.inverse.verify",
-                        input=verify_request.model_dump(mode="json"),
-                    )
+                verified = PolynomialMapInverseVerifyAdapter(self.resources).verify(
+                    verify_request
                 )
-                verification_output = PolynomialMapInverseVerifyOutput.model_validate(
-                    verified.output
-                )
+                verification_output = verified.value
                 verification_artifact_uri = (
                     verification_output.verification_record_uri
                     or verification_output.certificate_uri
@@ -635,6 +631,14 @@ class PolynomialMapInverseVerifyAdapter:
             code="INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST",
             operation="map inverse verification",
         )
+        return self.verify(validated).project(self.descriptor)
+
+    def verify(
+        self,
+        validated: PolynomialMapInverseVerifyRequest,
+    ) -> PolynomialOperationResult[PolynomialMapInverseVerifyOutput]:
+        """Verify one validated inverse without re-entering the adapter."""
+
         checker_id = self.resources.installation.inverse_checker_id
         if checker_id is None:
             raise _polynomial_error(
@@ -666,18 +670,15 @@ class PolynomialMapInverseVerifyAdapter:
             (validated.target_variables, right_residuals, right_records),
         ):
             for residual in residuals:
-                checked = identity_adapter.invoke(
-                    CapabilityRequest(
-                        capability_id="polynomial.identity.verify",
-                        input=PolynomialIdentityRequest(
-                            variables=variables,
-                            left=residual,
-                            right=zero,
-                        ).model_dump(mode="json"),
+                checked = identity_adapter.verify(
+                    PolynomialIdentityRequest(
+                        variables=variables,
+                        left=residual,
+                        right=zero,
                     )
                 )
-                record_uri = checked.output.get("verification_record_uri")
-                if not isinstance(record_uri, str):
+                record_uri = checked.verification_record_uri
+                if record_uri is None:
                     raise _polynomial_error(
                         "POLYNOMIAL_IDENTITY_REPLAY_UNAVAILABLE",
                         "composition_identity_replay",
@@ -800,11 +801,9 @@ class PolynomialMapInverseVerifyAdapter:
             source_variables=validated.source_variables,
             target_variables=validated.target_variables,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
+            value=output,
             execution=aggregate_checked.execution,
-            output=output.model_dump(mode="json"),
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(
                 dict.fromkeys(

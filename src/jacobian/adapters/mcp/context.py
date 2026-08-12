@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -15,7 +15,6 @@ from typing import Any
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 
-from jacobian.adapters.mcp.remote import TenantRuntimeRouter
 from jacobian.adapters.mcp.tooling import (
     AgentRecoveryError,
     MCPBlockingWorkerRegistry,
@@ -28,9 +27,24 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class AppState:
-    runtime: JacobianRuntime | None
+    acquire_runtime: Callable[[], RuntimeLease]
     worker_registry: MCPBlockingWorkerRegistry
-    tenant_router: TenantRuntimeRouter | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeLease:
+    """One request's runtime and optional release action."""
+
+    runtime: JacobianRuntime
+    release: Callable[[], None] | None = None
+
+
+class AuthenticationError(PermissionError):
+    """A remote request lacks a usable authenticated tenant subject."""
+
+
+class TenantRuntimeLimitError(RuntimeError):
+    """A remote host cannot admit another in-memory tenant runtime."""
 
 
 _active_runtime: ContextVar[JacobianRuntime | None] = ContextVar(
@@ -66,48 +80,27 @@ def _runtime(ctx: Context[Any, Any]) -> Iterator[JacobianRuntime]:
 def _runtime_scope(state: AppState) -> Iterator[JacobianRuntime]:
     """Bind exactly one runtime and blocking-worker owner to an MCP request."""
 
-    if state.tenant_router is not None:
-        from mcp.server.auth.middleware.auth_context import get_access_token
-
-        access_token = get_access_token()
-        subject = access_token.subject if access_token is not None else None
-        lease = state.tenant_router.lease_for(subject)
-        with blocking_worker_scope(
-            state.worker_registry,
-            lease_release=lease.release,
-        ):
-            token: Token[JacobianRuntime | None] = _active_runtime.set(lease.runtime)
-            try:
-                _start_lean_warmup(lease.runtime)
-                yield lease.runtime
-            finally:
-                _active_runtime.reset(token)
-        return
-    if state.runtime is None:
-        raise AgentRecoveryError(
-            "Jacobian is unavailable for this request. Retry once; if it fails "
-            "again, inspect the local Jacobian log."
-        )
-    with blocking_worker_scope(state.worker_registry):
-        token = _active_runtime.set(state.runtime)
+    lease = state.acquire_runtime()
+    with blocking_worker_scope(
+        state.worker_registry,
+        lease_release=lease.release,
+    ):
+        token: Token[JacobianRuntime | None] = _active_runtime.set(lease.runtime)
         try:
-            yield state.runtime
+            _start_lean_warmup(lease.runtime)
+            yield lease.runtime
         finally:
             _active_runtime.reset(token)
 
 
 def _start_lean_warmup(runtime: JacobianRuntime) -> None:
-    if (
-        runtime.portfolio.lean is not None
-        and os.environ.get("JACOBIAN_LEAN_WARMUP") == "1"
-    ):
-        runtime.portfolio.lean.start_mathlib_warmup()
+    if os.environ.get("JACOBIAN_LEAN_WARMUP") == "1":
+        runtime.start_lean_warmup()
 
 
 @contextmanager
 def _static_resource_runtime(
-    runtime: JacobianRuntime | None,
-    tenant_router: TenantRuntimeRouter | None,
+    state: AppState,
 ) -> Iterator[JacobianRuntime]:
     """Route SDK static resources through the active authentication context.
 
@@ -121,21 +114,13 @@ def _static_resource_runtime(
         yield active_runtime
         return
 
-    if tenant_router is not None:
-        from mcp.server.auth.middleware.auth_context import get_access_token
-
-        access_token = get_access_token()
-        subject = access_token.subject if access_token is not None else None
-        with tenant_router.lease_for(subject) as active_runtime:
-            _start_lean_warmup(active_runtime)
-            yield active_runtime
-        return
-    if runtime is None:
-        raise AgentRecoveryError(
-            "Jacobian is unavailable for this resource request. Retry once; if it "
-            "fails again, inspect the local Jacobian log."
-        )
-    yield runtime
+    lease = state.acquire_runtime()
+    try:
+        _start_lean_warmup(lease.runtime)
+        yield lease.runtime
+    finally:
+        if lease.release is not None:
+            lease.release()
 
 
 def _configured_root(state_dir: str | Path | None) -> Path:
@@ -158,10 +143,6 @@ def _unwrap_tool_error(exc: Exception) -> Exception:
 def _classify_public_tool_error(
     tool_name: str, tool_error: Exception
 ) -> tuple[str, str, str]:
-    from jacobian.adapters.mcp.remote import (
-        AuthenticationError,
-        TenantRuntimeLimitError,
-    )
     from jacobian.registry import CheckerNotFoundError
     from jacobian.storage.errors import ArtifactNotFoundError
 

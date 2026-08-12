@@ -172,7 +172,6 @@ def test_model_find_materializes_only_an_unverified_bound_assignment(
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "ASSIGNMENT_PRODUCED"
     assert result.output["solver_status"] == "SATISFIABLE"
-    assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["assignment"] == {"x": True, "y": False}
     assignment_uri = result.output["assignment_uri"]
     stored = runtime.core.store.get(assignment_uri)
@@ -247,7 +246,6 @@ def test_proof_find_normalizes_deletions_without_self_verification(
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "PROOF_PRODUCED"
     assert result.output["solver_status"] == "UNSATISFIABLE"
-    assert result.output["conclusion"] == "UNKNOWN"
     proof_uri = result.output["proof_uri"]
     stored = runtime.core.store.get(proof_uri)
     proof = SatProofArtifact.model_validate(stored.payload)
@@ -337,7 +335,6 @@ def test_opposite_or_unknown_solver_status_never_becomes_a_conclusion(
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == expected_status
     assert result.output["solver_status"] == solver_status
-    assert result.output["conclusion"] == "UNKNOWN"
     assert result.artifact_uris == (cnf.artifact_uri,)
 
 

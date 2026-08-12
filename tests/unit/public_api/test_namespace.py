@@ -58,7 +58,15 @@ PUBLIC_API = {
         "sign",
         "sum_rationals",
     ),
-    "jacobian.math.graphs": ("diameter", "is_eulerian", "triangle_count"),
+    "jacobian.math.graphs": (
+        "GraphCompositionInput",
+        "SimpleUndirectedGraph",
+        "compose_graphs",
+        "diameter",
+        "explicit_graph",
+        "is_eulerian",
+        "triangle_count",
+    ),
     "jacobian.math.matrices": (
         "adjugate",
         "characteristic_polynomial",
@@ -117,7 +125,7 @@ def test_functions_have_one_canonical_module() -> None:
 
 def test_root_namespace_stays_minimal() -> None:
     assert jacobian.__all__ == []
-    assert not hasattr(jacobian, "ResultEnvelope")
+    assert not hasattr(jacobian, "VerificationResult")
 
 
 def test_shared_contract_namespace_contains_only_passive_primitives() -> None:
@@ -129,7 +137,7 @@ def test_shared_contract_namespace_contains_only_passive_primitives() -> None:
         "Sha256Digest",
         "ValueUri",
     ]
-    assert not hasattr(contracts, "ResultEnvelope")
+    assert not hasattr(contracts, "VerificationResult")
 
 
 def test_deleted_experimental_contract_modules_are_not_importable() -> None:

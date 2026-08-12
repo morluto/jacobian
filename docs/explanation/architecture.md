@@ -2,7 +2,7 @@
 
 [Documentation home](../index.md)
 
-- Status: Target architecture for the pre-stable cutover
+- Status: Current architecture
 
 ## Purpose
 
@@ -75,9 +75,18 @@ private backend modules
 
 Private mathematical backends never import runtime, operation declarations,
 MCP, CLI, storage, installation, publication, or checker authority. Import
-Linter contracts enforce this boundary incrementally as domains migrate and
-become exhaustive after the domain cutover. Operation declarations live
-outside `jacobian.math`.
+Linter enforces the leaf boundaries and dependency direction. Operation
+declarations live outside `jacobian.math`.
+
+The portfolio composition root is the only owner that assembles runtime
+services and installation order. Ordinary `DomainBundle` values contain typed
+operation declarations only; they do not carry installer callbacks or runtime
+collaborators. A capability family with a genuinely specialized artifact or
+checker lifecycle is represented as an explicitly named managed portfolio
+component rather than widening the semantic bundle contract.
+An operation may still bind a typed computational backend, provided that
+backend owns no runtime, storage, publication, installation, or checker
+authority. This is execution dependency injection, not lifecycle ownership.
 
 ## Mathematical value and backend layers
 
@@ -137,7 +146,7 @@ does not own mathematical validation, applicability, checker authority,
 provider selection, effects, or parsing.
 
 Built-ins use a static explicit inventory. External operation packages and
-entry-point discovery are not supported during the cutover.
+entry-point discovery are not supported.
 
 ## Execution pipeline
 
@@ -169,6 +178,15 @@ A postcondition runs before publication. Failure exposes no value reference,
 artifact, or verification record. Terminal execution state remains separate from the
 mathematical result and from verification authority.
 
+`CapabilityResult` is a wire projection, not an in-process return type. Domain
+functions, operation executors, artifact services, and checker services return
+their owned typed values or terminal states. The final capability adapter
+constructs the wire envelope once, after publication has returned the complete
+artifact closure. Artifact-producing operations must not move storage writes
+into `OperationSpec.execute`; a domain-specific publisher may preserve an
+established durable schema and parent closure without expanding the generic
+publication policy.
+
 The v2 wire envelope carries a top-level `verification_record_uri` when an
 independent checker accepted the result. That pointer is not an input to
 execution, discovery, publication, or mathematical identity. Ordinary
@@ -196,6 +214,12 @@ subject, candidate, evidence, protocol, semantics, scope, certificate format,
 and checker identity. Independent checker execution does not import or call the
 producer, proposal, search, or evaluation path it certifies.
 
+`VerificationResult` is the internal typed outcome of that checker execution,
+not a generic mathematical result envelope. Capability adapters project it
+once into the ordinary operation response. Ordinary producers do not use it,
+so checker input validity, conclusions, and evidence bindings do not become
+knobs on every mathematical value.
+
 ## Values, carriers, and composition
 
 Composition distinguishes four identities:
@@ -214,16 +238,12 @@ Installation verifies each declared field and result type. Compatibility
 requires exact type/version, parent, presentation, axes, and bases; all
 transformations are explicit.
 
-#905 Slices A and B use this same contract unchanged. Complete projective
-lines, finite map tables, fiber partitions, and certificates remain
-domain-owned semantic values, so the port layer needs no collection model,
-field extraction, cardinality language, coercion graph, or generalized
-unifier. That two-slice reuse freezes this minimal shape as the supported
-internal composition contract.
-
-Slice A's complete projective line is a domain-owned semantic value with a
-fixed presentation, axis, order, completeness check, and digest. It does not
-make ports collection-aware.
+Finite-field direction ledgers, finite map tables, fiber partitions, and
+certificates use this contract unchanged. They remain domain-owned semantic
+values, so the port layer needs no collection model, field extraction,
+cardinality language, coercion graph, or generalized unifier. A complete
+projective line owns its presentation, axis, order, completeness check, and
+digest; it does not make ports collection-aware.
 
 `value://opaque-id` tokens contain no serialized metadata. The bounded in-memory
 store is owned by one local or tenant runtime and records the semantic value,
@@ -285,10 +305,13 @@ deliberate text projection requires an explicit MCP result. The two fixed tools
 are statically registered; dynamic operation tools and compatibility aliases
 are not supported.
 
-Hosting has two constructors with separate ownership: `create_server` owns one
-local runtime, while `create_remote_server` owns authentication and isolated
-tenant runtimes. Remote admission, leases, eviction, and quarantine do not
-enter the local constructor.
+Hosting has two constructors with separate ownership: `server.create_server`
+owns one concrete local runtime, while `remote.create_remote_server` owns
+authentication and isolated tenant runtimes. Their only shared request boundary
+acquires one runtime lease; local state has no nullable tenant router, and remote
+admission, eviction, and quarantine do not enter the local server module.
+The `jacobian-mcp` entry point is local stdio only. Remote transports use the
+separate `jacobian-remote-mcp` operator entry point.
 
 The CLI projects the same installed declarations and execution path through
 `catalog`, `inspect`, and `run`. Operator administration remains separate from

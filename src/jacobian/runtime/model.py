@@ -2,57 +2,42 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Callable
+from typing import Protocol
 
-from jacobian.installation.context import create_installation_context
-from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import RuntimeOptions
-from jacobian.runtime.services import build_runtime_services
+from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
 class RuntimeClosedError(RuntimeError):
     """An operation requires a live Jacobian runtime."""
 
 
+class _PortfolioLifecycle(Protocol):
+    def close(self) -> None: ...
+
+
 class JacobianRuntime:
     """Own the explicit service graph and installed portfolio for one store."""
 
-    def __init__(self, root: str | Path, options: RuntimeOptions) -> None:
+    def __init__(
+        self,
+        core: CoreServices,
+        services: RuntimeServices,
+        portfolio: _PortfolioLifecycle,
+        start_lean_warmup: Callable[[], None],
+    ) -> None:
+        if services.core is not core:
+            raise ValueError("runtime services must belong to the supplied core")
         self._closed = False
-        self.core = bootstrap_services(root, options)
-        services = None
-        try:
-            from jacobian.portfolio import install_portfolio
+        self.core = core
+        self.services = services
+        self.portfolio = portfolio
+        self._start_lean_warmup = start_lean_warmup
 
-            self.services = services = build_runtime_services(self.core)
-            installation = create_installation_context(
-                self.core,
-                self.services,
-                options,
-            )
-            self.portfolio = install_portfolio(
-                installation,
-                self.services,
-            )
-        except BaseException as exc:
-            cleanup_failures: list[BaseException] = []
-            if services is not None:
-                try:
-                    services.close()
-                except BaseException as cleanup_exc:
-                    cleanup_failures.append(cleanup_exc)
-            if hasattr(self, "core"):
-                try:
-                    self.core.close()
-                except BaseException as cleanup_exc:
-                    cleanup_failures.append(cleanup_exc)
-            self._closed = True
-            if cleanup_failures:
-                exc.add_note(
-                    "runtime construction cleanup also failed: "
-                    + "; ".join(str(failure) for failure in cleanup_failures)
-                )
-            raise
+    def start_lean_warmup(self) -> None:
+        """Warm the installed Lean backend when the portfolio provides one."""
+
+        self._start_lean_warmup()
 
     def close(self) -> None:
         """Release every runtime-owned resource."""

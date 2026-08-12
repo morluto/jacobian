@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Current implementation reference; contracts are pre-stable
+- Status: Experimental contracts
 - Related tutorial:
   [Retrieve a Lean theorem and check a proof](../../../tutorials/lean-declaration-discovery.md)
 
@@ -52,9 +52,15 @@ must not be interpreted as negative mathematical conclusions.
 
 ## Proof-state transitions
 
-`lean.proof_state.apply_tactic` accepts an environment, one statement, a
-bounded tuple of proof-prefix tactics, and one next tactic. It replays the
-prefix before applying the new tactic, then returns:
+`lean.proof_state.apply_tactic` has two mutually exclusive request modes:
+
+- **fresh**: `environment`, `statement`, optional `proof_prefix`, and `tactic`;
+- **continuation**: the returned `state_uri`, matching `environment`, and
+  `tactic`, with `statement` and `proof_prefix` omitted.
+
+`proof_prefix` contains tactic bodies after Lean's surrounding `by`; it must not
+contain `by` itself. The tool replays a fresh prefix or reconstructs the bound
+immutable state before applying the new tactic, then returns:
 
 - the exact replay source;
 - rendered goals and typed goals;
@@ -77,6 +83,13 @@ operational failure rather than evidence that the statement is unprovable.
 replays the statement and proof prefix, invokes Mathlib's `exact?` diagnostic,
 and returns a bounded ranked list of tactic candidates.
 
+As with proof-state transitions, `proof_prefix` is a sequence of tactic bodies
+after `by`. For example, use `["intro x"]`, not `["by", "intro x"]`. Invalid
+prefixes fail during request validation before a Lean process starts, with a
+field path and bounded validation evidence. Backend failures remain
+`LEAN_RETRIEVAL_FAILED` operational non-conclusions and retain a bounded raw
+backend message for repair.
+
 Each candidate records whether its tactic replayed and which declaration names
 were extracted. Name extraction is explicitly a display-text heuristic.
 Retrieval is non-exhaustive and experimental; it suggests premises but does not
@@ -93,7 +106,9 @@ references.
 Inspect `closure_complete`, `node_budget_exhausted`, and `frontier` together.
 A non-empty frontier identifies returned nodes whose dependencies were not
 fully expanded. A partial graph is useful context, not a complete dependency
-claim. The artifact binds the query and pinned `environment_digest`.
+claim. The durable-operation result uses `result_uri` for the graph artifact
+and includes the complete graph under `preview`; the artifact binds the query
+and pinned `environment_digest`.
 
 ## Statement operations
 

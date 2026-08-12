@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 PROFILE_DOCUMENTATION = "docs/how-to/setup-agent-from-source.md#profiles"
-OPTIONAL_BACKEND_DOCUMENTATION = "docs/how-to/install-optional-backends.md"
+NATIVE_PROVIDER_DOCUMENTATION = "docs/how-to/install-native-and-formal-providers.md"
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,7 +253,7 @@ def _distribution_diagnostic(
         found=found,
         recovery=f"Run `make setup PROFILE={profile_name}`",
         documentation=(
-            OPTIONAL_BACKEND_DOCUMENTATION
+            NATIVE_PROVIDER_DOCUMENTATION
             if profile_name != "core"
             else PROFILE_DOCUMENTATION
         ),
@@ -378,7 +378,7 @@ def _external_proof_diagnostics() -> list[Diagnostic]:
                 expected,
                 runtime.version,
                 recovery,
-                OPTIONAL_BACKEND_DOCUMENTATION,
+                NATIVE_PROVIDER_DOCUMENTATION,
             )
         )
     return diagnostics

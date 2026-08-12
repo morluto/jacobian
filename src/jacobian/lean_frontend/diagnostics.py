@@ -12,7 +12,7 @@ from jacobian.contracts.lean import (
     LeanDiagnosticSourceSpan,
     LeanEnvironment,
 )
-from jacobian.contracts.results import ResultEnvelope
+from jacobian.contracts.results import VerificationResult
 from jacobian.lean_frontend.artifacts import _PROOF_STATE_STATEMENT_PREFIX
 from jacobian.lean_frontend.repl import _response_errors
 from jacobian.lean_frontend.repl_protocol import (
@@ -201,7 +201,7 @@ def repl_diagnostics(
 
 
 def checker_diagnostics(
-    result: ResultEnvelope,
+    result: VerificationResult,
     *,
     statement: str,
     proof: str,

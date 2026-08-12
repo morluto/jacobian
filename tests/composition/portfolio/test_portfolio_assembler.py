@@ -40,6 +40,7 @@ from jacobian.portfolio import (
     PortfolioPlan,
 )
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.model import ManagedPortfolioComponent
 from jacobian.portfolio.result import (
     BundleInstallationStatus,
     PortfolioInstallationResult,
@@ -169,7 +170,7 @@ def test_install_domains_installs_every_available_bundle_and_registers_adapters(
     assembly: _RecordingContext,
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(domain_bundles=(_synthetic_bundle(domain_id="alpha"),))
+    plan = PortfolioPlan(components=(_synthetic_bundle(domain_id="alpha"),))
 
     result = assembler.install(plan)
 
@@ -195,7 +196,7 @@ def test_install_domains_preserves_declaration_order_across_bundles(
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             _synthetic_bundle(domain_id="beta"),
         )
@@ -213,7 +214,7 @@ def test_unavailable_provider_is_skipped_with_typed_diagnostic(
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             _synthetic_bundle(
                 domain_id="beta",
@@ -252,7 +253,7 @@ def test_unavailable_provider_does_not_block_subsequent_bundles(
 
     assembler = DomainBundleInstaller(assembly.context)
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             _synthetic_bundle(
                 domain_id="beta",
@@ -279,15 +280,15 @@ def test_unavailable_dependency_skips_affected_bundle_and_continues(
     def dependent_installer(*_args: object, **_kwargs: object) -> InstalledDomainBundle:
         raise AssertionError("an installer with unavailable dependencies must not run")
 
-    dependent = replace(
-        _synthetic_bundle(domain_id="dependent"),
-        capabilities=(),
-        managed_capability_ids=("dependent.compute.double",),
-        managed_installer=dependent_installer,
+    dependent = ManagedPortfolioComponent(
+        domain_id="dependent",
+        provider_runtime=_available_runtime(),
+        capability_ids=("dependent.compute.double",),
+        install=dependent_installer,
         dependency_ids=("optional",),
     )
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(
                 domain_id="optional",
                 runtime=_unavailable_runtime("optional provider is missing"),
@@ -321,7 +322,7 @@ def test_install_domains_validates_the_plan_before_installing(
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
     bundle = _synthetic_bundle(domain_id="alpha")
-    plan = PortfolioPlan(domain_bundles=(bundle, bundle))
+    plan = PortfolioPlan(components=(bundle, bundle))
 
     with pytest.raises(ValueError, match="duplicate domain bundles"):
         assembler.install(plan)
@@ -334,7 +335,7 @@ def test_empty_plan_yields_complete_empty_result(
     assembly: _RecordingContext,
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(domain_bundles=())
+    plan = PortfolioPlan(components=())
 
     result = assembler.install(plan)
 
@@ -350,7 +351,7 @@ def test_outcome_for_and_diagnostic_for_return_none_for_unknown_domains(
     assembly: _RecordingContext,
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(domain_bundles=(_synthetic_bundle(domain_id="alpha"),))
+    plan = PortfolioPlan(components=(_synthetic_bundle(domain_id="alpha"),))
 
     result = assembler.install(plan)
 
@@ -371,7 +372,7 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
     assembler = DomainBundleInstaller(assembly.context)
     broken = _synthetic_bundle(domain_id="broken", capabilities=())
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             broken,
             _synthetic_bundle(domain_id="gamma"),
@@ -401,6 +402,6 @@ def test_duplicate_capability_id_within_a_bundle_propagates(
     bundle = replace(base, capabilities=(base.capabilities[0], duplicate))
 
     with pytest.raises(ValueError, match="duplicate capability ID"):
-        assembler.install(PortfolioPlan(domain_bundles=(bundle,)))
+        assembler.install(PortfolioPlan(components=(bundle,)))
 
     assert assembly.registered == []

@@ -30,6 +30,7 @@ from jacobian.contracts.results import (
     Conclusion,
 )
 from jacobian.polynomials._support import (
+    PolynomialOperationResult,
     _polynomial_error,
     _validate_request,
 )
@@ -104,6 +105,14 @@ class PolynomialIdentityAdapter:
             code="INVALID_POLYNOMIAL_IDENTITY_REQUEST",
             operation="identity verification",
         )
+        return self.verify(validated).project(self.descriptor)
+
+    def verify(
+        self,
+        validated: PolynomialIdentityRequest,
+    ) -> PolynomialOperationResult[PolynomialIdentityOutput]:
+        """Verify one validated identity without re-entering the adapter."""
+
         checker_id = self.resources.installation.identity_checker_id
         if checker_id is None:
             raise _polynomial_error(
@@ -202,11 +211,9 @@ class PolynomialIdentityAdapter:
             checker_id=checker_id,
             first_coefficient_mismatch=mismatch,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
+            value=output,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=(
                 left.artifact_uri,

@@ -28,6 +28,19 @@ def test_contracts_cannot_import_runtime_or_domains(tmp_path: Path) -> None:
     assert "contract-dependency-leaf" in _codes(tmp_path)
 
 
+def test_product_code_cannot_construct_internal_capability_requests(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/composition.py",
+        "from jacobian.contracts.capabilities import CapabilityRequest\n"
+        "request = CapabilityRequest(capability_id='x', input={})\n",
+    )
+
+    assert "internal-capability-request" in _codes(tmp_path)
+
+
 def test_contracts_can_import_canonical_and_contract_modules(tmp_path: Path) -> None:
     _write(
         tmp_path,

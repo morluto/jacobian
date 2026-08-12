@@ -81,6 +81,11 @@ class SatArtifactService:
         """Canonicalize and materialize one named CNF instance."""
 
         cnf = canonicalize_cnf(variable_names=variable_names, clauses=clauses)
+        return self.put_canonical_cnf(cnf)
+
+    def put_canonical_cnf(self, cnf: CanonicalCnf) -> ArtifactPutResult:
+        """Materialize an already validated canonical CNF value."""
+
         return self.artifacts.put(
             schema_uri=self.installation.cnf_schema_uri,
             semantics_uri=self.installation.semantics_uri,

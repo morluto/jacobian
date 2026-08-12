@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 
 from pydantic import ValidationError
@@ -19,9 +18,16 @@ from jacobian.contracts.graph_composition import (
     GraphExplicitConstructionOutput,
     GraphExplicitConstructionRequest,
 )
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
-from jacobian.contracts.results import Execution, ExecutionStatus
-from jacobian.graphs.artifacts import GraphArtifactResources, runtime_ms
+from jacobian.graphs.artifacts import (
+    GraphArtifactResources,
+    publish_graph,
+)
+from jacobian.graphs.conversions import graph_contract_from_value
+from jacobian.math.graphs import SimpleUndirectedGraph, explicit_graph
+from jacobian.operation_execution import execute_operation
+from jacobian.operation_projection import project_operation_result
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, OperationSpec
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 
@@ -36,22 +42,18 @@ class GraphExplicitConstructionAdapter:
 
     def __init__(self, resources: GraphConstructionResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="graph.construct.explicit",
+        self.spec = OperationSpec(
+            operation_id="graph.construct.explicit",
             version="1",
+            request_type=GraphExplicitConstructionRequest,
+            result_type=SimpleUndirectedGraph,
+            execute=_explicit_graph,
             title="Materialize an explicit simple graph",
             description=(
                 "Validate and canonicalize one bounded explicit finite simple "
                 "undirected graph, then return a domain-owned graph artifact accepted "
                 "by graph capabilities."
             ),
-            provider="jacobian.networkx",
-            provider_runtime=known_provider_runtime(
-                "jacobian.networkx",
-                features=("simple-undirected-graphs", "canonical-materialization"),
-            ),
-            input_schema=model_schema(GraphExplicitConstructionRequest),
-            output_schema=model_schema(GraphExplicitConstructionOutput),
             tags=("graph", "construction", "explicit", "artifact-materialization"),
             invocation_examples=(
                 CapabilityInvocationExample(
@@ -66,13 +68,27 @@ class GraphExplicitConstructionAdapter:
                 ),
             ),
         )
+        self._descriptor = CapabilityDescriptor(
+            capability_id=self.spec.operation_id,
+            version=self.spec.version,
+            title=self.spec.title,
+            description=self.spec.description,
+            provider="jacobian.networkx",
+            provider_runtime=known_provider_runtime(
+                "jacobian.networkx",
+                features=("simple-undirected-graphs", "canonical-materialization"),
+            ),
+            input_schema=model_schema(GraphExplicitConstructionRequest),
+            output_schema=model_schema(GraphExplicitConstructionOutput),
+            tags=self.spec.tags,
+            invocation_examples=self.spec.invocation_examples,
+        )
 
     @property
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        started = time.monotonic()
         try:
             validated = GraphExplicitConstructionRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -102,22 +118,20 @@ class GraphExplicitConstructionAdapter:
                 )
             ) from exc
 
-        vertices = tuple(sorted(validated.vertices))
-        edges = tuple(
-            sorted(
-                (left, right) if left < right else (right, left)
-                for left, right in validated.edges
+        terminal = execute_operation(self.spec, validated)
+        if not isinstance(terminal, Completed):
+            return project_operation_result(
+                operation_id=self.spec.operation_id,
+                version=self.spec.version,
+                terminal=terminal,
             )
-        )
-        graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
-        graph_payload = graph.model_dump(mode="json")
-        stored = self.resources.graph.artifacts.put(
-            schema_uri=self.resources.graph.graph_schema_uri,
-            semantics_uri=self.resources.graph.semantics_uri,
-            payload=graph_payload,
+        graph = terminal.value
+        stored = publish_graph(
+            self.resources.graph,
+            graph,
             summary=(
-                f"explicit simple undirected graph of order {len(vertices)} "
-                f"and size {len(edges)}"
+                f"explicit simple undirected graph of order {len(graph.vertices)} "
+                f"and size {len(graph.edges)}"
             ),
         )
         output = GraphExplicitConstructionOutput(
@@ -125,17 +139,24 @@ class GraphExplicitConstructionAdapter:
             graph_object_digest=stored.object_digest,
             graph_schema_uri=self.resources.graph.graph_schema_uri,
             graph_semantics_uri=self.resources.graph.semantics_uri,
-            graph=graph,
-            order=len(vertices),
-            size=len(edges),
+            graph=graph_contract_from_value(graph),
+            order=len(graph.vertices),
+            size=len(graph.edges),
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=runtime_ms(started),
+        return project_operation_result(
+            operation_id=self.spec.operation_id,
+            version=self.spec.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(stored.artifact_uri,),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(stored.artifact_uri,),
         )
+
+
+def _explicit_graph(
+    request: GraphExplicitConstructionRequest,
+) -> SimpleUndirectedGraph:
+    """Bind the operation request to the graph library's semantic input."""
+
+    return explicit_graph(request.vertices, request.edges)

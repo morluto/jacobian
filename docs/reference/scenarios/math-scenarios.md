@@ -129,9 +129,9 @@ Compute RREF, pivot columns, nullspace, column basis, and quotient basis from
 the same explicit prime-field value. Check that returned vectors satisfy the
 defining equations and preserve canonical basis ordering.
 
-## #905 finite-field composition
+## Finite-field composition
 
-### FF905-A — Direction rank ledger
+### Direction rank ledger
 
 Construct the exact presentation
 
@@ -156,12 +156,12 @@ any inherited assurance. The independent checker may share passive formats and
 vectors but not producer conversion, restriction-of-scalars, field execution,
 or rank code.
 
-### FF905-B — Finite polynomial map fibers
+### Finite polynomial map fibers
 
-Reuse the exact Slice A field presentation and element encoding. Enumerate a
-bounded polynomial map table whose domain and codomain are exact. The fiber
-partition covers the complete field exactly once. Collision and permutation
-certificates bind the map and enumeration scope.
+Reuse the exact field presentation and element encoding from the direction
+ledger scenario. Enumerate a bounded polynomial map table whose domain and
+codomain are exact. The fiber partition covers the complete field exactly once.
+Collision and permutation certificates bind the map and enumeration scope.
 
 Reject a second field representation, incomplete table, duplicate/missing
 domain element, wrong codomain parent, forged fiber, or certificate for another

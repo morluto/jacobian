@@ -37,6 +37,7 @@ from jacobian.contracts.capabilities import (
     CapabilityResult,
 )
 from jacobian.contracts.graph_composition import (
+    GraphCompositionOutput,
     GraphCompositionRequest,
     GraphCompositionResultArtifact,
     GraphEnumerationRequest,
@@ -49,9 +50,20 @@ from jacobian.graphs.artifacts import (
     GRAPH_PAYLOAD_SCHEMA,
     GraphArtifactResources,
     graph_payload,
-    load_graph,
+    load_graph_value,
+    publish_graph,
 )
 from jacobian.graphs.atlas import graph_atlas_order, networkx_loader
+from jacobian.graphs.conversions import graph_contract_from_value
+from jacobian.math.graphs import (
+    GraphCompositionInput,
+    SimpleUndirectedGraph,
+    compose_graphs,
+)
+from jacobian.operation_execution import execute_operation
+from jacobian.operation_projection import project_operation_result
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, OperationSpec
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
@@ -154,9 +166,12 @@ class GraphComposeAdapter:
 
     def __init__(self, resources: GraphCompositionResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="graph.construct.compose",
+        self.spec = OperationSpec(
+            operation_id="graph.construct.compose",
             version="1",
+            request_type=GraphCompositionInput,
+            result_type=SimpleUndirectedGraph,
+            execute=compose_graphs,
             title="Compose graphs",
             description=(
                 "Apply one deterministic graph composition operation "
@@ -164,6 +179,13 @@ class GraphComposeAdapter:
                 "to one or two existing simple-undirected-graph artifacts and "
                 "materialize the result as a new graph artifact."
             ),
+            tags=("graph", "construction", "composition"),
+        )
+        self._descriptor = CapabilityDescriptor(
+            capability_id=self.spec.operation_id,
+            version=self.spec.version,
+            title=self.spec.title,
+            description=self.spec.description,
             provider="jacobian.networkx",
             provider_runtime=known_provider_runtime(
                 "jacobian.networkx",
@@ -173,40 +195,8 @@ class GraphComposeAdapter:
                 ),
             ),
             input_schema=GraphCompositionRequest.model_json_schema(),
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "operation": {
-                        "enum": [
-                            "DISJOINT_UNION",
-                            "JOIN",
-                            "COMPLEMENT",
-                            "LEXICOGRAPHIC_PRODUCT",
-                        ],
-                    },
-                    "result_graph_uri": {
-                        "type": "string",
-                        "pattern": ARTIFACT_URI_PATTERN,
-                    },
-                    "result_graph": GRAPH_PAYLOAD_SCHEMA,
-                    "composition_artifact_uri": {
-                        "type": "string",
-                        "pattern": ARTIFACT_URI_PATTERN,
-                    },
-                    "backend": {"type": "string"},
-                    "backend_version": {"type": "string"},
-                },
-                "required": [
-                    "operation",
-                    "result_graph_uri",
-                    "result_graph",
-                    "composition_artifact_uri",
-                    "backend",
-                    "backend_version",
-                ],
-                "additionalProperties": False,
-            },
-            tags=("graph", "construction", "composition"),
+            output_schema=model_schema(GraphCompositionOutput),
+            tags=self.spec.tags,
         )
 
     @property
@@ -214,8 +204,6 @@ class GraphComposeAdapter:
         return self._descriptor
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        backend_module = networkx_loader.get()
-        started = time.monotonic()
         try:
             validated = GraphCompositionRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -231,32 +219,39 @@ class GraphComposeAdapter:
                 )
             ) from exc
 
-        left_graph = load_graph(
-            _artifact_resources(self.resources), validated.left_graph_uri
-        )
-        right_graph: nx.Graph[Any] | None = None
+        graph_resources = _artifact_resources(self.resources)
+        left = load_graph_value(graph_resources, validated.left_graph_uri)
+        right = None
         if validated.right_graph_uri is not None:
-            right_graph = load_graph(
-                _artifact_resources(self.resources), validated.right_graph_uri
+            right = load_graph_value(graph_resources, validated.right_graph_uri)
+
+        terminal = execute_operation(
+            self.spec,
+            GraphCompositionInput(
+                operation=validated.operation,
+                left=left,
+                right=right,
+            ),
+        )
+        if not isinstance(terminal, Completed):
+            return project_operation_result(
+                operation_id=self.spec.operation_id,
+                version=self.spec.version,
+                terminal=terminal,
             )
-
-        operation = validated.operation
-        backend = f"networkx.{_backend_suffix(operation)}"
-        result_graph = _apply_composition(operation, left_graph, right_graph)
-        result_payload = graph_payload(result_graph)
-
-        result_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.graph_schema_uri,
-            semantics_uri=self.resources.semantics_uri,
-            payload=result_payload,
+        backend_module = networkx_loader.get()
+        backend = f"networkx.{_backend_suffix(validated.operation)}"
+        result_artifact = publish_graph(
+            graph_resources,
+            terminal.value,
             parents=_composition_parents(validated),
-            summary=f"Graph composition: {operation}",
+            summary=f"Graph composition: {validated.operation}",
         )
         composition_artifact = self.resources.artifacts.put(
             schema_uri=self.resources.composition_result_schema_uri,
             semantics_uri=self.resources.semantics_uri,
             payload=GraphCompositionResultArtifact(
-                operation=operation,
+                operation=validated.operation,
                 left_graph_uri=validated.left_graph_uri,
                 right_graph_uri=validated.right_graph_uri,
                 result_graph_uri=result_artifact.artifact_uri,
@@ -264,28 +259,27 @@ class GraphComposeAdapter:
                 backend_version=backend_module.__version__,
             ).model_dump(),
             parents=(result_artifact.artifact_uri,),
-            summary=f"Composition record: {operation}",
+            summary=f"Composition record: {validated.operation}",
         )
-
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=_runtime_ms(started),
-            ),
-            output={
-                "operation": operation,
-                "result_graph_uri": result_artifact.artifact_uri,
-                "result_graph": result_payload,
-                "composition_artifact_uri": composition_artifact.artifact_uri,
-                "backend": backend,
-                "backend_version": backend_module.__version__,
-            },
-            artifact_uris=(
-                *_composition_parents(validated),
-                result_artifact.artifact_uri,
-                composition_artifact.artifact_uri,
+        output = GraphCompositionOutput(
+            operation=validated.operation,
+            result_graph_uri=result_artifact.artifact_uri,
+            result_graph=graph_contract_from_value(terminal.value),
+            composition_artifact_uri=composition_artifact.artifact_uri,
+            backend=backend,
+            backend_version=backend_module.__version__,
+        )
+        return project_operation_result(
+            operation_id=self.spec.operation_id,
+            version=self.spec.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(
+                    *_composition_parents(validated),
+                    result_artifact.artifact_uri,
+                    composition_artifact.artifact_uri,
+                ),
             ),
         )
 

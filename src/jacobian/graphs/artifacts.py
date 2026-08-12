@@ -10,9 +10,17 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.contracts.capabilities import CapabilityDiagnostic
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
+from jacobian.contracts.graph_isomorphism import (
+    SimpleUndirectedGraph as SimpleUndirectedGraphContract,
+)
 from jacobian.graphs.atlas import networkx_loader
+from jacobian.graphs.conversions import (
+    graph_contract_from_value,
+    graph_value_from_contract,
+)
+from jacobian.math.graphs import SimpleUndirectedGraph
 from jacobian.schema_registry import model_schema
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
@@ -23,7 +31,7 @@ if TYPE_CHECKING:
 
 ARTIFACT_URI_PATTERN = r"^artifact://sha256/[0-9a-f]{64}$"
 
-GRAPH_PAYLOAD_SCHEMA: dict[str, Any] = model_schema(SimpleUndirectedGraph)
+GRAPH_PAYLOAD_SCHEMA: dict[str, Any] = model_schema(SimpleUndirectedGraphContract)
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,8 +67,29 @@ def graph_payload(graph: nx_type.Graph[Any]) -> dict[str, Any]:
     }
 
 
-def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Graph[str]:
-    """Load and validate one graph artifact against the installed graph contract."""
+def publish_graph(
+    resources: GraphArtifactResources,
+    graph: SimpleUndirectedGraph,
+    *,
+    parents: tuple[str, ...] = (),
+    summary: str,
+) -> ArtifactPutResult:
+    """Publish one graph value without changing its mathematical identity."""
+
+    return resources.artifacts.put(
+        schema_uri=resources.graph_schema_uri,
+        semantics_uri=resources.semantics_uri,
+        payload=graph_contract_from_value(graph).model_dump(mode="json"),
+        parents=parents,
+        summary=summary,
+    )
+
+
+def load_graph_value(
+    resources: GraphArtifactResources,
+    graph_uri: str,
+) -> SimpleUndirectedGraph:
+    """Load and validate one graph artifact as its immutable semantic value."""
 
     try:
         artifact = resources.store.get(graph_uri)
@@ -96,7 +125,8 @@ def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Gra
             )
         )
     try:
-        payload = SimpleUndirectedGraph.model_validate(artifact.payload)
+        contract = SimpleUndirectedGraphContract.model_validate(artifact.payload)
+        return graph_value_from_contract(contract)
     except ValidationError as exc:
         raise CapabilityInvocationError(
             CapabilityDiagnostic(
@@ -108,6 +138,11 @@ def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Gra
                 hint="Recreate the graph through its owning capability.",
             )
         ) from exc
+
+
+def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Graph[str]:
+    """Load and validate one graph artifact against the installed graph contract."""
+    payload = load_graph_value(resources, graph_uri)
     graph: nx_type.Graph[str] = nx().Graph()
     graph.add_nodes_from(payload.vertices)
     graph.add_edges_from(payload.edges)
@@ -124,6 +159,8 @@ __all__ = [
     "GraphArtifactResources",
     "graph_payload",
     "load_graph",
+    "load_graph_value",
     "nx",
+    "publish_graph",
     "runtime_ms",
 ]

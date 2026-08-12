@@ -21,6 +21,7 @@ from jacobian.canonical import (
 )
 from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
+    CapabilityDiagnostic,
     CapabilityProviderRuntime,
 )
 from jacobian.contracts.lean import (
@@ -242,6 +243,53 @@ def _validate_source_parts(statement: str, tactics: tuple[str, ...]) -> None:
     for tactic in tactics:
         if "\x00" in tactic or _FORBIDDEN.search(tactic):
             raise ValueError("tactic contains a forbidden command")
+
+
+def _request_validation_diagnostic(
+    error: ValidationError | ValueError,
+    *,
+    code: str,
+    subject: str,
+    hint: str,
+) -> CapabilityDiagnostic:
+    """Project bounded Pydantic/source-validation evidence for Lean requests."""
+
+    if isinstance(error, ValidationError):
+        validation_errors = []
+        for item in error.errors(
+            include_url=False,
+            include_context=False,
+            include_input=False,
+        ):
+            location = item.get("loc", ())
+            path = ".".join(str(part) for part in location) or "$"
+            reason = str(item.get("msg", "invalid value"))
+            if reason.startswith("Value error, "):
+                reason = reason.removeprefix("Value error, ")
+            validation_errors.append(
+                {
+                    "path": path[:512],
+                    "reason": reason[:500],
+                    "type": str(item.get("type", "value_error"))[:128],
+                }
+            )
+    else:
+        validation_errors = [
+            {
+                "path": "$",
+                "reason": str(error)[:500],
+                "type": "value_error",
+            }
+        ]
+    first = validation_errors[0]
+    return CapabilityDiagnostic(
+        code=code,
+        stage="request_validation",
+        message=f"{subject}: {first['reason']}",
+        path=first["path"],
+        hint=hint,
+        details={"validation_errors": validation_errors},
+    )
 
 
 def _normalized_response_goals(

@@ -99,6 +99,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                         "op": "search",
                         "query": "SAT UNSAT proof",
                         "input_kind": "STRUCTURED_REQUEST",
+                        "limit": 20,
                     }
                 },
             )

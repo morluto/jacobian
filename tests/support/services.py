@@ -12,9 +12,8 @@ from jacobian.installation.context import (
     InstallationContext,
     create_installation_context,
 )
-from jacobian.operations import DomainBundle
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
+from jacobian.portfolio.model import PortfolioComponent, PortfolioPlan
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.services import (
@@ -48,14 +47,14 @@ def atomic_installation(core: CoreServices) -> Iterator[None]:
 @contextmanager
 def open_domain_services(
     root: str | Path,
-    *bundles: DomainBundle,
+    *bundles: PortfolioComponent,
     options: RuntimeOptions | None = None,
     checker_authority: CheckerAuthorityMode | None = None,
 ) -> Iterator[DomainTestServices]:
     """Open core/application services and one production installation context.
 
     No built-in portfolio is imported or installed here.  A domain test passes
-    its literal ``DomainBundle`` to the production domain installer itself.
+    its literal portfolio component to the production installer itself.
     """
 
     if options is not None and checker_authority is not None:
@@ -75,7 +74,7 @@ def open_domain_services(
             if bundles:
                 with atomic_installation(core):
                     DomainBundleInstaller(installation).install(
-                        PortfolioPlan(domain_bundles=tuple(bundles))
+                        PortfolioPlan(components=tuple(bundles))
                     )
             yield DomainTestServices(
                 core=core,

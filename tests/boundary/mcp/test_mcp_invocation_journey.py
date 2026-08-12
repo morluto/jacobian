@@ -63,6 +63,23 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert "provider" not in result.structured_content
             assert "provider_digest" not in result.structured_content
 
+            invalid = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "integer.compute.gcd",
+                    "payload": {"left": "84", "unexpected": "30"},
+                },
+            )
+            assert isinstance(invalid.structured_content, dict)
+            invalid_result = invalid.structured_content
+            assert invalid_result["execution"]["status"] == "ERROR"
+            assert (
+                invalid_result["output"]["error"]["code"]
+                == "INVALID_NUMBER_THEORY_REQUEST"
+            )
+            assert invalid_result["artifact_uris"] == []
+            assert invalid_result["verification_record_uri"] is None
+
             matching_description = await client.call_tool(
                 "math.find",
                 {
@@ -134,6 +151,9 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(tmp_path: Path) ->
         from mcp import Client
 
         from jacobian.math.finite_fields import (
+            Axis,
+            AxisBoundMatrix,
+            FiniteDimensionalSubspace,
             element,
             finite_field,
             finite_polynomial,
@@ -191,5 +211,59 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(tmp_path: Path) ->
             assert sorted(
                 len(sources) for _image, sources in fibers_output["result"]["fibers"]
             ) == [1, 3]
+
+            rows = Axis(name="b", labels=("b1", "b2"))
+            columns = Axis(name="image", labels=("y1",))
+            basis_axis = Axis(name="basis", labels=("B1",))
+            subspace = FiniteDimensionalSubspace(
+                presentation=presentation,
+                basis_axis=basis_axis,
+                basis=(
+                    AxisBoundMatrix(
+                        presentation=presentation,
+                        row_axis=rows,
+                        column_axis=columns,
+                        entries=((one,), (zero,)),
+                    ),
+                ),
+            )
+            directions_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.projective_line.enumerate",
+                    "payload": {
+                        "presentation": presentation.model_dump(mode="json"),
+                        "axis": rows.model_dump(mode="json"),
+                    },
+                },
+            )
+            assert isinstance(directions_call.structured_content, dict)
+            directions_ref = directions_call.structured_content["output"]["value_refs"][
+                "directions"
+            ]
+
+            incomplete_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.direction_rank_ledger.compute",
+                    "payload": {},
+                    "inputs": {"directions": {"value_ref": directions_ref}},
+                },
+            )
+            assert isinstance(incomplete_call.structured_content, dict)
+            assert incomplete_call.structured_content["execution"]["status"] == "ERROR"
+
+            ledger_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.direction_rank_ledger.compute",
+                    "payload": {"subspace": subspace.model_dump(mode="json")},
+                    "inputs": {"directions": {"value_ref": directions_ref}},
+                },
+            )
+            assert isinstance(ledger_call.structured_content, dict)
+            ledger_output = ledger_call.structured_content["output"]
+            assert ledger_call.structured_content["execution"]["status"] == "COMPLETED"
+            assert len(ledger_output["result"]["entries"]) == 5
 
     asyncio.run(scenario())

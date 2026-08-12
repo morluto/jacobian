@@ -1,8 +1,8 @@
 """Whole-portfolio installation coverage belongs to the integration lane."""
 
 from jacobian.contracts.capabilities import CapabilityProviderAvailability
-from jacobian.domains.polynomial_nullstellensatz.bundle import SINGULAR_DOMAIN_ID
 from jacobian.portfolio import build_builtin_portfolio
+from jacobian.portfolio.nullstellensatz_installation import SINGULAR_DOMAIN_ID
 from jacobian.portfolio.result import (
     PROVIDER_UNAVAILABLE,
     BundleInstallationStatus,
@@ -54,10 +54,10 @@ def test_builtin_portfolio_installs_cleanly(
             if outcome.domain_id != SINGULAR_DOMAIN_ID
         )
     expected_capability_ids = {
-        operation.spec.operation_id
-        for bundle in build_builtin_portfolio().domain_bundles
+        capability_id
+        for bundle in build_builtin_portfolio().components
         if singular_available or bundle.domain_id != SINGULAR_DOMAIN_ID
-        for operation in bundle.capabilities
+        for capability_id in bundle.capability_ids
     }
     installed_capability_ids = {
         descriptor.capability_id

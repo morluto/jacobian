@@ -4,12 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.contracts.checkers import CheckerDecision
-from jacobian.contracts.results import ResultEnvelope
+from jacobian.contracts.results import VerificationResult
 
 
 def test_timeout_cannot_carry_a_verified_false_conclusion() -> None:
     with pytest.raises(ValidationError):
-        ResultEnvelope.model_validate(
+        VerificationResult.model_validate(
             {
                 "schema_version": "1",
                 "execution": {"status": "TIMEOUT", "runtime_ms": 10},
@@ -22,7 +22,7 @@ def test_timeout_cannot_carry_a_verified_false_conclusion() -> None:
 
 
 def test_timeout_is_represented_as_unknown_unverified_execution() -> None:
-    result = ResultEnvelope.model_validate(
+    result = VerificationResult.model_validate(
         {
             "schema_version": "1",
             "execution": {"status": "TIMEOUT", "runtime_ms": 10},
@@ -36,7 +36,7 @@ def test_timeout_is_represented_as_unknown_unverified_execution() -> None:
 
 def test_verification_record_requires_a_decisive_conclusion() -> None:
     with pytest.raises(ValidationError, match="decisive mathematical conclusion"):
-        ResultEnvelope.model_validate(
+        VerificationResult.model_validate(
             {
                 "execution": {"status": "COMPLETED"},
                 "input": {"status": "ACCEPTED"},
@@ -51,7 +51,7 @@ def test_verified_result_requires_claim_and_semantics_bindings() -> None:
         payload = _verified_result()
         payload.pop(missing)
         with pytest.raises(ValidationError):
-            ResultEnvelope.model_validate(payload)
+            VerificationResult.model_validate(payload)
 
 
 @pytest.mark.parametrize("method", ["DIRECT_WITNESS", "EXHAUSTIVE_FINITE"])
@@ -63,7 +63,7 @@ def test_verified_result_requires_candidate_binding(method: str) -> None:
     payload.pop("candidate_digest")
 
     with pytest.raises(ValidationError):
-        ResultEnvelope.model_validate(payload)
+        VerificationResult.model_validate(payload)
 
 
 @pytest.mark.parametrize(
@@ -78,7 +78,7 @@ def test_checked_certificates_support_non_rational_proof_mechanisms(
     arithmetic: str,
     coverage: str,
 ) -> None:
-    ResultEnvelope.model_validate(
+    VerificationResult.model_validate(
         _verified_result(
             arithmetic=arithmetic,
             method="CHECKED_CERTIFICATE",

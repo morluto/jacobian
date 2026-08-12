@@ -19,9 +19,9 @@ from uvicorn import Config, Server
 from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.remote import (
     StaticTokenVerifier,
+    create_remote_server,
     load_static_token_file,
 )
-from jacobian.adapters.mcp.server import create_remote_server
 
 
 def test_authenticated_streamable_http_isolates_tenant_memory(

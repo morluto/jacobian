@@ -72,7 +72,9 @@ the deferred Python environment, package-index access, and approximate install
 size. Non-interactive setup requires explicit clients plus `--yes`; `--json`
 reports contain only redacted public plan fields. Run the tailored `doctor`
 command printed after setup to validate those client entries and execute the
-configured launcher.
+configured launcher. For managed installations, doctor also requires the MCP
+server to report the exact npm package version; a stale Python runtime fails
+with a setup recovery action instead of being accepted by tool-name alone.
 
 Setup writes only the selected client's MCP configuration. It does not install
 prompts, skills, or a client-specific mathematical workflow.

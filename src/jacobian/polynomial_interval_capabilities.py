@@ -356,7 +356,6 @@ class PolynomialIntervalEncloseAdapter:
         )
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
             artifact_uris=(

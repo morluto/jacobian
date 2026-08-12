@@ -39,7 +39,9 @@ The supported modules and symbols are:
   `sum_rationals`, and `quotient`;
 - `jacobian.math.matrices`: `determinant`, `rank`, `rref`, `inverse`, and
   `trace`;
-- `jacobian.math.graphs`: `triangle_count`, `diameter`, and `is_eulerian`;
+- `jacobian.math.graphs`: `SimpleUndirectedGraph`, `GraphCompositionInput`,
+  `explicit_graph`, `compose_graphs`, `triangle_count`, `diameter`, and
+  `is_eulerian`;
 - `jacobian.math.polynomials`: `derivative`, `discriminant`, `divide`,
   `evaluate`, `factorization`, `gcdex`, `groebner_basis`, `integral`,
   `partial_fractions`, `resultant`, and `square_free_decomposition`;
@@ -50,14 +52,20 @@ The supported modules and symbols are:
   restriction of scalars, direction-bound rank ledgers, orbit aggregation,
   finite polynomial maps, complete tables, fibers, and bound collision and
   permutation certificates.
+
+`SimpleUndirectedGraph` is owned by `jacobian.math.graphs`; graph operation and
+artifact boundaries convert it explicitly to their wire contract. Native
+callers therefore do not depend on a capability-specific contract module.
+
 `projective_line` returns a `ProjectiveLine` value rather than an unbound tuple,
 so its presentation, axis, completeness, order, and digest remain attached.
 
 Arithmetic functions return Python `int` or `fractions.Fraction` values. Matrix
 functions accept and return SymPy matrices and exact SymPy scalar values. Graph
-functions accept undirected simple NetworkX `Graph` objects. Polynomial
-functions accept and return exact SymPy `Poly` values or their exact scalar
-results. Each module's
+algorithms accept undirected simple NetworkX `Graph` objects; graph construction
+and composition return the owned immutable graph value. Polynomial functions
+accept and return exact SymPy `Poly` values or their exact scalar results. Each
+module's
 `__all__` is the authoritative public symbol manifest; other implementation
 modules remain internal.
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,11 @@ from jacobian.canonical import (
 )
 from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
-from jacobian.contracts.checkers import CheckerDecision, EvidenceKind
+from jacobian.contracts.checkers import (
+    CheckerDecision,
+    CheckerRegistration,
+    EvidenceKind,
+)
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
@@ -35,7 +40,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
     InputStatus,
     InputValidation,
-    ResultEnvelope,
+    VerificationResult,
 )
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.process_policy import (
@@ -98,6 +103,24 @@ _RECOVERABLE_VERIFICATION_ERRORS: tuple[type[Exception], ...] = (
     StorageError,
     CheckerExecutionError,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _VerificationPlan:
+    """Fully resolved replay request ready for one authorized checker run."""
+
+    checker: CheckerRegistration
+    evidence_kind: EvidenceKind
+    evidence_uri: str
+    bindings: EvidenceBindings
+    request: dict[str, Any]
+    request_artifact_uris: frozenset[str]
+    parents: tuple[str, ...]
+    summary: str
+    claim_digest: str
+    semantics_digest: str
+    candidate_digest: str
+    scope_uri: str | None
 
 
 class VerificationService:
@@ -233,9 +256,8 @@ class VerificationService:
         candidate_payload: dict[str, object],
         checker_id: str,
         witness_format: str,
-        request: dict[str, Any],
         timeout_seconds: float | None = None,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         """Verify exact inline values without materializing them as artifacts.
 
         Only an accepted immutable record is persisted.  The record binds the
@@ -260,16 +282,31 @@ class VerificationService:
                 semantics_uri=semantics_uri,
                 payload=candidate_payload,
             )
-            expected_bindings = request.get("expected_bindings")
-            if not isinstance(expected_bindings, dict) or expected_bindings != {
-                "claim_digest": claim_digest,
-                "semantics_digest": semantics_digest,
-                "candidate_digest": candidate_digest,
-                "scope_digest": None,
-                "encoding_digest": None,
-            }:
-                raise ValueError("inline exact replay bindings do not match values")
-            bindings = EvidenceBindings.model_validate(expected_bindings)
+            bindings = EvidenceBindings(
+                claim_digest=claim_digest,
+                semantics_digest=semantics_digest,
+                candidate_digest=candidate_digest,
+            )
+            request = {
+                "request_version": "2",
+                "operation_id": operation_id,
+                "claim": {
+                    "schema_uri": claim_schema_uri,
+                    "semantics_uri": semantics_uri,
+                    "payload": claim_payload,
+                },
+                "candidate": {
+                    "schema_uri": candidate_schema_uri,
+                    "semantics_uri": semantics_uri,
+                    "payload": candidate_payload,
+                },
+                "semantics": self._checker_artifact(
+                    semantics,
+                    include_storage_metadata=True,
+                ),
+                "scope": None,
+                "expected_bindings": bindings.model_dump(mode="json"),
+            }
             checker = self.checker_registry.require_compatible(
                 checker_id,
                 evidence_kind=EvidenceKind.WITNESS,
@@ -297,7 +334,7 @@ class VerificationService:
                         "checker must report exhaustive or not-applicable coverage."
                     )
                 )
-                return ResultEnvelope(
+                return VerificationResult(
                     execution=Execution(
                         status=ExecutionStatus.COMPLETED, runtime_ms=runtime_ms
                     ),
@@ -339,7 +376,7 @@ class VerificationService:
                 parents=(semantics_uri,),
                 summary="authorized inline exact verification",
             )
-            return ResultEnvelope(
+            return VerificationResult(
                 execution=Execution(
                     status=ExecutionStatus.COMPLETED,
                     runtime_ms=runtime_ms,
@@ -413,7 +450,7 @@ class VerificationService:
         timeout_seconds: float | None = None,
         include_artifact_metadata: bool = False,
         include_semantics_artifact: bool = False,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         """Replay a bound witness with the explicitly selected checker."""
 
         started = time.monotonic()
@@ -447,52 +484,32 @@ class VerificationService:
                 include_artifact_metadata=include_artifact_metadata,
                 include_semantics_artifact=include_semantics_artifact,
             )
-            request_digest = _digest_bytes(canonicalize_json(request))
-            decision = self._run_checker(
-                entrypoint=checker.entrypoint,
-                expected_digest=checker.executable_digest,
-                request=request,
-                provider_runtime=checker.provider_runtime,
-                timeout_seconds=timeout_seconds,
-            )
-            runtime_ms = int((time.monotonic() - started) * 1000)
-            if not decision.accepted:
-                return self._rejected_decision_result(
-                    decision,
-                    runtime_ms,
-                    claim_digest=claim.manifest.object_digest,
-                    candidate_digest=candidate.manifest.object_digest,
-                    evidence_uri=witness_uri,
-                )
             request_artifact_uris = {claim_uri, candidate_uri, witness_uri}
             if scope is not None:
                 request_artifact_uris.add(scope.artifact_uri)
-            self._ensure_decision_endpoints_in_request(decision, request_artifact_uris)
-            record = self._build_verification_record(
-                decision,
+            plan = _VerificationPlan(
                 checker=checker,
                 evidence_kind=EvidenceKind.WITNESS,
                 evidence_uri=witness_uri,
                 bindings=witness.bindings,
-                request_digest=request_digest,
-            )
-            parent_uris = [claim_uri, candidate_uri, witness_uri]
-            if scope is not None:
-                parent_uris.append(scope.artifact_uri)
-            return self._finalize_verification(
-                decision=decision,
-                checker=checker,
-                runtime_ms=runtime_ms,
+                request=request,
+                request_artifact_uris=frozenset(request_artifact_uris),
+                parents=(
+                    claim_uri,
+                    candidate_uri,
+                    witness_uri,
+                    *((scope.artifact_uri,) if scope is not None else ()),
+                ),
+                summary="authorized witness verification",
                 claim_digest=claim.manifest.object_digest,
                 semantics_digest=semantics_digest,
                 candidate_digest=candidate.manifest.object_digest,
-                evidence_uri=witness_uri,
                 scope_uri=(scope.artifact_uri if scope is not None else None),
-                record=record,
-                schema_uri=self.record_schema_uri,
-                parents=tuple(parent_uris),
-                summary="authorized witness verification",
-                execution_detail=decision.detail,
+            )
+            return self._execute_verification_plan(
+                plan,
+                started=started,
+                timeout_seconds=timeout_seconds,
             )
         except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
@@ -505,7 +522,7 @@ class VerificationService:
         timeout_seconds: float | None = None,
         include_artifact_metadata: bool = False,
         supporting_artifact_uris: tuple[str, ...] = (),
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         """Run a specified compatible checker or uniquely select one."""
 
         started = time.monotonic()
@@ -542,23 +559,6 @@ class VerificationService:
                 supporting_artifacts,
                 include_artifact_metadata=include_artifact_metadata,
             )
-            request_digest = _digest_bytes(canonicalize_json(request))
-            decision = self._run_checker(
-                entrypoint=checker.entrypoint,
-                expected_digest=checker.executable_digest,
-                request=request,
-                provider_runtime=checker.provider_runtime,
-                timeout_seconds=timeout_seconds,
-            )
-            runtime_ms = int((time.monotonic() - started) * 1000)
-            if not decision.accepted:
-                return self._rejected_decision_result(
-                    decision,
-                    runtime_ms,
-                    claim_digest=claim.manifest.object_digest,
-                    candidate_digest=candidate.manifest.object_digest,
-                    evidence_uri=certificate_uri,
-                )
             request_artifact_uris = {
                 claim.artifact_uri,
                 candidate.artifact_uri,
@@ -567,35 +567,37 @@ class VerificationService:
             }
             if scope is not None:
                 request_artifact_uris.add(scope.artifact_uri)
-            self._ensure_decision_endpoints_in_request(decision, request_artifact_uris)
-            record = self._build_verification_record(
-                decision,
+            plan = _VerificationPlan(
                 checker=checker,
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 evidence_uri=certificate_uri,
                 bindings=certificate.bindings,
-                request_digest=request_digest,
-            )
-            parent_uris = [claim.artifact_uri, candidate.artifact_uri, certificate_uri]
-            if scope is not None:
-                parent_uris.append(scope.artifact_uri)
-            parent_uris.extend(
-                artifact.artifact_uri for artifact in supporting_artifacts
-            )
-            return self._finalize_verification(
-                decision=decision,
-                checker=checker,
-                runtime_ms=runtime_ms,
+                request=request,
+                request_artifact_uris=frozenset(request_artifact_uris),
+                parents=tuple(
+                    dict.fromkeys(
+                        (
+                            claim.artifact_uri,
+                            candidate.artifact_uri,
+                            certificate_uri,
+                            *((scope.artifact_uri,) if scope is not None else ()),
+                            *(
+                                artifact.artifact_uri
+                                for artifact in supporting_artifacts
+                            ),
+                        )
+                    )
+                ),
+                summary="authorized certificate verification",
                 claim_digest=claim.manifest.object_digest,
                 semantics_digest=semantics_digest,
                 candidate_digest=candidate.manifest.object_digest,
-                evidence_uri=certificate_uri,
                 scope_uri=(scope.artifact_uri if scope is not None else None),
-                record=record,
-                schema_uri=self.record_schema_uri,
-                parents=tuple(dict.fromkeys(parent_uris)),
-                summary="authorized certificate verification",
-                execution_detail=decision.detail,
+            )
+            return self._execute_verification_plan(
+                plan,
+                started=started,
+                timeout_seconds=timeout_seconds,
             )
         except _RECOVERABLE_VERIFICATION_ERRORS as exc:
             return self._verification_failure_result(exc, started)
@@ -849,6 +851,61 @@ class VerificationService:
             ]
         return request
 
+    def _execute_verification_plan(
+        self,
+        plan: _VerificationPlan,
+        *,
+        started: float,
+        timeout_seconds: float | None,
+    ) -> VerificationResult:
+        """Run one resolved plan and commit only a valid accepted decision."""
+
+        request_digest = _digest_bytes(canonicalize_json(plan.request))
+        decision = self._run_checker(
+            entrypoint=plan.checker.entrypoint,
+            expected_digest=plan.checker.executable_digest,
+            request=plan.request,
+            provider_runtime=plan.checker.provider_runtime,
+            timeout_seconds=timeout_seconds,
+        )
+        runtime_ms = int((time.monotonic() - started) * 1000)
+        if not decision.accepted:
+            return self._rejected_decision_result(
+                decision,
+                runtime_ms,
+                claim_digest=plan.claim_digest,
+                semantics_digest=plan.semantics_digest,
+                candidate_digest=plan.candidate_digest,
+                evidence_uri=plan.evidence_uri,
+            )
+        self._ensure_decision_endpoints_in_request(
+            decision,
+            set(plan.request_artifact_uris),
+        )
+        record = self._build_verification_record(
+            decision,
+            checker=plan.checker,
+            evidence_kind=plan.evidence_kind,
+            evidence_uri=plan.evidence_uri,
+            bindings=plan.bindings,
+            request_digest=request_digest,
+        )
+        return self._finalize_verification(
+            decision=decision,
+            checker=plan.checker,
+            runtime_ms=runtime_ms,
+            claim_digest=plan.claim_digest,
+            semantics_digest=plan.semantics_digest,
+            candidate_digest=plan.candidate_digest,
+            evidence_uri=plan.evidence_uri,
+            scope_uri=plan.scope_uri,
+            record=record,
+            schema_uri=self.record_schema_uri,
+            parents=plan.parents,
+            summary=plan.summary,
+            execution_detail=decision.detail,
+        )
+
     def _rejected_decision_result(
         self,
         decision: CheckerDecision,
@@ -858,8 +915,8 @@ class VerificationService:
         candidate_digest: str,
         evidence_uri: str,
         semantics_digest: str | None = None,
-    ) -> ResultEnvelope:
-        return ResultEnvelope(
+    ) -> VerificationResult:
+        return VerificationResult(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms,
@@ -879,7 +936,7 @@ class VerificationService:
         self,
         decision: CheckerDecision,
         *,
-        checker: Any,
+        checker: CheckerRegistration,
         evidence_kind: EvidenceKind,
         evidence_uri: str,
         bindings: EvidenceBindings,
@@ -914,7 +971,7 @@ class VerificationService:
         self,
         *,
         decision: CheckerDecision,
-        checker: Any,
+        checker: CheckerRegistration,
         runtime_ms: int,
         claim_digest: str,
         candidate_digest: str,
@@ -926,7 +983,7 @@ class VerificationService:
         semantics_digest: str | None = None,
         scope_uri: str | None = None,
         execution_detail: str | None = None,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         record_artifact = self._commit_verification_record(
             checker_id=checker.checker_id,
             checker_digest=checker.executable_digest,
@@ -936,7 +993,7 @@ class VerificationService:
             parents=parents,
             summary=summary,
         )
-        return ResultEnvelope(
+        return VerificationResult(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=runtime_ms,
@@ -956,7 +1013,7 @@ class VerificationService:
         self,
         exc: BaseException,
         started: float,
-    ) -> ResultEnvelope:
+    ) -> VerificationResult:
         if isinstance(exc, TimeoutError):
             return self._operational_failure(
                 status=ExecutionStatus.TIMEOUT,
@@ -1068,8 +1125,8 @@ class VerificationService:
                 summary=summary,
             )
 
-    def _rejected_input(self, detail: str, *, started: float) -> ResultEnvelope:
-        return ResultEnvelope(
+    def _rejected_input(self, detail: str, *, started: float) -> VerificationResult:
+        return VerificationResult(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=int((time.monotonic() - started) * 1000),
@@ -1087,8 +1144,8 @@ class VerificationService:
         status: ExecutionStatus,
         detail: str,
         started: float,
-    ) -> ResultEnvelope:
-        return ResultEnvelope(
+    ) -> VerificationResult:
+        return VerificationResult(
             execution=Execution(
                 status=status,
                 runtime_ms=int((time.monotonic() - started) * 1000),

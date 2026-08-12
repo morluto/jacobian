@@ -33,6 +33,7 @@ dependencies = [
 [project.scripts]
 jacobian = "jacobian.cli:app"
 jacobian-mcp = "jacobian.adapters.mcp.cli:main"
+jacobian-remote-mcp = "jacobian.adapters.mcp.remote_cli:main"
 
 [dependency-groups]
 dev-core = [
@@ -134,26 +135,113 @@ per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["cvc5", "python-flint"],
 root_package = "jacobian"
 
 [[tool.importlinter.contracts]]
-name = "The public math library does not depend on runtime or installation"
+name = "Passive contracts do not depend on product layers"
 type = "forbidden"
-source_modules = ["jacobian.math"]
+source_modules = ["jacobian.contracts"]
 forbidden_modules = [
-    "jacobian.adapters.mcp",
+    "jacobian.adapters",
     "jacobian.capability_service",
+    "jacobian.domains",
+    "jacobian.installation",
+    "jacobian.math",
     "jacobian.operation_bindings",
     "jacobian.operation_installation",
     "jacobian.operation_publication",
     "jacobian.operation_runtime",
     "jacobian.operations",
+    "jacobian.persistence",
+    "jacobian.portfolio",
+    "jacobian.providers",
     "jacobian.runtime",
     "jacobian.storage",
+    "jacobian.verification",
 ]
 
 [[tool.importlinter.contracts]]
-name = "Finite-field values do not import their private backend"
+name = "The public math library does not depend on product layers"
+type = "forbidden"
+source_modules = ["jacobian.math"]
+forbidden_modules = [
+    "jacobian.adapters",
+    "jacobian.capability_service",
+    "jacobian.checker_authorization",
+    "jacobian.checker_operations",
+    "jacobian.checker_worker",
+    "jacobian.domains",
+    "jacobian.installation",
+    "jacobian.operation_bindings",
+    "jacobian.operation_installation",
+    "jacobian.operation_projection",
+    "jacobian.operation_publication",
+    "jacobian.operation_runtime",
+    "jacobian.operations",
+    "jacobian.persistence",
+    "jacobian.portfolio",
+    "jacobian.providers",
+    "jacobian.runtime",
+    "jacobian.storage",
+    "jacobian.verification",
+    "jacobian.value_references",
+]
+
+[[tool.importlinter.contracts]]
+name = "Finite-field values do not import private backends"
 type = "forbidden"
 source_modules = ["jacobian.math.finite_fields.values"]
-forbidden_modules = ["jacobian.math.finite_fields._flint"]
+forbidden_modules = [
+    "jacobian.math.finite_fields._flint",
+    "jacobian.math.finite_fields._sympy",
+]
+
+[[tool.importlinter.contracts]]
+name = "Persistence does not depend on storage or product layers"
+type = "forbidden"
+source_modules = ["jacobian.persistence"]
+forbidden_modules = [
+    "jacobian.adapters",
+    "jacobian.domains",
+    "jacobian.installation",
+    "jacobian.operation_bindings",
+    "jacobian.operation_installation",
+    "jacobian.operation_publication",
+    "jacobian.operation_runtime",
+    "jacobian.portfolio",
+    "jacobian.providers",
+    "jacobian.runtime",
+    "jacobian.storage",
+    "jacobian.verification",
+]
+
+[[tool.importlinter.contracts]]
+name = "Provider infrastructure does not depend on installed product layers"
+type = "forbidden"
+source_modules = ["jacobian.providers", "jacobian.provider_runtime"]
+forbidden_modules = [
+    "jacobian.adapters",
+    "jacobian.domains",
+    "jacobian.installation",
+    "jacobian.math",
+    "jacobian.operation_bindings",
+    "jacobian.operation_installation",
+    "jacobian.operation_projection",
+    "jacobian.operation_publication",
+    "jacobian.operation_runtime",
+    "jacobian.operations",
+    "jacobian.portfolio",
+    "jacobian.runtime",
+    "jacobian.storage",
+    "jacobian.verification",
+]
+
+[[tool.importlinter.contracts]]
+name = "Runtime service ownership does not depend on portfolio assembly"
+type = "forbidden"
+source_modules = [
+    "jacobian.runtime.bootstrap",
+    "jacobian.runtime.model",
+    "jacobian.runtime.services",
+]
+forbidden_modules = ["jacobian.portfolio"]
 
 [tool.coverage.run]
 branch = true

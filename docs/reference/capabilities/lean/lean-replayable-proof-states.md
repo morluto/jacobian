@@ -2,10 +2,9 @@
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
-`lean.proof_state.apply_tactic` is the canonical implementation covering the
-`lean.tactic.apply` inventory operation. Version 3 applies one bounded tactic
-to an immutable, replayable Lean proof state. It does not expose or depend on
-a long-lived session identifier. A replayable chain is limited to 64 tactics,
+`lean.proof_state.apply_tactic` version 3 applies one bounded tactic to an
+immutable, replayable Lean proof state. It does not expose or depend on a
+long-lived session identifier. A replayable chain is limited to 64 tactics,
 and each tactic remains limited to 1,000 characters.
 
 ## State artifact

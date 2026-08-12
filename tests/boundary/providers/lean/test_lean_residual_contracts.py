@@ -752,6 +752,27 @@ def test_term_apply_rejects_admit_at_own_boundary(
     assert raised.value.diagnostic.code == "INVALID_LEAN_TERM_APPLY_REQUEST"
 
 
+def test_term_apply_rejects_forbidden_statement_before_execution(
+    tmp_path: Path,
+) -> None:
+    _, term_apply, _, _, _ = _adapters(tmp_path)
+
+    with pytest.raises(CapabilityInvocationError) as raised:
+        term_apply.invoke(
+            CapabilityRequest(
+                capability_id="lean.term.apply",
+                input={
+                    "environment": "CORE",
+                    "statement": "run_tac pure ()",
+                    "term": "True.intro",
+                },
+            )
+        )
+
+    assert raised.value.diagnostic.code == "INVALID_LEAN_TRANSITION_REQUEST"
+    assert raised.value.diagnostic.stage == "request_validation"
+
+
 # ---------------------------------------------------------------------------
 # regression: helper error envelopes preserved (M2 fix)
 # ---------------------------------------------------------------------------

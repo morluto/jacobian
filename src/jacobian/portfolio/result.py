@@ -27,7 +27,6 @@ from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.exact_domain_checkers import ExactDomainCheckerInstallation
 from jacobian.finite_coverage import FiniteCoverageInstallation
-from jacobian.finite_partition import FinitePartitionInstallation
 from jacobian.graphs.coloring import GraphColoringInstallation
 from jacobian.graphs.composition import GraphCompositionInstallation
 from jacobian.graphs.installation import GraphInstallation
@@ -220,7 +219,6 @@ class PortfolioInstallation:
     graph_composition: GraphCompositionInstallation | None = None
 
     # --- Finite ---
-    finite_partition: FinitePartitionInstallation | None = None
     finite_coverage: FiniteCoverageInstallation | None = None
 
     # --- Domain bundles ---

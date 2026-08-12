@@ -2,7 +2,7 @@
 
 [Documentation home](../../index.md)
 
-- Status: Current implementation reference; contracts are experimental
+- Status: Experimental contracts
 - Matrix producer backend: SymPy `smith_normal_decomp` over `ZZ`; canonical
   diagonal and invariant factors, noncanonical unimodular transformations
 - Topology producer backend: exact integer chain arithmetic over canonical
@@ -178,25 +178,6 @@ witness format, and checker identity. Malformed data, unsupported scope,
 timeout, cancellation, arithmetic failure, or a false relation returns
 `UNKNOWN` and creates no verification record. A failed replay is not evidence
 for an opposite mathematical claim.
-
-## Public reproductions and evaluation status
-
-The answer-visible, unscored reproduction file
-[`smith-rank-deficient`](../../../benchmarks/datasets/public-reproductions-v1/smith-rank-deficient/)
-contains rectangular and rank-deficient matrix cases, a circle,
-\(\mathbb{RP}^2\), and reduced-point homology. It also records a frozen
-held-out comparison design. That held-out evaluation remains
-`READY_NOT_RUN`; public regression success is not evidence of autonomous-agent
-improvement. No evaluation model, prompt, scorer run, or raw model trace exists
-for that future comparison.
-
-Discovery found the repeated missing move—recovering and independently
-checking basis transformations rather than only invariant factors.
-Implementation split the matrix and topology outcomes, checker development
-used independent relation replay, and evaluation froze public reproductions
-plus a future held-out design. The handoff retains unresolved obligations:
-run the held-out baseline/treatment study before making portfolio-value claims,
-and reconsider the bounds only with new artifact-size and runtime evidence.
 
 ## Nonclaims
 

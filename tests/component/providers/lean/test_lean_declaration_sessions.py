@@ -46,6 +46,20 @@ _RUNTIME = CapabilityProviderRuntime(
     install_tier=CapabilityInstallTier.T3,
     license_id="Apache-2.0",
     features=("CORE", "MATHLIB"),
+    configuration={
+        "profiles": {
+            "CORE": {
+                "lean_version": "4.31.0",
+                "lean_commit": "lean-commit",
+                "mathlib_commit": None,
+            },
+            "MATHLIB": {
+                "lean_version": "4.31.0",
+                "lean_commit": "lean-commit",
+                "mathlib_commit": "mathlib-commit",
+            },
+        }
+    },
 )
 
 

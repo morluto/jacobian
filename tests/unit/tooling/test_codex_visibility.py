@@ -10,6 +10,7 @@ from benchmarks.tooling.codex_visibility import (
     CueLevel,
     ToolMode,
     VisibilityCase,
+    VisibilityOutputOutcome,
     _build_summary,
     _codex_arguments,
     _run_case,
@@ -104,10 +105,12 @@ def test_committed_visibility_v1_suite_remains_loadable() -> None:
 def test_committed_visibility_v2_suite_covers_domains_and_abstention() -> None:
     suite = load_suite(_ROOT / "benchmarks/config/codex-visibility-v2.json")
 
-    expected_ids = {
+    tracked_ids = {
         capability_id
         for case in suite.cases
-        for capability_id in case.expected_capability_ids
+        for capability_id in (
+            case.expected_capability_ids + case.diagnostic_capability_ids
+        )
     }
     assert suite.schema_version == "2"
     assert {
@@ -116,11 +119,33 @@ def test_committed_visibility_v2_suite_covers_domains_and_abstention() -> None:
         "matrix.determinant.compute",
         "matrix.rank.compute",
         "polynomial.compute.gcd",
-    } <= expected_ids
+    } <= tracked_ids
     assert (
         sum(case.expectation is AdoptionExpectation.ABSTAIN for case in suite.cases)
         >= 2
     )
+
+
+def test_committed_lean_usability_suite_covers_atomic_formal_tools() -> None:
+    suite = load_suite(_ROOT / "benchmarks/config/lean-usability-v1.json")
+    tracked_ids = {
+        capability_id
+        for case in suite.cases
+        for capability_id in (
+            case.expected_capability_ids + case.diagnostic_capability_ids
+        )
+    }
+
+    assert suite.schema_version == "2"
+    assert {
+        "lean.check",
+        "lean.declaration.inspect",
+        "lean.declaration.search",
+        "lean.proof_state.apply_tactic",
+        "lean.retrieve.premises",
+        "lean.term.apply",
+    } <= tracked_ids
+    assert any(case.expectation is AdoptionExpectation.ABSTAIN for case in suite.cases)
 
 
 def test_unified_exec_mode_is_opt_in(tmp_path: Path) -> None:
@@ -276,6 +301,126 @@ def test_visibility_case_rejects_inconsistent_expectations() -> None:
             prompt="Define a matrix.",
             expected_capability_ids=("matrix.rank.compute",),
         )
+    with pytest.raises(ValidationError, match="cannot declare operations or outcomes"):
+        VisibilityCase(
+            case_id="negative-with-diagnostic-capability",
+            cue_level=CueLevel.LATENT,
+            expectation=AdoptionExpectation.ABSTAIN,
+            prompt="Define a matrix.",
+            diagnostic_capability_ids=("matrix.rank.compute",),
+        )
+    with pytest.raises(ValidationError, match="must be tracked"):
+        VisibilityCase(
+            case_id="untracked-outcome",
+            cue_level=CueLevel.LATENT,
+            prompt="Find a declaration.",
+            acceptable_output_outcomes=(
+                VisibilityOutputOutcome(
+                    capability_id="lean.declaration.search",
+                    required_output_fields=("declarations.0.name",),
+                ),
+            ),
+        )
+    with pytest.raises(ValidationError, match="must be disjoint"):
+        VisibilityCase(
+            case_id="overlapping-capabilities",
+            cue_level=CueLevel.LATENT,
+            prompt="Compute a rank.",
+            expected_capability_ids=("matrix.rank.compute",),
+            diagnostic_capability_ids=("matrix.rank.compute",),
+        )
+
+
+def test_diagnostic_operation_observation_does_not_gate_outcome_contract() -> None:
+    case = VisibilityCase(
+        case_id="verified-proof-with-optional-term-transition",
+        cue_level=CueLevel.AFFORDANCE,
+        prompt="Prove and verify a theorem.",
+        expected_capability_ids=("lean.check",),
+        diagnostic_capability_ids=("lean.term.apply",),
+        require_verified=True,
+    )
+    telemetry = {
+        "capability_attempt_ids": ["lean.check"],
+        "capability_ids": ["lean.check"],
+        "capability_invocations": [
+            {
+                "capability_id": "lean.check",
+                "verification_record_uri": "artifact://sha256/record",
+            }
+        ],
+    }
+
+    result = classify_visibility(case, telemetry)
+
+    assert result["contract_satisfied"] is True
+    assert result["expected_capabilities"]["missing_completed"] == []
+    assert result["diagnostic_capabilities"]["not_completed"] == ["lean.term.apply"]
+    assert result["unexpected_capabilities"]["completed"] == []
+
+
+def test_declaration_outcome_accepts_complete_search_without_inspect() -> None:
+    case = load_suite(_ROOT / "benchmarks/config/lean-usability-v1.json").cases[3]
+    telemetry = {
+        "capability_attempt_ids": ["lean.declaration.search"],
+        "capability_ids": ["lean.declaration.search"],
+        "capability_invocations": [
+            {
+                "capability_id": "lean.declaration.search",
+                "output": {
+                    "environment_digest": "sha256:" + "a" * 64,
+                    "lean_version": "4.31.0",
+                    "lean_commit": "lean-commit",
+                    "mathlib_commit": "mathlib-commit",
+                    "declarations": [
+                        {
+                            "name": "irrational_sqrt_two",
+                            "type": "Irrational √2",
+                        }
+                    ],
+                },
+            }
+        ],
+    }
+
+    result = classify_visibility(case, telemetry)
+
+    assert result["contract_satisfied"] is True
+    assert result["expected_capabilities"]["missing_completed"] == []
+    assert result["diagnostic_capabilities"]["not_completed"] == [
+        "lean.declaration.inspect"
+    ]
+    assert result["output_outcomes"] == {
+        "required": True,
+        "satisfied": True,
+        "matched_capability_ids": ["lean.declaration.search"],
+    }
+
+
+def test_declaration_outcome_rejects_incomplete_structured_output() -> None:
+    case = load_suite(_ROOT / "benchmarks/config/lean-usability-v1.json").cases[3]
+    result = classify_visibility(
+        case,
+        {
+            "capability_attempt_ids": ["lean.declaration.search"],
+            "capability_ids": ["lean.declaration.search"],
+            "capability_invocations": [
+                {
+                    "capability_id": "lean.declaration.search",
+                    "output": {
+                        "environment_digest": "sha256:" + "a" * 64,
+                        "lean_version": "4.31.0",
+                        "lean_commit": "lean-commit",
+                        "mathlib_commit": "mathlib-commit",
+                        "declarations": [{"name": "irrational_sqrt_two"}],
+                    },
+                }
+            ],
+        },
+    )
+
+    assert result["contract_satisfied"] is False
+    assert result["output_outcomes"]["satisfied"] is False
 
 
 def test_visibility_classification_requires_bound_verified_evidence(

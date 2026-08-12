@@ -130,10 +130,9 @@ Version 1 uses these fail-closed limits:
 
 The regression suite covers the empty poset, singleton, chains, antichains,
 the diamond, non-graded examples, complete and selected Möbius scopes,
-relabeling, cycles, redundant covers, incomplete comparable relations, and
-forged certificate payloads. A separate development audit exhaustively
-cross-checked all 1,100 fixed-topological-order presentations through order
-five against independent replay, including exact topological-sort counts.
+relabeling, cycles, redundant covers, incomplete comparable relations, forged
+certificate payloads, and all fixed-topological-order presentations through
+order five.
 
 ## Trust boundary
 

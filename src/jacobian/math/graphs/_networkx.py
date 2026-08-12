@@ -6,6 +6,8 @@ from typing import Any, cast
 
 import networkx as nx
 
+from jacobian.math.graphs.values import GraphCompositionInput, SimpleUndirectedGraph
+
 
 def simple_graph(graph: nx.Graph[Any]) -> nx.Graph[Any]:
     if not isinstance(graph, nx.Graph):
@@ -33,3 +35,55 @@ def diameter(graph: nx.Graph[Any]) -> int:
 
 def is_eulerian(graph: nx.Graph[Any]) -> bool:
     return bool(nx.is_eulerian(simple_graph(graph)))
+
+
+def compose_graphs(value: GraphCompositionInput) -> SimpleUndirectedGraph:
+    """Apply one composition and return its canonical semantic graph value."""
+
+    left = graph_from_value(value.left)
+    right = graph_from_value(value.right) if value.right is not None else None
+    if value.operation == "DISJOINT_UNION":
+        if right is None:  # guarded by GraphCompositionInput
+            raise ValueError("disjoint union requires a right graph")
+        result = nx.disjoint_union(left, right)
+    elif value.operation == "JOIN":
+        if right is None:  # guarded by GraphCompositionInput
+            raise ValueError("join requires a right graph")
+        result = nx.full_join(left, right, rename=("L", "R"))
+    elif value.operation == "COMPLEMENT":
+        result = nx.complement(left)
+    elif value.operation == "LEXICOGRAPHIC_PRODUCT":
+        if right is None:  # guarded by GraphCompositionInput
+            raise ValueError("lexicographic product requires a right graph")
+        result = nx.lexicographic_product(left, right)
+    else:  # pragma: no cover - closed Literal validated by Pydantic
+        raise ValueError(f"unsupported composition operation: {value.operation}")
+    return graph_value(result)
+
+
+def graph_from_value(value: SimpleUndirectedGraph) -> nx.Graph[str]:
+    """Convert one immutable graph value to a transient NetworkX graph."""
+
+    graph: nx.Graph[str] = nx.Graph()
+    graph.add_nodes_from(value.vertices)
+    graph.add_edges_from(value.edges)
+    return graph
+
+
+def graph_value(graph: nx.Graph[Any]) -> SimpleUndirectedGraph:
+    """Canonicalize a transient NetworkX graph as an immutable graph value."""
+
+    ordered_nodes = tuple(sorted(graph.nodes))
+    labels = {node: f"v{index}" for index, node in enumerate(ordered_nodes)}
+    edges = tuple(
+        sorted(
+            (labels[source], labels[target])
+            if labels[source] < labels[target]
+            else (labels[target], labels[source])
+            for source, target in graph.edges
+        )
+    )
+    return SimpleUndirectedGraph(
+        vertices=tuple(labels[node] for node in ordered_nodes),
+        edges=edges,
+    )

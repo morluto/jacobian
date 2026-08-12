@@ -12,7 +12,7 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
-from jacobian.contracts.results import ResultEnvelope
+from jacobian.contracts.results import VerificationResult
 from jacobian.domains.finite_fields import build_finite_field_bundle
 from jacobian.domains.finite_fields.contracts import (
     FiniteMapTableRequest,
@@ -235,9 +235,9 @@ def test_inline_verification_record_rejects_stale_candidate_binding(
         ]
         assert isinstance(adapter, ExactComputedVerificationAdapter)
         verify_inline_exact = adapter.verification.verify_inline_exact
-        accepted: list[ResultEnvelope] = []
+        accepted: list[VerificationResult] = []
 
-        def capture_accepted_result(**kwargs: Any) -> ResultEnvelope:
+        def capture_accepted_result(**kwargs: Any) -> VerificationResult:
             result = verify_inline_exact(**kwargs)
             accepted.append(result)
             return result

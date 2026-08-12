@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Experimental pre-stable contract
+- Status: Experimental contract
 - Provider profile: Python-FLINT 0.9.0, `fmpq_mat.rref`
 - Domain: finite systems `A x = b` over `QQ`
 - Maximum shape: 32 equations by 32 declared variables
@@ -144,7 +144,7 @@ canonical rationals, exact input and candidate bindings, and semantics. Only
 acceptance creates a verification record and the `VERIFIED_INCONSISTENT`
 result.
 
-## Runtime identity and measurements
+## Provider contract
 
 The supported provider identity is:
 
@@ -156,22 +156,6 @@ The supported provider identity is:
 - operation profile: exact `QQ` reduced row-echelon form, either with free
   variables fixed to zero for a solution vector or with the dual pairing
   normalized to one for an inconsistency witness.
-
-On the 2026-07-26 Linux x86-64 development host, the repository measurement
-protocol recorded:
-
-| Measurement | Result |
-| --- | ---: |
-| Fresh-cache, no-dependency wheel install | 4.606 s |
-| Installed distribution size | 25,950,757 bytes |
-| Cold import probe | 0.038 s, 42,332,160-byte peak RSS |
-| 2-by-2 exact RREF reproduction | 0.040 s, 42,332,160-byte peak RSS |
-
-These measurements characterize one host and distribution digest; they are
-not performance guarantees.
-
-The paired agent result is recorded in the
-[the committed Harbor task boundary](../../evaluations/benchmark-contracts.md#task-and-verifier-validation).
 
 ## Trust limits
 

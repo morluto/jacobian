@@ -2,9 +2,7 @@
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
-`graph.compute.properties@2` is the canonical batch operation corresponding to
-the inventory concept `graph.invariants.compute`. The inventory name is not an
-installed alias.
+`graph.compute.properties@2` computes a fixed batch of graph invariants.
 
 ## Supported registry
 

@@ -97,7 +97,7 @@ def test_core_domain_verification_phase_accepts_empty_bundle_result() -> None:
     result = PortfolioInstallation()
     CoreApplicationInstaller(
         cast(InstallationContext, object())
-    ).install_domain_verification(result, PortfolioPlan(domain_bundles=()))
+    ).install_domain_verification(result, PortfolioPlan(components=()))
 
     assert result.exact_domain_checkers is None
 

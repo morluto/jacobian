@@ -3,10 +3,8 @@
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 `finite.coverage.verify` verifies that a bounded paged archive contains every
-member of an explicit finite scope exactly once. It is a distinct verification
-contract, not an alias for `case.partition.finite`: the latter checks named
-case membership, while this capability binds typed archive pages and replays
-an exactly-once archive claim.
+member of an explicit finite scope exactly once. It binds typed archive pages
+and independently replays an exactly-once archive claim.
 
 ## Bounded v1 contract
 

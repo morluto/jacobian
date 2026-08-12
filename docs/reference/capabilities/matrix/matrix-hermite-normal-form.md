@@ -13,7 +13,7 @@ the other.
 
 ## Input contract
 
-The producer accepts one [`IntegerMatrix`](../index.md#shared-matrix-values)
+The producer accepts one [`IntegerMatrix`](index.md#shared-matrix-values)
 from `jacobian.contracts.matrices`: a nonempty rectangular matrix over `ZZ`
 with 1 to 32 rows and 1 to 32 columns. The shared `IntegerMatrix` model
 permits up to 32,768 canonical digits per entry; the HNF request model

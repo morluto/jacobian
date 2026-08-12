@@ -22,7 +22,7 @@ from jacobian.contracts.results import (
     Execution,
     ExecutionStatus,
     InputStatus,
-    ResultEnvelope,
+    VerificationResult,
 )
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.lean_frontend.diagnostics import checker_diagnostics
@@ -49,7 +49,7 @@ class LeanService:
         self.artifacts = artifacts
         self.verification = verification
         self.installations = installations
-        self._cache: OrderedDict[str, tuple[str, ResultEnvelope]] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[str, VerificationResult]] = OrderedDict()
         self._cache_lock = threading.Lock()
         self._certificate_locks: weakref.WeakValueDictionary[str, threading.Lock] = (
             weakref.WeakValueDictionary()
@@ -238,7 +238,7 @@ class LeanService:
         *,
         certificate_uri: str,
         installation: LeanCheckerInstallation,
-    ) -> ResultEnvelope | None:
+    ) -> VerificationResult | None:
         if installation.checker_id is None:
             return None
         with self._cache_lock:

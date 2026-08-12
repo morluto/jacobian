@@ -2,6 +2,7 @@ import networkx as nx
 import pytest
 
 from jacobian.math import graphs
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def test_graph_algorithms_use_networkx_objects() -> None:
@@ -18,3 +19,22 @@ def test_graph_input_errors_are_stable() -> None:
         graphs.diameter(nx.Graph([(0, 1), (2, 3)]))
     with pytest.raises(ValueError, match="undirected and simple"):
         graphs.triangle_count(nx.DiGraph([(0, 1)]))  # type: ignore[arg-type]
+
+
+def test_graph_construction_functions_use_immutable_graph_values() -> None:
+    explicit = graphs.explicit_graph(
+        ("c", "a", "b"),
+        (("b", "a"), ("c", "b")),
+    )
+
+    assert explicit.vertices == ("a", "b", "c")
+    assert explicit.edges == (("a", "b"), ("b", "c"))
+
+    complement = graphs.compose_graphs(
+        graphs.GraphCompositionInput(operation="COMPLEMENT", left=explicit)
+    )
+
+    assert complement.vertices == ("v0", "v1", "v2")
+    assert complement.edges == (("v0", "v2"),)
+    assert type(explicit) is SimpleUndirectedGraph
+    assert SimpleUndirectedGraph.__module__ == "jacobian.math.graphs.values"

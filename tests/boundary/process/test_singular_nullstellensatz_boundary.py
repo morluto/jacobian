@@ -14,10 +14,6 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.domains.polynomial_nullstellensatz import (
-    build_nullstellensatz_core_bundle,
-)
-from jacobian.domains.polynomial_nullstellensatz.bundle import CORE_DOMAIN_ID
 from jacobian.domains.polynomial_nullstellensatz.core import MATERIALIZE_CAPABILITY_ID
 from jacobian.domains.polynomial_nullstellensatz.singular import (
     PRODUCE_CAPABILITY_ID,
@@ -25,6 +21,10 @@ from jacobian.domains.polynomial_nullstellensatz.singular import (
 )
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
+from jacobian.portfolio.nullstellensatz_installation import (
+    CORE_DOMAIN_ID,
+    build_nullstellensatz_core_component,
+)
 from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.providers.singular_runtime import singular_provider_runtime
 
@@ -46,7 +46,7 @@ def _runtime() -> CapabilityProviderRuntime:
 
 def _install(services: DomainTestServices) -> None:
     result = DomainBundleInstaller(services.installation).install(
-        PortfolioPlan(domain_bundles=(build_nullstellensatz_core_bundle(),))
+        PortfolioPlan(components=(build_nullstellensatz_core_component(),))
     )
     installed = install_singular_producer(
         services.installation,

@@ -591,9 +591,7 @@ class ExactComputedVerificationAdapter:
         if source_artifacts is None:
             if normalized_candidate is None:
                 raise AssertionError("inline replay candidate was not validated")
-            return self._verify_inline_relation(
-                request, normalized_input, normalized_candidate
-            )
+            return self._verify_inline_relation(normalized_input, normalized_candidate)
         input_artifact, result_artifact, semantics_artifact = source_artifacts
         witness = put_witness_envelope(
             self.artifacts,
@@ -612,7 +610,6 @@ class ExactComputedVerificationAdapter:
             ),
         )
         return self._verify_materialized_relation(
-            request,
             input_artifact,
             result_artifact,
             self.store.get(witness.artifact_uri),
@@ -620,7 +617,6 @@ class ExactComputedVerificationAdapter:
 
     def _verify_inline_relation(
         self,
-        request: CapabilityRequest,
         normalized_input: dict[str, object],
         normalized_candidate: dict[str, object],
     ) -> CapabilityResult:
@@ -641,23 +637,6 @@ class ExactComputedVerificationAdapter:
                 payload=normalized_candidate,
             ),
         )
-        checker_request = {
-            "request_version": "2",
-            "operation_id": declaration.declaration.capability_id,
-            "claim": {
-                "schema_uri": declaration.input_schema_uri,
-                "semantics_uri": declaration.semantics_uri,
-                "payload": normalized_input,
-            },
-            "candidate": {
-                "schema_uri": declaration.result_schema_uri,
-                "semantics_uri": declaration.semantics_uri,
-                "payload": normalized_candidate,
-            },
-            "semantics": self._checker_artifact(semantics),
-            "scope": None,
-            "expected_bindings": bindings.model_dump(mode="json"),
-        }
         checked = self.verification.verify_inline_exact(
             operation_id=declaration.declaration.capability_id,
             claim_schema_uri=declaration.input_schema_uri,
@@ -667,7 +646,6 @@ class ExactComputedVerificationAdapter:
             candidate_payload=normalized_candidate,
             checker_id=declaration.checker_id,
             witness_format=declaration.declaration.format_id,
-            request=checker_request,
         )
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
@@ -716,7 +694,6 @@ class ExactComputedVerificationAdapter:
 
     def _verify_materialized_relation(
         self,
-        request: CapabilityRequest,
         input_artifact: StoredArtifact,
         result_artifact: StoredArtifact,
         witness: StoredArtifact,
@@ -811,18 +788,6 @@ class ExactComputedVerificationAdapter:
                 )
             ) from exc
         return normalized_input, normalized_candidate
-
-    @staticmethod
-    def _checker_artifact(artifact: StoredArtifact) -> dict[str, object]:
-        return {
-            "artifact_uri": artifact.artifact_uri,
-            "object_digest": artifact.manifest.object_digest,
-            "payload_digest": artifact.manifest.payload_digest,
-            "schema_uri": artifact.manifest.schema_uri,
-            "semantics_uri": artifact.manifest.semantics_uri,
-            "parents": list(artifact.manifest.parents),
-            "payload": artifact.payload,
-        }
 
     def _resolve_stored_result(
         self, request: CapabilityRequest

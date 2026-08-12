@@ -276,7 +276,7 @@ validate_install_root() {
 
 validate_release_runtime() {
     local release_dir="$1"
-    local entrypoint="${release_dir}/.venv/bin/jacobian-mcp"
+    local entrypoint="${release_dir}/.venv/bin/jacobian-remote-mcp"
     local expected_shebang="#!${release_dir}/.venv/bin/python"
     local python_target
     local shebang

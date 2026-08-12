@@ -40,6 +40,7 @@ from jacobian.contracts.results import (
 )
 from jacobian.domains._examples import example
 from jacobian.polynomials._support import (
+    PolynomialOperationResult,
     _computed_result,
     _evaluate,
     _load_evaluation,
@@ -230,7 +231,6 @@ class PolynomialCollisionAdapter:
             artifact_uris.append(witness_uri)
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
             artifact_uris=tuple(artifact_uris),
@@ -453,20 +453,17 @@ class PolynomialCollisionSearchAdapter:
             dict.fromkeys(uri for uri in artifacts if uri is not None)
         )
         if cancelled:
-            return CapabilityResult(
-                capability_id=self.descriptor.capability_id,
-                capability_version=self.descriptor.version,
+            return PolynomialOperationResult(
+                value=output,
                 execution=Execution(
                     status=ExecutionStatus.CANCELLED,
                     runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
                     detail="The client cancelled the collision-grid search.",
                 ),
-                output=output.model_dump(mode="json"),
                 artifact_uris=artifact_uris,
-            )
+            ).project(self.descriptor)
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
             artifact_uris=artifact_uris,
@@ -577,14 +574,12 @@ class PolynomialCollisionVerifyAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
+            value=output,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
-        )
+        ).project(self.descriptor)
 
 
 class PolynomialMapInverseCollisionVerifyAdapter:
@@ -696,11 +691,9 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         artifact_uris.append(witness_artifact.artifact_uri)
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
+            value=output,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
-        )
+        ).project(self.descriptor)

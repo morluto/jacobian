@@ -2,7 +2,7 @@
 
 [Documentation home](../index.md)
 
-- Status: Target contract for the pre-stable cutover
+- Status: Current library contract
 - Related architecture: [Domain operation library](../explanation/architecture.md#domain-operation-library)
 
 `jacobian.math` is Jacobian's authoritative mathematical library. Built-in
@@ -119,6 +119,12 @@ artifacts, and semantic closure over referenced parents and axes. It never owns
 request validation, mathematical postconditions, domain applicability,
 provider selection, checker authority, or operation effects.
 
+`DomainBundle` groups ordinary installed operations and their shared semantics;
+it has no managed-installer callback. Specialized artifact/checker lifecycles
+belong to explicitly named components in the portfolio composition root. This
+keeps runtime services and dependency ordering out of the semantic operation
+model instead of adding an optional installation mode to every bundle.
+
 ## Execution contract
 
 The ordinary path is:
@@ -148,7 +154,7 @@ known without executing the operation.
 A request-to-result postcondition runs before anything is exposed. Failure
 publishes no value reference, artifact, or verification record.
 
-Legacy envelope metadata is not part of `OperationSpec`. In particular, an
+Envelope metadata is not part of `OperationSpec`. In particular, an
 ordinary operation does not configure generic completeness, scope,
 relationships, or obligations. A v2 result carries a `verification_record_uri`
 only when an independent checker accepted the result; that pointer carries no

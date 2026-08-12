@@ -6,11 +6,11 @@ from dataclasses import dataclass
 
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.finite_coverage import install_finite_coverage
-from jacobian.finite_partition import install_finite_partition
 from jacobian.graphs.coloring import install_graph_coloring_capabilities
 from jacobian.graphs.installation import install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
 from jacobian.installation.context import InstallationContext
+from jacobian.operations import DomainBundle
 from jacobian.polynomial_system_capabilities import (
     install_polynomial_system_capabilities,
 )
@@ -73,21 +73,6 @@ class CoreApplicationInstaller:
         ctx = self.context
 
         self.context.register_capability(PolytopeSeparationAdapter(services.polytope))
-        (
-            finite_partition_adapter,
-            finite_partition_verify,
-            result.finite_partition,
-        ) = install_finite_partition(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            ctx.verification,
-            ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        self.context.register_capability(finite_partition_adapter)
-        if finite_partition_verify is not None:
-            self.context.register_capability(finite_partition_verify)
         finite_coverage_adapter, result.finite_coverage = install_finite_coverage(
             ctx.store,
             ctx.schemas,
@@ -174,8 +159,10 @@ class CoreApplicationInstaller:
         ctx = self.context
         exact_bundles = {
             bundle.domain_id: (bundle, result.domain_bundles[bundle.domain_id])
-            for bundle in plan.domain_bundles
-            if bundle.checker_declarations and bundle.domain_id in result.domain_bundles
+            for bundle in plan.components
+            if isinstance(bundle, DomainBundle)
+            and bundle.checker_declarations
+            and bundle.domain_id in result.domain_bundles
         }
         if not exact_bundles:
             return

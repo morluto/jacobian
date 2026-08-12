@@ -10,6 +10,33 @@ from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import CapabilityDescriptor
 
 
+def test_math_find_discovers_finite_expectation_by_natural_vocabulary(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            discovered = await client.call_tool(
+                "math.find",
+                {
+                    "request": {
+                        "op": "search",
+                        "query": "expectation of a discrete random variable",
+                        "domain": "probability",
+                        "limit": 5,
+                    }
+                },
+            )
+
+        assert isinstance(discovered.structured_content, dict)
+        assert "probability.finite_distribution.raw_moment.compute" in {
+            match["capability_id"] for match in discovered.structured_content["matches"]
+        }
+
+    asyncio.run(scenario())
+
+
 def test_math_find_search_returns_compact_lexical_and_availability_facts(
     tmp_path: Path,
 ) -> None:

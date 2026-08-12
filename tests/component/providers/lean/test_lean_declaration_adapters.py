@@ -152,8 +152,9 @@ def test_search_adapter_exposes_bounded_computed_retrieval(tmp_path: Path) -> No
     )
     adapter = _query_adapter(tmp_path, backend, "lean.declaration.search")
     assert adapter.descriptor.invocation_examples[0].input["name_contains"] == (
-        "irrational_sqrt"
+        "irrational_sqrt_two"
     )
+    assert adapter.descriptor.invocation_examples[0].input["result_limit"] == 1
     assert "shell-searching" in adapter.descriptor.description
     result = adapter.invoke(
         CapabilityRequest(

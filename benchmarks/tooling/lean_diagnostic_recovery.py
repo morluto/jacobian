@@ -24,10 +24,11 @@ from pydantic import (
 )
 
 from benchmarks.tooling.codex_visibility import (
-    _CODEX_ENVIRONMENT,
     ToolMode,
     _codex_arguments,
     _command_version,
+    _inspect_codex_skill_surface,
+    _prepare_isolated_codex_environment,
     _sha256_bytes,
     _validate_mcp_url,
     inspect_surface,
@@ -37,7 +38,6 @@ from benchmarks.tooling.command_runner import (
     ToolCommandStatus,
     git_head_sha,
     git_tracked_worktree_is_clean,
-    operator_environment,
     run_operator_command,
 )
 from jacobian.canonical import canonicalize_json, loads_strict_json
@@ -61,6 +61,7 @@ _SHARED_REPORT_FIELDS = (
     "repetitions",
     "timeout_seconds",
     "codex_version",
+    "evaluator",
     "selected_case_ids",
 )
 _DELTA_METRICS = (
@@ -687,6 +688,7 @@ def _run_case(
     mcp_url: str,
     timeout_seconds: float,
     tool_mode: ToolMode,
+    environment: Mapping[str, str],
 ) -> dict[str, Any]:
     stem = f"{case.case_id}-r{repetition:02d}"
     command_path = output / f"{stem}.command.json"
@@ -707,7 +709,7 @@ def _run_case(
         timeout_seconds=timeout_seconds,
         stdout_limit_bytes=16 * 1024 * 1024,
         stderr_limit_bytes=2 * 1024 * 1024,
-        environment=operator_environment(include=_CODEX_ENVIRONMENT),
+        environment=environment,
     )
     transcript_path.write_bytes(result.stdout)
     stderr_path.write_bytes(result.stderr)
@@ -893,6 +895,8 @@ def _validate_shared_report_invariants(
         raise ValueError("control report must use the control condition")
     if treatment.get("condition") != "enriched-diagnostics":
         raise ValueError("treatment report must use the enriched-diagnostics condition")
+    _validate_evaluator_identity(control)
+    _validate_evaluator_identity(treatment)
     for field in _SHARED_REPORT_FIELDS:
         if control.get(field) != treatment.get(field):
             raise ValueError(f"recovery comparison invariant differs: {field}")
@@ -900,6 +904,28 @@ def _validate_shared_report_invariants(
         raise ValueError("recovery comparison requires report schema version 1")
     if control.get("causal_claim_authorized") is not False:
         raise ValueError("recovery reports cannot authorize causal claims")
+
+
+def _validate_evaluator_identity(report: Mapping[str, Any]) -> None:
+    evaluator = report.get("evaluator")
+    if not isinstance(evaluator, Mapping):
+        raise ValueError("recovery reports require evaluator identity")
+    isolation = evaluator.get("isolation")
+    skill_surface = evaluator.get("skill_surface")
+    if not isinstance(isolation, Mapping) or not isinstance(skill_surface, Mapping):
+        raise ValueError(
+            "recovery reports require evaluator isolation and skill surface"
+        )
+    if (
+        isolation.get("home_isolated") is not True
+        or isolation.get("codex_home_isolated") is not True
+    ):
+        raise ValueError("recovery reports require isolated evaluator homes")
+    if skill_surface.get("external_file_sources") != []:
+        raise ValueError("recovery evaluator skill surface is not isolated")
+    digest = skill_surface.get("model_visible_instructions_sha256")
+    if not isinstance(digest, str) or _DIGEST.fullmatch(digest) is None:
+        raise ValueError("recovery evaluator skill surface digest is invalid")
 
 
 def _validate_selected_case_ids(report: Mapping[str, Any]) -> None:
@@ -1289,6 +1315,17 @@ def _compare_from_arguments(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def _prepare_evaluator(
+    isolated_root: Path,
+    workspace: Path,
+) -> tuple[Mapping[str, str], dict[str, Any], dict[str, Any]]:
+    environment, isolation = _prepare_isolated_codex_environment(isolated_root)
+    skill_surface = _inspect_codex_skill_surface(workspace, environment)
+    if skill_surface["external_file_sources"]:
+        raise RuntimeError("isolated Codex prompt exposed external file-backed skills")
+    return environment, isolation, skill_surface
+
+
 def main() -> None:
     args = _parser().parse_args()
     if args.compare:
@@ -1356,9 +1393,17 @@ def main() -> None:
         expected_revision=expected_revision,
     )
     output.mkdir(parents=True)
-    with tempfile.TemporaryDirectory(prefix="jacobian-lean-recovery-") as raw:
+    with (
+        tempfile.TemporaryDirectory(prefix="jacobian-lean-recovery-") as raw,
+        tempfile.TemporaryDirectory(
+            prefix="jacobian-lean-recovery-isolation-"
+        ) as isolated,
+    ):
         workspace = Path(raw)
-        codex_version = _command_version(workspace)
+        environment, isolation, skill_surface = _prepare_evaluator(
+            Path(isolated), workspace
+        )
+        codex_version = _command_version(workspace, environment)
         runs = [
             _run_case(
                 case=case,
@@ -1370,6 +1415,7 @@ def main() -> None:
                 mcp_url=args.mcp_url,
                 timeout_seconds=timeout,
                 tool_mode=args.tool_mode,
+                environment=environment,
             )
             for case in selected
             for repetition in range(1, repetitions + 1)
@@ -1392,6 +1438,10 @@ def main() -> None:
         "repetitions": repetitions,
         "timeout_seconds": timeout,
         "codex_version": codex_version,
+        "evaluator": {
+            "isolation": isolation,
+            "skill_surface": skill_surface,
+        },
         "surface": surface,
         "selected_case_ids": [case.case_id for case in selected],
         "runs": runs,

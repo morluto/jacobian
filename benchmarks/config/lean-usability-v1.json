@@ -5,7 +5,7 @@
     {
       "case_id": "mathlib-premise-retrieval",
       "cue_level": "AFFORDANCE",
-      "prompt": "Repair and independently verify the exact Lean MATHLIB theorem `∀ x : ℝ, x ^ 2 ≥ 0`. Use any suitable atomic mathematical operations; premise retrieval is available if useful, but do not rely only on a theorem name recalled from memory. Report any selected premise and replay evidence, the final proof, and verification evidence.",
+      "prompt": "Using the exposed atomic mathematical tools—not source code, repository indexes, or a local Lean process—repair and independently verify the exact Lean MATHLIB theorem `∀ x : ℝ, x ^ 2 ≥ 0`. Premise retrieval is available if useful, but do not rely only on a theorem name recalled from memory. Report any selected premise and replay evidence, the final proof, and verification evidence.",
       "expected_capability_ids": [
         "lean.check"
       ],
@@ -52,29 +52,29 @@
         {
           "capability_id": "lean.declaration.search",
           "required_output_fields": [
-            "environment_digest",
-            "lean_version",
-            "lean_commit",
-            "mathlib_commit",
-            "declarations.0.name",
-            "declarations.0.type"
+            "result.environment_digest",
+            "result.lean_version",
+            "result.lean_commit",
+            "result.mathlib_commit",
+            "result.declarations.0.name",
+            "result.declarations.0.type"
           ],
           "expected_output_values": {
-            "declarations.0.name": "irrational_sqrt_two"
+            "result.declarations.0.name": "irrational_sqrt_two"
           }
         },
         {
           "capability_id": "lean.declaration.inspect",
           "required_output_fields": [
-            "environment_digest",
-            "lean_version",
-            "lean_commit",
-            "mathlib_commit",
-            "declaration.name",
-            "declaration.type"
+            "result.environment_digest",
+            "result.lean_version",
+            "result.lean_commit",
+            "result.mathlib_commit",
+            "result.declaration.name",
+            "result.declaration.type"
           ],
           "expected_output_values": {
-            "declaration.name": "irrational_sqrt_two"
+            "result.declaration.name": "irrational_sqrt_two"
           }
         }
       ],

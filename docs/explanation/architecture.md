@@ -295,10 +295,11 @@ deliberate text projection requires an explicit MCP result. The two fixed tools
 are statically registered; dynamic operation tools and compatibility aliases
 are not supported.
 
-Hosting has two constructors with separate ownership: `create_server` owns one
-local runtime, while `create_remote_server` owns authentication and isolated
-tenant runtimes. Remote admission, leases, eviction, and quarantine do not
-enter the local constructor.
+Hosting has two constructors with separate ownership: `server.create_server`
+owns one concrete local runtime, while `remote.create_remote_server` owns
+authentication and isolated tenant runtimes. Their only shared request boundary
+acquires one runtime lease; local state has no nullable tenant router, and remote
+admission, eviction, and quarantine do not enter the local server module.
 
 The CLI projects the same installed declarations and execution path through
 `catalog`, `inspect`, and `run`. Operator administration remains separate from

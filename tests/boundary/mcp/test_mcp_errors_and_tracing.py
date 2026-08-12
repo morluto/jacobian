@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 
 from jacobian.adapters.mcp.context import _public_tool_error
-from jacobian.adapters.mcp.server import create_remote_server, create_server
+from jacobian.adapters.mcp.remote import create_remote_server
+from jacobian.adapters.mcp.server import create_server
 from jacobian.adapters.mcp.tooling import _request_id_digest, _request_trace_digest
 
 

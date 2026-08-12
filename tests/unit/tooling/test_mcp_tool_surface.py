@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.guidance import (
     MATH_FIND_DESCRIPTION,
     MATH_RUN_DESCRIPTION,
     SERVER_INSTRUCTIONS,
 )
 from jacobian.adapters.mcp.server import JacobianCoreExtension
+from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 
 
 def test_core_extension_exposes_exactly_the_stable_math_tools() -> None:
-    extension = JacobianCoreExtension(None, None)
+    extension = JacobianCoreExtension(
+        AppState(lambda: None, MCPBlockingWorkerRegistry())  # type: ignore[arg-type]
+    )
     assert extension.identifier == "io.jacobian/core"
     assert extension.settings() == {"version": "2"}
     assert tuple(binding.kwargs["name"] for binding in extension.tools()) == (

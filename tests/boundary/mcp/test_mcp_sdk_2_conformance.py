@@ -11,7 +11,9 @@ from mcp.server.extension import Extension, ResourceBinding, ToolBinding
 from mcp_types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
+from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.server import JacobianCoreExtension, create_server
+from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.contracts.capabilities import CapabilityResult
 
 
@@ -19,7 +21,9 @@ def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
     assert importlib.metadata.version("mcp") == "2.0.0"
     assert importlib.metadata.version("mcp-types") == "2.0.0"
 
-    extension = JacobianCoreExtension(None, None)
+    extension = JacobianCoreExtension(
+        AppState(lambda: None, MCPBlockingWorkerRegistry())  # type: ignore[arg-type]
+    )
     assert isinstance(extension, Extension)
     assert extension.identifier == "io.jacobian/core"
     assert extension.settings() == {"version": "2"}

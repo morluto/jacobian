@@ -97,11 +97,8 @@ def _runtime_scope(state: AppState) -> Iterator[JacobianRuntime]:
 
 
 def _start_lean_warmup(runtime: JacobianRuntime) -> None:
-    if (
-        runtime.portfolio.lean is not None
-        and os.environ.get("JACOBIAN_LEAN_WARMUP") == "1"
-    ):
-        runtime.portfolio.lean.start_mathlib_warmup()
+    if os.environ.get("JACOBIAN_LEAN_WARMUP") == "1":
+        runtime.start_lean_warmup()
 
 
 @contextmanager

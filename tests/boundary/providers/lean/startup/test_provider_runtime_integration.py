@@ -15,11 +15,11 @@ from jacobian.contracts.capabilities import (
     CapabilityResult,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.builtins import build_builtin_domain_bundles
 from jacobian.domains.graph_optimization.bundle import build_graph_optimization_bundle
 from jacobian.domains.graph_optimization.invariant_bundle import (
     build_graph_invariant_bundle,
 )
+from jacobian.portfolio.builtin import build_builtin_portfolio_components
 from jacobian.provider_measurements import _cold_install_spec
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 
@@ -75,7 +75,7 @@ def test_catalog_exposes_exact_runtime_identity_for_every_adapter(
         descriptors["universal_algebra.search.countermodel"].provider_runtime.provider
         == "jacobian.z3"
     )
-    built_in_bundles = build_builtin_domain_bundles()
+    built_in_bundles = build_builtin_portfolio_components()
     built_in_ids = {
         capability_id
         for bundle in built_in_bundles

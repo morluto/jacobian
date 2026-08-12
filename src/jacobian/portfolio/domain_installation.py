@@ -8,7 +8,7 @@ from jacobian.contracts.capabilities import CapabilityProviderAvailability
 from jacobian.installation.context import InstallationContext
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.operations import DomainBundle
-from jacobian.portfolio.model import PortfolioPlan
+from jacobian.portfolio.model import ManagedPortfolioComponent, PortfolioPlan
 from jacobian.portfolio.result import (
     DEPENDENCY_UNAVAILABLE,
     PROVIDER_UNAVAILABLE,
@@ -32,7 +32,7 @@ class DomainBundleInstaller:
         installed: dict[str, InstalledDomainBundle] = {}
         diagnostics: list[PortfolioDiagnostic] = []
         outcomes: list[BundleInstallation] = []
-        for bundle in plan.domain_bundles:
+        for bundle in plan.components:
             capability_ids = bundle.capability_ids
             runtime = bundle.provider_runtime
             if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
@@ -54,9 +54,14 @@ class DomainBundleInstaller:
                 )
                 continue
 
+            dependency_ids = (
+                bundle.dependency_ids
+                if isinstance(bundle, ManagedPortfolioComponent)
+                else ()
+            )
             unavailable_dependencies = tuple(
                 dependency_id
-                for dependency_id in bundle.dependency_ids
+                for dependency_id in dependency_ids
                 if dependency_id not in installed
             )
             if unavailable_dependencies:
@@ -83,14 +88,14 @@ class DomainBundleInstaller:
                 )
                 continue
 
-            if bundle.managed_installer is None:
+            if isinstance(bundle, DomainBundle):
                 installation = self.context.operations.install(bundle)
             else:
                 dependencies = {
                     dependency_id: installed[dependency_id]
-                    for dependency_id in bundle.dependency_ids
+                    for dependency_id in dependency_ids
                 }
-                installation = bundle.managed_installer(self.context, dependencies)
+                installation = bundle.install(self.context, dependencies)
                 _validate_managed_installation(bundle, installation)
             installed[bundle.domain_id] = installation
             for adapter in installation.adapters:
@@ -113,7 +118,7 @@ class DomainBundleInstaller:
 
 
 def _validate_managed_installation(
-    bundle: DomainBundle,
+    bundle: ManagedPortfolioComponent,
     installation: InstalledDomainBundle,
 ) -> None:
     installed_ids = tuple(
@@ -121,7 +126,7 @@ def _validate_managed_installation(
     )
     if installed_ids != bundle.capability_ids:
         raise ValueError(
-            f"managed bundle {bundle.domain_id} installed capability IDs "
+            f"managed component {bundle.domain_id} installed capability IDs "
             f"{installed_ids!r}, expected {bundle.capability_ids!r}"
         )
     mismatched_providers = tuple(
@@ -131,6 +136,6 @@ def _validate_managed_installation(
     )
     if mismatched_providers:
         raise ValueError(
-            f"managed bundle {bundle.domain_id} installed adapters with provider "
+            f"managed component {bundle.domain_id} installed adapters with provider "
             f"runtimes that differ from the bundle: {mismatched_providers!r}"
         )

@@ -119,6 +119,12 @@ artifacts, and semantic closure over referenced parents and axes. It never owns
 request validation, mathematical postconditions, domain applicability,
 provider selection, checker authority, or operation effects.
 
+`DomainBundle` groups ordinary installed operations and their shared semantics;
+it has no managed-installer callback. Specialized artifact/checker lifecycles
+belong to explicitly named components in the portfolio composition root. This
+keeps runtime services and dependency ordering out of the semantic operation
+model instead of adding an optional installation mode to every bundle.
+
 ## Execution contract
 
 The ordinary path is:

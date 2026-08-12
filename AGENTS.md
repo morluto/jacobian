@@ -128,6 +128,15 @@ registration, or mechanical wrappers for backend functions. Producers remain
 capped at `COMPUTED`; domain-owned checker declarations do not authorize
 themselves.
 
+`DomainBundle` is a semantic declaration, not an installation escape hatch. It
+must not own installer callbacks, runtime services, storage collaborators, or
+dependency-resolution policy. A capability family that genuinely needs a
+special artifact/checker lifecycle is an explicitly named portfolio component
+at the composition root; do not add a generic knob to every ordinary bundle for
+one exceptional installer. An operation may bind a typed computational backend
+that owns no runtime, storage, publication, installation, or checker authority;
+that backend is part of execution, not application lifecycle.
+
 Keep availability, recommendations, compatibility, and verification authority
 separate. Experimental contracts may break between versions; compatibility
 applies only to supported versions. Only an operator-authorized checker

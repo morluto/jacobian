@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from jacobian.checker_operations import ExactReplayCheckerDeclaration
-    from jacobian.installation.context import InstallationContext
     from jacobian.operation_bindings import InstalledOperation
-    from jacobian.operation_installation import InstalledDomainBundle
 
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
@@ -170,16 +168,6 @@ class DomainDiagnostics:
     invalid_request: CapabilityDiagnostic
 
 
-class ManagedDomainInstaller(Protocol):
-    """Install a domain adapter whose resource policy is not generic."""
-
-    def __call__(
-        self,
-        context: InstallationContext,
-        dependencies: Mapping[str, InstalledDomainBundle],
-    ) -> InstalledDomainBundle: ...
-
-
 @dataclass(frozen=True, slots=True)
 class DomainBundle:
     """Explicit installation unit owned by one mathematical domain."""
@@ -191,15 +179,10 @@ class DomainBundle:
     backend_version: str
     capabilities: tuple[InstalledOperation[Any, Any], ...]
     diagnostics: DomainDiagnostics
-    managed_capability_ids: tuple[str, ...] = ()
-    managed_installer: ManagedDomainInstaller | None = None
-    dependency_ids: tuple[str, ...] = ()
     checker_declarations: tuple[ExactReplayCheckerDeclaration, ...] = ()
 
     @property
     def capability_ids(self) -> tuple[str, ...]:
         """Return the capability IDs declared by exactly one installation mode."""
 
-        if self.managed_installer is not None:
-            return self.managed_capability_ids
         return tuple(operation.spec.operation_id for operation in self.capabilities)

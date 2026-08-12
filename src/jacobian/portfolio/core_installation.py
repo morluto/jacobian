@@ -11,6 +11,7 @@ from jacobian.graphs.coloring import install_graph_coloring_capabilities
 from jacobian.graphs.installation import install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
 from jacobian.installation.context import InstallationContext
+from jacobian.operations import DomainBundle
 from jacobian.polynomial_system_capabilities import (
     install_polynomial_system_capabilities,
 )
@@ -174,8 +175,10 @@ class CoreApplicationInstaller:
         ctx = self.context
         exact_bundles = {
             bundle.domain_id: (bundle, result.domain_bundles[bundle.domain_id])
-            for bundle in plan.domain_bundles
-            if bundle.checker_declarations and bundle.domain_id in result.domain_bundles
+            for bundle in plan.components
+            if isinstance(bundle, DomainBundle)
+            and bundle.checker_declarations
+            and bundle.domain_id in result.domain_bundles
         }
         if not exact_bundles:
             return

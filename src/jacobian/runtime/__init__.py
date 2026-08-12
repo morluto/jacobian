@@ -21,9 +21,9 @@ def create_runtime(
 ) -> JacobianRuntime:
     """Create the single owned runtime for ``root``."""
 
-    from jacobian.runtime.model import JacobianRuntime
+    from jacobian.composition import compose_runtime
 
-    return JacobianRuntime(
+    return compose_runtime(
         root,
         RuntimeOptions(
             checker_authority=checker_authority,

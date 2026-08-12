@@ -79,6 +79,16 @@ Linter contracts enforce this boundary incrementally as domains migrate and
 become exhaustive after the domain cutover. Operation declarations live
 outside `jacobian.math`.
 
+The portfolio composition root is the only owner that assembles runtime
+services and installation order. Ordinary `DomainBundle` values contain typed
+operation declarations only; they do not carry installer callbacks or runtime
+collaborators. A capability family with a genuinely specialized artifact or
+checker lifecycle is represented as an explicitly named managed portfolio
+component rather than widening the semantic bundle contract.
+An operation may still bind a typed computational backend, provided that
+backend owns no runtime, storage, publication, installation, or checker
+authority. This is execution dependency injection, not lifecycle ownership.
+
 ## Mathematical value and backend layers
 
 Domain packages own values and functions vertically:

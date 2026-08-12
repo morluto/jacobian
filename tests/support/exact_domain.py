@@ -42,7 +42,7 @@ def install_verified_domain_bundles(
         raise ValueError("at least one verified domain bundle is required")
     with atomic_installation(services.core):
         installed = DomainBundleInstaller(services.installation).install(
-            PortfolioPlan(domain_bundles=bundles)
+            PortfolioPlan(components=bundles)
         )
         missing = tuple(
             bundle.domain_id

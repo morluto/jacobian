@@ -86,6 +86,7 @@ _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
     "jacobian_checkers.matrix_normal_forms": "matrix-hnf",
     "jacobian_checkers.finite_field_rank": "sympy",
     "jacobian_checkers.finite_field_polynomial": "finite-field-polynomial",
+    "jacobian_checkers.real_quadratic": "real-quadratic",
 }
 
 
@@ -195,6 +196,15 @@ def install_exact_domain_checkers(
         "topology": topology_exact_checker_provider_runtime,
         "sympy": _finite_field_rank_checker_runtime,
         "finite-field-polynomial": _finite_field_polynomial_checker_runtime,
+        "real-quadratic": partial(
+            source_provider_runtime,
+            "jacobian.real-quadratic-checker",
+            version="1",
+            entrypoint="jacobian_checkers.real_quadratic:check_real_quadratic_order",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=("standard-library-rational-replay", "clean-process-checker"),
+        ),
         "geometry": partial(
             source_provider_runtime,
             "jacobian.exact-geometry-checker",

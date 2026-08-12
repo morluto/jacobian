@@ -7,6 +7,9 @@ from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS,
 )
+from jacobian.domains.graph_optimization.distance_matrix import (
+    DISTANCE_MATRIX_CAPABILITY,
+)
 from jacobian.domains.graph_optimization.invariants import (
     EXACT_GRAPH_INVARIANT_CAPABILITIES,
 )
@@ -16,6 +19,15 @@ from jacobian.provider_runtime import (
     SYMPY_VERSION,
     composite_provider_runtime,
     known_provider_runtime,
+)
+
+_GRAPH_INVARIANT_CAPABILITIES = (
+    DISTANCE_MATRIX_CAPABILITY,
+    *(
+        operation
+        for operation in EXACT_GRAPH_INVARIANT_CAPABILITIES
+        if operation.spec.operation_id != "graph.distance_matrix.compute"
+    ),
 )
 
 
@@ -33,6 +45,7 @@ def build_graph_invariant_bundle() -> DomainBundle:
                 "maximum_edges": 496,
                 "exact_computations": [
                     "girth",
+                    "distance_matrix",
                     "diameter",
                     "edge_connectivity",
                     "vertex_connectivity",
@@ -66,7 +79,7 @@ def build_graph_invariant_bundle() -> DomainBundle:
             ),
         ),
         backend_version=f"networkx-{NETWORKX_VERSION};sympy-{SYMPY_VERSION}",
-        capabilities=EXACT_GRAPH_INVARIANT_CAPABILITIES,
+        capabilities=_GRAPH_INVARIANT_CAPABILITIES,
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
                 code="INVALID_GRAPH_INVARIANT_REQUEST",

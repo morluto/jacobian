@@ -2,74 +2,59 @@
 
 [Documentation home](../../../index.md)
 
-`graph.distance_matrix.compute` returns one complete matrix of exact
+`graph.distance_matrix.compute` returns one complete typed value of exact
 unweighted shortest-path distances for a bounded finite simple undirected
-graph. The producer uses the existing `GraphInvariantRequest` graph contract,
-so inputs retain the established limit of 32 vertices and 496 edges.
+graph. The operation uses the existing `GraphInvariantRequest` contract, so
+inputs retain the established limit of 32 vertices and 496 edges.
 
 ## Result semantics
 
 The result is bound to
-`unweighted-shortest-path-distance-matrix.v1` and makes its representation
+`unweighted-shortest-path-distance-matrix.v3` and makes its representation
 choices explicit:
 
-- `vertices` is the complete input vertex set in lexicographic ascending order;
-- `distances[i][j]` covers every ordered pair of vertices in that order;
+- `target_vertices` is the complete input vertex set in lexicographic ascending
+  order and labels every distance-vector target;
+- `rows` is in the same canonical order, and every row carries its own
+  `source_vertex` label next to a `distances_by_target` mapping;
+- every entry is therefore bound directly to both its source and target labels
+  rather than relying on detached positional indices;
 - a finite entry is the number of edges in a shortest path;
 - an unreachable pair is represented by JSON `null`, never a numeric sentinel;
 - the diagonal is zero, finite off-diagonal entries are positive, and the
   matrix is symmetric; and
-- `connected` is true exactly when the graph is nonempty and every matrix
-  entry is finite.
+- `connected` is true exactly when the graph is nonempty and every entry is
+  finite.
 
-The empty graph returns an empty matrix with `connected = false`. A singleton
-returns `[[0]]` with `connected = true`.
+The empty graph returns empty targets and rows with `connected = false`. A
+singleton returns one labelled row mapping itself to zero with
+`connected = true`.
 
-The result model rejects inconsistent ordering, shape, diagonal, symmetry,
-component closure, triangle inequality, or connectedness before an artifact is
-written.
+The typed result rejects inconsistent ordering, coverage, diagonal, symmetry,
+component closure, triangle inequality, or connectedness before publication.
 
 ## Scope and composition
 
-This capability exposes the distance matrix as one inspectable mathematical
-outcome. It does not compute a diameter, radius, vertex eccentricity, distance
-between derived vertex sets, or a conjecture-specific inequality. An agent can
-derive such quantities by composing this artifact with independently obtained
-sets or other capabilities.
-
-The producer is capped at `COMPUTED`. That assurance means the bounded
-operation completed and produced a typed artifact; it is not independent
-verification of the distance claim.
+This operation exposes the distance matrix as one inspectable mathematical
+value. It does not compute a diameter, radius, vertex eccentricity, distance
+between derived vertex sets, or a conjecture-specific inequality. Agents can
+compose the labelled rows with independently obtained vertex sets without
+relabeling a detached positional matrix.
 
 ## Independent verification
 
-`graph.distance_matrix.verify` consumes one stored producer result and can
-promote that exact matrix to `VERIFIED`. The operator-authorized checker uses
-only Python standard-library adjacency sets, queues, and integer distances. It
-does not import NetworkX or the producer package.
+`graph.distance_matrix.verify` is a separate checker operation. It accepts the
+exact producer input and candidate value and independently replays a
+breadth-first traversal from every source using only Python standard-library
+adjacency sets, queues, and integer distances. It does not import NetworkX or
+the producer implementation.
 
-The checker first rejects malformed metadata, ordering, shape, entry types,
-diagonal values, asymmetry, incorrect edge distances, triangle violations, and
-finite-component closure violations. Those conditions are only fast rejection
-checks. Acceptance still requires an exhaustive breadth-first traversal from
-every source and exact comparison of every finite distance and unreachable
-`null`.
+The checker rejects malformed metadata, source or target ordering, missing or
+extra rows, entry types, diagonal values, asymmetry, incorrect edge distances,
+triangle violations, finite-component closure violations, and false shortest
+paths. Acceptance requires exact comparison of every finite distance and every
+unreachable `null`.
 
-The verification record is bound to the exact graph input artifact, matrix
-result artifact, schemas, semantics, checker source digest, witness format, and
-provider runtime. Rejection, timeout, cancellation, unavailable runtime, or
-checker error remains `UNKNOWN` and cannot produce `VERIFIED`.
-
-## Public composition evidence
-
-The frozen public matched evaluation in
-[Capability workflow evaluations](../../evaluations/benchmark-contracts.md#task-and-verifier-validation)
-used three control/treatment pairs. All treatments autonomously discovered the
-producer and verifier, preserved independently replayable matrix evidence, and
-correctly derived a restricted-set distance profile without substituting
-diameter, radius, or eccentricity. Only the exact matrix received a bound
-verification record; the derived profile did not.
-
-This public answer-visible result is regression evidence for composition, not
-a broad portfolio-value claim. It does not justify adding a restricted-set
-distance capability by itself.
+Only the operator-authorized checker may emit a verification record. Failure,
+rejection, timeout, cancellation, or unavailable checker execution does not
+verify the candidate.

@@ -9,9 +9,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-)
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
     build_graph_invariant_bundle,
@@ -309,7 +307,10 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     assert verified.output["verification_record_uri"] in verified.artifact_uris
     assert len(verified.artifact_uris) == 2
 
-    matrix = computed.output["result"]["distances"]
+    matrix = [
+        list(row["distances_by_target"].values())
+        for row in computed.output["result"]["rows"]
+    ]
     degree = dict.fromkeys(graph["vertices"], 0)
     for left, right in graph["edges"]:
         degree[left] += 1
@@ -318,7 +319,7 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     maximum_degree_vertices = sorted(
         vertex for vertex, value in degree.items() if value == maximum_degree
     )
-    matrix_vertices = computed.output["result"]["vertices"]
+    matrix_vertices = computed.output["result"]["target_vertices"]
     designated_indices = [
         matrix_vertices.index(vertex) for vertex in maximum_degree_vertices
     ]
@@ -342,10 +343,17 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     assert maximizing_vertices == ["5"]
 
     false_candidate = deepcopy(computed.output["result"])
-    order = len(false_candidate["vertices"])
-    false_candidate["distances"] = [
-        [0 if source == target else 1 for target in range(order)]
-        for source in range(order)
+    false_candidate["rows"] = [
+        {
+            "source_vertex": vertex,
+            "distances_by_target": {
+                target_vertex: 0 if source == target else 1
+                for target, target_vertex in enumerate(
+                    false_candidate["target_vertices"]
+                )
+            },
+        }
+        for source, vertex in enumerate(false_candidate["target_vertices"])
     ]
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(

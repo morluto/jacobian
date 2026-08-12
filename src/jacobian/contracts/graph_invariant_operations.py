@@ -31,26 +31,41 @@ class GraphMaximumMatchingRequest(ContractModel):
 
 
 GraphDistance = Annotated[StrictInt, Field(ge=0, le=31)] | None
-GraphDistanceRow = Annotated[
-    tuple[GraphDistance, ...],
-    Field(max_length=32),
-]
+
+
+class GraphDistanceMatrixRow(ContractModel):
+    """One source-labelled row over the result's declared target vertices."""
+
+    source_vertex: GraphVertex
+    distances_by_target: Annotated[
+        dict[GraphVertex, GraphDistance],
+        Field(max_length=32),
+    ]
 
 
 def _validate_distance_matrix_shape(
-    vertices: tuple[GraphVertex, ...],
-    distances: tuple[GraphDistanceRow, ...],
+    target_vertices: tuple[GraphVertex, ...],
+    rows: tuple[GraphDistanceMatrixRow, ...],
 ) -> int:
-    order = len(vertices)
-    if tuple(sorted(vertices)) != vertices or len(set(vertices)) != order:
-        raise ValueError("distance-matrix vertices must be unique and sorted")
-    if len(distances) != order or any(len(row) != order for row in distances):
-        raise ValueError("distance matrix must be square on the declared vertices")
+    order = len(target_vertices)
+    if (
+        tuple(sorted(target_vertices)) != target_vertices
+        or len(set(target_vertices)) != order
+    ):
+        raise ValueError("distance-matrix target vertices must be unique and sorted")
+    if tuple(row.source_vertex for row in rows) != target_vertices:
+        raise ValueError(
+            "distance-matrix rows must bind every source vertex in target order"
+        )
+    if any(tuple(row.distances_by_target) != target_vertices for row in rows):
+        raise ValueError(
+            "every distance-matrix row must bind all targets in target order"
+        )
     return order
 
 
 def _validate_distance_matrix_diagonal_and_symmetry(
-    distances: tuple[GraphDistanceRow, ...],
+    distances: tuple[tuple[GraphDistance, ...], ...],
     order: int,
 ) -> None:
     for source in range(order):
@@ -66,7 +81,7 @@ def _validate_distance_matrix_diagonal_and_symmetry(
 
 
 def _validate_distance_matrix_triangle_inequality(
-    distances: tuple[GraphDistanceRow, ...],
+    distances: tuple[tuple[GraphDistance, ...], ...],
     order: int,
 ) -> None:
     for source in range(order):
@@ -87,23 +102,28 @@ def _validate_distance_matrix_triangle_inequality(
 
 
 class GraphDistanceMatrixResult(ContractModel):
-    """All exact unweighted shortest-path distances in canonical vertex order."""
+    """All exact distances with every positional row bound to its source label."""
 
-    semantics_version: Literal["unweighted-shortest-path-distance-matrix.v1"]
-    vertex_ordering: Literal["LEXICOGRAPHIC_ASCENDING"]
+    semantics_version: Literal["unweighted-shortest-path-distance-matrix.v3"]
+    row_ordering: Literal["SOURCE_VERTEX_LEXICOGRAPHIC_ASCENDING"]
+    target_ordering: Literal["TARGET_VERTEX_LEXICOGRAPHIC_ASCENDING"]
     pair_coverage: Literal["ALL_ORDERED_VERTEX_PAIRS"]
     unreachable_representation: Literal["JSON_NULL"]
-    vertices: tuple[GraphVertex, ...] = Field(max_length=32)
-    distances: tuple[GraphDistanceRow, ...] = Field(max_length=32)
+    target_vertices: tuple[GraphVertex, ...] = Field(max_length=32)
+    rows: tuple[GraphDistanceMatrixRow, ...] = Field(max_length=32)
     connected: StrictBool
 
     @model_validator(mode="after")
     def bind_complete_metric(self) -> Self:
-        order = _validate_distance_matrix_shape(self.vertices, self.distances)
-        _validate_distance_matrix_diagonal_and_symmetry(self.distances, order)
-        _validate_distance_matrix_triangle_inequality(self.distances, order)
+        order = _validate_distance_matrix_shape(self.target_vertices, self.rows)
+        distances = tuple(
+            tuple(row.distances_by_target[target] for target in self.target_vertices)
+            for row in self.rows
+        )
+        _validate_distance_matrix_diagonal_and_symmetry(distances, order)
+        _validate_distance_matrix_triangle_inequality(distances, order)
         expected_connected = order > 0 and all(
-            distance is not None for row in self.distances for distance in row
+            distance is not None for row in distances for distance in row
         )
         if self.connected != expected_connected:
             raise ValueError("connected must match all-pairs finite reachability")

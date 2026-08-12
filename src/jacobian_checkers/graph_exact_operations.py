@@ -748,6 +748,7 @@ def _graph_symmetry_generator_orbits(
         "determinism": "DETERMINISTIC",
         "backend": "networkx",
         "backend_version": "3.6.1",
+        "verification": "UNVERIFIED",
     }
     return result == expected
 
@@ -867,20 +868,42 @@ def _validate_distance_matrix_header(
         set(result)
         != {
             "semantics_version",
-            "vertex_ordering",
+            "row_ordering",
+            "target_ordering",
             "pair_coverage",
             "unreachable_representation",
-            "vertices",
-            "distances",
+            "target_vertices",
+            "rows",
             "connected",
         }
-        or result["semantics_version"] != "unweighted-shortest-path-distance-matrix.v1"
-        or result["vertex_ordering"] != "LEXICOGRAPHIC_ASCENDING"
+        or result["semantics_version"] != "unweighted-shortest-path-distance-matrix.v3"
+        or result["row_ordering"] != "SOURCE_VERTEX_LEXICOGRAPHIC_ASCENDING"
+        or result["target_ordering"] != "TARGET_VERTEX_LEXICOGRAPHIC_ASCENDING"
         or result["pair_coverage"] != "ALL_ORDERED_VERTEX_PAIRS"
         or result["unreachable_representation"] != "JSON_NULL"
-        or result["vertices"] != list(vertices)
+        or result["target_vertices"] != list(vertices)
         or type(result["connected"]) is not bool
     )
+
+
+def _distance_matrix_rows(
+    value: object,
+    vertices: tuple[str, ...],
+) -> list[list[int | None]] | None:
+    if not isinstance(value, list) or len(value) != len(vertices):
+        return None
+    matrix: list[list[int | None]] = []
+    for source_vertex, row in zip(vertices, value, strict=True):
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"source_vertex", "distances_by_target"}
+            or row["source_vertex"] != source_vertex
+            or not isinstance(row["distances_by_target"], dict)
+            or list(row["distances_by_target"]) != list(vertices)
+        ):
+            return None
+        matrix.append([row["distances_by_target"][target] for target in vertices])
+    return matrix
 
 
 def _validate_distance_matrix_entries(
@@ -937,7 +960,9 @@ def _distance_matrix(source: dict[str, Any], result: dict[str, Any]) -> bool:
     if not _validate_distance_matrix_header(result, vertices):
         return False
 
-    matrix = result["distances"]
+    matrix = _distance_matrix_rows(result["rows"], vertices)
+    if matrix is None:
+        return False
     order = len(vertices)
     if not _validate_distance_matrix_entries(matrix, order):
         return False
@@ -964,7 +989,7 @@ def check_graph_distance_matrix(request: dict[str, Any]) -> dict[str, Any]:
     return _run(
         request,
         operation_id="graph.distance_matrix.compute",
-        witness_format="graph.distance-matrix.all-sources-bfs-v1",
+        witness_format="graph.distance-matrix.all-sources-bfs-v3",
         replay=_distance_matrix,
         replay_method="all-sources breadth-first distance-matrix replay",
         exhaustive=True,

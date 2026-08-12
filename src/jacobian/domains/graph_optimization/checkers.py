@@ -138,7 +138,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "graph.distance_matrix.compute",
         GraphInvariantRequest,
         "check_graph_distance_matrix",
-        "graph.distance-matrix.all-sources-bfs-v1",
+        "graph.distance-matrix.all-sources-bfs-v3",
         entrypoint_module=_GRAPH_ENTRYPOINT,
         replay_method="all-sources breadth-first distance-matrix replay",
         reason=(

@@ -41,7 +41,7 @@ def _distance_matrix_checker_request(
 ) -> dict[str, Any]:
     return _request(
         "graph.distance_matrix.compute",
-        "graph.distance-matrix.all-sources-bfs-v1",
+        "graph.distance-matrix.all-sources-bfs-v3",
         {
             "graph": {
                 "graph_schema_version": "1",
@@ -50,12 +50,19 @@ def _distance_matrix_checker_request(
             }
         },
         {
-            "semantics_version": "unweighted-shortest-path-distance-matrix.v1",
-            "vertex_ordering": "LEXICOGRAPHIC_ASCENDING",
+            "semantics_version": "unweighted-shortest-path-distance-matrix.v3",
+            "row_ordering": "SOURCE_VERTEX_LEXICOGRAPHIC_ASCENDING",
+            "target_ordering": "TARGET_VERTEX_LEXICOGRAPHIC_ASCENDING",
             "pair_coverage": "ALL_ORDERED_VERTEX_PAIRS",
             "unreachable_representation": "JSON_NULL",
-            "vertices": result_vertices,
-            "distances": distances,
+            "target_vertices": result_vertices,
+            "rows": [
+                {
+                    "source_vertex": vertex,
+                    "distances_by_target": dict(zip(result_vertices, row, strict=True)),
+                }
+                for vertex, row in zip(result_vertices, distances, strict=True)
+            ],
             "connected": connected,
         },
     )
@@ -281,26 +288,43 @@ def test_distance_matrix_checker_accepts_exact_boundary_claims(
 @pytest.mark.parametrize(
     "mutate",
     (
-        lambda result: result.update(vertices=["b", "a", "c"]),
+        lambda result: result.update(target_vertices=["b", "a", "c"]),
+        lambda result: result.update(rows=result["rows"][:2]),
+        lambda result: result["rows"][0].update(source_vertex="b"),
+        lambda result: result["rows"][0].update(extra="forged"),
+        lambda result: result["rows"][0]["distances_by_target"].pop("c"),
+        lambda result: result["rows"][0]["distances_by_target"].__setitem__("a", 1),
+        lambda result: result["rows"][0]["distances_by_target"].__setitem__("b", 0),
+        lambda result: result["rows"][0]["distances_by_target"].__setitem__("c", 1),
+        lambda result: result["rows"][2]["distances_by_target"].__setitem__("a", 1),
         lambda result: result.update(
-            distances=[[0, 1], [1, 0]],
-        ),
-        lambda result: result["distances"][0].__setitem__(0, 1),
-        lambda result: result["distances"][0].__setitem__(1, 0),
-        lambda result: result["distances"][0].__setitem__(2, 1),
-        lambda result: result["distances"][2].__setitem__(0, 1),
-        lambda result: result.update(
-            distances=[[0, 1, 1], [1, 0, 1], [1, 1, 0]],
+            rows=[
+                {
+                    "source_vertex": "a",
+                    "distances_by_target": {"a": 0, "b": 1, "c": 1},
+                },
+                {
+                    "source_vertex": "b",
+                    "distances_by_target": {"a": 1, "b": 0, "c": 1},
+                },
+                {
+                    "source_vertex": "c",
+                    "distances_by_target": {"a": 1, "b": 1, "c": 0},
+                },
+            ],
         ),
         lambda result: result.update(connected=False),
         lambda result: result.update(
-            semantics_version="unweighted-shortest-path-distance-matrix.v2"
+            semantics_version="unweighted-shortest-path-distance-matrix.v1"
         ),
         lambda result: result.update(extra="forged"),
-        lambda result: result["distances"][0].__setitem__(1, True),
+        lambda result: result["rows"][0]["distances_by_target"].__setitem__("b", True),
     ),
     ids=(
         "wrong-order",
+        "missing-row",
+        "wrong-source-label",
+        "extra-row-field",
         "wrong-shape",
         "diagonal",
         "off-diagonal-zero",

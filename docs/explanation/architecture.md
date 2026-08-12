@@ -2,7 +2,7 @@
 
 [Documentation home](../index.md)
 
-- Status: Target architecture for the pre-stable cutover
+- Status: Current architecture
 
 ## Purpose
 
@@ -75,9 +75,8 @@ private backend modules
 
 Private mathematical backends never import runtime, operation declarations,
 MCP, CLI, storage, installation, publication, or checker authority. Import
-Linter contracts enforce this boundary incrementally as domains migrate and
-become exhaustive after the domain cutover. Operation declarations live
-outside `jacobian.math`.
+Linter enforces the leaf boundaries and dependency direction. Operation
+declarations live outside `jacobian.math`.
 
 The portfolio composition root is the only owner that assembles runtime
 services and installation order. Ordinary `DomainBundle` values contain typed
@@ -147,7 +146,7 @@ does not own mathematical validation, applicability, checker authority,
 provider selection, effects, or parsing.
 
 Built-ins use a static explicit inventory. External operation packages and
-entry-point discovery are not supported during the cutover.
+entry-point discovery are not supported.
 
 ## Execution pipeline
 
@@ -239,16 +238,12 @@ Installation verifies each declared field and result type. Compatibility
 requires exact type/version, parent, presentation, axes, and bases; all
 transformations are explicit.
 
-#905 Slices A and B use this same contract unchanged. Complete projective
-lines, finite map tables, fiber partitions, and certificates remain
-domain-owned semantic values, so the port layer needs no collection model,
-field extraction, cardinality language, coercion graph, or generalized
-unifier. That two-slice reuse freezes this minimal shape as the supported
-internal composition contract.
-
-Slice A's complete projective line is a domain-owned semantic value with a
-fixed presentation, axis, order, completeness check, and digest. It does not
-make ports collection-aware.
+Finite-field direction ledgers, finite map tables, fiber partitions, and
+certificates use this contract unchanged. They remain domain-owned semantic
+values, so the port layer needs no collection model, field extraction,
+cardinality language, coercion graph, or generalized unifier. A complete
+projective line owns its presentation, axis, order, completeness check, and
+digest; it does not make ports collection-aware.
 
 `value://opaque-id` tokens contain no serialized metadata. The bounded in-memory
 store is owned by one local or tenant runtime and records the semantic value,

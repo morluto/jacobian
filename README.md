@@ -16,11 +16,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/morluto/jacobian" alt="MIT license"></a>
 </p>
 
-<p align="center">
-  <a href="README.md">English</a> ·
-  <a href="README.zh-CN.md">简体中文</a>
-</p>
-
 Jacobian is a collection of mathematical operations for AI agents. It runs as
 an MCP server and is also available as a CLI and Python library. Agents can use
 it to compute invariants, search for examples or counterexamples, work with
@@ -126,8 +121,8 @@ environment. Use `math.run` to invoke a selected operation.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and
-[optional backend setup](docs/how-to/install-optional-backends.md) for provider
-requirements.
+[native and formal provider setup](docs/how-to/install-native-and-formal-providers.md)
+for provider requirements.
 
 ## Verification model
 
@@ -167,8 +162,8 @@ research may change experimental contracts between releases.
   ownership, and project boundaries
 - [Tool reference](docs/reference/tools.md) — MCP resources and invocation
   contracts
-- [Optional backends](docs/how-to/install-optional-backends.md) — provider and
-  Lean setup
+- [Native and formal providers](docs/how-to/install-native-and-formal-providers.md)
+  — provider and Lean setup
 - [Remote deployment](docs/how-to/deploy-remote-mcp.md) — HTTP deployment and
   authentication
 

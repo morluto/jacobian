@@ -73,7 +73,7 @@ ordinary contributor work that only needs to run the test suite, the
 `make setup PROFILE=core` quick path installs the same complete Python backend
 stack without writing client configuration; see
 [CONTRIBUTING.md](../../CONTRIBUTING.md). Optional native backend installation is described in
-[Install optional backends](install-optional-backends.md).
+[Install native and formal providers](install-native-and-formal-providers.md).
 
 Add `--dev` when the clone also needs the locked development group. Use
 `--dry-run` to inspect every sync, init, configuration, and doctor command

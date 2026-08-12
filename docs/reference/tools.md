@@ -2,7 +2,7 @@
 
 [Documentation home](../index.md)
 
-- Status: Target pre-stable MCP contract
+- Status: Current MCP contract
 - Installed membership is runtime-defined
 
 Jacobian exposes exactly two MCP tools.
@@ -136,26 +136,25 @@ mathematical product.
 
 ## SDK projection
 
-During the migration the server pins `mcp==2.0.0` and `mcp-types==2.0.0`. It
-uses MCP SDK-derived schemas, Pydantic output validation,
+The server pins `mcp==2.0.0` and `mcp-types==2.0.0`. It uses MCP SDK-derived
+schemas, Pydantic output validation,
 `structured_output=True`, context injection, cancellation, progress, transport,
 and middleware. It returns Pydantic results directly unless a real
 `ResourceLink`, custom metadata, or deliberate text projection requires an
 explicit MCP result.
 
-Until python-sdk issue #3067 is resolved, a narrow boundary shim rejects
-unknown call arguments. It is deleted only when the pinned SDK publishes
-`additionalProperties: false` and rejects unknown arguments in conformance
-tests.
+Because the pinned SDK does not publish strict extra-argument schemas, a narrow
+boundary shim rejects unknown call arguments. It can be deleted when the SDK
+publishes `additionalProperties: false` and rejects unknown arguments in
+conformance tests.
 
 `math.find` is read-only and idempotent. `math.run` is non-destructive at the
 fixed MCP surface but is not globally read-only or idempotent; the selected
 operation's exact effect is catalog metadata.
 
 The fixed generic executor does not expose each selected payload as a separate
-host-level tool schema. That limitation is accepted while issue #1031 remains
-deferred; Jacobian does not add prepared handles or direct-operation aliases as
-a workaround.
+host-level tool schema. Jacobian does not add prepared handles or
+direct-operation aliases as a workaround.
 
 ## CLI parity
 

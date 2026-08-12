@@ -10,8 +10,8 @@ operations, also use the
 
 ## Product Constraints
 
-Jacobian is a **toolbox of atomic math tools** for agents, not a workflow
-engine and not a trust-OS with explore/verify research phases.
+Jacobian is a **toolbox of atomic math tools** for agents. It is not a workflow
+engine: the agent owns decomposition, sequencing, checker choice, and stopping.
 
 | Agent verb | MCP tool | Meaning |
 | --- | --- | --- |
@@ -25,9 +25,9 @@ Not a required sequence: agents may run a known ID, search first, or re-find
 mid-investigation.
 
 **Results are math-first.** Ordinary tools return calculations (GCD, matrix,
-path, factors, …) plus execution status. They do not primarily return
-HEURISTIC/COMPUTED/VERIFIED slogans. Optional envelope fields may exist on the
-wire during migration; do not design new behavior around them as the product.
+path, factors, …) plus execution status. Do not add generic assurance,
+completeness, scope, or obligation knobs to ordinary results; bounded status
+belongs in the domain result that defines it.
 
 **Checker tools are additional tools.** Independent check is a **separate
 catalog ID** (e.g. `….verify`, `lean.check`), not a role on the producer. **No
@@ -52,8 +52,12 @@ Design against the portfolio. Reuse values/artifacts; prefer composable
 primitives over paper-shaped mega-tools. Domain-owned tool IDs over generic
 verb taxonomies or new top-level MCP tools.
 
-Prefer thin adapters to maintained mathematical systems. Pin versions when
-reproducibility, certificates, or verification depend on them.
+Prefer thin adapters to maintained mathematical systems. Wrap Jacobian's
+semantics, not an entire backend API: one public function has one canonical
+semantic input, validates the domain it promises, and delegates the algorithm
+through a private backend module without silently changing domains or parents.
+Pin versions when reproducibility, certificates, or verification depend on
+them.
 Do not reimplement proof kernels, elaborators, tactic engines, solver engines,
 computer algebra algorithms, or graph canonicalization when a maintained
 backend provides the needed operation.

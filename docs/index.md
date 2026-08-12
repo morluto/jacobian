@@ -14,20 +14,20 @@ catalog IDs—separate from producers. Catalog entries are often still called
 and [Search and execute](explanation/architecture.md#search-and-execute) define
 the contract.
 
-Jacobian is pre-stable and is making an explicit architecture cutover. The
-product, architecture, operation-library, and tool documents define the target
-contract; the installed catalog defines operation availability in the current
-checkout. Evaluations guide portfolio quality and do not grant formal authority.
+Jacobian is pre-stable. The product, architecture, operation-library, and tool
+documents define the current contract; the installed catalog defines which
+operations are available in a particular checkout. Evaluations guide portfolio
+quality and do not grant formal authority.
 
 ## Project control documents
 
-These documents track the current product contract and its ongoing evolution:
+These documents define the current product contract:
 
 | Question | Document | Status |
 | --- | --- | --- |
-| What product is Jacobian building? | [Product model](explanation/product-blueprint.md) | Active product direction |
-| What architecture is the cutover implementing? | [Architecture](explanation/architecture.md) | Target dependencies and trust boundaries |
-| What tool contract is the cutover implementing? | [Tool surface](reference/tools.md) | Target fixed MCP projection |
+| What is Jacobian? | [Product model](explanation/product-blueprint.md) | Product and ownership model |
+| How is it structured? | [Architecture](explanation/architecture.md) | Dependencies and trust boundaries |
+| What does MCP expose? | [Tool surface](reference/tools.md) | Fixed MCP projection |
 | What operations are installed now? | Runtime `capability://catalog` | Current installation-specific inventory |
 | What work is open? | GitHub issues (e.g. architecture epics) | Implementation priorities live in issues, not a parallel goals doc |
 
@@ -48,7 +48,7 @@ complete a specific task.
 
 - [Discover, invoke, and check domain math tools](how-to/invoke-domain-capabilities.md)
 - [Configure an agent from a source checkout](how-to/setup-agent-from-source.md)
-- [Install optional backends](how-to/install-optional-backends.md)
+- [Install native and formal providers](how-to/install-native-and-formal-providers.md)
 - [Troubleshoot Z3 installation on macOS](how-to/troubleshoot-z3-macos.md)
 - [Run the MCP visibility evaluation](how-to/run-codex-visibility-evaluation.md)
 - [Deploy the remote MCP server](how-to/deploy-remote-mcp.md)

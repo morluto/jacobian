@@ -2,7 +2,7 @@
 
 [Documentation home](../index.md)
 
-- Status: Active product direction
+- Status: Current product contract
 - Scope: MCP, CLI, and Python access to installed mathematical operations
 
 ## Product definition

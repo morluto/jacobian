@@ -10,7 +10,7 @@ proof.
 ## Prerequisites
 
 Install the locked Python environment and prepare the pinned Lean runtime as
-described in [Install optional backends](../how-to/install-optional-backends.md#lean-certificates).
+described in [Install native and formal providers](../how-to/install-native-and-formal-providers.md#lean-certificates).
 
 ## Run the public composition
 

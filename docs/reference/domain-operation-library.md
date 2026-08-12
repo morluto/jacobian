@@ -2,7 +2,7 @@
 
 [Documentation home](../index.md)
 
-- Status: Target contract for the pre-stable cutover
+- Status: Current library contract
 - Related architecture: [Domain operation library](../explanation/architecture.md#domain-operation-library)
 
 `jacobian.math` is Jacobian's authoritative mathematical library. Built-in
@@ -154,7 +154,7 @@ known without executing the operation.
 A request-to-result postcondition runs before anything is exposed. Failure
 publishes no value reference, artifact, or verification record.
 
-Legacy envelope metadata is not part of `OperationSpec`. In particular, an
+Envelope metadata is not part of `OperationSpec`. In particular, an
 ordinary operation does not configure generic completeness, scope,
 relationships, or obligations. A v2 result carries a `verification_record_uri`
 only when an independent checker accepted the result; that pointer carries no

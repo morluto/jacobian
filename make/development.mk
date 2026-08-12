@@ -81,4 +81,4 @@ docs-command-check: ## Validate Make targets and TESTS paths in command examples
 	$(UV_RUN) python tools/check_doc_commands.py
 
 docs-linkcheck: docs-command-check ## Check relative Markdown links in project docs.
-	npx --yes markdown-link-check@3.15.0 --config .markdown-link-check.json -q README.md README.zh-CN.md AGENTS.md CONTRIBUTING.md docs
+	npx --yes markdown-link-check@3.15.0 --config .markdown-link-check.json -q README.md AGENTS.md CONTRIBUTING.md docs

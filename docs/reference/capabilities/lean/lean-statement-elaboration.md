@@ -9,10 +9,8 @@ artifact:
 - `ELABORATE_PROPOSITION` directly elaborates one proposition and requires the
   informal claim to be omitted.
 
-The direct operation resolves the `lean.statement.elaborate` inventory
-contract without adding an alias. Both operations remain available through
-`lean.statement.propose` because they use the same statement input, Lean
-execution boundary, artifact ownership, and non-verification semantics.
+Both operations use `lean.statement.propose` because they share one statement
+input, Lean execution boundary, artifact owner, and non-verification semantics.
 
 ## Direct proposition contract
 

@@ -33,9 +33,12 @@ from jacobian.contracts.polynomials import (
 )
 from jacobian.contracts.results import (
     Conclusion,
+    Execution,
+    ExecutionStatus,
 )
 from jacobian.domains._examples import example
 from jacobian.polynomials._support import (
+    PolynomialOperationResult,
     _computed_result,
     _evaluate,
     _materialize_evaluation,
@@ -127,7 +130,6 @@ class PolynomialMapEvaluationAdapter:
         )
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
             artifact_uris=(map_uri, evaluation_uri),
@@ -194,6 +196,14 @@ class PolynomialJacobianAdapter:
             code="INVALID_POLYNOMIAL_JACOBIAN_REQUEST",
             operation="Jacobian computation",
         )
+        return self.compute(validated).project(self.descriptor)
+
+    def compute(
+        self,
+        validated: PolynomialJacobianRequest,
+    ) -> PolynomialOperationResult[PolynomialJacobianOutput]:
+        """Compute from one validated request without re-entering the adapter."""
+
         started = time.monotonic()
         polynomial_map = validated.map
         polynomial_map, map_uri = _materialize_map(self.resources, polynomial_map)
@@ -289,11 +299,12 @@ class PolynomialJacobianAdapter:
             determinant=jacobian.determinant,
             backend_version=SYMPY_VERSION,
         )
-        return _computed_result(
-            descriptor=self.descriptor,
-            request=request,
-            started=started,
-            output=output.model_dump(mode="json"),
+        return PolynomialOperationResult(
+            value=output,
+            execution=Execution(
+                status=ExecutionStatus.COMPLETED,
+                runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
+            ),
             artifact_uris=(
                 map_uri,
                 jacobian_artifact.artifact_uri,
@@ -377,13 +388,10 @@ class PolynomialKellerConditionVerifyAdapter:
                 "keller_condition_verification",
                 "No authorized polynomial Keller-condition checker is installed.",
             )
-        jacobian_result = PolynomialJacobianAdapter(self.resources).invoke(
-            CapabilityRequest(
-                capability_id="polynomial.map.compute_jacobian",
-                input={"map": validated.map.model_dump(mode="json")},
-            )
+        jacobian_result = PolynomialJacobianAdapter(self.resources).compute(
+            PolynomialJacobianRequest(map=validated.map)
         )
-        jacobian = PolynomialJacobianOutput.model_validate(jacobian_result.output)
+        jacobian = jacobian_result.value
         map_uri = jacobian.map_uri
         jacobian_uri = jacobian.jacobian_uri
         claim = self.resources.artifacts.put(

@@ -93,7 +93,9 @@ references.
 Inspect `closure_complete`, `node_budget_exhausted`, and `frontier` together.
 A non-empty frontier identifies returned nodes whose dependencies were not
 fully expanded. A partial graph is useful context, not a complete dependency
-claim. The artifact binds the query and pinned `environment_digest`.
+claim. The durable-operation result uses `result_uri` for the graph artifact
+and includes the complete graph under `preview`; the artifact binds the query
+and pinned `environment_digest`.
 
 ## Statement operations
 

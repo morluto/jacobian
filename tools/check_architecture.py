@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces fourteen PR10 invariants:
+runtime.  It enforces fifteen PR10 invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -54,6 +54,9 @@ runtime.  It enforces fourteen PR10 invariants:
 
 14. **unsupported-surface**: removed experimental memory/search identifiers must
     not appear in supported product source, tests, schemas, catalog, or docs.
+
+15. **internal-capability-request**: only CLI and MCP boundaries may construct
+    the generic capability request envelope; in-process composition stays typed.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
@@ -243,6 +246,13 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
 
 # os.environ spreading: product source only.
 _ENVIRON_SPREAD_ROOTS = (PurePosixPath("src"),)
+
+_CAPABILITY_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
+    {
+        PurePosixPath("src/jacobian/cli.py"),
+        PurePosixPath("src/jacobian/adapters/mcp/tooling.py"),
+    }
+)
 
 # Public-contract checks apply to datasets with agent-visible contract projections.
 _PUBLIC_CONTRACT_DATASET_PREFIXES = (
@@ -443,6 +453,29 @@ def _imported_module(node: ast.Import | ast.ImportFrom) -> str:
 
 def _imported_names(node: ast.Import | ast.ImportFrom) -> list[str]:
     return [alias.name for alias in node.names]
+
+
+def _internal_capability_request_violations(
+    relative: PurePosixPath,
+    tree: ast.AST,
+) -> tuple[Violation, ...]:
+    if not str(relative).startswith("src/jacobian/"):
+        return ()
+    if relative in _CAPABILITY_REQUEST_ALLOWED_EXACT:
+        return ()
+    return tuple(
+        Violation(
+            str(relative),
+            "internal-capability-request",
+            "in-process composition must pass typed values instead of constructing "
+            "CapabilityRequest",
+            node.lineno,
+        )
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "CapabilityRequest"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1358,6 +1391,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return (Violation(rel_str, "parse-error", f"cannot parse file: {exc}"),)
 
     violations: list[Violation] = []
+    violations.extend(_internal_capability_request_violations(relative, tree))
     violations.extend(_subprocess_violations(relative, tree))
     violations.extend(_run_bounded_process_violations(relative, tree))
     violations.extend(_shutil_which_violations(relative, tree))

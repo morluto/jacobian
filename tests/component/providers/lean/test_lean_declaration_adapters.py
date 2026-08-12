@@ -6,15 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from jacobian.artifacts import ArtifactService
-from jacobian.builtin_capabilities import (
-    LeanDeclarationInspectAdapter,
-    LeanDeclarationSearchAdapter,
-    LeanDependencyGraphAdapter,
-)
-from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
@@ -22,7 +14,10 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
     CapabilityRequest,
 )
-from jacobian.contracts.lean import LeanDependencyGraphArtifact, LeanEnvironment
+from jacobian.contracts.lean import LeanEnvironment
+from jacobian.lean_frontend.declaration_operations import (
+    build_lean_declaration_query_bundle,
+)
 from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationBackendResult,
     LeanDeclarationDependenciesQuery,
@@ -35,6 +30,7 @@ from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
     LeanDeclarationService,
 )
+from jacobian.operation_installation import OperationInstaller
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -88,7 +84,28 @@ class MissingDeclarationBackend:
         )
 
 
-def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
+def _query_adapter(
+    tmp_path: Path,
+    backend: LeanDeclarationBackend,
+    operation_id: str,
+):
+    store = ArtifactRepository(tmp_path)
+    schemas = SchemaRegistry(store)
+    artifacts = ArtifactService(store, schemas)
+    installation = OperationInstaller(store, schemas, artifacts).install(
+        build_lean_declaration_query_bundle(
+            LeanDeclarationService(backend),
+            _RUNTIME,
+        )
+    )
+    return next(
+        adapter
+        for adapter in installation.adapters
+        if adapter.descriptor.capability_id == operation_id
+    )
+
+
+def test_search_adapter_exposes_bounded_computed_retrieval(tmp_path: Path) -> None:
     backend = FakeBackend(
         {
             "operation": "search",
@@ -113,7 +130,7 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
             "stop_reason": "RESULT_LIMIT",
         }
     )
-    adapter = LeanDeclarationSearchAdapter(LeanDeclarationService(backend), _RUNTIME)
+    adapter = _query_adapter(tmp_path, backend, "lean.declaration.search")
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
@@ -124,8 +141,8 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
             },
         )
     )
-    assert result.output["environment_digest"] == _DIGEST
-    assert result.output["declarations"][0]["name"] == "irrational_sqrt_two"
+    assert result.output["result"]["environment_digest"] == _DIGEST
+    assert result.output["result"]["declarations"][0]["name"] == ("irrational_sqrt_two")
     assert backend.calls[0][1] == LeanDeclarationSearchQuery(
         name_contains="irrational_sqrt_two",
         type_constants=(),
@@ -136,7 +153,9 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
     )
 
 
-def test_inspect_adapter_returns_docs_without_promoting_the_theorem() -> None:
+def test_inspect_adapter_returns_docs_without_promoting_the_theorem(
+    tmp_path: Path,
+) -> None:
     backend = FakeBackend(
         {
             "operation": "inspect",
@@ -151,15 +170,15 @@ def test_inspect_adapter_returns_docs_without_promoting_the_theorem() -> None:
             },
         }
     )
-    adapter = LeanDeclarationInspectAdapter(LeanDeclarationService(backend), _RUNTIME)
+    adapter = _query_adapter(tmp_path, backend, "lean.declaration.inspect")
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
             input={"environment": "CORE", "declaration_name": "Nat.add"},
         )
     )
-    assert result.output["declaration"]["docstring"].startswith("Addition")
-    assert result.output["environment_digest"] == _DIGEST
+    assert result.output["result"]["declaration"]["docstring"].startswith("Addition")
+    assert result.output["result"]["environment_digest"] == _DIGEST
 
 
 def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> None:
@@ -182,27 +201,7 @@ def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> No
             "closure_complete": False,
         }
     )
-    store = ArtifactRepository(tmp_path)
-    schemas = SchemaRegistry(store)
-    artifacts = ArtifactService(store, schemas)
-    semantics_uri = store.register_descriptor(
-        kind="semantics",
-        name="test.lean-dependencies",
-        version="1",
-        definition={"dependency_api": "Lean.Expr.getUsedConstantsAsSet"},
-    )
-    schema_uri = schemas.register(
-        name="test.lean-dependency-graph",
-        version="1",
-        schema=LeanDependencyGraphArtifact.model_json_schema(),
-    )
-    adapter = LeanDependencyGraphAdapter(
-        LeanDeclarationService(backend),
-        _RUNTIME,
-        artifacts,
-        semantics_uri=semantics_uri,
-        dependency_graph_schema_uri=schema_uri,
-    )
+    adapter = _query_adapter(tmp_path, backend, "lean.declaration.dependencies")
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.dependencies",
@@ -214,24 +213,27 @@ def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> No
             },
         )
     )
-    assert result.output["edges"][0]["kinds"] == ["TYPE", "VALUE"]
-    assert result.output["closure_complete"] is False
-    assert result.output["dependency_graph_uri"] in result.artifact_uris
+    assert result.output["preview"]["edges"][0]["kinds"] == ["TYPE", "VALUE"]
+    assert result.output["preview"]["closure_complete"] is False
+    assert result.output["result_uri"] in result.artifact_uris
     sent = backend.calls[0][1]
     assert isinstance(sent, LeanDeclarationDependenciesQuery)
     assert sent.max_depth == 1
     assert sent.max_nodes == 20
 
 
-def test_missing_declaration_is_an_explicit_failed_operation() -> None:
-    adapter = LeanDeclarationInspectAdapter(
-        LeanDeclarationService(MissingDeclarationBackend()), _RUNTIME
+def test_missing_declaration_is_an_explicit_failed_operation(tmp_path: Path) -> None:
+    adapter = _query_adapter(
+        tmp_path,
+        MissingDeclarationBackend(),
+        "lean.declaration.inspect",
     )
-    with pytest.raises(CapabilityInvocationError) as raised:
-        adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.declaration.inspect",
-                input={"environment": "CORE", "declaration_name": "Missing.name"},
-            )
+    result = adapter.invoke(
+        CapabilityRequest(
+            capability_id="lean.declaration.inspect",
+            input={"environment": "CORE", "declaration_name": "Missing.name"},
         )
-    assert raised.value.diagnostic.code == "LEAN_DECLARATION_NOT_FOUND"
+    )
+    assert result.execution.status.value == "ERROR"
+    assert result.diagnostics[0].code == "LEAN_DECLARATION_NOT_FOUND"
+    assert result.output["error"]["code"] == "LEAN_DECLARATION_NOT_FOUND"

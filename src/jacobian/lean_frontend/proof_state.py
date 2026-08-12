@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -46,6 +47,15 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplProofStepResponse,
     LeanReplValidatedExecution,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class LeanProofStateApplication:
+    """Typed transition result before the public capability projection."""
+
+    output: LeanProofStateOutput
+    execution: Execution
+    artifact_uris: tuple[str, ...]
 
 
 class LeanProofStateAdapter:
@@ -101,15 +111,8 @@ class LeanProofStateAdapter:
     @staticmethod
     def _validate_request(request: CapabilityRequest) -> LeanProofStateRequest:
         try:
-            validated = LeanProofStateRequest.model_validate(request.input)
-            if validated.statement is not None:
-                _validate_source_parts(
-                    validated.statement,
-                    (*validated.proof_prefix, validated.tactic),
-                )
-            else:
-                _validate_source_parts("True", (validated.tactic,))
-        except (ValidationError, ValueError) as exc:
+            return LeanProofStateRequest.model_validate(request.input)
+        except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_LEAN_TRANSITION_REQUEST",
@@ -121,7 +124,6 @@ class LeanProofStateAdapter:
                     ),
                 )
             ) from exc
-        return validated
 
     def _resolve_statement_and_prefix(
         self,
@@ -247,17 +249,45 @@ class LeanProofStateAdapter:
         return responses, typed_goals, accepted
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        return self._invoke_with_diagnostic_context(request)
+        applied = self.apply(self._validate_request(request))
+        return CapabilityResult(
+            capability_id=self.descriptor.capability_id,
+            capability_version=self.descriptor.version,
+            execution=applied.execution,
+            output=applied.output.model_dump(mode="json"),
+            artifact_uris=applied.artifact_uris,
+        )
 
-    def _invoke_with_diagnostic_context(
+    def apply(
         self,
-        request: CapabilityRequest,
+        validated: LeanProofStateRequest,
         *,
         diagnostic_phase: LeanDiagnosticPhase = (LeanDiagnosticPhase.TACTIC_EXECUTION),
         diagnostic_source: LeanDiagnosticSource = LeanDiagnosticSource.TACTIC,
         diagnostic_column_offset: int = 0,
-    ) -> CapabilityResult:
-        validated = self._validate_request(request)
+    ) -> LeanProofStateApplication:
+        """Apply one already validated transition without re-entering the adapter."""
+
+        try:
+            if validated.statement is not None:
+                _validate_source_parts(
+                    validated.statement,
+                    (*validated.proof_prefix, validated.tactic),
+                )
+            else:
+                _validate_source_parts("True", (validated.tactic,))
+        except ValueError as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INVALID_LEAN_TRANSITION_REQUEST",
+                    stage="request_validation",
+                    message="The Lean statement or tactic sequence is invalid.",
+                    hint=(
+                        "Use one proposition and bounded tactic bodies without "
+                        "commands, imports, declarations, sorry, or run_tac."
+                    ),
+                )
+            ) from exc
         started = time.monotonic()
         installation = self.resources.installations[validated.environment]
         environment_digest = _environment_digest(
@@ -407,9 +437,7 @@ class LeanProofStateAdapter:
             *successor_artifact_uris,
             artifact.artifact_uri,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return LeanProofStateApplication(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),
@@ -419,9 +447,9 @@ class LeanProofStateAdapter:
                     else "Lean rejected the tactic; no successor state was created"
                 ),
             ),
-            output=output.model_dump(mode="json"),
+            output=output,
             artifact_uris=artifact_uris,
         )
 
 
-__all__ = ["LeanProofStateAdapter"]
+__all__ = ["LeanProofStateAdapter", "LeanProofStateApplication"]

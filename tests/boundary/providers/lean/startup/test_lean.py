@@ -128,14 +128,15 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
         )
     )
 
-    assert result.output["nodes"][0] == {
+    preview = result.output["preview"]
+    assert preview["nodes"][0] == {
         "name": "Nat.add_comm",
         "kind": "THEOREM",
         "depth": 0,
     }
-    assert len(result.output["nodes"]) <= 40
-    assert result.output["dependency_graph_uri"] in result.artifact_uris
-    artifact = runtime.core.store.get(result.output["dependency_graph_uri"])
+    assert len(preview["nodes"]) <= 40
+    assert result.output["result_uri"] in result.artifact_uris
+    artifact = runtime.core.store.get(result.output["result_uri"])
     assert artifact.payload["nodes"][0]["name"] == "Nat.add_comm"
     assert artifact.payload["query"]["max_depth"] == 1
 
@@ -178,10 +179,13 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
         )
     )
 
-    assert searched.output["declarations"][0]["name"] == "irrational_sqrt_two"
-    assert inspected.output["declaration"]["type"] == "Irrational √2"
+    assert searched.output["result"]["declarations"][0]["name"] == (
+        "irrational_sqrt_two"
+    )
+    assert inspected.output["result"]["declaration"]["type"] == "Irrational √2"
     assert (
-        inspected.output["environment_digest"] == searched.output["environment_digest"]
+        inspected.output["result"]["environment_digest"]
+        == searched.output["result"]["environment_digest"]
     )
 
     verified = runtime.portfolio.lean.verify(
@@ -231,9 +235,9 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
         )
     )
 
-    assert inspected.output["declaration"]["type"] == "Nat → Nat → Nat"
-    assert outside_profile.output["declarations"] == []
-    assert outside_profile.output["stop_reason"] == "EXHAUSTED"
+    assert inspected.output["result"]["declaration"]["type"] == "Nat → Nat → Nat"
+    assert outside_profile.output["result"]["declarations"] == []
+    assert outside_profile.output["result"]["stop_reason"] == "EXHAUSTED"
 
     verified = runtime.portfolio.lean.verify(
         statement="∀ n : Nat, n + 0 = n",

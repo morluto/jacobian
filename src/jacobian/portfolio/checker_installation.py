@@ -11,12 +11,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from jacobian.builtin_capabilities import (
-    LeanCheckAdapter,
-    LeanDeclarationInspectAdapter,
-    LeanDeclarationSearchAdapter,
-    LeanDependencyGraphAdapter,
-)
+from jacobian.builtin_capabilities import LeanCheckAdapter
 from jacobian.checker_authorization import (
     install_lean_checkers,
     install_polytope_checkers,
@@ -25,8 +20,10 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
 )
-from jacobian.contracts.lean import LeanDependencyGraphArtifact
 from jacobian.installation.context import InstallationContext
+from jacobian.lean_frontend.declaration_operations import (
+    build_lean_declaration_query_bundle,
+)
 from jacobian.lean_frontend.declarations import installed_lean_declaration_service
 from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
 from jacobian.lean_frontend.proof_axioms import (
@@ -170,35 +167,8 @@ class CheckerPortfolioInstaller:
         if result.lean_declarations is None:
             return
         ctx = self.context
-        ctx.register_capability(
-            LeanDeclarationSearchAdapter(result.lean_declarations, runtime)
+        query_installation = ctx.operations.install(
+            build_lean_declaration_query_bundle(result.lean_declarations, runtime)
         )
-        ctx.register_capability(
-            LeanDependencyGraphAdapter(
-                result.lean_declarations,
-                runtime,
-                ctx.artifacts,
-                semantics_uri=ctx.store.register_descriptor(
-                    kind="semantics",
-                    name="jacobian.lean4-declaration-dependencies",
-                    version="1",
-                    definition={
-                        "description": (
-                            "bounded constant dependencies extracted from elaborated "
-                            "Lean declaration types and values"
-                        ),
-                        "provider_digest": runtime.digest,
-                        "dependency_api": "Lean.Expr.getUsedConstantsAsSet",
-                        "verification": "computed metadata; no theorem verification",
-                    },
-                ),
-                dependency_graph_schema_uri=ctx.schemas.register(
-                    name="jacobian.lean4-dependency-graph",
-                    version="1",
-                    schema=LeanDependencyGraphArtifact.model_json_schema(),
-                ),
-            )
-        )
-        ctx.register_capability(
-            LeanDeclarationInspectAdapter(result.lean_declarations, runtime)
-        )
+        for adapter in query_installation.adapters:
+            ctx.register_capability(adapter)

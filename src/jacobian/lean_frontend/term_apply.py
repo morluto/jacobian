@@ -25,6 +25,7 @@ from jacobian.contracts.capabilities import (
     CapabilityResult,
 )
 from jacobian.contracts.lean import LeanDiagnosticPhase, LeanDiagnosticSource
+from jacobian.contracts.lean_exploration import LeanProofStateRequest
 from jacobian.contracts.lean_term_apply import (
     LeanTermApplyOutput,
     LeanTermApplyRequest,
@@ -125,19 +126,16 @@ class LeanTermApplyAdapter:
                     ),
                 )
             )
-        delegated = self._proof_state._invoke_with_diagnostic_context(
-            CapabilityRequest(
-                capability_id=self._proof_state.descriptor.capability_id,
-                input={
-                    "state_uri": validated.state_uri,
-                    "environment": validated.environment.value,
-                    "statement": validated.statement,
-                    "proof_prefix": list(validated.proof_prefix),
-                    "tactic": _EXACT_PREFIX + validated.term,
-                    "max_goals": validated.max_goals,
-                    "max_local_declarations": validated.max_local_declarations,
-                    "max_rendered_bytes": validated.max_rendered_bytes,
-                },
+        delegated = self._proof_state.apply(
+            LeanProofStateRequest(
+                state_uri=validated.state_uri,
+                environment=validated.environment,
+                statement=validated.statement,
+                proof_prefix=validated.proof_prefix,
+                tactic=_EXACT_PREFIX + validated.term,
+                max_goals=validated.max_goals,
+                max_local_declarations=validated.max_local_declarations,
+                max_rendered_bytes=validated.max_rendered_bytes,
             ),
             diagnostic_phase=LeanDiagnosticPhase.TERM_ELABORATION,
             diagnostic_source=LeanDiagnosticSource.TERM,
@@ -146,8 +144,8 @@ class LeanTermApplyAdapter:
         try:
             output = LeanTermApplyOutput.model_validate(
                 {
-                    **delegated.output,
-                    "term_apply_uri": delegated.output["transition_uri"],
+                    **delegated.output.model_dump(mode="python"),
+                    "term_apply_uri": delegated.output.transition_uri,
                     "term_application": "LEAN_EXACT_ELABORATION",
                 }
             )
@@ -168,7 +166,6 @@ class LeanTermApplyAdapter:
             capability_version=self.descriptor.version,
             execution=delegated.execution,
             output=output.model_dump(mode="json"),
-            verification_record_uri=delegated.verification_record_uri,
             artifact_uris=delegated.artifact_uris,
         )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import multiprocessing
 import time
 from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from fractions import Fraction
 from math import prod as multiply
 from queue import Empty
@@ -17,7 +18,6 @@ from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityRequest,
     CapabilityResult,
 )
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
@@ -53,6 +53,26 @@ if TYPE_CHECKING:
 _INVERSE_SOLVER_SHUTDOWN_TIMEOUT_SECONDS = 1.0
 _MAX_CANONICALIZATION_COEFFICIENT_DIGITS = 256
 _MAX_CANONICALIZATION_DUPLICATE_TERMS = 64
+
+
+@dataclass(frozen=True, slots=True)
+class PolynomialOperationResult[ResultT: ContractModel]:
+    """Typed polynomial result plus the outer projection facts it produced."""
+
+    value: ResultT
+    execution: Execution
+    artifact_uris: tuple[str, ...]
+    verification_record_uri: str | None = None
+
+    def project(self, descriptor: CapabilityDescriptor) -> CapabilityResult:
+        return CapabilityResult(
+            capability_id=descriptor.capability_id,
+            capability_version=descriptor.version,
+            execution=self.execution,
+            output=self.value.model_dump(mode="json"),
+            verification_record_uri=self.verification_record_uri,
+            artifact_uris=self.artifact_uris,
+        )
 
 
 class _SparsePolynomialInputTerm(ContractModel):
@@ -722,7 +742,6 @@ def _materialize_evaluation(
 def _computed_result(
     *,
     descriptor: CapabilityDescriptor,
-    request: CapabilityRequest,
     started: float,
     output: dict[str, Any],
     artifact_uris: tuple[str, ...],

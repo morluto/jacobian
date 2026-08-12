@@ -153,8 +153,9 @@ def test_polynomial_factor_result_verifies_through_mcp(tmp_path: Path) -> None:
 
             assert verified["output"]["status"] == "VERIFIED"
             assert verified["output"]["conclusion"] == "TRUE"
-            assert verified["assurance"]["level"] == "VERIFIED"
-            assert verified["output"]["verification_record_uri"]
+            record_uri = verified["output"]["verification_record_uri"]
+            assert verified["verification_record_uri"] == record_uri
+            assert record_uri in verified["artifact_uris"]
 
             corrupted_candidate = json.loads(json.dumps(computed["output"]["result"]))
             corrupted_candidate["coefficient"]["num"] = "2"
@@ -172,8 +173,8 @@ def test_polynomial_factor_result_verifies_through_mcp(tmp_path: Path) -> None:
 
             assert rejected["output"]["status"] == "REJECTED"
             assert rejected["output"]["conclusion"] == "UNKNOWN"
-            assert rejected["assurance"]["level"] == "COMPUTED"
             assert rejected["output"]["verification_record_uri"] is None
+            assert rejected["verification_record_uri"] is None
 
             overbound = await _tool(
                 client,
@@ -189,7 +190,7 @@ def test_polynomial_factor_result_verifies_through_mcp(tmp_path: Path) -> None:
 
             assert overbound["execution"]["status"] == "ERROR"
             assert overbound["output"]["error"]["code"] == "INVALID_EXACT_DOMAIN_INPUT"
-            assert overbound["assurance"]["level"] == "HEURISTIC"
+            assert overbound["verification_record_uri"] is None
 
     asyncio.run(scenario())
 

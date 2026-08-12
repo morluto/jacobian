@@ -505,6 +505,21 @@ _CIRCLE = {
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
 }
 
+_CANONICAL_CIRCLE = {
+    "vertices": ["a", "b", "c"],
+    "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
+    "faces_by_dimension": [
+        {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
+        {"dimension": 1, "faces": [["a", "b"], ["a", "c"], ["b", "c"]]},
+    ],
+    "dimension": 1,
+    "f_vector": [3, 3],
+    "closure_size": 6,
+    "complex_digest": (
+        "sha256:6f797991bac967e2a8e572707df487061655df0f094cbde0f52f82c5401fc043"
+    ),
+}
+
 type TopologyOperation = (
     InstalledOperation[
         SimplicialComplexRequest, SimplicialComplexCanonicalizationResult
@@ -566,6 +581,17 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
                 "boundary-matrix",
                 "exact",
             ),
+            invocation_examples=(
+                example(
+                    "circle_integer_chain_complex",
+                    "Construct the oriented integer boundary matrices of a circle.",
+                    {
+                        "complex": _CANONICAL_CIRCLE,
+                        "coefficient_ring": "INTEGER",
+                        "convention": "UNREDUCED",
+                    },
+                ),
+            ),
             version="4",
         )
     ),
@@ -587,6 +613,17 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
                 "cycle-basis",
                 "prime-field",
                 "exact",
+            ),
+            invocation_examples=(
+                example(
+                    "circle_homology_mod_two",
+                    "Compute H_0 and H_1 over F_2 for a triangle boundary.",
+                    {
+                        "complex": _CANONICAL_CIRCLE,
+                        "prime": 2,
+                        "convention": "UNREDUCED",
+                    },
+                ),
             ),
             version="4",
         )

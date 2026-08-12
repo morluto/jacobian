@@ -171,6 +171,14 @@ def test_accepts_reordered_repair():
     assert module.mathematics(result)
 
 
+def test_raw_submission_rejects_duplicate_keys(tmp_path):
+    module = _module()
+    submission = tmp_path / "submission.json"
+    submission.write_text('{"result":{"bad":true},"result":{"bad":false}}')
+
+    assert module._raw(submission) is None
+
+
 def test_assurance_diagnostic_is_independent_of_protocol(monkeypatch, tmp_path):
     module = _module()
     raw = {

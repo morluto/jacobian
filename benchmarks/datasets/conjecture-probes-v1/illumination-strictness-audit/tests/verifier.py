@@ -113,12 +113,20 @@ def mathematics(result):
     )
 
 
-def _raw():
-    path = Path("/app/submission.json")
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        value[key] = item
+    return value
+
+
+def _raw(path: Path = Path("/app/submission.json")):
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(), object_pairs_hook=_reject_duplicate_keys)
     except (OSError, ValueError, MemoryError, RecursionError):
         return None
     return value if isinstance(value, dict) else None

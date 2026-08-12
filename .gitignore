@@ -46,3 +46,4 @@ lean/.lake/
 # Test infrastructure state
 .test_durations
 tmp/
+.ci/

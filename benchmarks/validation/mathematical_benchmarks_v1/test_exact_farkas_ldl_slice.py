@@ -10,6 +10,15 @@ from benchmarks.validation.mathematical_benchmarks_v1 import support
 TASK = "exact-farkas-ldl-slice"
 
 
+def test_exact_farkas_slice_publishes_scored_scalar_identity() -> None:
+    task = support.TASKS / TASK
+    instruction = (task / "instruction.md").read_text()
+
+    assert "`m00 = y0 + c00_y`" in instruction
+    assert "`m00 < 0`" in instruction
+    assert "`objective > 0`" in instruction
+
+
 def _prepare_farkas_slice_case(tmp_path: Path):
     task, app, logs = support._prepare_case(
         tmp_path, "exact-farkas-ldl-slice", "computed"

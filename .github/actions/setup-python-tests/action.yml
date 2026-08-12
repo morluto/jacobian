@@ -7,7 +7,10 @@ inputs:
   dependency-profile:
     description: >
       Locked uv dependency profile. `dev`/`contributor` install the full
-      contributor umbrella. `test-core` installs only the pytest runner stack.
+      contributor umbrella. `test-core` is the complete unit-lane import
+      closure: unit tests exercise benchmark, release, and contributor tooling,
+      so it intentionally resolves through the contributor group. The `lint`,
+      `typecheck`, `security`, and `benchmark` profiles remain narrow.
     required: false
     default: "dev"
 
@@ -36,7 +39,13 @@ runs:
           dev|contributor)
             uv sync --locked --group "${DEPENDENCY_PROFILE}"
             ;;
-          test-core|lint|typecheck|security|benchmark)
+          test-core)
+            # The unit lane imports benchmark/release helpers that are themselves
+            # contributor tools. Keep one honest, locked import closure rather
+            # than allowing collection to depend on ambient packages.
+            uv sync --locked --group contributor
+            ;;
+          lint|typecheck|security|benchmark)
             uv sync --locked --no-default-groups --group "${DEPENDENCY_PROFILE}"
             ;;
           *)

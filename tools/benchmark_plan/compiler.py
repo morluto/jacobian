@@ -25,23 +25,17 @@ import importlib
 import json
 import math
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-_SCRIPTS_DIR = str(ROOT / ".github" / "scripts")
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPTS_DIR)
-from _ci_paths import normalize_paths, path_values  # noqa: E402
-from benchmarks.tooling.validation_plan import (  # noqa: E402
+from benchmarks.tooling.validation_plan import (
     full_host_validation,
     host_validation_plan,
 )
+from tools.benchmark_plan.control_paths import BENCHMARK_CONTROL_PATHS
+from tools.benchmark_plan.paths import normalize_paths, path_values
 
-from tools.benchmark_plan.control_paths import BENCHMARK_CONTROL_PATHS  # noqa: E402
+ROOT = Path(__file__).resolve().parents[2]
 
 PLANNER_DIGEST_SOURCES = (
     ROOT / ".github" / "scripts" / "plan-benchmarks",
@@ -50,6 +44,7 @@ PLANNER_DIGEST_SOURCES = (
     ROOT / "tools" / "benchmark_plan" / "__init__.py",
     ROOT / "tools" / "benchmark_plan" / "control_paths.py",
     ROOT / "tools" / "benchmark_plan" / "compiler.py",
+    ROOT / "tools" / "benchmark_plan" / "paths.py",
     ROOT / "tools" / "benchmark_plan" / "validation.py",
 )
 

@@ -137,6 +137,8 @@ def test_streaming_evidence_accepts_padding_but_preserves_token_boundaries() -> 
         module._read_streaming_json_value(io.BytesIO(b'{"value":- 1}'))
     with pytest.raises(ValueError, match="invalid JSON constant"):
         module._read_streaming_json_value(io.BytesIO(b'{"value":NaN}'))
+    with pytest.raises(ValueError, match="out-of-range JSON number"):
+        module._read_streaming_json_value(io.BytesIO(b'{"value":1e400}'))
 
 
 def test_evidence_copied_fields_bind_to_raw_submission():
@@ -175,6 +177,14 @@ def test_raw_submission_rejects_duplicate_keys(tmp_path):
     module = _module()
     submission = tmp_path / "submission.json"
     submission.write_text('{"result":{"bad":true},"result":{"bad":false}}')
+
+    assert module._raw(submission) is None
+
+
+def test_raw_submission_rejects_overflowing_float(tmp_path):
+    module = _module()
+    submission = tmp_path / "submission.json"
+    submission.write_text('{"result":1e400}')
 
     assert module._raw(submission) is None
 

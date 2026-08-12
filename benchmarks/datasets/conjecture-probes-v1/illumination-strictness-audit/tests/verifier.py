@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from itertools import product
 from pathlib import Path
 from typing import Any
@@ -122,11 +123,22 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return value
 
 
+def _finite_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"out-of-range JSON number: {value}")
+    return parsed
+
+
 def _raw(path: Path = Path("/app/submission.json")):
     if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
         return None
     try:
-        value = json.loads(path.read_text(), object_pairs_hook=_reject_duplicate_keys)
+        value = json.loads(
+            path.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_float=_finite_json_float,
+        )
     except (OSError, ValueError, MemoryError, RecursionError):
         return None
     return value if isinstance(value, dict) else None

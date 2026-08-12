@@ -329,6 +329,7 @@ def _read_streaming_json_value(stream) -> Any:
     parser = json.JSONDecoder(
         object_pairs_hook=_reject_duplicate_keys,
         parse_constant=_reject_json_constant,
+        parse_float=_finite_json_float,
     )
     buffer = ""
     in_string = False

@@ -221,6 +221,7 @@ def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
 
 def test_required_ci_gates_fail_when_a_needed_job_is_cancelled() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    required = workflow.split("  required:", 1)[1].split("  python-test:", 1)[0]
 
     assert "treating gate as non-failure" not in workflow
     assert "if: ${{ always() }}" in workflow
@@ -228,6 +229,13 @@ def test_required_ci_gates_fail_when_a_needed_job_is_cancelled() -> None:
     assert "name: Python Tests" in workflow
     assert "name: Lean Tests" in workflow
     assert "name: Deployment Tests" in workflow
+    assert (
+        "needs: [static, python, boundaries, wheel, coverage, lean, "
+        "optional-providers]"
+    ) in required
+    assert "success|skipped" in required
+    assert "needs.optional-providers.result" in required
+    assert "needs.lean.result" in required
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:

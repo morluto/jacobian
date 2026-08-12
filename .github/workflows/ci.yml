@@ -281,23 +281,33 @@ jobs:
   required:
     name: required
     if: ${{ always() }}
-    needs: [static, python, boundaries, wheel, coverage]
+    needs: [static, python, boundaries, wheel, coverage, lean, optional-providers]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require static python boundaries wheel and coverage
+      - name: Require static python boundaries wheel coverage and selected specialist lanes
         env:
           STATIC_RESULT: ${{ needs.static.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
           WHEEL_RESULT: ${{ needs.wheel.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
+          LEAN_RESULT: ${{ needs.lean.result }}
+          PROVIDERS_RESULT: ${{ needs.optional-providers.result }}
         run: |
           test "$STATIC_RESULT" = success
           test "$PYTHON_RESULT" = success
           test "$BOUNDARIES_RESULT" = success
           test "$WHEEL_RESULT" = success
           test "$COVERAGE_RESULT" = success
+          case "$LEAN_RESULT" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
+          case "$PROVIDERS_RESULT" in
+            success|skipped) ;;
+            *) exit 1 ;;
+          esac
 
   python-test:
     name: Python Tests

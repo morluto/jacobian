@@ -85,12 +85,17 @@ boundary is already documented.
 Then:
 
 1. Search with natural task language.
-2. Inspect returned cards, schemas, examples, domains, bounds, providers, relationships, and assurance.
-3. Inspect the exact producer and independent verifier contracts.
-4. Execute the frozen input directly.
-5. Run the independent verifier when installed.
-6. Replay relevant malformed, wrong-input, over-bound, and unsupported-domain cases.
-7. Run focused deterministic tests.
+2. Treat bounded `math.find` search as candidate retrieval, not complete inventory;
+   use `capability://catalog` when full installed membership matters.
+3. Inspect returned cards and exact IDs for schemas, examples, domains, bounds,
+   and provider availability. Treat these as operation facts, not workflow advice.
+4. Inspect the producer and independent checker as separate operation contracts.
+   A checker-backed result is verified only when the top-level result envelope
+   contains a verification-record URI bound to the exact final claim.
+5. Execute the frozen input directly.
+6. Run the independent checker when installed.
+7. Replay relevant malformed, wrong-input, over-bound, and unsupported-domain cases.
+8. Run focused deterministic tests.
 
 Persist complete machine-readable discovery and invocation outputs, including
 failures, before summarizing them. Hash the input, probe, raw output, and

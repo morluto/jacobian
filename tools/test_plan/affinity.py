@@ -26,9 +26,10 @@ def balance_affinity_shards(
 ) -> tuple[tuple[str, ...], ...]:
     """Return ``shard_count`` shards preferring affinity co-location.
 
-    Groups whose total duration is at most ``total / shard_count`` stay on one
-    shard. Larger groups are packed node-by-node onto the lightest shards so a
-    dominant shared profile still parallelizes.
+    One- and two-node affinity groups stay together. Larger groups whose total
+    duration is at most ``total / shard_count`` also stay on one shard. Only
+    larger, dominant groups are packed node-by-node onto the lightest shards so
+    a shared profile such as composition can still parallelize.
     """
 
     if shard_count <= 0:
@@ -52,7 +53,7 @@ def balance_affinity_shards(
     )
     for _affinity, group in ordered_groups:
         group_weight = sum(max(node.duration, 0.0) for node in group)
-        if group_weight <= colocate_limit or len(group) == 1:
+        if len(group) <= 2 or group_weight <= colocate_limit:
             target = min(range(shard_count), key=lambda index: (weights[index], index))
             for node in sorted(group, key=lambda item: item.nodeid):
                 shards[target].append(node.nodeid)

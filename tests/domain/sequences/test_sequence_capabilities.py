@@ -29,31 +29,27 @@ def test_prefix_gcds_return_each_prefix_result(
     assert result.output["result"] == {"values": ["18", "6", "3"]}
 
 
-@pytest.mark.parametrize(
-    ("values", "expected"),
-    (
+def test_geometric_sequence_handles_zero_terms_exactly(
+    domain_services: DomainTestServices,
+) -> None:
+    cases = (
         (["0", "0", "1"], False),
         (["1", "0", "0"], True),
         (["0", "0", "0"], True),
         (["2", "4", "8", "16"], True),
         (["8", "-4", "2", "-1"], True),
         (["2", "4", "9"], False),
-    ),
-)
-def test_geometric_sequence_handles_zero_terms_exactly(
-    domain_services: DomainTestServices,
-    values: list[str],
-    expected: bool,
-) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sequence.decide.geometric",
-            input={"values": values},
-        )
     )
+    for values, expected in cases:
+        result = domain_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id="sequence.decide.geometric",
+                input={"values": values},
+            )
+        )
 
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["result"] == {"holds": expected}
+        assert result.execution.status is ExecutionStatus.COMPLETED, values
+        assert result.output["result"] == {"holds": expected}, values
 
 
 def test_sequence_products_format_results_beyond_python_digit_limit(

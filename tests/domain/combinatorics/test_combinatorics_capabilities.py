@@ -5,7 +5,6 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityDiscoveryRequest,
     CapabilityRequest,
 )
@@ -47,7 +46,7 @@ def test_binomial_is_discoverable_from_number_theory_language(
     )
 
     assert discovered.matches[0].capability_id == "combinatorics.compute.binomial"
-    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert discovered.matches[0].relevance_score > 0
 
     result = domain_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -81,5 +80,4 @@ def test_combinatorics_resource_atomics_are_exact_computed(
             CapabilityRequest(capability_id=capability_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
-        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
         assert result.output["result"] == expected

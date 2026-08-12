@@ -18,10 +18,7 @@ CheckerUri = Annotated[
     str,
     StringConstraints(pattern=r"^checker://sha256/[0-9a-f]{64}$", strict=True),
 ]
-ExperimentUri = Annotated[
+ValueUri = Annotated[
     str,
-    StringConstraints(
-        pattern=r"^experiment://[0-9a-f]{32}$",
-        strict=True,
-    ),
+    StringConstraints(pattern=r"^value://[A-Za-z0-9_-]{32}$", strict=True),
 ]

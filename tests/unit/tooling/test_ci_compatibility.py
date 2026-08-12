@@ -10,9 +10,12 @@ from __future__ import annotations
 
 
 def test_public_contract_and_canonicalization_surface_imports() -> None:
-    from jacobian import ResultEnvelope  # noqa: F401
     from jacobian.canonical import canonicalize_json
+    from jacobian.contracts import ArtifactUri, CheckerUri, Sha256Digest
 
+    assert ArtifactUri is not None
+    assert CheckerUri is not None
+    assert Sha256Digest is not None
     assert canonicalize_json({"version": 1}) == b'{"version":1}'
 
 

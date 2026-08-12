@@ -12,16 +12,11 @@ from pydantic import ValidationError
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.lean_proof_edit import (
     LeanProofEditArtifact,
@@ -31,8 +26,7 @@ from jacobian.contracts.lean_proof_edit import (
 from jacobian.contracts.results import (
     Conclusion,
     ExecutionStatus,
-    ResultEnvelope,
-    Verification,
+    VerificationResult,
 )
 from jacobian.lean_frontend.service import LeanService
 from jacobian.schema_registry import SchemaRegistry
@@ -57,7 +51,7 @@ def install_lean_proof_edit_capability(
     semantics_uri = store.register_descriptor(
         kind="semantics",
         name="jacobian.lean4-proof-edit-validation",
-        version="2",
+        version="3",
         definition={
             "description": (
                 "an exact Lean proof edit checked against the unchanged statement "
@@ -69,7 +63,7 @@ def install_lean_proof_edit_capability(
     )
     schema_uri = schemas.register(
         name="jacobian.lean4-proof-edit",
-        version="2",
+        version="3",
         schema=LeanProofEditArtifact.model_json_schema(),
     )
     installation = LeanProofEditInstallation(
@@ -100,18 +94,29 @@ class LeanProofEditAdapter:
         self.installation = installation
         self._descriptor = CapabilityDescriptor(
             capability_id="lean.proof_edit.validate",
-            version="2",
-            title="Validate an exact Lean proof edit",
+            version="3",
+            title="Independently validate an exact Lean proof edit",
             description=(
                 "Bind an original and edited proof to one unchanged statement, then "
                 "submit the exact edited source through the operator-authorized "
-                "lean.check checker."
+                "Lean checker. Returns baseline and edited-proof diagnostics with "
+                "proof-relative source spans; acceptance requires a verification "
+                "record."
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
             input_schema=LeanProofEditRequest.model_json_schema(),
             output_schema=LeanProofEditOutput.model_json_schema(),
-            tags=("lean", "proof-edit", "validation", "checker"),
+            tags=(
+                "lean",
+                "proof-edit",
+                "validation",
+                "checker",
+                "proof-repair",
+                "diagnostics",
+                "type-mismatch",
+                "source-span",
+            ),
         )
 
     @property
@@ -166,11 +171,13 @@ class LeanProofEditAdapter:
             unified_diff=diff,
             baseline_checker_execution_status=baseline.result.execution.status,
             baseline_accepted=baseline_verified,
+            baseline_diagnostics=baseline.diagnostics,
             baseline_candidate_uri=baseline.candidate_uri,
             baseline_certificate_uri=baseline.certificate_uri,
             baseline_verification_record_uri=(baseline.result.verification_record_uri),
             checker_execution_status=checked.result.execution.status,
             accepted=verified,
+            diagnostics=checked.diagnostics,
             claim_uri=checked.claim_uri,
             candidate_uri=checked.candidate_uri,
             certificate_uri=checked.certificate_uri,
@@ -200,42 +207,8 @@ class LeanProofEditAdapter:
                 update={"runtime_ms": int((time.monotonic() - started) * 1000)}
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="one exact edited Lean proof for one unchanged statement",
-                parameters={
-                    "environment": validated.environment.value,
-                    "statement": validated.statement,
-                },
-                artifact_uri=artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis=(
-                    "direct proof replay makes no search-completeness claim"
-                    if checked.result.execution.status is ExecutionStatus.COMPLETED
-                    else "the Lean checker did not complete; completeness is not applicable"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.COMPUTED
-                    if checked.result.execution.status is ExecutionStatus.COMPLETED
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-                basis=(
-                    "the exact edited proof was accepted by the operator-authorized "
-                    "pinned Lean checker"
-                    if verified
-                    else "the edited proof has no completed authorized verification"
-                ),
-                verification_record_uri=(
-                    checked.result.verification_record_uri if verified else None
-                ),
+            verification_record_uri=(
+                checked.result.verification_record_uri if verified else None
             ),
             artifact_uris=(
                 checked.claim_uri,
@@ -258,10 +231,9 @@ class LeanProofEditAdapter:
         )
 
 
-def _is_verified(result: ResultEnvelope) -> bool:
+def _is_verified(result: VerificationResult) -> bool:
     return (
         result.execution.status is ExecutionStatus.COMPLETED
         and result.conclusion is Conclusion.TRUE
-        and result.assurance.verification is Verification.VERIFIED
         and result.verification_record_uri is not None
     )

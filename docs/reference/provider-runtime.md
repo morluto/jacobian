@@ -1,9 +1,11 @@
 # Provider runtime contract
 
-Jacobian advertises a capability only when its exact provider runtime is
-installed and passes its local health probe. Provider availability is a catalog
-condition. An absent optional backend is not left for the agent to discover
-during invocation.
+Jacobian's maintained Python backends are exact package dependencies. Runtime
+construction checks their distribution identity without importing their
+implementation, and a missing or mismatched dependency is an installation
+failure rather than a supported reduced catalog. Operator-installed native and
+formal providers remain optional: their absence removes only the operations
+that depend on them and is not left for the agent to discover during invocation.
 
 This contract describes operational provenance. It does not change
 mathematical assurance: an available provider, successful measurement, solver
@@ -40,10 +42,11 @@ for example Jacobian checker source plus the exact Python-FLINT distribution it
 executes. Its canonical configuration exposes the component identities, and
 resolution remeasures every component before accepting the aggregate digest.
 
-The result repeats the selected `provider` and `provider_digest`. This binds the
-invocation to the exact descriptor runtime without repeating all discovery
-metadata in every response. Provider metadata remains separate from execution
-status, conclusion, evidence type, and assurance.
+The installed descriptor is the authoritative provider identity. Mathematical
+results do not repeat `provider` or `provider_digest` and then validate those
+copies against their source. Invocation provenance and checker records may bind
+the descriptor runtime where an audit record is required; provider metadata
+remains separate from the mathematical value and its assurance.
 
 Identity revalidation and first-use readiness are separate checks. The former
 remeasures the declared executable, source tree, distribution RECORD, or every
@@ -77,10 +80,11 @@ still starts. Capabilities requiring the failed profile are absent from
 operator-installed adapters fail registration instead of silently falling
 back to another provider.
 
-The optional cvc5 Alethe producer follows the same rule. The exact 1.3.4 wheel
-must expose the required SMT-LIB parser and proof APIs and have a hashed RECORD
-manifest. Otherwise `smt.unsat_proof.find` is absent while the base runtime and
-SMT artifact schemas remain available.
+The cvc5 Alethe producer is part of the packaged Python portfolio. Its exact
+1.3.4 wheel must have a hashed RECORD manifest at runtime construction; its
+SMT-LIB parser and proof APIs are checked lazily at first use. Missing or
+mismatched package identity is a broken installation, while a first-use
+readiness failure fails the selected invocation closed.
 
 Source-backed adapters can construct metadata without importing their
 implementation:

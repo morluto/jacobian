@@ -2,14 +2,13 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture
@@ -297,7 +296,6 @@ def test_integer_polynomial_shift_is_exact_computed(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["result"] == {
         "shift": 2,
         "shifted": {

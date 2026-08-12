@@ -1,8 +1,8 @@
 """Cheap provider metadata inspection without importing implementations.
 
 These helpers read installed distribution metadata through ``importlib.metadata``
-only. They never import the provider package itself, so a missing or heavy
-optional dependency cannot affect runtime startup or capability discovery.
+only. They never import the provider package itself during runtime assembly;
+missing distributions are reported through metadata instead.
 """
 
 from __future__ import annotations

@@ -13,7 +13,6 @@ from jacobian.canonical import (
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.validated_analysis import (
-    ArbPointEnclosureObligation,
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
 )
@@ -26,13 +25,8 @@ from jacobian.domains.analysis.protocol import (
     ArbPointEnclosureWorkerResponse,
     parse_arb_worker_response,
 )
-from jacobian.operations import (
-    BoundedSearchIncomplete,
-    BoundedSearchInterrupted,
-    BoundedSearchOperation,
-    BoundedSearchOutcome,
-    BoundedSearchWitness,
-)
+from jacobian.operation_bindings import inline_operation
+from jacobian.operations import OperationAbortError, OperationSpec
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessTermination,
@@ -87,38 +81,34 @@ def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
 
 def _point_enclosure(
     request: ArbPointEnclosureRequest,
-) -> BoundedSearchOutcome[ArbPointEnclosureResult]:
+) -> ArbPointEnclosureResult:
     try:
         response = _run_worker(request)
         if isinstance(response, ArbEnclosedWorkerResponse):
-            return BoundedSearchWitness(
-                ArbPointEnclosureResult(
-                    status="ENCLOSED",
-                    function=request.function,
-                    argument=request.argument,
-                    precision_bits=request.precision_bits,
-                    lower=response.lower,
-                    upper=response.upper,
-                    relative_accuracy_bits=response.relative_accuracy_bits,
-                    exact=response.exact,
-                    detail=(
-                        "Pinned Arb ball arithmetic returned an outward-rounded "
-                        "enclosure with exact dyadic endpoints."
-                    ),
-                )
+            return ArbPointEnclosureResult(
+                status="ENCLOSED",
+                function=request.function,
+                argument=request.argument,
+                precision_bits=request.precision_bits,
+                lower=response.lower,
+                upper=response.upper,
+                relative_accuracy_bits=response.relative_accuracy_bits,
+                exact=response.exact,
+                detail=(
+                    "Pinned Arb ball arithmetic returned an outward-rounded "
+                    "enclosure with exact dyadic endpoints."
+                ),
             )
         if isinstance(response, ArbNonfiniteWorkerResponse):
-            return BoundedSearchIncomplete(
-                ArbPointEnclosureResult(
-                    status="NONFINITE",
-                    function=request.function,
-                    argument=request.argument,
-                    precision_bits=request.precision_bits,
-                    detail=(
-                        "Arb returned a non-finite ball; no enclosure conclusion "
-                        "is available."
-                    ),
-                )
+            return ArbPointEnclosureResult(
+                status="NONFINITE",
+                function=request.function,
+                argument=request.argument,
+                precision_bits=request.precision_bits,
+                detail=(
+                    "Arb returned a non-finite ball; no enclosure conclusion "
+                    "is available."
+                ),
             )
         raise AssertionError("unreachable Arb worker response")
     except TimeoutError:
@@ -126,93 +116,48 @@ def _point_enclosure(
             "The Arb worker exceeded the declared wall-clock budget; "
             "no enclosure conclusion is available."
         )
-        return BoundedSearchInterrupted(
-            value=ArbPointEnclosureResult(
-                status="TIMEOUT",
-                function=request.function,
-                argument=request.argument,
-                precision_bits=request.precision_bits,
-                detail=detail,
-            ),
-            status=ExecutionStatus.TIMEOUT,
-            diagnostic=_diagnostic("ARB_POINT_ENCLOSURE_TIMEOUT", detail),
-        )
+        raise OperationAbortError(
+            ExecutionStatus.TIMEOUT,
+            _diagnostic("ARB_POINT_ENCLOSURE_TIMEOUT", detail),
+        ) from None
     except (OSError, RuntimeError, ValueError):
         detail = (
             "The Arb worker failed or returned malformed output; "
             "no enclosure conclusion is available."
         )
-        return BoundedSearchInterrupted(
-            value=ArbPointEnclosureResult(
-                status="BACKEND_ERROR",
-                function=request.function,
-                argument=request.argument,
-                precision_bits=request.precision_bits,
-                detail=detail,
-            ),
-            status=ExecutionStatus.ERROR,
-            diagnostic=_diagnostic("ARB_POINT_ENCLOSURE_BACKEND_ERROR", detail),
-        )
-
-
-def _scope(
-    request: ArbPointEnclosureRequest,
-    _result: ArbPointEnclosureResult,
-) -> dict[str, object]:
-    return {
-        "function": request.function.value,
-        "precision_bits": request.precision_bits,
-        "wall_seconds": request.wall_seconds,
-    }
-
-
-def _obligation(
-    request: ArbPointEnclosureRequest,
-    result: ArbPointEnclosureResult,
-) -> ArbPointEnclosureObligation:
-    return ArbPointEnclosureObligation(
-        function=request.function,
-        argument=request.argument,
-        precision_bits=request.precision_bits,
-        claimed_lower=result.lower,
-        claimed_upper=result.upper,
-        status=result.status,
-    )
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            _diagnostic("ARB_POINT_ENCLOSURE_BACKEND_ERROR", detail),
+        ) from None
 
 
 POINT_ENCLOSURE_CAPABILITIES = (
-    BoundedSearchOperation(
-        capability_id="analysis.real_function.point_enclosure.compute",
-        title="Enclose a real function at a rational point",
-        description=(
-            "Use pinned Arb ball arithmetic to enclose one supported real "
-            "function at one exact rational point within a wall-clock budget."
-        ),
-        request_model=ArbPointEnclosureRequest,
-        result_model=ArbPointEnclosureResult,
-        implementation=_point_enclosure,
-        relation_id="analysis.real_function.point_enclosure.relation",
-        scope_parameters=_scope,
-        is_complete=lambda result: result.status == "ENCLOSED",
-        obligation_model=ArbPointEnclosureObligation,
-        obligation=_obligation,
-        incomplete_basis=(
-            "Arb returned no finite enclosure or did not complete within "
-            "the declared bounded execution"
-        ),
-        tags=("analysis", "validated", "arb", "enclosure", "bounded"),
-        invocation_examples=(
-            example(
-                "sqrt_zero",
-                "Enclose sqrt(0) at 32-bit precision.",
-                {
-                    "function": "SQRT",
-                    "argument": {"num": "0", "den": "1"},
-                    "precision_bits": 32,
-                    "wall_seconds": 1,
-                },
+    inline_operation(
+        OperationSpec(
+            operation_id="analysis.real_function.point_enclosure.compute",
+            version="1",
+            title="Enclose a real function at a rational point",
+            description=(
+                "Use pinned Arb ball arithmetic to enclose one supported real "
+                "function at one exact rational point within a wall-clock budget."
             ),
-        ),
+            request_type=ArbPointEnclosureRequest,
+            result_type=ArbPointEnclosureResult,
+            execute=_point_enclosure,
+            tags=("analysis", "validated", "arb", "enclosure", "bounded"),
+            invocation_examples=(
+                example(
+                    "sqrt_zero",
+                    "Enclose sqrt(0) at 32-bit precision.",
+                    {
+                        "function": "SQRT",
+                        "argument": {"num": "0", "den": "1"},
+                        "precision_bits": 32,
+                        "wall_seconds": 1,
+                    },
+                ),
+            ),
+        )
     ),
 )
 

@@ -26,21 +26,21 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ContractModel
 from jacobian.installation.context import InstallationContext
+from jacobian.operation_bindings import InstalledOperation, inline_operation
 from jacobian.operation_installation import InstalledDomainBundle, OperationInstaller
 from jacobian.operations import (
-    ComputedOperation,
-    ComputedSuccess,
     DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
+    OperationSpec,
 )
 from jacobian.portfolio import (
     DEPENDENCY_UNAVAILABLE,
     PROVIDER_UNAVAILABLE,
     PortfolioPlan,
 )
-from jacobian.portfolio.builtin import build_builtin_portfolio
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.model import ManagedPortfolioComponent
 from jacobian.portfolio.result import (
     BundleInstallationStatus,
     PortfolioInstallationResult,
@@ -82,10 +82,10 @@ def _synthetic_bundle(
     *,
     domain_id: str = "synthetic",
     runtime: CapabilityProviderRuntime | None = None,
-    capabilities: tuple[ComputedOperation[Any, Any], ...] | None = None,
+    capabilities: tuple[InstalledOperation[Any, Any], ...] | None = None,
 ) -> DomainBundle:
-    def compute(request: _SyntheticRequest) -> ComputedSuccess[_SyntheticResult]:
-        return ComputedSuccess(_SyntheticResult(doubled=request.value * 2))
+    def compute(request: _SyntheticRequest) -> _SyntheticResult:
+        return _SyntheticResult(doubled=request.value * 2)
 
     return DomainBundle(
         domain_id=domain_id,
@@ -100,15 +100,17 @@ def _synthetic_bundle(
         capabilities=capabilities
         if capabilities is not None
         else (
-            ComputedOperation(
-                capability_id=f"{domain_id}.compute.double",
-                title="Double a bounded integer",
-                description="Double one bounded nonnegative integer.",
-                request_model=_SyntheticRequest,
-                result_model=_SyntheticResult,
-                implementation=compute,
-                relation_id=f"{domain_id}.relation.double",
-                tags=("synthetic",),
+            inline_operation(
+                OperationSpec(
+                    operation_id=f"{domain_id}.compute.double",
+                    version="2",
+                    title="Double a bounded integer",
+                    description="Double one bounded nonnegative integer.",
+                    request_type=_SyntheticRequest,
+                    result_type=_SyntheticResult,
+                    execute=compute,
+                    tags=("synthetic",),
+                )
             ),
         ),
         diagnostics=DomainDiagnostics(
@@ -118,9 +120,6 @@ def _synthetic_bundle(
                 message="Input does not satisfy the synthetic contract.",
             )
         ),
-        scope_description="the complete supplied synthetic input",
-        completeness_basis="deterministic computation covered the supplied input",
-        assurance_basis="deterministic synthetic computation; no checker invoked",
     )
 
 
@@ -161,7 +160,6 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
             operations=operations,
             checker_authority=CheckerAuthorityMode.NONE,
             register_capability=register_capability,
-            register_checker_relationship=capabilities._register_catalog_relationship,
         )
         yield _RecordingContext(context=context, store=store, registered=registered)
     finally:
@@ -172,7 +170,7 @@ def test_install_domains_installs_every_available_bundle_and_registers_adapters(
     assembly: _RecordingContext,
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(domain_bundles=(_synthetic_bundle(domain_id="alpha"),))
+    plan = PortfolioPlan(components=(_synthetic_bundle(domain_id="alpha"),))
 
     result = assembler.install(plan)
 
@@ -198,7 +196,7 @@ def test_install_domains_preserves_declaration_order_across_bundles(
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             _synthetic_bundle(domain_id="beta"),
         )
@@ -216,7 +214,7 @@ def test_unavailable_provider_is_skipped_with_typed_diagnostic(
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             _synthetic_bundle(
                 domain_id="beta",
@@ -255,7 +253,7 @@ def test_unavailable_provider_does_not_block_subsequent_bundles(
 
     assembler = DomainBundleInstaller(assembly.context)
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             _synthetic_bundle(
                 domain_id="beta",
@@ -282,15 +280,15 @@ def test_unavailable_dependency_skips_affected_bundle_and_continues(
     def dependent_installer(*_args: object, **_kwargs: object) -> InstalledDomainBundle:
         raise AssertionError("an installer with unavailable dependencies must not run")
 
-    dependent = replace(
-        _synthetic_bundle(domain_id="dependent"),
-        capabilities=(),
-        managed_capability_ids=("dependent.compute.double",),
-        managed_installer=dependent_installer,
+    dependent = ManagedPortfolioComponent(
+        domain_id="dependent",
+        provider_runtime=_available_runtime(),
+        capability_ids=("dependent.compute.double",),
+        install=dependent_installer,
         dependency_ids=("optional",),
     )
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(
                 domain_id="optional",
                 runtime=_unavailable_runtime("optional provider is missing"),
@@ -324,7 +322,7 @@ def test_install_domains_validates_the_plan_before_installing(
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
     bundle = _synthetic_bundle(domain_id="alpha")
-    plan = PortfolioPlan(domain_bundles=(bundle, bundle))
+    plan = PortfolioPlan(components=(bundle, bundle))
 
     with pytest.raises(ValueError, match="duplicate domain bundles"):
         assembler.install(plan)
@@ -337,7 +335,7 @@ def test_empty_plan_yields_complete_empty_result(
     assembly: _RecordingContext,
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(domain_bundles=())
+    plan = PortfolioPlan(components=())
 
     result = assembler.install(plan)
 
@@ -353,7 +351,7 @@ def test_outcome_for_and_diagnostic_for_return_none_for_unknown_domains(
     assembly: _RecordingContext,
 ) -> None:
     assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(domain_bundles=(_synthetic_bundle(domain_id="alpha"),))
+    plan = PortfolioPlan(components=(_synthetic_bundle(domain_id="alpha"),))
 
     result = assembler.install(plan)
 
@@ -374,7 +372,7 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
     assembler = DomainBundleInstaller(assembly.context)
     broken = _synthetic_bundle(domain_id="broken", capabilities=())
     plan = PortfolioPlan(
-        domain_bundles=(
+        components=(
             _synthetic_bundle(domain_id="alpha"),
             broken,
             _synthetic_bundle(domain_id="gamma"),
@@ -390,56 +388,6 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
     assert "broken" not in assembly.registered
 
 
-def test_conjecture_ingestion_installs_through_domain_bundle_outcome(
-    assembly: _RecordingContext,
-) -> None:
-    bundle = build_builtin_portfolio().bundle_for("conjecture_ingestion")
-
-    assert bundle is not None
-    assert bundle.capability_ids == ("dataset.conjecture.ingest",)
-    assert bundle.managed_installer is not None
-
-    result = DomainBundleInstaller(assembly.context).install(
-        PortfolioPlan(domain_bundles=(bundle,))
-    )
-
-    assert result.outcomes[0].status is BundleInstallationStatus.INSTALLED
-    assert result.outcomes[0].capability_ids == ("dataset.conjecture.ingest",)
-    assert "dataset.conjecture.ingest" in assembly.registered
-
-
-def test_managed_bundle_rejects_installed_capability_id_mismatch(
-    assembly: _RecordingContext,
-) -> None:
-    bundle = build_builtin_portfolio().bundle_for("conjecture_ingestion")
-    assert bundle is not None
-    mismatched = replace(bundle, managed_capability_ids=("dataset.wrong.ingest",))
-
-    with pytest.raises(ValueError, match="installed capability IDs"):
-        DomainBundleInstaller(assembly.context).install(
-            PortfolioPlan(domain_bundles=(mismatched,))
-        )
-
-
-def test_managed_bundle_rejects_installed_provider_runtime_mismatch(
-    assembly: _RecordingContext,
-) -> None:
-    bundle = build_builtin_portfolio().bundle_for("conjecture_ingestion")
-    assert bundle is not None
-    mismatched = replace(
-        bundle,
-        provider_runtime=known_provider_runtime(
-            "jacobian.different-provider",
-            features=("license-policy",),
-        ),
-    )
-
-    with pytest.raises(ValueError, match="provider runtimes"):
-        DomainBundleInstaller(assembly.context).install(
-            PortfolioPlan(domain_bundles=(mismatched,))
-        )
-
-
 def test_duplicate_capability_id_within_a_bundle_propagates(
     assembly: _RecordingContext,
 ) -> None:
@@ -450,13 +398,10 @@ def test_duplicate_capability_id_within_a_bundle_propagates(
 
     assembler = DomainBundleInstaller(assembly.context)
     base = _synthetic_bundle(domain_id="alpha")
-    duplicate = replace(
-        base.capabilities[0],
-        relation_id="alpha.relation.duplicate",
-    )
+    duplicate = base.capabilities[0]
     bundle = replace(base, capabilities=(base.capabilities[0], duplicate))
 
     with pytest.raises(ValueError, match="duplicate capability ID"):
-        assembler.install(PortfolioPlan(domain_bundles=(bundle,)))
+        assembler.install(PortfolioPlan(components=(bundle,)))
 
     assert assembly.registered == []

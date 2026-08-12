@@ -8,16 +8,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
@@ -187,14 +181,6 @@ class GraphAtlasSearchAdapter:
                 }
             )
         artifact_uris = (scope.artifact_uri, *graph_uris)
-        relationships = tuple(
-            CapabilityRelationship(
-                relation_id="graph.relation.atlas-member",
-                source_artifact_uris=(scope.artifact_uri,),
-                target_artifact_uris=(graph_uri,),
-            )
-            for graph_uri in graph_uris
-        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -211,33 +197,6 @@ class GraphAtlasSearchAdapter:
                 "backend": "networkx.graph_atlas_g",
                 "backend_version": nx().__version__,
             },
-            scope=CapabilityScope(
-                description=(
-                    "all Graph Atlas representatives with the requested exact order"
-                ),
-                parameters={
-                    "source": "networkx.graph_atlas_g",
-                    "backend_version": nx().__version__,
-                    "order": order,
-                },
-                artifact_uri=scope.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "the maintained Graph Atlas provider was scanned to exhaustion; "
-                    "this computation was not independently checked"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=relationships,
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "deterministic NetworkX Graph Atlas enumeration and exact "
-                    "property filters; no independent checker was invoked"
-                ),
-            ),
             artifact_uris=artifact_uris,
         )
 

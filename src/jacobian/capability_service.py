@@ -8,12 +8,11 @@ those boundaries behind a second compatibility API.
 
 from __future__ import annotations
 
-import importlib
-import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol, cast
+from typing import Literal
 
 from jacobian.canonical import canonicalize_json
+from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_discovery import (
     CapabilityDiscoveryMixin,
 )
@@ -31,18 +30,8 @@ from jacobian.capability_errors import (
 )
 from jacobian.capability_registry import CapabilityRegistryMixin
 from jacobian.capability_verification import CapabilityVerificationMixin
-from jacobian.contracts.capabilities import (
-    CapabilityCatalogRelationship,
-    CapabilityDescriptor,
-    CapabilityRequest,
-    CapabilityResult,
-)
+from jacobian.contracts.capabilities import CapabilityDescriptor
 from jacobian.storage.repository import ArtifactRepository
-
-if TYPE_CHECKING:
-    from jacobian.runtime.model import JacobianRuntime
-
-_ENTRYPOINT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,15 +131,6 @@ class CapabilityPolicy:
         return tuple(reasons)
 
 
-class CapabilityAdapter(Protocol):
-    """Operator-installed adapter; registration requires no MCP changes."""
-
-    @property
-    def descriptor(self) -> CapabilityDescriptor: ...
-
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult: ...
-
-
 class CapabilityService(
     CapabilityRegistryMixin,
     CapabilityDiscoveryMixin,
@@ -169,51 +149,6 @@ class CapabilityService(
         self.policy = policy or CapabilityPolicy()
         self._adapters: dict[str, CapabilityAdapter] = {}
         self._descriptors: dict[str, CapabilityDescriptor] = {}
-        self._catalog_relationships: dict[
-            str, dict[str, CapabilityCatalogRelationship]
-        ] = {}
-
-    def _register_catalog_relationship(
-        self,
-        source_capability_id: str,
-        relationship: CapabilityCatalogRelationship,
-    ) -> None:
-        """Register one installer-authorized directed catalog relationship."""
-
-        if source_capability_id == relationship.capability_id:
-            raise CapabilityError("a capability cannot relate to itself")
-        related = self._catalog_relationships.setdefault(source_capability_id, {})
-        previous = related.get(relationship.capability_id)
-        if previous is not None and previous != relationship:
-            raise CapabilityError(
-                "conflicting catalog relationship: "
-                f"{source_capability_id} -> {relationship.capability_id}"
-            )
-        related[relationship.capability_id] = relationship
-
-
-def load_capability_adapter(
-    entrypoint: str,
-    runtime: JacobianRuntime,
-) -> CapabilityAdapter:
-    """Load one operator-approved ``factory(runtime)`` adapter entrypoint."""
-
-    if not _ENTRYPOINT_PATTERN.fullmatch(entrypoint):
-        raise CapabilityError("capability adapter entrypoint has an invalid format")
-    module_name, attribute_name = entrypoint.split(":", 1)
-    try:
-        module = importlib.import_module(module_name)
-        factory = getattr(module, attribute_name)
-        adapter = factory(runtime)
-        descriptor = adapter.descriptor
-        invoke = adapter.invoke
-    except (AttributeError, ImportError, TypeError) as exc:
-        raise CapabilityError(
-            f"cannot load capability adapter entrypoint: {entrypoint}"
-        ) from exc
-    if not isinstance(descriptor, CapabilityDescriptor) or not callable(invoke):
-        raise CapabilityError("capability adapter does not implement the protocol")
-    return cast(CapabilityAdapter, adapter)
 
 
 __all__ = [
@@ -223,5 +158,4 @@ __all__ = [
     "CapabilityInvocationError",
     "CapabilityPolicy",
     "CapabilityService",
-    "load_capability_adapter",
 ]

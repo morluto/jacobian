@@ -11,7 +11,6 @@ from tests.support.artifacts import sha256_file as _sha256_file
 
 import jacobian_checkers.smt
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityInstallTier,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
@@ -223,7 +222,7 @@ def test_unsat_proof_is_verified_by_authorized_strict_carcara(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert result.verification_record_uri is not None
     assert result.output["status"] == "VERIFIED_UNSAT"
     assert result.output["conclusion"] == "TRUE"
     assert result.output["problem_uri"] == problem_uri
@@ -272,7 +271,6 @@ def test_holey_checker_report_never_establishes_sat_or_unsat(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["status"] == "REJECTED"
     assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["verification_record_uri"] is None
@@ -354,7 +352,6 @@ def test_checker_operational_failure_never_creates_a_conclusion(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is expected_status
-    assert result.assurance.level is not CapabilityAssuranceLevel.VERIFIED
     assert result.output["status"] == expected_output_status
     assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["verification_record_uri"] is None
@@ -379,7 +376,6 @@ def test_runtime_replacement_after_authorization_fails_closed(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.assurance.level is not CapabilityAssuranceLevel.VERIFIED
     assert result.output["status"] == "ERROR"
     assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["verification_record_uri"] is None

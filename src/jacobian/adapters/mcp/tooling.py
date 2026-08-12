@@ -374,19 +374,19 @@ def _log_capability_attempt(
         execution_status = result.execution.status.value
         diagnostic_codes = tuple(item.code for item in result.diagnostics)
         capability_version = result.capability_version
-        assurance = result.assurance.level.value
+        verification_record_uri_present = result.verification_record_uri is not None
         operation_runtime_ms = result.execution.runtime_ms
         response_bytes = _response_size(result)
     else:
         capability_version = "unknown"
-        assurance = "none"
+        verification_record_uri_present = False
         operation_runtime_ms = None
         response_bytes = 0
     codes = ",".join(diagnostic_codes[:8]) or "none"
     _LOGGER.info(
         "MCP capability attempt request_digest=%s trace_digest=%s trace_source=%s "
         "capability_id=%s capability_version=%s "
-        "execution_status=%s assurance=%s diagnostic_codes=%s "
+        "execution_status=%s verification_record_uri_present=%s diagnostic_codes=%s "
         "attempt_duration_ms=%.3f operation_runtime_ms=%s "
         "response_bytes=%d argument_digest=%s",
         request_digest,
@@ -395,7 +395,7 @@ def _log_capability_attempt(
         capability_id,
         capability_version,
         execution_status or "ERROR",
-        assurance,
+        verification_record_uri_present,
         codes,
         (time.monotonic() - started) * 1000,
         "none" if operation_runtime_ms is None else operation_runtime_ms,
@@ -409,6 +409,7 @@ async def _invoke_capability_attempt(
     *,
     capability_id: str,
     payload: dict[str, Any],
+    inputs: dict[str, str] | None = None,
     ctx: Any | None,
 ) -> CapabilityResult:
     started = time.monotonic()
@@ -416,6 +417,7 @@ async def _invoke_capability_attempt(
         {
             "capability_id": capability_id,
             "payload": payload,
+            "inputs": inputs or {},
         }
     )
     trace_digest, trace_source = _request_trace_digest(ctx)
@@ -424,6 +426,7 @@ async def _invoke_capability_attempt(
     request = CapabilityRequest(
         capability_id=capability_id,
         input=payload,
+        inputs=inputs or {},
     )
     try:
         result = await _run_blocking(

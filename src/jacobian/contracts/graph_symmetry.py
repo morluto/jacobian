@@ -233,7 +233,6 @@ class GraphSymmetryOrbitResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["networkx"] = "networkx"
     backend_version: str = Field(min_length=1, max_length=64)
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_complete_canonical_partitions(self) -> Self:

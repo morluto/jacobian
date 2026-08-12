@@ -18,18 +18,14 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_proof_state_inspect import (
@@ -42,7 +38,6 @@ from jacobian.lean_frontend._state_validation import (
     _StoredProofStateResources,
 )
 from jacobian.lean_frontend.artifacts import _environment_digest
-from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -143,29 +138,6 @@ class LeanProofStateInspectAdapter:
                 detail="read-only inspection; no Lean process was started",
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="one immutable proof state inspected without replay",
-                parameters={
-                    "environment": validated.environment.value,
-                    "state_uri": validated.state_uri,
-                    "state_digest": state.state_digest,
-                },
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "the artifact's recorded goals are returned in full; "
-                    "no search or replay is performed"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "inspection returns the immutable artifact's recorded "
-                    "fields; it is not a theorem-verification record"
-                ),
-            ),
             artifact_uris=(validated.state_uri,),
         )
 

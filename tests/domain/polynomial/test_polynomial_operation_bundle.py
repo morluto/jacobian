@@ -3,15 +3,12 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from tests.support.capabilities import invoke_capability as _invoke
-from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
 from jacobian.process_policy import ProcessResult, ProcessTermination
+from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture
@@ -77,7 +74,6 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         },
     )
     assert gcd_result.execution.status is ExecutionStatus.COMPLETED
-    assert gcd_result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert gcd_result.output["result"] == {
         "gcd": _polynomial(["x"], [(1, 1, 1), (0, -1, 1)]),
         "bezout": {
@@ -194,7 +190,10 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         },
     )
     assert groebner_result.execution.status is ExecutionStatus.COMPLETED
-    assert groebner_result.output == {
+    groebner_payload = runtime.core.store.get(
+        groebner_result.output["result_uri"]
+    ).payload
+    assert groebner_payload == {
         "variables": ["x", "y"],
         "monomial_order": "lex",
         "basis": [
@@ -210,17 +209,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         "completion": "COMPLETE",
         "normalization": "REDUCED_MONIC",
     }
-    assert len(groebner_result.artifact_uris) == 3
-    obligation = runtime.core.store.get(groebner_result.artifact_uris[2])
-    assert obligation.payload["verification_status"] == "UNVERIFIED"
-    assert obligation.manifest.parents == tuple(
-        sorted(
-            (
-                groebner_result.artifact_uris[0],
-                groebner_result.artifact_uris[1],
-            )
-        )
-    )
+    assert len(groebner_result.artifact_uris) == 2
 
     for result in (
         gcd_result,
@@ -229,9 +218,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         square_free_result,
     ):
         assert result.execution.status is ExecutionStatus.COMPLETED
-        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
         assert result.artifact_uris == ()
-        assert result.relationships == ()
 
     invalid_result = _invoke(
         runtime,
@@ -312,7 +299,8 @@ def test_groebner_result_preserves_advertised_input_variable_bound(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output == {
+    payload = polynomial_services.core.store.get(result.output["result_uri"]).payload
+    assert payload == {
         "variables": variables,
         "monomial_order": "lex",
         "basis": [_polynomial(variables, [((0, 0, 0, 0, 0), 1, 1)])],

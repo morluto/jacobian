@@ -28,7 +28,6 @@
   "files": [
     "bin",
     "install.sh",
-    "README.md",
-    "skills"
+    "README.md"
   ]
 }

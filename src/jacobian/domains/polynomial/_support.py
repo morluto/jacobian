@@ -10,18 +10,18 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains.polynomial.operations import PolynomialOutputBudgetError
+from jacobian.operation_bindings import (
+    DurableOperationFactory,
+    InlineOperationFactory,
+    InstalledOperation,
+)
 from jacobian.operations import (
-    ComputedNotApplicable,
-    ComputedOperation,
-    ComputedOperationFactory,
-    ComputedOutcome,
-    MaterializedOperation,
-    MaterializedOperationFactory,
-    OperationExecutionFailure,
+    OperationAbortError,
     OperationFailure,
+    OperationRefusalError,
 )
 
-_polynomial_operation_factory = ComputedOperationFactory(
+_polynomial_operation_factory = InlineOperationFactory(
     OperationFailure(
         code="POLYNOMIAL_OPERATION_NOT_APPLICABLE",
         stage="polynomial_computation",
@@ -29,7 +29,7 @@ _polynomial_operation_factory = ComputedOperationFactory(
         exceptions=(TypeError, ValueError),
     )
 )
-_materialized_polynomial_operation_factory = MaterializedOperationFactory(
+_materialized_polynomial_operation_factory = DurableOperationFactory(
     _polynomial_operation_factory.failure
 )
 
@@ -54,9 +54,8 @@ def polynomial_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
-    relation_id: str | None = None,
     version: str = "2",
-) -> ComputedOperation[RequestT, ResultT]:
+) -> InstalledOperation[RequestT, ResultT]:
     """Declare an exact polynomial operation with bounded-output failure semantics."""
 
     declared = _polynomial_operation_factory(
@@ -68,12 +67,14 @@ def polynomial_operation[
         operation,
         *tags,
         invocation_examples=invocation_examples,
-        relation_id=relation_id,
+        version=version,
     )
     return replace(
         declared,
-        version=version,
-        implementation=_with_polynomial_output_budget(declared.implementation),
+        spec=replace(
+            declared.spec,
+            execute=_with_polynomial_output_budget(declared.spec.execute),
+        ),
     )
 
 
@@ -89,10 +90,9 @@ def materialized_polynomial_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
-    relation_id: str | None = None,
     resource_reason: str = "",
     version: str = "2",
-) -> MaterializedOperation[RequestT, ResultT, ResultT, ContractModel]:
+) -> InstalledOperation[RequestT, ResultT]:
     """Declare an exact polynomial operation with durable result lineage."""
 
     declared = _materialized_polynomial_operation_factory(
@@ -104,13 +104,15 @@ def materialized_polynomial_operation[
         operation,
         *tags,
         invocation_examples=invocation_examples,
-        relation_id=relation_id,
         resource_reason=resource_reason,
         version=version,
     )
     return replace(
         declared,
-        implementation=_with_polynomial_output_budget(declared.implementation),
+        spec=replace(
+            declared.spec,
+            execute=_with_polynomial_output_budget(declared.spec.execute),
+        ),
     )
 
 
@@ -118,17 +120,17 @@ def _with_polynomial_output_budget[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    implementation: Callable[[RequestT], ComputedOutcome[ResultT]],
-) -> Callable[[RequestT], ComputedOutcome[ResultT]]:
+    implementation: Callable[[RequestT], ResultT],
+) -> Callable[[RequestT], ResultT]:
     """Add polynomial-specific bounded-output handling to an operation."""
 
-    def execute(request: RequestT) -> ComputedOutcome[ResultT]:
+    def execute(request: RequestT) -> ResultT:
         try:
             return implementation(request)
         except PolynomialOutputBudgetError as error:
-            return OperationExecutionFailure(
-                status=ExecutionStatus.ERROR,
-                diagnostic=CapabilityDiagnostic(
+            raise OperationAbortError(
+                ExecutionStatus.ERROR,
+                CapabilityDiagnostic(
                     code="POLYNOMIAL_OUTPUT_LIMIT_EXCEEDED",
                     stage="polynomial_output_validation",
                     message=str(error),
@@ -137,12 +139,12 @@ def _with_polynomial_output_budget[
                         "explicitly larger output budget."
                     ),
                 ),
-            )
+            ) from error
         except Exception as error:
             if isinstance(error, _polynomial_error()):
-                return ComputedNotApplicable(
+                raise OperationRefusalError(
                     _polynomial_operation_factory.failure.diagnostic(error)
-                )
+                ) from error
             raise
 
     return execute

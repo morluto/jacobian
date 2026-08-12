@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
 import jacobian.provider_runtime as provider_runtime
+import jacobian.providers.external_solver_runtime as external_solver_runtime
 import jacobian.providers.flint_runtime as flint_runtime
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -30,13 +32,44 @@ from jacobian.provider_runtime import (
 from jacobian.providers.flint_runtime import (
     exact_domain_checker_provider_runtime,
     python_flint_exact_checker_provider_runtime,
+    python_flint_provider_runtime,
 )
 from jacobian.providers.lean_runtime import (
     LeanRuntimeIdentityError,
     lean_frontend_provider_runtime,
+    lean_mathlib_git_config,
     lean_provider_runtime,
     require_lean_semantic_runtime_identity,
 )
+
+
+def test_lean_mathlib_git_config_authorizes_only_manifest_checkouts(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    packages = project / ".lake" / "packages"
+    first = packages / "mathlib"
+    second = packages / "repl"
+    first.mkdir(parents=True)
+    second.mkdir()
+    (project / "lake-manifest.json").write_text(
+        '{"packagesDir":".lake/packages","packages":['
+        '{"type":"git","name":"mathlib"},'
+        '{"type":"git","name":"repl"}]}',
+        encoding="utf-8",
+    )
+
+    environment = lean_mathlib_git_config(project)
+
+    assert environment == {
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": str(first.resolve()),
+        "GIT_CONFIG_KEY_1": "safe.directory",
+        "GIT_CONFIG_VALUE_1": str(second.resolve()),
+    }
 
 
 def _runtime(**updates: object) -> CapabilityProviderRuntime:
@@ -320,23 +353,57 @@ def test_python_provider_readiness_checks_required_attributes(
     assert raised.value.code is ProviderRuntimeErrorCode.READINESS_FAILED
 
 
-def test_z3_version_mismatch_reports_smt_solver_profile(
+@pytest.mark.parametrize(
+    ("module", "resolve", "diagnostic"),
+    (
+        (
+            provider_runtime,
+            lambda: provider_runtime.known_provider_runtime("jacobian.networkx"),
+            "NetworkX is installed but does not match the pinned",
+        ),
+        (
+            provider_runtime,
+            lambda: provider_runtime.known_provider_runtime("jacobian.sympy"),
+            "SymPy is installed but does not match the pinned",
+        ),
+        (
+            flint_runtime,
+            python_flint_provider_runtime,
+            "Python-FLINT is installed but does not match the pinned",
+        ),
+        (
+            provider_runtime,
+            lambda: provider_runtime.known_provider_runtime("jacobian.z3"),
+            "Z3 is installed but does not match the pinned",
+        ),
+        (
+            external_solver_runtime,
+            external_solver_runtime.cvc5_provider_runtime,
+            "The pinned cvc5",
+        ),
+    ),
+    ids=("networkx", "sympy", "flint", "z3", "cvc5"),
+)
+def test_required_python_provider_rejects_version_skew(
     monkeypatch: pytest.MonkeyPatch,
+    module: ModuleType,
+    resolve: Callable[[], CapabilityProviderRuntime],
+    diagnostic: str,
 ) -> None:
-    mismatched = _runtime(provider="jacobian.z3", version="0.0.0")
+    mismatched = _runtime(version="0.0.0")
     monkeypatch.setattr(
-        provider_runtime,
+        module,
         "python_distribution_provider_runtime",
         lambda *_args, **_kwargs: mismatched,
     )
 
-    runtime = provider_runtime.known_provider_runtime("jacobian.z3")
+    runtime = resolve()
 
     assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
-    assert runtime.diagnostic == (
-        "Z3 is installed but does not match the pinned "
-        f"{provider_runtime.Z3_SOLVER_VERSION} SMT solver profile."
-    )
+    assert runtime.version is None
+    assert runtime.digest is None
+    assert runtime.diagnostic is not None
+    assert diagnostic in runtime.diagnostic
 
 
 def test_disappeared_executable_is_unavailable(tmp_path: Path) -> None:
@@ -376,6 +443,13 @@ def test_lean_frontend_runtime_binds_the_pinned_executable(
     assert runtime.features == ("CORE", "elaboration", "lean-statement")
     assert runtime.configuration["executable"] == str(executable)
     assert runtime.configuration["profiles"]["CORE"]["import_name"] == "Init.Prelude"
+    assert runtime.configuration["profiles"]["CORE"]["lean_version"] == (
+        lean4.LEAN_VERSION
+    )
+    assert runtime.configuration["profiles"]["CORE"]["lean_commit"] == (
+        lean4.LEAN_COMMIT
+    )
+    assert runtime.configuration["profiles"]["CORE"]["mathlib_commit"] is None
 
 
 def test_lean_frontend_runtime_preserves_actionable_probe_diagnostic(

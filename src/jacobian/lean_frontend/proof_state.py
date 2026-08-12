@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -11,17 +12,13 @@ from pydantic import ValidationError
 import jacobian.lean_frontend.exploration as _exploration_support
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
+from jacobian.contracts.lean import LeanDiagnosticPhase, LeanDiagnosticSource
 from jacobian.contracts.lean_exploration import (
     LeanProofStateArtifact,
     LeanProofStateOutput,
@@ -40,6 +37,7 @@ from jacobian.lean_frontend.artifacts import (
 )
 from jacobian.lean_frontend.exploration import (
     _normalized_response_goals,
+    _request_validation_diagnostic,
     _Resources,
     _runtime_ms,
     _tactic_diagnostics,
@@ -52,23 +50,46 @@ from jacobian.lean_frontend.repl_protocol import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class LeanProofStateApplication:
+    """Typed transition result before the public capability projection."""
+
+    output: LeanProofStateOutput
+    execution: Execution
+    artifact_uris: tuple[str, ...]
+
+
 class LeanProofStateAdapter:
     def __init__(self, resources: _Resources) -> None:
         self.resources = resources
         self._descriptor = CapabilityDescriptor(
             capability_id="lean.proof_state.apply_tactic",
-            version="2",
-            title="Apply one Lean tactic to a replayable proof state",
+            version="3",
+            title="Apply one Lean tactic and inspect resulting goals",
             description=(
-                "Reconstruct and validate an immutable proof state in a clean "
-                "Lean process, apply one tactic, and return every durable "
-                "successor state or structured rejection diagnostics."
+                "Apply exactly one tactic in either fresh mode "
+                "(statement plus optional proof_prefix) or continuation mode "
+                "(state_uri plus tactic). Continuation requests must omit statement "
+                "and proof_prefix. A clean Lean process reconstructs the immutable "
+                "state and returns typed goals plus a durable successor state. "
+                "Tactic failures return stable repair diagnostics, a goal index, "
+                "and payload-relative source spans."
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
             input_schema=LeanProofStateRequest.model_json_schema(),
             output_schema=LeanProofStateOutput.model_json_schema(),
-            tags=("lean", "proof-state", "tactic", "exploration"),
+            tags=(
+                "lean",
+                "proof-state",
+                "tactic",
+                "goals",
+                "exploration",
+                "proof-repair",
+                "diagnostics",
+                "tactic-error",
+                "source-span",
+            ),
             invocation_examples=(
                 CapabilityInvocationExample(
                     name="close_true_with_trivial",
@@ -84,6 +105,23 @@ class LeanProofStateAdapter:
                         }
                     ).model_dump(mode="json"),
                 ),
+                CapabilityInvocationExample(
+                    name="continue_returned_state",
+                    description=(
+                        "Continue an immutable successor state using only its URI, "
+                        "the matching environment, and one tactic."
+                    ),
+                    input=LeanProofStateRequest.model_validate(
+                        {
+                            "environment": "CORE",
+                            "state_uri": "artifact://sha256/" + "a" * 64,
+                            "tactic": "rfl",
+                        }
+                    ).model_dump(
+                        mode="json",
+                        exclude={"statement", "proof_prefix"},
+                    ),
+                ),
             ),
         )
 
@@ -94,27 +132,20 @@ class LeanProofStateAdapter:
     @staticmethod
     def _validate_request(request: CapabilityRequest) -> LeanProofStateRequest:
         try:
-            validated = LeanProofStateRequest.model_validate(request.input)
-            if validated.statement is not None:
-                _validate_source_parts(
-                    validated.statement,
-                    (*validated.proof_prefix, validated.tactic),
-                )
-            else:
-                _validate_source_parts("True", (validated.tactic,))
-        except (ValidationError, ValueError) as exc:
+            return LeanProofStateRequest.model_validate(request.input)
+        except ValidationError as exc:
             raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+                _request_validation_diagnostic(
+                    exc,
                     code="INVALID_LEAN_TRANSITION_REQUEST",
-                    stage="request_validation",
-                    message="The Lean statement or tactic sequence is invalid.",
+                    subject="The Lean proof-state transition request is invalid",
                     hint=(
-                        "Use one proposition and bounded tactic bodies without "
-                        "commands, imports, declarations, sorry, or run_tac."
+                        "For a fresh state use environment, statement, optional "
+                        "proof_prefix, and tactic. For a continuation use only the "
+                        "returned state_uri, matching environment, and tactic."
                     ),
                 )
             ) from exc
-        return validated
 
     def _resolve_statement_and_prefix(
         self,
@@ -240,7 +271,45 @@ class LeanProofStateAdapter:
         return responses, typed_goals, accepted
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        validated = self._validate_request(request)
+        applied = self.apply(self._validate_request(request))
+        return CapabilityResult(
+            capability_id=self.descriptor.capability_id,
+            capability_version=self.descriptor.version,
+            execution=applied.execution,
+            output=applied.output.model_dump(mode="json"),
+            artifact_uris=applied.artifact_uris,
+        )
+
+    def apply(
+        self,
+        validated: LeanProofStateRequest,
+        *,
+        diagnostic_phase: LeanDiagnosticPhase = (LeanDiagnosticPhase.TACTIC_EXECUTION),
+        diagnostic_source: LeanDiagnosticSource = LeanDiagnosticSource.TACTIC,
+        diagnostic_column_offset: int = 0,
+    ) -> LeanProofStateApplication:
+        """Apply one already validated transition without re-entering the adapter."""
+
+        try:
+            if validated.statement is not None:
+                _validate_source_parts(
+                    validated.statement,
+                    (*validated.proof_prefix, validated.tactic),
+                )
+            else:
+                _validate_source_parts("True", (validated.tactic,))
+        except ValueError as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INVALID_LEAN_TRANSITION_REQUEST",
+                    stage="request_validation",
+                    message="The Lean statement or tactic sequence is invalid.",
+                    hint=(
+                        "Use one proposition and bounded tactic bodies without "
+                        "commands, imports, declarations, sorry, or run_tac."
+                    ),
+                )
+            ) from exc
         started = time.monotonic()
         installation = self.resources.installations[validated.environment]
         environment_digest = _environment_digest(
@@ -297,7 +366,13 @@ class LeanProofStateAdapter:
             input_state_uri = validated.state_uri
             input_state = bound_state
 
-        diagnostics = _tactic_diagnostics(responses)
+        diagnostics = _tactic_diagnostics(
+            responses,
+            statement=statement,
+            final_phase=diagnostic_phase,
+            final_source=diagnostic_source,
+            final_column_offset=diagnostic_column_offset,
+        )
         successor_states: tuple[LeanProofSuccessorState, ...] = ()
         successor_artifact_uris: tuple[str, ...] = ()
         goals: tuple[str, ...] = ()
@@ -384,9 +459,7 @@ class LeanProofStateAdapter:
             *successor_artifact_uris,
             artifact.artifact_uri,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return LeanProofStateApplication(
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=_runtime_ms(started),
@@ -396,37 +469,9 @@ class LeanProofStateAdapter:
                     else "Lean rejected the tactic; no successor state was created"
                 ),
             ),
-            output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "one tactic applied after clean replay and state validation"
-                ),
-                parameters={
-                    "environment": validated.environment.value,
-                    "statement": statement,
-                    "input_state_digest": input_state.state_digest,
-                    "environment_digest": environment_digest,
-                },
-                artifact_uri=artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "Lean returned the complete successor-state list for this "
-                    "single tactic application"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "a clean pinned Lean process reconstructed the bound state "
-                    "and computed one transition; only lean.check can verify a "
-                    "completed theorem"
-                ),
-            ),
+            output=output,
             artifact_uris=artifact_uris,
         )
 
 
-__all__ = ["LeanProofStateAdapter"]
+__all__ = ["LeanProofStateAdapter", "LeanProofStateApplication"]

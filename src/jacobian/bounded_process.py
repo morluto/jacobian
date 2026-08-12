@@ -1,4 +1,4 @@
-"""Bounded subprocess capture for local plugin and checker isolation.
+"""Bounded subprocess capture for provider and checker isolation.
 
 Children run in their own process group. Reader threads cap retained output and
 terminate the whole group as soon as either stream exceeds its limit. Timeouts

@@ -4,20 +4,18 @@ from __future__ import annotations
 
 from jacobian.implementation import cached_package_digests
 from jacobian.installation.context import InstallationContext
+from jacobian.portfolio.checker_installation import CheckerPortfolioInstaller
 from jacobian.portfolio.core_installation import CoreApplicationInstaller
 from jacobian.portfolio.foundation_installation import FoundationInstaller
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
-from jacobian.portfolio.reference_installation import ReferenceLeanInstaller
 from jacobian.portfolio.resource_installation import ResourceCapabilityInstaller
 from jacobian.portfolio.result import PortfolioInstallation
-from jacobian.runtime.services import ApplicationServices
+from jacobian.runtime.services import RuntimeServices
 
 
 def install_portfolio(
     context: InstallationContext,
-    application: ApplicationServices,
-    *,
-    capability_adapter_entrypoints: tuple[str, ...] = (),
+    services: RuntimeServices,
 ) -> PortfolioInstallation:
     """Install the complete portfolio in its declared phase order.
 
@@ -29,9 +27,9 @@ def install_portfolio(
     the duration of the same atomic installation.
     """
 
-    core = application.core
+    core = services.core
     if context.store is not core.store:
-        raise ValueError("installation context must belong to application core")
+        raise ValueError("installation context must belong to runtime core")
 
     result = PortfolioInstallation()
     resolver = ProviderAvailabilityResolver()
@@ -48,14 +46,13 @@ def install_portfolio(
                 runtimes,
             )
             CoreApplicationInstaller(context).install(
-                application,
+                services,
                 result,
             )
             ResourceCapabilityInstaller(context).install(result)
-            ReferenceLeanInstaller(context, resolver).install(
-                application,
+            CheckerPortfolioInstaller(context, resolver).install(
+                services,
                 result,
-                capability_adapter_entrypoints=capability_adapter_entrypoints,
             )
     except BaseException as exc:
         try:

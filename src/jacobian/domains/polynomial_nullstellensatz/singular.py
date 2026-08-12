@@ -13,18 +13,12 @@ from pydantic import ValidationError
 from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityProviderRuntime,
-    CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.nullstellensatz import (
@@ -335,7 +329,7 @@ class SingularNullstellensatzCertificateAdapter:
         self.system_schema_uri = dependency.result_schema_uris[
             MATERIALIZE_CAPABILITY_ID
         ]
-        self.bundle_schema_uri = dependency.obligation_schema_uris[
+        self.bundle_schema_uri = dependency.named_schema_uris[
             "nullstellensatz_certificate_bundle"
         ]
         self._descriptor = CapabilityDescriptor(
@@ -383,15 +377,6 @@ class SingularNullstellensatzCertificateAdapter:
             ),
             output={"error": diagnostic.model_dump(mode="json", exclude_none=True)},
             diagnostics=(diagnostic,),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.UNKNOWN,
-                basis="producer failure establishes no chart identity coverage",
-                assurance_level=CapabilityAssuranceLevel.HEURISTIC,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.HEURISTIC,
-                basis="producer did not complete; no infeasibility conclusion",
-            ),
         )
 
     def _resolve_request(
@@ -514,30 +499,6 @@ class SingularNullstellensatzCertificateAdapter:
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="all 12 charts in the bound normalized degree slice",
-                parameters={
-                    "chart_count": 12,
-                    "maximum_degree": validated.resource_budget.maximum_degree,
-                },
-                artifact_uri=system_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis="Singular returned one multiplier for every generator in every chart",
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.infeasibility-certificate-for",
-                    source_artifact_uris=(stored.artifact_uri,),
-                    target_artifact_uris=(system_artifact.artifact_uri,),
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis="pinned Singular lift output; independent replay not yet invoked",
-            ),
             artifact_uris=(system_artifact.artifact_uri, stored.artifact_uri),
         )
 
@@ -559,7 +520,7 @@ def install_singular_producer(
             NullstellensatzCertificateRequest: adapter.system_schema_uri
         },
         result_schema_uris={PRODUCE_CAPABILITY_ID: adapter.bundle_schema_uri},
-        obligation_schema_uris={},
+        named_schema_uris={},
     )
 
 

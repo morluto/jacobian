@@ -9,7 +9,6 @@ from tests.support.provider_lean import (
 )
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.runtime.model import JacobianRuntime
@@ -38,9 +37,8 @@ def test_lean_capability_returns_bound_verified_result(
         )
     )
 
-    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert result.assurance.verification_record_uri is not None
-    assert result.assurance.verification_record_uri in result.artifact_uris
+    assert result.verification_record_uri is not None
+    assert result.verification_record_uri in result.artifact_uris
     assert result.output["conclusion"] == "TRUE"
 
 
@@ -66,5 +64,16 @@ def test_lean_capability_projects_repairable_checker_diagnostics(
 
     assert result.output["input"]["status"] == "REJECTED"
     assert "forbidden Lean command" in result.output["input"]["errors"][0]
-    assert result.output["diagnostics"] == result.output["input"]["errors"]
-    assert result.assurance.verification_record_uri is None
+    assert result.output["diagnostics"] == [
+        {
+            "code": "LEAN_FORBIDDEN_SOURCE",
+            "phase": "KERNEL_CHECK",
+            "severity": "ERROR",
+            "message": "The source uses a forbidden Lean construct.",
+            "source_span": None,
+            "goal_index": None,
+            "metavariable": None,
+            "raw_backend_message": "proof contains a forbidden Lean command",
+        }
+    ]
+    assert result.verification_record_uri is None

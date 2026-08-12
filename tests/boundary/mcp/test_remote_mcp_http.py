@@ -16,17 +16,26 @@ from mcp.server.auth.settings import AuthSettings
 from pydantic import AnyHttpUrl
 from uvicorn import Config, Server
 
+from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.remote import (
     StaticTokenVerifier,
+    create_remote_server,
     load_static_token_file,
 )
-from jacobian.adapters.mcp.server import create_server
 
 
 def test_authenticated_streamable_http_isolates_tenant_memory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    revision = "a" * 40
+    monkeypatch.setattr(
+        "jacobian.adapters.mcp.server.load_deployment_identity",
+        lambda: DeploymentIdentity(
+            revision=revision,
+            package_version=version("jacobian"),
+        ),
+    )
     token_file = tmp_path / "tokens.json"
     token_file.write_text(
         json.dumps(
@@ -49,18 +58,14 @@ def test_authenticated_streamable_http_isolates_tenant_memory(
         listener.listen()
         port = int(listener.getsockname()[1])
         public_base_url = f"http://127.0.0.1:{port}"
-        mcp_server = create_server(
+        mcp_server = create_remote_server(
             tmp_path / "state",
-            tenant_isolation=True,
             allow_anonymous=False,
             token_verifier=StaticTokenVerifier(load_static_token_file(token_file)),
             auth=AuthSettings(
                 issuer_url=AnyHttpUrl(public_base_url),
                 resource_server_url=AnyHttpUrl(f"{public_base_url}/mcp"),
                 required_scopes=["jacobian:use"],
-            ),
-            capability_adapter_entrypoints=(
-                "tests.component.capabilities._fixture_capabilities:create_adapter",
             ),
         )
         http_server = Server(
@@ -81,18 +86,23 @@ def test_authenticated_streamable_http_isolates_tenant_memory(
             _wait_for_server(http_server, server_thread)
             asyncio.run(_remote_auth_rejections(port))
             asyncio.run(_remote_tenant_scenario(port))
+            tenant_roots = sorted((tmp_path / "state" / "tenants").iterdir())
+            assert len(tenant_roots) == 2
+            assert tenant_roots[0].name != tenant_roots[1].name
             monkeypatch.setenv("JACOBIAN_MCP_BEARER_TOKEN", "a" * 32)
             report = asyncio.run(
                 inspect_remote_deployment(
                     url=f"http://127.0.0.1:{port}/mcp",
                     expected_version=version("jacobian"),
+                    expected_revision=revision,
                     expected_policy_profile="DEFAULT",
-                    required_capabilities={"fixture.increment"},
-                    query="fixture increment",
+                    required_capabilities={"matrix.determinant.compute"},
+                    query="exact matrix determinant",
                     timeout_seconds=60,
                 )
             )
             assert report["server"]["version"] == version("jacobian")
+            assert report["deployment"]["revision"] == revision
             assert report["catalog"]["policy_profile"] == "DEFAULT"
             assert report["catalog"]["catalog_digest"].startswith("sha256:")
         finally:
@@ -139,12 +149,18 @@ async def _remote_tenant_scenario(port: int) -> None:
             ) as client,
         ):
             catalog = await client.read_resource("capability://catalog")
-            assert "fixture.increment" in catalog.contents[0].text
+            assert "matrix.determinant.compute" in catalog.contents[0].text
             result = await client.call_tool(
                 "math.run",
                 {
-                    "capability_id": "fixture.increment",
-                    "payload": {"value": 4},
+                    "capability_id": "matrix.determinant.compute",
+                    "payload": {
+                        "matrix": {
+                            "matrix_schema_version": "1",
+                            "domain": "QQ",
+                            "entries": [[{"num": "4", "den": "1"}]],
+                        }
+                    },
                 },
             )
             assert isinstance(result.structured_content, dict)
@@ -152,8 +168,15 @@ async def _remote_tenant_scenario(port: int) -> None:
 
     alpha_output = await invoke("a" * 32)
     beta_output = await invoke("b" * 32)
-    assert alpha_output == {"value": 5}
-    assert beta_output == {"value": 5}
+    expected = {
+        "result": {
+            "determinant": {"num": "4", "den": "1"},
+            "method": "FRACTION_FREE_BAREISS",
+        },
+        "backend_version": "1.14.0",
+    }
+    assert alpha_output == expected
+    assert beta_output == expected
 
 
 def _wait_for_server(

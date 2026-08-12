@@ -57,7 +57,6 @@ class LeanProofAxiomsArtifact(ContractModel):
     admit_count: int = Field(ge=0, le=64)
     diagnostics: tuple[LeanElaborationDiagnostic, ...] = Field(max_length=128)
     semantic_scope: Literal["AXIOM_DEPENDENCY_ONLY"] = "AXIOM_DEPENDENCY_ONLY"
-    verification_status: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def validate_inspection_shape(self) -> Self:
@@ -76,7 +75,6 @@ class LeanProofAxiomsArtifact(ContractModel):
 
 class LeanProofAxiomsInspectOutput(LeanProofAxiomsArtifact):
     proof_axioms_uri: ArtifactUri
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
 
 __all__ = [

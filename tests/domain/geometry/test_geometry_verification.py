@@ -9,7 +9,6 @@ from tests.support.services import DomainTestServices
 
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -94,7 +93,7 @@ def test_minimum_weight_triangulation_charges_one_diagonal_once(
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_triangulation_checker_rejects_double_counted_cost(
@@ -176,12 +175,10 @@ def test_selected_geometry_results_verify_through_public_dispatch(
             )
         )
 
-        assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
         assert verified.execution.status is ExecutionStatus.COMPLETED
         assert verified.output["status"] == "VERIFIED"
         assert verified.output["operation_id"] == operation_id
-        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-        assert verified.assurance.verification_record_uri is not None
+        assert verified.verification_record_uri is not None
 
 
 def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
@@ -206,8 +203,7 @@ def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
     assert rejected.execution.status is ExecutionStatus.COMPLETED
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert rejected.assurance.verification_record_uri is None
+    assert rejected.verification_record_uri is None
 
 
 def test_schema_valid_false_simple_polygon_decision_is_rejected(
@@ -236,5 +232,4 @@ def test_schema_valid_false_simple_polygon_decision_is_rejected(
 
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert rejected.assurance.verification_record_uri is None
+    assert rejected.verification_record_uri is None

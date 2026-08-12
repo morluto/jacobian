@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import model_validator
+from pydantic import StringConstraints, model_validator
 
 from jacobian.contracts._verification_rules import (
     validate_certified_relationship_endpoints,
@@ -19,7 +19,6 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.evidence import FormatIdentifier
-from jacobian.contracts.plugins import Entrypoint
 from jacobian.contracts.results import (
     Arithmetic,
     Conclusion,
@@ -28,12 +27,18 @@ from jacobian.contracts.results import (
     Method,
 )
 
+Entrypoint = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$",
+        strict=True,
+    ),
+]
+
 
 class EvidenceKind(StrEnum):
     WITNESS = "WITNESS"
     CERTIFICATE = "CERTIFICATE"
-    PRESERVATION = "PRESERVATION"
-    TRANSFORMATION = "TRANSFORMATION"
 
 
 class CheckerRegistration(ContractModel):

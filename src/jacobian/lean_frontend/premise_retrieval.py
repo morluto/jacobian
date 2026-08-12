@@ -10,15 +10,11 @@ from pydantic import ValidationError
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
+    CapabilityInvocationExample,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import (
@@ -32,6 +28,7 @@ from jacobian.lean_frontend.artifacts import _proof_state_command
 from jacobian.lean_frontend.exploration import (
     _DECLARATION,
     _SUGGESTION,
+    _request_validation_diagnostic,
     _Resources,
     _response_messages,
     _run_repl,
@@ -50,14 +47,34 @@ class LeanPremiseRetrievalAdapter:
             version="2",
             title="Retrieve Lean premises",
             description=(
-                "Ask pinned Mathlib exact? for bounded candidate tactics at one "
-                "explicit proof prefix; an empty result is non-exhaustive."
+                "Retrieve bounded premise-backed tactic candidates for one explicit "
+                "statement and tactic-body prefix with pinned Mathlib's `exact?` "
+                "tactic. "
+                "proof_prefix contains only tactics after `by` (for example "
+                "[`intro x`]); never include `by`. Each candidate reports whether "
+                "the first tactic replayed, and an empty result is non-exhaustive."
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
             input_schema=LeanPremiseRetrievalRequest.model_json_schema(),
             output_schema=LeanPremiseRetrievalOutput.model_json_schema(),
             tags=("lean", "mathlib", "premise-retrieval", "exploration"),
+            invocation_examples=(
+                CapabilityInvocationExample(
+                    name="square_nonnegative_after_intro",
+                    description=(
+                        "Ask Mathlib exact? for a premise after introducing x; "
+                        "proof_prefix omits the surrounding `by`."
+                    ),
+                    input=LeanPremiseRetrievalRequest.model_validate(
+                        {
+                            "statement": "∀ x : Real, x ^ 2 ≥ 0",
+                            "proof_prefix": ["intro x"],
+                            "limit": 5,
+                        }
+                    ).model_dump(mode="json"),
+                ),
+            ),
         )
 
     @property
@@ -70,10 +87,14 @@ class LeanPremiseRetrievalAdapter:
             _validate_source_parts(validated.statement, validated.proof_prefix)
         except (ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+                _request_validation_diagnostic(
+                    exc,
                     code="INVALID_LEAN_RETRIEVAL_REQUEST",
-                    stage="request_validation",
-                    message="The Lean premise-retrieval request is invalid.",
+                    subject="The Lean premise-retrieval request is invalid",
+                    hint=(
+                        "Use one proposition and a bounded sequence of tactic bodies "
+                        "after `by`; do not include the `by` introducer."
+                    ),
                 )
             ) from exc
         started = time.monotonic()
@@ -83,12 +104,27 @@ class LeanPremiseRetrievalAdapter:
             statement=validated.statement,
             proof_prefix=validated.proof_prefix,
         )
-        command_response, tactic_response = _run_repl(
-            self.resources,
-            command=command,
-            tactic="exact?",
-            environment=environment,
-        )
+        try:
+            command_response, tactic_response = _run_repl(
+                self.resources,
+                command=command,
+                tactic="exact?",
+                environment=environment,
+            )
+        except RuntimeError as exc:
+            raw_backend_message = str(exc)[:1_000]
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="LEAN_RETRIEVAL_FAILED",
+                    stage="premise_retrieval",
+                    message="Pinned Mathlib premise retrieval did not return a result.",
+                    hint=(
+                        "Inspect raw_backend_message, correct the statement or tactic "
+                        "prefix when applicable, and retry."
+                    ),
+                    details={"raw_backend_message": raw_backend_message},
+                )
+            ) from exc
         command_errors = _response_errors(command_response)
         tactic_errors = _response_errors(tactic_response)
         if command_errors:
@@ -169,30 +205,6 @@ class LeanPremiseRetrievalAdapter:
                 runtime_ms=_runtime_ms(started),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="one explicit Lean goal under pinned Mathlib exact?",
-                parameters={
-                    "environment": "MATHLIB",
-                    "statement": validated.statement,
-                    "limit": validated.limit,
-                },
-                artifact_uri=artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.PARTIAL,
-                basis=(
-                    "Mathlib exact? suggestions are bounded and non-exhaustive; "
-                    "no suggestion is not a proof of absence"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "candidate tactics were emitted by pinned Mathlib exact?; "
-                    "they remain unverified until lean.check accepts exact source"
-                ),
-            ),
             artifact_uris=(artifact.artifact_uri,),
         )
 

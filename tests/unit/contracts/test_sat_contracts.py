@@ -262,7 +262,7 @@ def test_exploration_request_exposes_only_enforced_budget_fields() -> None:
         )
 
 
-def test_exploration_outputs_never_project_a_solver_status_as_a_conclusion() -> None:
+def test_exploration_outputs_do_not_project_a_mathematical_conclusion() -> None:
     model = SatModelFindOutput(
         status="NO_ASSIGNMENT_PRODUCED",
         solver_status="UNSATISFIABLE",
@@ -276,8 +276,8 @@ def test_exploration_outputs_never_project_a_solver_status_as_a_conclusion() -> 
         detail="no proof was produced",
     )
 
-    assert model.conclusion == "UNKNOWN"
-    assert proof.conclusion == "UNKNOWN"
+    assert "conclusion" not in model.model_dump(mode="json")
+    assert "conclusion" not in proof.model_dump(mode="json")
     with pytest.raises(ValidationError):
         SatModelFindOutput(
             status="ASSIGNMENT_PRODUCED",

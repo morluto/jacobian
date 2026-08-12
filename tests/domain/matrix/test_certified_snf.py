@@ -11,7 +11,6 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -107,7 +106,6 @@ def test_certified_smith_materializes_both_full_basis_changes(
     assert certificate["relation"] == ("DIAGONAL_EQUALS_LEFT_TIMES_SOURCE_TIMES_RIGHT")
     assert certificate["left_determinant"] in {"-1", "1"}
     assert certificate["right_determinant"] in {"-1", "1"}
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert len(result.artifact_uris) == 2
 
 

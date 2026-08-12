@@ -5,7 +5,7 @@ clone rather than the latest published Python package. From the repository
 root, run:
 
 ```sh
-./scripts/setup-agent --client codex --profile full-python --yes
+./scripts/setup-agent --client codex --profile core --yes
 ```
 
 Replace `codex` with `claude`, `cursor`, `gemini`, or `opencode`; repeat
@@ -18,7 +18,9 @@ uv run --project /absolute/path/to/jacobian --locked --no-sync \
 ```
 
 The bootstrap requires the uv version in [`.uv-version`](../../.uv-version),
-Python 3.12 or 3.13, Git, and Node.js 18 or newer. It requires a clean checkout,
+CPython 3.12 or 3.13, Git, and Node.js 18 or newer. The tested binary-install
+platform is glibc Linux x86-64; other platforms require a compatible wheel for
+every mandatory Python backend. It requires a clean checkout,
 performs a locked sync, initializes the state directory, and audits the exact
 Git revision, package version, catalog digest, and provider runtimes before it
 writes any client configuration. The audit is saved as
@@ -47,20 +49,16 @@ bootstrap discovery. The `lean` profile likewise records a nondefault
 `ELAN_HOME` and any `JACOBIAN_LEAN_RUNTIME` override, so a GUI restart uses the
 toolchain home and mathlib checkout that doctor audited.
 
-For Codex, setup also installs the `jacobian-math` visibility skill under
-`~/.codex/skills`. MCP server instructions are not guaranteed to be present in
-Codex's always-visible prompt, so this thin skill lets mathematical requests
-surface `math.find` even when the user does not name Jacobian. Setup refuses to
-replace a same-named unmanaged skill; removal preserves a user-modified copy.
+The bootstrap configures the selected client's MCP entry only. Jacobian does
+not install prompts, skills, or client-specific mathematical workflows.
 
 ## Profiles
 
 | Profile | Installed or checked surface |
 | --- | --- |
-| `core` | Locked base dependencies, including SymPy and Z3 |
-| `full-python` | `core` plus all maintained Python extras: python-flint and cvc5 |
-| `lean` | `full-python` plus a build of the pinned `lean/lean-toolchain` project; `elan`/`lake` must already be on `PATH` |
-| `external-proof` | `full-python` plus fail-closed availability checks for pinned CaDiCaL, DRAT-trim, and Carcara executables |
+| `core` | Complete locked Python backend stack: SymPy, NetworkX, Z3, Python-FLINT, and cvc5 |
+| `lean` | `core` plus a build of the pinned `lean/lean-toolchain` project; `elan`/`lake` must already be on `PATH` |
+| `external-proof` | `core` plus fail-closed availability checks for pinned CaDiCaL, DRAT-trim, and Carcara executables |
 
 The `external-proof` profile does not download or trust native executables on
 the user's behalf. Their exact version and provenance contracts are defined in
@@ -72,12 +70,10 @@ instead of a floating Lean installation.
 
 These profiles configure an agent client against a source checkout. For
 ordinary contributor work that only needs to run the test suite, the
-`make setup PROFILE=core` quick path installs the same locked base surface
-(NetworkX, SymPy, and Z3) without writing client configuration; see
-[CONTRIBUTING.md](../../CONTRIBUTING.md). `make setup PROFILE=full-python`
-additionally requires every maintained Python extra. Optional backend
-installation is described in
-[Install optional backends](install-optional-backends.md).
+`make setup PROFILE=core` quick path installs the same complete Python backend
+stack without writing client configuration; see
+[CONTRIBUTING.md](../../CONTRIBUTING.md). Optional native backend installation is described in
+[Install native and formal providers](install-native-and-formal-providers.md).
 
 Add `--dev` when the clone also needs the locked development group. Use
 `--dry-run` to inspect every sync, init, configuration, and doctor command

@@ -7,9 +7,9 @@ coefficient bound.
 
 ``polynomial.interval.enclose`` (EXPLORE) computes the enclosure with pinned
 SymPy rational arithmetic and emits an inspectable enclosure artifact. The
-result is ``COMPUTED`` and ``UNVERIFIED``; the descriptor advertises the
-independent Bernstein-coefficient checker as the verification boundary, but the
-capability does not invoke it.
+result creates no verification record; the independent Bernstein-coefficient
+checker is the separate verification boundary, and the capability does not
+invoke it.
 
 ``polynomial.interval.enclosure.verify`` (VERIFY) packages the claimed
 enclosure as a replay certificate and asks the operator-authorized independent
@@ -38,17 +38,10 @@ from jacobian.capability_service import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -67,7 +60,6 @@ from jacobian.contracts.polynomial_intervals import (
 from jacobian.contracts.results import (
     Conclusion,
     ExecutionStatus,
-    Verification,
 )
 from jacobian.domains._examples import example
 from jacobian.polynomials._support import _computed_result, _validate_request
@@ -263,9 +255,9 @@ class PolynomialIntervalEncloseAdapter:
                 "Compute an exact rational enclosure of the values of one "
                 "univariate rational polynomial on one closed rational interval "
                 "using the Bernstein-coefficient bound. The enclosure is a valid "
-                "superset of the range, not the exact image. The result is "
-                "UNVERIFIED; the advertised independent Bernstein-coefficient "
-                "checker is the verification boundary."
+                "superset of the range, not the exact image. The separate "
+                "independent Bernstein-coefficient checker is the verification "
+                "boundary."
             ),
             provider="jacobian.sympy",
             provider_runtime=known_provider_runtime(
@@ -361,50 +353,14 @@ class PolynomialIntervalEncloseAdapter:
             bernstein_coefficients=enclosure.bernstein_coefficients,
             lo=enclosure.lo,
             hi=enclosure.hi,
-            backend_version=SYMPY_VERSION,
-        )
-        checker_hint = (
-            "invoke polynomial.interval.enclosure.verify with the authorized "
-            "Bernstein-coefficient checker to obtain a VERIFIED record"
-            if self.resources.installation.checker_id is not None
-            else "no independent checker is authorized in this installation; the "
-            "enclosure remains UNVERIFIED"
         )
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "one closed rational interval for one univariate polynomial"
-                ),
-                parameters={
-                    "polynomial_uri": polynomial_artifact.artifact_uri,
-                    "interval": interval.model_dump(mode="json"),
-                    "degree": polynomial.degree,
-                },
-                artifact_uri=polynomial_artifact.artifact_uri,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.enclosure-of",
-                    source_artifact_uris=(polynomial_artifact.artifact_uri,),
-                    target_artifact_uris=(enclosure_artifact.artifact_uri,),
-                ),
-            ),
             artifact_uris=(
                 polynomial_artifact.artifact_uri,
                 enclosure_artifact.artifact_uri,
-            ),
-            completeness_basis=(
-                "the Bernstein-coefficient bound covers the entire declared "
-                "interval; the bound is a valid enclosure, not the exact range"
-            ),
-            assurance_basis=(
-                "deterministic exact SymPy rational arithmetic over QQ produced "
-                "the Bernstein coefficients; the computation did not authorize or "
-                "invoke an independent checker; " + checker_hint
             ),
         )
 
@@ -552,7 +508,6 @@ class PolynomialIntervalEnclosureVerifyAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         conclusion: Literal["TRUE", "FALSE", "UNKNOWN"] = (
@@ -577,7 +532,6 @@ class PolynomialIntervalEnclosureVerifyAdapter:
             bernstein_coefficients=validated.claimed_bernstein_coefficients,
             lo=validated.claimed_lo,
             hi=validated.claimed_hi,
-            enclosure_assurance="VERIFIED" if verified else "COMPUTED",
             conclusion=conclusion,
         )
         artifact_uris = [
@@ -593,83 +547,7 @@ class PolynomialIntervalEnclosureVerifyAdapter:
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "one closed rational interval for one univariate polynomial"
-                ),
-                parameters={
-                    "polynomial_uri": polynomial_artifact.artifact_uri,
-                    "interval": interval.model_dump(mode="json"),
-                    "degree": polynomial.degree,
-                },
-                artifact_uri=polynomial_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if checked.execution.status is ExecutionStatus.COMPLETED
-                    else CapabilityCompletenessStatus.UNKNOWN
-                ),
-                basis=(
-                    "the independent checker replayed every Bernstein coefficient "
-                    "over the declared interval"
-                    if verified
-                    else (
-                        "the adapter packaged the claimed enclosure, but the "
-                        "checker did not accept the bound replay"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not establish complete coverage"
-                    )
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else (
-                        CapabilityAssuranceLevel.COMPUTED
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else CapabilityAssuranceLevel.HEURISTIC
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
-            relationships=(
-                (
-                    CapabilityRelationship(
-                        relation_id="polynomial.relation.valid-bernstein-enclosure",
-                        source_artifact_uris=(enclosure_artifact.artifact_uri,),
-                        target_artifact_uris=(polynomial_artifact.artifact_uri,),
-                        status=CapabilityRelationshipStatus.VERIFIED,
-                        verification_record_uri=record_uri,
-                    ),
-                )
-                if conclusion == "TRUE" and verified
-                else ()
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else (
-                        CapabilityAssuranceLevel.COMPUTED
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else CapabilityAssuranceLevel.HEURISTIC
-                    )
-                ),
-                basis=(
-                    "accepted by the authorized independent Bernstein-coefficient "
-                    "checker; the enclosure is a valid Bernstein bound, not the "
-                    "exact polynomial range"
-                    if verified
-                    else (
-                        "the claimed enclosure was packaged, but the independent "
-                        "checker did not accept the bound replay"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not complete; no mathematical "
-                        "conclusion follows"
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
         )
 

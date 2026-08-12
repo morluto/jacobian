@@ -13,7 +13,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.lean import LeanEnvironment
+from jacobian.lean_frontend.process_environment import (
+    lean_elan_worker_environment,
+)
 from jacobian.lean_frontend.repl_protocol import (
     LeanReplCommandRequest,
     LeanReplCommandResponse,
@@ -34,18 +38,20 @@ from jacobian.process_policy import (
     InteractiveProcessError,
     InteractiveProcessRequest,
 )
-from jacobian.references import LeanCheckerInstallation
-from jacobian.worker_environment import worker_environment
+from jacobian.providers.lean_runtime import lean_mathlib_git_config
 
 _RESOURCE_POLL_SECONDS = 0.1
 _DEFAULT_CORE_MAX_RSS_KB = 7 * 1024 * 1024
 _DEFAULT_MATHLIB_MAX_RSS_KB = 9 * 1024 * 1024
 
 
-def _repl_process_environment() -> dict[str, str]:
-    return worker_environment(
-        extra_variables=("HOME", "PATH", "ELAN_HOME"),
+def _repl_process_environment(runtime: Path) -> dict[str, str]:
+    overrides = dict(
+        lean_mathlib_git_config(runtime)
+        if (runtime / "lake-manifest.json").is_file()
+        else {}
     )
+    return lean_elan_worker_environment(overrides=overrides)
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,7 +192,7 @@ class PersistentLeanRepl:
             InteractiveProcessRequest(
                 executable=self._command[0],
                 arguments=self._command[1:],
-                environment=_repl_process_environment(),
+                environment=_repl_process_environment(self._cwd),
                 cwd=str(self._cwd.resolve(strict=True)),
                 startup_timeout_seconds=self._policy.timeout_seconds,
                 read_timeout_seconds=self._policy.timeout_seconds,
@@ -357,6 +363,35 @@ class LeanExplorationReplRuntime:
                 )
             finally:
                 session.close()
+
+    def execute_persistent_validated(
+        self,
+        *,
+        command: str,
+        tactic: str,
+        environment: LeanEnvironment,
+        pickle_path: Path | None = None,
+    ) -> LeanReplValidatedExecution:
+        """Replay and apply through a retained bounded environment session.
+
+        This backend candidate is intentionally not wired to an agent-facing
+        operation.  It exists so evaluation can compare the same validated
+        transition contract against clean-process replay without changing the
+        atomic capability surface.
+        """
+
+        with self._lock:
+            if self._closing or self._closed:
+                raise RuntimeError("Lean exploration runtime is closing")
+            session = self._sessions.get(environment)
+            if session is None:
+                session = self._create_session(environment)
+                self._sessions[environment] = session
+            return session.execute_validated(
+                command=command,
+                tactic=tactic,
+                pickle_path=pickle_path,
+            )
 
     def close(self) -> None:
         """Stop every exploration process without affecting independent checkers."""

@@ -2,10 +2,9 @@
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
-`lean.proof_state.apply_tactic` is the canonical implementation covering the
-`lean.tactic.apply` inventory operation. Version 2 applies one bounded tactic
-to an immutable, replayable Lean proof state. It does not expose or depend on
-a long-lived session identifier. A replayable chain is limited to 64 tactics,
+`lean.proof_state.apply_tactic` version 3 applies one bounded tactic to an
+immutable, replayable Lean proof state. It does not expose or depend on a
+long-lived session identifier. A replayable chain is limited to 64 tactics,
 and each tactic remains limited to 1,000 characters.
 
 ## State artifact
@@ -43,7 +42,10 @@ Each tactic invocation starts a clean pinned Lean REPL process. It:
 No process-local proof-state number is persisted. If Lean rejects
 reconstruction, the request fails without a mathematical conclusion. If
 reconstruction succeeds but the tactic is rejected, the operation returns
-structured diagnostics, `accepted = false`, and no successor states.
+structured diagnostics, `accepted = false`, and no successor states. Those
+diagnostics use stable Lean codes, distinguish reconstruction from tactic
+execution, and report zero-based locations relative to the supplied statement
+or tactic when Lean provides a source range.
 
 An accepted transition returns one successor-state artifact containing all
 ordered goals produced by Lean. A completed successor has an empty goal list.
@@ -57,8 +59,8 @@ Proof states and transitions have `COMPUTED` assurance only. A completed state
 means that exploratory Lean reported no remaining goals for that replayed
 prefix. It is not a theorem-verification record.
 
-Every result reports `verification = UNVERIFIED` and
-`verification_boundary = LEAN_CHECK_REQUIRED`. Only `lean.check`, using its
+Every result reports `verification_boundary = LEAN_CHECK_REQUIRED` and creates
+no verification record. Only `lean.check`, using its
 separate operator-authorized clean verification path, may verify the complete
 statement and proof.
 

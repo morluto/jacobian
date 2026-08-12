@@ -7,12 +7,13 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from typing import Any
 
 import httpx2
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
-from mcp_types import TextContent, TextResourceContents
+from mcp_types import Implementation, TextContent, TextResourceContents
 
 from jacobian import __version__
 from jacobian.canonical import canonicalize_json
@@ -22,6 +23,12 @@ REQUIRED_TOOLS = {
     "math.run",
 }
 DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
+
+
+def _require_server_info(server_info: Implementation | None) -> Implementation:
+    if server_info is None:
+        raise RuntimeError("deployed MCP server did not provide implementation info")
+    return server_info
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -43,6 +50,10 @@ def _parser() -> argparse.ArgumentParser:
         help="required catalog policy profile",
     )
     parser.add_argument(
+        "--expect-revision",
+        help="required full Git revision from deployment://identity",
+    )
+    parser.add_argument(
         "--require-capability",
         action="append",
         default=[],
@@ -57,15 +68,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def inspect(
-    *,
-    url: str,
-    expected_version: str,
-    expected_policy_profile: str,
-    required_capabilities: set[str],
-    query: str,
-    timeout_seconds: float,
-) -> dict[str, Any]:
+def _headers() -> dict[str, str] | None:
     token = os.environ.get("JACOBIAN_MCP_BEARER_TOKEN")
     token_file = os.environ.get("JACOBIAN_MCP_AUTH_TOKENS_FILE")
     if token is None and token_file:
@@ -78,7 +81,74 @@ async def inspect(
         )
         if token is None:
             raise RuntimeError("smoke token file has no jacobian:use grant")
-    headers = {"Authorization": f"Bearer {token}"} if token else None
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
+def _validate_tool_surface(listed: Any, failures: list[str]) -> set[str]:
+    tool_names = {tool.name for tool in listed.tools}
+    missing = sorted(REQUIRED_TOOLS - tool_names)
+    unexpected = sorted(tool_names - REQUIRED_TOOLS)
+    if missing:
+        failures.append(
+            f"deployed MCP tool surface is missing required tools: {missing!r}"
+        )
+    if unexpected:
+        failures.append(
+            f"deployed MCP tool surface has unexpected tools: {unexpected!r}"
+        )
+    return tool_names
+
+
+def _validate_server_version(
+    actual: str,
+    expected: str,
+    failures: list[str],
+) -> None:
+    if actual != expected:
+        failures.append(
+            f"deployed MCP version mismatch: expected {expected!r}, got {actual!r}"
+        )
+
+
+async def _deployment_identity(
+    client: Any,
+    *,
+    expected_revision: str | None,
+    server_version: str,
+    failures: list[str],
+) -> dict[str, Any] | None:
+    if expected_revision is None:
+        return None
+    if re.fullmatch(r"[0-9a-f]{40}", expected_revision) is None:
+        raise RuntimeError("expected deployment revision is not canonical")
+    deployment_result = await client.read_resource("deployment://identity")
+    deployment_content = deployment_result.contents[0]
+    if not isinstance(deployment_content, TextResourceContents):
+        raise RuntimeError("deployed identity resource is not text")
+    deployment = json.loads(deployment_content.text)
+    if not isinstance(deployment, dict):
+        raise RuntimeError("deployed identity resource is malformed")
+    if (
+        deployment.get("schema_version") != "1"
+        or deployment.get("evidence") != "release-marker"
+        or deployment.get("package_version") != server_version
+        or deployment.get("revision") != expected_revision
+    ):
+        failures.append("deployed revision identity does not match the release")
+    return deployment
+
+
+async def inspect(
+    *,
+    url: str,
+    expected_version: str,
+    expected_revision: str | None = None,
+    expected_policy_profile: str,
+    required_capabilities: set[str],
+    query: str,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    headers = _headers()
     failures: list[str] = []
     async with (
         httpx2.AsyncClient(
@@ -91,25 +161,19 @@ async def inspect(
             raise_exceptions=True,
         ) as client,
     ):
-        server_version = client.server_info.version
-        if server_version != expected_version:
-            failures.append(
-                "deployed MCP version mismatch: "
-                f"expected {expected_version!r}, got {server_version!r}"
-            )
+        server_info = _require_server_info(client.server_info)
+        server_version = server_info.version
+        _validate_server_version(server_version, expected_version, failures)
+
+        deployment = await _deployment_identity(
+            client,
+            expected_revision=expected_revision,
+            server_version=server_version,
+            failures=failures,
+        )
 
         listed = await client.list_tools()
-        tool_names = {tool.name for tool in listed.tools}
-        missing = sorted(REQUIRED_TOOLS - tool_names)
-        unexpected = sorted(tool_names - REQUIRED_TOOLS)
-        if missing:
-            failures.append(
-                f"deployed MCP tool surface is missing required tools: {missing!r}"
-            )
-        if unexpected:
-            failures.append(
-                f"deployed MCP tool surface has unexpected tools: {unexpected!r}"
-            )
+        tool_names = _validate_tool_surface(listed, failures)
 
         catalog_result = await client.read_resource("capability://catalog")
         catalog_content = catalog_result.contents[0]
@@ -145,7 +209,7 @@ async def inspect(
 
         discovery_result = await client.call_tool(
             "math.find",
-            {"query": query, "limit": 5},
+            {"request": {"op": "search", "query": query, "limit": 5}},
         )
         if discovery_result.is_error:
             failures.append("deployed capability discovery returned an MCP error")
@@ -168,9 +232,10 @@ async def inspect(
         report = {
             "url": url,
             "server": {
-                "name": client.server_info.name,
+                "name": server_info.name,
                 "version": server_version,
             },
+            "deployment": deployment,
             "tool_names": sorted(tool_names),
             "catalog": {
                 "catalog_version": catalog["catalog_version"],
@@ -198,6 +263,7 @@ async def _main() -> None:
     report = await inspect(
         url=args.url,
         expected_version=args.expect_version,
+        expected_revision=args.expect_revision,
         expected_policy_profile=args.expect_policy_profile,
         required_capabilities=set(args.require_capability),
         query=args.query,

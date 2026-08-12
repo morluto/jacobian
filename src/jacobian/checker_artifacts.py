@@ -11,7 +11,7 @@ linear rational and integer row-HNF paths as confirming evidence): building a
 SUPPORTS_CLAIM witness envelope bound by claim, semantics, and candidate
 object digests and committing it with the claim and candidate as parents.
 
-Authorization, mathematical replay, status interpretation, and assurance
+Authorization, mathematical replay, status interpretation, and verification
 wording remain specialized and operator-owned in each caller.
 """
 

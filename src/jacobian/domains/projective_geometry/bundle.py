@@ -30,7 +30,6 @@ def build_projective_geometry_bundle() -> DomainBundle:
                 "line_equation": "a*x + b*y + c*z = 0",
                 "flat_incidence": "exact homogeneous dot product equals zero",
                 "completion": "all distinct line pairs are grouped by exact cross product",
-                "assurance": "computed; complete finite materialization",
             },
         ),
         provider_runtime=known_provider_runtime(
@@ -52,15 +51,6 @@ def build_projective_geometry_bundle() -> DomainBundle:
                     "triples; scalar multiples denote the same line."
                 ),
             )
-        ),
-        scope_description="the complete supplied finite labelled line arrangement",
-        completeness_basis=(
-            "every unordered line pair was exactly intersected and every coincident "
-            "point was grouped with all incident supplied lines"
-        ),
-        assurance_basis=(
-            "exact rational-to-primitive-integer incidence materialization; no "
-            "independent checker invoked"
         ),
         checker_declarations=PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
     )

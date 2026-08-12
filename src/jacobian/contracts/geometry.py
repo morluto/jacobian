@@ -314,10 +314,6 @@ class GeometryLineIntersectionResult(ContractModel):
         return self
 
 
-class GeometryPointSetResult(ContractModel):
-    points: tuple[RationalPoint2D, ...]
-
-
 class GeometryConvexHullResult(ContractModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=1, max_length=128)
 
@@ -421,4 +417,3 @@ class ConvexPolygonTriangulationResult(ContractModel):
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
     tie_break: Literal["LOWEST_SPLIT_INDEX"] = "LOWEST_SPLIT_INDEX"
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"

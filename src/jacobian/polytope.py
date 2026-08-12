@@ -31,17 +31,10 @@ from jacobian.contracts.polytope import (
     RationalVector,
 )
 from jacobian.contracts.results import (
-    Arithmetic,
-    Assurance,
-    Conclusion,
-    Coverage,
     Execution,
     ExecutionStatus,
     InputStatus,
     InputValidation,
-    Method,
-    ResultEnvelope,
-    Verification,
 )
 from jacobian.math.arithmetic import integerize_rational_vector
 from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_schema
@@ -507,7 +500,6 @@ class PolytopeService:
             generators=generators,
             claim=claim,
             status=PolytopeStatus.MEMBER,
-            evidence_uri=stored.artifact_uri,
             witness_uri=stored.artifact_uri,
         )
 
@@ -592,7 +584,6 @@ class PolytopeService:
             generators=generators,
             claim=claim,
             status=PolytopeStatus.SEPARATED,
-            evidence_uri=stored.artifact_uri,
             certificate_uri=stored.artifact_uri,
         )
 
@@ -640,7 +631,6 @@ class PolytopeService:
         generators: StoredArtifact,
         claim: StoredArtifact,
         status: PolytopeStatus,
-        evidence_uri: str,
         witness_uri: str | None = None,
         certificate_uri: str | None = None,
     ) -> PolytopeSeparateResult:
@@ -653,26 +643,11 @@ class PolytopeService:
             claim_uri=claim.artifact_uri,
             witness_uri=witness_uri,
             certificate_uri=certificate_uri,
-            result=ResultEnvelope(
-                execution=Execution(
-                    status=ExecutionStatus.COMPLETED,
-                    runtime_ms=int((time.monotonic() - started) * 1000),
-                ),
-                input=InputValidation(status=InputStatus.ACCEPTED),
-                conclusion=Conclusion.TRUE,
-                assurance=Assurance(
-                    arithmetic=Arithmetic.EXACT_RATIONAL,
-                    method=Method.BOUNDED_SEARCH,
-                    coverage=Coverage.NOT_APPLICABLE,
-                    verification=Verification.UNVERIFIED,
-                ),
-                claim_digest=claim.manifest.object_digest,
-                semantics_digest=self.store.get(
-                    self.semantics_uri
-                ).manifest.object_digest,
-                candidate_digest=point.manifest.object_digest,
-                evidence_uris=(evidence_uri,),
+            execution=Execution(
+                status=ExecutionStatus.COMPLETED,
+                runtime_ms=int((time.monotonic() - started) * 1000),
             ),
+            input=InputValidation(status=InputStatus.ACCEPTED),
         )
 
     @staticmethod
@@ -686,21 +661,12 @@ class PolytopeService:
             status=PolytopeStatus.UNKNOWN,
             point_uri=request.point_uri,
             generator_set_uri=request.generator_set_uri,
-            result=ResultEnvelope(
-                execution=Execution(
-                    status=status,
-                    runtime_ms=int((time.monotonic() - started) * 1000),
-                    detail=detail,
-                ),
-                input=InputValidation(status=InputStatus.ACCEPTED),
-                conclusion=Conclusion.UNKNOWN,
-                assurance=Assurance(
-                    arithmetic=Arithmetic.EXACT_RATIONAL,
-                    method=Method.BOUNDED_SEARCH,
-                    coverage=Coverage.NOT_APPLICABLE,
-                    verification=Verification.UNVERIFIED,
-                ),
+            execution=Execution(
+                status=status,
+                runtime_ms=int((time.monotonic() - started) * 1000),
+                detail=detail,
             ),
+            input=InputValidation(status=InputStatus.ACCEPTED),
         )
 
     @staticmethod
@@ -713,21 +679,12 @@ class PolytopeService:
             status=PolytopeStatus.UNKNOWN,
             point_uri=request.point_uri,
             generator_set_uri=request.generator_set_uri,
-            result=ResultEnvelope(
-                execution=Execution(
-                    status=ExecutionStatus.COMPLETED,
-                    runtime_ms=int((time.monotonic() - started) * 1000),
-                ),
-                input=InputValidation(
-                    status=InputStatus.REJECTED,
-                    errors=(detail,),
-                ),
-                conclusion=Conclusion.UNKNOWN,
-                assurance=Assurance(
-                    arithmetic=Arithmetic.EXACT_RATIONAL,
-                    method=Method.BOUNDED_SEARCH,
-                    coverage=Coverage.NOT_APPLICABLE,
-                    verification=Verification.UNVERIFIED,
-                ),
+            execution=Execution(
+                status=ExecutionStatus.COMPLETED,
+                runtime_ms=int((time.monotonic() - started) * 1000),
+            ),
+            input=InputValidation(
+                status=InputStatus.REJECTED,
+                errors=(detail,),
             ),
         )

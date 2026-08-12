@@ -6,8 +6,6 @@ import pytest
 
 from jacobian.capability_service import CapabilityError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
     CapabilityDescriptor,
     CapabilityInstallTier,
     CapabilityProviderAvailability,
@@ -16,12 +14,12 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
-from jacobian.domains.builtins import build_builtin_domain_bundles
+from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization.bundle import build_graph_optimization_bundle
 from jacobian.domains.graph_optimization.invariant_bundle import (
     build_graph_invariant_bundle,
 )
+from jacobian.portfolio.builtin import build_builtin_portfolio_components
 from jacobian.provider_measurements import _cold_install_spec
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 
@@ -77,7 +75,7 @@ def test_catalog_exposes_exact_runtime_identity_for_every_adapter(
         descriptors["universal_algebra.search.countermodel"].provider_runtime.provider
         == "jacobian.z3"
     )
-    built_in_bundles = build_builtin_domain_bundles()
+    built_in_bundles = build_builtin_portfolio_components()
     built_in_ids = {
         capability_id
         for bundle in built_in_bundles
@@ -207,7 +205,7 @@ def test_unhealthy_lean_frontend_is_absent_from_catalog(
     )
 
 
-def test_invocation_binds_descriptor_runtime_to_result_provenance(
+def test_failed_invocation_keeps_provider_identity_in_the_descriptor(
     attached_complete_runtime,
 ) -> None:
     runtime = attached_complete_runtime
@@ -226,35 +224,8 @@ def test_invocation_binds_descriptor_runtime_to_result_provenance(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert descriptor.provider_runtime is not None
-    assert result.provider == descriptor.provider
-    assert result.provider_digest == descriptor.provider_runtime.digest
-
-
-def test_runtime_contract_accepts_a_bound_completed_result() -> None:
-    runtime = CapabilityProviderRuntime(
-        provider="tests.fixture",
-        availability=CapabilityProviderAvailability.AVAILABLE,
-        version="1",
-        digest="sha256:" + "a" * 64,
-        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
-        platform="any",
-        install_tier=CapabilityInstallTier.T0,
-        license_id="MIT",
-    )
-    result = CapabilityResult(
-        capability_id="fixture.identity",
-        capability_version="1",
-        execution=Execution(status=ExecutionStatus.COMPLETED),
-        assurance=CapabilityAssurance(
-            level=CapabilityAssuranceLevel.COMPUTED,
-            basis="fixture computation",
-        ),
-        provider=runtime.provider,
-        provider_digest=runtime.digest,
-    )
-
-    assert result.provider == runtime.provider
-    assert result.provider_digest == runtime.digest
+    assert descriptor.provider_runtime.provider == descriptor.provider
+    assert descriptor.provider_runtime.digest is not None
 
 
 def test_source_runtime_has_no_implicit_working_directory_install() -> None:

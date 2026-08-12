@@ -28,7 +28,6 @@ def build_finite_set_bundle() -> DomainBundle:
                 "description": "Finite sets of canonical integers with exact operations",
                 "element_type": "canonical integer",
                 "max_set_size": 128,
-                "assurance": "computed; no independent checker",
             },
         ),
         provider_runtime=jacobian_provider_runtime(
@@ -48,13 +47,5 @@ def build_finite_set_bundle() -> DomainBundle:
                 message="Input does not satisfy the finite-integer-set contract.",
                 hint="Use canonical integer strings and inspect the operation's set schema.",
             )
-        ),
-        scope_description="the complete supplied finite integer set input",
-        completeness_basis=(
-            "exact standard-library set computation covered the supplied finite input; "
-            "not independently verified"
-        ),
-        assurance_basis=(
-            "exact Python standard-library set operations; no independent checker invoked"
         ),
     )

@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Current implementation reference; contracts are pre-stable
+- Status: Experimental contracts
 - Related tutorial:
   [Retrieve a Lean theorem and check a proof](../../../tutorials/lean-declaration-discovery.md)
 
@@ -32,11 +32,35 @@ before using any payload below.
 These tools form a portfolio, not a required workflow. Agents decide which to
 compose.
 
+## Lean diagnostics
+
+`lean.check` version 2, `lean.proof_state.apply_tactic` version 3,
+`lean.term.apply` version 2, and `lean.proof_edit.validate` version 3 share one
+Lean-owned diagnostic model. A diagnostic keeps a stable `code`, processing
+`phase`, severity, normalized message, optional payload-relative `source_span`,
+optional `goal_index` and metavariable, and the bounded path-redacted backend
+message. Source spans name the caller field (`STATEMENT`, `PROOF`, `TACTIC`, or
+`TERM`) and use zero-based positions; they never expose generated temporary
+file coordinates. `RUNTIME_SETUP` identifies toolchain, Mathlib-manifest, and
+bounded checker-start failures; it is operational evidence and never a proof
+repair verdict.
+
+Diagnostics explain a rejected candidate without changing its mathematical
+meaning. A rejected proof remains `UNKNOWN` and unverified, and a rejected
+tactic creates no successor state. Operational errors and absent diagnostics
+must not be interpreted as negative mathematical conclusions.
+
 ## Proof-state transitions
 
-`lean.proof_state.apply_tactic` accepts an environment, one statement, a
-bounded tuple of proof-prefix tactics, and one next tactic. It replays the
-prefix before applying the new tactic, then returns:
+`lean.proof_state.apply_tactic` has two mutually exclusive request modes:
+
+- **fresh**: `environment`, `statement`, optional `proof_prefix`, and `tactic`;
+- **continuation**: the returned `state_uri`, matching `environment`, and
+  `tactic`, with `statement` and `proof_prefix` omitted.
+
+`proof_prefix` contains tactic bodies after Lean's surrounding `by`; it must not
+contain `by` itself. The tool replays a fresh prefix or reconstructs the bound
+immutable state before applying the new tactic, then returns:
 
 - the exact replay source;
 - rendered goals and typed goals;
@@ -44,8 +68,8 @@ prefix before applying the new tactic, then returns:
 - Lean and Mathlib runtime identity; and
 - a transition artifact URI.
 
-`completed = true` means no goals remain after this transition. It is not proof
-verification, and the output is explicitly `UNVERIFIED`. Goal count, typed-goal
+`completed = true` means no goals remain after this transition. It creates no
+verification record. Goal count, typed-goal
 indices, and completion are cross-validated so malformed backend output fails
 closed.
 
@@ -58,6 +82,13 @@ operational failure rather than evidence that the statement is unprovable.
 `lean.retrieve.premises` is available only for the pinned `MATHLIB` profile. It
 replays the statement and proof prefix, invokes Mathlib's `exact?` diagnostic,
 and returns a bounded ranked list of tactic candidates.
+
+As with proof-state transitions, `proof_prefix` is a sequence of tactic bodies
+after `by`. For example, use `["intro x"]`, not `["by", "intro x"]`. Invalid
+prefixes fail during request validation before a Lean process starts, with a
+field path and bounded validation evidence. Backend failures remain
+`LEAN_RETRIEVAL_FAILED` operational non-conclusions and retain a bounded raw
+backend message for repair.
 
 Each candidate records whether its tactic replayed and which declaration names
 were extracted. Name extraction is explicitly a display-text heuristic.
@@ -75,7 +106,9 @@ references.
 Inspect `closure_complete`, `node_budget_exhausted`, and `frontier` together.
 A non-empty frontier identifies returned nodes whose dependencies were not
 fully expanded. A partial graph is useful context, not a complete dependency
-claim. The artifact binds the query and pinned `environment_digest`.
+claim. The durable-operation result uses `result_uri` for the graph artifact
+and includes the complete graph under `preview`; the artifact binds the query
+and pinned `environment_digest`.
 
 ## Statement operations
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Never
 
 from pydantic import ValidationError
 
@@ -11,7 +12,6 @@ from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.number_theory import (
-    DiscreteLogarithmObligation,
     DiscreteLogarithmRequest,
     DiscreteLogarithmResult,
 )
@@ -21,12 +21,8 @@ from jacobian.domains.number_theory.discrete_logarithm_protocol import (
     DiscreteLogarithmWorkerRequest,
     DiscreteLogarithmWorkerResult,
 )
-from jacobian.operations import (
-    BoundedSearchOperation,
-    BoundedSearchOutcome,
-    BoundedSearchWitness,
-    OperationExecutionFailure,
-)
+from jacobian.operation_bindings import inline_operation
+from jacobian.operations import OperationAbortError, OperationSpec
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
 
@@ -38,10 +34,10 @@ def _failure(
     status: ExecutionStatus,
     code: str,
     message: str,
-) -> OperationExecutionFailure:
-    return OperationExecutionFailure(
-        status=status,
-        diagnostic=CapabilityDiagnostic(
+) -> Never:
+    raise OperationAbortError(
+        status,
+        CapabilityDiagnostic(
             code=code,
             stage="discrete_logarithm_computation",
             message=message,
@@ -52,7 +48,7 @@ def _failure(
 
 def _compute(
     request: DiscreteLogarithmRequest,
-) -> BoundedSearchOutcome[DiscreteLogarithmResult]:
+) -> DiscreteLogarithmResult:
     completed = execute_process(
         ProcessRequest(
             executable=sys.executable,
@@ -112,64 +108,33 @@ def _compute(
             "DISCRETE_LOGARITHM_PROTOCOL_INVALID",
             "The worker returned a result outside the bounded exact contract.",
         )
-    return BoundedSearchWitness(result)
+    return result
 
 
-def _scope(
-    request: DiscreteLogarithmRequest,
-    _result: DiscreteLogarithmResult,
-) -> dict[str, object]:
-    return {
-        "modulus": request.modulus,
-        "wall_seconds": request.resource_budget.wall_seconds,
-    }
-
-
-def _obligation(
-    _request: DiscreteLogarithmRequest,
-    result: DiscreteLogarithmResult,
-) -> DiscreteLogarithmObligation:
-    return DiscreteLogarithmObligation(
-        base=result.base,
-        target=result.target,
-        modulus=result.modulus,
-        status=result.status,
-        discrete_log=result.discrete_log,
-        required_checks=(
-            ("DISCRETE_LOG_WITNESS_REPLAY",)
-            if result.status == "SOLVED"
-            else ("DISCRETE_LOG_NONSOLVABILITY",)
+DISCRETE_LOGARITHM_CAPABILITY = inline_operation(
+    OperationSpec(
+        operation_id="modular.compute.discrete_logarithm",
+        version="1",
+        title="Compute a bounded discrete logarithm",
+        description=(
+            "Compute a modular discrete logarithm with SymPy in an isolated "
+            "wall-bounded worker. Timeout and worker failure are non-conclusions."
+        ),
+        request_type=DiscreteLogarithmRequest,
+        result_type=DiscreteLogarithmResult,
+        execute=_compute,
+        tags=("number-theory", "modular", "discrete-logarithm", "bounded", "sympy"),
+        invocation_examples=(
+            example(
+                "two_to_one_mod_three",
+                "Solve 2^x = 1 modulo 3.",
+                {
+                    "base": 2,
+                    "target": 1,
+                    "modulus": 3,
+                    "resource_budget": {"wall_seconds": 5},
+                },
+            ),
         ),
     )
-
-
-DISCRETE_LOGARITHM_CAPABILITY = BoundedSearchOperation(
-    capability_id="modular.compute.discrete_logarithm",
-    title="Compute a bounded discrete logarithm",
-    description=(
-        "Compute a modular discrete logarithm with SymPy in an isolated "
-        "wall-bounded worker. Timeout and worker failure are non-conclusions."
-    ),
-    request_model=DiscreteLogarithmRequest,
-    result_model=DiscreteLogarithmResult,
-    implementation=_compute,
-    relation_id="modular.relation.discrete_logarithm",
-    scope_parameters=_scope,
-    is_complete=lambda _result: True,
-    obligation_model=DiscreteLogarithmObligation,
-    obligation=_obligation,
-    incomplete_basis="the bounded worker did not establish a conclusion",
-    tags=("number-theory", "modular", "discrete-logarithm", "bounded", "sympy"),
-    invocation_examples=(
-        example(
-            "two_to_one_mod_three",
-            "Solve 2^x = 1 modulo 3.",
-            {
-                "base": 2,
-                "target": 1,
-                "modulus": 3,
-                "resource_budget": {"wall_seconds": 1},
-            },
-        ),
-    ),
 )

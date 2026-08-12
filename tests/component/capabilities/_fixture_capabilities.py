@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
     CapabilityDescriptor,
     CapabilityInstallTier,
     CapabilityInvocationExample,
@@ -54,10 +52,6 @@ class FixtureAdapter:
             capability_version=self.descriptor.version,
             execution=Execution(status=ExecutionStatus.COMPLETED),
             output={"value": int(request.input["value"]) + 1},
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis="fixture integer arithmetic",
-            ),
         )
 
 

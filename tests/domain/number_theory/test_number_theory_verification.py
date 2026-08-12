@@ -9,7 +9,6 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -37,34 +36,37 @@ def _modular_residue_payload(*, coefficient: str = "4") -> dict[str, object]:
     }
 
 
-@pytest.mark.parametrize("value", ("360", "-360", "1", "-1", "101"))
 def test_prime_factorization_result_uses_independent_python_flint_replay(
     number_theory_services,
-    value: str,
 ) -> None:
     producer_id = "integer.compute.prime_factorization"
     verifier_id = "integer.prime_factorization.verify"
-    producer_payload = {"value": value}
-    computed = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer_id,
-            input=producer_payload,
+    for value in ("360", "-360", "1", "-1", "101"):
+        producer_payload = {"value": value}
+        computed = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=producer_id,
+                input=producer_payload,
+            )
         )
-    )
 
-    verified = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
-            input={"input": producer_payload, "candidate": computed.output["result"]},
+        verified = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={
+                    "input": producer_payload,
+                    "candidate": computed.output["result"],
+                },
+            )
         )
-    )
 
-    assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED"
-    assert verified.output["operation_id"] == producer_id
-    assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.output["verification_record_uri"] in verified.artifact_uris
+        assert verified.execution.status is ExecutionStatus.COMPLETED, value
+        assert verified.output["status"] == "VERIFIED", value
+        assert verified.output["operation_id"] == producer_id, value
+        assert verified.output["verification_record_uri"] is not None, value
+        assert verified.output["verification_record_uri"] in verified.artifact_uris, (
+            value
+        )
     provider_runtime = next(
         descriptor.provider_runtime
         for descriptor in number_theory_services.core.capabilities.catalog().capabilities
@@ -104,34 +106,37 @@ def test_prime_factorization_verifier_rejects_incomplete_factor_list(
     assert rejected.output["verification_record_uri"] is None
 
 
-@pytest.mark.parametrize("value", ("1", "72", "12", "30"))
 def test_powerful_number_result_uses_independent_python_flint_replay(
     number_theory_services,
-    value: str,
 ) -> None:
     producer_id = "integer.decide.powerful"
     verifier_id = "integer.powerful.verify"
-    producer_payload = {"value": value}
-    computed = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer_id,
-            input=producer_payload,
+    for value in ("1", "72", "12", "30"):
+        producer_payload = {"value": value}
+        computed = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=producer_id,
+                input=producer_payload,
+            )
         )
-    )
 
-    verified = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
-            input={"input": producer_payload, "candidate": computed.output["result"]},
+        verified = number_theory_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={
+                    "input": producer_payload,
+                    "candidate": computed.output["result"],
+                },
+            )
         )
-    )
 
-    assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED"
-    assert verified.output["operation_id"] == producer_id
-    assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.output["verification_record_uri"] in verified.artifact_uris
+        assert verified.execution.status is ExecutionStatus.COMPLETED, value
+        assert verified.output["status"] == "VERIFIED", value
+        assert verified.output["operation_id"] == producer_id, value
+        assert verified.output["verification_record_uri"] is not None, value
+        assert verified.output["verification_record_uri"] in verified.artifact_uris, (
+            value
+        )
 
 
 def test_powerful_number_verifier_rejects_schema_valid_wrong_factor_product(
@@ -197,7 +202,6 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == producer_id
     assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.output["verification_record_uri"] in verified.artifact_uris
     provider_runtime = next(
         descriptor.provider_runtime
@@ -235,4 +239,3 @@ def test_modular_residue_verifier_replays_its_materialized_lineage(
     assert rejected.output["status"] == "VERIFIED"
     assert rejected.output["conclusion"] == "TRUE"
     assert rejected.output["verification_record_uri"] is not None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.VERIFIED

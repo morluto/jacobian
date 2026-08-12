@@ -53,7 +53,6 @@ def test_observation_job_keeps_the_minimal_jacobian_treatment() -> None:
     assert job["agents"] == [
         {
             "name": "codex",
-            "skills": [".agents/skills/jacobian-math"],
             "kwargs": {"web_search": "disabled"},
         }
     ]
@@ -89,8 +88,7 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
     assert "mathematical-benchmarks-v1-control-proxy.json" in evaluations
     assert "jacobian-observation-proxy.json" in evaluations
     assert "jacobian-loopback.mcp.json" in evaluations
-    assert "JACOBIAN_EVAL_SKILL ?= .agents/skills/jacobian-math" in evaluations
-    assert '--skill "$(JACOBIAN_EVAL_SKILL)"' in evaluations
+    assert "JACOBIAN_EVAL_SKILL" not in evaluations
     validate_recipe = evaluations.split("agent-eval-validate:", maxsplit=1)[1].split(
         "\n\n", maxsplit=1
     )[0]
@@ -106,7 +104,9 @@ def test_agent_eval_docs_exclude_host_codex_from_the_control_protocol() -> None:
 
     assert "fresh temporary `CODEX_HOME`" in guide
     assert "direct host `codex exec`" in guide
-    assert "control must have empty `skills` and `mcp_servers`" in guide
+    assert "control must have no Jacobian MCP server" in guide
+    assert "treatment must" in guide
+    assert "no Jacobian Skill" in guide
 
 
 def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> None:

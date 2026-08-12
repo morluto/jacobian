@@ -4,17 +4,16 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.exact_domain import open_exact_domain_services
-from tests.support.rationals import rational_payload as _q
-from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
+from tests.support.exact_domain import open_exact_domain_services
+from tests.support.rationals import rational_payload as _q
+from tests.support.services import DomainTestServices
 
 
 def _poly(*coefficients_ascending: int) -> dict[str, object]:
@@ -103,7 +102,6 @@ def test_public_seam_verifies_exact_producer_result(
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == "polynomial.compute.gcd"
     assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     record = polynomial_verification_services.core.store.get(
         verified.output["verification_record_uri"]
     )
@@ -142,7 +140,6 @@ def test_public_seam_rejects_validly_shaped_false_result(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
 def test_public_seam_reports_valid_multivariate_result_as_unsupported(
@@ -175,4 +172,3 @@ def test_public_seam_reports_valid_multivariate_result_as_unsupported(
     assert checked.output["conclusion"] == "UNKNOWN"
     assert checked.output["witness_uri"] is None
     assert checked.output["verification_record_uri"] is None
-    assert checked.assurance.level is CapabilityAssuranceLevel.COMPUTED

@@ -86,8 +86,6 @@ def test_sat_cnf_materialization_capability_exposes_reusable_identity(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level.value == "COMPUTED"
-    assert result.completeness.status.value == "NOT_APPLICABLE"
     assert result.output["cnf_uri"] in result.artifact_uris
     resolved = services.core.sat.resolve_cnf(result.output["cnf_uri"])
     assert resolved.cnf.to_dimacs_bytes() == b"p cnf 2 2\n-1 2 0\n1 0\n"
@@ -137,12 +135,16 @@ def test_sat_cnf_materialization_validates_before_artifact_write(
     services = sat_materialization_services
     called = False
 
-    def unexpected_put_cnf(**_kwargs: object) -> None:
+    def unexpected_put_canonical_cnf(_cnf: CanonicalCnf) -> None:
         nonlocal called
         called = True
         raise AssertionError("invalid request reached artifact write")
 
-    monkeypatch.setattr(services.core.sat, "put_cnf", unexpected_put_cnf)
+    monkeypatch.setattr(
+        services.core.sat,
+        "put_canonical_cnf",
+        unexpected_put_canonical_cnf,
+    )
     result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.cnf.materialize",

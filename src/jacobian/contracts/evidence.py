@@ -69,21 +69,3 @@ class CertificateEnvelope(ContractModel):
         if computed != self.payload_digest:
             raise ValueError("certificate payload does not match payload_digest")
         return self
-
-
-class PreservationEnvelope(ContractModel):
-    """Checker input binding one proposed reduced object to its predecessor."""
-
-    evidence_schema_version: Literal["1"] = "1"
-    preservation_format: FormatIdentifier
-    format_version: str = Field(min_length=1, max_length=64)
-    bindings: EvidenceBindings
-    reducer: str = Field(min_length=1, max_length=128)
-
-    @model_validator(mode="after")
-    def require_original_and_reduced_bindings(self) -> Self:
-        if self.bindings.candidate_digest is None:
-            raise ValueError("preservation evidence must bind the reduced object")
-        if self.bindings.encoding_digest is None:
-            raise ValueError("preservation evidence must bind the original object")
-        return self

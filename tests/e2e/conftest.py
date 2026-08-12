@@ -1,4 +1,4 @@
-"""Small public-surface workflow test configuration."""
+"""Small public-surface test configuration."""
 
 from __future__ import annotations
 

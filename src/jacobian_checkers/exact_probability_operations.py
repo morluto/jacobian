@@ -14,13 +14,6 @@ from typing import Any
 from jacobian_checkers.bound_artifacts import bound_request as _bound_request
 
 _INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
-_META = {
-    "exactness": "EXACT_RATIONAL",
-    "determinism": "DETERMINISTIC",
-    "backend": "python-flint",
-    "backend_version": "0.9.0",
-    "verification": "UNVERIFIED",
-}
 _GAUSSIAN_META = {
     "gaussian_model": "INDEPENDENT_STANDARD_REAL",
     "completeness": "COMPLETE_BOUNDED_EXPANSION",
@@ -28,7 +21,6 @@ _GAUSSIAN_META = {
     "determinism": "DETERMINISTIC",
     "backend": "python-flint",
     "backend_version": "0.9.0",
-    "verification": "UNVERIFIED",
 }
 # Independent bound mirror: the checker must not import producer contracts.
 # This must match MAX_GAUSSIAN_EXPANSION_PATHS in jacobian.contracts.probability.
@@ -44,7 +36,6 @@ _GRAPH_RELIABILITY_META = {
     "determinism": "DETERMINISTIC",
     "backend": "python-flint",
     "backend_version": "0.9.0",
-    "verification": "UNVERIFIED",
 }
 
 
@@ -147,9 +138,7 @@ def _distribution(value: object) -> list[tuple[Fraction, Fraction]]:
 
 
 def _metadata(result: dict[str, Any], fields: set[str]) -> bool:
-    return set(result) == fields | set(_META) and all(
-        result.get(key) == value for key, value in _META.items()
-    )
+    return set(result) == fields
 
 
 def _event(

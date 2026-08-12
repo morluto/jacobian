@@ -142,9 +142,7 @@ def test_proof_contract_preserves_bytes_and_marks_holes_without_verifying() -> N
         SmtAletheProofArtifact.model_validate(payload)
 
 
-def test_producer_output_never_projects_solver_status_or_holes_to_a_conclusion() -> (
-    None
-):
+def test_producer_output_does_not_project_a_mathematical_conclusion() -> None:
     output = SmtUnsatProofFindOutput(
         status="PROOF_PRODUCED",
         solver_status="UNSATISFIABLE",
@@ -155,7 +153,7 @@ def test_producer_output_never_projects_solver_status_or_holes_to_a_conclusion()
         detail="raw proof evidence only",
     )
 
-    assert output.conclusion == "UNKNOWN"
+    assert "conclusion" not in output.model_dump(mode="json")
     with pytest.raises(ValidationError):
         SmtUnsatProofFindOutput(
             status="NO_PROOF_PRODUCED",

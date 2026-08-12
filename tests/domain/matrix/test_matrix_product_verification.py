@@ -6,7 +6,6 @@ from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -40,7 +39,6 @@ def test_square_zero_product_is_computed_then_independently_verified(
     computed = _compute_square(matrix_services)
 
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
     verified = matrix_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -57,7 +55,6 @@ def test_square_zero_product_is_computed_then_independently_verified(
     assert verified.output["operation_id"] == "matrix.multiply.compute"
     assert verified.output["verification_record_uri"] is not None
     assert verified.output["verification_record_uri"] in verified.artifact_uris
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
 
 
 def test_matrix_product_verifier_rejects_a_false_product_without_a_record(
@@ -81,4 +78,3 @@ def test_matrix_product_verifier_rejects_a_false_product_without_a_record(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED

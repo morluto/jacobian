@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from itertools import combinations
 from typing import Literal
 
 from pydantic import ValidationError
@@ -14,17 +15,10 @@ from jacobian.capability_service import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -33,11 +27,13 @@ from jacobian.contracts.graph_isomorphism import (
     GraphIsomorphismReplay,
     GraphIsomorphismVerifyOutput,
     GraphIsomorphismVerifyRequest,
+    GraphIsomorphismViolation,
+    GraphIsomorphismViolationKind,
     GraphPair,
     GraphVertexMapping,
     SimpleUndirectedGraph,
 )
-from jacobian.contracts.results import Conclusion, ExecutionStatus, Verification
+from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.graphs.installation import GraphInstallation
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
@@ -167,11 +163,12 @@ class GraphIsomorphismAdapter:
             )
         self._descriptor = CapabilityDescriptor(
             capability_id="graph.isomorphism.verify",
-            version="1",
-            title="Verify one graph-isomorphism mapping",
+            version="2",
+            title="Verify an explicit graph-isomorphism mapping",
             description=(
                 "Independently check that one explicit vertex bijection preserves "
-                "all adjacency and nonadjacency."
+                "all adjacency and nonadjacency. A false mapping returns the first "
+                "source-domain, target-bijection, or adjacency violation."
             ),
             provider="jacobian.graph-isomorphism-checker",
             provider_runtime=known_provider_runtime(
@@ -181,7 +178,16 @@ class GraphIsomorphismAdapter:
             ),
             input_schema=model_schema(GraphIsomorphismVerifyRequest),
             output_schema=model_schema(GraphIsomorphismVerifyOutput),
-            tags=("graph", "isomorphism", "verification"),
+            tags=(
+                "graph",
+                "isomorphism",
+                "mapping",
+                "bijection",
+                "adjacency",
+                "verification",
+                "adjacency-violation",
+                "counter-witness",
+            ),
         )
 
     @property
@@ -287,7 +293,6 @@ class GraphIsomorphismAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         conclusion: Literal["TRUE", "FALSE", "UNKNOWN"]
@@ -301,6 +306,11 @@ class GraphIsomorphismAdapter:
             conclusion = "UNKNOWN"
             is_isomorphism = None
         record_uri = checked.verification_record_uri if verified else None
+        first_violation = (
+            _first_mapping_violation(left.graph, right.graph, validated.mapping)
+            if conclusion == "FALSE"
+            else None
+        )
         output = GraphIsomorphismVerifyOutput(
             is_isomorphism=is_isomorphism,
             conclusion=conclusion,
@@ -313,6 +323,7 @@ class GraphIsomorphismAdapter:
             verification_record_uri=record_uri,
             checker_id=checker_id,
             coverage="EXHAUSTIVE" if verified else "UNKNOWN",
+            first_violation=first_violation,
         )
         artifact_uris = [
             *source_graph_uris,
@@ -328,67 +339,7 @@ class GraphIsomorphismAdapter:
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="every vertex pair in two explicit finite graphs",
-                parameters={
-                    "left_graph_uri": validated.left_graph_uri,
-                    "right_graph_uri": validated.right_graph_uri,
-                    "left_order": len(left.graph.vertices),
-                    "right_order": len(right.graph.vertices),
-                },
-                artifact_uri=pair.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if verified
-                    else CapabilityCompletenessStatus.UNKNOWN
-                ),
-                basis=(
-                    "the checker compared the complete finite adjacency relation"
-                    if verified
-                    else "the checker did not accept the replay inputs"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-                verification_record_uri=record_uri,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="graph.relation.pair-scope",
-                    source_artifact_uris=source_graph_uris,
-                    target_artifact_uris=(pair.artifact_uri,),
-                ),
-                *(
-                    (
-                        CapabilityRelationship(
-                            relation_id="graph.relation.isomorphic-via",
-                            source_artifact_uris=source_graph_uris,
-                            target_artifact_uris=(mapping.artifact_uri,),
-                            status=CapabilityRelationshipStatus.VERIFIED,
-                            verification_record_uri=record_uri,
-                        ),
-                    )
-                    if conclusion == "TRUE" and record_uri is not None
-                    else ()
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-                basis=(
-                    "accepted by the authorized independent adjacency checker"
-                    if verified
-                    else "the independent checker did not accept the mapping"
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=record_uri,
             artifact_uris=tuple(artifact_uris),
         )
 
@@ -451,3 +402,57 @@ class GraphIsomorphismAdapter:
             object_digest=artifact.manifest.object_digest,
             graph=graph,
         )
+
+
+def _first_mapping_violation(
+    left: SimpleUndirectedGraph,
+    right: SimpleUndirectedGraph,
+    mapping: dict[str, str],
+) -> GraphIsomorphismViolation:
+    left_vertices = set(left.vertices)
+    mapping_vertices = set(mapping)
+    if mapping_vertices != left_vertices:
+        missing = next(
+            (vertex for vertex in left.vertices if vertex not in mapping_vertices),
+            None,
+        )
+        extra = next(iter(sorted(mapping_vertices - left_vertices)), None)
+        return GraphIsomorphismViolation(
+            kind=GraphIsomorphismViolationKind.SOURCE_DOMAIN_MISMATCH,
+            vertex=missing if missing is not None else extra,
+            mapped_vertex=(mapping.get(extra) if extra is not None else None),
+        )
+    right_vertices = set(right.vertices)
+    seen_targets: set[str] = set()
+    for vertex in left.vertices:
+        mapped = mapping[vertex]
+        if mapped not in right_vertices or mapped in seen_targets:
+            return GraphIsomorphismViolation(
+                kind=GraphIsomorphismViolationKind.TARGET_BIJECTION_MISMATCH,
+                vertex=vertex,
+                mapped_vertex=mapped,
+            )
+        seen_targets.add(mapped)
+    if seen_targets != right_vertices:
+        missing_target = next(
+            vertex for vertex in right.vertices if vertex not in seen_targets
+        )
+        return GraphIsomorphismViolation(
+            kind=GraphIsomorphismViolationKind.TARGET_BIJECTION_MISMATCH,
+            mapped_vertex=missing_target,
+        )
+    left_edges = set(left.edges)
+    right_edges = set(right.edges)
+    for source_vertices in combinations(left.vertices, 2):
+        mapped_vertices = (mapping[source_vertices[0]], mapping[source_vertices[1]])
+        source_adjacent = tuple(sorted(source_vertices)) in left_edges
+        target_adjacent = tuple(sorted(mapped_vertices)) in right_edges
+        if source_adjacent != target_adjacent:
+            return GraphIsomorphismViolation(
+                kind=GraphIsomorphismViolationKind.ADJACENCY_MISMATCH,
+                source_vertices=source_vertices,
+                mapped_vertices=mapped_vertices,
+                source_adjacent=source_adjacent,
+                target_adjacent=target_adjacent,
+            )
+    raise RuntimeError("false graph-isomorphism verdict has no mapping violation")

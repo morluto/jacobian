@@ -18,13 +18,11 @@ _META_INTEGER = {
     "exactness": "EXACT_INTEGER",
     "determinism": "DETERMINISTIC",
     "backend": "python-stdlib",
-    "verification": "UNVERIFIED",
 }
 _META_FINITE = {
     "exactness": "EXACT_FINITE",
     "determinism": "DETERMINISTIC",
     "backend": "python-stdlib",
-    "verification": "UNVERIFIED",
 }
 
 

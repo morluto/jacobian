@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from jacobian.adapters.mcp.context import _public_tool_error
+from jacobian.adapters.mcp.remote import create_remote_server
 from jacobian.adapters.mcp.server import create_server
 from jacobian.adapters.mcp.tooling import _request_id_digest, _request_trace_digest
 
@@ -46,7 +47,12 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             await client.call_tool(
                 "math.find",
-                {"query": "private-query-marker"},
+                {
+                    "request": {
+                        "op": "search",
+                        "query": "private-query-marker",
+                    }
+                },
             )
             failed = await client.call_tool(
                 "math.run",
@@ -101,7 +107,13 @@ def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None
 
         async with Client(create_server(tmp_path), raise_exceptions=False) as client:
             unknown_capability = await client.call_tool(
-                "math.find", {"capability_id": "missing.capability"}
+                "math.find",
+                {
+                    "request": {
+                        "op": "inspect",
+                        "capability_id": "missing.capability",
+                    }
+                },
             )
             response = json.loads(unknown_capability.content[0].text)
             assert response["error"]["code"] == "UNKNOWN_CAPABILITY"
@@ -138,9 +150,8 @@ def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) 
         from mcp import Client
 
         async with Client(
-            create_server(
+            create_remote_server(
                 tmp_path,
-                tenant_isolation=True,
                 allow_anonymous=False,
             ),
             raise_exceptions=False,
@@ -166,7 +177,13 @@ def test_direct_tool_calls_reject_removed_and_malformed_arguments(
         with pytest.raises(ToolError):
             await server.call_tool(
                 "math.find",
-                {"limit": "not-an-integer"},
+                {
+                    "request": {
+                        "op": "search",
+                        "query": "matrix",
+                        "limit": "not-an-integer",
+                    }
+                },
             )
 
     asyncio.run(scenario())

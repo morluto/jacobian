@@ -353,7 +353,10 @@ def check_lrat(request: dict[str, Any]) -> dict[str, Any]:
         clauses, variable_count = _cnf(claim["payload"])
         limits = dict(payload["limits"])
         limits["variable_count"] = variable_count
-        accepted, detail = _replay(clauses, raw, limits)
+        try:
+            accepted, detail = _replay(clauses, raw, limits)
+        except ValueError as exc:
+            return _result(False, str(exc))
         return _result(
             accepted, detail if accepted else detail + "; empty clause absent"
         )
@@ -361,5 +364,5 @@ def check_lrat(request: dict[str, Any]) -> dict[str, Any]:
         return _result(False, _unsupported_detail(exc))
     except TimeoutError:
         return _result(False, "LRAT replay timed out")
-    except (KeyError, TypeError, ValueError, OverflowError):
+    except (KeyError, TypeError, ValueError):
         return _result(False, "malformed, rejected, or over-budget LRAT proof")

@@ -14,8 +14,6 @@ import jacobian.lean_frontend.statement as lean_statements
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
     CapabilityRequest,
 )
 from jacobian.contracts.lean_statement import LeanElaborationOption
@@ -78,10 +76,7 @@ def test_propose_elaborates_valid_statement(tmp_path: Path) -> None:
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["elaborates"] is True
     assert result.output["sorry_count"] == 1
-    assert result.output["verification"] == "UNVERIFIED"
     assert result.output["proposal_uri"] in result.artifact_uris
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert "does not establish truth" in result.assurance.basis
 
 
 @pytest.mark.skipif(
@@ -230,8 +225,6 @@ def test_propose_directly_elaborates_environment_bound_proposition(
     assert "Eq" in result.output["used_declarations"]
     assert result.output["options"][0] == {"name": "pp.all", "value": "true"}
     assert result.output["semantic_scope"] == "ELABORATION_ONLY"
-    assert result.output["truth_status"] == "NOT_ASSESSED"
-    assert result.output["verification"] == "UNVERIFIED"
     assert result.output["environment_digest"].startswith("sha256:")
 
     artifact = propose.resources.store.get(result.output["proposal_uri"])
@@ -240,8 +233,6 @@ def test_propose_directly_elaborates_environment_bound_proposition(
         artifact.payload["elaborated_expression"]
         == result.output["elaborated_expression"]
     )
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert "does not establish truth" in result.assurance.basis
 
 
 def test_direct_elaboration_parser_preserves_multiline_core_expression() -> None:
@@ -330,7 +321,6 @@ def test_compare_identical_statements(tmp_path: Path) -> None:
     assert result.output["axiom_sets_identical"] is True
     assert result.output["elaboration_checked"] is True
     assert result.output["both_elaborate"] is True
-    assert result.output["verification"] == "UNVERIFIED"
     assert result.output["comparison_uri"] in result.artifact_uris
 
 
@@ -387,7 +377,6 @@ def test_compare_works_without_lean_for_syntactic_comparison(
     assert result.output["statements_identical"] is True
     assert result.output["elaboration_checked"] is False
     assert result.output["both_elaborate"] is False
-    assert result.completeness.status is CapabilityCompletenessStatus.PARTIAL
 
 
 def test_execution_uses_the_exact_pinned_executable(

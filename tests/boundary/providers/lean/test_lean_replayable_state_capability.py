@@ -7,6 +7,7 @@ import pytest
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateRequest, LeanTypedGoal
@@ -23,7 +24,6 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplValidatedExecution,
 )
 from jacobian.provider_runtime import jacobian_provider_runtime
-from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -202,7 +202,6 @@ def test_apply_tactic_materializes_and_reuses_replayable_state(
     assert second.output["completed"] is True
     assert second.output["successor_states"][0]["normalized_goals"] == []
     assert second.output["verification_boundary"] == "LEAN_CHECK_REQUIRED"
-    assert second.output["verification"] == "UNVERIFIED"
     successor = adapter.resources.store.get(successor_uri)
     assert successor.payload["expiry"] == "IMMUTABLE_NO_EXPIRY"
     assert successor.payload["environment_digest"].startswith("sha256:")
@@ -292,10 +291,11 @@ def test_rejected_transition_persists_all_protocol_diagnostics(
     )
 
     assert result.output["accepted"] is False
-    assert expected_message in result.output["messages"]
-    assert expected_message in {
-        diagnostic["message"] for diagnostic in result.output["diagnostics"]
-    }
+    assert result.output["messages"] == ["Lean rejected the supplied tactic."]
+    assert any(
+        expected_message in diagnostic["raw_backend_message"]
+        for diagnostic in result.output["diagnostics"]
+    )
 
 
 def test_apply_tactic_rejects_environment_stale_state_before_replay(
@@ -341,3 +341,48 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
         )
 
     assert raised.value.diagnostic.code == "STALE_LEAN_PROOF_STATE"
+
+
+def test_apply_tactic_preserves_cross_field_validation_evidence(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    continuation = adapter.descriptor.invocation_examples[1].input
+    assert set(continuation) == {
+        "environment",
+        "state_uri",
+        "tactic",
+        "max_goals",
+        "max_local_declarations",
+        "max_rendered_bytes",
+    }
+    assert "statement" not in continuation
+    assert "proof_prefix" not in continuation
+
+    with pytest.raises(CapabilityInvocationError) as raised:
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "state_uri": "artifact://sha256/" + "a" * 64,
+                    "statement": "True",
+                    "proof_prefix": ["skip"],
+                    "tactic": "trivial",
+                },
+            )
+        )
+
+    diagnostic = raised.value.diagnostic
+    assert diagnostic.code == "INVALID_LEAN_TRANSITION_REQUEST"
+    assert diagnostic.stage == "request_validation"
+    assert diagnostic.path == "$"
+    assert (
+        "state_uri cannot be combined with statement or proof_prefix"
+        in diagnostic.message
+    )
+    assert diagnostic.details["validation_errors"] == [
+        {
+            "path": "$",
+            "reason": "state_uri cannot be combined with statement or proof_prefix",
+            "type": "value_error",
+        }
+    ]

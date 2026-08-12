@@ -10,7 +10,7 @@ def test_verified_token_does_not_match_unverified() -> None:
         'assert snapshot.verification.value == "UNVERIFIED"'
     )
     assert has_verify_authority_signal(
-        "assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED"
+        "assert result.verification_record_uri is not None"
     )
 
 

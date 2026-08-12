@@ -152,7 +152,6 @@ class CertifiedSmithNormalFormResult(ContractModel):
     )
     backend_version: Literal["1"] = "1"
     completeness: Literal["FULL_MATRIX_TRANSFORMATIONS"] = "FULL_MATRIX_TRANSFORMATIONS"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
 
 __all__ = [

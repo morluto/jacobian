@@ -5,11 +5,7 @@ from typing import Any
 import pytest
 from tests.support.core_capability_harnesses import UniversalAlgebraTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
-    CapabilityRequest,
-)
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.universal_algebra import (
     UniversalAlgebraCountermodelSearchRequest,
 )
@@ -121,7 +117,6 @@ def test_evaluate_laws_returns_exact_truth_and_counterexample(
         )
     )
 
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     records = {record["law_id"]: record for record in result.output["records"]}
     assert records["associative"] == {
         "law_id": "associative",
@@ -145,17 +140,14 @@ def test_evaluate_laws_returns_exact_truth_and_counterexample(
         },
     }
     assert result.output["certificate_uri"] in result.artifact_uris
-    assert result.output["checker_id"] == (
-        universal_algebra_services.installation.evaluation_checker_id
+    assert "verification_handoff" not in result.output
+    verified = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="universal_algebra.law_evaluation.verify",
+            input={"certificate_uri": result.output["certificate_uri"]},
+        )
     )
-    assert result.output["verification_handoff"] == {
-        "capability_id": "certificate.verify",
-        "payload": {
-            "certificate_uri": result.output["certificate_uri"],
-            "checker_id": result.output["checker_id"],
-            "timeout_seconds": 150,
-        },
-    }
+    assert verified.verification_record_uri is not None
     assert "conclusion" not in result.output
 
 
@@ -208,7 +200,6 @@ def test_countermodel_search_reports_fixed_order_no_witness_without_conclusion(
     assert search.execution.status.value == "COMPLETED"
     assert search.output["status"] == "NO_WITNESS_FOUND"
     assert search.output["structure"] is None
-    assert search.scope.parameters["order"] == 1
     assert "conclusion" not in search.output
 
 
@@ -260,9 +251,6 @@ def test_finite_magma_table_enumeration_is_exact_and_canonical(
     assert result.output["enumerated_count"] == 16
     assert result.output["total_count"] == 16
     assert result.output["ordering"] == "LEXICOGRAPHIC_ROW_MAJOR"
-    assert result.output["completeness"] == "COMPLETE"
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
     table_payloads = [
         runtime.core.store.get(uri).payload for uri in result.output["table_uris"]
     ]

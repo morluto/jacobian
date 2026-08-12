@@ -27,6 +27,7 @@ LEAN_TOOLCHAIN = f"leanprover/lean4:v{LEAN_VERSION}"
 MATHLIB_COMMIT = "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
 MATHLIB_AXIOMS = frozenset({"Classical.choice", "Quot.sound", "propext"})
 _TOOLCHAIN_PROBE_TIMEOUT_SECONDS = 15
+_PACKAGE_CHECKOUT_PROBE_TIMEOUT_SECONDS = 15
 _MATHLIB_COMPILE_TIMEOUT_SECONDS = 180
 _FORBIDDEN = re.compile(
     r"\b(?:admit|axiom|class|def|elab|end|example|import|instance|lemma|macro|"
@@ -36,7 +37,8 @@ _FORBIDDEN = re.compile(
 )
 _AXIOMS = re.compile(r"'jacobian_theorem' depends on axioms: \[([^\]]*)\]")
 _LEAN_ERROR = re.compile(
-    r"^[^\r\n]+:(?P<line>\d+):(?P<column>\d+):\s*error:\s*(?P<message>.+)$",
+    r"^[^\r\n]+:(?P<line>\d+):(?P<column>\d+):\s*"
+    r"error(?:\([^\r\n)]{1,128}\))?:\s*(?P<message>.+)$",
     re.MULTILINE,
 )
 _QUOTED_LOCAL_PATH = re.compile(
@@ -344,7 +346,16 @@ def _validate_package_checkout(
         or re.fullmatch(r"[0-9a-f]{40}", revision) is None
     ):
         raise RuntimeError("the mathlib manifest contains an invalid package")
-    checkout = packages_directory / name
+    try:
+        resolved_packages = packages_directory.resolve(strict=True)
+        checkout_candidate = resolved_packages / name
+        if checkout_candidate.is_symlink() or not checkout_candidate.is_dir():
+            raise RuntimeError("the mathlib package checkout is not a directory")
+        checkout = checkout_candidate.resolve(strict=True)
+    except OSError as exc:
+        raise RuntimeError("the mathlib package checkout is unavailable") from exc
+    if checkout.parent != resolved_packages:
+        raise RuntimeError("the mathlib package checkout escapes its package root")
     git_environment = worker_environment(locale="C")
     git_executable = shutil.which("git")
     if git_executable is None:
@@ -352,10 +363,17 @@ def _validate_package_checkout(
     rev_result = execute_process(
         ProcessRequest(
             executable=git_executable,
-            arguments=("-C", str(checkout), "rev-parse", "HEAD"),
+            arguments=(
+                "-c",
+                f"safe.directory={checkout}",
+                "-C",
+                str(checkout),
+                "rev-parse",
+                "HEAD",
+            ),
             environment=git_environment,
             cwd=str(checkout),
-            timeout_seconds=5.0,
+            timeout_seconds=float(_PACKAGE_CHECKOUT_PROBE_TIMEOUT_SECONDS),
             stdin_bytes=b"",
             stdout_limit_bytes=4096,
             stderr_limit_bytes=4096,
@@ -373,6 +391,8 @@ def _validate_package_checkout(
         ProcessRequest(
             executable=git_executable,
             arguments=(
+                "-c",
+                f"safe.directory={checkout}",
                 "-C",
                 str(checkout),
                 "status",
@@ -381,7 +401,7 @@ def _validate_package_checkout(
             ),
             environment=git_environment,
             cwd=str(checkout),
-            timeout_seconds=5.0,
+            timeout_seconds=float(_PACKAGE_CHECKOUT_PROBE_TIMEOUT_SECONDS),
             stdin_bytes=b"",
             stdout_limit_bytes=4096,
             stderr_limit_bytes=4096,
@@ -568,6 +588,36 @@ def _mathlib_process_path(lake_command: tuple[str, ...]) -> str:
     )
 
 
+def _mathlib_git_config(runtime: Path) -> dict[str, str]:
+    """Authorize Git only for the exact manifest-owned package checkouts.
+
+    Immutable releases are root-owned while the checker runs as an unprivileged
+    service user. Lake invokes Git while assembling its environment, so pass
+    process-local ``safe.directory`` entries for the package roots that
+    :func:`_mathlib_runtime` has already validated. The service account never
+    receives a writable HOME or a persistent wildcard Git exception.
+    """
+
+    manifest = json.loads((runtime / "lake-manifest.json").read_text(encoding="utf-8"))
+    packages = manifest["packages"]
+    packages_directory = (runtime / ".lake" / "packages").resolve(strict=True)
+    checkouts: list[str] = []
+    for package in packages:
+        name = package["name"]
+        checkout = (packages_directory / name).resolve(strict=True)
+        if checkout.parent != packages_directory or not checkout.is_dir():
+            raise _LeanSetupError("MATHLIB_MANIFEST: a package checkout is unavailable")
+        checkouts.append(str(checkout))
+    environment = {
+        "GIT_CONFIG_COUNT": str(len(checkouts)),
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+    for index, checkout in enumerate(checkouts):
+        environment[f"GIT_CONFIG_KEY_{index}"] = "safe.directory"
+        environment[f"GIT_CONFIG_VALUE_{index}"] = checkout
+    return environment
+
+
 def _run_lean(
     source: str,
     *,
@@ -576,6 +626,7 @@ def _run_lean(
     if environment_name == "CORE":
         command = list(_lean_command("lean"))
         _validate_lean(tuple(command))
+        mathlib_environment: dict[str, str] = {}
         memory_mb = "1024"
         timeout_seconds = 25
         cwd_context = tempfile.TemporaryDirectory(prefix="jacobian-lean-")
@@ -585,8 +636,12 @@ def _run_lean(
         runtime = _mathlib_runtime()
         lake_command = _lean_command("lake")
         command = [*lake_command, "env", "lean"]
-        _validate_lean(tuple(command), cwd=runtime)
+        # ``lake env lean`` is the compiler launcher, but Lake itself does not
+        # implement Lean's ``-V`` and ``-g`` identity probes. Validate the
+        # separately digest-authorized Lean sibling before Lake drives it.
+        _validate_lean(_lean_command("lean"), cwd=runtime)
         mathlib_path = _mathlib_process_path(lake_command)
+        mathlib_environment = _mathlib_git_config(runtime)
         memory_mb = "8192"
         timeout_seconds = _MATHLIB_COMPILE_TIMEOUT_SECONDS
         cwd_context = tempfile.TemporaryDirectory(prefix="jacobian-lean-home-")
@@ -603,6 +658,7 @@ def _run_lean(
                 if environment_name == "MATHLIB"
                 else str(Path(command[0]).parent)
             ),
+            **mathlib_environment,
             **({"ELAN_HOME": elan_home} if elan_home is not None else {}),
         },
     )

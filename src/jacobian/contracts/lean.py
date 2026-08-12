@@ -1,4 +1,4 @@
-"""Contracts for pinned Lean certificate workflows."""
+"""Contracts for pinned Lean certificate checkers."""
 
 from __future__ import annotations
 
@@ -8,12 +8,71 @@ from typing import Literal, Self
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian.contracts.common import ArtifactUri, Sha256Digest
-from jacobian.contracts.results import ContractModel, ResultEnvelope
+from jacobian.contracts.results import (
+    Conclusion,
+    ContractModel,
+    Execution,
+    InputValidation,
+    VerificationResult,
+)
 
 
 class LeanEnvironment(StrEnum):
     CORE = "CORE"
     MATHLIB = "MATHLIB"
+
+
+class LeanDiagnosticPhase(StrEnum):
+    RUNTIME_SETUP = "RUNTIME_SETUP"
+    SOURCE_ELABORATION = "SOURCE_ELABORATION"
+    STATE_RECONSTRUCTION = "STATE_RECONSTRUCTION"
+    TACTIC_EXECUTION = "TACTIC_EXECUTION"
+    TERM_ELABORATION = "TERM_ELABORATION"
+    KERNEL_CHECK = "KERNEL_CHECK"
+
+
+class LeanDiagnosticSource(StrEnum):
+    STATEMENT = "STATEMENT"
+    PROOF = "PROOF"
+    TACTIC = "TACTIC"
+    TERM = "TERM"
+
+
+class LeanDiagnosticPosition(ContractModel):
+    """Zero-based position relative to one agent-supplied Lean payload field."""
+
+    line: StrictInt = Field(ge=0)
+    column: StrictInt = Field(ge=0)
+
+
+class LeanDiagnosticSourceSpan(ContractModel):
+    """A payload-relative source range, never a generated-file coordinate."""
+
+    source: LeanDiagnosticSource
+    start: LeanDiagnosticPosition
+    end: LeanDiagnosticPosition
+
+    @model_validator(mode="after")
+    def require_forward_source_range(self) -> Self:
+        if (self.end.line, self.end.column) < (
+            self.start.line,
+            self.start.column,
+        ):
+            raise ValueError("Lean diagnostic source span must not run backwards")
+        return self
+
+
+class LeanDiagnostic(ContractModel):
+    """Stable Lean-owned diagnostic adjacent to, but distinct from, a verdict."""
+
+    code: str = Field(pattern=r"^LEAN_[A-Z0-9_]+$", max_length=128)
+    phase: LeanDiagnosticPhase
+    severity: Literal["ERROR", "WARNING", "INFO"]
+    message: str = Field(min_length=1, max_length=2_000)
+    source_span: LeanDiagnosticSourceSpan | None = None
+    goal_index: StrictInt | None = Field(default=None, ge=0, le=63)
+    metavariable: str | None = Field(default=None, min_length=1, max_length=512)
+    raw_backend_message: str = Field(min_length=1, max_length=20_000)
 
 
 class LeanClaim(ContractModel):
@@ -34,7 +93,20 @@ class LeanVerifyResult(ContractModel):
     claim_uri: ArtifactUri
     candidate_uri: ArtifactUri
     certificate_uri: ArtifactUri
-    result: ResultEnvelope
+    result: VerificationResult
+    diagnostics: tuple[LeanDiagnostic, ...] = ()
+    cache_hit: bool = False
+
+
+class LeanCheckOutput(ContractModel):
+    conclusion: Conclusion
+    execution: Execution
+    input: InputValidation
+    diagnostics: tuple[LeanDiagnostic, ...]
+    claim_uri: ArtifactUri
+    candidate_uri: ArtifactUri
+    certificate_uri: ArtifactUri
+    verification_record_uri: ArtifactUri | None = None
     cache_hit: bool = False
 
 
@@ -103,12 +175,42 @@ class LeanDeclarationTypePattern(ContractModel):
 
 
 class LeanDeclarationSearchRequest(ContractModel):
-    environment: LeanEnvironment = LeanEnvironment.CORE
-    name_contains: str | None = Field(default=None, min_length=1, max_length=256)
-    type_pattern: LeanDeclarationTypePattern | None = None
-    namespace_prefixes: tuple[str, ...] = Field(default=(), max_length=16)
-    kinds: tuple[LeanDeclarationKind, ...] = ()
-    result_limit: StrictInt = Field(default=10, ge=1, le=50)
+    environment: LeanEnvironment = Field(
+        default=LeanEnvironment.CORE,
+        description=(
+            "Pinned declaration environment to search; use MATHLIB for Mathlib "
+            "theorems and CORE for Lean's core declarations."
+        ),
+    )
+    name_contains: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description=(
+            "Case-sensitive substring of the fully qualified declaration name."
+        ),
+    )
+    type_pattern: LeanDeclarationTypePattern | None = Field(
+        default=None,
+        description=(
+            "Optional exact named constants that must all occur in the elaborated type."
+        ),
+    )
+    namespace_prefixes: tuple[str, ...] = Field(
+        default=(),
+        max_length=16,
+        description="Optional fully qualified namespace prefixes used as filters.",
+    )
+    kinds: tuple[LeanDeclarationKind, ...] = Field(
+        default=(),
+        description="Optional declaration-kind filters such as THEOREM or DEFINITION.",
+    )
+    result_limit: StrictInt = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum declarations returned by the deterministic bounded scan.",
+    )
 
     @model_validator(mode="after")
     def require_query_and_distinct_filters(self) -> Self:
@@ -125,9 +227,25 @@ class LeanDeclarationSearchRequest(ContractModel):
         return self
 
 
-class LeanDeclarationSearchOutput(ContractModel):
+class LeanDeclarationEnvironmentIdentity(ContractModel):
+    """Portable pinned runtime identity attached to declaration results."""
+
     environment: LeanEnvironment
     environment_digest: Sha256Digest
+    lean_version: str = Field(min_length=1, max_length=64)
+    lean_commit: str = Field(min_length=7, max_length=64)
+    mathlib_commit: str | None = Field(default=None, min_length=7, max_length=64)
+
+    @model_validator(mode="after")
+    def bind_mathlib_commit_to_environment(self) -> Self:
+        if self.environment is LeanEnvironment.MATHLIB and self.mathlib_commit is None:
+            raise ValueError("MATHLIB declaration identity requires mathlib_commit")
+        if self.environment is LeanEnvironment.CORE and self.mathlib_commit is not None:
+            raise ValueError("CORE declaration identity cannot include mathlib_commit")
+        return self
+
+
+class LeanDeclarationSearchOutput(LeanDeclarationEnvironmentIdentity):
     query: LeanDeclarationSearchRequest
     declarations: tuple[LeanDeclarationRecord, ...]
     scanned_declarations: StrictInt = Field(ge=0)
@@ -168,8 +286,17 @@ class LeanDeclarationSearchOutput(ContractModel):
 
 
 class LeanDeclarationInspectRequest(ContractModel):
-    environment: LeanEnvironment = LeanEnvironment.CORE
-    declaration_name: str = Field(min_length=1, max_length=512)
+    environment: LeanEnvironment = Field(
+        default=LeanEnvironment.CORE,
+        description=(
+            "Pinned declaration environment containing the exact declaration name."
+        ),
+    )
+    declaration_name: str = Field(
+        min_length=1,
+        max_length=512,
+        description="Exact fully qualified Lean declaration name to inspect.",
+    )
 
     @model_validator(mode="after")
     def require_exact_name_text(self) -> Self:
@@ -177,9 +304,7 @@ class LeanDeclarationInspectRequest(ContractModel):
         return self
 
 
-class LeanDeclarationInspectOutput(ContractModel):
-    environment: LeanEnvironment
-    environment_digest: Sha256Digest
+class LeanDeclarationInspectOutput(LeanDeclarationEnvironmentIdentity):
     query: LeanDeclarationInspectRequest
     declaration: LeanDeclarationRecord
 

@@ -85,8 +85,6 @@ class PolynomialSystemRationalSearchOutput(ContractModel):
     assignment: tuple[CanonicalRational, ...] | None = None
     examined_assignment_count: int = Field(ge=0, le=RATIONAL_SEARCH_GRID_LIMIT)
     grid_assignment_count: int = Field(ge=1, le=RATIONAL_SEARCH_GRID_LIMIT)
-    checker_id: CheckerUri | None = None
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
     coverage: Literal["COMPLETE_SEARCH_OBJECTIVE"] = "COMPLETE_SEARCH_OBJECTIVE"
 
     @model_validator(mode="after")
@@ -123,18 +121,15 @@ class PolynomialSystemSolutionOutput(ContractModel):
     conclusion: Literal["TRUE", "FALSE", "UNKNOWN"]
     equation_residuals: tuple[CanonicalRational, ...]
     inequation_values: tuple[CanonicalRational, ...]
-    residuals_assurance: Literal["COMPUTED", "VERIFIED"]
     system_uri: ArtifactUri
     assignment_uri: ArtifactUri
     claim_uri: ArtifactUri
     certificate_uri: ArtifactUri
     verification_record_uri: ArtifactUri | None = None
     checker_id: CheckerUri | None = None
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
 
     @model_validator(mode="after")
-    def preserve_truth_and_residual_assurance(self) -> Self:
+    def preserve_truth_and_verification(self) -> Self:
         expected_satisfies = {
             "TRUE": True,
             "FALSE": False,
@@ -142,17 +137,11 @@ class PolynomialSystemSolutionOutput(ContractModel):
         }[self.conclusion]
         if self.satisfies is not expected_satisfies:
             raise ValueError("satisfies must preserve TRUE, FALSE, and UNKNOWN")
-        if self.residuals_assurance == "VERIFIED":
-            if (
-                self.conclusion == "UNKNOWN"
-                or self.verification_record_uri is None
-                or self.checker_id is None
-            ):
-                raise ValueError(
-                    "verified residuals require a decisive checker-backed record"
-                )
-        elif self.verification_record_uri is not None:
+        if self.verification_record_uri is not None and (
+            self.conclusion == "UNKNOWN" or self.checker_id is None
+        ):
             raise ValueError(
-                "a verification record requires checker-verified residuals"
+                "a residual verification record requires a decisive conclusion "
+                "and checker identity"
             )
         return self

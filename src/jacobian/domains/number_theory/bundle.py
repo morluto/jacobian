@@ -32,7 +32,6 @@ def build_number_theory_bundle() -> DomainBundle:
                     "and modular arithmetic over bounded inputs"
                 ),
                 "integer_encoding": "canonical decimal string",
-                "assurance": "computed; no independent checker",
             },
         ),
         provider_runtime=known_provider_runtime(
@@ -56,15 +55,6 @@ def build_number_theory_bundle() -> DomainBundle:
                     "integers within each operation's limits."
                 ),
             )
-        ),
-        scope_description=("the complete supplied bounded exact number-theory input"),
-        completeness_basis=(
-            "deterministic exact computation covered the declared input; "
-            "not independently verified"
-        ),
-        assurance_basis=(
-            "deterministic exact arithmetic from the pinned SymPy runtime; "
-            "no independent checker invoked"
         ),
         checker_declarations=NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
     )

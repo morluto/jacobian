@@ -6,7 +6,6 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian.contracts.common import ArtifactUri, CheckerUri
 from jacobian.contracts.exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalInteger,
@@ -82,85 +81,4 @@ class IntegerMatrix(ContractModel):
             maximum=MAX_MATRIX_SCALAR_DIGITS,
             label="matrix",
         )
-        return self
-
-
-class MatrixDeterminantArtifact(ContractModel):
-    result_schema_version: Literal["1"] = "1"
-    matrix_uri: ArtifactUri
-    determinant: CanonicalRational
-    method: Literal["FRACTION_FREE_BAREISS"] = "FRACTION_FREE_BAREISS"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: str
-
-
-class MatrixRankArtifact(ContractModel):
-    result_schema_version: Literal["1"] = "1"
-    matrix_uri: ArtifactUri
-    rank: int = Field(ge=0, le=32)
-    pivot_columns: tuple[int, ...] = Field(max_length=32)
-    method: Literal["EXACT_RATIONAL_ROW_REDUCTION"] = "EXACT_RATIONAL_ROW_REDUCTION"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: str
-
-
-class MatrixDeterminantVerificationRequest(ContractModel):
-    determinant_uri: ArtifactUri
-
-
-class MatrixDeterminantVerificationOutput(ContractModel):
-    """Projection of an independent exact determinant recomputation."""
-
-    status: Literal[
-        "VERIFIED_DETERMINANT",
-        "REJECTED",
-        "TIMEOUT",
-        "CANCELLED",
-        "ERROR",
-    ]
-    conclusion: Literal["TRUE", "UNKNOWN"]
-    matrix_uri: ArtifactUri
-    determinant_uri: ArtifactUri
-    witness_uri: ArtifactUri
-    checker_id: CheckerUri
-    verification_record_uri: ArtifactUri | None = None
-    detail: str = Field(min_length=1, max_length=1024)
-
-    @model_validator(mode="after")
-    def bind_verified_projection(self) -> Self:
-        if self.status == "VERIFIED_DETERMINANT":
-            if self.conclusion != "TRUE" or self.verification_record_uri is None:
-                raise ValueError(
-                    "verified determinant output requires TRUE and a verification record"
-                )
-        elif self.conclusion != "UNKNOWN" or self.verification_record_uri is not None:
-            raise ValueError(
-                "non-verified determinant output cannot carry a conclusion or record"
-            )
-        return self
-
-
-class MatrixRankVerificationRequest(ContractModel):
-    rank_uri: ArtifactUri
-
-
-class MatrixRankVerificationOutput(ContractModel):
-    status: Literal["VERIFIED_RANK", "REJECTED", "TIMEOUT", "CANCELLED", "ERROR"]
-    conclusion: Literal["TRUE", "UNKNOWN"]
-    matrix_uri: ArtifactUri
-    rank_uri: ArtifactUri
-    witness_uri: ArtifactUri
-    checker_id: CheckerUri
-    verification_record_uri: ArtifactUri | None = None
-    detail: str = Field(min_length=1, max_length=1024)
-
-    @model_validator(mode="after")
-    def bind_verified_projection(self) -> Self:
-        if self.status == "VERIFIED_RANK":
-            if self.conclusion != "TRUE" or self.verification_record_uri is None:
-                raise ValueError(
-                    "verified rank requires TRUE and a verification record"
-                )
-        elif self.conclusion != "UNKNOWN" or self.verification_record_uri is not None:
-            raise ValueError("non-verified rank cannot carry a conclusion or record")
         return self

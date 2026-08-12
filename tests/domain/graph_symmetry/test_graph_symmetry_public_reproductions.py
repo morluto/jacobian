@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -55,7 +54,6 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
         assert result["automorphism_group_completeness"] == (
             "FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"
         )
-        assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
         verified = graph_symmetry_services.core.capabilities.invoke(
             CapabilityRequest(
@@ -64,4 +62,4 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
             )
         )
         assert verified.output["status"] == "VERIFIED"
-        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+        assert verified.verification_record_uri is not None

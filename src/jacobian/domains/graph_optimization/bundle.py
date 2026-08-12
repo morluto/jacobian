@@ -84,7 +84,6 @@ def build_graph_optimization_bundle() -> DomainBundle:
                     "canonical weight-and-endpoint edge insertion before maintained "
                     "Kruskal selection"
                 ),
-                "assurance": "computed; incomplete search is never a conclusion",
             },
         ),
         provider_runtime=composite_provider_runtime(
@@ -137,14 +136,6 @@ def build_graph_optimization_bundle() -> DomainBundle:
                     "edges, plus an optional wall_seconds budget from 1 to 120."
                 ),
             )
-        ),
-        scope_description="one bounded simple undirected graph",
-        completeness_basis=(
-            "Z3 settled every stronger threshold needed to bind the reported optimum"
-        ),
-        assurance_basis=(
-            "bounded Z3 computation with NetworkX witness predicates; an "
-            "independent checker is still required for VERIFIED assurance"
         ),
         checker_declarations=GRAPH_SEARCH_EXACT_REPLAY_CHECKERS,
     )

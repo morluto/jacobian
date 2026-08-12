@@ -213,7 +213,6 @@ class PolynomialFactorizationResult(ContractModel):
     normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
         "CONTENT_AND_MONIC_IRREDUCIBLES"
     )
-    irreducibility_assurance: Literal["UNVERIFIED"] = "UNVERIFIED"
     product_reconstruction: Literal["EXACT"] = "EXACT"
 
     @model_validator(mode="after")
@@ -306,28 +305,6 @@ class PolynomialGroebnerBasisResult(ContractModel):
         if sum(len(polynomial.polynomial.terms) for polynomial in self.basis) > 1024:
             raise ValueError("Gröbner basis exceeds the aggregate output term limit")
         return self
-
-
-class PolynomialGroebnerBasisObligation(ContractModel):
-    """Independent obligations needed to verify the computed ideal basis."""
-
-    obligation_schema_version: Literal["1"] = "1"
-    candidate_basis_available: Literal[True] = True
-    required_checks: tuple[
-        Literal[
-            "ORIGINAL_GENERATORS_REDUCE_TO_ZERO",
-            "BASIS_ELEMENTS_BELONG_TO_SOURCE_IDEAL",
-            "S_POLYNOMIALS_REDUCE_TO_ZERO",
-            "BASIS_IS_REDUCED_AND_MONIC",
-        ],
-        ...,
-    ] = (
-        "ORIGINAL_GENERATORS_REDUCE_TO_ZERO",
-        "BASIS_ELEMENTS_BELONG_TO_SOURCE_IDEAL",
-        "S_POLYNOMIALS_REDUCE_TO_ZERO",
-        "BASIS_IS_REDUCED_AND_MONIC",
-    )
-    verification_status: Literal["UNVERIFIED"] = "UNVERIFIED"
 
 
 class IntegerPolynomial(ContractModel):
@@ -557,7 +534,6 @@ __all__ = [
     "PolynomialFactorizationResult",
     "PolynomialGcdRequest",
     "PolynomialGcdResult",
-    "PolynomialGroebnerBasisObligation",
     "PolynomialGroebnerBasisRequest",
     "PolynomialGroebnerBasisResult",
     "PolynomialGroebnerBudget",

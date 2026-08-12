@@ -11,9 +11,12 @@ import pytest
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
+    CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
 )
 from jacobian.installation.context import InstallationContext
+from jacobian.portfolio import foundation_installation
+from jacobian.portfolio.checker_installation import CheckerPortfolioInstaller
 from jacobian.portfolio.core_installation import CoreApplicationInstaller
 from jacobian.portfolio.foundation_installation import FoundationInstaller
 from jacobian.portfolio.model import PortfolioPlan
@@ -21,11 +24,10 @@ from jacobian.portfolio.provider_resolution import (
     ProviderAvailabilityResolver,
     ProviderRuntimePlan,
 )
-from jacobian.portfolio.reference_installation import ReferenceLeanInstaller
 from jacobian.portfolio.resource_installation import ResourceCapabilityInstaller
 from jacobian.portfolio.result import PortfolioInstallation
 from jacobian.runtime.config import CheckerAuthorityMode
-from jacobian.runtime.services import ApplicationServices, CoreServices
+from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
 def _unavailable_runtime(provider: str) -> CapabilityProviderRuntime:
@@ -39,29 +41,48 @@ def _unavailable_runtime(provider: str) -> CapabilityProviderRuntime:
     )
 
 
-def _unavailable_provider_plan() -> ProviderRuntimePlan:
+def _available_runtime(provider: str) -> CapabilityProviderRuntime:
+    return CapabilityProviderRuntime(
+        provider=provider,
+        availability=CapabilityProviderAvailability.AVAILABLE,
+        version="1",
+        digest="sha256:" + "0" * 64,
+        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        platform="test-platform",
+        install_tier=CapabilityInstallTier.T0,
+        license_id="MIT",
+    )
+
+
+def _provider_plan_with_unavailable_external_solvers() -> ProviderRuntimePlan:
     return ProviderRuntimePlan(
         cadical=_unavailable_runtime("cadical"),
         carcara=_unavailable_runtime("carcara"),
-        cvc5=_unavailable_runtime("cvc5"),
+        cvc5=_available_runtime("cvc5"),
         drat_trim=_unavailable_runtime("drat-trim"),
-        python_flint=_unavailable_runtime("python-flint"),
-        python_flint_hnf=_unavailable_runtime("python-flint-hnf"),
-        sympy_polynomial_normalization=_unavailable_runtime(
+        sympy_polynomial_normalization=_available_runtime(
             "sympy-polynomial-normalization"
         ),
     )
 
 
-def test_foundation_optional_provider_phase_skips_unavailable_solvers() -> None:
+def test_foundation_solver_phase_skips_unavailable_external_solver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     result = PortfolioInstallation()
+    registered: list[object] = []
+    context = SimpleNamespace(register_capability=registered.append)
+    adapter = object()
+    monkeypatch.setattr(
+        foundation_installation,
+        "install_cvc5_capability",
+        lambda _smt, _runtime: adapter,
+    )
 
-    FoundationInstaller(
-        cast(InstallationContext, object())
-    ).install_optional_provider_components(
-        cast(CoreServices, object()),
+    FoundationInstaller(cast(InstallationContext, context)).install_solver_components(
+        cast(CoreServices, SimpleNamespace(smt=object())),
         result,
-        _unavailable_provider_plan(),
+        _provider_plan_with_unavailable_external_solvers(),
     )
 
     assert result.cadical_runtime is not None
@@ -69,17 +90,14 @@ def test_foundation_optional_provider_phase_skips_unavailable_solvers() -> None:
         result.cadical_runtime.availability
         is CapabilityProviderAvailability.UNAVAILABLE
     )
-    assert result.cvc5_runtime is not None
-    assert (
-        result.cvc5_runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
-    )
+    assert registered == [adapter]
 
 
 def test_core_domain_verification_phase_accepts_empty_bundle_result() -> None:
     result = PortfolioInstallation()
     CoreApplicationInstaller(
         cast(InstallationContext, object())
-    ).install_domain_verification(result, PortfolioPlan(domain_bundles=()))
+    ).install_domain_verification(result, PortfolioPlan(components=()))
 
     assert result.exact_domain_checkers is None
 
@@ -104,31 +122,22 @@ class _UnauthorizedContext:
         self.registered.append(adapter)
 
 
-def test_reference_phase_derives_authority_from_its_context() -> None:
-    installed: dict[str, object] = {}
-
-    class _ReferenceInstaller:
-        def install_all(self, *, authorize_checker: bool = True) -> dict[str, object]:
-            installed["authorize_checker"] = authorize_checker
-            return {"graph_paths": object()}
-
+def test_checker_phase_derives_authority_from_its_context() -> None:
     context = _UnauthorizedContext()
     application = cast(
-        ApplicationServices,
+        RuntimeServices,
         SimpleNamespace(
-            core=SimpleNamespace(plugins=object()),
-            reference_installer=_ReferenceInstaller(),
+            core=SimpleNamespace(),
         ),
     )
     result = PortfolioInstallation()
 
-    ReferenceLeanInstaller(
+    CheckerPortfolioInstaller(
         cast(InstallationContext, context),
         cast(ProviderAvailabilityResolver, object()),
     ).install(application, result)
 
-    assert installed["authorize_checker"] is False
-    assert set(result.references) == {"graph_paths"}
+    assert result.polytope_checkers is None
     assert result.lean_checkers == {}
     assert context.registered == []
 

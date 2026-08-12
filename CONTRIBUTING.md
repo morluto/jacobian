@@ -24,8 +24,8 @@ make check-changed BASE=origin/main
 ```
 
 Then open a pull request. `make setup PROFILE=core` installs the locked
-development environment and requires only the core provider surface (NetworkX,
-SymPy, and Z3). `make check-changed BASE=origin/main`
+development environment with the complete maintained Python backend stack.
+`make check-changed BASE=origin/main`
 runs format, type-checking, and the exact tests selected from your changed
 paths against that base ref. Open the PR once it is green, and add any
 explicitly relevant specialist validation called out below.
@@ -74,8 +74,7 @@ classification detail live in the
 Jacobian uses Python 3.12 and the uv release pinned in [`.uv-version`](.uv-version).
 
 ```sh
-make setup PROFILE=core          # locked dev environment; core readiness
-make setup PROFILE=full-python    # also require every maintained Python extra
+make setup PROFILE=core          # locked dev environment and Python backends
 ```
 
 `make check` runs Ruff, mypy, and the unit lane; it is a useful local handoff.

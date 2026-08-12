@@ -30,7 +30,6 @@ def build_sequence_bundle() -> DomainBundle:
                 "description": "Finite sequences of canonical integers with exact operations",
                 "element_type": "canonical integer",
                 "max_sequence_length": 256,
-                "assurance": "computed; no independent checker",
             },
         ),
         provider_runtime=jacobian_provider_runtime(
@@ -52,13 +51,5 @@ def build_sequence_bundle() -> DomainBundle:
                 message="Input does not satisfy the finite-integer-sequence contract.",
                 hint="Use canonical integer strings and inspect the operation's sequence schema.",
             )
-        ),
-        scope_description="the complete supplied finite integer sequence input",
-        completeness_basis=(
-            "exact standard-library computation covered the supplied finite input; "
-            "not independently verified"
-        ),
-        assurance_basis=(
-            "exact Python standard-library sequence operations; no independent checker invoked"
         ),
     )

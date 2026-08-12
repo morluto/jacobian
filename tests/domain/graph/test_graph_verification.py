@@ -10,7 +10,6 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -35,34 +34,35 @@ def graph_verification_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     graph_verification_services: DomainTestServices,
 ) -> None:
+    producer_input = {
+        "graph": {
+            "vertices": ["a", "b", "c", "d"],
+            "edges": [
+                ["a", "b"],
+                ["b", "c"],
+                ["c", "d"],
+                ["d", "a"],
+            ],
+        },
+        "resource_budget": {
+            "wall_seconds": 5,
+            "max_solver_calls": 33,
+            "max_order": 16,
+        },
+    }
     computed = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.induced_tree.maximum.compute",
-            input={
-                "graph": {
-                    "vertices": ["a", "b", "c", "d"],
-                    "edges": [
-                        ["a", "b"],
-                        ["b", "c"],
-                        ["c", "d"],
-                        ["d", "a"],
-                    ],
-                },
-                "resource_budget": {
-                    "wall_seconds": 5,
-                    "max_solver_calls": 33,
-                    "max_order": 16,
-                },
-            },
+            input=producer_input,
         )
     )
-    assert computed.output["optimum_value"] == 3
-    result_uri = computed.artifact_uris[1]
+    candidate = computed.output["result"]
+    assert candidate["optimum_value"] == 3
 
     verified = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.induced_tree.maximum.verify",
-            input={"result_uri": result_uri},
+            input={"input": producer_input, "candidate": candidate},
         )
     )
 
@@ -70,15 +70,13 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == "graph.induced_tree.maximum.compute"
     assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.execution.detail == (
         "independent finite-subset exhaustive replay accepted "
         "graph.induced_tree.maximum.compute"
     )
     assert "FLINT" not in verified.execution.detail
 
-    result_artifact = graph_verification_services.core.store.get(result_uri)
-    false_payload = dict(result_artifact.payload)
+    false_payload = dict(candidate)
     false_payload.update(
         {
             "optimum_value": 4,
@@ -88,17 +86,10 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
             "witness_vertices": ["a", "b", "c", "d"],
         }
     )
-    false_result = graph_verification_services.core.artifacts.put(
-        schema_uri=result_artifact.manifest.schema_uri,
-        semantics_uri=result_artifact.manifest.semantics_uri,
-        parents=result_artifact.manifest.parents,
-        payload=false_payload,
-        summary="adversarial false maximum induced-tree result",
-    )
     rejected = graph_verification_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.induced_tree.maximum.verify",
-            input={"result_uri": false_result.artifact_uri},
+            input={"input": producer_input, "candidate": false_payload},
         )
     )
     assert rejected.execution.status is ExecutionStatus.COMPLETED
@@ -140,7 +131,7 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     assert verified.output["operation_id"] == (
         "graph.invariant.maximum_matching.compute"
     )
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
     assert verified.execution.detail == (
         "independent Tutte-Berge barrier replay accepted "
         "graph.invariant.maximum_matching.compute"
@@ -208,12 +199,13 @@ def test_maximum_matching_verifier_replays_a_64_vertex_certificate(
     )
 
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
-@pytest.mark.parametrize(
-    ("producer_id", "verifier_id", "result_field", "expected"),
-    (
+def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
+    graph_verification_services: DomainTestServices,
+) -> None:
+    cases = (
         (
             "graph.invariant.diameter.compute",
             "graph.invariant.diameter.verify",
@@ -226,63 +218,60 @@ def test_maximum_matching_verifier_replays_a_64_vertex_certificate(
             "radius",
             2,
         ),
-    ),
-)
-def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
-    graph_verification_services: DomainTestServices,
-    producer_id: str,
-    verifier_id: str,
-    result_field: str,
-    expected: int,
-) -> None:
+    )
     producer_input = {
         "graph": {
             "vertices": ["a", "b", "c", "d"],
             "edges": [["a", "b"], ["b", "c"], ["c", "d"]],
         }
     }
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer_id,
-            input=producer_input,
+    for producer_id, verifier_id, result_field, expected in cases:
+        computed = graph_verification_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=producer_id,
+                input=producer_input,
+            )
         )
-    )
 
-    verified = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
-            input={"input": producer_input, "candidate": computed.output["result"]},
+        verified = graph_verification_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={
+                    "input": producer_input,
+                    "candidate": computed.output["result"],
+                },
+            )
         )
-    )
 
-    assert computed.output["result"][result_field] == expected
-    assert verified.execution.status is ExecutionStatus.COMPLETED
-    assert verified.output["status"] == "VERIFIED"
-    assert verified.output["operation_id"] == producer_id
-    assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert verified.output["verification_record_uri"] in verified.artifact_uris
-    provider_runtime = next(
-        descriptor.provider_runtime
-        for descriptor in graph_verification_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == verifier_id
-    )
-    assert provider_runtime is not None
-    assert provider_runtime.provider == "jacobian.graph-exact-checkers"
-
-    false_candidate = deepcopy(computed.output["result"])
-    false_candidate[result_field] = 0
-    rejected = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
-            input={"input": producer_input, "candidate": false_candidate},
+        assert computed.output["result"][result_field] == expected, producer_id
+        assert verified.execution.status is ExecutionStatus.COMPLETED, producer_id
+        assert verified.output["status"] == "VERIFIED", producer_id
+        assert verified.output["operation_id"] == producer_id, producer_id
+        assert verified.output["verification_record_uri"] is not None, producer_id
+        assert verified.output["verification_record_uri"] in verified.artifact_uris, (
+            producer_id
         )
-    )
+        provider_runtime = next(
+            descriptor.provider_runtime
+            for descriptor in graph_verification_services.core.capabilities.catalog().capabilities
+            if descriptor.capability_id == verifier_id
+        )
+        assert provider_runtime is not None, producer_id
+        assert provider_runtime.provider == "jacobian.graph-exact-checkers", producer_id
 
-    assert rejected.execution.status is ExecutionStatus.COMPLETED
-    assert rejected.output["status"] == "REJECTED"
-    assert rejected.output["conclusion"] == "UNKNOWN"
-    assert rejected.output["verification_record_uri"] is None
+        false_candidate = deepcopy(computed.output["result"])
+        false_candidate[result_field] = 0
+        rejected = graph_verification_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=verifier_id,
+                input={"input": producer_input, "candidate": false_candidate},
+            )
+        )
+
+        assert rejected.execution.status is ExecutionStatus.COMPLETED, producer_id
+        assert rejected.output["status"] == "REJECTED", producer_id
+        assert rejected.output["conclusion"] == "UNKNOWN", producer_id
+        assert rejected.output["verification_record_uri"] is None, producer_id
 
 
 def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
@@ -313,12 +302,10 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
         )
     )
 
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == "graph.distance_matrix.compute"
     assert verified.output["verification_record_uri"] is not None
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.output["verification_record_uri"] in verified.artifact_uris
     assert len(verified.artifact_uris) == 2
 
@@ -371,4 +358,3 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is not CapabilityAssuranceLevel.VERIFIED

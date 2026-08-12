@@ -8,8 +8,8 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
-from jacobian.contracts.results import ContractModel, Execution
+from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest, ValueUri
+from jacobian.contracts.results import ContractModel, Execution, ExecutionStatus
 
 CapabilityId = Annotated[
     str,
@@ -28,7 +28,6 @@ class CapabilityInputKind(StrEnum):
     STRUCTURED_REQUEST = "STRUCTURED_REQUEST"
     FORMAL_PROPOSITION = "FORMAL_PROPOSITION"
     TYPED_ARTIFACT = "TYPED_ARTIFACT"
-    NATURAL_LANGUAGE_PROOF = "NATURAL_LANGUAGE_PROOF"
 
 
 def _validate_descriptor_input_contract(
@@ -65,10 +64,17 @@ class CapabilityInvocationExample(ContractModel):
         return self
 
 
+class CapabilityValuePort(ContractModel):
+    """One named whole-value composition port."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
+    value_type: str = Field(min_length=1, max_length=128)
+
+
 class CapabilityDiscoveryRequest(ContractModel):
     """Compact installed-portfolio search, independent of any transport."""
 
-    query: str | None = Field(default=None, min_length=1, max_length=512)
+    query: str = Field(min_length=1, max_length=512)
     domain: str | None = Field(
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
@@ -80,7 +86,7 @@ class CapabilityDiscoveryRequest(ContractModel):
 
     @model_validator(mode="after")
     def reject_blank_filters(self) -> Self:
-        if self.query is not None and not self.query.strip():
+        if not self.query.strip():
             raise ValueError("query must contain a non-whitespace character")
         if self.domain is not None and not self.domain.strip():
             raise ValueError("domain must contain a non-whitespace character")
@@ -96,64 +102,6 @@ class CapabilityDiscoveryRequest(ContractModel):
         return self
 
 
-class CapabilityDiscoveryReformulateQueryRecoveryPath(ContractModel):
-    """Offer a differently worded query without prescribing one."""
-
-    action: Literal["reformulate_query"]
-    tool: Literal["math.find"] = "math.find"
-    change: Literal["Use different or broader mathematical language for query."] = (
-        "Use different or broader mathematical language for query."
-    )
-
-
-class CapabilityDiscoveryRemoveUnknownDomainRecoveryPath(ContractModel):
-    """Expose the rejected domain filter as one removable constraint."""
-
-    action: Literal["remove_unknown_domain_filter"]
-    tool: Literal["math.find"] = "math.find"
-    rejected_domain: str = Field(
-        pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
-    )
-    change: Literal["Retry without the unrecognized domain filter."] = (
-        "Retry without the unrecognized domain filter."
-    )
-
-
-class CapabilityDiscoveryRemoveFiltersRecoveryPath(ContractModel):
-    """Offer unfiltered discovery without ranking it above other choices."""
-
-    action: Literal["remove_filters"]
-    tool: Literal["math.find"] = "math.find"
-    change: Literal["Remove domain, input_kind, or artifact_type filters."] = (
-        "Remove domain, input_kind, or artifact_type filters."
-    )
-
-
-class CapabilityDiscoveryBrowseRecoveryPath(ContractModel):
-    """Expose the existing empty-query browse operation."""
-
-    action: Literal["browse"]
-    tool: Literal["math.find"] = "math.find"
-    arguments: dict[str, Any] = Field(default_factory=dict, max_length=0)
-
-
-class CapabilityDiscoveryInspectCatalogRecoveryPath(ContractModel):
-    """Expose the complete catalog resource as an alternative access path."""
-
-    action: Literal["inspect_catalog"]
-    resource_uri: Literal["capability://catalog"] = "capability://catalog"
-
-
-CapabilityDiscoveryRecoveryPath = Annotated[
-    CapabilityDiscoveryReformulateQueryRecoveryPath
-    | CapabilityDiscoveryRemoveUnknownDomainRecoveryPath
-    | CapabilityDiscoveryRemoveFiltersRecoveryPath
-    | CapabilityDiscoveryBrowseRecoveryPath
-    | CapabilityDiscoveryInspectCatalogRecoveryPath,
-    Field(discriminator="action"),
-]
-
-
 class CapabilityDiscoveryMatch(ContractModel):
     """One compact installed outcome returned by capability discovery."""
 
@@ -161,45 +109,30 @@ class CapabilityDiscoveryMatch(ContractModel):
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=512)
     tags: tuple[str, ...] = ()
-    matched_on: tuple[str, ...] = ()
-    matched_terms: tuple[str, ...] = ()
-    has_invocation_examples: bool = False
     relevance_score: int = Field(default=0, ge=0, strict=True)
-    query_term_count: int = Field(default=0, ge=0, strict=True)
-    query_coverage_milli: int = Field(default=0, ge=0, le=1000, strict=True)
-    lexical_fit: Literal["STRONG_CANDIDATE", "WEAK_LEXICAL_MATCH"] = (
-        "WEAK_LEXICAL_MATCH"
-    )
+    applicability: Literal[
+        "INCOMPATIBLE",
+        "NEEDS_MORE_TYPED_REQUIREMENTS",
+    ]
+    applicability_code: Literal[
+        "FULL_REQUEST_REQUIRED",
+        "INPUT_KIND_MISMATCH",
+        "ARTIFACT_TYPE_MISMATCH",
+    ]
 
 
 class CapabilityDiscoveryResult(ContractModel):
     """Deterministically ranked compact installed outcomes."""
 
     discovery_version: Literal["1"] = "1"
-    query: str | None = None
+    query: str
     domain: str | None = None
-    domain_filter_status: Literal["UNFILTERED", "MATCHED", "UNKNOWN"] = "UNFILTERED"
-    domain_filter_basis: str = Field(
-        default="No domain filter was supplied.",
-        min_length=1,
-        max_length=512,
-    )
-    resolved_input_kind: CapabilityInputKind | None = None
+    input_kind: CapabilityInputKind | None = None
     artifact_type: ArtifactUri | None = None
-    routing_status: Literal["UNFILTERED", "ROUTES_FOUND", "NO_ROUTE"] = "UNFILTERED"
-    routing_basis: str = Field(min_length=1, max_length=512)
     matches: tuple[CapabilityDiscoveryMatch, ...]
     total_matches: int = Field(ge=0, strict=True)
     truncated: bool
     next_cursor: CapabilityId | None = None
-    available_domains: tuple[str, ...] = ()
-    portfolio_fit: Literal[
-        "UNFILTERED",
-        "STRONG_CANDIDATES_FOUND",
-        "ONLY_WEAK_LEXICAL_MATCHES",
-        "NO_LEXICAL_MATCHES",
-    ] = "UNFILTERED"
-    portfolio_fit_basis: str = Field(min_length=1, max_length=512)
 
     @model_validator(mode="after")
     def bind_page_metadata(self) -> Self:
@@ -214,8 +147,6 @@ class CapabilityDiscoveryResult(ContractModel):
             not capability_ids or self.next_cursor != capability_ids[-1]
         ):
             raise ValueError("next_cursor must identify the final returned match")
-        if tuple(sorted(set(self.available_domains))) != self.available_domains:
-            raise ValueError("available domains must be unique and sorted")
         return self
 
 
@@ -387,65 +318,6 @@ class CapabilityProviderRuntime(ContractModel):
         return self
 
 
-class CapabilityAssuranceLevel(StrEnum):
-    """Coarse model-facing assurance without hiding the detailed result record."""
-
-    HEURISTIC = "HEURISTIC"
-    COMPUTED = "COMPUTED"
-    VERIFIED = "VERIFIED"
-
-
-class CapabilityRelationshipStatus(StrEnum):
-    """Whether a returned mathematical relationship has checker backing."""
-
-    PROPOSED = "PROPOSED"
-    VERIFIED = "VERIFIED"
-
-
-class CapabilityObligationStatus(StrEnum):
-    """Lifecycle of a proof obligation created by a capability."""
-
-    OPEN = "OPEN"
-    DISCHARGED = "DISCHARGED"
-
-
-class CapabilityCompletenessStatus(StrEnum):
-    """How much of the explicitly declared scope an operation covered."""
-
-    NOT_APPLICABLE = "NOT_APPLICABLE"
-    UNKNOWN = "UNKNOWN"
-    PARTIAL = "PARTIAL"
-    COMPLETE = "COMPLETE"
-
-
-class CapabilityCatalogRelationshipKind(StrEnum):
-    """Factual installed-capability relationship exposed by the catalog."""
-
-    INDEPENDENT_VERIFIER = "INDEPENDENT_VERIFIER"
-    VERIFIABLE_RESULT_PRODUCER = "VERIFIABLE_RESULT_PRODUCER"
-
-
-class CapabilityCatalogRelationship(ContractModel):
-    """One typed navigation edge to another installed capability."""
-
-    capability_id: CapabilityId
-    kind: CapabilityCatalogRelationshipKind
-    relationship: str = Field(min_length=1, max_length=256)
-
-
-class CapabilityCatalogRelationshipRegistration(ContractModel):
-    """One authoritative directed relationship before catalog projection."""
-
-    source_capability_id: CapabilityId
-    related_capability: CapabilityCatalogRelationship
-
-    @model_validator(mode="after")
-    def reject_self_relationship(self) -> Self:
-        if self.source_capability_id == self.related_capability.capability_id:
-            raise ValueError("a capability cannot relate to itself")
-        return self
-
-
 class CapabilityDescriptor(ContractModel):
     """One installed operation advertised by an operator-installed adapter."""
 
@@ -465,8 +337,8 @@ class CapabilityDescriptor(ContractModel):
     )
     accepted_artifact_types: tuple[ArtifactUri, ...] = ()
     produced_artifact_types: tuple[ArtifactUri, ...] = ()
-    related_capabilities: tuple[CapabilityCatalogRelationship, ...] = ()
-    discovery_visible: bool = True
+    input_ports: tuple[CapabilityValuePort, ...] = ()
+    output_ports: tuple[CapabilityValuePort, ...] = ()
     invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
 
     @model_validator(mode="after")
@@ -477,11 +349,13 @@ class CapabilityDescriptor(ContractModel):
         )
         if len(set(self.produced_artifact_types)) != len(self.produced_artifact_types):
             raise ValueError("produced artifact types must be unique")
-        related_ids = [item.capability_id for item in self.related_capabilities]
-        if self.capability_id in related_ids:
-            raise ValueError("a capability cannot relate to itself")
-        if len(set(related_ids)) != len(related_ids):
-            raise ValueError("related capability IDs must be unique")
+        for ports, label in (
+            (self.input_ports, "input"),
+            (self.output_ports, "output"),
+        ):
+            names = tuple(port.name for port in ports)
+            if len(names) != len(set(names)):
+                raise ValueError(f"{label} port names must be unique")
         if len({example.name for example in self.invocation_examples}) != len(
             self.invocation_examples
         ):
@@ -500,124 +374,7 @@ class CapabilityRequest(ContractModel):
     request_version: Literal["1"] = "1"
     capability_id: CapabilityId
     input: dict[str, Any]
-
-
-class CapabilityAssurance(ContractModel):
-    level: CapabilityAssuranceLevel
-    basis: str = Field(min_length=1, max_length=1024)
-    verification_record_uri: ArtifactUri | None = None
-
-    @model_validator(mode="after")
-    def bind_verified_assurance(self) -> Self:
-        if (
-            self.level is CapabilityAssuranceLevel.VERIFIED
-            and self.verification_record_uri is None
-        ):
-            raise ValueError("verified capability assurance requires a record URI")
-        if (
-            self.level is not CapabilityAssuranceLevel.VERIFIED
-            and self.verification_record_uri is not None
-        ):
-            raise ValueError(
-                "only verified capability assurance may carry a record URI"
-            )
-        return self
-
-
-class CapabilityScope(ContractModel):
-    """Domain-owned scope parameters, optionally materialized as an artifact."""
-
-    description: str | None = Field(default=None, min_length=1, max_length=512)
-    parameters: dict[str, Any] = Field(default_factory=dict)
-    artifact_uri: ArtifactUri | None = None
-
-    @model_validator(mode="after")
-    def require_explicit_scope(self) -> Self:
-        canonicalize_json(self.parameters)
-        if not self.parameters and self.artifact_uri is None:
-            raise ValueError("scope requires parameters or an artifact URI")
-        return self
-
-
-class CapabilityCompleteness(ContractModel):
-    """Coverage claim over the result's exact declared scope."""
-
-    status: CapabilityCompletenessStatus = CapabilityCompletenessStatus.NOT_APPLICABLE
-    basis: str = Field(min_length=1, max_length=1024)
-    assurance_level: CapabilityAssuranceLevel = CapabilityAssuranceLevel.HEURISTIC
-    verification_record_uri: ArtifactUri | None = None
-
-    @model_validator(mode="after")
-    def bind_verified_completeness(self) -> Self:
-        if (
-            self.assurance_level is CapabilityAssuranceLevel.VERIFIED
-            and self.verification_record_uri is None
-        ):
-            raise ValueError("verified completeness requires a record URI")
-        if (
-            self.assurance_level is not CapabilityAssuranceLevel.VERIFIED
-            and self.verification_record_uri is not None
-        ):
-            raise ValueError("only verified completeness may carry a record URI")
-        if (
-            self.status is not CapabilityCompletenessStatus.COMPLETE
-            and self.assurance_level is CapabilityAssuranceLevel.VERIFIED
-        ):
-            raise ValueError("only complete coverage may be independently verified")
-        return self
-
-
-class CapabilityRelationship(ContractModel):
-    """A domain-owned relationship between exact immutable artifacts."""
-
-    relation_id: CapabilityId
-    source_artifact_uris: tuple[ArtifactUri, ...]
-    target_artifact_uris: tuple[ArtifactUri, ...]
-    status: CapabilityRelationshipStatus = CapabilityRelationshipStatus.PROPOSED
-    obligation_uris: tuple[ArtifactUri, ...] = ()
-    verification_record_uri: ArtifactUri | None = None
-
-    @model_validator(mode="after")
-    def require_bound_endpoints(self) -> Self:
-        if not self.source_artifact_uris or not self.target_artifact_uris:
-            raise ValueError("relationship requires source and target artifacts")
-        if len(set(self.source_artifact_uris)) != len(self.source_artifact_uris):
-            raise ValueError("relationship source artifacts must be unique")
-        if len(set(self.target_artifact_uris)) != len(self.target_artifact_uris):
-            raise ValueError("relationship target artifacts must be unique")
-        if (
-            self.status is CapabilityRelationshipStatus.VERIFIED
-            and self.verification_record_uri is None
-        ):
-            raise ValueError("verified relationship requires a record URI")
-        if (
-            self.status is CapabilityRelationshipStatus.PROPOSED
-            and self.verification_record_uri is not None
-        ):
-            raise ValueError("proposed relationship cannot carry a record URI")
-        return self
-
-
-class CapabilityObligation(ContractModel):
-    """One materialized proof obligation and its checker-backed lifecycle."""
-
-    obligation_uri: ArtifactUri
-    status: CapabilityObligationStatus = CapabilityObligationStatus.OPEN
-    verification_record_uri: ArtifactUri | None = None
-
-    @model_validator(mode="after")
-    def require_record_for_discharge(self) -> Self:
-        if (
-            self.status is CapabilityObligationStatus.DISCHARGED
-            and self.verification_record_uri is None
-        ):
-            raise ValueError("discharged obligation requires a record URI")
-        if (
-            self.status is CapabilityObligationStatus.OPEN
-            and self.verification_record_uri is not None
-        ):
-            raise ValueError("open obligation cannot carry a record URI")
-        return self
+    inputs: dict[str, ValueUri] = Field(default_factory=dict)
 
 
 class CapabilityDiagnostic(ContractModel):
@@ -635,74 +392,19 @@ class CapabilityDiagnostic(ContractModel):
 
 
 def _validate_capability_execution_lane(
-    execution_status: str,
+    execution_status: ExecutionStatus,
     diagnostics: tuple[CapabilityDiagnostic, ...],
-    assurance_level: CapabilityAssuranceLevel,
-    completeness_status: CapabilityCompletenessStatus,
-    scope: CapabilityScope | None,
+    verification_record_uri: ArtifactUri | None,
 ) -> None:
-    if execution_status == "COMPLETED" and diagnostics:
+    if execution_status is ExecutionStatus.COMPLETED and diagnostics:
         raise ValueError("completed capability execution cannot carry diagnostics")
     if (
-        execution_status != "COMPLETED"
-        and assurance_level is CapabilityAssuranceLevel.VERIFIED
+        execution_status is not ExecutionStatus.COMPLETED
+        and verification_record_uri is not None
     ):
-        raise ValueError("failed capability execution cannot be verified")
-    if completeness_status is CapabilityCompletenessStatus.COMPLETE and scope is None:
-        raise ValueError("complete result requires explicit scope")
-    if (
-        execution_status != "COMPLETED"
-        and completeness_status is CapabilityCompletenessStatus.COMPLETE
-    ):
-        raise ValueError("failed execution cannot be complete")
-
-
-def _validate_verified_relationships(
-    relationships: tuple[CapabilityRelationship, ...],
-    assurance_level: CapabilityAssuranceLevel,
-    record_uri: ArtifactUri | None,
-) -> None:
-    for relationship in relationships:
-        if relationship.status is CapabilityRelationshipStatus.VERIFIED:
-            if assurance_level is not CapabilityAssuranceLevel.VERIFIED:
-                raise ValueError(
-                    "verified relationship requires verified result assurance"
-                )
-            if relationship.verification_record_uri != record_uri:
-                raise ValueError(
-                    "verified relationship must use the result verification record"
-                )
-
-
-def _validate_discharged_obligations(
-    obligations: tuple[CapabilityObligation, ...],
-    assurance_level: CapabilityAssuranceLevel,
-    record_uri: ArtifactUri | None,
-) -> None:
-    for obligation in obligations:
-        if obligation.status is CapabilityObligationStatus.DISCHARGED:
-            if assurance_level is not CapabilityAssuranceLevel.VERIFIED:
-                raise ValueError(
-                    "discharged obligation requires verified result assurance"
-                )
-            if obligation.verification_record_uri != record_uri:
-                raise ValueError(
-                    "discharged obligation must use the result verification record"
-                )
-
-
-def _validate_verified_completeness(
-    completeness: CapabilityCompleteness,
-    assurance_level: CapabilityAssuranceLevel,
-    record_uri: ArtifactUri | None,
-) -> None:
-    if completeness.assurance_level is CapabilityAssuranceLevel.VERIFIED:
-        if assurance_level is not CapabilityAssuranceLevel.VERIFIED:
-            raise ValueError("verified completeness requires verified result assurance")
-        if completeness.verification_record_uri != record_uri:
-            raise ValueError(
-                "verified completeness must use the result verification record"
-            )
+        raise ValueError(
+            "failed capability execution cannot carry a verification record"
+        )
 
 
 class CapabilityResult(ContractModel):
@@ -713,47 +415,22 @@ class CapabilityResult(ContractModel):
     capability_version: str = Field(min_length=1, max_length=64)
     execution: Execution
     output: dict[str, Any] = Field(default_factory=dict)
-    scope: CapabilityScope | None = None
-    completeness: CapabilityCompleteness = Field(
-        default_factory=lambda: CapabilityCompleteness(
-            basis="the operation makes no completeness claim",
-        )
-    )
-    relationships: tuple[CapabilityRelationship, ...] = ()
-    obligations: tuple[CapabilityObligation, ...] = ()
     diagnostics: tuple[CapabilityDiagnostic, ...] = ()
-    assurance: CapabilityAssurance
+    verification_record_uri: ArtifactUri | None = None
     artifact_uris: tuple[ArtifactUri, ...] = ()
-    provider: str | None = Field(default=None, min_length=1, max_length=128)
-    provider_digest: Sha256Digest | None = None
 
     @model_validator(mode="after")
     def enforce_lane_and_canonical_output(self) -> Self:
         canonicalize_json(self.output)
         _validate_capability_execution_lane(
-            self.execution.status.value,
+            self.execution.status,
             self.diagnostics,
-            self.assurance.level,
-            self.completeness.status,
-            self.scope,
+            self.verification_record_uri,
         )
-        record_uri = self.assurance.verification_record_uri
-        _validate_verified_relationships(
-            self.relationships,
-            self.assurance.level,
-            record_uri,
-        )
-        _validate_discharged_obligations(
-            self.obligations,
-            self.assurance.level,
-            record_uri,
-        )
-        _validate_verified_completeness(
-            self.completeness,
-            self.assurance.level,
-            record_uri,
-        )
-        if record_uri is not None and record_uri not in self.artifact_uris:
+        if (
+            self.verification_record_uri is not None
+            and self.verification_record_uri not in self.artifact_uris
+        ):
             raise ValueError(
                 "the verification record must be included in artifact_uris"
             )

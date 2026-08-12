@@ -18,11 +18,10 @@ from jacobian.contracts.graph_optimization import (
     GraphMstCycleCheck,
     GraphMstOptimalityCertificate,
 )
+from jacobian.operation_bindings import InstalledOperation, inline_operation
 from jacobian.operations import (
-    ComputedNotApplicable,
-    ComputedOperation,
-    ComputedOutcome,
-    ComputedSuccess,
+    OperationRefusalError,
+    OperationSpec,
 )
 
 if TYPE_CHECKING:
@@ -157,11 +156,11 @@ def compute_minimum_spanning_tree(
 
 def _execute(
     request: GraphMinimumSpanningTreeRequest,
-) -> ComputedOutcome[GraphMinimumSpanningTreeResult]:
+) -> GraphMinimumSpanningTreeResult:
     import networkx as nx
 
     try:
-        return ComputedSuccess(compute_minimum_spanning_tree(request))
+        return compute_minimum_spanning_tree(request)
     except (
         ArithmeticError,
         nx.NetworkXError,
@@ -169,7 +168,7 @@ def _execute(
         TypeError,
         ValueError,
     ) as exc:
-        return ComputedNotApplicable(
+        raise OperationRefusalError(
             CapabilityDiagnostic(
                 code="MINIMUM_SPANNING_TREE_NOT_APPLICABLE",
                 stage="minimum_spanning_tree_computation",
@@ -179,73 +178,74 @@ def _execute(
                     "rational edge weights."
                 ),
             )
-        )
+        ) from exc
 
 
-MINIMUM_SPANNING_TREE_CAPABILITY: ComputedOperation[
+MINIMUM_SPANNING_TREE_CAPABILITY: InstalledOperation[
     GraphMinimumSpanningTreeRequest,
     GraphMinimumSpanningTreeResult,
-] = ComputedOperation(
-    capability_id="graph.spanning_tree.minimum.compute",
-    title="Exact weighted minimum spanning tree",
-    description=(
-        "Compute one deterministic minimum-total-weight spanning tree of a bounded "
-        "labelled simple graph over exact rational edge weights. Return the selected "
-        "weighted edges, exact total, connected components, and all fundamental-cycle "
-        "non-improvement checks; disconnected or empty inputs return a complete "
-        "NO_SPANNING_TREE outcome."
-    ),
-    request_model=GraphMinimumSpanningTreeRequest,
-    result_model=GraphMinimumSpanningTreeResult,
-    implementation=_execute,
-    relation_id="graph.spanning_tree.minimum.relation",
-    tags=(
-        "graph",
-        "weighted-graph",
-        "minimum-spanning-tree",
-        "mst",
-        "spanning-tree",
-        "minimum-weight",
-        "exact-rational",
-        "cycle-property",
-    ),
-    invalid_request=_INVALID_REQUEST,
-    invocation_examples=(
-        CapabilityInvocationExample(
-            name="four_vertex_weighted_graph",
-            description=(
-                "Compute an exact minimum spanning tree and its cycle checks."
-            ),
-            input={
-                "graph": {
-                    "vertices": ["a", "b", "c", "d"],
-                    "edges": [
-                        {
-                            "endpoints": ["a", "b"],
-                            "weight": {"num": "1", "den": "1"},
-                        },
-                        {
-                            "endpoints": ["b", "c"],
-                            "weight": {"num": "2", "den": "1"},
-                        },
-                        {
-                            "endpoints": ["c", "d"],
-                            "weight": {"num": "3", "den": "1"},
-                        },
-                        {
-                            "endpoints": ["a", "d"],
-                            "weight": {"num": "5", "den": "1"},
-                        },
-                        {
-                            "endpoints": ["a", "c"],
-                            "weight": {"num": "7", "den": "2"},
-                        },
-                    ],
-                }
-            },
+] = inline_operation(
+    OperationSpec(
+        operation_id="graph.spanning_tree.minimum.compute",
+        version="4",
+        title="Exact weighted minimum spanning tree",
+        description=(
+            "Compute one deterministic minimum-total-weight spanning tree of a bounded "
+            "labelled simple graph over exact rational edge weights. Return the selected "
+            "weighted edges, exact total, connected components, and all fundamental-cycle "
+            "non-improvement checks; disconnected or empty inputs return a complete "
+            "NO_SPANNING_TREE outcome."
         ),
-    ),
-    version="4",
+        request_type=GraphMinimumSpanningTreeRequest,
+        result_type=GraphMinimumSpanningTreeResult,
+        execute=_execute,
+        tags=(
+            "graph",
+            "weighted-graph",
+            "minimum-spanning-tree",
+            "mst",
+            "spanning-tree",
+            "minimum-weight",
+            "exact-rational",
+            "cycle-property",
+        ),
+        invalid_request=_INVALID_REQUEST,
+        invocation_examples=(
+            CapabilityInvocationExample(
+                name="four_vertex_weighted_graph",
+                description=(
+                    "Compute an exact minimum spanning tree and its cycle checks."
+                ),
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            {
+                                "endpoints": ["a", "b"],
+                                "weight": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "endpoints": ["b", "c"],
+                                "weight": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "endpoints": ["c", "d"],
+                                "weight": {"num": "3", "den": "1"},
+                            },
+                            {
+                                "endpoints": ["a", "d"],
+                                "weight": {"num": "5", "den": "1"},
+                            },
+                            {
+                                "endpoints": ["a", "c"],
+                                "weight": {"num": "7", "den": "2"},
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    )
 )
 
 

@@ -37,11 +37,6 @@ def build_rational_optimization_bundle() -> DomainBundle:
                 hint="Use the declared bounded standard-form rational LP model.",
             )
         ),
-        scope_description="one bounded standard-form rational linear program",
-        completeness_basis="SymPy produced exact primal and dual candidates",
-        assurance_basis=(
-            "pinned maintained-backend computation; independent replay remains open"
-        ),
     )
 
 

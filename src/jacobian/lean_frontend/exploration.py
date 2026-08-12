@@ -19,22 +19,29 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
+    CapabilityDiagnostic,
     CapabilityProviderRuntime,
 )
-from jacobian.contracts.lean import LeanEnvironment
+from jacobian.contracts.lean import (
+    LeanDiagnostic,
+    LeanDiagnosticPhase,
+    LeanDiagnosticSource,
+    LeanEnvironment,
+)
 from jacobian.contracts.lean_exploration import (
     LeanPremiseRetrievalArtifact,
     LeanProofStateArtifact,
     LeanProofStateRequest,
     LeanProofStateTransitionArtifact,
-    LeanTacticDiagnostic,
     LeanTypedGoal,
 )
 from jacobian.contracts.lean_metavariable_fields import (
     LeanMetavariableFieldsArtifact,
     LeanMetavariableFieldsRequest,
 )
+from jacobian.lean_frontend.diagnostics import repl_diagnostics
 from jacobian.lean_frontend.helper_protocol import (
     LeanHelperErrorEnvelope,
     LeanHelperPayload,
@@ -45,9 +52,11 @@ from jacobian.lean_frontend.helper_protocol import (
     LeanTypedGoalsHelperRequest,
     LeanTypedGoalsHelperResult,
 )
+from jacobian.lean_frontend.process_environment import (
+    lean_elan_worker_environment,
+)
 from jacobian.lean_frontend.repl import (
     LeanExplorationReplRuntime,
-    _response_errors,
 )
 from jacobian.lean_frontend.repl_protocol import (
     LeanReplErrorResponse,
@@ -61,11 +70,12 @@ from jacobian.process_policy import (
     ProcessTermination,
     execute_process,
 )
-from jacobian.providers.lean_runtime import require_lean_semantic_runtime_identity
-from jacobian.references import LeanCheckerInstallation
+from jacobian.providers.lean_runtime import (
+    lean_mathlib_git_config,
+    require_lean_semantic_runtime_identity,
+)
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.worker_environment import worker_environment
 
 
 class LeanHelperError(RuntimeError):
@@ -166,7 +176,7 @@ def install_lean_exploration_capabilities(
     )
     transition_schema_uri = schemas.register(
         name="jacobian.lean4-proof-state-transition",
-        version="2",
+        version="3",
         schema=LeanProofStateTransitionArtifact.model_json_schema(),
     )
     retrieval_schema_uri = schemas.register(
@@ -235,6 +245,53 @@ def _validate_source_parts(statement: str, tactics: tuple[str, ...]) -> None:
             raise ValueError("tactic contains a forbidden command")
 
 
+def _request_validation_diagnostic(
+    error: ValidationError | ValueError,
+    *,
+    code: str,
+    subject: str,
+    hint: str,
+) -> CapabilityDiagnostic:
+    """Project bounded Pydantic/source-validation evidence for Lean requests."""
+
+    if isinstance(error, ValidationError):
+        validation_errors = []
+        for item in error.errors(
+            include_url=False,
+            include_context=False,
+            include_input=False,
+        ):
+            location = item.get("loc", ())
+            path = ".".join(str(part) for part in location) or "$"
+            reason = str(item.get("msg", "invalid value"))
+            if reason.startswith("Value error, "):
+                reason = reason.removeprefix("Value error, ")
+            validation_errors.append(
+                {
+                    "path": path[:512],
+                    "reason": reason[:500],
+                    "type": str(item.get("type", "value_error"))[:128],
+                }
+            )
+    else:
+        validation_errors = [
+            {
+                "path": "$",
+                "reason": str(error)[:500],
+                "type": "value_error",
+            }
+        ]
+    first = validation_errors[0]
+    return CapabilityDiagnostic(
+        code=code,
+        stage="request_validation",
+        message=f"{subject}: {first['reason']}",
+        path=first["path"],
+        hint=hint,
+        details={"validation_errors": validation_errors},
+    )
+
+
 def _normalized_response_goals(
     response: LeanReplProofStepResponse,
 ) -> tuple[str, ...]:
@@ -248,32 +305,19 @@ def _normalize_goal(goal: str) -> str:
 
 def _tactic_diagnostics(
     responses: LeanReplValidatedExecution,
-) -> tuple[LeanTacticDiagnostic, ...]:
-    diagnostics: list[LeanTacticDiagnostic] = []
-    for response in responses:
-        seen: set[str] = set()
-        for message in _response_errors(response):
-            if message in seen:
-                continue
-            seen.add(message)
-            diagnostics.append(LeanTacticDiagnostic(severity="ERROR", message=message))
-        if isinstance(response, LeanReplErrorResponse):
-            continue
-        for item in response.messages:
-            if item.data in seen:
-                continue
-            seen.add(item.data)
-            severity = (
-                "ERROR"
-                if item.severity == "error"
-                else ("WARNING" if item.severity == "warning" else "INFO")
-            )
-            diagnostics.append(
-                LeanTacticDiagnostic.model_validate(
-                    {"severity": severity, "message": item.data}
-                )
-            )
-    return tuple(diagnostics)
+    *,
+    statement: str,
+    final_phase: LeanDiagnosticPhase = LeanDiagnosticPhase.TACTIC_EXECUTION,
+    final_source: LeanDiagnosticSource = LeanDiagnosticSource.TACTIC,
+    final_column_offset: int = 0,
+) -> tuple[LeanDiagnostic, ...]:
+    return repl_diagnostics(
+        responses,
+        statement=statement,
+        final_phase=final_phase,
+        final_source=final_source,
+        final_column_offset=final_column_offset,
+    )
 
 
 def _run_repl(
@@ -310,9 +354,11 @@ def _resolve_typed_goal_helper(
     if elan is None:
         raise RuntimeError("elan is unavailable")
     installation = resources.installations[request.environment]
-    environment = worker_environment(
-        extra_variables=("HOME", "PATH", "ELAN_HOME"),
-        overrides={"JACOBIAN_LEAN_PROOF_STATE_QUERY": str(query_path)},
+    environment = lean_elan_worker_environment(
+        overrides={
+            **lean_mathlib_git_config(resources.runtime),
+            "JACOBIAN_LEAN_PROOF_STATE_QUERY": str(query_path),
+        },
     )
     arguments = (
         "run",

@@ -16,11 +16,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/morluto/jacobian" alt="MIT license"></a>
 </p>
 
-<p align="center">
-  <a href="README.md">English</a> ·
-  <a href="README.zh-CN.md">简体中文</a>
-</p>
-
 Jacobian is a collection of mathematical operations for AI agents. It runs as
 an MCP server and is also available as a CLI and Python library. Agents can use
 it to compute invariants, search for examples or counterexamples, work with
@@ -66,8 +61,17 @@ For the Python distribution:
 python -m pip install jacobian
 ```
 
+That package includes Jacobian's exact maintained Python backend stack: SymPy,
+NetworkX, Z3, Python-FLINT, and cvc5. A normal Python or npm installation
+therefore exposes the same built-in Python-backed operation portfolio. The
+tested binary-install contract is CPython 3.12 or 3.13 on glibc Linux x86-64;
+the release gate installs the built wheel and starts Jacobian on both Python
+versions. Other systems may have compatible upstream wheels, but are not part
+of the tested release contract yet. In particular, Alpine/musl cannot install
+the complete mandatory stack from PyPI.
+
 The launcher supports Claude, Codex, Cursor, Gemini, and OpenCode. It requires
-Node.js 18 or newer plus Python 3.12/3.13 or
+Node.js 18 or newer plus CPython 3.12/3.13 or
 [`uv`](https://docs.astral.sh/uv/); the guided installer can install its pinned
 `uv` release after confirmation. Run `jacobian mcp` to start the server
 directly.
@@ -82,47 +86,24 @@ JavaScript dependency tree.
 To run the exact code in a clone, follow
 [Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).
 
-## A simple counterexample
+## Compute, then check when needed
 
-Here is a small counterexample an agent can reason about directly:
+An ordinary operation returns mathematics first. For example,
+`matrix.determinant.compute` accepts one exact rational matrix and returns its
+determinant inline. If independent replay matters, the agent may separately run
+`matrix.determinant.verify` with that exact input and candidate result.
 
-```text
-Claim: every prime is odd
-Agent checks: 2 is prime and even
-Counterexample: 2
-Conclusion: the claim is false
-```
+The producer and checker are distinct catalog IDs with independent
+implementations. Computation does not certify itself, and a timeout,
+cancellation, error, or incomplete bounded search remains a non-conclusion.
 
-Here `2` is a witness: the actual example that disproves the claim. For a much
-larger search, Jacobian can preserve the candidate and the exact checks used to
-establish it.
-
-## A checked counterexample
-
-Suppose an agent is testing the claim **“`F` is injective.”**
-
-A search returns two points, `p` and `q`, with the same image. That is a
-candidate counterexample, not yet a trusted conclusion.
-
-```text
-p ≠ q
-F(p) - F(q) = 0
-```
-
-An independent checker confirms those relations exactly. The checked collision
-can then be bound to the original claim and checker identity, producing
-`FALSE · VERIFIED`.
-
-If the search finds nothing, times out, is cancelled, or fails, the claim
-remains `UNKNOWN`. Absence of a witness is not proof.
-
-The [introductory tutorial](docs/tutorials/first-verified-result.md) shows the
-same boundary in a runnable graph example.
+The [introductory tutorial](docs/tutorials/first-verified-result.md) runs this
+determinant pair through the public MCP surface.
 
 ## Available mathematics
 
-The installed operations vary with local providers, but the maintained
-portfolio covers work in:
+The installed operations vary with optional external providers, but the
+maintained portfolio covers work in:
 
 - polynomial maps and polynomial algebra;
 - exact linear algebra;
@@ -132,44 +113,40 @@ portfolio covers work in:
 - polytopes; and
 - Lean declaration discovery and proof checking.
 
-Some operations require optional local backends. Catalog membership means an
-operation is installed and invocable; it does not grant verification authority.
+Some operations require optional native or formal backends. Catalog membership
+means an operation is installed and invocable; it does not grant verification
+authority.
 Read `capability://catalog` or use `math.find` to inspect the current
 environment. Use `math.run` to invoke a selected operation.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and
-[optional backend setup](docs/how-to/install-optional-backends.md) for provider
-requirements.
+[native and formal provider setup](docs/how-to/install-native-and-formal-providers.md)
+for provider requirements.
 
 ## Verification model
 
-Jacobian separates finding evidence from deciding what that evidence proves.
-Search, generation, evaluation, and computation cannot certify their own
-conclusions.
+Jacobian separates mathematical production from independent checking. A
+producer cannot certify its own output.
 
 ```text
-Claim → Candidate → Independent check → Record
+Subject + Candidate → Independent checker → Bound record
 ```
 
 Only an operator-authorized checker may emit a verified record, bound to the
-exact claim, candidate, scope, semantics, certificate format, and checker
-identity. Plugins and search code cannot authorize a checker or change
-verification policy.
+exact subject, candidate, evidence, protocol, scope, semantics, certificate
+format, and checker identity. Availability and provider provenance do not grant
+that authority.
 
 > **No witness is not proof.** A failed search, timeout, cancellation, error,
 > or completed bounded search without a witness leaves the claim `UNKNOWN`.
-
-A formal claim may still be a poor translation of the informal conjecture.
-Jacobian records that correspondence and its review status; schema validation
-does not establish it automatically.
 
 The [architecture document](docs/explanation/architecture.md) describes the
 complete trust boundary.
 
 ## Status
 
-Jacobian 0.6.0 is a pre-stable release. Its published package, capability, and
+Jacobian 0.11.0 is a pre-stable release. Its published package, capability, and
 artifact contracts describe the current supported surface; ongoing capability
 research may change experimental contracts between releases.
 
@@ -185,8 +162,8 @@ research may change experimental contracts between releases.
   ownership, and project boundaries
 - [Tool reference](docs/reference/tools.md) — MCP resources and invocation
   contracts
-- [Optional backends](docs/how-to/install-optional-backends.md) — provider and
-  Lean setup
+- [Native and formal providers](docs/how-to/install-native-and-formal-providers.md)
+  — provider and Lean setup
 - [Remote deployment](docs/how-to/deploy-remote-mcp.md) — HTTP deployment and
   authentication
 

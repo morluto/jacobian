@@ -169,8 +169,6 @@ def test_collision_request_requires_two_distinct_evaluation_artifacts() -> None:
 def test_collision_output_enforces_distinct_points_and_equal_images() -> None:
     artifact_uri = "artifact://sha256/" + "a" * 64
     second_artifact_uri = "artifact://sha256/" + "c" * 64
-    checker_id = "checker://sha256/" + "b" * 64
-
     with pytest.raises(ValidationError, match="collision status"):
         PolynomialCollisionOutput.model_validate(
             {
@@ -184,8 +182,6 @@ def test_collision_output_enforces_distinct_points_and_equal_images() -> None:
                 "second_image": [_rational(1)],
                 "candidate_collision": True,
                 "witness_uri": artifact_uri,
-                "checker_id": checker_id,
-                "certificate_available": True,
             }
         )
 

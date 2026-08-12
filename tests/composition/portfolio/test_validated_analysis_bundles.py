@@ -10,7 +10,7 @@ def test_subject_bundles_preserve_wire_contracts_and_report_one_backend() -> Non
         bundle.domain_id: (
             bundle.provider_runtime.provider,
             bundle.schema_namespace,
-            tuple(operation.capability_id for operation in bundle.capabilities),
+            tuple(operation.spec.operation_id for operation in bundle.capabilities),
         )
         for bundle in (
             build_real_analysis_bundle(),

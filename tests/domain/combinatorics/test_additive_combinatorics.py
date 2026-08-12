@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityAssuranceLevel, CapabilityRequest
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.combinatorics import (
     MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH,
     MAX_ADDITIVE_INTEGER_LENGTH,
@@ -37,7 +37,6 @@ def test_integer_sidon_materializes_every_ordered_difference(
 
     result = computed.output["result"]
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result["is_sidon"] is True
     assert len(result["ordered_differences"]) == 20
 
@@ -76,7 +75,6 @@ def test_fixed_order_extension_returns_complete_negative_decisions(
     )
 
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert computed.artifact_uris == ()
     assert computed.output["result"]["decision"] == "DOES_NOT_EXTEND"
     assert computed.output["result"]["coverage"] == "ALL_CANDIDATES"
@@ -125,7 +123,6 @@ def test_integer_sidon_accepts_the_widest_canonical_difference(
 
     result = computed.output["result"]
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result["is_sidon"] is True
     difference_strings = {
         record["difference"] for record in result["ordered_differences"]

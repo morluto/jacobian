@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 
 from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.exact import CanonicalRational
-from jacobian.contracts.results import ContractModel, ResultEnvelope
+from jacobian.contracts.results import ContractModel, Execution, InputValidation
 
 
 class RationalVector(ContractModel):
@@ -82,7 +82,8 @@ class PolytopeSeparateResult(ContractModel):
     claim_uri: ArtifactUri | None = None
     witness_uri: ArtifactUri | None = None
     certificate_uri: ArtifactUri | None = None
-    result: ResultEnvelope
+    execution: Execution
+    input: InputValidation
 
     @model_validator(mode="after")
     def evidence_matches_status(self) -> Self:
@@ -94,4 +95,13 @@ class PolytopeSeparateResult(ContractModel):
                 raise ValueError("separation requires a certificate and no witness")
         elif self.witness_uri is not None or self.certificate_uri is not None:
             raise ValueError("unknown results cannot carry decisive evidence")
+        if self.status is not PolytopeStatus.UNKNOWN and any(
+            value is None
+            for value in (
+                self.effective_point_uri,
+                self.effective_generator_set_uri,
+                self.claim_uri,
+            )
+        ):
+            raise ValueError("decisive results require replay bindings")
         return self

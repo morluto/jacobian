@@ -7,7 +7,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictBool, model_validator
 
 from jacobian.contracts.common import ArtifactUri
-from jacobian.contracts.lean import LeanEnvironment
+from jacobian.contracts.lean import LeanDiagnostic, LeanEnvironment
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 
 
@@ -27,7 +27,7 @@ class LeanProofEditRequest(ContractModel):
 
 
 class LeanProofEditArtifact(ContractModel):
-    proof_edit_schema_version: Literal["2"] = "2"
+    proof_edit_schema_version: Literal["3"] = "3"
     environment: LeanEnvironment
     statement: str
     original_proof: str
@@ -35,11 +35,13 @@ class LeanProofEditArtifact(ContractModel):
     unified_diff: str = Field(min_length=1, max_length=50_000)
     baseline_checker_execution_status: ExecutionStatus
     baseline_accepted: StrictBool
+    baseline_diagnostics: tuple[LeanDiagnostic, ...] = ()
     baseline_candidate_uri: ArtifactUri
     baseline_certificate_uri: ArtifactUri
     baseline_verification_record_uri: ArtifactUri | None = None
     checker_execution_status: ExecutionStatus
     accepted: StrictBool
+    diagnostics: tuple[LeanDiagnostic, ...] = ()
     claim_uri: ArtifactUri
     candidate_uri: ArtifactUri
     certificate_uri: ArtifactUri

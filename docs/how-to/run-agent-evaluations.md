@@ -2,8 +2,8 @@
 
 [Documentation home](../index.md) · [Evaluation reference](../reference/evaluations/evaluation-methods.md)
 
-This guide covers an explicit operator-run of Harbor workflow observations and
-paired Jacobian control/treatment runs. Model execution is not a routine
+This guide covers explicit operator-run Harbor observations and paired Jacobian
+control/treatment runs. Model execution is not a routine
 development or pull-request gate. The evaluation roles, assurance rules, and
 interpretation boundaries are in the [reference page](../reference/evaluations/evaluation-methods.md).
 
@@ -159,12 +159,8 @@ make agent-eval DATASET=mathematical-benchmarks-v1 \
 ```
 
 Use `TASKS=graph-counterexample` for a small smoke run. The treatment run uses
-`benchmarks/config/jacobian.mcp.json` and installs the repository's
-`.agents/skills/jacobian-math` skill. `agent-eval` passes both explicitly
-because its agent/model CLI overrides replace the agent block from the job
-JSON. Set `JACOBIAN_EVAL_SKILL` only for a deliberate development comparison;
-normalized evidence requires a matching job declaration. Task TOMLs remain
-agent-agnostic.
+only `benchmarks/config/jacobian.mcp.json`. Task TOMLs remain agent-agnostic;
+the treatment measures the MCP product rather than a bundled prompt or Skill.
 
 ### Evaluate tool adoption and task design
 
@@ -231,9 +227,9 @@ task's structured submission contract. Otherwise a control answer can reuse
 `VERIFIED` as an ordinary English synonym and make the assurance comparison
 misleading.
 
-`JACOBIAN_ENABLED=1` selects the treatment job and passes Harbor's
-`--mcp-config` and `--skill` options. `JACOBIAN_ENABLED=0` clears both
-interventions. `JACOBIAN_EVAL_PROXY=1` selects matching
+`JACOBIAN_ENABLED=1` selects the MCP-only treatment job and passes Harbor's
+`--mcp-config` option. `JACOBIAN_ENABLED=0` selects the control with no Jacobian
+MCP server. `JACOBIAN_EVAL_PROXY=1` selects matching
 proxy-enabled control/treatment job configs and requires at least one proxy
 URL variable. The Makefile also passes Harbor's
 `web_search=disabled` agent kwarg explicitly, because the `-a codex` and
@@ -241,12 +237,12 @@ URL variable. The Makefile also passes Harbor's
 The default treatment job does not include the proxy overlay.
 
 The pinned Harbor Codex adapter creates a fresh temporary `CODEX_HOME` for
-each trial and copies only the job-declared configuration and skills into it.
+each trial and copies only the job-declared configuration into it.
 Therefore a direct host `codex exec`, even with user configuration partially
 disabled, is not a valid control for this protocol: installed host apps or
 plugins may still be visible. For first-party evidence, inspect each trial's
-`lock.json`: control must have empty `skills` and `mcp_servers`, while
-treatment must contain exactly the declared Jacobian skill and MCP server.
+`lock.json`: control must have no Jacobian MCP server, while treatment must
+contain exactly the declared Jacobian MCP server and no Jacobian Skill.
 
 ## Docker and Daytona
 
@@ -304,7 +300,7 @@ The comparator rejects unmatched task repetitions or configuration drift and
 reports correctness, evidence, scope, assurance, infrastructure, and routing
 separately. Missing, unknown, and nonterminal Harbor statuses remain
 `UNKNOWN`; they are never normalized into completed runs. See
-[Capability workflow evaluations](../reference/evaluations/benchmark-contracts.md)
+[Agent evaluation contracts](../reference/evaluations/benchmark-contracts.md)
 for the full evidence roles and interpretation boundaries.
 
 Record the git tree, task digests, provider/runtime, model and prompt settings,

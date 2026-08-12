@@ -240,7 +240,6 @@ class GaussianPolynomialMomentResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["python-flint"] = "python-flint"
     backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_complete_contraction_ledger(self) -> Self:
@@ -393,7 +392,6 @@ class GraphConnectionProbabilityResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["python-flint"] = "python-flint"
     backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_complete_state_mass(self) -> Self:
@@ -549,11 +547,6 @@ class FiniteEventProbabilityResult(ContractModel):
     selected_atoms: tuple[FiniteDistributionAtom, ...] = Field(
         max_length=MAX_FINITE_DISTRIBUTION_ATOMS
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_selected_atom_contributions(self) -> Self:
@@ -602,11 +595,6 @@ class FiniteConditionResult(ContractModel):
         min_length=1,
         max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_normalized_contributions(self) -> Self:
@@ -719,11 +707,6 @@ class FinitePushforwardResult(ContractModel):
         min_length=1,
         max_length=MAX_FINITE_DISTRIBUTION_ATOMS,
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_aggregated_pushforward(self) -> Self:
@@ -818,11 +801,6 @@ class FiniteConvolutionResult(ContractModel):
         max_length=MAX_FINITE_CONVOLUTION_PAIRS,
     )
     independence: Literal["PRODUCT_MEASURE"] = "PRODUCT_MEASURE"
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_aggregated_pairs(self) -> Self:

@@ -11,7 +11,7 @@ setup: ## Install and diagnose a locked development profile (PROFILE=core).
 doctor: ## Diagnose a development profile without changing it (PROFILE=core).
 	uv run --locked --no-sync python tools/development_profiles.py doctor --profile "$(PROFILE)" --repo .
 
-setup-agent: ## Configure an agent against this source checkout (ARGS="--client codex --profile full-python").
+setup-agent: ## Configure an agent against this source checkout (ARGS="--client codex --profile core").
 	./scripts/setup-agent $(ARGS)
 
 JACOBIAN_REGISTRY_IMAGE ?= ghcr.io/morluto/jacobian
@@ -62,6 +62,9 @@ typecheck: ## Run strict static type checking.
 test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
 	$(UV_RUN) python -m tools.check_test_architecture .
 
+import-contracts: ## Enforce declared package dependency direction.
+	$(UV_RUN) lint-imports
+
 test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
 	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified
 
@@ -78,4 +81,4 @@ docs-command-check: ## Validate Make targets and TESTS paths in command examples
 	$(UV_RUN) python tools/check_doc_commands.py
 
 docs-linkcheck: docs-command-check ## Check relative Markdown links in project docs.
-	npx --yes markdown-link-check@3.15.0 --config .markdown-link-check.json -q README.md README.zh-CN.md AGENTS.md CONTRIBUTING.md docs
+	npx --yes markdown-link-check@3.15.0 --config .markdown-link-check.json -q README.md AGENTS.md CONTRIBUTING.md docs

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Never
 
 from pydantic import ValidationError
 
@@ -11,7 +12,6 @@ from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.polynomial_operations import (
-    PolynomialGroebnerBasisObligation,
     PolynomialGroebnerBasisRequest,
     PolynomialGroebnerBasisResult,
 )
@@ -22,12 +22,8 @@ from jacobian.domains.polynomial.groebner_protocol import (
     GroebnerWorkerResultLimitExceeded,
     parse_groebner_worker_response,
 )
-from jacobian.operations import (
-    BoundedSearchOperation,
-    BoundedSearchOutcome,
-    BoundedSearchWitness,
-    OperationExecutionFailure,
-)
+from jacobian.operation_bindings import durable_operation
+from jacobian.operations import OperationAbortError, OperationSpec
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
 
@@ -39,10 +35,10 @@ def _failure(
     status: ExecutionStatus,
     code: str,
     message: str,
-) -> OperationExecutionFailure:
-    return OperationExecutionFailure(
-        status=status,
-        diagnostic=CapabilityDiagnostic(
+) -> Never:
+    raise OperationAbortError(
+        status,
+        CapabilityDiagnostic(
             code=code,
             stage="polynomial_groebner_computation",
             message=message,
@@ -53,7 +49,7 @@ def _failure(
 
 def _compute(
     request: PolynomialGroebnerBasisRequest,
-) -> BoundedSearchOutcome[PolynomialGroebnerBasisResult]:
+) -> PolynomialGroebnerBasisResult:
     completed = execute_process(
         ProcessRequest(
             executable=sys.executable,
@@ -118,75 +114,47 @@ def _compute(
             "POLYNOMIAL_GROEBNER_PROTOCOL_INVALID",
             "The worker returned a result outside the bounded exact contract.",
         )
-    return BoundedSearchWitness(result)
+    return result
 
 
-def _scope(
-    request: PolynomialGroebnerBasisRequest,
-    result: PolynomialGroebnerBasisResult,
-) -> dict[str, object]:
-    return {
-        "variables": list(result.variables),
-        "monomial_order": result.monomial_order,
-        "generator_count": len(request.generators),
-        "wall_seconds": request.resource_budget.wall_seconds,
-        "maximum_basis_polynomials": (
-            request.resource_budget.maximum_basis_polynomials
+POLYNOMIAL_GROEBNER_CAPABILITY = durable_operation(
+    OperationSpec(
+        operation_id="polynomial.groebner_basis.compute",
+        version="1",
+        title="Compute a bounded Gröbner basis",
+        description=(
+            "Compute a complete reduced monic Gröbner basis over QQ in an isolated "
+            "SymPy worker under declared input, output, and wall-clock limits."
         ),
-        "maximum_output_terms": request.resource_budget.maximum_output_terms,
-    }
-
-
-def _obligation(
-    _request: PolynomialGroebnerBasisRequest,
-    _result: PolynomialGroebnerBasisResult,
-) -> PolynomialGroebnerBasisObligation:
-    return PolynomialGroebnerBasisObligation()
-
-
-POLYNOMIAL_GROEBNER_CAPABILITY = BoundedSearchOperation(
-    capability_id="polynomial.groebner_basis.compute",
-    title="Compute a bounded Gröbner basis",
-    description=(
-        "Compute a complete reduced monic Gröbner basis over QQ in an isolated "
-        "SymPy worker under declared input, output, and wall-clock limits."
-    ),
-    request_model=PolynomialGroebnerBasisRequest,
-    result_model=PolynomialGroebnerBasisResult,
-    implementation=_compute,
-    relation_id="polynomial.relation.groebner-basis-of",
-    scope_parameters=_scope,
-    is_complete=lambda result: result.completion == "COMPLETE",
-    obligation_model=PolynomialGroebnerBasisObligation,
-    obligation=_obligation,
-    incomplete_basis=(
-        "the bounded Gröbner computation did not complete; no partial basis "
-        "supports an ideal conclusion"
-    ),
-    tags=("polynomial", "groebner", "ideal", "bounded", "exact"),
-    invocation_examples=(
-        example(
-            "unit_ideal",
-            "Compute a Groebner basis for the unit ideal in one variable.",
-            {
-                "generators": [
-                    {
-                        "variables": ["x"],
-                        "polynomial": {
-                            "terms": [
-                                {
-                                    "coefficient": {"num": "1", "den": "1"},
-                                    "exponents": [0],
-                                }
-                            ]
-                        },
-                    }
-                ],
-                "monomial_order": "lex",
-                "resource_budget": {"wall_seconds": 1},
-            },
+        request_type=PolynomialGroebnerBasisRequest,
+        result_type=PolynomialGroebnerBasisResult,
+        execute=_compute,
+        tags=("polynomial", "groebner", "ideal", "bounded", "exact"),
+        invocation_examples=(
+            example(
+                "unit_ideal",
+                "Compute a Groebner basis for the unit ideal in one variable.",
+                {
+                    "generators": [
+                        {
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [0],
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                    "monomial_order": "lex",
+                    "resource_budget": {"wall_seconds": 1},
+                },
+            ),
         ),
     ),
+    resource_reason="a Gröbner basis may exceed the bounded inline response budget",
 )
 
 __all__ = ["POLYNOMIAL_GROEBNER_CAPABILITY"]

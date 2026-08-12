@@ -3,7 +3,6 @@ from pathlib import Path
 from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
     CapabilityResult,
 )
@@ -76,7 +75,6 @@ def test_rational_solution_search_returns_first_exact_candidate(tmp_path: Path) 
     assert result.output["found"] is True
     assert result.output["assignment"] == [{"num": "-1", "den": "1"}]
     assert result.output["examined_assignment_count"] == 1
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
 def test_rational_solution_search_reports_completed_bounded_absence(
@@ -90,4 +88,3 @@ def test_rational_solution_search_reports_completed_bounded_absence(
     assert result.output["found"] is False
     assert result.output["examined_assignment_count"] == 3
     assert result.output["grid_assignment_count"] == 3
-    assert result.output["verification"] == "UNVERIFIED"

@@ -16,6 +16,7 @@ import pytest
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
@@ -41,7 +42,6 @@ from jacobian.lean_frontend.repl_protocol import (
 )
 from jacobian.lean_frontend.term_apply import LeanTermApplyAdapter
 from jacobian.provider_runtime import jacobian_provider_runtime
-from jacobian.references import LeanCheckerInstallation
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -315,7 +315,6 @@ def test_term_apply_elaborates_exact_term_and_returns_successor(
     assert result.output["term_application"] == "LEAN_EXACT_ELABORATION"
     assert result.output["term_apply_uri"] == result.output["transition_uri"]
     assert result.output["verification_boundary"] == "LEAN_CHECK_REQUIRED"
-    assert result.output["verification"] == "UNVERIFIED"
     assert result.output["successor_states"][0]["normalized_goals"] == []
 
 
@@ -366,6 +365,22 @@ def test_term_apply_fails_closed_on_rejected_term(
     assert result.output["accepted"] is False
     assert result.output["successor_states"] == []
     assert result.output["term_application"] == "LEAN_EXACT_ELABORATION"
+    assert result.output["diagnostics"] == [
+        {
+            "code": "LEAN_TYPE_MISMATCH",
+            "phase": "TERM_ELABORATION",
+            "severity": "ERROR",
+            "message": "Lean reported a type mismatch.",
+            "source_span": {
+                "source": "TERM",
+                "start": {"line": 0, "column": 0},
+                "end": {"line": 0, "column": 0},
+            },
+            "goal_index": 0,
+            "metavariable": None,
+            "raw_backend_message": "type mismatch: trivial has type True",
+        }
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -411,7 +426,6 @@ def test_inspect_returns_recorded_goals_without_replay(
 
     assert result.capability_id == "lean.proof_state.inspect"
     assert result.output["inspection"] == "READ_ONLY_NO_REPLAY"
-    assert result.output["verification"] == "UNVERIFIED"
     assert result.output["completed"] is False
     assert result.output["goal_count"] == 2
     assert result.output["normalized_goals"] == [
@@ -543,7 +557,6 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     assert result.output["metavariable_schema_version"] == "1"
     assert result.output["coercion_provenance"] == "UNAVAILABLE"
     assert "Lean.Meta.Coe" in result.output["coercion_provenance_basis"]
-    assert result.output["verification"] == "UNVERIFIED"
     mvar = result.output["structured_metavariables"][0]
     assert mvar["goal_index"] == 0
     assert mvar["kind"] == "NATURAL"
@@ -737,6 +750,27 @@ def test_term_apply_rejects_admit_at_own_boundary(
             )
         )
     assert raised.value.diagnostic.code == "INVALID_LEAN_TERM_APPLY_REQUEST"
+
+
+def test_term_apply_rejects_forbidden_statement_before_execution(
+    tmp_path: Path,
+) -> None:
+    _, term_apply, _, _, _ = _adapters(tmp_path)
+
+    with pytest.raises(CapabilityInvocationError) as raised:
+        term_apply.invoke(
+            CapabilityRequest(
+                capability_id="lean.term.apply",
+                input={
+                    "environment": "CORE",
+                    "statement": "run_tac pure ()",
+                    "term": "True.intro",
+                },
+            )
+        )
+
+    assert raised.value.diagnostic.code == "INVALID_LEAN_TRANSITION_REQUEST"
+    assert raised.value.diagnostic.stage == "request_validation"
 
 
 # ---------------------------------------------------------------------------

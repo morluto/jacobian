@@ -8,7 +8,6 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -78,7 +77,6 @@ def _betti(
         )
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
     return tuple(
         group["betti_number"]
@@ -111,7 +109,6 @@ def test_canonicalization_is_canonical_complete_inline_and_composable(
     assert complex_["closure_size"] == 6
     assert complex_["empty_simplex_stored"] is False
     assert payload["completeness"] == "COMPLETE_FACE_CLOSURE"
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
     assert result.output["result"] == payload
 
@@ -295,7 +292,6 @@ def test_integral_homology_exposes_free_and_torsion_generators(
     )
 
     assert circle_result.execution.status is ExecutionStatus.COMPLETED
-    assert circle_result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     circle_groups = _result_payload(topology_services, circle_result)["groups"]
     assert [group["betti_number"] for group in circle_groups] == [1, 1]
     assert [group["torsion_coefficients"] for group in circle_groups] == [[], []]

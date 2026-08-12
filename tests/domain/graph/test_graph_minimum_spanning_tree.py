@@ -9,7 +9,6 @@ from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityDiscoveryRequest,
     CapabilityRequest,
 )
@@ -80,7 +79,6 @@ def test_exact_weighted_minimum_spanning_tree_and_lineage(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert _result_payload(graph_optimization_services, result) == {
         "result_schema_version": "1",
         "status": "EXACT",
@@ -219,7 +217,7 @@ def test_weighted_mst_intent_is_discoverable_and_example_is_valid(
     assert discovered.matches[0].capability_id == (
         "graph.spanning_tree.minimum.compute"
     )
-    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
         for descriptor in graph_optimization_services.core.capabilities.catalog().capabilities

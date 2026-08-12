@@ -7,7 +7,6 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
@@ -91,7 +90,6 @@ def test_zero_hole_qf_uf_proof_is_independently_verified(
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED_UNSAT"
     assert verified.output["conclusion"] == "TRUE"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.output["verification_record_uri"] is not None
 
 
@@ -116,7 +114,6 @@ def test_holey_arithmetic_proofs_remain_unverified(
     assert checked.execution.status is ExecutionStatus.COMPLETED
     assert checked.output["status"] == "REJECTED"
     assert checked.output["conclusion"] == "UNKNOWN"
-    assert checked.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert checked.output["verification_record_uri"] is None
 
 

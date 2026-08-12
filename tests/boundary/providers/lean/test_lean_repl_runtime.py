@@ -11,6 +11,7 @@ from jacobian.lean_frontend.repl import (
     LeanExplorationReplRuntime,
     LeanReplPolicy,
     PersistentLeanRepl,
+    _repl_process_environment,
 )
 from jacobian.lean_frontend.repl_protocol import LeanReplProofStepResponse
 
@@ -47,7 +48,11 @@ while True:
     elif "pickleTo" in request:
         assert request["proofState"] == proof_state - 1
         pathlib.Path(request["pickleTo"]).write_text("pickled")
-        response = {}
+        response = {
+            "proofState": proof_state,
+            "proofStatus": "Completed",
+            "goals": [],
+        }
     else:
         assert request["proofState"] == proof_state - 1
         response = {
@@ -58,6 +63,31 @@ while True:
         proof_state += 1
     print(json.dumps(response), end="\n\n", flush=True)
 """
+
+
+def test_repl_environment_derives_default_elan_home_without_forwarding_home(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ELAN_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    environment = _repl_process_environment(tmp_path)
+
+    assert environment["ELAN_HOME"] == str(tmp_path / ".elan")
+    assert "HOME" not in environment
+
+
+def test_repl_environment_preserves_explicit_elan_home(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    explicit = tmp_path / "shared-elan"
+    monkeypatch.setenv("ELAN_HOME", str(explicit))
+
+    environment = _repl_process_environment(tmp_path)
+
+    assert environment["ELAN_HOME"] == str(explicit)
 
 
 def test_persistent_repl_reuses_import_then_restarts_at_request_limit(
@@ -108,7 +138,7 @@ def test_validated_execution_inspects_state_before_requested_tactic(
     assert starts.read_text() == "x"
 
 
-def test_persistent_repl_accepts_empty_pickle_acknowledgement(
+def test_persistent_repl_accepts_proof_snapshot_pickle_response(
     tmp_path: Path,
 ) -> None:
     starts = tmp_path / "starts"
@@ -269,6 +299,55 @@ def test_clean_execution_discards_every_repl_instance(
 
     assert len(sessions) == 2
     assert all(session.closed for session in sessions)
+
+
+def test_persistent_validated_execution_reuses_one_bounded_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = LeanExplorationReplRuntime(tmp_path, {})
+
+    class FakeSession:
+        calls = 0
+
+        def execute_validated(
+            self,
+            *,
+            command: str,
+            tactic: str,
+            pickle_path: Path | None = None,
+        ) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+            assert command and tactic
+            assert pickle_path is None
+            self.calls += 1
+            return ({}, {}, {})
+
+        def close(self) -> None:
+            pass
+
+    session = FakeSession()
+    created = 0
+
+    def create(_environment: LeanEnvironment) -> FakeSession:
+        nonlocal created
+        created += 1
+        return session
+
+    monkeypatch.setattr(runtime, "_create_session", create)
+
+    runtime.execute_persistent_validated(
+        command="example : True := by sorry",
+        tactic="trivial",
+        environment=LeanEnvironment.CORE,
+    )
+    runtime.execute_persistent_validated(
+        command="example : True := by sorry",
+        tactic="trivial",
+        environment=LeanEnvironment.CORE,
+    )
+
+    assert created == 1
+    assert session.calls == 2
 
 
 def test_runtime_close_releases_retained_sessions(

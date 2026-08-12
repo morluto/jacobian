@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.graph_invariant_operations import GraphDistanceMatrixResult
@@ -57,7 +56,6 @@ def test_distance_matrix_is_complete_canonical_and_lineage_bound(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["result"] == {
         "semantics_version": "unweighted-shortest-path-distance-matrix.v1",
         "vertex_ordering": "LEXICOGRAPHIC_ASCENDING",
@@ -68,7 +66,6 @@ def test_distance_matrix_is_complete_canonical_and_lineage_bound(
         "connected": True,
     }
     assert result.artifact_uris == ()
-    assert result.relationships == ()
 
 
 def test_distance_matrix_represents_disconnected_pairs_with_null(
@@ -105,7 +102,7 @@ def test_distance_matrix_rejects_graph_above_existing_order_bound(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.artifact_uris == ()
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].code == "INVALID_GRAPH_INVARIANT_REQUEST"
 
 
 @pytest.mark.parametrize(

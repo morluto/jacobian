@@ -14,7 +14,7 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 COPY lean ./lean
 
-RUN uv sync --locked --no-dev --extra flint --extra smt
+RUN uv sync --locked --no-dev
 
 EXPOSE 8000
 VOLUME ["/var/lib/jacobian"]
@@ -23,5 +23,5 @@ VOLUME ["/var/lib/jacobian"]
 ENV JACOBIAN_STATE_DIR=/var/lib/jacobian
 ENV JACOBIAN_BUILD_REVISION=$JACOBIAN_REVISION
 
-ENTRYPOINT ["uv", "run", "--no-sync", "jacobian-mcp"]
+ENTRYPOINT ["uv", "run", "--no-sync", "jacobian-remote-mcp"]
 CMD ["--help"]

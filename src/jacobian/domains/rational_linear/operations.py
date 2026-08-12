@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Never
 
 from pydantic import ValidationError
 
@@ -34,9 +35,7 @@ from jacobian.domains.rational_linear.protocol import (
     parse_solution_worker_response,
 )
 from jacobian.operations import (
-    ComputedOutcome,
-    ComputedSuccess,
-    OperationExecutionFailure,
+    OperationAbortError,
 )
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.providers.flint_runtime import python_flint_provider_runtime
@@ -49,12 +48,10 @@ class _RuntimeChangedError(RuntimeError):
     """The pinned FLINT runtime changed while the worker was running."""
 
 
-def _failure(
-    code: str, status: ExecutionStatus, message: str
-) -> OperationExecutionFailure:
-    return OperationExecutionFailure(
-        status=status,
-        diagnostic=CapabilityDiagnostic(
+def _failure(code: str, status: ExecutionStatus, message: str) -> Never:
+    raise OperationAbortError(
+        status,
+        CapabilityDiagnostic(
             code=code,
             stage="rational_linear_provider",
             message=message,
@@ -116,7 +113,7 @@ def _run(
 
 def compute_rational_solution(
     request: LinearRationalSolutionFindRequest,
-) -> ComputedOutcome[LinearRationalSolutionResult]:
+) -> LinearRationalSolutionResult:
     try:
         response = _run(
             RationalLinearSolutionWorkerRequest(
@@ -131,12 +128,10 @@ def compute_rational_solution(
                 "The pinned Python-FLINT rational-linear provider is unavailable.",
             )
         if isinstance(response, RationalLinearNoSolutionProduced):
-            return ComputedSuccess(
-                LinearRationalSolutionResult(status="NO_SOLUTION_PRODUCED")
-            )
+            return LinearRationalSolutionResult(status="NO_SOLUTION_PRODUCED")
         if not isinstance(response, RationalLinearSolutionProduced):
             raise ValueError("worker did not produce a solution")
-        return ComputedSuccess(LinearRationalSolutionResult(values=response.values))
+        return LinearRationalSolutionResult(values=response.values)
     except TimeoutError:
         return _failure(
             "FLINT_LINEAR_TIMEOUT",
@@ -159,7 +154,7 @@ def compute_rational_solution(
 
 def compute_rational_inconsistency(
     request: LinearRationalInconsistencyFindRequest,
-) -> ComputedOutcome[LinearRationalInconsistencyResult]:
+) -> LinearRationalInconsistencyResult:
     try:
         response = _run(
             RationalLinearInconsistencyWorkerRequest(
@@ -174,16 +169,12 @@ def compute_rational_inconsistency(
                 "The pinned Python-FLINT rational-linear provider is unavailable.",
             )
         if isinstance(response, RationalLinearNoCertificateProduced):
-            return ComputedSuccess(
-                LinearRationalInconsistencyResult(status="NO_CERTIFICATE_PRODUCED")
-            )
+            return LinearRationalInconsistencyResult(status="NO_CERTIFICATE_PRODUCED")
         if not isinstance(response, RationalLinearCertificateProduced):
             raise ValueError("worker did not produce an inconsistency witness")
-        return ComputedSuccess(
-            LinearRationalInconsistencyResult(
-                left_witness=response.left_witness,
-                rhs_pairing=response.rhs_pairing,
-            )
+        return LinearRationalInconsistencyResult(
+            left_witness=response.left_witness,
+            rhs_pairing=response.rhs_pairing,
         )
     except TimeoutError:
         return _failure(

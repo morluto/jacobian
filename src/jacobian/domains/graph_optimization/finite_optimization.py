@@ -8,15 +8,10 @@ from typing import Any, Protocol, cast
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_coloring import ChromaticGraph
 from jacobian.contracts.graph_optimization import (
-    GraphDominationMinimumObligation,
     GraphDominationMinimumOutput,
-    GraphInducedBipartiteMaximumObligation,
     GraphInducedBipartiteMaximumOutput,
-    GraphInducedForestMaximumObligation,
     GraphInducedForestMaximumOutput,
-    GraphInducedTreeMaximumObligation,
     GraphInducedTreeMaximumOutput,
-    GraphMinimumMaximalMatchingObligation,
     GraphMinimumMaximalMatchingOutput,
     GraphOptimizationBudget,
     GraphOptimizationRequest,
@@ -30,14 +25,8 @@ from jacobian.domains.graph_optimization.exact_search import (
     solve_minimum_maximal_matching,
 )
 from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.operations import (
-    BoundedSearchIncomplete,
-    BoundedSearchInterrupted,
-    BoundedSearchOperation,
-    BoundedSearchOutcome,
-    BoundedSearchWitness,
-    OperationExecutionFailure,
-)
+from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operations import OperationAbortError, OperationSpec
 
 
 class _HasStatus(Protocol):
@@ -102,14 +91,14 @@ def _execute[ResultT: ContractModel](
         [Any, ChromaticGraph, GraphOptimizationBudget],
         ResultT,
     ],
-) -> BoundedSearchOutcome[ResultT]:
+) -> ResultT:
     graph = cast(Any, build_simple_graph(request.graph))
     result = solve(graph, request.graph, request.resource_budget)
     state = cast(_HasStatus, result)
     if not _valid_witness(graph, result):
-        return OperationExecutionFailure(
-            status=ExecutionStatus.ERROR,
-            diagnostic=CapabilityDiagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            CapabilityDiagnostic(
                 code="GRAPH_OPTIMIZATION_WITNESS_INVALID",
                 stage="graph_optimization_postcondition",
                 message=(
@@ -119,12 +108,11 @@ def _execute[ResultT: ContractModel](
             ),
         )
     if state.status == "EXACT":
-        return BoundedSearchWitness(result)
+        return result
     if state.termination_reason in {"WALL_TIME", "SOLVER_UNKNOWN"}:
-        return BoundedSearchInterrupted(
-            value=result,
-            status=ExecutionStatus.TIMEOUT,
-            diagnostic=CapabilityDiagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.TIMEOUT,
+            CapabilityDiagnostic(
                 code="GRAPH_OPTIMIZATION_TIMEOUT",
                 stage="graph_optimization_search",
                 message=(
@@ -133,166 +121,83 @@ def _execute[ResultT: ContractModel](
                 ),
             ),
         )
-    return BoundedSearchIncomplete(result)
+    return result
 
 
-def _scope(
-    request: GraphOptimizationRequest,
-    result: ContractModel,
-) -> dict[str, object]:
-    del result
-    return {
-        "order": len(request.graph.vertices),
-        "wall_seconds": request.resource_budget.wall_seconds,
-        "max_solver_calls": request.resource_budget.max_solver_calls,
-        "max_order": request.resource_budget.max_order,
-    }
-
-
-def _vertex_obligation[ObligationT: ContractModel](
-    request: GraphOptimizationRequest,
-    result: (
-        GraphDominationMinimumOutput
-        | GraphInducedForestMaximumOutput
-        | GraphInducedTreeMaximumOutput
-        | GraphInducedBipartiteMaximumOutput
-    ),
-    model: type[ObligationT],
-) -> ObligationT:
-    return model.model_validate(
-        {
-            "graph": request.graph,
-            "status": result.status,
-            "claimed_value": result.optimum_value,
-            "lower_bound": result.lower_bound,
-            "upper_bound": result.upper_bound,
-            "witness_vertices": result.witness_vertices,
-            "tested": result.tested,
-        }
+def _operation[ResultT: ContractModel](
+    operation_id: str,
+    title: str,
+    description: str,
+    result_type: type[ResultT],
+    solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget], ResultT],
+    *tags: str,
+) -> InstalledOperation[GraphOptimizationRequest, ResultT]:
+    return inline_operation(
+        OperationSpec(
+            operation_id=operation_id,
+            version="1",
+            title=title,
+            description=description,
+            request_type=GraphOptimizationRequest,
+            result_type=result_type,
+            execute=lambda request: _execute(request, solve),
+            tags=("graph", *tags, "bounded", "z3"),
+            invalid_request=_INVALID_GRAPH_OPTIMIZATION_REQUEST,
+        )
     )
 
 
-def _matching_obligation(
-    request: GraphOptimizationRequest,
-    result: GraphMinimumMaximalMatchingOutput,
-) -> GraphMinimumMaximalMatchingObligation:
-    return GraphMinimumMaximalMatchingObligation(
-        graph=request.graph,
-        status=result.status,
-        claimed_value=result.optimum_value,
-        lower_bound=result.lower_bound,
-        upper_bound=result.upper_bound,
-        witness_edges=result.witness_edges,
-        tested=result.tested,
-    )
-
-
-DOMINATION_MINIMUM_CAPABILITY = BoundedSearchOperation(
-    capability_id="graph.domination.minimum.compute",
-    title="Minimum dominating set",
-    description=(
-        "Compute the ordinary domination number and an attaining set under "
-        "explicit order, solver-call, and wall-clock budgets."
-    ),
-    request_model=GraphOptimizationRequest,
-    result_model=GraphDominationMinimumOutput,
-    implementation=lambda request: _execute(request, solve_domination),
-    relation_id="graph.domination.minimum.relation",
-    scope_parameters=_scope,
-    is_complete=lambda result: result.status == "EXACT",
-    obligation_model=GraphDominationMinimumObligation,
-    obligation=lambda request, result: _vertex_obligation(
-        request, result, GraphDominationMinimumObligation
-    ),
-    incomplete_basis="the bounded threshold search did not establish optimality",
-    tags=("graph", "domination", "minimum", "bounded", "z3"),
-    invalid_request=_INVALID_GRAPH_OPTIMIZATION_REQUEST,
+DOMINATION_MINIMUM_CAPABILITY = _operation(
+    "graph.domination.minimum.compute",
+    "Minimum dominating set",
+    "Compute the domination number and an attaining set within explicit budgets.",
+    GraphDominationMinimumOutput,
+    lambda graph, contract, budget: solve_domination(graph, contract, budget),
+    "domination",
+    "minimum",
 )
 
-MINIMUM_MAXIMAL_MATCHING_CAPABILITY = BoundedSearchOperation(
-    capability_id="graph.matching.maximal.minimum.compute",
-    title="Minimum maximal matching",
-    description=(
-        "Compute the saturation number and an attaining maximal matching under "
-        "explicit order, solver-call, and wall-clock budgets."
+MINIMUM_MAXIMAL_MATCHING_CAPABILITY = _operation(
+    "graph.matching.maximal.minimum.compute",
+    "Minimum maximal matching",
+    "Compute the saturation number and an attaining maximal matching within explicit budgets.",
+    GraphMinimumMaximalMatchingOutput,
+    lambda graph, contract, budget: solve_minimum_maximal_matching(
+        graph, contract, budget
     ),
-    request_model=GraphOptimizationRequest,
-    result_model=GraphMinimumMaximalMatchingOutput,
-    implementation=lambda request: _execute(request, solve_minimum_maximal_matching),
-    relation_id="graph.matching.maximal.minimum.relation",
-    scope_parameters=_scope,
-    is_complete=lambda result: result.status == "EXACT",
-    obligation_model=GraphMinimumMaximalMatchingObligation,
-    obligation=_matching_obligation,
-    incomplete_basis="the bounded threshold search did not establish optimality",
-    tags=("graph", "matching", "saturation_number", "minimum", "bounded", "z3"),
-    invalid_request=_INVALID_GRAPH_OPTIMIZATION_REQUEST,
+    "matching",
+    "saturation_number",
+    "minimum",
 )
 
-INDUCED_FOREST_MAXIMUM_CAPABILITY = BoundedSearchOperation(
-    capability_id="graph.induced_forest.maximum.compute",
-    title="Maximum induced forest",
-    description=(
-        "Compute a maximum-order induced forest and its vertex witness under "
-        "explicit order, solver-call, and wall-clock budgets."
-    ),
-    request_model=GraphOptimizationRequest,
-    result_model=GraphInducedForestMaximumOutput,
-    implementation=lambda request: _execute(request, solve_induced_forest),
-    relation_id="graph.induced_forest.maximum.relation",
-    scope_parameters=_scope,
-    is_complete=lambda result: result.status == "EXACT",
-    obligation_model=GraphInducedForestMaximumObligation,
-    obligation=lambda request, result: _vertex_obligation(
-        request, result, GraphInducedForestMaximumObligation
-    ),
-    incomplete_basis="the bounded threshold search did not establish optimality",
-    tags=("graph", "induced_forest", "maximum", "bounded", "z3"),
-    invalid_request=_INVALID_GRAPH_OPTIMIZATION_REQUEST,
+INDUCED_FOREST_MAXIMUM_CAPABILITY = _operation(
+    "graph.induced_forest.maximum.compute",
+    "Maximum induced forest",
+    "Compute a maximum-order induced forest and vertex witness within explicit budgets.",
+    GraphInducedForestMaximumOutput,
+    lambda graph, contract, budget: solve_induced_forest(graph, contract, budget),
+    "induced_forest",
+    "maximum",
 )
 
-INDUCED_TREE_MAXIMUM_CAPABILITY = BoundedSearchOperation(
-    capability_id="graph.induced_tree.maximum.compute",
-    title="Maximum induced tree",
-    description=(
-        "Compute a maximum-order nonempty connected acyclic induced subgraph "
-        "under explicit order, solver-call, and wall-clock budgets."
-    ),
-    request_model=GraphOptimizationRequest,
-    result_model=GraphInducedTreeMaximumOutput,
-    implementation=lambda request: _execute(request, solve_induced_tree),
-    relation_id="graph.induced_tree.maximum.relation",
-    scope_parameters=_scope,
-    is_complete=lambda result: result.status == "EXACT",
-    obligation_model=GraphInducedTreeMaximumObligation,
-    obligation=lambda request, result: _vertex_obligation(
-        request, result, GraphInducedTreeMaximumObligation
-    ),
-    incomplete_basis="the bounded threshold search did not establish optimality",
-    tags=("graph", "induced_tree", "maximum", "bounded", "z3"),
-    invalid_request=_INVALID_GRAPH_OPTIMIZATION_REQUEST,
+INDUCED_TREE_MAXIMUM_CAPABILITY = _operation(
+    "graph.induced_tree.maximum.compute",
+    "Maximum induced tree",
+    "Compute a maximum-order induced tree and vertex witness within explicit budgets.",
+    GraphInducedTreeMaximumOutput,
+    lambda graph, contract, budget: solve_induced_tree(graph, contract, budget),
+    "induced_tree",
+    "maximum",
 )
 
-INDUCED_BIPARTITE_MAXIMUM_CAPABILITY = BoundedSearchOperation(
-    capability_id="graph.induced_bipartite.maximum.compute",
-    title="Maximum induced bipartite subgraph",
-    description=(
-        "Compute a maximum-order induced bipartite subgraph and its vertex "
-        "witness under explicit order, solver-call, and wall-clock budgets."
-    ),
-    request_model=GraphOptimizationRequest,
-    result_model=GraphInducedBipartiteMaximumOutput,
-    implementation=lambda request: _execute(request, solve_induced_bipartite),
-    relation_id="graph.induced_bipartite.maximum.relation",
-    scope_parameters=_scope,
-    is_complete=lambda result: result.status == "EXACT",
-    obligation_model=GraphInducedBipartiteMaximumObligation,
-    obligation=lambda request, result: _vertex_obligation(
-        request, result, GraphInducedBipartiteMaximumObligation
-    ),
-    incomplete_basis="the bounded threshold search did not establish optimality",
-    tags=("graph", "induced_bipartite", "maximum", "bounded", "z3"),
-    invalid_request=_INVALID_GRAPH_OPTIMIZATION_REQUEST,
+INDUCED_BIPARTITE_MAXIMUM_CAPABILITY = _operation(
+    "graph.induced_bipartite.maximum.compute",
+    "Maximum induced bipartite subgraph",
+    "Compute a maximum-order induced bipartite subgraph within explicit budgets.",
+    GraphInducedBipartiteMaximumOutput,
+    lambda graph, contract, budget: solve_induced_bipartite(graph, contract, budget),
+    "induced_bipartite",
+    "maximum",
 )
 
 FINITE_GRAPH_OPTIMIZATION_CAPABILITIES = (

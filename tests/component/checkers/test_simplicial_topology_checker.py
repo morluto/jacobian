@@ -104,7 +104,7 @@ _PRESENTATION = {
     "facets": [["b", "a"], ["c", "b"], ["a", "c"]],
 }
 _CANONICALIZATION_REQUEST = SimplicialComplexRequest.model_validate(_PRESENTATION)
-_CANONICALIZATION_RESULT = _canonicalize(_CANONICALIZATION_REQUEST).value
+_CANONICALIZATION_RESULT = _canonicalize(_CANONICALIZATION_REQUEST)
 _COMPLEX = _CANONICALIZATION_RESULT.complex
 _CHAIN_REQUEST = ChainComplexRequest(
     complex=_COMPLEX,
@@ -135,7 +135,7 @@ _HOMOLOGY_CASE = _request(
     "topology.simplicial_homology.compute",
     "topology.simplicial-homology.modular-replay",
     _HOMOLOGY_REQUEST.model_dump(mode="json"),
-    _homology(_HOMOLOGY_REQUEST).value.model_dump(mode="json"),
+    _homology(_HOMOLOGY_REQUEST).model_dump(mode="json"),
 )
 
 _CASES: tuple[
@@ -178,7 +178,7 @@ _CASES: tuple[
             "topology.simplicial_homology.compute",
             "topology.simplicial-homology.modular-replay",
             _REDUCED_HOMOLOGY_REQUEST.model_dump(mode="json"),
-            _homology(_REDUCED_HOMOLOGY_REQUEST).value.model_dump(mode="json"),
+            _homology(_REDUCED_HOMOLOGY_REQUEST).model_dump(mode="json"),
         ),
     ),
     (
@@ -187,9 +187,7 @@ _CASES: tuple[
             "topology.simplicial_homology.integral.compute",
             "topology.simplicial-homology.integral-smith-certificate-v1",
             _INTEGRAL_HOMOLOGY_REQUEST.model_dump(mode="json"),
-            _integral_homology(_INTEGRAL_HOMOLOGY_REQUEST).value.model_dump(
-                mode="json"
-            ),
+            _integral_homology(_INTEGRAL_HOMOLOGY_REQUEST).model_dump(mode="json"),
         ),
     ),
 )

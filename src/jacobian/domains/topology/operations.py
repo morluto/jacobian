@@ -3,10 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from sympy.polys.matrices import DomainMatrix
 
 from jacobian.contracts.certified_snf import CertifiedIntegerMatrix
 from jacobian.contracts.topology import (
@@ -44,7 +40,9 @@ from jacobian.domains._certified_snf import (
     smith_reduce,
 )
 from jacobian.domains._examples import example
-from jacobian.operations import ComputedOperation, ComputedSuccess
+from jacobian.math import prime_field_linear_algebra as prime_field
+from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operations import OperationSpec
 
 
 def _canonical_complex(
@@ -82,11 +80,9 @@ def _canonical_complex(
 
 def _canonicalize(
     request: SimplicialComplexRequest,
-) -> ComputedSuccess[SimplicialComplexCanonicalizationResult]:
-    return ComputedSuccess(
-        SimplicialComplexCanonicalizationResult(
-            complex=_canonical_complex(request.vertices, request.facets)
-        )
+) -> SimplicialComplexCanonicalizationResult:
+    return SimplicialComplexCanonicalizationResult(
+        complex=_canonical_complex(request.vertices, request.facets)
     )
 
 
@@ -243,163 +239,33 @@ def _chain_result(request: ChainComplexRequest) -> ChainComplexResult:
 
 def _chain(
     request: ChainComplexRequest,
-) -> ComputedSuccess[ChainComplexResult]:
-    return ComputedSuccess(_chain_result(request))
+) -> ChainComplexResult:
+    return _chain_result(request)
 
 
-def _domain_matrix(
-    matrix: Sequence[Sequence[int]],
-    *,
-    rows: int,
-    columns: int,
-    prime: int,
-) -> DomainMatrix:
-    """Build a SymPy ``DomainMatrix`` over ``GF(prime)`` with residues in ``[0, p)``."""
-
-    import sympy
-    from sympy.polys.matrices import DomainMatrix
-
-    field = sympy.GF(prime)
-    entries = [[int(value) % prime for value in row[:columns]] for row in matrix[:rows]]
-    return DomainMatrix(entries, (rows, columns), field)
-
-
-def _rref(
+def _prime_matrix(
     matrix: Sequence[Sequence[int]],
     *,
     columns: int,
     prime: int,
-) -> tuple[list[list[int]], tuple[int, ...]]:
-    row_count = len(matrix)
-    # Explicitly handle empty shapes: DomainMatrix requires consistent row
-    # lists, so a 0xm matrix is an empty row list and an nx0 matrix is n
-    # empty row lists.
-    if row_count == 0 or columns == 0:
-        return [[0] * columns for _ in range(row_count)], ()
-    domain = _domain_matrix(matrix, rows=row_count, columns=columns, prime=prime)
-    reduced_domain, pivot_columns = domain.rref()
-    reduced_matrix = reduced_domain.to_Matrix()
-    rows_out = [
-        [int(reduced_matrix[row, column]) % prime for column in range(columns)]
-        for row in range(row_count)
-    ]
-    return rows_out, tuple(int(pivot) for pivot in pivot_columns)
-
-
-def _rank(
-    matrix: Sequence[Sequence[int]],
-    *,
-    columns: int,
-    prime: int,
-) -> int:
-    row_count = len(matrix)
-    if row_count == 0 or columns == 0:
-        return 0
-    domain = _domain_matrix(matrix, rows=row_count, columns=columns, prime=prime)
-    return int(domain.rank())
-
-
-def _nullspace(
-    matrix: Sequence[Sequence[int]],
-    *,
-    columns: int,
-    prime: int,
-) -> tuple[tuple[int, ...], ...]:
-    reduced, pivots = _rref(matrix, columns=columns, prime=prime)
-    free_columns = tuple(column for column in range(columns) if column not in pivots)
-    basis: list[tuple[int, ...]] = []
-    for free in free_columns:
-        vector = [0] * columns
-        vector[free] = 1
-        for row, pivot in enumerate(pivots):
-            vector[pivot] = -reduced[row][free] % prime
-        basis.append(tuple(vector))
-    return tuple(basis)
+) -> prime_field.PrimeFieldMatrix:
+    return prime_field.PrimeFieldMatrix(
+        prime=prime,
+        entries=tuple(tuple(value for value in row[:columns]) for row in matrix),
+        columns=columns,
+    )
 
 
 def _vector_rank(vectors: Sequence[Sequence[int]], *, prime: int) -> int:
     if not vectors:
         return 0
     rows = [[vector[row] for vector in vectors] for row in range(len(vectors[0]))]
-    return _rank(rows, columns=len(vectors), prime=prime)
-
-
-class _IncrementalVectorBasis:
-    def __init__(self, *, dimension: int, prime: int) -> None:
-        self._prime = prime
-        self._rows: dict[int, list[int]] = {}
-        self._dimension = dimension
-
-    def add(self, vector: Sequence[int]) -> bool:
-        reduced = [value % self._prime for value in vector]
-        if len(reduced) != self._dimension:
-            raise ValueError("basis vector has the wrong dimension")
-        for existing_pivot, row in self._rows.items():
-            factor = reduced[existing_pivot]
-            if factor:
-                reduced = [
-                    (value - factor * basis_value) % self._prime
-                    for value, basis_value in zip(reduced, row, strict=True)
-                ]
-        new_pivot = next(
-            (index for index, value in enumerate(reduced) if value),
-            None,
-        )
-        if new_pivot is None:
-            return False
-        inverse = pow(reduced[new_pivot], -1, self._prime)
-        reduced = [value * inverse % self._prime for value in reduced]
-        for existing_pivot, row in tuple(self._rows.items()):
-            factor = row[new_pivot]
-            if factor:
-                self._rows[existing_pivot] = [
-                    (value - factor * basis_value) % self._prime
-                    for value, basis_value in zip(row, reduced, strict=True)
-                ]
-        self._rows[new_pivot] = reduced
-        self._rows = dict(sorted(self._rows.items()))
-        return True
-
-
-def _column_basis(
-    matrix: Sequence[Sequence[int]],
-    *,
-    columns: int,
-    prime: int,
-) -> tuple[tuple[int, ...], ...]:
-    if columns == 0:
-        return ()
-    row_count = len(matrix)
-    selected: list[tuple[int, ...]] = []
-    basis = _IncrementalVectorBasis(dimension=row_count, prime=prime)
-    for column in range(columns):
-        vector = tuple(matrix[row][column] % prime for row in range(row_count))
-        if basis.add(vector):
-            selected.append(vector)
-    return tuple(selected)
-
-
-def _quotient_basis(
-    cycles: Sequence[Sequence[int]],
-    boundaries: Sequence[Sequence[int]],
-    *,
-    prime: int,
-) -> tuple[tuple[int, ...], ...]:
-    dimension = len(cycles[0]) if cycles else (len(boundaries[0]) if boundaries else 0)
-    basis = _IncrementalVectorBasis(dimension=dimension, prime=prime)
-    for boundary in boundaries:
-        basis.add(boundary)
-    quotient: list[tuple[int, ...]] = []
-    for cycle in cycles:
-        vector = tuple(cycle)
-        if basis.add(vector):
-            quotient.append(vector)
-    return tuple(quotient)
+    return prime_field.rank(_prime_matrix(rows, columns=len(vectors), prime=prime))
 
 
 def _homology(
     request: SimplicialHomologyRequest,
-) -> ComputedSuccess[SimplicialHomologyResult]:
+) -> SimplicialHomologyResult:
     chain = _chain_result(
         ChainComplexRequest(
             complex=request.complex,
@@ -426,28 +292,25 @@ def _homology(
         )
         if outgoing is None:
             raise ValueError("boundary for dimension is unexpectedly None")
-        cycles = _nullspace(
-            outgoing,
-            columns=chain_dimension,
-            prime=request.prime,
+        outgoing_matrix = _prime_matrix(
+            outgoing, columns=chain_dimension, prime=request.prime
         )
-        outgoing_rank = _rank(
-            outgoing,
-            columns=chain_dimension,
-            prime=request.prime,
-        )
+        cycles = prime_field.nullspace(outgoing_matrix)
+        outgoing_rank = prime_field.rank(outgoing_matrix)
         if dimension < request.complex.dimension:
             incoming = boundaries[dimension + 1]
             incoming_columns = len(chain.simplex_bases[dimension + 1].simplices)
         else:
             incoming = [[] for _ in range(chain_dimension)]
             incoming_columns = 0
-        boundary_basis = _column_basis(
-            incoming,
-            columns=incoming_columns,
-            prime=request.prime,
+        boundary_basis = prime_field.column_basis(
+            _prime_matrix(
+                incoming,
+                columns=incoming_columns,
+                prime=request.prime,
+            )
         )
-        homology_basis = _quotient_basis(
+        homology_basis = prime_field.quotient_basis(
             cycles,
             boundary_basis,
             prime=request.prime,
@@ -476,14 +339,12 @@ def _homology(
                 quotient_span_rank=quotient_span_rank,
             )
         )
-    return ComputedSuccess(
-        SimplicialHomologyResult(
-            complex_digest=request.complex.complex_digest,
-            prime=request.prime,
-            convention=request.convention,
-            dimension_range=(0, request.complex.dimension),
-            groups=tuple(groups),
-        )
+    return SimplicialHomologyResult(
+        complex_digest=request.complex.complex_digest,
+        prime=request.prime,
+        convention=request.convention,
+        dimension_range=(0, request.complex.dimension),
+        groups=tuple(groups),
     )
 
 
@@ -506,7 +367,7 @@ def _integral_vector(values: list[int]) -> IntegralVector:
 
 def _integral_homology(
     request: IntegralSimplicialHomologyRequest,
-) -> ComputedSuccess[IntegralSimplicialHomologyResult]:
+) -> IntegralSimplicialHomologyResult:
     chain = _chain_result(
         ChainComplexRequest(
             complex=request.complex,
@@ -631,13 +492,11 @@ def _integral_homology(
                 ),
             )
         )
-    return ComputedSuccess(
-        IntegralSimplicialHomologyResult(
-            complex_digest=request.complex.complex_digest,
-            convention=request.convention,
-            dimension_range=(0, request.complex.dimension),
-            groups=tuple(groups),
-        )
+    return IntegralSimplicialHomologyResult(
+        complex_digest=request.complex.complex_digest,
+        convention=request.convention,
+        dimension_range=(0, request.complex.dimension),
+        groups=tuple(groups),
     )
 
 
@@ -647,148 +506,154 @@ _CIRCLE = {
 }
 
 type TopologyOperation = (
-    ComputedOperation[SimplicialComplexRequest, SimplicialComplexCanonicalizationResult]
-    | ComputedOperation[ChainComplexRequest, ChainComplexResult]
-    | ComputedOperation[SimplicialHomologyRequest, SimplicialHomologyResult]
-    | ComputedOperation[
+    InstalledOperation[
+        SimplicialComplexRequest, SimplicialComplexCanonicalizationResult
+    ]
+    | InstalledOperation[ChainComplexRequest, ChainComplexResult]
+    | InstalledOperation[SimplicialHomologyRequest, SimplicialHomologyResult]
+    | InstalledOperation[
         IntegralSimplicialHomologyRequest, IntegralSimplicialHomologyResult
     ]
 )
 
 
 TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
-    ComputedOperation(
-        capability_id="topology.simplicial_complex.canonicalize",
-        title="Canonicalize a finite simplicial complex",
-        description=(
-            "Validate bounded maximal facets, close them under every non-empty "
-            "face, and return canonical oriented simplex bases and the exact "
-            "f-vector."
-        ),
-        request_model=SimplicialComplexRequest,
-        result_model=SimplicialComplexCanonicalizationResult,
-        implementation=_canonicalize,
-        relation_id="topology.simplicial_complex.canonicalization.relation",
-        tags=(
-            "topology",
-            "simplicial-complex",
-            "facets",
-            "face-closure",
-            "f-vector",
-            "exact",
-        ),
-        invocation_examples=(
-            example(
-                "triangle_boundary",
-                "Canonicalize the three-edge simplicial model of a circle.",
-                _CIRCLE,
+    inline_operation(
+        OperationSpec(
+            operation_id="topology.simplicial_complex.canonicalize",
+            title="Canonicalize a finite simplicial complex",
+            description=(
+                "Validate bounded maximal facets, close them under every non-empty "
+                "face, and return canonical oriented simplex bases and the exact "
+                "f-vector."
             ),
-        ),
-        version="4",
-    ),
-    ComputedOperation(
-        capability_id="topology.simplicial_complex.chain_complex.compute",
-        title="Compute an oriented simplicial chain complex",
-        description=(
-            "Construct every oriented sparse boundary matrix for one canonical "
-            "finite simplicial complex over the integers or a bounded prime field."
-        ),
-        request_model=ChainComplexRequest,
-        result_model=ChainComplexResult,
-        implementation=_chain,
-        relation_id="topology.simplicial_complex.chain_complex.relation",
-        tags=(
-            "topology",
-            "simplicial-complex",
-            "chain-complex",
-            "boundary-matrix",
-            "exact",
-        ),
-        version="4",
-    ),
-    ComputedOperation(
-        capability_id="topology.simplicial_homology.compute",
-        title="Compute finite-field simplicial homology",
-        description=(
-            "Compute every Betti number and inspectable cycle, boundary, and "
-            "quotient basis of a bounded finite simplicial complex over F_p."
-        ),
-        request_model=SimplicialHomologyRequest,
-        result_model=SimplicialHomologyResult,
-        implementation=_homology,
-        relation_id="topology.simplicial_homology.relation",
-        tags=(
-            "topology",
-            "simplicial-homology",
-            "betti-number",
-            "cycle-basis",
-            "prime-field",
-            "exact",
-        ),
-        version="4",
-    ),
-    ComputedOperation(
-        capability_id="topology.simplicial_homology.integral.compute",
-        title="Compute transformation-certified integral simplicial homology",
-        description=(
-            "Compute the free rank, torsion invariant factors, and simplex-basis "
-            "cycle generators of every integral homology group, with explicit "
-            "Smith transformations and bounding chains."
-        ),
-        request_model=IntegralSimplicialHomologyRequest,
-        result_model=IntegralSimplicialHomologyResult,
-        implementation=_integral_homology,
-        relation_id="topology.simplicial_homology.integral.relation",
-        tags=(
-            "topology",
-            "simplicial-homology",
-            "integer-homology",
-            "torsion",
-            "betti-number",
-            "cycle-generator",
-            "smith-normal-form",
-            "certificate",
-            "exact",
-        ),
-        invocation_examples=(
-            example(
-                "integral_circle_homology",
-                "Compute H_0 and H_1 over the integers for a triangle boundary.",
-                {
-                    "complex": {
-                        "vertices": ["a", "b", "c"],
-                        "maximal_simplices": [
-                            ["a", "b"],
-                            ["a", "c"],
-                            ["b", "c"],
-                        ],
-                        "faces_by_dimension": [
-                            {
-                                "dimension": 0,
-                                "faces": [["a"], ["b"], ["c"]],
-                            },
-                            {
-                                "dimension": 1,
-                                "faces": [
-                                    ["a", "b"],
-                                    ["a", "c"],
-                                    ["b", "c"],
-                                ],
-                            },
-                        ],
-                        "dimension": 1,
-                        "f_vector": [3, 3],
-                        "closure_size": 6,
-                        "complex_digest": (
-                            "sha256:"
-                            "6f797991bac967e2a8e572707df487061655df0f094c"
-                            "bde0f52f82c5401fc043"
-                        ),
-                    }
-                },
+            request_type=SimplicialComplexRequest,
+            result_type=SimplicialComplexCanonicalizationResult,
+            execute=_canonicalize,
+            tags=(
+                "topology",
+                "simplicial-complex",
+                "facets",
+                "face-closure",
+                "f-vector",
+                "exact",
             ),
-        ),
-        version="4",
+            invocation_examples=(
+                example(
+                    "triangle_boundary",
+                    "Canonicalize the three-edge simplicial model of a circle.",
+                    _CIRCLE,
+                ),
+            ),
+            version="4",
+        )
+    ),
+    inline_operation(
+        OperationSpec(
+            operation_id="topology.simplicial_complex.chain_complex.compute",
+            title="Compute an oriented simplicial chain complex",
+            description=(
+                "Construct every oriented sparse boundary matrix for one canonical "
+                "finite simplicial complex over the integers or a bounded prime field."
+            ),
+            request_type=ChainComplexRequest,
+            result_type=ChainComplexResult,
+            execute=_chain,
+            tags=(
+                "topology",
+                "simplicial-complex",
+                "chain-complex",
+                "boundary-matrix",
+                "exact",
+            ),
+            version="4",
+        )
+    ),
+    inline_operation(
+        OperationSpec(
+            operation_id="topology.simplicial_homology.compute",
+            title="Compute finite-field simplicial homology",
+            description=(
+                "Compute every Betti number and inspectable cycle, boundary, and "
+                "quotient basis of a bounded finite simplicial complex over F_p."
+            ),
+            request_type=SimplicialHomologyRequest,
+            result_type=SimplicialHomologyResult,
+            execute=_homology,
+            tags=(
+                "topology",
+                "simplicial-homology",
+                "betti-number",
+                "cycle-basis",
+                "prime-field",
+                "exact",
+            ),
+            version="4",
+        )
+    ),
+    inline_operation(
+        OperationSpec(
+            operation_id="topology.simplicial_homology.integral.compute",
+            title="Compute transformation-certified integral simplicial homology",
+            description=(
+                "Compute the free rank, torsion invariant factors, and simplex-basis "
+                "cycle generators of every integral homology group, with explicit "
+                "Smith transformations and bounding chains."
+            ),
+            request_type=IntegralSimplicialHomologyRequest,
+            result_type=IntegralSimplicialHomologyResult,
+            execute=_integral_homology,
+            tags=(
+                "topology",
+                "simplicial-homology",
+                "integer-homology",
+                "torsion",
+                "betti-number",
+                "cycle-generator",
+                "smith-normal-form",
+                "certificate",
+                "exact",
+            ),
+            invocation_examples=(
+                example(
+                    "integral_circle_homology",
+                    "Compute H_0 and H_1 over the integers for a triangle boundary.",
+                    {
+                        "complex": {
+                            "vertices": ["a", "b", "c"],
+                            "maximal_simplices": [
+                                ["a", "b"],
+                                ["a", "c"],
+                                ["b", "c"],
+                            ],
+                            "faces_by_dimension": [
+                                {
+                                    "dimension": 0,
+                                    "faces": [["a"], ["b"], ["c"]],
+                                },
+                                {
+                                    "dimension": 1,
+                                    "faces": [
+                                        ["a", "b"],
+                                        ["a", "c"],
+                                        ["b", "c"],
+                                    ],
+                                },
+                            ],
+                            "dimension": 1,
+                            "f_vector": [3, 3],
+                            "closure_size": 6,
+                            "complex_digest": (
+                                "sha256:"
+                                "6f797991bac967e2a8e572707df487061655df0f094c"
+                                "bde0f52f82c5401fc043"
+                            ),
+                        }
+                    },
+                ),
+            ),
+            version="4",
+        )
     ),
 )
 

@@ -52,7 +52,6 @@ def test_factorization_checker_accepts_content_and_monic_irreducibles() -> None:
             ],
             "reconstructed": _rational_poly((-3, 2), (0, 1), (-3, 2)),
             "normalization": "CONTENT_AND_MONIC_IRREDUCIBLES",
-            "irreducibility_assurance": "UNVERIFIED",
             "product_reconstruction": "EXACT",
         },
     )

@@ -190,7 +190,6 @@ def _validate_recurrence_result_budget(
                 {"index": index, "value": _fraction_wire(replay[index])}
                 for index in requested_indices
             ],
-            "verification": "UNVERIFIED",
         }
     )
 
@@ -300,7 +299,6 @@ def _validate_p_recursive_result_budget(
                 {"index": index, "value": _fraction_wire(replay[index])}
                 for index in requested_indices
             ],
-            "verification": "UNVERIFIED",
         }
     )
 
@@ -365,7 +363,6 @@ def _validate_series_result_budget(
                 "DENOMINATOR_TIMES_SERIES_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_ORDER"
             ),
             "truncation_order": truncation_order,
-            "verification": "UNVERIFIED",
         }
     )
 
@@ -433,7 +430,6 @@ class IntegerSidonResult(ContractModel):
     exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["python-stdlib"] = "python-stdlib"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_complete_ordered_difference_profile(self) -> Self:
@@ -542,7 +538,6 @@ class CyclicPerfectDifferenceSetResult(ContractModel):
     exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["python-stdlib"] = "python-stdlib"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_complete_cyclic_profile(self) -> Self:
@@ -694,7 +689,6 @@ class CyclicDifferenceSetExtensionResult(ContractModel):
     exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["python-stdlib"] = "python-stdlib"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_fixed_order_scope_and_decision_shape(self) -> Self:
@@ -903,7 +897,6 @@ class LinearRecurrenceEvaluationResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["sympy"] = "sympy"
     backend_version: Literal["1.14.0"] = "1.14.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def require_complete_replay_prefix(self) -> Self:
@@ -1028,7 +1021,6 @@ class PolynomialCoefficientRecurrenceEvaluationResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["sympy"] = "sympy"
     backend_version: Literal["1.14.0"] = "1.14.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def require_complete_replay(self) -> Self:
@@ -1122,7 +1114,6 @@ class RationalGeneratingFunctionCoefficientsResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["sympy"] = "sympy"
     backend_version: Literal["1.14.0"] = "1.14.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def require_exact_finite_truncation(self) -> Self:

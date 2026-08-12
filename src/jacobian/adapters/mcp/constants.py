@@ -1,19 +1,3 @@
 """Shared MCP adapter constants."""
 
-from __future__ import annotations
-
-from typing import Literal
-
 CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
-CAPABILITY_INSPECTION_RELATIONSHIPS_BYTE_LIMIT = 16_384
-CapabilityDescriptionView = Literal["SUMMARY", "CONTRACT", "FULL"]
-
-
-_CAPABILITY_SCOPE_RULE = {
-    "conclusion_scope": "Only the exact supplied input or claim is covered.",
-    "bounded_repetition": (
-        "Additional finite or bounded invocations remain finite evidence; they do "
-        "not establish an all-orders, all-parameters, or otherwise unbounded "
-        "conclusion."
-    ),
-}

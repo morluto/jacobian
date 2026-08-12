@@ -7,7 +7,7 @@ separate trust boundaries.
 
 ## Input and result contracts
 
-The producer accepts one [`RationalMatrix`](../index.md#shared-matrix-values)
+The producer accepts one [`RationalMatrix`](index.md#shared-matrix-values)
 from `jacobian.contracts.matrices`: a nonempty square matrix with at most 32
 rows and columns. Every entry is a canonical reduced rational:
 
@@ -24,8 +24,8 @@ fraction-free Bareiss method. It returns the bounded canonical determinant
 inline with its method and backend version; ordinary computation writes no
 artifact.
 
-The compute result remains `COMPUTED` and `UNVERIFIED`. Backend success is an
-execution result, not independent assurance. SymPy documents both the
+The compute result creates no verification record. Backend success is an
+execution result, not independent verification. SymPy documents both the
 [`Matrix.det` API][sympy-det] and its Bareiss method.
 
 ## Independent verification
@@ -57,21 +57,5 @@ declared value = det(stored source matrix)
 It does not separately conclude invertibility, rank, orientation, volume, or
 any downstream theorem. An agent can compose those later from the inline value
 or from the associated verification record.
-
-## Public reproduction
-
-The integration reproduction uses
-
-```text
-[[1, 0, 1],
- [2, -1, 3],
- [4, 3, 2]]
-```
-
-The producer returns determinant `-1` inline; pass the same matrix under
-`input` and that returned `result` under `candidate` to the verifier. The
-independent checker recomputes the value and emits a bound verification record.
-Attack cases mutate the candidate value, supply noncanonical rationals, add
-unexpected fields, and force a checker timeout.
 
 [sympy-det]: https://docs.sympy.org/latest/modules/matrices/matrices.html#sympy.matrices.matrixbase.MatrixBase.det

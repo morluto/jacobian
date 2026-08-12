@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -63,7 +62,6 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
         assert [group["torsion_coefficients"] for group in groups] == (
             case["expected_torsion"]
         )
-        assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
         verified = topology_services.core.capabilities.invoke(
             CapabilityRequest(
@@ -76,4 +74,4 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED
         assert verified.output["status"] == "VERIFIED"
-        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+        assert verified.verification_record_uri is not None

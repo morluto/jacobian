@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -53,8 +52,6 @@ def test_public_small_graph_reliability_reaches_checker_bound_results(
             == (case["expected_probability"])
         )
         assert computed.output["result"]["visited_states"] == case["expected_states"]
-        assert computed.output["result"]["completeness"] == "COMPLETE"
-        assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
         verified = probability_services.core.capabilities.invoke(
             CapabilityRequest(
@@ -68,4 +65,4 @@ def test_public_small_graph_reliability_reaches_checker_bound_results(
             )
         )
         assert verified.output["status"] == "VERIFIED"
-        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+        assert verified.verification_record_uri is not None

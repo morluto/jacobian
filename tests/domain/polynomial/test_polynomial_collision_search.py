@@ -6,17 +6,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.bounded_process import bounded_process_cancellation
-from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
-    CapabilityRequest,
-)
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
 from jacobian.polynomials import install_polynomial_capabilities
+from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture
@@ -78,8 +74,6 @@ def test_collision_search_returns_first_deterministic_candidate(
     assert result.output["common_image"] == [{"num": "1", "den": "1"}]
     assert result.output["witness_uri"] in result.artifact_uris
     assert result.output["stop_reason"] == "FIRST_COLLISION"
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
 def test_collision_search_reports_partial_grid_after_early_collision(
@@ -94,36 +88,6 @@ def test_collision_search_reports_partial_grid_after_early_collision(
     assert result.output["first_point"] == [{"num": "-1", "den": "1"}]
     assert result.output["second_point"] == [{"num": "0", "den": "1"}]
     assert result.output["stop_reason"] == "FIRST_COLLISION"
-    assert result.completeness.status is CapabilityCompletenessStatus.PARTIAL
-
-    relationships = {
-        relationship.relation_id: relationship for relationship in result.relationships
-    }
-    evaluation_relationship = relationships["polynomial.relation.evaluation-of"]
-    assert evaluation_relationship.source_artifact_uris == (result.output["map_uri"],)
-    assert len(evaluation_relationship.target_artifact_uris) == 2
-    assert set(evaluation_relationship.target_artifact_uris) == {
-        result.output["first_evaluation_uri"],
-        result.output["second_evaluation_uri"],
-    }
-    assert relationships[
-        "polynomial.relation.collision-derived-from"
-    ].source_artifact_uris == (
-        result.output["first_evaluation_uri"],
-        result.output["second_evaluation_uri"],
-    )
-    assert relationships[
-        "polynomial.relation.collision-refutes-injectivity"
-    ].target_artifact_uris == (result.output["claim_uri"],)
-    relationship_artifacts = {
-        uri
-        for relationship in result.relationships
-        for uri in (
-            *relationship.source_artifact_uris,
-            *relationship.target_artifact_uris,
-        )
-    }
-    assert relationship_artifacts <= set(result.artifact_uris)
 
 
 def test_collision_search_reports_exact_completed_not_found_scope(
@@ -137,14 +101,6 @@ def test_collision_search_reports_exact_completed_not_found_scope(
     assert result.output["grid_point_count"] == 3
     assert result.output["witness_uri"] is None
     assert result.output["stop_reason"] == "GRID_EXHAUSTED"
-    assert result.output["verification"] == "UNVERIFIED"
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert len(result.relationships) == 1
-    assert result.relationships[0].relation_id == "polynomial.relation.evaluation-of"
-    assert len(result.relationships[0].target_artifact_uris) == 3
-    assert set(result.relationships[0].target_artifact_uris) <= set(
-        result.artifact_uris
-    )
 
 
 def test_collision_search_preserves_partial_evidence_when_cancelled(
@@ -161,9 +117,7 @@ def test_collision_search_preserves_partial_evidence_when_cancelled(
     assert result.output["stop_reason"] == "CANCELLED"
     assert result.output["examined_point_count"] == 0
     assert result.output["grid_point_count"] == 3
-    assert result.completeness.status is CapabilityCompletenessStatus.PARTIAL
     assert len(result.artifact_uris) == 1
-    assert result.relationships == ()
 
 
 def test_collision_search_validates_grid_bound_before_artifact_writes(

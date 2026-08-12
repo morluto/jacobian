@@ -118,8 +118,8 @@ class LeanReplProofStepResponse(LeanReplWireModel):
     )
 
 
-class LeanReplPickleProofStateResponse(LeanReplWireModel):
-    """Empty acknowledgement returned after a successful ``pickleTo`` request."""
+class LeanReplPickleProofStateResponse(LeanReplProofStepResponse):
+    """Proof snapshot returned after a successful ``pickleTo`` request."""
 
 
 class LeanReplErrorResponse(LeanReplWireModel):

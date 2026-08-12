@@ -10,17 +10,10 @@ from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationE
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import (
@@ -32,7 +25,7 @@ from jacobian.contracts.polynomial_expressions import (
     PolynomialExpressionNormalizationVerificationOutput,
     PolynomialExpressionNormalizationVerificationRequest,
 )
-from jacobian.contracts.results import Conclusion, ExecutionStatus, Verification
+from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.polynomial_expressions import (
     PolynomialExpressionArtifactError,
     PolynomialExpressionArtifactService,
@@ -244,7 +237,6 @@ class PolynomialExpressionNormalizationVerificationAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion is Conclusion.TRUE
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         status: Literal[
@@ -298,80 +290,6 @@ class PolynomialExpressionNormalizationVerificationAdapter:
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "the full typed source expression and every proposed canonical "
-                    "sparse coefficient"
-                ),
-                parameters={
-                    "declared_scope": "FULL_EXPRESSION",
-                    "variables": list(resolved.expression.variables),
-                    "node_count": resolved.candidate.source.node_count,
-                    "normalized_term_count": len(resolved.candidate.normalized.terms),
-                },
-                artifact_uri=resolved.expression_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if verified
-                    else CapabilityCompletenessStatus.NOT_APPLICABLE
-                ),
-                basis=(
-                    "the independent checker replayed every node and canonical "
-                    "coefficient of the bound finite AST relation"
-                    if verified
-                    else "direct exact replay makes no accepted completeness claim"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else (
-                        CapabilityAssuranceLevel.COMPUTED
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else CapabilityAssuranceLevel.HEURISTIC
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else (
-                        CapabilityAssuranceLevel.COMPUTED
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else CapabilityAssuranceLevel.HEURISTIC
-                    )
-                ),
-                basis=(
-                    "accepted in a clean process by the operator-authorized "
-                    "independent exact typed-polynomial checker"
-                    if verified
-                    else (
-                        "checker replay completed without accepting the candidate; "
-                        "no mathematical conclusion follows"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not complete; no mathematical "
-                        "conclusion follows"
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
-            relationships=(
-                (
-                    CapabilityRelationship(
-                        relation_id=("polynomial.relation.expression-normalization-of"),
-                        source_artifact_uris=(resolved.artifact.artifact_uri,),
-                        target_artifact_uris=(
-                            resolved.expression_artifact.artifact_uri,
-                        ),
-                        status=CapabilityRelationshipStatus.VERIFIED,
-                        verification_record_uri=record_uri,
-                    ),
-                )
-                if verified
-                else ()
-            ),
+            verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
         )

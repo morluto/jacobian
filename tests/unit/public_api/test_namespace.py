@@ -7,7 +7,48 @@ import pytest
 import jacobian
 
 PUBLIC_API = {
-    "jacobian.math": ("arithmetic", "graphs", "matrices", "polynomials"),
+    "jacobian.math": (
+        "arithmetic",
+        "finite_fields",
+        "graphs",
+        "matrices",
+        "polynomials",
+        "prime_field_linear_algebra",
+    ),
+    "jacobian.math.finite_fields": (
+        "Axis",
+        "AxisBoundMatrix",
+        "CollisionCertificate",
+        "DirectionRankLedger",
+        "FiberPartition",
+        "FiniteDimensionalSubspace",
+        "FiniteFieldElement",
+        "FiniteFieldPresentation",
+        "FiniteLinearMap",
+        "FiniteMapTable",
+        "FinitePolynomial",
+        "FinitePolynomialMap",
+        "OrbitDistribution",
+        "PermutationCertificate",
+        "ProjectiveLine",
+        "ProjectivePoint",
+        "RankResult",
+        "collision_certificate",
+        "direction_rank_ledger",
+        "element",
+        "evaluate_finite_polynomial",
+        "fiber_partition",
+        "finite_field",
+        "finite_map_table",
+        "finite_polynomial",
+        "finite_polynomial_map",
+        "linear_map_rank",
+        "orbit_distribution",
+        "permutation_certificate",
+        "projective_line",
+        "projective_point",
+        "restrict_scalars",
+    ),
     "jacobian.math.arithmetic": (
         "absolute_value",
         "integerize_rational_vector",
@@ -17,9 +58,48 @@ PUBLIC_API = {
         "sign",
         "sum_rationals",
     ),
-    "jacobian.math.graphs": ("diameter", "is_eulerian", "triangle_count"),
-    "jacobian.math.matrices": ("inverse", "rref", "trace"),
-    "jacobian.math.polynomials": ("derivative", "gcdex", "resultant"),
+    "jacobian.math.graphs": (
+        "GraphCompositionInput",
+        "SimpleUndirectedGraph",
+        "compose_graphs",
+        "diameter",
+        "explicit_graph",
+        "is_eulerian",
+        "triangle_count",
+    ),
+    "jacobian.math.matrices": (
+        "adjugate",
+        "characteristic_polynomial",
+        "determinant",
+        "inverse",
+        "multiply",
+        "rank",
+        "rref",
+        "smith_normal_form",
+        "solve_linear_system",
+        "trace",
+    ),
+    "jacobian.math.polynomials": (
+        "derivative",
+        "discriminant",
+        "divide",
+        "evaluate",
+        "factorization",
+        "gcdex",
+        "groebner_basis",
+        "integral",
+        "partial_fractions",
+        "resultant",
+        "square_free_decomposition",
+    ),
+    "jacobian.math.prime_field_linear_algebra": (
+        "PrimeFieldMatrix",
+        "column_basis",
+        "nullspace",
+        "quotient_basis",
+        "rank",
+        "rref",
+    ),
 }
 
 
@@ -44,11 +124,20 @@ def test_functions_have_one_canonical_module() -> None:
 
 
 def test_root_namespace_stays_minimal() -> None:
-    assert jacobian.__all__ == ["ResultEnvelope"]
-    assert "arithmetic" not in jacobian.__all__
-    assert "matrices" not in jacobian.__all__
-    assert "graphs" not in jacobian.__all__
-    assert "polynomials" not in jacobian.__all__
+    assert jacobian.__all__ == []
+    assert not hasattr(jacobian, "VerificationResult")
+
+
+def test_shared_contract_namespace_contains_only_passive_primitives() -> None:
+    contracts = importlib.import_module("jacobian.contracts")
+
+    assert contracts.__all__ == [
+        "ArtifactUri",
+        "CheckerUri",
+        "Sha256Digest",
+        "ValueUri",
+    ]
+    assert not hasattr(contracts, "VerificationResult")
 
 
 def test_deleted_experimental_contract_modules_are_not_importable() -> None:

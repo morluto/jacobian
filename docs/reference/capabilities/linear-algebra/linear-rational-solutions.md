@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Experimental pre-stable contract
+- Status: Experimental contract
 - Provider profile: Python-FLINT 0.9.0, `fmpq_mat.rref`
 - Domain: finite systems `A x = b` over `QQ`
 - Maximum shape: 32 equations by 32 declared variables
@@ -19,12 +19,8 @@ outcomes. Their producers and verifiers are also separate operations:
 | `linear.rational_inconsistency.compute` | One normalized left witness `y` with proposed relations `y^T A = 0` and `y^T b = 1`, or no witness | `COMPUTED` when the bounded provider attempt completes; never self-verified |
 | `linear.rational_inconsistency.verify` | Independent replay of every left-witness equation and the nonzero pairing | `VERIFIED` only after the operator-authorized checker creates a durable verification record |
 
-The producers run only when the exact optional Python-FLINT distribution is
-available. Install the pinned wheel with:
-
-```sh
-uv sync --extra flint
-```
+The exact Python-FLINT distribution is pinned by the base Jacobian package and
+the locked source environment.
 
 The verifiers do not import Python-FLINT, SymPy, or the producers. They use
 standard-library `fractions.Fraction` arithmetic in the existing clean-process
@@ -134,8 +130,8 @@ has `y^T A = [0, 0]` and `y^T b = 1`. The producer returns this ordered row
 witness inline. The v2 verification request binds it to the exact supplied
 system and semantics without creating a producer-side artifact.
 
-The producer returns `CERTIFICATE_PRODUCED` with `UNKNOWN` conclusion and
-`UNVERIFIED` assurance. `NO_CERTIFICATE_PRODUCED`, timeout, cancellation,
+The producer returns `CERTIFICATE_PRODUCED` with `UNKNOWN` conclusion and no
+verification record. `NO_CERTIFICATE_PRODUCED`, timeout, cancellation,
 runtime replacement, or malformed output also remains `UNKNOWN`; none proves
 that the system is consistent.
 
@@ -148,7 +144,7 @@ canonical rationals, exact input and candidate bindings, and semantics. Only
 acceptance creates a verification record and the `VERIFIED_INCONSISTENT`
 result.
 
-## Runtime identity and measurements
+## Provider contract
 
 The supported provider identity is:
 
@@ -160,22 +156,6 @@ The supported provider identity is:
 - operation profile: exact `QQ` reduced row-echelon form, either with free
   variables fixed to zero for a solution vector or with the dual pairing
   normalized to one for an inconsistency witness.
-
-On the 2026-07-26 Linux x86-64 development host, the repository measurement
-protocol recorded:
-
-| Measurement | Result |
-| --- | ---: |
-| Fresh-cache, no-dependency wheel install | 4.606 s |
-| Installed distribution size | 25,950,757 bytes |
-| Cold import probe | 0.038 s, 42,332,160-byte peak RSS |
-| 2-by-2 exact RREF reproduction | 0.040 s, 42,332,160-byte peak RSS |
-
-These measurements characterize one host and distribution digest; they are
-not performance guarantees.
-
-The paired agent result is recorded in the
-[the committed Harbor task boundary](../../evaluations/benchmark-contracts.md#task-and-verifier-validation).
 
 ## Trust limits
 

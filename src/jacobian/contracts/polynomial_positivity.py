@@ -107,14 +107,6 @@ class PolynomialIntervalPositivityOutput(ContractModel):
     roots_in_open_interval: int = Field(ge=0)
     endpoint_root: bool
     positive: bool
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    method: Literal["STURM_SEQUENCE"] = "STURM_SEQUENCE"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    certificate_available: Literal[False] = False
-    checker_id: None = None
-    backend: Literal["sympy"] = "sympy"
-    backend_version: str = Field(min_length=1, max_length=64)
 
 
 class PolynomialIntervalPositivityVerifyRequest(ContractModel):
@@ -141,30 +133,15 @@ class PolynomialIntervalPositivityVerifyOutput(ContractModel):
     sign_changes_at_hi: int = Field(ge=0)
     roots_in_open_interval: int = Field(ge=0)
     endpoint_root: bool
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    method: Literal["STURM_SEQUENCE"] = "STURM_SEQUENCE"
-    positivity_assurance: Literal["COMPUTED", "VERIFIED"]
     conclusion: Literal["TRUE", "FALSE", "UNKNOWN"]
 
     @model_validator(mode="after")
-    def preserve_truth_and_assurance(self) -> Self:
-        if self.conclusion == "UNKNOWN" and self.positivity_assurance == "VERIFIED":
-            raise ValueError("an unknown conclusion cannot carry verified assurance")
-        if self.positivity_assurance == "VERIFIED" and (
-            self.verification_record_uri is None
-            or self.checker_id is None
-            or self.conclusion == "UNKNOWN"
+    def bind_verification_record(self) -> Self:
+        if self.verification_record_uri is not None and (
+            self.checker_id is None or self.conclusion == "UNKNOWN"
         ):
             raise ValueError(
-                "verified assurance requires a decisive checker-backed record "
+                "a positivity verification record requires a decisive conclusion "
                 "and checker identity"
-            )
-        if (
-            self.positivity_assurance != "VERIFIED"
-            and self.verification_record_uri is not None
-        ):
-            raise ValueError(
-                "a verification record requires checker-verified assurance"
             )
         return self

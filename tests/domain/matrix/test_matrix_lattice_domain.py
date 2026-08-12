@@ -12,7 +12,6 @@ from tests.support.services import (
 )
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityDiscoveryRequest,
     CapabilityRequest,
 )
@@ -25,6 +24,7 @@ from jacobian.contracts.matrix_operations import (
     MAX_INPUT_SCALAR_DIGITS,
     IntegerMatrixRequest,
     LatticeReductionRequest,
+    LatticeReductionResult,
     MatrixProductResult,
     MatrixTraceResult,
     NullspaceResult,
@@ -38,7 +38,7 @@ from jacobian.domains.matrix_lattice.capabilities import matrix_operation
 from jacobian.domains.matrix_lattice.lattice import reduce_lattice_basis
 from jacobian.domains.matrix_lattice.lattice_bundle import build_lattice_bundle
 from jacobian.domains.matrix_lattice.operations import compute_smith_normal_form
-from jacobian.operations import ComputedSuccess, OperationExecutionFailure
+from jacobian.operations import OperationAbortError
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
@@ -234,7 +234,6 @@ def test_exact_matrix_domain_results_and_lineage(
             CapabilityRequest(capability_id=capability_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
-        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
         assert result.output["result"] == expected
         assert result.artifact_uris == ()
 
@@ -253,7 +252,7 @@ def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
     )
 
     assert discovered.matches[0].capability_id == "matrix.nullspace.compute"
-    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
         for descriptor in matrix_domain_services.core.capabilities.catalog().capabilities
@@ -294,7 +293,7 @@ def test_matrix_multiplication_intent_is_discoverable(
     )
 
     assert discovered.matches[0].capability_id == "matrix.multiply.compute"
-    assert discovered.matches[0].lexical_fit == "STRONG_CANDIDATE"
+    assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
         for descriptor in matrix_domain_services.core.capabilities.catalog().capabilities
@@ -446,14 +445,13 @@ def test_matrix_output_contract_failure_is_operational_error() -> None:
         SquareIntegerMatrixRequest,
         MatrixTraceResult,
         lambda _request: MatrixTraceResult(trace="9" * (MAX_MATRIX_SCALAR_DIGITS + 1)),
-        "matrix.relation.test-of",
     )
 
-    outcome = operation.implementation(request)
+    with raises(OperationAbortError) as exc_info:
+        operation.spec.execute(request)
 
-    assert isinstance(outcome, OperationExecutionFailure)
-    assert outcome.status is ExecutionStatus.ERROR
-    assert outcome.diagnostic.code == "MATRIX_OUTPUT_LIMIT_EXCEEDED"
+    assert exc_info.value.status is ExecutionStatus.ERROR
+    assert exc_info.value.diagnostic.code == "MATRIX_OUTPUT_LIMIT_EXCEEDED"
 
 
 def test_smith_normal_form_preserves_rectangular_shape_and_zero_tail() -> None:
@@ -494,10 +492,10 @@ def test_lll_worker_allows_result_growth_beyond_input_digit_limit() -> None:
             )
         )
     )
-    assert isinstance(outcome, ComputedSuccess)
+    assert isinstance(outcome, LatticeReductionResult)
     largest_output = max(
         len(value.lstrip("-"))
-        for matrix in (outcome.value.reduced_basis, outcome.value.transformation)
+        for matrix in (outcome.reduced_basis, outcome.transformation)
         for row in matrix.entries
         for value in row
     )
@@ -525,7 +523,6 @@ def test_lattice_lll_returns_exact_left_transformation(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     computed = _result_payload(runtime, result)
     reduced = [
         [int(value) for value in row] for row in computed["reduced_basis"]["entries"]

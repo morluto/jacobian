@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -12,16 +14,11 @@ from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationE
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -29,9 +26,9 @@ from jacobian.contracts.results import (
     Conclusion,
     Execution,
     ExecutionStatus,
-    Verification,
 )
 from jacobian.contracts.sat import (
+    SatLratInvalidProofStep,
     SatLratProofArtifact,
     SatLratVerificationOutput,
     SatLratVerificationRequest,
@@ -106,6 +103,8 @@ def install_sat_lrat_verifier(
 
 
 class SatLratVerificationAdapter:
+    typed_input = True
+
     def __init__(
         self,
         *,
@@ -125,11 +124,13 @@ class SatLratVerificationAdapter:
             raise RuntimeError("checker is not installed")
         self._descriptor = CapabilityDescriptor(
             capability_id="sat.lrat.verify",
-            version="1",
-            title="Verify an LRAT UNSAT certificate",
+            version="2",
+            title="Replay and verify an LRAT UNSAT proof",
             description=(
                 "Independently replay the deterministic ASCII LRAT RUP profile "
-                "against an exact canonical CNF; negative RAT hints are unsupported."
+                "against an exact canonical CNF. A line-local rejection returns the "
+                "first invalid proof step, clause ID, proof line, and stable failure "
+                "code; negative RAT hints are unsupported."
             ),
             provider="jacobian.sat-lrat",
             provider_runtime=known_provider_runtime(
@@ -139,7 +140,17 @@ class SatLratVerificationAdapter:
             ),
             input_schema=model_schema(SatLratVerificationRequest),
             output_schema=model_schema(SatLratVerificationOutput),
-            tags=("sat", "cnf", "lrat", "unsat", "certificate", "verification"),
+            tags=(
+                "sat",
+                "cnf",
+                "lrat",
+                "unsat",
+                "certificate",
+                "verification",
+                "proof-replay",
+                "invalid-step",
+                "rejection-witness",
+            ),
             accepted_input_kinds=(CapabilityInputKind.STRUCTURED_REQUEST,),
         )
 
@@ -163,9 +174,10 @@ class SatLratVerificationAdapter:
                     expected="an exact canonical CNF artifact",
                 )
             ) from exc
+        raw_proof = base64.b64decode(validated.proof_base64, validate=True)
         proof = SatLratProofArtifact.from_bytes(
             cnf=resolved.binding,
-            proof=__import__("base64").b64decode(validated.proof_base64, validate=True),
+            proof=raw_proof,
             limits=validated.limits,
         )
         proof_artifact = self.artifacts.put(
@@ -222,27 +234,6 @@ class SatLratVerificationAdapter:
                     detail="cancelled before independent LRAT replay",
                 ),
                 output=output.model_dump(mode="json"),
-                scope=CapabilityScope(
-                    description="the exact canonical CNF and exact LRAT proof bytes",
-                    parameters={
-                        "proof_format": proof.proof_format,
-                        "proof_format_version": proof.proof_format_version,
-                        "proof_digest": proof.proof_digest,
-                        "variable_map_digest": proof.cnf.variable_map_digest,
-                        "dimacs_digest": proof.cnf.dimacs_digest,
-                        "limits": validated.limits.model_dump(mode="json"),
-                    },
-                    artifact_uri=resolved.artifact.artifact_uri,
-                ),
-                completeness=CapabilityCompleteness(
-                    status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                    basis="cancelled certificate replay makes no completeness claim",
-                    assurance_level=CapabilityAssuranceLevel.HEURISTIC,
-                ),
-                assurance=CapabilityAssurance(
-                    level=CapabilityAssuranceLevel.HEURISTIC,
-                    basis="cancelled before checker execution; no conclusion follows",
-                ),
                 artifact_uris=(
                     resolved.artifact.artifact_uri,
                     proof_artifact.artifact_uri,
@@ -257,7 +248,6 @@ class SatLratVerificationAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion is Conclusion.TRUE
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         detail = checked.execution.detail or (
@@ -296,6 +286,9 @@ class SatLratVerificationAdapter:
             checker_id=checker_id,
             verification_record_uri=record_uri,
             detail=detail,
+            invalid_step=(
+                _invalid_lrat_step(detail, raw_proof) if status == "REJECTED" else None
+            ),
         )
         uris = [
             resolved.artifact.artifact_uri,
@@ -309,43 +302,69 @@ class SatLratVerificationAdapter:
             capability_version=self.descriptor.version,
             execution=projected_execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the exact canonical CNF and exact LRAT proof bytes",
-                parameters={
-                    "proof_format": proof.proof_format,
-                    "proof_format_version": proof.proof_format_version,
-                    "proof_digest": proof.proof_digest,
-                    "variable_map_digest": proof.cnf.variable_map_digest,
-                    "dimacs_digest": proof.cnf.dimacs_digest,
-                    "limits": validated.limits.model_dump(mode="json"),
-                },
-                artifact_uri=resolved.artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis="certificate replay makes no search-completeness claim",
-                assurance_level=(
-                    CapabilityAssuranceLevel.HEURISTIC
-                    if status == "TIMEOUT"
-                    else CapabilityAssuranceLevel.COMPUTED
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else (
-                        CapabilityAssuranceLevel.HEURISTIC
-                        if status == "TIMEOUT"
-                        else CapabilityAssuranceLevel.COMPUTED
-                    )
-                ),
-                basis=(
-                    "independent checker accepted the exact bound LRAT proof"
-                    if verified
-                    else "proof was not accepted; this is not evidence of satisfiability"
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=record_uri,
             artifact_uris=tuple(uris),
         )
+
+
+_LINE_REJECTION = re.compile(r"^line (?P<line>\d+): (?P<reason>.+)$")
+_INVALID_PROOF_LINE_LIMIT = 4096
+_LINE_REJECTION_CODES = {
+    "non-integer": "NON_INTEGER_TOKEN",
+    "invalid clause id": "INVALID_CLAUSE_ID",
+    "invalid addition framing": "INVALID_ADDITION_FRAMING",
+    "invalid literal": "INVALID_LITERAL",
+    "invalid hint count": "INVALID_HINT_COUNT",
+    "tautological candidate": "TAUTOLOGICAL_CANDIDATE",
+    "hint references inactive clause": "HINT_REFERENCES_INACTIVE_CLAUSE",
+    "hint is not unit or conflicting": "HINT_NOT_UNIT_OR_CONFLICTING",
+    "hints do not establish RUP": "RUP_NOT_ESTABLISHED",
+}
+
+
+def _invalid_lrat_step(
+    detail: str,
+    raw: bytes,
+) -> SatLratInvalidProofStep | None:
+    match = _LINE_REJECTION.fullmatch(detail)
+    if match is None:
+        return None
+    line_number = int(match.group("line"))
+    reason = match.group("reason")
+    code = next(
+        (
+            mapped
+            for prefix, mapped in _LINE_REJECTION_CODES.items()
+            if reason.startswith(prefix)
+        ),
+        None,
+    )
+    if code is None:
+        return None
+    try:
+        proof_lines = raw.decode("ascii").splitlines()
+    except UnicodeDecodeError:
+        return None
+    if line_number > len(proof_lines):
+        return None
+    full_proof_line = proof_lines[line_number - 1].strip()
+    proof_line = full_proof_line[:_INVALID_PROOF_LINE_LIMIT]
+    clause_id: int | None = None
+    fields = full_proof_line.split(maxsplit=1)
+    if fields:
+        try:
+            parsed_clause_id = int(fields[0])
+        except ValueError:
+            pass
+        else:
+            clause_id = parsed_clause_id if parsed_clause_id > 0 else None
+    return SatLratInvalidProofStep.model_validate(
+        {
+            "line": line_number,
+            "clause_id": clause_id,
+            "code": code,
+            "proof_line": proof_line,
+            "proof_line_truncated": len(full_proof_line) > len(proof_line),
+            "raw_checker_message": detail,
+        }
+    )

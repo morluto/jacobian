@@ -8,6 +8,11 @@
 
 set -Eeuo pipefail
 
+# Root-run validation and smoke probes must not mutate an immutable release by
+# creating bytecode caches that inherit the operator's (possibly restrictive)
+# umask. The long-running service has its own systemd environment.
+export PYTHONDONTWRITEBYTECODE=1
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/service_state.sh"
@@ -21,16 +26,15 @@ ALLOW_ANONYMOUS=0
 CONFIRM_PUBLIC_ANONYMOUS=0
 SKIP_SMOKE=0
 DRY_RUN=0
+WITH_LEAN=0
 
 BACKEND_PORT=8765
 INGRESS_PORT=8766
-RELEASE_ROOT="/opt/jacobian/releases"
-CURRENT_LINK="/opt/jacobian/current"
-PYTHON_INSTALL_ROOT="/opt/jacobian/python"
+INSTALL_ROOT="/opt/jacobian"
 CONFIG_ROOT="/etc/jacobian-mcp"
 CADDY_CONFIG_ROOT="/etc/caddy-jacobian"
 SYSTEMD_ROOT="/etc/systemd/system"
-TOKEN_DESTINATION="${CONFIG_ROOT}/tokens.json"
+DEPLOY_LOCK_PATH="/run/lock/jacobian-mcp-install.lock"
 TAILSCALE_STATUS=""
 RENDER_ROOT=""
 RELEASE_BUILD_DIR=""
@@ -39,6 +43,7 @@ ROLLBACK_ROOT=""
 ROLLBACK_ARMED=0
 DEPLOYMENT_ACCEPTED=0
 PREVIOUS_RELEASE=""
+VALIDATED_INSTALL_ROOT=""
 
 cleanup() {
     if [[ -n "${RELEASE_BUILD_DIR}" && -d "${RELEASE_BUILD_DIR}" ]]; then
@@ -78,6 +83,10 @@ Configuration:
   --anonymous-tenant-id ID      Shared anonymous namespace
                                 (default: jacobian-test).
   --confirm-public-anonymous    Also required when anonymous mode is public.
+  --install-root PATH           Durable root for immutable releases, managed
+                                Python, and Lean (default: /opt/jacobian).
+  --with-lean                   Build and require the pinned Lean CORE + MATHLIB
+                                provider and checker portfolio.
   --skip-smoke                  Do not run the read-only MCP deployment smoke.
   --dry-run                     Validate arguments and print the deployment plan.
   -h, --help                    Show this help.
@@ -214,9 +223,60 @@ validate_domain() {
         "domain must be a fully qualified DNS name such as math.example.org"
 }
 
+resolve_effective_path() {
+    local candidate="$1"
+    local unresolved=""
+    local resolved
+
+    # `readlink -f` cannot resolve a nonexistent leaf on every supported host.
+    # Resolve the nearest existing ancestor, including a symlink ancestor, then
+    # append the still-nonexistent suffix without changing its validated shape.
+    while [[ ! -e "${candidate}" && ! -L "${candidate}" ]]; do
+        [[ "${candidate}" != "/" ]] || break
+        unresolved="/${candidate##*/}${unresolved}"
+        candidate="${candidate%/*}"
+        [[ -n "${candidate}" ]] || candidate="/"
+    done
+    resolved="$(readlink -f -- "${candidate}" 2>/dev/null || true)"
+    [[ -n "${resolved}" ]] || return 1
+    printf '%s%s\n' "${resolved%/}" "${unresolved}"
+}
+
+validate_install_root() {
+    local value="$1"
+    local effective
+    [[ "${value}" != "/" && "${value}" =~ ^/[A-Za-z0-9._/-]+$ ]] || die \
+        "--install-root must be a non-root absolute path without spaces"
+    [[ "${value}" != *"//"* && "${value}" != *"/./"* \
+        && "${value}" != */. && "${value}" != *"/../"* \
+        && "${value}" != */.. ]] || die \
+        "--install-root must not contain empty, '.' or '..' path segments"
+    case "${value}/" in
+        /home/* | /root/* | /tmp/* | /var/tmp/*)
+            die "--install-root must remain visible through the systemd sandbox; do not place it below /home, /root, /tmp, or /var/tmp"
+            ;;
+        /run/* | /dev/shm/*)
+            die "--install-root must be durable across reboots; do not place it below /run or /dev/shm"
+            ;;
+    esac
+    effective="$(resolve_effective_path "${value}")" || die \
+        "--install-root has an unresolved or broken symlink ancestor"
+    [[ "${effective}" != "/" && "${effective}" =~ ^/[A-Za-z0-9._/-]+$ ]] || die \
+        "--install-root resolves to a non-root path with unsupported characters"
+    case "${effective}/" in
+        /home/* | /root/* | /tmp/* | /var/tmp/*)
+            die "--install-root resolves below a path hidden by the systemd sandbox: ${effective}"
+            ;;
+        /run/* | /dev/shm/*)
+            die "--install-root resolves below a volatile runtime hierarchy: ${effective}"
+            ;;
+    esac
+    VALIDATED_INSTALL_ROOT="${effective}"
+}
+
 validate_release_runtime() {
     local release_dir="$1"
-    local entrypoint="${release_dir}/.venv/bin/jacobian-mcp"
+    local entrypoint="${release_dir}/.venv/bin/jacobian-remote-mcp"
     local expected_shebang="#!${release_dir}/.venv/bin/python"
     local python_target
     local shebang
@@ -238,6 +298,70 @@ validate_release_runtime() {
     esac
     "${RUNUSER_BIN}" --user jacobian -- "${entrypoint}" --version >/dev/null \
         || die "release entrypoint is not executable by the jacobian service user"
+}
+
+validate_service_readability() {
+    local issue
+    local runtime_root
+
+    for runtime_root in "$@"; do
+        [[ -d "${runtime_root}" ]] || die \
+            "runtime input root is unavailable: ${runtime_root}"
+        if ! issue="$(
+            "${RUNUSER_BIN}" --user jacobian -- \
+                find "${runtime_root}" \
+                \( \
+                    \( -type d \( ! -readable -o ! -executable \) \) -o \
+                    \( -type f ! -readable \) \
+                \) \
+                -print -quit 2>&1
+        )"; then
+            die "jacobian service user could not inspect ${runtime_root}: ${issue}"
+        fi
+        [[ -z "${issue}" ]] || die \
+            "runtime input is not readable by the jacobian service user: ${issue}"
+    done
+}
+
+validate_lean_release_runtime() {
+    local release_dir="$1"
+    local required
+    local required_paths=(
+        "lean/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean"
+        "lean/.lake/build/lib/lean/JacobianLeanRuntime.olean"
+        "lean/.lake/build/lib/lean/JacobianLeanProofState.olean"
+        "lean/.lake/build/bin/jacobian_lean_proof_state"
+    )
+
+    for required in "${required_paths[@]}"; do
+        [[ -f "${release_dir}/${required}" ]] || die \
+            "pinned Lean release component is unavailable: ${required}"
+    done
+    (
+        cd "${release_dir}"
+        "${RUNUSER_BIN}" --user jacobian -- \
+            env \
+            "ELAN_HOME=${LEAN_ELAN_HOME}" \
+            "PATH=${LEAN_SERVICE_PATH}" \
+            "${release_dir}/.venv/bin/python" - <<'PY'
+from jacobian_checkers import lean4
+from jacobian.contracts.capabilities import CapabilityProviderAvailability
+from jacobian.providers.lean_runtime import lean_provider_runtime
+
+executable, mathlib_runtime = lean4.inspect_runtime(require_mathlib=True)
+if not executable.is_file() or mathlib_runtime is None or not mathlib_runtime.is_dir():
+    raise SystemExit("pinned Lean provider is unavailable")
+runtime = lean_provider_runtime(
+    profiles={
+        "CORE": {},
+        "MATHLIB": {"mathlib_commit": lean4.MATHLIB_COMMIT},
+    },
+    checker_ids=(),
+)
+if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
+    raise SystemExit(runtime.diagnostic or "pinned Lean provider is unavailable")
+PY
+    ) || die "pinned Lean provider failed its release readiness probe"
 }
 
 while (($#)); do
@@ -275,6 +399,15 @@ while (($#)); do
             CONFIRM_PUBLIC_ANONYMOUS=1
             shift
             ;;
+        --install-root)
+            (($# >= 2)) || die "--install-root requires a path"
+            INSTALL_ROOT="$2"
+            shift 2
+            ;;
+        --with-lean)
+            WITH_LEAN=1
+            shift
+            ;;
         --skip-smoke)
             SKIP_SMOKE=1
             shift
@@ -292,6 +425,16 @@ while (($#)); do
             ;;
     esac
 done
+
+INSTALL_ROOT="${INSTALL_ROOT%/}"
+validate_install_root "${INSTALL_ROOT}"
+INSTALL_ROOT="${VALIDATED_INSTALL_ROOT}"
+RELEASE_ROOT="${INSTALL_ROOT}/releases"
+CURRENT_LINK="${INSTALL_ROOT}/current"
+PYTHON_INSTALL_ROOT="${INSTALL_ROOT}/python"
+LEAN_ELAN_HOME="${INSTALL_ROOT}/lean/elan"
+LEAN_SERVICE_PATH="${LEAN_ELAN_HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+TOKEN_DESTINATION="${CONFIG_ROOT}/tokens.json"
 
 case "${MODE}" in
     local | domain | tailscale) ;;
@@ -324,7 +467,15 @@ GIT=(git -c "safe.directory=${REPO_ROOT}" -C "${REPO_ROOT}")
     || die "deploy/install.sh must be run from a Git clone"
 REVISION="$("${GIT[@]}" rev-parse HEAD)"
 SHORT_REVISION="$("${GIT[@]}" rev-parse --short=12 HEAD)"
-RELEASE_DIR="${RELEASE_ROOT}/${SHORT_REVISION}"
+RELEASE_PROFILE="core"
+if ((WITH_LEAN)); then
+    RELEASE_PROFILE="lean"
+fi
+RELEASE_SUFFIX=""
+if [[ "${RELEASE_PROFILE}" != "core" ]]; then
+    RELEASE_SUFFIX="-${RELEASE_PROFILE}"
+fi
+RELEASE_DIR="${RELEASE_ROOT}/${SHORT_REVISION}${RELEASE_SUFFIX}"
 
 PUBLIC_BASE_URL=""
 CONNECTOR_URL=""
@@ -377,6 +528,7 @@ if ((DRY_RUN)); then
     cat <<EOF
 Jacobian deployment plan
   revision:    ${REVISION}
+  install:     ${INSTALL_ROOT}
   release:     ${RELEASE_DIR}
   python:      ${PYTHON_INSTALL_ROOT}
   mode:        ${MODE}
@@ -385,6 +537,7 @@ Jacobian deployment plan
   backend:     jacobian-mcp.service on 127.0.0.1:${BACKEND_PORT}
   caddy:       $([[ "${MODE}" == "local" ]] && printf 'disabled' || printf 'enabled')
   funnel:      $([[ "${MODE}" == "tailscale" ]] && printf 'enabled' || printf 'disabled')
+  lean:        $(((WITH_LEAN)) && printf 'pinned CORE + MATHLIB runtime' || printf 'disabled')
   smoke:       $(((SKIP_SMOKE)) && printf 'skipped' || printf 'required')
 EOF
     exit 0
@@ -396,9 +549,13 @@ fi
 "${GIT[@]}" diff --cached --quiet --ignore-submodules -- \
     || die "staged changes exist; commit or stash them before deployment"
 
+INVOKING_HOME=""
+if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    INVOKING_HOME="$(getent passwd "${SUDO_USER}" | cut -d: -f6 || true)"
+fi
+
 UV_BIN="$(find_executable uv /usr/local/bin/uv /usr/bin/uv || true)"
-if [[ -z "${UV_BIN}" && -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
-    INVOKING_HOME="$(getent passwd "${SUDO_USER}" | cut -d: -f6)"
+if [[ -z "${UV_BIN}" && -n "${INVOKING_HOME}" ]]; then
     UV_BIN="$(find_executable uv "${INVOKING_HOME}/.local/bin/uv" || true)"
 fi
 [[ -n "${UV_BIN}" ]] || die \
@@ -412,12 +569,30 @@ FLOCK_BIN="$(find_executable flock /usr/bin/flock || true)"
     && -n "${RUNUSER_BIN}" && -n "${FLOCK_BIN}" ]] || die \
     "this installer requires a systemd host"
 
+ELAN_BIN=""
+LEAN_TOOLCHAIN=""
+if ((WITH_LEAN)); then
+    ELAN_FALLBACKS=(/usr/local/bin/elan /usr/bin/elan)
+    if [[ -n "${INVOKING_HOME}" ]]; then
+        ELAN_FALLBACKS+=("${INVOKING_HOME}/.elan/bin/elan")
+    fi
+    ELAN_BIN="$(find_executable elan "${ELAN_FALLBACKS[@]}" || true)"
+    [[ -n "${ELAN_BIN}" ]] || die \
+        "--with-lean requires an operator-installed elan launcher"
+    LEAN_TOOLCHAIN="$(tr -d '\r\n' <"${REPO_ROOT}/lean/lean-toolchain")"
+    [[ -n "${LEAN_TOOLCHAIN}" ]] || die "lean/lean-toolchain is empty"
+fi
+
 CADDY_BIN=""
 if [[ "${MODE}" != "local" ]]; then
     CADDY_BIN="$(find_executable caddy /usr/local/bin/caddy /usr/bin/caddy || true)"
     [[ -n "${CADDY_BIN}" ]] || die \
         "caddy is required for public ingress; install it first"
 fi
+
+install -d -m 0755 "$(dirname -- "${DEPLOY_LOCK_PATH}")"
+exec 9>"${DEPLOY_LOCK_PATH}"
+"${FLOCK_BIN}" --nonblock 9 || die "another Jacobian deployment is in progress"
 
 if ! getent group jacobian >/dev/null; then
     groupadd --system jacobian
@@ -438,8 +613,6 @@ fi
 
 log "installing immutable release ${SHORT_REVISION}"
 install -d -m 0755 "${RELEASE_ROOT}" "${PYTHON_INSTALL_ROOT}"
-exec 9>"$(dirname -- "${RELEASE_ROOT}")/.install.lock"
-"${FLOCK_BIN}" --nonblock 9 || die "another Jacobian deployment is in progress"
 if [[ -e "${RELEASE_DIR}" && ! -d "${RELEASE_DIR}" ]]; then
     die "release path exists and is not a directory: ${RELEASE_DIR}"
 fi
@@ -460,18 +633,73 @@ if [[ ! -d "${RELEASE_DIR}" ]]; then
             "${UV_BIN}" sync \
             --locked \
             --no-dev \
-            --all-extras \
             --managed-python \
             --link-mode copy
     )
+    if ((WITH_LEAN)); then
+        log "building pinned Lean and Mathlib release runtime"
+        install -d -m 0755 "${LEAN_ELAN_HOME}/bin"
+        install -m 0755 "$(readlink -f "${ELAN_BIN}")" \
+            "${LEAN_ELAN_HOME}/bin/elan"
+        INSTALLED_LEAN_TOOLCHAINS="$({
+            ELAN_HOME="${LEAN_ELAN_HOME}" \
+                "${LEAN_ELAN_HOME}/bin/elan" toolchain list
+        })" || die "could not inspect installed Lean toolchains"
+        LEAN_TOOLCHAIN_INSTALLED=0
+        while IFS= read -r installed_toolchain; do
+            if [[ "${installed_toolchain}" == "${LEAN_TOOLCHAIN}" ]]; then
+                LEAN_TOOLCHAIN_INSTALLED=1
+                break
+            fi
+        done <<<"${INSTALLED_LEAN_TOOLCHAINS}"
+        if ((!LEAN_TOOLCHAIN_INSTALLED)); then
+            ELAN_HOME="${LEAN_ELAN_HOME}" \
+                "${LEAN_ELAN_HOME}/bin/elan" toolchain install "${LEAN_TOOLCHAIN}"
+        fi
+        (
+            cd "${RELEASE_DIR}/lean"
+            ELAN_HOME="${LEAN_ELAN_HOME}" \
+                "${LEAN_ELAN_HOME}/bin/elan" run "${LEAN_TOOLCHAIN}" \
+                lake exe cache get
+            ELAN_HOME="${LEAN_ELAN_HOME}" \
+                "${LEAN_ELAN_HOME}/bin/elan" run "${LEAN_TOOLCHAIN}" \
+                lake build repl JacobianLeanRuntime jacobian_lean_proof_state
+        )
+    fi
     chown -R root:root "${RELEASE_DIR}" "${PYTHON_INSTALL_ROOT}"
+    # uv and backend caches honor the invoking root umask and may create
+    # owner-only directories or executables. The immutable release contains no
+    # secrets, so normalize every runtime input before service-user validation.
+    chmod -R a+rX "${RELEASE_DIR}" "${PYTHON_INSTALL_ROOT}"
     RELEASE_WAS_BUILT=1
 elif [[ "$(cat "${RELEASE_DIR}/.git-revision" 2>/dev/null || true)" != "${REVISION}" ]]; then
     die "existing release directory is not bound to revision ${REVISION}"
+elif [[ "$(cat "${RELEASE_DIR}/.release-profile" 2>/dev/null || printf 'core')" \
+    != "${RELEASE_PROFILE}" ]]; then
+    die "existing release directory does not match profile ${RELEASE_PROFILE}"
 fi
 validate_release_runtime "${RELEASE_DIR}"
+if ((WITH_LEAN)); then
+    # Elan's shared toolchain is outside the immutable release. Normalize it on
+    # every deployment so service readability does not depend on root's umask
+    # or on whether this invocation reused an existing release.
+    chmod -R a+rX "${LEAN_ELAN_HOME}"
+    validate_lean_release_runtime "${RELEASE_DIR}"
+fi
 if ((RELEASE_WAS_BUILT)); then
+    printf '%s\n' "${RELEASE_PROFILE}" >"${RELEASE_DIR}/.release-profile"
     printf '%s\n' "${REVISION}" >"${RELEASE_DIR}/.git-revision"
+    chmod 0644 \
+        "${RELEASE_DIR}/.release-profile" \
+        "${RELEASE_DIR}/.git-revision"
+fi
+
+RUNTIME_READ_ROOTS=("${RELEASE_DIR}" "${PYTHON_INSTALL_ROOT}")
+if ((WITH_LEAN)); then
+    RUNTIME_READ_ROOTS+=("${LEAN_ELAN_HOME}")
+fi
+validate_service_readability "${RUNTIME_READ_ROOTS[@]}"
+if ((RELEASE_WAS_BUILT)); then
     RELEASE_BUILD_DIR=""
 fi
 
@@ -506,6 +734,7 @@ if ((ALLOW_ANONYMOUS)); then
         "${SYSTEMD_ROOT}/jacobian-mcp.service.d"
     sed \
         -e "s|replace-with-unique-test-id|${ANONYMOUS_TENANT_ID}|g" \
+        -e "s|/opt/jacobian/current|${CURRENT_LINK}|g" \
         "${REPO_ROOT}/deploy/systemd/jacobian-mcp-anonymous.conf" \
         >"${SYSTEMD_ROOT}/jacobian-mcp.service.d/anonymous.conf"
     chmod 0644 "${SYSTEMD_ROOT}/jacobian-mcp.service.d/anonymous.conf"
@@ -563,7 +792,10 @@ fi
 
 RENDER_ROOT="$(mktemp -d)"
 
-sed "s|https://math-tools.example.org|${PUBLIC_BASE_URL}|g" \
+sed \
+    -e "s|https://math-tools.example.org|${PUBLIC_BASE_URL}|g" \
+    -e "s|/opt/jacobian/current|${CURRENT_LINK}|g" \
+    -e "s|/opt/jacobian/lean/elan|${LEAN_ELAN_HOME}|g" \
     "${REPO_ROOT}/deploy/systemd/jacobian-mcp.service" \
     >"${RENDER_ROOT}/jacobian-mcp.service"
 install -m 0644 "${RENDER_ROOT}/jacobian-mcp.service" \
@@ -651,13 +883,36 @@ if ((!SKIP_SMOKE)); then
         SMOKE_TOKEN_FILE="${TOKEN_DESTINATION}"
     fi
     SMOKE_SUCCEEDED=0
+    SMOKE_REQUIREMENTS=(
+        --require-capability graph.construct.explicit
+    )
+    if ((WITH_LEAN)); then
+        SMOKE_REQUIREMENTS+=(
+            --require-capability lean.check
+            --require-capability lean.proof_state.apply_tactic
+            --require-capability lean.term.apply
+            --require-capability lean.retrieve.premises
+        )
+    fi
     for attempt in {1..12}; do
         if JACOBIAN_MCP_AUTH_TOKENS_FILE="${SMOKE_TOKEN_FILE}" \
             "${RELEASE_DIR}/.venv/bin/python" \
             "${RELEASE_DIR}/deploy/smoke_remote.py" \
             "${CONNECTOR_URL}" \
+            --expect-revision "${REVISION}" \
             --expect-policy-profile DEFAULT \
-            --require-capability graph.construct.explicit; then
+            "${SMOKE_REQUIREMENTS[@]}"; then
+            if ((WITH_LEAN)) && ! \
+                JACOBIAN_MCP_AUTH_TOKENS_FILE="${SMOKE_TOKEN_FILE}" \
+                "${RELEASE_DIR}/.venv/bin/python" \
+                "${RELEASE_DIR}/deploy/smoke_lean.py" \
+                "${CONNECTOR_URL}"; then
+                if ((attempt < 12)); then
+                    sleep 5
+                    continue
+                fi
+                break
+            fi
             SMOKE_SUCCEEDED=1
             break
         fi
@@ -668,6 +923,10 @@ if ((!SKIP_SMOKE)); then
     ((SMOKE_SUCCEEDED)) || die \
         "deployment smoke failed; inspect jacobian-mcp and ingress journals"
 fi
+
+# Recheck after root-run authentication and smoke probes. With rollback still
+# armed, any post-build mutation that makes runtime input private fails closed.
+validate_service_readability "${RUNTIME_READ_ROOTS[@]}"
 
 DEPLOYMENT_ACCEPTED=1
 ROLLBACK_ARMED=0

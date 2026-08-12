@@ -278,7 +278,6 @@ def check_certified_smith_normal_form(request: object) -> dict[str, Any]:
             "backend",
             "backend_version",
             "completeness",
-            "verification",
         }:
             raise ValueError("certified Smith result is malformed")
         if (
@@ -287,7 +286,6 @@ def check_certified_smith_normal_form(request: object) -> dict[str, Any]:
             or result["backend"] != "jacobian-sympy-smith-normal-decomposition"
             or result["backend_version"] != "1"
             or result["completeness"] != "FULL_MATRIX_TRANSFORMATIONS"
-            or result["verification"] != "UNVERIFIED"
         ):
             raise ValueError("certified Smith result metadata is unsupported")
         certificate = validate_certificate(result["certificate"])

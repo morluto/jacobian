@@ -15,7 +15,6 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
@@ -121,9 +120,7 @@ def test_matrix_determinant_compute_is_exact_and_unverified(
     )
 
     assert result.output["result"]["determinant"] == _rational(expected)
-    assert result.output["result"]["method"] == "FRACTION_FREE_BAREISS"
     assert result.output["backend_version"] == sympy.__version__
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
 
 
@@ -158,7 +155,7 @@ def test_matrix_determinant_verify_independently_recomputes_exact_value(
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["conclusion"] == "TRUE"
     assert verified.output["verification_record_uri"].startswith("artifact://sha256/")
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_matrix_determinant_verify_rejects_wrong_bound_value(
@@ -189,7 +186,6 @@ def test_matrix_determinant_verify_rejects_wrong_bound_value(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is not CapabilityAssuranceLevel.VERIFIED
 
 
 def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
@@ -226,7 +222,6 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
     assert timed_out.output["status"] == "TIMEOUT"
     assert timed_out.output["conclusion"] == "UNKNOWN"
     assert timed_out.output["verification_record_uri"] is None
-    assert timed_out.assurance.level is not CapabilityAssuranceLevel.VERIFIED
 
 
 def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
@@ -252,7 +247,6 @@ def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
     assert result.output["result"]["rank"] == 2
     assert result.output["result"]["pivot_columns"] == [0, 1]
     assert result.output["backend_version"] == sympy.__version__
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
 
 
@@ -276,7 +270,7 @@ def test_matrix_rank_verify_independently_recomputes_inline_candidate(
 
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["conclusion"] == "TRUE"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_matrix_rank_rejects_authoritative_values_above_its_operation_budget(

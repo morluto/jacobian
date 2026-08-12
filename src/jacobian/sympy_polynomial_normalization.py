@@ -13,19 +13,13 @@ from pydantic import ValidationError
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
-    CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.polynomial_expressions import (
     SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION,
@@ -234,7 +228,6 @@ class SympyPolynomialExpressionNormalizeAdapter:
             expression_uri = self.expressions.put_expression(
                 validated.expression
             ).artifact_uri
-            resolved = self.expressions.resolve_expression(expression_uri)
         except (ValidationError, ValueError) as exc:
             budget_error = _expansion_budget_error(exc)
             if budget_error is not None:
@@ -326,7 +319,6 @@ class SympyPolynomialExpressionNormalizeAdapter:
             expression_uri=expression_uri,
             normalization_uri=normalization_uri,
             normalized=run.normalized if normalization_uri is not None else None,
-            verification_candidate_available=normalization_uri is not None,
             detail=(
                 "Pinned SymPy produced canonical exact sparse QQ coefficients; "
                 "equality with the typed source expression remains unverified."
@@ -337,17 +329,6 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 )
             ),
         )
-        relationships = (
-            (
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.expression-normalization-of",
-                    source_artifact_uris=(normalization_uri,),
-                    target_artifact_uris=(expression_uri,),
-                ),
-            )
-            if normalization_uri is not None
-            else ()
-        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -357,62 +338,11 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 detail=run.detail,
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the full declared typed QQ-polynomial expression",
-                parameters={
-                    "declared_scope": "FULL_EXPRESSION",
-                    "variables": list(resolved.expression.variables),
-                    "node_count": resolved.binding.node_count,
-                    "depth": resolved.binding.depth,
-                    "expanded_term_upper_bound": (
-                        resolved.binding.expanded_term_upper_bound
-                    ),
-                    "coefficient_digit_budget": (
-                        resolved.binding.coefficient_digit_budget
-                    ),
-                    "wall_seconds": validated.resource_budget.wall_seconds,
-                },
-                artifact_uri=expression_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if normalization_uri is not None
-                    else CapabilityCompletenessStatus.UNKNOWN
-                ),
-                basis=(
-                    "one full canonical sparse coefficient map was produced; "
-                    "provider completion is not independent verification"
-                    if normalization_uri is not None
-                    else "the bounded provider attempt produced no normalization "
-                    "evidence; no mathematical conclusion follows"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.COMPUTED
-                    if run.execution_status is ExecutionStatus.COMPLETED
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.COMPUTED
-                    if run.execution_status is ExecutionStatus.COMPLETED
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-                basis=(
-                    "the pinned exact SymPy provider produced bound canonical "
-                    "coefficients, but provider success does not verify equivalence"
-                    if normalization_uri is not None
-                    else "provider execution did not complete; no mathematical "
-                    "conclusion follows"
-                ),
-            ),
             artifact_uris=(
                 (expression_uri, normalization_uri)
                 if normalization_uri is not None
                 else (expression_uri,)
             ),
-            relationships=relationships,
         )
 
 

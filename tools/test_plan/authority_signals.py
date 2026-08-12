@@ -12,11 +12,11 @@ import re
 
 _TOKEN_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?<![A-Za-z_])VERIFIED(?![A-Za-z_])"),
-    re.compile(r"(?<![A-Za-z_])CapabilityAssuranceLevel\.VERIFIED(?![A-Za-z_])"),
     re.compile(r"(?<![A-Za-z_])CheckerAuthorityMode(?![A-Za-z_])"),
     re.compile(r"(?<![A-Za-z_])HYDRATE_EXISTING(?![A-Za-z_])"),
     re.compile(r"(?<![A-Za-z_])INSTALL_BUNDLED(?![A-Za-z_])"),
     re.compile(r"(?<![A-Za-z_])verification_record(?![A-Za-z_])"),
+    re.compile(r"(?<![A-Za-z_])verification_record_uri(?![A-Za-z_])"),
     re.compile(r"(?<![A-Za-z_])authorize_checker(?![A-Za-z_])"),
     re.compile(r"\bverify_witness\b"),
     re.compile(r"\bverify_certificate\b"),

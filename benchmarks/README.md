@@ -80,10 +80,10 @@ make codex-visibility
 ```
 
 `codex-visibility` is a separate opt-in agent-adoption diagnostic, not a Harbor
-mathematical correctness task. It snapshots the advertised MCP surface and
-measures whether Codex discovers, inspects, invokes, completes, or independently
-verifies relevant operations under explicit, affordance, and latent cues. See
-[Run the Codex visibility evaluation](../docs/how-to/run-codex-visibility-evaluation.md).
+mathematical correctness task. It compares no Jacobian with Jacobian MCP only
+and measures whether Codex discovers, inspects, invokes, completes, or
+independently checks relevant operations. See
+[Run the MCP visibility evaluation](../docs/how-to/run-codex-visibility-evaluation.md).
 
 `symbolic-coordination-v1` keeps its deterministic 26-case pilot separate
 from the fixed `mathematical-benchmarks-v1` snapshots. Its task bundles are solvable

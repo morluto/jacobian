@@ -35,13 +35,7 @@ from jacobian.domains.polynomial.conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
-from jacobian.domains.polynomial.kernels import (
-    polynomial_derivative,
-    polynomial_division,
-    polynomial_evaluate,
-    polynomial_integral,
-    polynomial_partial_fractions,
-)
+from jacobian.math import polynomials
 
 
 @cache
@@ -146,7 +140,7 @@ def rational_polynomial_division(
 ) -> RationalPolynomialDivisionResult:
     left = rational_polynomial_to_sympy(request.left)
     right = rational_polynomial_to_sympy(request.right)
-    quotient, remainder, reconstruction = polynomial_division(left, right)
+    quotient, remainder, reconstruction = polynomials.divide(left, right)
     variables = request.left.variables
     return RationalPolynomialDivisionResult(
         quotient=rational_polynomial_from_sympy(quotient, variables),
@@ -161,7 +155,7 @@ def rational_polynomial_evaluate(
     point = request.point.as_fraction()
     from sympy import Rational
 
-    value = polynomial_evaluate(
+    value = polynomials.evaluate(
         rational_polynomial_to_sympy(request.polynomial),
         Rational(point.numerator, point.denominator),
     )
@@ -176,7 +170,7 @@ def rational_polynomial_derivative(
 ) -> RationalPolynomialDerivativeResult:
     return RationalPolynomialDerivativeResult(
         derivative=rational_polynomial_from_sympy(
-            polynomial_derivative(rational_polynomial_to_sympy(request.polynomial)),
+            polynomials.derivative(rational_polynomial_to_sympy(request.polynomial)),
             request.polynomial.variables,
         )
     )
@@ -187,7 +181,7 @@ def rational_polynomial_integral(
 ) -> RationalPolynomialIntegralResult:
     return RationalPolynomialIntegralResult(
         antiderivative=rational_polynomial_from_sympy(
-            polynomial_integral(rational_polynomial_to_sympy(request.polynomial)),
+            polynomials.integral(rational_polynomial_to_sympy(request.polynomial)),
             request.polynomial.variables,
         )
     )
@@ -243,7 +237,7 @@ def rational_partial_fraction_decomposition(
     denominator_polynomial = rational_polynomial_to_sympy(request.denominator)
     generator = numerator_polynomial.gens[0]
     source = cancel(numerator_polynomial.as_expr() / denominator_polynomial.as_expr())
-    decomposition = polynomial_partial_fractions(source, generator)
+    decomposition = polynomials.partial_fractions(source, generator)
     polynomial_part = Poly(0, generator, domain="QQ")
     proper_terms: list[RationalPartialFractionTerm] = []
     for summand in Add.make_args(decomposition):

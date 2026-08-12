@@ -42,13 +42,6 @@ def build_finite_probability_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="one bounded exact rational probability operation",
-        completeness_basis=(
-            "Python-FLINT produced every selected atom, source-map contribution, "
-            "bounded product-measure pair, or coefficient contraction required by "
-            "the request, or exhausted every bounded graph edge subset"
-        ),
-        assurance_basis="pinned maintained-backend exact rational computation",
         checker_declarations=PROBABILITY_EXACT_REPLAY_CHECKERS,
     )
 

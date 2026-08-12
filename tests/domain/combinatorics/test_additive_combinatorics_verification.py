@@ -8,7 +8,6 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -58,12 +57,11 @@ def test_additive_decisions_are_independently_verified(
         )
     )
 
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == producer_id
     assert verified.output["verification_record_uri"] in verified.artifact_uris
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_fixed_order_negative_result_is_verified_inline(
@@ -89,7 +87,7 @@ def test_fixed_order_negative_result_is_verified_inline(
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == producer_id
     assert verified.output["verification_record_uri"] in verified.artifact_uris
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
     assert computed.artifact_uris == ()
 
 
@@ -112,7 +110,7 @@ def test_fixed_order_positive_witness_is_independently_verified(
 
     assert computed.output["result"]["extension"] == [0, 1, 3]
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_inline_checker_rejects_a_contract_valid_false_sidon_result(
@@ -137,7 +135,6 @@ def test_inline_checker_rejects_a_contract_valid_false_sidon_result(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
 def test_additive_checker_runtime_binds_both_independent_sources(

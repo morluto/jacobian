@@ -17,19 +17,13 @@ from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationE
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
-    CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -51,18 +45,18 @@ from jacobian.contracts.universal_algebra import (
     MagmaLawCoverage,
     MagmaLawEvaluationRecord,
     MagmaTerm,
-    UniversalAlgebraCertificateVerificationPayload,
     UniversalAlgebraCountermodelSearchOutput,
     UniversalAlgebraCountermodelSearchRequest,
     UniversalAlgebraEvaluationOutput,
     UniversalAlgebraEvaluationRequest,
-    UniversalAlgebraVerificationHandoff,
 )
 from jacobian.domains._examples import example
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.verification import VerificationService
+from jacobian.verification_capabilities import certificate_verification_adapter
 
 _COUNTERMODEL_TIMEOUT_MS = 10_000
 
@@ -91,6 +85,7 @@ def install_universal_algebra_capabilities(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
+    verification: VerificationService,
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
@@ -197,6 +192,19 @@ def install_universal_algebra_capabilities(
             UniversalAlgebraSearchCountermodelAdapter(resources, search_runtime),
         )
     adapters += (FiniteMagmaTableEnumerateAdapter(resources),)
+    verify = certificate_verification_adapter(
+        capability_id="universal_algebra.law_evaluation.verify",
+        title="Verify a finite-magma law evaluation",
+        description=(
+            "Independently replay one exhaustive finite-magma law evaluation "
+            "certificate."
+        ),
+        checker_id=evaluation_checker_id,
+        tags=("universal-algebra", "finite-magma", "law-evaluation"),
+        verification=verification,
+    )
+    if verify is not None:
+        adapters += (verify,)
     return adapters, installation
 
 
@@ -339,18 +347,7 @@ class UniversalAlgebraEvaluateLawsAdapter:
             evaluation_uri=evaluation_artifact.artifact_uri,
             claim_uri=claim_artifact.artifact_uri,
             certificate_uri=certificate_artifact.artifact_uri,
-            checker_id=self.resources.installation.evaluation_checker_id,
             records=records,
-            verification_handoff=(
-                UniversalAlgebraVerificationHandoff(
-                    payload=UniversalAlgebraCertificateVerificationPayload(
-                        certificate_uri=certificate_artifact.artifact_uri,
-                        checker_id=self.resources.installation.evaluation_checker_id,
-                    )
-                )
-                if self.resources.installation.evaluation_checker_id is not None
-                else None
-            ),
         )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
@@ -360,42 +357,6 @@ class UniversalAlgebraEvaluateLawsAdapter:
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "all valuations of each stated law on one finite magma, "
-                    "stopping a false law at its first counterexample"
-                ),
-                parameters={
-                    "problem_uri": problem_artifact.artifact_uri,
-                    "order": problem.structure.order,
-                    "law_count": len(problem.laws),
-                    "valuation_order": "LEXICOGRAPHIC",
-                },
-                artifact_uri=problem_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "every true law exhausted its finite valuation space and every "
-                    "false law produced an exact counterexample; verification is "
-                    "separate"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="universal_algebra.relation.evaluation-of",
-                    source_artifact_uris=(problem_artifact.artifact_uri,),
-                    target_artifact_uris=(evaluation_artifact.artifact_uri,),
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "deterministic exact finite-table evaluation; the bundled "
-                    "certificate was not invoked"
-                ),
-            ),
             artifact_uris=(
                 problem_artifact.artifact_uri,
                 evaluation_artifact.artifact_uri,
@@ -562,7 +523,6 @@ class UniversalAlgebraSearchCountermodelAdapter:
             source_records=search.source_records,
             target_record=search.target_record,
         )
-        complete = search.status is not CountermodelSearchStatus.INDETERMINATE
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -571,44 +531,6 @@ class UniversalAlgebraSearchCountermodelAdapter:
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "all total binary operation tables on the fixed carrier "
-                    f"0 through {validated.order - 1}"
-                ),
-                parameters={
-                    "order": validated.order,
-                    "table_count": validated.order
-                    ** (validated.order * validated.order),
-                    "source_law_count": len(validated.source_laws),
-                    "target_law_id": validated.target_law.law_id,
-                    "encoding": "COMPLETE_FIXED_ORDER_FINITE_TABLE",
-                },
-                artifact_uri=search_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if complete
-                    else CapabilityCompletenessStatus.UNKNOWN
-                ),
-                basis=(
-                    "Z3 settled the complete fixed-order finite-table encoding; "
-                    "the solver result is computed evidence, not a verified "
-                    "mathematical conclusion"
-                    if complete
-                    else "Z3 did not settle the complete fixed-order encoding"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "bounded Z3 finite-table search; any returned table must be "
-                    "replayed with universal_algebra.evaluate_laws and its "
-                    "independent certificate checker"
-                ),
-            ),
             artifact_uris=(search_artifact.artifact_uri,),
         )
 
@@ -708,41 +630,6 @@ class FiniteMagmaTableEnumerateAdapter:
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "all total binary operations on the fixed carrier "
-                    f"0 through {order - 1}"
-                ),
-                parameters={
-                    "order": order,
-                    "table_count": total_count,
-                    "ordering": "LEXICOGRAPHIC_ROW_MAJOR",
-                },
-                artifact_uri=enumeration_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "the bounded Cartesian product of all row-major table cells "
-                    "was exhausted exactly once"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=tuple(
-                CapabilityRelationship(
-                    relation_id="universal_algebra.relation.enumeration-member",
-                    source_artifact_uris=(enumeration_artifact.artifact_uri,),
-                    target_artifact_uris=(table_uri,),
-                )
-                for table_uri in table_uris
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "deterministic exact standard-library enumeration; no "
-                    "independent coverage checker was invoked"
-                ),
-            ),
             artifact_uris=(enumeration_artifact.artifact_uri, *table_uris),
         )
 

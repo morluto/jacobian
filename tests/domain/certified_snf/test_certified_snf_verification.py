@@ -6,7 +6,6 @@ from typing import Any
 from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -57,10 +56,9 @@ def test_certified_smith_result_is_independently_verified(
         )
     )
 
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
     assert verified.output["verification_record_uri"] in verified.artifact_uris
 
 
@@ -92,4 +90,3 @@ def test_certified_smith_checker_rejects_a_forged_relation(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED

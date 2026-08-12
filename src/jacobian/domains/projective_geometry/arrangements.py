@@ -15,14 +15,10 @@ from jacobian.contracts.projective_geometry import (
     ProjectiveLineArrangementResult,
     ProjectiveMultiplicityCount,
 )
-from jacobian.contracts.results import ContractModel
 from jacobian.domains._examples import example
 from jacobian.math.arithmetic import primitive_integer_vector
-from jacobian.operations import (
-    MaterializedOperation,
-    MaterializedOperationFactory,
-    OperationFailure,
-)
+from jacobian.operation_bindings import DurableOperationFactory, InstalledOperation
+from jacobian.operations import OperationFailure
 
 
 def _primitive(values: tuple[Fraction, Fraction, Fraction]) -> tuple[int, int, int]:
@@ -134,7 +130,7 @@ def materialize_projective_line_flats(
     )
 
 
-_FACTORY = MaterializedOperationFactory(
+_FACTORY = DurableOperationFactory(
     OperationFailure(
         code="PROJECTIVE_ARRANGEMENT_NOT_APPLICABLE",
         stage="projective_arrangement_computation",
@@ -145,11 +141,9 @@ _FACTORY = MaterializedOperationFactory(
     )
 )
 
-PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: MaterializedOperation[
+PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: InstalledOperation[
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
-    ProjectiveLineArrangementResult,
-    ContractModel,
 ] = _FACTORY(
     "geometry.projective_line_arrangement.flats.materialize",
     "Materialize projective line-arrangement flats",
@@ -167,7 +161,6 @@ PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: MaterializedOperation[
     "incidence",
     "flats",
     "exact",
-    relation_id="geometry.projective_line_arrangement.flats.relation",
     resource_reason=(
         "the complete labelled flat lattice is retained for durable projective "
         "incidence provenance and downstream certificate binding"

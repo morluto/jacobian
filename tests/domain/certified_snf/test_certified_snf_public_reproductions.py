@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -47,7 +46,6 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
         certificate = result["certificate"]
         assert certificate["rank"] == case["expected_rank"]
         assert certificate["invariant_factors"] == case["expected_invariant_factors"]
-        assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
         verified = certified_snf_services.core.capabilities.invoke(
             CapabilityRequest(
@@ -57,4 +55,4 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
         )
         assert verified.execution.status is ExecutionStatus.COMPLETED
         assert verified.output["status"] == "VERIFIED"
-        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+        assert verified.verification_record_uri is not None

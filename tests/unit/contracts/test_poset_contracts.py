@@ -8,17 +8,24 @@ from jacobian.contracts.posets import (
     LinearExtensionRequest,
     MobiusFunctionRequest,
 )
-from jacobian.domains.posets.operations import _materialized_poset
+from jacobian.domains.posets import build_finite_poset_bundle
 
 
 def _materialize(elements: list[str], relation: list[tuple[str, str]]):
-    return _materialized_poset(
+    operation = next(
+        operation
+        for operation in build_finite_poset_bundle().capabilities
+        if operation.spec.operation_id == "poset.finite.compute"
+    )
+    outcome = operation.spec.execute(
         FinitePosetRequest(
             elements=elements,
             relation=[{"lower": lower, "upper": upper} for lower, upper in relation],
             interpretation="COVER_EDGES",
         )
     )
+    assert isinstance(outcome, operation.spec.result_type)
+    return outcome.poset
 
 
 def test_cover_relation_rejects_cycles_and_redundant_edges() -> None:

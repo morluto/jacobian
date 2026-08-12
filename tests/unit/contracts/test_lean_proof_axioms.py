@@ -60,10 +60,9 @@ def test_request_rejects_comment_injection() -> None:
         )
 
 
-def test_artifact_accepts_complete_unverified_facts() -> None:
+def test_artifact_accepts_complete_axiom_dependency_facts() -> None:
     artifact = _artifact()
 
-    assert artifact.verification_status == "UNVERIFIED"
     assert artifact.semantic_scope == "AXIOM_DEPENDENCY_ONLY"
 
 

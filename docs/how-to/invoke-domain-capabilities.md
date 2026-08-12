@@ -6,7 +6,7 @@ Use this guide when you know the mathematical outcome you need but not the
 installed tool ID or payload. The product surface is
 [search and execute](../explanation/architecture.md#search-and-execute):
 
-1. **Search** with `math.find` (browse, query, or inspect an ID);
+1. **Search or inspect** with `math.find`;
 2. **Execute** the ordinary tool with `math.run` and read the **mathematical
    value** in `output`;
 3. use execution status (and optional artifacts) for failures and handoffs; and
@@ -14,17 +14,21 @@ installed tool ID or payload. The product surface is
    `*.verify` ID)—not a second mode on the producer.
 
 Do not infer availability or payload fields from examples. Provider health,
-configured exclusions, optional backends, and checker authorization all affect
+configured exclusions, optional native/formal backends, and checker
+authorization all affect
 the installed catalog.
 
 ## Discover and describe
 
-Call `math.find` without a tool ID to receive installed matches.
+Call `math.find` with a search request to receive installed matches.
 Select by mathematical outcome and domain tags, then inspect the exact ID:
 
 ```json
 {
-  "capability_id": "polynomial.compute.gcd"
+  "request": {
+    "op": "inspect",
+    "capability_id": "polynomial.compute.gcd"
+  }
 }
 ```
 
@@ -40,8 +44,7 @@ installed version.
 
 This complete local MCP example runs two **different** math tools: a GCD
 producer, then an independent GCD checker. The important split is the tool ID
-(and assurance on the result), not an explore/verify research phase. The
-`mode` field remains on the wire for dispatch compatibility.
+and the checker verdict, not a mode on the producer.
 
 It uses the bundled references so the checker tool is operator-authorized and
 present.
@@ -93,13 +96,16 @@ async def main() -> None:
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     )
     async with Client(server, raise_exceptions=True) as client:
-        # Producer tool (compute). Legacy mode=EXPLORE still accepted on the wire
-        # until https://github.com/morluto/jacobian/issues/1143 — identity is what
-        # matters, not a research phase.
+        # Ordinary producer tool.
         described = await tool(
             client,
             "math.find",
-            {"capability_id": "polynomial.compute.gcd"},
+            {
+                "request": {
+                    "op": "inspect",
+                    "capability_id": "polynomial.compute.gcd",
+                }
+            },
         )
         assert described["capability"]["capability_id"] == "polynomial.compute.gcd"
 
@@ -108,7 +114,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "polynomial.compute.gcd",
-                "mode": "EXPLORE",  # legacy; defaults to EXPLORE if omitted
                 "payload": {
                     "left": polynomial(-1, 0, 1),
                     "right": polynomial(0, 1, 1),
@@ -116,13 +121,17 @@ async def main() -> None:
             },
         )
         assert computed["execution"]["status"] == "COMPLETED"
-        assert computed["assurance"]["level"] == "COMPUTED"
 
-        # Separate checker tool — not "VERIFY mode" on the producer.
+        # Separate checker tool.
         verification_descriptor = await tool(
             client,
             "math.find",
-            {"capability_id": "polynomial.gcd.verify"},
+            {
+                "request": {
+                    "op": "inspect",
+                    "capability_id": "polynomial.gcd.verify",
+                }
+            },
         )
         assert (
             verification_descriptor["capability"]["capability_id"]
@@ -134,7 +143,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "polynomial.gcd.verify",
-                "mode": "VERIFY",  # legacy; must match this tool until #1143
                 "payload": {
                     "input": {
                         "left": polynomial(-1, 0, 1),
@@ -158,9 +166,8 @@ uv run python domain_capability.py
 ```
 
 The producer's exact arithmetic and successful completion yield `COMPUTED`,
-not `VERIFIED`. The second capability resolves the stored input/result lineage
-and independently replays the relation. Supplying copied inline output instead
-of the exact `result_uri` would lose that binding.
+not `VERIFIED`. The second operation independently replays the exact typed
+input/candidate pair and binds their canonical digests.
 
 ## Interpret bounded-search results
 
@@ -173,16 +180,16 @@ First inspect operational state:
 
 Then inspect mathematical state:
 
-- `completeness.status = COMPLETE` means the operation's declared completion
-  predicate holds, but assurance may still be only `COMPUTED`;
-- `UNKNOWN` or `PARTIAL` means the result is not complete;
-- `obligations` identifies the open optimality or completeness claim; and
+- the operation's typed output owns its completion or coverage status;
+- `UNKNOWN`, `INCOMPLETE`, or a domain-specific partial status is not a
+  negative conclusion; and
 - the output may retain an incumbent, bounds, and a tested trace even when no
   conclusion is available.
 
 Never use `execution.status = COMPLETED` by itself as evidence of optimality.
-Keep the input, result, and obligation artifact URIs together so a later
-checker or resumed investigation can address the exact open claim.
+Keep the input and result artifact URIs together so a later checker can address
+the exact typed subject and candidate. The generic response envelope does not
+create an obligation lifecycle.
 
 ## When verification is unavailable
 
@@ -193,8 +200,7 @@ failed runtime measurement, configured exclusions, or a producer relation for
 which no independent checker is installed.
 
 You can still use the computed result as explicitly labeled evidence. Preserve
-its provider identity, artifacts, scope, completeness, and obligations, and
-report the missing verification path.
+its typed value and artifacts, and report the missing checker operation.
 
 See the [domain operation library reference](../reference/domain-operation-library.md)
 for the underlying producer and checker contracts.

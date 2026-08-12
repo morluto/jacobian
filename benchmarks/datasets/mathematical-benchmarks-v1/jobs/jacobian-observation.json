@@ -35,9 +35,6 @@
   "agents": [
     {
       "name": "codex",
-      "skills": [
-        ".agents/skills/jacobian-math"
-      ],
       "kwargs": {
         "web_search": "disabled"
       }

@@ -11,7 +11,6 @@ from tests.support.artifacts import sha256_file as _sha256_file
 
 import jacobian_checkers.sat
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityInstallTier,
     CapabilityProviderAvailability,
     CapabilityProviderDigestKind,
@@ -189,12 +188,10 @@ def test_unsat_proof_is_verified_by_authorized_external_runtime(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert result.verification_record_uri is not None
     assert result.output["status"] == "VERIFIED_UNSAT"
     assert result.output["conclusion"] == "TRUE"
     assert result.output["verified_claim_scope"] == "CANONICAL_CNF_ONLY"
-    assert result.scope is not None
-    assert result.scope.parameters["domain_encoding_verified"] is False
     assert result.output["cnf_uri"] == cnf_uri
     assert result.output["proof_uri"] == proof_uri
     certificate_uri = result.output["certificate_uri"]
@@ -241,11 +238,9 @@ def test_rejected_proof_never_establishes_sat_or_unsat(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["status"] == "REJECTED"
     assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["verification_record_uri"] is None
-    assert result.assurance.verification_record_uri is None
 
 
 def test_proof_verify_requires_runtime_and_operator_authorization(
@@ -324,7 +319,6 @@ def test_checker_operational_failure_never_creates_a_conclusion(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is expected_status
-    assert result.assurance.level is not CapabilityAssuranceLevel.VERIFIED
     assert result.output["status"] == expected_output_status
     assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["verification_record_uri"] is None
@@ -349,7 +343,6 @@ def test_runtime_replacement_after_authorization_fails_closed(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.assurance.level is not CapabilityAssuranceLevel.VERIFIED
     assert result.output["status"] == "ERROR"
     assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["verification_record_uri"] is None

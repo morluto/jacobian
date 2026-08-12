@@ -15,10 +15,6 @@ from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
@@ -27,7 +23,6 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import (
@@ -37,18 +32,22 @@ from jacobian.contracts.evidence import (
 )
 from jacobian.contracts.results import (
     Conclusion,
-    Execution,
     ExecutionStatus,
-    Verification,
 )
 from jacobian.contracts.sat import (
+    CanonicalCnf,
     SatAssignmentVerificationOutput,
     SatAssignmentVerificationRequest,
     SatCnfMaterializationOutput,
     SatCnfMaterializationRequest,
     SatUnsatProofVerificationOutput,
     SatUnsatProofVerificationRequest,
+    canonicalize_cnf,
 )
+from jacobian.operation_execution import execute_operation
+from jacobian.operation_projection import project_operation_result
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, OperationSpec
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactError, SatArtifactService
@@ -73,11 +72,16 @@ class SatUnsatProofCheckerInstallation:
 class SatCnfMaterializationAdapter:
     """Create one canonical CNF artifact without making a SAT conclusion."""
 
+    typed_input = True
+
     def __init__(self, sat: SatArtifactService) -> None:
         self.sat = sat
-        self._descriptor = CapabilityDescriptor(
-            capability_id="sat.cnf.materialize",
+        self.spec = OperationSpec(
+            operation_id="sat.cnf.materialize",
             version="1",
+            request_type=SatCnfMaterializationRequest,
+            result_type=CanonicalCnf,
+            execute=_canonical_cnf,
             title="Materialize a canonical SAT CNF",
             description=(
                 "Encode exact finite existence problems, including finite colorings "
@@ -85,13 +89,6 @@ class SatCnfMaterializationAdapter:
                 "clauses. Canonicalize and store the exact CNF consumed by SAT model "
                 "and certified exhaustive UNSAT search capabilities."
             ),
-            provider="jacobian.sat",
-            provider_runtime=known_provider_runtime(
-                "jacobian.sat",
-                features=("canonical-cnf", "cnf-materialization"),
-            ),
-            input_schema=model_schema(SatCnfMaterializationRequest),
-            output_schema=model_schema(SatCnfMaterializationOutput),
             tags=(
                 "sat",
                 "cnf",
@@ -132,6 +129,21 @@ class SatCnfMaterializationAdapter:
                 ),
             ),
         )
+        self._descriptor = CapabilityDescriptor(
+            capability_id=self.spec.operation_id,
+            version=self.spec.version,
+            title=self.spec.title,
+            description=self.spec.description,
+            provider="jacobian.sat",
+            provider_runtime=known_provider_runtime(
+                "jacobian.sat",
+                features=("canonical-cnf", "cnf-materialization"),
+            ),
+            input_schema=model_schema(SatCnfMaterializationRequest),
+            output_schema=model_schema(SatCnfMaterializationOutput),
+            tags=self.spec.tags,
+            invocation_examples=self.spec.invocation_examples,
+        )
 
     @property
     def descriptor(self) -> CapabilityDescriptor:
@@ -157,10 +169,15 @@ class SatCnfMaterializationAdapter:
                 )
             ) from exc
 
-        stored = self.sat.put_cnf(
-            variable_names=validated.variable_names,
-            clauses=validated.clauses,
-        )
+        terminal = execute_operation(self.spec, validated)
+        if not isinstance(terminal, Completed):
+            return project_operation_result(
+                operation_id=self.spec.operation_id,
+                version=self.spec.version,
+                terminal=terminal,
+            )
+
+        stored = self.sat.put_canonical_cnf(terminal.value)
         resolved = self.sat.resolve_cnf(stored.artifact_uri)
         binding = resolved.binding
         canonical_bindings = resolved.cnf.variables
@@ -196,37 +213,22 @@ class SatCnfMaterializationAdapter:
                 )
             ),
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(status=ExecutionStatus.COMPLETED),
-            output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the complete canonicalized CNF supplied in this request",
-                parameters={
-                    "declared_scope": "FULL_CNF",
-                    "variable_count": binding.variable_count,
-                    "clause_count": binding.clause_count,
-                },
-                artifact_uri=binding.cnf_artifact_uri,
+        return project_operation_result(
+            operation_id=self.spec.operation_id,
+            version=self.spec.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(binding.cnf_artifact_uri,),
             ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis=(
-                    "materialization stores one complete input CNF and makes no "
-                    "satisfiability or enumeration claim"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "deterministic canonicalization and content-addressed artifact "
-                    "storage; no SAT or UNSAT conclusion is claimed"
-                ),
-            ),
-            artifact_uris=(binding.cnf_artifact_uri,),
         )
+
+
+def _canonical_cnf(request: SatCnfMaterializationRequest) -> CanonicalCnf:
+    return canonicalize_cnf(
+        variable_names=request.variable_names,
+        clauses=request.clauses,
+    )
 
 
 def install_sat_assignment_checker(
@@ -340,6 +342,8 @@ def install_sat_unsat_proof_checker(
 class SatAssignmentVerificationAdapter:
     """Verify one assignment; never infer UNSAT from assignment rejection."""
 
+    typed_input = True
+
     def __init__(
         self,
         *,
@@ -446,7 +450,6 @@ class SatAssignmentVerificationAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion is Conclusion.TRUE
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         status: Literal[
@@ -495,63 +498,20 @@ class SatAssignmentVerificationAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        assurance_level = (
-            CapabilityAssuranceLevel.VERIFIED
-            if verified
-            else (
-                CapabilityAssuranceLevel.COMPUTED
-                if checked.execution.status is ExecutionStatus.COMPLETED
-                else CapabilityAssuranceLevel.HEURISTIC
-            )
-        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the full exact canonical CNF bound by the assignment",
-                parameters={
-                    "declared_scope": "FULL_CNF",
-                    "variable_count": resolved.assignment.cnf.variable_count,
-                    "clause_count": resolved.assignment.cnf.clause_count,
-                },
-                artifact_uri=resolved.cnf_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis=(
-                    "direct assignment replay checks one witness and makes no "
-                    "enumeration or UNSAT completeness claim"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.COMPUTED
-                    if checked.execution.status is ExecutionStatus.COMPLETED
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=assurance_level,
-                basis=(
-                    "accepted by the operator-authorized independent SAT "
-                    "assignment checker"
-                    if verified
-                    else (
-                        "checker replay completed without accepting the assignment; "
-                        "no opposite conclusion follows"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not complete; no mathematical "
-                        "conclusion follows"
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=record_uri,
             artifact_uris=tuple(artifact_uris),
         )
 
 
 class SatUnsatProofVerificationAdapter:
     """Verify one raw proof; rejection never establishes satisfiability."""
+
+    typed_input = True
 
     def __init__(
         self,
@@ -673,7 +633,6 @@ class SatUnsatProofVerificationAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion is Conclusion.TRUE
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         status: Literal[
@@ -723,59 +682,11 @@ class SatUnsatProofVerificationAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        assurance_level = (
-            CapabilityAssuranceLevel.VERIFIED
-            if verified
-            else (
-                CapabilityAssuranceLevel.COMPUTED
-                if checked.execution.status is ExecutionStatus.COMPLETED
-                else CapabilityAssuranceLevel.HEURISTIC
-            )
-        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the full exact canonical CNF bound by the raw proof",
-                parameters={
-                    "declared_scope": "CANONICAL_CNF_ONLY",
-                    "domain_encoding_verified": False,
-                    "variable_count": resolved.proof.cnf.variable_count,
-                    "clause_count": resolved.proof.cnf.clause_count,
-                    "proof_format": resolved.proof.proof_format,
-                    "proof_format_version": resolved.proof.proof_format_version,
-                },
-                artifact_uri=resolved.cnf_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis=(
-                    "certificate replay checks one exact proof and makes no "
-                    "enumeration-completeness claim"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.COMPUTED
-                    if checked.execution.status is ExecutionStatus.COMPLETED
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=assurance_level,
-                basis=(
-                    "accepted by the operator-authorized external DRAT-trim "
-                    "runtime bound into the checker registration"
-                    if verified
-                    else (
-                        "checker replay completed without accepting the proof; "
-                        "no opposite conclusion follows"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not complete; no mathematical "
-                        "conclusion follows"
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=record_uri,
             artifact_uris=tuple(artifact_uris),
         )

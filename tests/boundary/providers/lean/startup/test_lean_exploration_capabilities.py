@@ -9,7 +9,6 @@ from tests.support.provider_lean import (
 )
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
@@ -39,7 +38,6 @@ def test_apply_tactic_exposes_child_goals_and_replay_source(tmp_path: Path) -> N
         )
     )
 
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["completed"] is False
     assert result.output["goal_count"] == 2
     assert all("⊢" in goal for goal in result.output["goals"])
@@ -81,7 +79,6 @@ def test_apply_tactic_returns_structured_failure_without_conclusion(
     )
 
     assert result.execution.status.value == "COMPLETED"
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["accepted"] is False
     assert result.output["successor_states"] == []
     assert any(
@@ -118,7 +115,6 @@ def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> N
         )
     )
 
-    assert suggested.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert suggested.output["candidates"]
     assert suggested.output["candidates"][0]["tactic"] == ("exact Nat.gcd_zero_right n")
     assert (

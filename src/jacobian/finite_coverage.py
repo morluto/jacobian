@@ -17,20 +17,11 @@ from jacobian.capability_service import (
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityObligation,
-    CapabilityObligationStatus,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -47,7 +38,7 @@ from jacobian.contracts.finite_coverage import (
     FiniteCoverageVerifyOutput,
     FiniteCoverageVerifyRequest,
 )
-from jacobian.contracts.results import Conclusion, ExecutionStatus, Verification
+from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
@@ -463,7 +454,6 @@ class FiniteCoverageVerifyAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion is Conclusion.TRUE
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         detail = checked.execution.detail
@@ -495,16 +485,6 @@ class FiniteCoverageVerifyAdapter:
             detail=detail,
         )
         record_uri = checked.verification_record_uri if verified else None
-        assurance_level = (
-            CapabilityAssuranceLevel.VERIFIED
-            if verified
-            else (
-                CapabilityAssuranceLevel.COMPUTED
-                if checked.execution.status is ExecutionStatus.COMPLETED
-                else CapabilityAssuranceLevel.HEURISTIC
-            )
-        )
-        complete = verified
         artifact_uris = [
             canonicalizer_uri,
             scope.artifact_uri,
@@ -520,67 +500,7 @@ class FiniteCoverageVerifyAdapter:
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the exact typed finite scope bound to the page archive",
-                parameters={
-                    "canonicalizer_id": canonicalizer_id,
-                    "scope_item_count": len(validated.scope_items),
-                    "page_count": len(validated.pages),
-                    "archive_item_count": sum(
-                        len(page.items) for page in validated.pages
-                    ),
-                },
-                artifact_uri=scope.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if complete
-                    else CapabilityCompletenessStatus.PARTIAL
-                ),
-                basis=(
-                    "operator-authorized independent checker replayed every bound "
-                    "scope and page item exactly once"
-                    if verified
-                    else "exactly-once coverage was not independently accepted"
-                ),
-                assurance_level=assurance_level,
-                verification_record_uri=record_uri,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="finite.relation.covers-exactly-once",
-                    source_artifact_uris=(scope.artifact_uri,),
-                    target_artifact_uris=(archive.artifact_uri,),
-                    status=(
-                        CapabilityRelationshipStatus.VERIFIED
-                        if verified
-                        else CapabilityRelationshipStatus.PROPOSED
-                    ),
-                    obligation_uris=(claim.artifact_uri,),
-                    verification_record_uri=record_uri,
-                ),
-            ),
-            obligations=(
-                CapabilityObligation(
-                    obligation_uri=claim.artifact_uri,
-                    status=(
-                        CapabilityObligationStatus.DISCHARGED
-                        if verified
-                        else CapabilityObligationStatus.OPEN
-                    ),
-                    verification_record_uri=record_uri,
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=assurance_level,
-                basis=(
-                    "operator-authorized independent finite coverage checker accepted"
-                    if verified
-                    else "coverage diagnostics were computed but not verified"
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=record_uri,
             artifact_uris=tuple(artifact_uris),
         )
 

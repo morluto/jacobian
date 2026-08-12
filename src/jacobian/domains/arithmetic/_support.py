@@ -1,8 +1,9 @@
 """Arithmetic operation declarations."""
 
-from jacobian.operations import ComputedOperationFactory, OperationFailure
+from jacobian.operation_bindings import InlineOperationFactory
+from jacobian.operations import OperationFailure
 
-arithmetic_operation = ComputedOperationFactory(
+arithmetic_operation = InlineOperationFactory(
     OperationFailure(
         code="ARITHMETIC_OPERATION_NOT_APPLICABLE",
         stage="arithmetic_computation",

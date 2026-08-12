@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces thirteen PR10 invariants:
+runtime.  It enforces fifteen PR10 invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -49,8 +49,14 @@ runtime.  It enforces thirteen PR10 invariants:
 12. **output-only-contract**: superseded matrix input/output contract variants
     must not return after consolidation.
 
-13. **unsupported-surface**: removed experimental memory/search identifiers must
+13. **private-math-backend**: operation domains must use the supported
+    ``jacobian.math`` package rather than importing its private backend modules.
+
+14. **unsupported-surface**: removed experimental memory/search identifiers must
     not appear in supported product source, tests, schemas, catalog, or docs.
+
+15. **internal-capability-request**: only CLI and MCP boundaries may construct
+    the generic capability request envelope; in-process composition stays typed.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
@@ -90,14 +96,11 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
             "benchmarks/datasets/provider-feasibility-v1/lean-repl/tests/replay.py"
         ),
         # --- Explicit test fixtures where subprocess is the test mechanism ---
-        # E2e workflow scenarios spawn CLI processes.
-        PurePosixPath("tests/e2e/verified_results/test_reference_runtime.py"),
         # Process boundary tests directly exercise subprocess seams.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
         PurePosixPath("tests/boundary/process/test_cvc5_worker_command_profile.py"),
         PurePosixPath("tests/boundary/process/test_process_policy.py"),
         PurePosixPath("tests/boundary/process/test_rational_lp_worker_protocol.py"),
-        PurePosixPath("tests/boundary/process/test_worker_error_protocol.py"),
         PurePosixPath(
             "tests/boundary/process/polynomial/test_polynomial_system_adapter_guards.py"
         ),
@@ -112,7 +115,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/tooling/test_make_help.py"),
         # MCP transport boundary tests spawn server processes.
         PurePosixPath("tests/boundary/mcp/test_mcp_entrypoint.py"),
-        PurePosixPath("tests/boundary/mcp/test_mcp_operations.py"),
         PurePosixPath("tests/boundary/mcp/test_remote_mcp_auth.py"),
         # Provider startup boundary tests spawn provider executables.
         PurePosixPath(
@@ -124,13 +126,12 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
             "test_smt_unsat_proof_verification.py"
         ),
         PurePosixPath(
-            "tests/boundary/providers/flint/startup/test_optional_provider_startup.py"
+            "tests/boundary/providers/flint/startup/test_required_provider_startup.py"
         ),
         PurePosixPath(
             "tests/boundary/providers/lean/test_lean_statement_capabilities.py"
         ),
         # Storage recovery/transaction boundary tests crash and recover processes.
-        PurePosixPath("tests/boundary/storage/recovery/test_enumeration_recovery.py"),
         PurePosixPath(
             "tests/boundary/storage/transactions/test_process_crash_recovery.py"
         ),
@@ -147,13 +148,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/component/providers/matrix/test_matrix_capabilities.py"),
         # Real analysis domain test uses external analysis executables.
         PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
-        # SAT assignment composition test invokes the SAT checker directly.
-        PurePosixPath("tests/composition/runtime/test_sat_assignment_verification.py"),
-        # Polynomial-system composition test exercises checker authorization
-        # under an optimized Python interpreter.
-        PurePosixPath(
-            "tests/composition/runtime/test_polynomial_system_capabilities.py"
-        ),
         # Untrusted plugin entrypoints manage their own process lifecycle.
         PurePosixPath("tests/support/process_entrypoints.py"),
         # Architecture policy test uses subprocess in a synthetic import probe.
@@ -252,6 +246,13 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
 
 # os.environ spreading: product source only.
 _ENVIRON_SPREAD_ROOTS = (PurePosixPath("src"),)
+
+_CAPABILITY_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
+    {
+        PurePosixPath("src/jacobian/cli.py"),
+        PurePosixPath("src/jacobian/adapters/mcp/tooling.py"),
+    }
+)
 
 # Public-contract checks apply to datasets with agent-visible contract projections.
 _PUBLIC_CONTRACT_DATASET_PREFIXES = (
@@ -452,6 +453,29 @@ def _imported_module(node: ast.Import | ast.ImportFrom) -> str:
 
 def _imported_names(node: ast.Import | ast.ImportFrom) -> list[str]:
     return [alias.name for alias in node.names]
+
+
+def _internal_capability_request_violations(
+    relative: PurePosixPath,
+    tree: ast.AST,
+) -> tuple[Violation, ...]:
+    if not str(relative).startswith("src/jacobian/"):
+        return ()
+    if relative in _CAPABILITY_REQUEST_ALLOWED_EXACT:
+        return ()
+    return tuple(
+        Violation(
+            str(relative),
+            "internal-capability-request",
+            "in-process composition must pass typed values instead of constructing "
+            "CapabilityRequest",
+            node.lineno,
+        )
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "CapabilityRequest"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -845,6 +869,13 @@ _NATIVE_MATH_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.operation_installation",
     "jacobian.installation",
 )
+_PRIVATE_MATH_BACKEND_PREFIXES = (
+    "jacobian.math.finite_fields._flint",
+    "jacobian.math.finite_fields._sympy",
+    "jacobian.math.graphs._networkx",
+    "jacobian.math.matrices._sympy",
+    "jacobian.math.polynomials._sympy",
+)
 _SUPERSEDED_MATRIX_CONTRACTS = frozenset(
     {
         "ExactRationalMatrix",
@@ -930,6 +961,23 @@ def _native_math_boundary_violations(
                         node.lineno,
                     )
                 )
+            elif reference.startswith("jacobian.domains.") and any(
+                _is_under(relative, PurePosixPath(prefix))
+                for prefix in (
+                    "src/jacobian/math/graphs",
+                    "src/jacobian/math/matrices",
+                    "src/jacobian/math/polynomials",
+                )
+            ):
+                violations.append(
+                    Violation(
+                        str(relative),
+                        "native-math-boundary",
+                        "this migrated jacobian.math package owns its implementation "
+                        "and may not import the legacy domain package",
+                        node.lineno,
+                    )
+                )
             elif (
                 reference.startswith("jacobian.domains.")
                 and not reference.endswith(".kernels")
@@ -941,6 +989,29 @@ def _native_math_boundary_violations(
                         "native-math-boundary",
                         "jacobian.math may import domain-owned kernels directly, "
                         "not domain operations or installation layers",
+                        node.lineno,
+                    )
+                )
+    return tuple(violations)
+
+
+def _private_math_backend_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    if not _is_under(relative, PurePosixPath("src/jacobian/domains")):
+        return ()
+    violations: list[Violation] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        for reference in _import_references(relative, node):
+            if _imports_prefix(reference, _PRIVATE_MATH_BACKEND_PREFIXES):
+                violations.append(
+                    Violation(
+                        str(relative),
+                        "private-math-backend",
+                        "operation domains must call the supported jacobian.math "
+                        "API instead of a private backend module",
                         node.lineno,
                     )
                 )
@@ -1049,7 +1120,11 @@ def _materialization_reason_violations(
         if name != "MaterializedOperation" and not name.startswith("materialized_"):
             continue
         reason = next(
-            (keyword.value for keyword in node.keywords if keyword.arg == "resource_reason"),
+            (
+                keyword.value
+                for keyword in node.keywords
+                if keyword.arg == "resource_reason"
+            ),
             None,
         )
         if reason is None or (
@@ -1316,6 +1391,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return (Violation(rel_str, "parse-error", f"cannot parse file: {exc}"),)
 
     violations: list[Violation] = []
+    violations.extend(_internal_capability_request_violations(relative, tree))
     violations.extend(_subprocess_violations(relative, tree))
     violations.extend(_run_bounded_process_violations(relative, tree))
     violations.extend(_shutil_which_violations(relative, tree))
@@ -1324,6 +1400,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_unsafe_canonical_conversion_violations(relative, tree))
     violations.extend(_contract_dependency_leaf_violations(relative, tree))
     violations.extend(_native_math_boundary_violations(relative, tree))
+    violations.extend(_private_math_backend_violations(relative, tree))
     violations.extend(_checker_producer_isolation_violations(relative, tree))
     violations.extend(_erased_contract_operation_violations(relative, tree))
     violations.extend(_output_only_contract_violations(relative, tree))

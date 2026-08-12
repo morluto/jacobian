@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.services import CoreServices
+
+
+class CapabilityRuntime(Protocol):
+    """The minimal public invocation surface used by capability tests."""
+
+    @property
+    def core(self) -> CoreServices: ...
 
 
 def invoke_capability(
-    runtime: JacobianRuntime,
+    runtime: CapabilityRuntime,
     capability_id: str,
     payload: dict[str, Any],
 ) -> CapabilityResult:

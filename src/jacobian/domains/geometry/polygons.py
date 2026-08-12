@@ -41,7 +41,6 @@ POLYGON_CAPABILITIES = (
         "polygon",
         "triangulation",
         "optimization",
-        relation_id="geometry.polygon.triangulation.minimum_weight.relation",
     ),
     geometry_operation(
         "geometry.polygon.compute.signed_area",
@@ -73,7 +72,6 @@ POLYGON_CAPABILITIES = (
         "geometry",
         "polygon",
         "decision",
-        relation_id="geometry.polygon.simple.relation",
         invocation_examples=(
             example(
                 "unit_square_is_simple",
@@ -95,7 +93,6 @@ POLYGON_CAPABILITIES = (
         "geometry",
         "polygon",
         "classification",
-        relation_id="geometry.polygon.point.relation",
         invocation_examples=(
             example(
                 "unit_square_center",

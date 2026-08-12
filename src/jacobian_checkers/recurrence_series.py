@@ -25,7 +25,6 @@ _META = {
     "determinism": "DETERMINISTIC",
     "backend": "sympy",
     "backend_version": "1.14.0",
-    "verification": "UNVERIFIED",
 }
 _MAX_RESULT_DIGITS = 32_768
 _MAX_RESULT_BYTES = 10 * 1024 * 1024

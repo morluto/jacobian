@@ -20,19 +20,49 @@ from jacobian.provider_runtime import (
 )
 
 
-def python_flint_provider_runtime(
+def _python_flint_runtime(
     *,
-    refresh: bool = False,
+    required_attributes: tuple[str, ...],
+    features: tuple[str, ...],
+    configuration: dict[str, object],
+    profile: str,
+    refresh: bool,
 ) -> CapabilityProviderRuntime:
-    """Identify the exact optional Python-FLINT compatibility profile."""
-
     runtime = python_distribution_provider_runtime(
         "python-flint",
         distribution_name="python-flint",
         import_name="flint",
-        required_attributes=("fmpq", "fmpq_mat"),
+        required_attributes=required_attributes,
         install_tier=CapabilityInstallTier.T1,
         license_id="MIT AND LGPL-3.0-or-later",
+        features=features,
+        configuration=configuration,
+        refresh=refresh,
+    )
+    if (
+        runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        and runtime.version != PYTHON_FLINT_VERSION
+    ):
+        return _unavailable_runtime(
+            provider="python-flint",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT AND LGPL-3.0-or-later",
+            diagnostic=(
+                "Python-FLINT is installed but does not match the pinned "
+                f"{PYTHON_FLINT_VERSION} {profile} profile."
+            ),
+        )
+    return runtime
+
+
+def python_flint_provider_runtime(
+    *,
+    refresh: bool = False,
+) -> CapabilityProviderRuntime:
+    """Identify the exact packaged Python-FLINT compatibility profile."""
+
+    return _python_flint_runtime(
+        required_attributes=("fmpq", "fmpq_mat"),
         features=(
             "exact-rational",
             "dense-matrix",
@@ -45,22 +75,27 @@ def python_flint_provider_runtime(
             "maximum_columns": 32,
             "free_variable_policy": "ZERO",
         },
+        profile="compatibility",
         refresh=refresh,
     )
-    if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
-        and runtime.version != PYTHON_FLINT_VERSION
-    ):
-        return _unavailable_runtime(
-            provider="python-flint",
-            install_tier=CapabilityInstallTier.T1,
-            license_id="MIT AND LGPL-3.0-or-later",
-            diagnostic=(
-                "Python-FLINT is installed but does not match the pinned "
-                f"{PYTHON_FLINT_VERSION} compatibility profile."
-            ),
-        )
-    return runtime
+
+
+def python_flint_finite_field_provider_runtime(
+    *,
+    refresh: bool = False,
+) -> CapabilityProviderRuntime:
+    """Identify the exact packaged Python-FLINT finite-field API."""
+
+    return _python_flint_runtime(
+        required_attributes=("fmpz_mod_poly_ctx", "fq_default_ctx", "nmod_mat"),
+        features=("exact-finite-field-presentation", "restriction-of-scalars"),
+        configuration={
+            "element_encoding": "power-basis-v1",
+            "matrix_backend": "nmod_mat",
+        },
+        profile="finite-field",
+        refresh=refresh,
+    )
 
 
 def python_flint_exact_checker_provider_runtime(
@@ -69,10 +104,7 @@ def python_flint_exact_checker_provider_runtime(
 ) -> CapabilityProviderRuntime:
     """Identify the pinned Python-FLINT API used by exact-domain replay."""
 
-    runtime = python_distribution_provider_runtime(
-        "python-flint",
-        distribution_name="python-flint",
-        import_name="flint",
+    runtime = _python_flint_runtime(
         required_attributes=(
             "fmpq",
             "fmpq_mat",
@@ -81,28 +113,14 @@ def python_flint_exact_checker_provider_runtime(
             "fmpz_mat",
             "fmpz_poly",
         ),
-        install_tier=CapabilityInstallTier.T1,
-        license_id="MIT AND LGPL-3.0-or-later",
         features=("exact-domain-independent-replay",),
         configuration={
             "import_name": "flint",
             "flint_library_version": PYTHON_FLINT_HNF_FLINT_VERSION,
         },
+        profile="exact-checker",
         refresh=refresh,
     )
-    if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
-        and runtime.version != PYTHON_FLINT_VERSION
-    ):
-        return _unavailable_runtime(
-            provider="python-flint",
-            install_tier=CapabilityInstallTier.T1,
-            license_id="MIT AND LGPL-3.0-or-later",
-            diagnostic=(
-                "Python-FLINT is installed but does not match the pinned "
-                f"{PYTHON_FLINT_VERSION} exact-checker profile."
-            ),
-        )
     if refresh and runtime.availability is CapabilityProviderAvailability.AVAILABLE:
         try:
             flint = importlib.import_module("flint")

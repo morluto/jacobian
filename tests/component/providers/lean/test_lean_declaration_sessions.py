@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gc
 import hashlib
+import json
 import threading
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -45,6 +46,20 @@ _RUNTIME = CapabilityProviderRuntime(
     install_tier=CapabilityInstallTier.T3,
     license_id="Apache-2.0",
     features=("CORE", "MATHLIB"),
+    configuration={
+        "profiles": {
+            "CORE": {
+                "lean_version": "4.31.0",
+                "lean_commit": "lean-commit",
+                "mathlib_commit": None,
+            },
+            "MATHLIB": {
+                "lean_version": "4.31.0",
+                "lean_commit": "lean-commit",
+                "mathlib_commit": "mathlib-commit",
+            },
+        }
+    },
 )
 
 
@@ -185,6 +200,49 @@ def test_environment_identity_fails_closed_if_the_lean_executable_changes(
     with pytest.raises(LeanDeclarationBackendError) as raised:
         backend.environment_digest(LeanEnvironment.CORE)
     assert raised.value.code == "LEAN_ENVIRONMENT_CHANGED"
+
+
+def test_mathlib_declaration_environment_authorizes_manifest_checkouts(
+    tmp_path: Path,
+) -> None:
+    lean_bin = tmp_path / "toolchain" / "bin"
+    lean_bin.mkdir(parents=True)
+    lean = lean_bin / "lean"
+    lake = lean_bin / "lake"
+    lean.write_bytes(b"pinned lean executable")
+    lake.write_bytes(b"pinned lake executable")
+    runtime = tmp_path / "runtime"
+    package_root = runtime / ".lake" / "packages"
+    (package_root / "mathlib").mkdir(parents=True)
+    (package_root / "batteries").mkdir()
+    (runtime / "lake-manifest.json").write_text(
+        json.dumps(
+            {
+                "packagesDir": ".lake/packages",
+                "packages": [
+                    {"name": "mathlib", "type": "git"},
+                    {"name": "batteries", "type": "git"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    digest = "sha256:" + hashlib.sha256(lean.read_bytes()).hexdigest()
+    backend = LeanSubprocessDeclarationBackend(
+        lean_executable=lean,
+        mathlib_runtime=runtime,
+        provider_runtime=_RUNTIME.model_copy(update={"digest": digest}),
+    )
+
+    environment = backend._process_environment(LeanEnvironment.MATHLIB, tmp_path)
+
+    assert environment["GIT_CONFIG_COUNT"] == "2"
+    assert environment["GIT_CONFIG_GLOBAL"] == "/dev/null"
+    assert environment["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert environment["GIT_CONFIG_KEY_0"] == "safe.directory"
+    assert environment["GIT_CONFIG_VALUE_0"] == str(package_root / "mathlib")
+    assert environment["GIT_CONFIG_KEY_1"] == "safe.directory"
+    assert environment["GIT_CONFIG_VALUE_1"] == str(package_root / "batteries")
 
 
 def test_subprocess_backend_reuses_one_pinned_session_per_environment(

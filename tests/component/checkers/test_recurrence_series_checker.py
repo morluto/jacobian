@@ -20,7 +20,6 @@ _META = {
     "determinism": "DETERMINISTIC",
     "backend": "sympy",
     "backend_version": "1.14.0",
-    "verification": "UNVERIFIED",
 }
 _RECURRENCE_CONVENTION = "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
 _P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"

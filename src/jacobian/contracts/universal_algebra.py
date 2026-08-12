@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from jacobian.contracts.common import ArtifactUri, CheckerUri
+from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.results import ContractModel
 
 Identifier = Annotated[
@@ -174,7 +174,6 @@ class FiniteMagmaTableEnumerationOutput(ContractModel):
     ordering: Literal["LEXICOGRAPHIC_ROW_MAJOR"] = "LEXICOGRAPHIC_ROW_MAJOR"
     exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
     completeness: Literal["COMPLETE"] = "COMPLETE"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def require_exact_output_count(self) -> Self:
@@ -266,47 +265,13 @@ class FiniteMagmaLawReplayPayload(ContractModel):
     evaluation_uri: ArtifactUri
 
 
-class UniversalAlgebraCertificateVerificationPayload(ContractModel):
-    certificate_uri: ArtifactUri
-    checker_id: CheckerUri
-    timeout_seconds: int = Field(default=150, ge=1, le=150)
-
-
-class UniversalAlgebraVerificationHandoff(ContractModel):
-    capability_id: Literal["certificate.verify"] = "certificate.verify"
-    payload: UniversalAlgebraCertificateVerificationPayload
-
-
 class UniversalAlgebraEvaluationOutput(ContractModel):
     problem_uri: ArtifactUri
     evaluation_uri: ArtifactUri
     claim_uri: ArtifactUri
     certificate_uri: ArtifactUri
-    checker_id: CheckerUri | None = None
     records: tuple[MagmaLawEvaluationRecord, ...]
-    exactness: Literal["EXACT"] = "EXACT"
     completeness: Literal["COMPLETE"] = "COMPLETE"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    certificate_available: Literal[True] = True
-    verification_handoff: UniversalAlgebraVerificationHandoff | None = None
-
-    @model_validator(mode="after")
-    def bind_verification_handoff(self) -> Self:
-        if self.checker_id is None:
-            if self.verification_handoff is not None:
-                raise ValueError(
-                    "verification handoff requires an installed checker identity"
-                )
-        elif (
-            self.verification_handoff is None
-            or self.verification_handoff.payload.certificate_uri != self.certificate_uri
-            or self.verification_handoff.payload.checker_id != self.checker_id
-        ):
-            raise ValueError(
-                "installed checker output requires an exact certificate handoff"
-            )
-        return self
 
 
 class CountermodelSearchStatus(StrEnum):
@@ -374,12 +339,7 @@ class UniversalAlgebraCountermodelSearchOutput(ContractModel):
     structure: FiniteMagma | None = None
     source_records: tuple[MagmaLawEvaluationRecord, ...] | None = None
     target_record: MagmaLawEvaluationRecord | None = None
-    exactness: Literal["EXACT_FINITE_ENCODING"] = "EXACT_FINITE_ENCODING"
     scope: Literal["ONE_FIXED_CARRIER_ORDER"] = "ONE_FIXED_CARRIER_ORDER"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    verification_capability_id: Literal["universal_algebra.evaluate_laws"] = (
-        "universal_algebra.evaluate_laws"
-    )
 
     @model_validator(mode="after")
     def require_status_evidence_shape(self) -> Self:

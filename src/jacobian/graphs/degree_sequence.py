@@ -12,16 +12,10 @@ from pydantic import ValidationError
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.graph_degree_sequence import (
@@ -219,7 +213,6 @@ class GraphDegreeSequenceAdapter:
             result_uri=result_artifact.artifact_uri,
             claim_uri=claim_artifact.artifact_uri,
             certificate_uri=certificate_artifact.artifact_uri,
-            checker_id=self.resources.degree_sequence_checker_id,
             backend_version=nx().__version__,
         )
         artifact_uris = [
@@ -237,36 +230,6 @@ class GraphDegreeSequenceAdapter:
                 runtime_ms=runtime_ms(started),
             ),
             output=output.model_dump(mode="json", exclude_none=True),
-            scope=CapabilityScope(
-                description="one finite nonnegative integer degree sequence",
-                parameters={
-                    "degree_sequence": list(sequence),
-                    "graph_model": "finite simple undirected graph",
-                },
-                artifact_uri=claim_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "the result carries either a full graph realization or one "
-                    "necessary-condition obstruction; verification remains separate"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="graph.relation.degree-sequence-result",
-                    source_artifact_uris=(claim_artifact.artifact_uri,),
-                    target_artifact_uris=(result_artifact.artifact_uri,),
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "deterministic NetworkX construction or exact integer "
-                    "obstruction; the bundled certificate was not invoked"
-                ),
-            ),
             artifact_uris=tuple(artifact_uris),
         )
 

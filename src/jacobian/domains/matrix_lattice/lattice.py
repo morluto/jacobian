@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Never
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
@@ -23,11 +23,10 @@ from jacobian.domains.matrix_lattice.lll_protocol import (
     LllWorkerRequest,
     parse_lll_worker_response,
 )
+from jacobian.operation_bindings import InstalledOperation, durable_operation
 from jacobian.operations import (
-    ComputedOutcome,
-    ComputedSuccess,
-    MaterializedOperation,
-    OperationExecutionFailure,
+    OperationAbortError,
+    OperationSpec,
 )
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.providers.flint_runtime import python_flint_lll_provider_runtime
@@ -42,10 +41,10 @@ def _failure(
     status: ExecutionStatus,
     code: str,
     message: str,
-) -> OperationExecutionFailure:
-    return OperationExecutionFailure(
-        status=status,
-        diagnostic=CapabilityDiagnostic(
+) -> Never:
+    raise OperationAbortError(
+        status,
+        CapabilityDiagnostic(
             code=code,
             stage="lattice_reduction",
             message=message,
@@ -59,7 +58,7 @@ def _failure(
 
 def reduce_lattice_basis(
     request: LatticeReductionRequest,
-) -> ComputedOutcome[LatticeReductionResult]:
+) -> LatticeReductionResult:
     if (
         LATTICE_RUNTIME.availability is not CapabilityProviderAvailability.AVAILABLE
         or python_flint_lll_provider_runtime(refresh=True) != LATTICE_RUNTIME
@@ -133,33 +132,34 @@ def reduce_lattice_basis(
             "FLINT_LLL_PROVIDER_CHANGED",
             "The Python-FLINT runtime changed during LLL execution.",
         )
-    return ComputedSuccess(result)
+    return result
 
 
-LATTICE_CAPABILITIES: tuple[MaterializedOperation[Any, Any, Any, Any], ...] = (
-    MaterializedOperation(
-        capability_id="lattice.basis.reduce",
-        title="Reduce an exact integer lattice basis",
-        description=(
-            "Run bounded Python-FLINT exact-gram LLL and return the reduced row "
-            "basis with its exact left transformation."
+LATTICE_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
+    durable_operation(
+        OperationSpec(
+            operation_id="lattice.basis.reduce",
+            version="3",
+            title="Reduce an exact integer lattice basis",
+            description=(
+                "Run bounded Python-FLINT exact-gram LLL and return the reduced row "
+                "basis with its exact left transformation."
+            ),
+            request_type=LatticeReductionRequest,
+            result_type=LatticeReductionResult,
+            execute=reduce_lattice_basis,
+            tags=("lattice", "lll", "exact-integer", "bounded", "python-flint"),
+            invocation_examples=(
+                example(
+                    "unit_basis",
+                    "Reduce the one-dimensional unit basis.",
+                    {"basis": {"entries": [["1"]]}},
+                ),
+            ),
         ),
-        request_model=LatticeReductionRequest,
-        result_model=LatticeReductionResult,
-        implementation=reduce_lattice_basis,
-        relation_id="lattice.relation.reduced-basis-of",
-        tags=("lattice", "lll", "exact-integer", "bounded", "python-flint"),
         resource_reason=(
             "the reduced basis and exact left transformation have durable identity "
             "for later certificate replay and lattice composition"
         ),
-        invocation_examples=(
-            example(
-                "unit_basis",
-                "Reduce the one-dimensional unit basis.",
-                {"basis": {"entries": [["1"]]}},
-            ),
-        ),
-        version="3",
     ),
 )

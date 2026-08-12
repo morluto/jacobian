@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_coloring import (
-    ChromaticNumberBudget,
-    GraphChromaticNumberObligation,
     GraphChromaticNumberOutput,
     GraphChromaticNumberRequest,
 )
@@ -14,32 +12,30 @@ from jacobian.domains.graph_optimization.operations import (
     build_simple_graph,
     solve_chromatic_number,
 )
+from jacobian.operation_bindings import inline_operation
 from jacobian.operations import (
-    BoundedSearchInterrupted,
-    BoundedSearchNotApplicable,
-    BoundedSearchOperation,
-    BoundedSearchOutcome,
-    BoundedSearchWitness,
-    OperationExecutionFailure,
+    OperationAbortError,
+    OperationRefusalError,
+    OperationSpec,
 )
 
 
 def _search_chromatic_number(
     request: GraphChromaticNumberRequest,
-) -> BoundedSearchOutcome[GraphChromaticNumberOutput]:
+) -> GraphChromaticNumberOutput:
     """Run bounded k-colorability decisions until exactness or timeout."""
 
     try:
         networkx_graph = build_simple_graph(request.graph)
     except (KeyError, ValueError, TypeError) as exc:
-        return BoundedSearchNotApplicable(
+        raise OperationRefusalError(
             CapabilityDiagnostic(
                 code="CHROMATIC_NUMBER_GRAPH_NOT_APPLICABLE",
                 stage="graph_optimization_precondition",
                 message=str(exc),
                 hint="Supply a simple undirected graph with unique vertices.",
             )
-        )
+        ) from exc
 
     output = solve_chromatic_number(
         networkx_graph,
@@ -62,81 +58,39 @@ def _search_chromatic_number(
             )
         )
     ):
-        return OperationExecutionFailure(
-            status=ExecutionStatus.ERROR,
-            diagnostic=CapabilityDiagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            CapabilityDiagnostic(
                 code="CHROMATIC_NUMBER_COLORING_INVALID",
                 stage="graph_optimization_postcondition",
                 message="The solver returned a coloring that does not separate an edge.",
             ),
         )
     if output.status == "EXACT":
-        return BoundedSearchWitness(value=output)
-    return BoundedSearchInterrupted(
-        value=output,
-        status=ExecutionStatus.TIMEOUT,
-        diagnostic=CapabilityDiagnostic(
-            code="CHROMATIC_NUMBER_TIMEOUT",
-            stage="graph_optimization_search",
-            message=(
-                "The chromatic-number search exhausted its wall-clock budget "
-                "before establishing exactness."
-            ),
+        return output
+    return output
+
+
+CHROMATIC_NUMBER_CAPABILITY = inline_operation(
+    OperationSpec(
+        operation_id="graph.invariant.chromatic_number.compute",
+        version="1",
+        title="Exact chromatic number",
+        description=(
+            "Compute the exact chromatic number of a bounded simple undirected "
+            "graph by bounded Z3 k-colorability decisions. A timeout returns "
+            "an UNKNOWN result with the tested bounds and search trace."
+        ),
+        request_type=GraphChromaticNumberRequest,
+        result_type=GraphChromaticNumberOutput,
+        execute=_search_chromatic_number,
+        tags=(
+            "graph",
+            "invariant",
+            "chromatic_number",
+            "exact",
+            "bounded",
+            "z3",
         ),
     )
-
-
-def _chromatic_number_scope_parameters(
-    request: GraphChromaticNumberRequest,
-    result: GraphChromaticNumberOutput,
-) -> dict[str, object]:
-    budget: ChromaticNumberBudget = request.resource_budget
-    return {
-        "wall_seconds": budget.wall_seconds,
-        "order": result.order,
-    }
-
-
-def _chromatic_number_obligation(
-    request: GraphChromaticNumberRequest,
-    result: GraphChromaticNumberOutput,
-) -> GraphChromaticNumberObligation:
-    return GraphChromaticNumberObligation(
-        graph=request.graph,
-        status=result.status,
-        claimed_value=result.chromatic_number,
-        lower_bound=result.lower_bound,
-        upper_bound=result.upper_bound,
-        coloring=result.coloring,
-        tested=result.tested,
-    )
-
-
-CHROMATIC_NUMBER_CAPABILITY = BoundedSearchOperation(
-    capability_id="graph.invariant.chromatic_number.compute",
-    title="Exact chromatic number",
-    description=(
-        "Compute the exact chromatic number of a bounded simple undirected "
-        "graph by bounded Z3 k-colorability decisions. A timeout returns "
-        "an UNKNOWN result with the tested bounds and search trace."
-    ),
-    request_model=GraphChromaticNumberRequest,
-    result_model=GraphChromaticNumberOutput,
-    implementation=_search_chromatic_number,
-    relation_id="graph.invariant.chromatic_number.relation",
-    scope_parameters=_chromatic_number_scope_parameters,
-    is_complete=lambda result: result.status == "EXACT",
-    obligation_model=GraphChromaticNumberObligation,
-    obligation=_chromatic_number_obligation,
-    incomplete_basis=(
-        "the declared wall-clock budget ended before exactness was established"
-    ),
-    tags=(
-        "graph",
-        "invariant",
-        "chromatic_number",
-        "exact",
-        "bounded",
-        "z3",
-    ),
 )

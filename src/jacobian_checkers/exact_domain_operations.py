@@ -823,13 +823,11 @@ def _factorization(source: dict[str, Any], result: dict[str, Any]) -> bool:
         "factors",
         "reconstructed",
         "normalization",
-        "irreducibility_assurance",
         "product_reconstruction",
     }:
         return False
     if (
         result["normalization"] != "CONTENT_AND_MONIC_IRREDUCIBLES"
-        or result["irreducibility_assurance"] != "UNVERIFIED"
         or result["product_reconstruction"] != "EXACT"
     ):
         return False

@@ -14,7 +14,6 @@ from tests.support.state import copy_template
 
 from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.checkers import CheckerDecision
@@ -28,7 +27,6 @@ from jacobian.contracts.results import (
     Coverage,
     InputStatus,
     Method,
-    Verification,
 )
 from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
@@ -130,16 +128,15 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
         )
     )
 
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.assurance.verification_record_uri is None
-    assert result.output["nodes"][0] == {
+    preview = result.output["preview"]
+    assert preview["nodes"][0] == {
         "name": "Nat.add_comm",
         "kind": "THEOREM",
         "depth": 0,
     }
-    assert len(result.output["nodes"]) <= 40
-    assert result.output["dependency_graph_uri"] in result.artifact_uris
-    artifact = runtime.core.store.get(result.output["dependency_graph_uri"])
+    assert len(preview["nodes"]) <= 40
+    assert result.output["result_uri"] in result.artifact_uris
+    artifact = runtime.core.store.get(result.output["result_uri"])
     assert artifact.payload["nodes"][0]["name"] == "Nat.add_comm"
     assert artifact.payload["query"]["max_depth"] == 1
 
@@ -182,12 +179,13 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
         )
     )
 
-    assert searched.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert searched.assurance.verification_record_uri is None
-    assert searched.output["declarations"][0]["name"] == "irrational_sqrt_two"
-    assert inspected.output["declaration"]["type"] == "Irrational √2"
+    assert searched.output["result"]["declarations"][0]["name"] == (
+        "irrational_sqrt_two"
+    )
+    assert inspected.output["result"]["declaration"]["type"] == "Irrational √2"
     assert (
-        inspected.output["environment_digest"] == searched.output["environment_digest"]
+        inspected.output["result"]["environment_digest"]
+        == searched.output["result"]["environment_digest"]
     )
 
     verified = runtime.portfolio.lean.verify(
@@ -197,7 +195,7 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
     )
 
     assert verified.result.conclusion is Conclusion.TRUE, verified.result.input.errors
-    assert verified.result.assurance.verification is Verification.VERIFIED
+    assert verified.result.verification_record_uri is not None
     certificate = runtime.core.store.get(verified.certificate_uri)
     assert certificate.payload["payload"]["environment"] == "MATHLIB"
     assert certificate.payload["payload"]["allowed_axioms"] == [
@@ -237,9 +235,9 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
         )
     )
 
-    assert inspected.output["declaration"]["type"] == "Nat → Nat → Nat"
-    assert outside_profile.output["declarations"] == []
-    assert outside_profile.output["stop_reason"] == "EXHAUSTED"
+    assert inspected.output["result"]["declaration"]["type"] == "Nat → Nat → Nat"
+    assert outside_profile.output["result"]["declarations"] == []
+    assert outside_profile.output["result"]["stop_reason"] == "EXHAUSTED"
 
     verified = runtime.portfolio.lean.verify(
         statement="∀ n : Nat, n + 0 = n",
@@ -252,7 +250,7 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
     )
 
     assert verified.result.conclusion is Conclusion.TRUE
-    assert verified.result.assurance.verification is Verification.VERIFIED
+    assert verified.result.verification_record_uri is not None
     assert verified.result.verification_record_uri is not None
     record = runtime.core.store.get(verified.result.verification_record_uri)
     certificate = runtime.core.store.get(verified.certificate_uri)
@@ -300,7 +298,7 @@ def test_core_lean_accepts_single_expression_witness_forms(
     verified = runtime.portfolio.lean.verify(statement=statement, proof=proof)
 
     assert verified.result.conclusion is Conclusion.TRUE
-    assert verified.result.assurance.verification is Verification.VERIFIED
+    assert verified.result.verification_record_uri is not None
 
 
 def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> None:
@@ -313,12 +311,18 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
         ) as client:
             described = await client.call_tool(
                 "math.find",
-                {"capability_id": "lean.check", "view": "CONTRACT"},
+                {
+                    "request": {
+                        "op": "inspect",
+                        "capability_id": "lean.check",
+                    }
+                },
             )
             assert isinstance(described.structured_content, dict)
             descriptor = described.structured_content
-            assert descriptor["invocations"][0]["name"] == "finite-witness-let"
-            assert descriptor["cache"]["mathlib_warmup"]["status"] == "NOT_STARTED"
+            assert descriptor["capability"]["invocation_examples"][0]["name"] == (
+                "finite-witness-let"
+            )
 
             response = await client.call_tool(
                 "math.run",
@@ -339,7 +343,7 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
             assert isinstance(response.structured_content, dict)
             payload = response.structured_content
             assert payload["output"]["conclusion"] == "TRUE"
-            assert payload["assurance"]["level"] == "VERIFIED"
+            assert payload["verification_record_uri"] is not None
 
     asyncio.run(scenario())
 
@@ -369,8 +373,13 @@ def test_core_lean_rejects_untrusted_or_invalid_proofs(
 
     assert rejected.result.input.status is InputStatus.REJECTED
     assert rejected.result.conclusion is Conclusion.UNKNOWN
-    assert rejected.result.assurance.verification is Verification.UNVERIFIED
     assert rejected.result.verification_record_uri is None
+    assert rejected.result.verification_record_uri is None
+    assert rejected.diagnostics
+    diagnostic = rejected.diagnostics[0]
+    assert diagnostic.code.startswith("LEAN_")
+    assert diagnostic.phase.value == "KERNEL_CHECK"
+    assert diagnostic.raw_backend_message
 
 
 def test_lean_reuses_only_an_exact_active_checker_result(
@@ -413,6 +422,55 @@ def test_lean_reuses_only_an_exact_active_checker_result(
     assert changed.cache_hit is False
 
 
+def test_lean_cache_never_reuses_a_rejected_checker_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = create_runtime(
+        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+    )
+    assert runtime.portfolio.lean is not None
+    decisions = iter(
+        (
+            CheckerDecision(
+                accepted=False,
+                conclusion=Conclusion.UNKNOWN,
+                arithmetic=Arithmetic.SYMBOLIC,
+                method=Method.CHECKED_CERTIFICATE,
+                coverage=Coverage.NOT_APPLICABLE,
+                detail="transient checker setup failure",
+            ),
+            CheckerDecision(
+                accepted=True,
+                conclusion=Conclusion.TRUE,
+                arithmetic=Arithmetic.SYMBOLIC,
+                method=Method.CHECKED_CERTIFICATE,
+                coverage=Coverage.NOT_APPLICABLE,
+                detail="accepted after checker recovery",
+            ),
+        )
+    )
+    calls = 0
+
+    def recover(**_: object) -> CheckerDecision:
+        nonlocal calls
+        calls += 1
+        return next(decisions)
+
+    monkeypatch.setattr(runtime.services.verification, "_run_checker", recover)
+
+    first = runtime.portfolio.lean.verify(statement="True", proof="by trivial")
+    recovered = runtime.portfolio.lean.verify(statement="True", proof="by trivial")
+    repeated = runtime.portfolio.lean.verify(statement="True", proof="by trivial")
+
+    assert first.result.input.status is InputStatus.REJECTED
+    assert first.cache_hit is False
+    assert recovered.result.verification_record_uri is not None
+    assert recovered.cache_hit is False
+    assert repeated.cache_hit is True
+    assert calls == 2
+
+
 def test_lean_cache_does_not_reuse_a_revoked_checker_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -439,9 +497,9 @@ def test_lean_cache_does_not_reuse_a_revoked_checker_result(
 
     repeated = runtime.portfolio.lean.verify(statement="1 + 1 = 2", proof="rfl")
 
-    assert first.result.assurance.verification is Verification.VERIFIED
+    assert first.result.verification_record_uri is not None
     assert repeated.cache_hit is False
-    assert repeated.result.assurance.verification is Verification.UNVERIFIED
+    assert repeated.result.verification_record_uri is None
 
 
 def test_mathlib_warmup_starts_only_once(

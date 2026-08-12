@@ -1,10 +1,11 @@
-"""Jacobian mathematical capability runtime."""
+"""Jacobian package metadata.
+
+The supported native mathematical API lives under :mod:`jacobian.math`.
+"""
 
 from importlib.metadata import PackageNotFoundError, version
 
-from jacobian.contracts.results import ResultEnvelope
-
-__all__ = ["ResultEnvelope"]
+__all__: list[str] = []
 
 try:
     __version__ = version("jacobian")

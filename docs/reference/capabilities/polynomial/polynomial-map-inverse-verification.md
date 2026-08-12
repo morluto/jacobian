@@ -20,8 +20,8 @@ statuses are:
 - `UNSUPPORTED`.
 
 `NO_CANDIDATE_WITHIN_ANSATZ` means only that the declared finite coefficient
-system has no solution. It never proves noninvertibility. Synthesis always
-remains `COMPUTED` and `UNVERIFIED`; every found candidate is submitted to
+system has no solution. It never proves noninvertibility. Synthesis alone
+creates no verification record; every found candidate is submitted to
 `polynomial.map.inverse.verify`, and the synthesis result records either that
 verifier's certificate/output or an explicit verification failure.
 

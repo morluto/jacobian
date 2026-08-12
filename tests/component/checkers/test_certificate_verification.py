@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
-from jacobian.contracts.results import Conclusion, ExecutionStatus, Verification
+from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.registry import CheckerRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification import VerificationService
@@ -137,8 +137,7 @@ def test_complete_path_enumeration_certificate_is_verified(tmp_path: Path) -> No
     result = service.verify_certificate(certificate_uri=certificate_uri)
 
     assert result.conclusion is Conclusion.FALSE
-    assert result.assurance.verification is Verification.VERIFIED
-    assert result.assurance.coverage.value == "EXHAUSTIVE"
+    assert result.verification_record_uri is not None
 
 
 def test_certificate_supporting_artifacts_include_requested_storage_metadata(
@@ -171,7 +170,7 @@ def test_certificate_supporting_artifacts_include_requested_storage_metadata(
     )
 
     assert result.conclusion is Conclusion.FALSE
-    assert result.assurance.verification is Verification.VERIFIED
+    assert result.verification_record_uri is not None
 
 
 def test_certificate_binding_substitution_is_rejected(tmp_path: Path) -> None:
@@ -189,7 +188,7 @@ def test_certificate_binding_substitution_is_rejected(tmp_path: Path) -> None:
     result = service.verify_certificate(certificate_uri=rebound.artifact_uri)
 
     assert result.conclusion is Conclusion.UNKNOWN
-    assert result.assurance.verification is Verification.UNVERIFIED
+    assert result.verification_record_uri is None
     assert result.verification_record_uri is None
 
 
@@ -205,7 +204,7 @@ def test_certificate_without_bound_parents_is_rejected(tmp_path: Path) -> None:
     result = service.verify_certificate(certificate_uri=unbound.artifact_uri)
 
     assert result.conclusion is Conclusion.UNKNOWN
-    assert result.assurance.verification is Verification.UNVERIFIED
+    assert result.verification_record_uri is None
     assert result.verification_record_uri is None
 
 
@@ -220,5 +219,5 @@ def test_corrupt_certificate_payload_is_an_operational_failure(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.conclusion is Conclusion.UNKNOWN
-    assert result.assurance.verification is Verification.UNVERIFIED
+    assert result.verification_record_uri is None
     assert result.verification_record_uri is None

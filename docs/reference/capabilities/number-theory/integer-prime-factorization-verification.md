@@ -51,11 +51,3 @@ compares the complete list with Python-FLINT's independent factorization.
 
 A rejected candidate returns `UNKNOWN`; it does not assert a different
 factorization or a mathematical claim about another integer.
-
-## Compatibility
-
-The producer capability version, request schema, result schema, backend, and
-artifact relationships are unchanged. The catalog delta is one dedicated
-verification capability plus its operator-authorized checker registration.
-Installations without the number-theory bundle simply omit this verifier while
-retaining unrelated exact-domain checkers.

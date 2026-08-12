@@ -144,7 +144,10 @@ def test_version_identity_uses_uv_normalization(
 
 def test_active_uv_surfaces_share_the_repository_pin() -> None:
     pinned = (ROOT / ".uv-version").read_text().strip()
-    assert f"ghcr.io/astral-sh/uv:{pinned}-" in (ROOT / "Dockerfile").read_text()
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    assert f"ghcr.io/astral-sh/uv:{pinned}-" in dockerfile
+    assert "RUN uv sync --locked --no-dev\n" in dockerfile
+    assert "--extra" not in dockerfile
     setup_files = [
         ROOT / ".github" / "actions" / "setup-python-tests" / "action.yml",
         ROOT / ".github" / "actions" / "setup-lean" / "action.yml",

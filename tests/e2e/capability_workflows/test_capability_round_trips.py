@@ -80,7 +80,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 },
             )
             assert computed["execution"]["status"] == "COMPLETED"
-            assert computed["assurance"]["level"] == "COMPUTED"
+            assert computed["verification_record_uri"] is None
             candidate = computed["output"]["result"]
 
             verified = await _tool(
@@ -92,8 +92,8 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 },
             )
             assert verified["output"]["status"] == "VERIFIED"
-            assert verified["assurance"]["level"] == "VERIFIED"
             record_uri = verified["output"]["verification_record_uri"]
+            assert verified["verification_record_uri"] == record_uri
             assert record_uri in verified["artifact_uris"]
             record = await _artifact(client, record_uri)
             assert record["artifact_uri"] == record_uri
@@ -146,8 +146,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 },
             )
             assert computed["execution"]["status"] == "COMPLETED"
-            assert computed["assurance"]["level"] == "COMPUTED"
-            assert computed["assurance"]["verification_record_uri"] is None
+            assert computed["verification_record_uri"] is None
 
             unavailable = await _tool(
                 client,
@@ -162,7 +161,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
             )
             assert unavailable["execution"]["status"] == "ERROR"
             assert unavailable["output"]["error"]["code"] == "UNKNOWN_CAPABILITY"
-            assert unavailable["assurance"]["level"] == "HEURISTIC"
+            assert unavailable["verification_record_uri"] is None
             assert "conclusion" not in unavailable["output"]
 
     asyncio.run(scenario())
@@ -199,8 +198,6 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
         async with Client(server, raise_exceptions=True) as client:
             verified = await validate(client)
             assert verified["output"]["accepted"] is True
-            assert verified["assurance"]["level"] == "VERIFIED"
-            assert verified["completeness"]["status"] == "NOT_APPLICABLE"
             record_uri = verified["output"]["verification_record_uri"]
             assert record_uri in verified["artifact_uris"]
             assert verified["output"]["proof_edit_uri"] in verified["artifact_uris"]

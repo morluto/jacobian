@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 PROFILE_DOCUMENTATION = "docs/how-to/setup-agent-from-source.md#profiles"
-OPTIONAL_BACKEND_DOCUMENTATION = "docs/how-to/install-optional-backends.md"
+NATIVE_PROVIDER_DOCUMENTATION = "docs/how-to/install-native-and-formal-providers.md"
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,20 +27,16 @@ class DevelopmentProfile:
     """One supported, deterministic development environment."""
 
     name: str
-    all_extras: bool
     providers: tuple[str, ...]
 
 
 PROFILES = {
-    "core": DevelopmentProfile("core", False, ("networkx", "sympy", "z3")),
-    "full-python": DevelopmentProfile(
-        "full-python",
-        True,
+    "core": DevelopmentProfile(
+        "core",
         ("networkx", "sympy", "z3", "python-flint", "python-flint-hnf", "cvc5"),
     ),
     "lean": DevelopmentProfile(
         "lean",
-        True,
         (
             "networkx",
             "sympy",
@@ -53,7 +49,6 @@ PROFILES = {
     ),
     "external-proof": DevelopmentProfile(
         "external-proof",
-        True,
         (
             "networkx",
             "sympy",
@@ -98,14 +93,8 @@ def profile(name: str) -> DevelopmentProfile:
 def sync_arguments(name: str, *, development: bool = True) -> tuple[str, ...]:
     """Return locked uv sync arguments for a profile."""
 
-    selected = profile(name)
-    if name == "core" and development:
-        arguments = ["sync", "--locked", "--only-group", "dev-core"]
-    else:
-        arguments = ["sync", "--locked", "--dev" if development else "--no-dev"]
-    if selected.all_extras:
-        arguments.append("--all-extras")
-    return tuple(arguments)
+    profile(name)
+    return ("sync", "--locked", "--dev" if development else "--no-dev")
 
 
 def _run(arguments: Sequence[str], cwd: Path) -> int:
@@ -204,8 +193,6 @@ def _requirements(repo: Path) -> dict[str, str]:
     with (repo / "pyproject.toml").open("rb") as stream:
         pyproject = tomllib.load(stream)
     values = list(pyproject["project"]["dependencies"])
-    for extra in pyproject["project"].get("optional-dependencies", {}).values():
-        values.extend(extra)
     requirements: dict[str, str] = {}
     for value in values:
         match = re.match(r"([A-Za-z0-9_-]+)\s*(.*)", value)
@@ -266,7 +253,7 @@ def _distribution_diagnostic(
         found=found,
         recovery=f"Run `make setup PROFILE={profile_name}`",
         documentation=(
-            OPTIONAL_BACKEND_DOCUMENTATION
+            NATIVE_PROVIDER_DOCUMENTATION
             if profile_name != "core"
             else PROFILE_DOCUMENTATION
         ),
@@ -391,7 +378,7 @@ def _external_proof_diagnostics() -> list[Diagnostic]:
                 expected,
                 runtime.version,
                 recovery,
-                OPTIONAL_BACKEND_DOCUMENTATION,
+                NATIVE_PROVIDER_DOCUMENTATION,
             )
         )
     return diagnostics

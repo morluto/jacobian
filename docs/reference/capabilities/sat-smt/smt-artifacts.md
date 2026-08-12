@@ -2,9 +2,9 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Experimental pre-stable producer and verifier contracts
-- Optional operation: `smt.unsat_proof.find` when the exact cvc5 1.3.4
-  Python distribution is installed
+- Status: Experimental producer and verifier contracts
+- Producer operation: `smt.unsat_proof.find`, backed by the exact packaged
+  cvc5 1.3.4 Python distribution
 - Verification operation: `smt.unsat_proof.verify` for the pinned zero-hole
   `QF_UF` compatibility profile when an operator-authorized Carcara runtime is
   installed
@@ -15,14 +15,8 @@ and the raw Alethe bytes emitted by cvc5. It does not expose a broad
 of lexical `hole` markers is computed evidence, not independent verification.
 Every producer result therefore carries `conclusion: UNKNOWN`.
 
-Install the optional wheel-backed provider with:
-
-```sh
-uv sync --extra smt
-```
-
-The locked development environment also includes the exact provider so the
-producer contract and public reproduction cases run in CI.
+The base package and locked development environment both include this exact
+provider. Carcara remains separately operator-installed for independent replay.
 
 ## Registered descriptors
 
@@ -36,9 +30,7 @@ URIs registered by the current runtime:
 | Schema | `jacobian.smt-alethe-proof@1` | Raw cvc5 Alethe bytes bound to one exact input |
 
 The schemas are model backed. Their closed structural and cross-field
-invariants also apply when a payload is submitted through `artifact.put`.
-Runtime construction registers the artifact boundary even when cvc5 is absent;
-only the producer capability is conditional.
+invariants apply before the SMT producer publishes a typed artifact.
 
 ## Pinned SMT-LIB profile
 
@@ -131,7 +123,7 @@ anything from failure to find a proof.
 
 ## Strict Carcara verification
 
-`smt.unsat_proof.verify` accepts one `proof_uri` in `VERIFY` mode. It resolves
+`smt.unsat_proof.verify` accepts one `proof_uri`. It resolves
 the exact proof and parent problem, re-derives the problem binding, and creates
 an `smt.unsat-proof@1` `CertificateEnvelope`. The certificate binds the
 problem claim, proof candidate, SMT semantics, exact artifact URIs, payload

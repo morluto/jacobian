@@ -17,10 +17,6 @@ from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.canonical import loads_strict_json
 from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
@@ -29,7 +25,6 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.contracts.smt import (
@@ -191,6 +186,8 @@ class _Cvc5Backend:
 class Cvc5UnsatProofFindAdapter:
     """Preserve raw cvc5 Alethe evidence without validating it."""
 
+    typed_input = True
+
     def __init__(
         self,
         *,
@@ -294,14 +291,14 @@ class Cvc5UnsatProofFindAdapter:
                 ),
             )
         if run.execution_status is not ExecutionStatus.COMPLETED:
-            return _failed_result(self.descriptor, request, resolved, run)
+            return _failed_result(self.descriptor, resolved, run)
         if run.solver_status is None:
-            return _failed_result(self.descriptor, request, resolved, run)
+            return _failed_result(self.descriptor, resolved, run)
         proof_uri: str | None = None
         holes: int | None = None
         if run.solver_status == "UNSATISFIABLE":
             if run.proof is None:
-                return _failed_result(self.descriptor, request, resolved, run)
+                return _failed_result(self.descriptor, resolved, run)
             proof_uri = self.smt.put_proof(
                 problem_uri=problem_uri,
                 proof=run.proof,
@@ -310,7 +307,7 @@ class Cvc5UnsatProofFindAdapter:
             ).artifact_uri
             holes = run.alethe_hole_count
             if holes is None:
-                return _failed_result(self.descriptor, request, resolved, run)
+                return _failed_result(self.descriptor, resolved, run)
         output = SmtUnsatProofFindOutput(
             status="PROOF_PRODUCED" if proof_uri is not None else "NO_PROOF_PRODUCED",
             solver_status=run.solver_status,
@@ -336,31 +333,17 @@ class Cvc5UnsatProofFindAdapter:
             artifacts.append(proof_uri)
         return _completed_result(
             self.descriptor,
-            request,
-            resolved,
             run,
             output.model_dump(mode="json"),
             tuple(artifacts),
-            basis=(
-                "the pinned solver produced bound raw Alethe bytes, but neither "
-                "its UNSAT status, lexical hole count, nor stored proof is an "
-                "independent verification"
-                if proof_uri is not None
-                else "the bounded solver attempt completed without proof evidence; "
-                "no opposite mathematical conclusion follows"
-            ),
         )
 
 
 def _completed_result(
     descriptor: CapabilityDescriptor,
-    request: CapabilityRequest,
-    resolved: ResolvedSmtProblem,
     run: _Cvc5Run,
     output: dict[str, object],
     artifact_uris: tuple[str, ...],
-    *,
-    basis: str,
 ) -> CapabilityResult:
     return CapabilityResult(
         capability_id=descriptor.capability_id,
@@ -370,26 +353,12 @@ def _completed_result(
             runtime_ms=run.runtime_ms,
         ),
         output=output,
-        scope=_scope(resolved),
-        completeness=CapabilityCompleteness(
-            status=CapabilityCompletenessStatus.UNKNOWN,
-            basis=(
-                "this bounded producer makes no proof-validity, exhaustive-search, "
-                "or mathematical completeness claim"
-            ),
-            assurance_level=CapabilityAssuranceLevel.COMPUTED,
-        ),
-        assurance=CapabilityAssurance(
-            level=CapabilityAssuranceLevel.COMPUTED,
-            basis=basis,
-        ),
         artifact_uris=artifact_uris,
     )
 
 
 def _failed_result(
     descriptor: CapabilityDescriptor,
-    request: CapabilityRequest,
     resolved: ResolvedSmtProblem,
     run: _Cvc5Run,
 ) -> CapabilityResult:
@@ -403,38 +372,8 @@ def _failed_result(
             runtime_ms=run.runtime_ms,
             detail=run.diagnostic.message,
         ),
-        scope=_scope(resolved),
-        completeness=CapabilityCompleteness(
-            status=CapabilityCompletenessStatus.UNKNOWN,
-            basis=(
-                "the producer did not complete with usable proof evidence; no "
-                "coverage or mathematical conclusion follows"
-            ),
-            assurance_level=CapabilityAssuranceLevel.HEURISTIC,
-        ),
         diagnostics=(run.diagnostic,),
-        assurance=CapabilityAssurance(
-            level=CapabilityAssuranceLevel.HEURISTIC,
-            basis=(
-                "the producer did not complete with usable bound evidence; no "
-                "mathematical conclusion follows"
-            ),
-        ),
         artifact_uris=(resolved.artifact.artifact_uri,),
-    )
-
-
-def _scope(resolved: ResolvedSmtProblem) -> CapabilityScope:
-    return CapabilityScope(
-        description="the full exact single-query SMT-LIB input supplied to cvc5",
-        parameters={
-            "declared_scope": "FULL_QUERY",
-            "logic": resolved.problem.logic,
-            "profile": resolved.problem.profile,
-            "input_language": resolved.problem.input_language,
-            "smtlib_digest": resolved.problem.smtlib_digest,
-        },
-        artifact_uri=resolved.artifact.artifact_uri,
     )
 
 

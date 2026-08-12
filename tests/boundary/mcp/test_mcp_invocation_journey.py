@@ -10,6 +10,8 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from jacobian.adapters.mcp.server import create_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
@@ -23,18 +25,21 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             described = await client.call_tool(
                 "math.find",
-                {"capability_id": "integer.compute.gcd", "view": "CONTRACT"},
+                {
+                    "request": {
+                        "op": "inspect",
+                        "capability_id": "integer.compute.gcd",
+                    }
+                },
             )
             assert isinstance(described.structured_content, dict)
             contract = described.structured_content
-            assert contract["view"] == "CONTRACT"
             assert contract["capability"]["capability_id"] == "integer.compute.gcd"
             assert contract["capability"]["provider_runtime"]["digest"].startswith(
                 "sha256:"
             )
-            assert "configuration" not in contract["capability"]["provider_runtime"]
-            assert "output_schema" not in contract["capability"]
-            assert "output_schema_summary" in contract["capability"]
+            assert "configuration" in contract["capability"]["provider_runtime"]
+            assert "output_schema" in contract["capability"]
 
             result = await client.call_tool(
                 "math.run",
@@ -47,57 +52,62 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert result.structured_content["artifact_uris"] == []
             response = json.loads(result.content[0].text)
             assert response["execution"]["status"] == "COMPLETED"
-            assert response["assurance"]["level"] == "COMPUTED"
+            assert "verification_record_uri" not in response
             assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
-            for semantic_field in (
-                "scope",
-                "completeness",
-                "relationships",
-                "obligations",
-                "assurance",
-            ):
-                if semantic_field in response:
-                    assert (
-                        response[semantic_field]
-                        == result.structured_content[semantic_field]
-                    )
+            assert result.structured_content["verification_record_uri"] is None
             runtime = contract["capability"]["provider_runtime"]
-            assert (
-                result.structured_content["provider"]
-                == contract["capability"]["provider"]
+            assert runtime["provider"] == contract["capability"]["provider"]
+            assert runtime["digest"] is not None
+            assert "provider" not in result.structured_content
+            assert "provider_digest" not in result.structured_content
+
+            invalid = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "integer.compute.gcd",
+                    "payload": {"left": "84", "unexpected": "30"},
+                },
             )
-            assert result.structured_content["provider_digest"] == runtime["digest"]
+            assert isinstance(invalid.structured_content, dict)
+            invalid_result = invalid.structured_content
+            assert invalid_result["execution"]["status"] == "ERROR"
+            assert (
+                invalid_result["output"]["error"]["code"]
+                == "INVALID_NUMBER_THEORY_REQUEST"
+            )
+            assert invalid_result["artifact_uris"] == []
+            assert invalid_result["verification_record_uri"] is None
 
             matching_description = await client.call_tool(
                 "math.find",
                 {
-                    "capability_id": ("graph.invariant.maximum_matching.compute"),
-                    "view": "CONTRACT",
+                    "request": {
+                        "op": "inspect",
+                        "capability_id": ("graph.invariant.maximum_matching.compute"),
+                    }
                 },
             )
             assert isinstance(matching_description.structured_content, dict)
             matching_contract = matching_description.structured_content
             assert matching_contract["capability"]["version"] == "3"
-            assert matching_contract["invocations"][0]["name"] == ("triangle_with_tail")
-            assert matching_contract["related_capabilities"] == [
-                {
-                    "capability_id": ("graph.invariant.maximum_matching.verify"),
-                    "kind": "INDEPENDENT_VERIFIER",
-                    "relationship": "independently verify this exact producer result",
-                }
-            ]
+            assert matching_contract["capability"]["invocation_examples"][0][
+                "name"
+            ] == ("triangle_with_tail")
 
             reliability_verifier_discovery = await client.call_tool(
                 "math.find",
                 {
-                    "query": (
-                        "independently verify exact graph reliability terminal "
-                        "connection probability edge subset enumeration"
-                    ),
-                    "domain": "graph",
-                    "limit": 10,
+                    "request": {
+                        "op": "search",
+                        "query": (
+                            "independently verify exact graph reliability terminal "
+                            "connection probability edge subset enumeration"
+                        ),
+                        "domain": "graph",
+                        "limit": 10,
+                    }
                 },
             )
             assert isinstance(reliability_verifier_discovery.structured_content, dict)
@@ -107,31 +117,6 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
                     "matches"
                 ]
             }
-
-            modular_compute = await client.call_tool(
-                "math.find",
-                {
-                    "capability_id": "modular.polynomial_residue_image.compute",
-                    "view": "CONTRACT",
-                },
-            )
-            modular_verify = await client.call_tool(
-                "math.find",
-                {
-                    "capability_id": "modular.polynomial_residue_image.verify",
-                    "view": "CONTRACT",
-                },
-            )
-            assert isinstance(modular_compute.structured_content, dict)
-            assert isinstance(modular_verify.structured_content, dict)
-            assert {
-                item["capability_id"]
-                for item in modular_compute.structured_content["related_capabilities"]
-            } == {"modular.polynomial_residue_image.verify"}
-            assert {
-                item["capability_id"]
-                for item in modular_verify.structured_content["related_capabilities"]
-            } == {"modular.polynomial_residue_image.compute"}
 
             unknown = await client.call_tool(
                 "math.run",
@@ -154,6 +139,131 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
                 "action": "inspect_catalog",
                 "resource_uri": "capability://catalog",
             }
-            assert unknown_result["assurance"]["level"] != "VERIFIED"
+            assert "verification_record_uri" not in unknown_result
+            assert unknown.structured_content["verification_record_uri"] is None
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.requires_provider("flint")
+def test_mcp_composes_finite_field_values_by_opaque_reference(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        from jacobian.math.finite_fields import (
+            Axis,
+            AxisBoundMatrix,
+            FiniteDimensionalSubspace,
+            element,
+            finite_field,
+            finite_polynomial,
+            finite_polynomial_map,
+        )
+
+        presentation = finite_field(2, (1, 1, 1))
+        zero = element(presentation, (0, 0))
+        one = element(presentation, (1, 0))
+        polynomial_map = finite_polynomial_map(
+            finite_polynomial(presentation, (zero, zero, zero, one))
+        )
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            inspected = await client.call_tool(
+                "math.find",
+                {
+                    "request": {
+                        "op": "inspect",
+                        "capability_id": ("finite_field.polynomial_map.fibers.compute"),
+                    }
+                },
+            )
+            assert isinstance(inspected.structured_content, dict)
+            descriptor = inspected.structured_content["capability"]
+            assert descriptor["input_ports"] == [
+                {"name": "table", "value_type": "FiniteMapTable"}
+            ]
+
+            table_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.polynomial_map.table.compute",
+                    "payload": {
+                        "polynomial_map": polynomial_map.model_dump(mode="json")
+                    },
+                },
+            )
+            assert isinstance(table_call.structured_content, dict)
+            table_output = table_call.structured_content["output"]
+            value_ref = table_output["value_refs"]["table"]
+            assert value_ref.startswith("value://")
+
+            fibers_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.polynomial_map.fibers.compute",
+                    "payload": {},
+                    "inputs": {"table": {"value_ref": value_ref}},
+                },
+            )
+            assert isinstance(fibers_call.structured_content, dict)
+            fibers_output = fibers_call.structured_content["output"]
+            assert fibers_output["result"]["table"] == table_output["result"]
+            assert sorted(
+                len(sources) for _image, sources in fibers_output["result"]["fibers"]
+            ) == [1, 3]
+
+            rows = Axis(name="b", labels=("b1", "b2"))
+            columns = Axis(name="image", labels=("y1",))
+            basis_axis = Axis(name="basis", labels=("B1",))
+            subspace = FiniteDimensionalSubspace(
+                presentation=presentation,
+                basis_axis=basis_axis,
+                basis=(
+                    AxisBoundMatrix(
+                        presentation=presentation,
+                        row_axis=rows,
+                        column_axis=columns,
+                        entries=((one,), (zero,)),
+                    ),
+                ),
+            )
+            directions_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.projective_line.enumerate",
+                    "payload": {
+                        "presentation": presentation.model_dump(mode="json"),
+                        "axis": rows.model_dump(mode="json"),
+                    },
+                },
+            )
+            assert isinstance(directions_call.structured_content, dict)
+            directions_ref = directions_call.structured_content["output"]["value_refs"][
+                "directions"
+            ]
+
+            incomplete_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.direction_rank_ledger.compute",
+                    "payload": {},
+                    "inputs": {"directions": {"value_ref": directions_ref}},
+                },
+            )
+            assert isinstance(incomplete_call.structured_content, dict)
+            assert incomplete_call.structured_content["execution"]["status"] == "ERROR"
+
+            ledger_call = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "finite_field.direction_rank_ledger.compute",
+                    "payload": {"subspace": subspace.model_dump(mode="json")},
+                    "inputs": {"directions": {"value_ref": directions_ref}},
+                },
+            )
+            assert isinstance(ledger_call.structured_content, dict)
+            ledger_output = ledger_call.structured_content["output"]
+            assert ledger_call.structured_content["execution"]["status"] == "COMPLETED"
+            assert len(ledger_output["result"]["entries"]) == 5
 
     asyncio.run(scenario())

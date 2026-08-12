@@ -8,12 +8,7 @@ from tests.support.core_capability_harnesses import open_graph_core_services
 from tests.support.services import DomainTestServices
 
 from jacobian.artifacts import ArtifactValidationError
-from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
-    CapabilityRelationshipStatus,
-    CapabilityRequest,
-)
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.graphs import GraphInstallation
 
@@ -209,11 +204,6 @@ def test_graph_atlas_search_is_bounded_complete_and_replayable(
         )
     )
 
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert result.completeness.assurance_level is CapabilityAssuranceLevel.COMPUTED
-    assert result.scope is not None
-    assert result.scope.artifact_uri in result.artifact_uris
     assert result.output["match_count"] >= result.output["returned_count"] == 2
     assert result.output["truncated"] is (
         result.output["match_count"] > result.output["returned_count"]
@@ -229,11 +219,6 @@ def test_graph_atlas_search_is_bounded_complete_and_replayable(
         assert candidate["properties"]["connected"] is True
         assert candidate["properties"]["triangle_count"] == 0
         assert candidate["properties"]["independence_number"] == 3
-
-    scope = services.core.store.get(result.scope.artifact_uri)
-    assert scope.payload["source"] == "networkx.graph_atlas_g"
-    assert scope.payload["order"] == 5
-    assert scope.payload["enumerated_count"] > 0
 
 
 def test_graph_atlas_search_reports_no_match_without_a_truth_claim(
@@ -257,8 +242,6 @@ def test_graph_atlas_search_reports_no_match_without_a_truth_claim(
 
     assert result.output["match_count"] == 0
     assert result.output["candidates"] == []
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert "conclusion" not in result.output
 
 
@@ -368,18 +351,6 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
             "value": 0,
         },
     }
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert len(result.relationships) == 1
-    relationship = result.relationships[0]
-    assert relationship.status is CapabilityRelationshipStatus.PROPOSED
-    assert relationship.source_artifact_uris == (graph_uri,)
-    assert (
-        relationship.target_artifact_uris[0] == (result.output["property_artifact_uri"])
-    )
-    assert set(relationship.target_artifact_uris[1:]) == {
-        binding["artifact_uri"] for binding in result.output["results"]
-    }
     property_artifact = services.core.store.get(result.output["property_artifact_uri"])
     assert set(property_artifact.manifest.parents) == {
         graph_uri,
@@ -434,10 +405,8 @@ def test_exact_independence_number_stops_at_the_order_boundary(
     invariant = result.output["results"][0]["result"]
     assert invariant["status"] == expected_status
     if order == 24:
-        assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
         assert invariant["value"] == 24
     else:
-        assert result.completeness.status is CapabilityCompletenessStatus.PARTIAL
         assert invariant["value"] is None
         assert "limited to graphs of order 24" in invariant["detail"]
 
@@ -493,7 +462,6 @@ def test_graph_counterexample_invariant_batch_reproduces_path_five(
     assert properties["radius"]["value"] == 2
     assert properties["residue"]["value"] == 2
     assert set(properties["triangle_frequencies"]["value"].values()) == {0}
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
 def test_graph_invariant_batch_preserves_unsupported_and_not_applicable_results(
@@ -529,8 +497,6 @@ def test_graph_invariant_batch_preserves_unsupported_and_not_applicable_results(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.completeness.status is CapabilityCompletenessStatus.COMPLETE
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     outcomes = {
         binding["invariant"]: binding["result"] for binding in result.output["results"]
     }

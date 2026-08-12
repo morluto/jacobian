@@ -46,7 +46,6 @@ _META = {
     "determinism": "DETERMINISTIC",
     "backend": "jacobian.topology",
     "backend_version": "1",
-    "verification": "UNVERIFIED",
 }
 
 

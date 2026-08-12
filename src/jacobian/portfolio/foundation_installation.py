@@ -43,7 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class FoundationInstaller:
-    """Install foundational checkers and optional-provider adapters."""
+    """Install foundational checkers and solver adapters."""
 
     context: InstallationContext
 
@@ -118,15 +118,15 @@ class FoundationInstaller:
             result,
             runtimes.sympy_polynomial_normalization,
         )
-        self.install_optional_provider_components(core, result, runtimes)
+        self.install_solver_components(core, result, runtimes)
 
-    def install_optional_provider_components(
+    def install_solver_components(
         self,
         core: CoreServices,
         result: PortfolioInstallation,
         runtimes: ProviderRuntimePlan,
     ) -> None:
-        """Install capabilities backed by declared optional solver providers."""
+        """Install the packaged cvc5 adapter and optional CaDiCaL adapter."""
 
         result.cadical_runtime = runtimes.cadical
         if (
@@ -145,13 +145,9 @@ class FoundationInstaller:
                     self.context.register_capability(adapter)
 
         result.cvc5_runtime = runtimes.cvc5
-        if result.cvc5_runtime.availability is CapabilityProviderAvailability.AVAILABLE:
-            try:
-                adapter = install_cvc5_capability(core.smt, result.cvc5_runtime)
-            except OSError as exc:
-                _LOGGER.warning("cvc5 SMT proof exploration is not installed: %s", exc)
-            else:
-                self.context.register_capability(adapter)
+        self.context.register_capability(
+            install_cvc5_capability(core.smt, result.cvc5_runtime)
+        )
 
     # ------------------------------------------------------------------
     # Private installation helpers
@@ -179,20 +175,9 @@ class FoundationInstaller:
             self.context.register_capability(verification_adapter)
 
         result.sympy_polynomial_normalization_runtime = runtime
-        if (
-            result.sympy_polynomial_normalization_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
-        ):
-            return
-        try:
-            adapter = install_sympy_polynomial_normalization_capability(
+        self.context.register_capability(
+            install_sympy_polynomial_normalization_capability(
                 core.polynomial_expressions,
                 result.sympy_polynomial_normalization_runtime,
             )
-        except (OSError, ValueError) as exc:
-            _LOGGER.warning(
-                "SymPy typed polynomial normalization is not installed: %s",
-                exc,
-            )
-        else:
-            self.context.register_capability(adapter)
+        )

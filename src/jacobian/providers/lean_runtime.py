@@ -1,6 +1,7 @@
 """Provider-owned runtime declarations for Lean frontends and checkers."""
 
 import hashlib
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,53 @@ _MATHLIB_LOADED_MODULES = (
 
 class LeanRuntimeIdentityError(RuntimeError):
     """The declared Lean semantic environment cannot be reproduced exactly."""
+
+
+def lean_mathlib_git_config(project_root: Path) -> dict[str, str]:
+    """Return process-local Git trust for exact manifest-owned checkouts.
+
+    Lake consults Git even when it launches already-built binaries. Immutable
+    deployments are deliberately owned by root, so an unprivileged service
+    needs exact ``safe.directory`` entries without a persistent or wildcard
+    Git configuration.
+    """
+
+    root = project_root.resolve(strict=True)
+    manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
+    packages = manifest.get("packages")
+    if manifest.get("packagesDir") != ".lake/packages" or not isinstance(
+        packages, list
+    ):
+        raise LeanRuntimeIdentityError("the Lean package manifest is malformed")
+    package_root = (root / ".lake" / "packages").resolve(strict=True)
+    checkouts: list[str] = []
+    for package in packages:
+        if not isinstance(package, dict):
+            raise LeanRuntimeIdentityError("the Lean package manifest is malformed")
+        name = package.get("name")
+        if (
+            package.get("type") != "git"
+            or not isinstance(name, str)
+            or not name
+            or Path(name).name != name
+        ):
+            raise LeanRuntimeIdentityError("the Lean package manifest is malformed")
+        candidate = package_root / name
+        if candidate.is_symlink():
+            raise LeanRuntimeIdentityError("a Lean package checkout is not exact")
+        checkout = candidate.resolve(strict=True)
+        if checkout.parent != package_root or not checkout.is_dir():
+            raise LeanRuntimeIdentityError("a Lean package checkout is not exact")
+        checkouts.append(str(checkout))
+    environment = {
+        "GIT_CONFIG_COUNT": str(len(checkouts)),
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+    for index, checkout_path in enumerate(checkouts):
+        environment[f"GIT_CONFIG_KEY_{index}"] = "safe.directory"
+        environment[f"GIT_CONFIG_VALUE_{index}"] = checkout_path
+    return environment
 
 
 def _identity_file(root: Path, relative_path: Path) -> dict[str, str]:
@@ -292,7 +340,9 @@ def lean_frontend_provider_runtime() -> CapabilityProviderRuntime:
             "profiles": {
                 "CORE": {
                     "import_name": "Init.Prelude",
+                    "lean_version": lean4.LEAN_VERSION,
                     "lean_commit": lean4.LEAN_COMMIT,
+                    "mathlib_commit": None,
                 }
             },
         },

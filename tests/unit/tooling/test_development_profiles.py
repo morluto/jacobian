@@ -25,34 +25,23 @@ def test_profiles_share_locked_sync_contracts() -> None:
 
     assert profiles.PROFILE_NAMES == (
         "core",
-        "full-python",
         "lean",
         "external-proof",
     )
-    assert profiles.sync_arguments("core") == (
-        "sync",
-        "--locked",
-        "--only-group",
-        "dev-core",
-    )
+    assert profiles.sync_arguments("core") == ("sync", "--locked", "--dev")
     assert profiles.sync_arguments("core", development=False) == (
         "sync",
         "--locked",
         "--no-dev",
     )
-    for name in ("full-python", "lean", "external-proof"):
-        assert profiles.sync_arguments(name) == (
-            "sync",
-            "--locked",
-            "--dev",
-            "--all-extras",
-        )
+    for name in ("lean", "external-proof"):
+        assert profiles.sync_arguments(name) == ("sync", "--locked", "--dev")
 
 
 def test_invalid_profile_reports_all_supported_choices() -> None:
     profiles = _load_profiles()
 
-    with pytest.raises(ValueError, match="core, full-python, lean, external-proof"):
+    with pytest.raises(ValueError, match="core, lean, external-proof"):
         profiles.profile("everything")
 
 
@@ -83,7 +72,7 @@ def test_lean_setup_installs_pin_then_gets_cache_and_builds_without_update(
     profiles.setup_profile(repo, "lean", run=record)
 
     assert commands[:4] == [
-        (("uv", "sync", "--locked", "--dev", "--all-extras"), repo),
+        (("uv", "sync", "--locked", "--dev"), repo),
         (
             ("elan", "toolchain", "install", "leanprover/lean4:v4.31.0"),
             repo,
@@ -132,7 +121,6 @@ def test_external_proof_setup_never_downloads_executables(
         "sync",
         "--locked",
         "--dev",
-        "--all-extras",
     )
     assert commands == [*first_run, *first_run]
     assert all(command[0] == "uv" for command in commands)
@@ -148,14 +136,14 @@ def test_doctor_distinguishes_available_unavailable_and_incompatible_imports(
         requirement="cvc5",
         distribution="cvc5",
         expected="==1.3.4",
-        profile_name="full-python",
+        profile_name="core",
     )
     monkeypatch.setattr(profiles.importlib.metadata, "version", lambda _name: "1.2.0")
     incompatible = profiles._distribution_diagnostic(
         requirement="cvc5",
         distribution="cvc5",
         expected="==1.3.4",
-        profile_name="full-python",
+        profile_name="core",
     )
 
     def missing(_name: str) -> str:
@@ -166,7 +154,7 @@ def test_doctor_distinguishes_available_unavailable_and_incompatible_imports(
         requirement="cvc5",
         distribution="cvc5",
         expected="==1.3.4",
-        profile_name="full-python",
+        profile_name="core",
     )
 
     assert [available.status, incompatible.status, unavailable.status] == [
@@ -174,5 +162,5 @@ def test_doctor_distinguishes_available_unavailable_and_incompatible_imports(
         "incompatible",
         "unavailable",
     ]
-    assert unavailable.recovery == "Run `make setup PROFILE=full-python`"
-    assert unavailable.documentation == profiles.OPTIONAL_BACKEND_DOCUMENTATION
+    assert unavailable.recovery == "Run `make setup PROFILE=core`"
+    assert unavailable.documentation == profiles.PROFILE_DOCUMENTATION

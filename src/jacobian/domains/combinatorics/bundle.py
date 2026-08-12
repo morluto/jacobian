@@ -32,10 +32,6 @@ def build_combinatorics_bundle() -> DomainBundle:
                     "finite rational-series truncations"
                 ),
                 "arithmetic": "exact integer and rational via maintained SymPy and stdlib APIs",
-                "assurance": (
-                    "producers are computed; declared recurrence and rational-series "
-                    "results may be submitted to an operator-authorized independent checker"
-                ),
             },
         ),
         provider_runtime=known_provider_runtime(
@@ -56,15 +52,6 @@ def build_combinatorics_bundle() -> DomainBundle:
                 message="Input does not satisfy the exact combinatorics contract.",
                 hint="Provide bounded non-negative integers within each operation's limits.",
             )
-        ),
-        scope_description="the complete supplied bounded combinatorics input",
-        completeness_basis=(
-            "exact SymPy and stdlib computation covered the supplied bounded input; "
-            "producer completion is not independent verification"
-        ),
-        assurance_basis=(
-            "exact SymPy and stdlib combinatorics; independent verification requires "
-            "an explicit domain-owned verifier invocation"
         ),
         checker_declarations=COMBINATORICS_EXACT_REPLAY_CHECKERS,
     )

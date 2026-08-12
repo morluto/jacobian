@@ -3,7 +3,7 @@
 After the authoritative ``RationalMatrix``/``IntegerMatrix`` refactor, the
 artifact-backed legacy producers (``jacobian.matrices.capabilities``,
 ``jacobian.matrices.determinant``, ``jacobian.matrices.rank``) were removed
-because they duplicated the inline ``ComputedOperation`` capabilities owned by
+because they duplicated the installed ``OperationSpec`` bindings owned by
 ``jacobian.domains.matrix_lattice``.  These tests verify that the pilot bundle
 alone is sufficient: ``matrix.determinant.compute``, ``matrix.rank.compute``,
 and their ExactReplay verifiers all work without any legacy installation.
@@ -18,7 +18,6 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -47,7 +46,7 @@ def pilot_matrix_runtime(tmp_path: Path):
 def test_pilot_provides_matrix_determinant_compute_without_legacy(
     pilot_matrix_runtime,
 ) -> None:
-    """matrix.determinant.compute is an inline ComputedOperation from the pilot bundle."""
+    """matrix.determinant.compute is an inline OperationSpec binding."""
     result = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.determinant.compute",
@@ -55,16 +54,14 @@ def test_pilot_provides_matrix_determinant_compute_without_legacy(
         )
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
     assert result.output["result"]["determinant"] == _q(-2)
-    assert result.output["result"]["method"] == "FRACTION_FREE_BAREISS"
 
 
 def test_pilot_provides_matrix_rank_compute_without_legacy(
     pilot_matrix_runtime,
 ) -> None:
-    """matrix.rank.compute is an inline ComputedOperation from the pilot bundle."""
+    """matrix.rank.compute is an inline OperationSpec binding."""
     result = pilot_matrix_runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="matrix.rank.compute",
@@ -72,7 +69,6 @@ def test_pilot_provides_matrix_rank_compute_without_legacy(
         )
     )
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
     assert result.output["result"]["rank"] == 2
     assert result.output["result"]["pivot_columns"] == [0, 1]
@@ -99,7 +95,7 @@ def test_pilot_provides_matrix_determinant_verify_without_legacy(
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_pilot_provides_matrix_rank_verify_without_legacy(
@@ -123,7 +119,7 @@ def test_pilot_provides_matrix_rank_verify_without_legacy(
     )
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_legacy_matrix_capabilities_module_is_removed() -> None:

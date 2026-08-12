@@ -43,7 +43,6 @@ class LeanProofStateInspectOutput(ContractModel):
     lean_commit: str
     mathlib_commit: str | None = None
     inspection: Literal["READ_ONLY_NO_REPLAY"] = "READ_ONLY_NO_REPLAY"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_goal_summary(self) -> Self:

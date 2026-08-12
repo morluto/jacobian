@@ -9,7 +9,7 @@ decisions. Each contract is atomic, agent-visible, and freely composable.
 
 ## lean.term.apply
 
-`lean.term.apply` (version 1) applies one bounded Lean term to an immutable
+`lean.term.apply` (version 2) applies one bounded Lean term to an immutable
 replayable proof state by elaborating `exact <term>` through the maintained
 Lean REPL tactic protocol. It reuses the existing `lean.proof_state.apply_tactic`
 clean-replay path, immutable successor-state artifact type, resource bounds,
@@ -22,11 +22,16 @@ one Lean expression: no newlines, `:=`, or forbidden commands. The adapter
 constructs `exact <term>` and delegates to the proof-state adapter, so the
 returned transition artifact records the elaborated tactic, the successor-state
 artifact, structured goals, and the same `verification_boundary =
-LEAN_CHECK_REQUIRED` and `verification = UNVERIFIED` semantics.
+LEAN_CHECK_REQUIRED` semantics. It creates no verification record.
 
 Term application does not select terms, rank successors, or prescribe proof
 strategy. A completed transition still requires `lean.check` for theorem
 verification.
+
+Rejected terms use the shared Lean diagnostic model with phase
+`TERM_ELABORATION` and payload-relative source `TERM`. The adapter removes its
+internal `exact ` prefix from reported columns, so locations refer to the term
+the caller supplied.
 
 ## lean.proof_state.inspect
 
@@ -37,8 +42,8 @@ started: the returned fields are exactly those recorded on the immutable
 artifact, so inspection is available whenever the artifact is available,
 regardless of whether the pinned Lean runtime is installed.
 
-The result reports `inspection = READ_ONLY_NO_REPLAY` and
-`verification = UNVERIFIED`. Stale or malformed state artifacts (whose
+The result reports `inspection = READ_ONLY_NO_REPLAY` and creates no
+verification record. Stale or malformed state artifacts (whose
 environment digest, source digest, or state digest no longer match) are
 rejected before any field is returned.
 
@@ -78,7 +83,7 @@ instrumentation. The `coercion_provenance_basis` field records the reason.
 
 ## Verification boundary
 
-All three contracts report `COMPUTED` assurance and `verification = UNVERIFIED`.
-None of them is a theorem-verification record. Only `lean.check`, using its
+None of the three contracts creates a theorem-verification record. Only
+`lean.check`, using its
 separate operator-authorized clean verification path, may verify the complete
 statement and proof.

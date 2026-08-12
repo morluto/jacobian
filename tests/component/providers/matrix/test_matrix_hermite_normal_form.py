@@ -8,12 +8,12 @@ from tests.support.capabilities import invoke_capability
 from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.domains.matrix_lattice.hnf import _parse_hnf_worker_result
+from jacobian.operation_bindings import DurablePublication
 
 
 def _matrix(entries: list[list[int]]) -> dict[str, object]:
@@ -40,10 +40,11 @@ def test_hnf_is_domain_owned_and_explicitly_durable() -> None:
     operation = next(
         operation
         for operation in bundle.capabilities
-        if operation.capability_id == "matrix.normal_form.hermite.materialize"
+        if operation.spec.operation_id == "matrix.normal_form.hermite.materialize"
     )
-    assert operation.resource_reason
-    assert operation.provider_runtime is not None
+    assert isinstance(operation.publication, DurablePublication)
+    assert operation.publication.resource_reason
+    assert operation.provider_binding.runtime is not None
 
 
 def test_python_flint_hnf_produces_a_durable_certificate(hnf_services) -> None:
@@ -53,8 +54,6 @@ def test_python_flint_hnf_produces_a_durable_certificate(hnf_services) -> None:
         _matrix([[0, 2, 4], [0, 6, 8]]),
     )
     assert result.execution.status.value == "COMPLETED"
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.output["backend_version"] == "0.9.0"
     assert result.output["result_uri"].startswith("artifact://sha256/")
     payload = hnf_services.core.store.get(result.output["result_uri"]).payload
     assert payload["normal_form"]["entries"] == [["0", "2", "0"], ["0", "0", "4"]]
@@ -107,7 +106,7 @@ def test_hnf_checker_replays_the_retained_certificate(hnf_services) -> None:
     )
     assert verified.execution.status.value == "COMPLETED"
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_legacy_matrices_package_is_gone() -> None:

@@ -119,7 +119,6 @@ MODULAR_CAPABILITIES = (
         "residue",
         "enumeration",
         "obstruction",
-        relation_id="modular.polynomial_residue_image.relation",
         invocation_examples=(
             example(
                 "cubic_residue_image_mod_7",
@@ -153,10 +152,25 @@ MODULAR_CAPABILITIES = (
         "residue",
         "ledger",
         "evidence",
-        relation_id="modular.polynomial_residue_image.assignments.relation",
         resource_reason=(
             "the complete assignment-to-residue ledger is retained as explicit "
             "bulk evidence for independent replay"
+        ),
+        invocation_examples=(
+            example(
+                "cubic_assignment_ledger_mod_7",
+                "Materialize the assignment ledger for four times x cubed modulo 7.",
+                {
+                    "modulus": 7,
+                    "variables": [
+                        {
+                            "name": "x",
+                            "residues": [0, 1, 2, 3, 4, 5, 6],
+                        }
+                    ],
+                    "terms": [{"coefficient": "4", "exponents": [3]}],
+                },
+            ),
         ),
     ),
     number_theory_operation(

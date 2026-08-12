@@ -13,19 +13,12 @@ from jacobian.capability_service import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityProviderRuntime,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -37,7 +30,7 @@ from jacobian.contracts.nullstellensatz import (
     NullstellensatzVerificationOutput,
     NullstellensatzVerificationRequest,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus, Verification
+from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
@@ -168,20 +161,6 @@ class JacobianDegreeSliceMaterializeAdapter:
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the fixed normalized QQ degree-(2,3) feasibility slice",
-                parameters={"chart_count": 12, "generator_count_per_chart": 10},
-                artifact_uri=stored.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis="all 3 by 4 nonzero-leading-coefficient charts were materialized",
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis="deterministic exact system materialization; no infeasibility claim",
-            ),
             artifact_uris=(stored.artifact_uri,),
         )
 
@@ -344,7 +323,6 @@ class NullstellensatzVerificationAdapter:
         verified = bool(
             checked is not None
             and checked.execution.status is ExecutionStatus.COMPLETED
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         record_uri = checked.verification_record_uri if verified and checked else None
@@ -355,7 +333,6 @@ class NullstellensatzVerificationAdapter:
             verification_record_uri=record_uri,
             checker_id=checker_id,
             conclusion="TRUE" if verified else "UNKNOWN",
-            assurance="VERIFIED" if verified else "COMPUTED",
             checked_chart_count=12 if verified else 0,
         )
         artifact_uris = [
@@ -377,55 +354,7 @@ class NullstellensatzVerificationAdapter:
                 )
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="all 12 charts in the exact bound system",
-                parameters={"chart_count": 12, "identity": "sum(h_i*f_i)=1"},
-                artifact_uri=system_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if verified
-                    else CapabilityCompletenessStatus.UNKNOWN
-                ),
-                basis=(
-                    "the independent checker replayed all 12 identities"
-                    if verified
-                    else "no accepted checker result establishes complete identity coverage"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.COMPUTED
-                ),
-                verification_record_uri=record_uri,
-            ),
-            relationships=(
-                (
-                    CapabilityRelationship(
-                        relation_id="polynomial.relation.infeasibility-certificate-for",
-                        source_artifact_uris=(bundle_artifact.artifact_uri,),
-                        target_artifact_uris=(system_artifact.artifact_uri,),
-                        status=CapabilityRelationshipStatus.VERIFIED,
-                        verification_record_uri=record_uri,
-                    ),
-                )
-                if verified
-                else ()
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.COMPUTED
-                ),
-                basis=(
-                    "operator-authorized standard-library exact replay"
-                    if verified
-                    else "certificate is persisted but has no accepted checker conclusion"
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
         )
 
@@ -447,7 +376,6 @@ def install_nullstellensatz_core(
                 "12 charts t*a_i*b_j-1, equivalent to nonzero quadratic and cubic top vectors"
             ),
             "certificate_identity": "sum(h_i*f_i)=1 in QQ[a20,...,b03,t]",
-            "assurance": "producer computed; only an operator-authorized independent replay verifies",
         },
     )
     system_schema_uri = context.schemas.register_model(
@@ -502,7 +430,7 @@ def install_nullstellensatz_core(
             NullstellensatzVerificationRequest: envelope_schema_uri,
         },
         result_schema_uris={MATERIALIZE_CAPABILITY_ID: system_schema_uri},
-        obligation_schema_uris={
+        named_schema_uris={
             "nullstellensatz_certificate_bundle": bundle_schema_uri,
             "certificate_envelope": envelope_schema_uri,
         },

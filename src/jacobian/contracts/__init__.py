@@ -1,29 +1,10 @@
-"""Versioned public contracts for the Jacobian runtime."""
+"""Passive primitives shared across Jacobian domains."""
 
-from jacobian.contracts.results import (
-    Arithmetic,
-    Assurance,
-    Conclusion,
-    Coverage,
-    Execution,
-    ExecutionStatus,
-    InputStatus,
-    InputValidation,
-    Method,
-    ResultEnvelope,
-    Verification,
-)
+from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest, ValueUri
 
 __all__ = [
-    "Arithmetic",
-    "Assurance",
-    "Conclusion",
-    "Coverage",
-    "Execution",
-    "ExecutionStatus",
-    "InputStatus",
-    "InputValidation",
-    "Method",
-    "ResultEnvelope",
-    "Verification",
+    "ArtifactUri",
+    "CheckerUri",
+    "Sha256Digest",
+    "ValueUri",
 ]

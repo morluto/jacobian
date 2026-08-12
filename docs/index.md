@@ -14,19 +14,21 @@ catalog IDs—separate from producers. Catalog entries are often still called
 and [Search and execute](explanation/architecture.md#search-and-execute) define
 the contract.
 
-The current 0.6 architecture is pre-stable. Current reference documents and the
-installed catalog define supported tools. Evaluations guide portfolio quality;
-they do not grant formal authority.
+Jacobian is pre-stable. The product, architecture, operation-library, and tool
+documents define the current contract; the installed catalog defines which
+operations are available in a particular checkout. Evaluations guide portfolio
+quality and do not grant formal authority.
 
 ## Project control documents
 
-These documents track the current product contract and its ongoing evolution:
+These documents define the current product contract:
 
 | Question | Document | Status |
 | --- | --- | --- |
-| What product is Jacobian building? | [Product model](explanation/product-blueprint.md) | Active product direction |
-| What does the system currently look like? | [Architecture](explanation/architecture.md) | Current implementation and trust boundaries |
-| What is installed now? | [Tool surface](reference/tools.md) and runtime `capability://catalog` | Current interface rules and installation-specific inventory |
+| What is Jacobian? | [Product model](explanation/product-blueprint.md) | Product and ownership model |
+| How is it structured? | [Architecture](explanation/architecture.md) | Dependencies and trust boundaries |
+| What does MCP expose? | [Tool surface](reference/tools.md) | Fixed MCP projection |
+| What operations are installed now? | Runtime `capability://catalog` | Current installation-specific inventory |
 | What work is open? | GitHub issues (e.g. architecture epics) | Implementation priorities live in issues, not a parallel goals doc |
 
 ## Tutorials
@@ -34,9 +36,8 @@ These documents track the current product contract and its ongoing evolution:
 Tutorials are guided learning paths. They assume no prior Jacobian experience
 and build toward a complete result.
 
-- [Find and verify a counterexample](tutorials/first-verified-result.md) shows
-  the boundary between an unverified evaluator result and independently
-  verified evidence.
+- [Compute and independently check a determinant](tutorials/first-verified-result.md)
+  shows the boundary between an exact producer and a separate checker.
 - [Retrieve a Lean theorem and check a proof](tutorials/lean-declaration-discovery.md)
   composes computed declaration retrieval with independent Lean replay.
 
@@ -47,9 +48,9 @@ complete a specific task.
 
 - [Discover, invoke, and check domain math tools](how-to/invoke-domain-capabilities.md)
 - [Configure an agent from a source checkout](how-to/setup-agent-from-source.md)
-- [Install optional backends](how-to/install-optional-backends.md)
+- [Install native and formal providers](how-to/install-native-and-formal-providers.md)
 - [Troubleshoot Z3 installation on macOS](how-to/troubleshoot-z3-macos.md)
-- [Run the Codex visibility evaluation](how-to/run-codex-visibility-evaluation.md)
+- [Run the MCP visibility evaluation](how-to/run-codex-visibility-evaluation.md)
 - [Deploy the remote MCP server](how-to/deploy-remote-mcp.md)
 - [Author a Harbor benchmark task](how-to/author-harbor-benchmark-task.md)
 - [Run agent evaluations](how-to/run-agent-evaluations.md)
@@ -65,7 +66,6 @@ expectations.
 - [Domain operation library](reference/domain-operation-library.md) — built-in producer, bounded-search, artifact, and exact-replay contracts
 - [Native Python API](reference/python-api.md) — supported native-value modules
 - [Provider runtime](reference/provider-runtime.md) — backend availability, compatibility, and identity
-- [Plugin conformance](reference/plugin-conformance.md) — plugin contract and conformance gates
 - [Persistent state format](reference/state-format.md) — supported migration floor and fresh-store transition
 - [Testing strategy](reference/testing-strategy.md) — validation layers, commands, and CI responsibilities
 
@@ -75,9 +75,9 @@ math, number theory, linear algebra, topology, geometry).
 Adding an operation or provider does not require editing a central list; each
 domain owns its own subdirectory.
 
-**Evaluation references:** [Benchmark contracts](reference/evaluations/index.md)
-and [evaluation methods](reference/evaluations/index.md) — Harbor task
-contracts, dataset inventory, validation gates, workflow observation,
+**Evaluation references:** [Benchmark contracts](reference/evaluations/benchmark-contracts.md)
+and [evaluation methods](reference/evaluations/evaluation-methods.md) — Harbor task
+contracts, dataset inventory, validation gates, model observations,
 performance measurement, and regression policy.
 
 **Reference scenarios:** [Worked cases](reference/scenarios/index.md) —

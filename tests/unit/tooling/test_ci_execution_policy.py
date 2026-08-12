@@ -35,6 +35,17 @@ def test_python_313_uses_the_narrow_compatibility_smoke() -> None:
     assert "make test\n" not in compatibility
 
 
+def test_built_wheel_is_started_on_each_supported_python() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    validation = workflow.split("  validate-built-package:", 1)[1].split(
+        "  unit-test:", 1
+    )[0]
+
+    assert 'python-version: ["3.12", "3.13"]' in validation
+    assert "--only-binary :all:" in validation
+    assert '"$environment/bin/jacobian" --state-dir "$state_dir" init' in validation
+
+
 @pytest.mark.parametrize(
     ("rule_name", "expected_suites", "excluded_suites"),
     (

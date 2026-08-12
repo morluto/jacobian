@@ -8,16 +8,9 @@ from itertools import product
 from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.evidence import (
     EvidenceBindings,
@@ -44,10 +37,10 @@ from jacobian.contracts.results import (
     Conclusion,
     Execution,
     ExecutionStatus,
-    Verification,
 )
 from jacobian.domains._examples import example
 from jacobian.polynomials._support import (
+    PolynomialOperationResult,
     _computed_result,
     _evaluate,
     _load_evaluation,
@@ -216,7 +209,6 @@ class PolynomialCollisionAdapter:
                 summary="unverified rational polynomial-map collision witness",
             )
             witness_uri = witness_artifact.artifact_uri
-        checker_id = self.resources.installation.collision_checker_id
         output = PolynomialCollisionOutput(
             claim_uri=claim_artifact.artifact_uri,
             candidate_uri=candidate_uri,
@@ -228,8 +220,6 @@ class PolynomialCollisionAdapter:
             second_image=second_image,
             candidate_collision=candidate_collision,
             witness_uri=witness_uri,
-            checker_id=checker_id,
-            certificate_available=witness_uri is not None and checker_id is not None,
         )
         artifact_uris = [
             candidate_uri,
@@ -239,55 +229,11 @@ class PolynomialCollisionAdapter:
         ]
         if witness_uri is not None:
             artifact_uris.append(witness_uri)
-        relationships = [
-            CapabilityRelationship(
-                relation_id="polynomial.relation.evaluation-of",
-                source_artifact_uris=(candidate_uri,),
-                target_artifact_uris=(
-                    first_evaluation_artifact.artifact_uri,
-                    second_evaluation_artifact.artifact_uri,
-                ),
-            )
-        ]
-        if witness_uri is not None:
-            relationships.append(
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.collision-derived-from",
-                    source_artifact_uris=(
-                        first_evaluation_artifact.artifact_uri,
-                        second_evaluation_artifact.artifact_uri,
-                    ),
-                    target_artifact_uris=(witness_uri,),
-                )
-            )
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "exact comparison of two point-evaluation artifacts for one "
-                    "polynomial map"
-                ),
-                parameters={
-                    "candidate_uri": candidate_uri,
-                    "first_evaluation_uri": first_evaluation_artifact.artifact_uri,
-                    "second_evaluation_uri": second_evaluation_artifact.artifact_uri,
-                },
-                artifact_uri=candidate_uri,
-            ),
-            relationships=tuple(relationships),
             artifact_uris=tuple(artifact_uris),
-            completeness_basis=(
-                "both supplied evaluation artifact payloads were structurally "
-                "validated and their declared values were compared exactly"
-            ),
-            assurance_basis=(
-                "deterministic structural comparison of canonical rational payloads; "
-                "the source evaluations were not replayed and any candidate witness "
-                "remains unverified"
-            ),
         )
 
 
@@ -473,7 +419,6 @@ class PolynomialCollisionSearchAdapter:
             second_evaluation_uri=second_evaluation_result,
             claim_uri=claim_uri,
             witness_uri=witness_uri,
-            checker_id=self.resources.installation.collision_checker_id,
             stop_reason=(
                 PolynomialCollisionSearchStopReason.FIRST_COLLISION
                 if found is not None
@@ -485,15 +430,6 @@ class PolynomialCollisionSearchAdapter:
             ),
         )
         artifacts = [map_uri, *evaluation_uris]
-        relationships: list[CapabilityRelationship] = []
-        if evaluation_uris:
-            relationships.append(
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.evaluation-of",
-                    source_artifact_uris=(map_uri,),
-                    target_artifact_uris=tuple(evaluation_uris),
-                )
-            )
         if found is not None:
             (
                 first_evaluation_result,
@@ -513,95 +449,24 @@ class PolynomialCollisionSearchAdapter:
                     witness_uri,
                 ]
             )
-            relationships.extend(
-                (
-                    CapabilityRelationship(
-                        relation_id="polynomial.relation.injectivity-claim-of",
-                        source_artifact_uris=(map_uri,),
-                        target_artifact_uris=(claim_uri,),
-                    ),
-                    CapabilityRelationship(
-                        relation_id="polynomial.relation.collision-derived-from",
-                        source_artifact_uris=(
-                            first_evaluation_result,
-                            second_evaluation_result,
-                        ),
-                        target_artifact_uris=(witness_uri,),
-                    ),
-                    CapabilityRelationship(
-                        relation_id=(
-                            "polynomial.relation.collision-refutes-injectivity"
-                        ),
-                        source_artifact_uris=(witness_uri,),
-                        target_artifact_uris=(claim_uri,),
-                    ),
-                )
-            )
-        exhausted_grid = examined == grid_point_count
-        scope = CapabilityScope(
-            description="declared finite rational grid",
-            parameters={
-                "max_abs_numerator": validated.max_abs_numerator,
-                "max_denominator": validated.max_denominator,
-                "grid_point_count": grid_point_count,
-            },
-            artifact_uri=map_uri,
-        )
         artifact_uris = tuple(
             dict.fromkeys(uri for uri in artifacts if uri is not None)
         )
         if cancelled:
-            return CapabilityResult(
-                capability_id=self.descriptor.capability_id,
-                capability_version=self.descriptor.version,
+            return PolynomialOperationResult(
+                value=output,
                 execution=Execution(
                     status=ExecutionStatus.CANCELLED,
                     runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
                     detail="The client cancelled the collision-grid search.",
                 ),
-                completeness=CapabilityCompleteness(
-                    status=CapabilityCompletenessStatus.PARTIAL,
-                    basis=(
-                        "the deterministic grid prefix completed before client "
-                        "cancellation; no mathematical conclusion or independent "
-                        "verification is claimed"
-                    ),
-                    assurance_level=CapabilityAssuranceLevel.COMPUTED,
-                ),
-                assurance=CapabilityAssurance(
-                    level=CapabilityAssuranceLevel.COMPUTED,
-                    basis=(
-                        "deterministic exact SymPy search was cancelled before the "
-                        "declared grid was exhausted"
-                    ),
-                ),
-                output=output.model_dump(mode="json"),
-                scope=scope,
-                relationships=tuple(relationships),
                 artifact_uris=artifact_uris,
-            )
+            ).project(self.descriptor)
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
-            scope=scope,
-            relationships=tuple(relationships),
             artifact_uris=artifact_uris,
-            completeness_basis=(
-                "the deterministic grid was fully enumerated"
-                if exhausted_grid
-                else "the canonical prefix through the first collision was enumerated"
-            ),
-            completeness_status=(
-                CapabilityCompletenessStatus.COMPLETE
-                if exhausted_grid
-                else CapabilityCompletenessStatus.PARTIAL
-            ),
-            assurance_basis=(
-                "deterministic exact SymPy search; any returned witness remains "
-                "unverified until independent replay"
-            ),
         )
 
 
@@ -685,8 +550,7 @@ class PolynomialCollisionVerifyAdapter:
             checker_id=checker_id,
         )
         verified = (
-            checked.assurance.verification is Verification.VERIFIED
-            and checked.conclusion is Conclusion.FALSE
+            checked.conclusion is Conclusion.FALSE
             and checked.verification_record_uri is not None
         )
         record_uri = checked.verification_record_uri if verified else None
@@ -710,49 +574,12 @@ class PolynomialCollisionVerifyAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
+            value=output,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="one direct collision witness over QQ",
-                parameters={"map_uri": map_uri},
-                artifact_uri=map_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis="direct witness verification makes no search coverage claim",
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.collision-refutes-injectivity",
-                    source_artifact_uris=(witness_artifact.artifact_uri,),
-                    target_artifact_uris=(claim_artifact.artifact_uri,),
-                    status=(
-                        CapabilityRelationshipStatus.VERIFIED
-                        if verified
-                        else CapabilityRelationshipStatus.PROPOSED
-                    ),
-                    verification_record_uri=(record_uri),
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-                basis=(
-                    "accepted by the authorized independent Fraction-based checker"
-                    if verified
-                    else "the checker did not accept the claimed collision"
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
-        )
+        ).project(self.descriptor)
 
 
 class PolynomialMapInverseCollisionVerifyAdapter:
@@ -845,7 +672,6 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         verified = (
             checked.verification_record_uri is not None
             and checked.conclusion is Conclusion.TRUE
-            and checked.assurance.verification is Verification.VERIFIED
         )
         record_uri = checked.verification_record_uri if verified else None
         output = PolynomialMapInverseCollisionVerifyOutput(
@@ -865,50 +691,9 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         artifact_uris.append(witness_artifact.artifact_uri)
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
+            value=output,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="one direct collision over QQ",
-                parameters={"map_uri": map_uri},
-                artifact_uri=map_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis=(
-                    "a direct collision makes no bounded-search or global "
-                    "enumeration claim"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id=(
-                        "polynomial.relation.collision-refutes-two-sided-inverse"
-                    ),
-                    source_artifact_uris=(witness_artifact.artifact_uri,),
-                    target_artifact_uris=(claim.artifact_uri,),
-                    status=CapabilityRelationshipStatus.VERIFIED,
-                    verification_record_uri=record_uri,
-                ),
-            )
-            if verified
-            else (),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-                basis=(
-                    "accepted by the authorized independent collision "
-                    "inverse-obstruction checker"
-                    if verified
-                    else "the independent inverse-obstruction checker did not accept"
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
-        )
+        ).project(self.descriptor)

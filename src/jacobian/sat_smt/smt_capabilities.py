@@ -12,10 +12,6 @@ from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationE
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
@@ -23,11 +19,10 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
-from jacobian.contracts.results import Conclusion, ExecutionStatus, Verification
+from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.contracts.smt import (
     SmtUnsatProofVerificationOutput,
     SmtUnsatProofVerificationRequest,
@@ -108,6 +103,8 @@ def install_smt_unsat_proof_checker(
 
 class SmtUnsatProofVerificationAdapter:
     """Verify one compatible Alethe proof; rejection establishes nothing."""
+
+    typed_input = True
 
     def __init__(
         self,
@@ -225,7 +222,6 @@ class SmtUnsatProofVerificationAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion is Conclusion.TRUE
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         status: Literal[
@@ -274,60 +270,11 @@ class SmtUnsatProofVerificationAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        assurance_level = (
-            CapabilityAssuranceLevel.VERIFIED
-            if verified
-            else (
-                CapabilityAssuranceLevel.COMPUTED
-                if checked.execution.status is ExecutionStatus.COMPLETED
-                else CapabilityAssuranceLevel.HEURISTIC
-            )
-        )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="the full exact SMT query bound by the Alethe proof",
-                parameters={
-                    "declared_scope": resolved.proof.declared_scope,
-                    "logic": resolved.proof.problem.logic,
-                    "profile": resolved.proof.problem.profile,
-                    "proof_format": resolved.proof.proof_format,
-                    "proof_format_version": resolved.proof.proof_format_version,
-                    "contains_holes": resolved.proof.contains_holes,
-                    "alethe_hole_count": resolved.proof.alethe_hole_count,
-                },
-                artifact_uri=resolved.problem_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.NOT_APPLICABLE,
-                basis=(
-                    "certificate replay checks one exact proof and makes no "
-                    "enumeration-completeness claim"
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.COMPUTED
-                    if checked.execution.status is ExecutionStatus.COMPLETED
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=assurance_level,
-                basis=(
-                    "accepted by the operator-authorized external strict Carcara "
-                    "runtime bound into the checker registration"
-                    if verified
-                    else (
-                        "checker replay completed without accepting the proof; "
-                        "no opposite conclusion follows"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not complete; no mathematical "
-                        "conclusion follows"
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=record_uri,
             artifact_uris=tuple(artifact_uris),
         )

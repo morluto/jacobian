@@ -6,8 +6,8 @@ strictly positive on one closed rational interval, using Sturm's theorem.
 
 ``polynomial.interval.positivity.decide`` (EXPLORE) computes the Sturm
 sequence with pinned SymPy, counts sign changes at the interval endpoints,
-and determines whether p(x) > 0 for all x in [a,b]. The result is ``COMPUTED``
-and ``UNVERIFIED``.
+and determines whether p(x) > 0 for all x in [a,b]. It creates no verification
+record.
 
 ``polynomial.interval.positivity.verify`` (VERIFY) packages the claimed
 decision as a replay certificate and asks the operator-authorized independent
@@ -33,17 +33,10 @@ from jacobian.capability_service import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -67,7 +60,6 @@ from jacobian.contracts.polynomials import (
 from jacobian.contracts.results import (
     Conclusion,
     ExecutionStatus,
-    Verification,
 )
 from jacobian.domains._examples import example
 from jacobian.polynomials._support import (
@@ -261,8 +253,8 @@ class PolynomialIntervalPositivityDecideAdapter:
                 "Decide exactly whether one univariate rational polynomial is "
                 "strictly positive (p(x) > 0) on one closed rational interval "
                 "using Sturm's theorem. The decision is EXACT and "
-                "DETERMINISTIC. The result is UNVERIFIED; the advertised "
-                "independent Sturm-sequence checker is the verification boundary."
+                "DETERMINISTIC. The separate independent Sturm-sequence checker "
+                "is the verification boundary."
             ),
             provider="jacobian.sympy",
             provider_runtime=known_provider_runtime(
@@ -380,51 +372,14 @@ class PolynomialIntervalPositivityDecideAdapter:
             roots_in_open_interval=roots_in_open,
             endpoint_root=endpoint_root,
             positive=positive,
-            backend_version=SYMPY_VERSION,
-        )
-        checker_hint = (
-            "invoke polynomial.interval.positivity.verify with the authorized "
-            "Sturm-sequence checker to obtain a VERIFIED record"
-            if self.resources.installation.checker_id is not None
-            else "no independent checker is authorized in this installation; the "
-            "decision remains UNVERIFIED"
         )
         return _computed_result(
             descriptor=self.descriptor,
-            request=request,
             started=started,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "strict positivity of one univariate polynomial on one "
-                    "closed rational interval"
-                ),
-                parameters={
-                    "polynomial_uri": polynomial_artifact.artifact_uri,
-                    "interval": interval.model_dump(mode="json"),
-                    "degree": polynomial.degree,
-                },
-                artifact_uri=polynomial_artifact.artifact_uri,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.positivity-decision-of",
-                    source_artifact_uris=(polynomial_artifact.artifact_uri,),
-                    target_artifact_uris=(decision_artifact.artifact_uri,),
-                ),
-            ),
             artifact_uris=(
                 polynomial_artifact.artifact_uri,
                 decision_artifact.artifact_uri,
-            ),
-            completeness_basis=(
-                "Sturm's theorem counts every distinct real root in the "
-                "declared interval; the decision is exact and exhaustive"
-            ),
-            assurance_basis=(
-                "deterministic exact SymPy rational arithmetic over QQ produced "
-                "the Sturm sequence and sign-change counts; the computation did "
-                "not authorize or invoke an independent checker; " + checker_hint
             ),
         )
 
@@ -591,7 +546,6 @@ class PolynomialIntervalPositivityVerifyAdapter:
         verified = (
             checked.execution.status is ExecutionStatus.COMPLETED
             and checked.conclusion in {Conclusion.TRUE, Conclusion.FALSE}
-            and checked.assurance.verification is Verification.VERIFIED
             and checked.verification_record_uri is not None
         )
         conclusion: Literal["TRUE", "FALSE", "UNKNOWN"] = (
@@ -618,7 +572,6 @@ class PolynomialIntervalPositivityVerifyAdapter:
             sign_changes_at_hi=validated.claimed_sign_changes_at_hi,
             roots_in_open_interval=validated.claimed_roots_in_open_interval,
             endpoint_root=validated.claimed_endpoint_root,
-            positivity_assurance="VERIFIED" if verified else "COMPUTED",
             conclusion=conclusion,
         )
         artifact_uris = [
@@ -634,83 +587,7 @@ class PolynomialIntervalPositivityVerifyAdapter:
             capability_version=self.descriptor.version,
             execution=checked.execution,
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "strict positivity of one univariate polynomial on one "
-                    "closed rational interval"
-                ),
-                parameters={
-                    "polynomial_uri": polynomial_artifact.artifact_uri,
-                    "interval": interval.model_dump(mode="json"),
-                    "degree": polynomial.degree,
-                },
-                artifact_uri=polynomial_artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if checked.execution.status is ExecutionStatus.COMPLETED
-                    else CapabilityCompletenessStatus.UNKNOWN
-                ),
-                basis=(
-                    "the independent checker replayed the full Sturm sequence "
-                    "over the declared interval"
-                    if verified
-                    else (
-                        "the adapter packaged the claimed decision, but the "
-                        "checker did not accept the Sturm replay"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not establish complete coverage"
-                    )
-                ),
-                assurance_level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else (
-                        CapabilityAssuranceLevel.COMPUTED
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else CapabilityAssuranceLevel.HEURISTIC
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
-            relationships=(
-                (
-                    CapabilityRelationship(
-                        relation_id="polynomial.relation.valid-positivity-decision",
-                        source_artifact_uris=(decision_artifact.artifact_uri,),
-                        target_artifact_uris=(polynomial_artifact.artifact_uri,),
-                        status=CapabilityRelationshipStatus.VERIFIED,
-                        verification_record_uri=record_uri,
-                    ),
-                )
-                if conclusion == "TRUE" and verified
-                else ()
-            ),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else (
-                        CapabilityAssuranceLevel.COMPUTED
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else CapabilityAssuranceLevel.HEURISTIC
-                    )
-                ),
-                basis=(
-                    "accepted by the authorized independent Sturm-sequence "
-                    "checker; the positivity decision is exact"
-                    if verified
-                    else (
-                        "the claimed decision was packaged, but the independent "
-                        "checker did not accept the Sturm replay"
-                        if checked.execution.status is ExecutionStatus.COMPLETED
-                        else "checker execution did not complete; no mathematical "
-                        "conclusion follows"
-                    )
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
         )
 

@@ -124,7 +124,6 @@ RECURRENCE_CAPABILITIES = (
                 },
             ),
         ),
-        relation_id="combinatorics.recurrence.linear.evaluation.relation",
     ),
     combinatorics_operation(
         "combinatorics.recurrence.p_recursive.evaluate",
@@ -164,7 +163,6 @@ RECURRENCE_CAPABILITIES = (
                 },
             ),
         ),
-        relation_id="combinatorics.recurrence.p_recursive.evaluation.relation",
     ),
     combinatorics_operation(
         "combinatorics.generating_function.coefficients.compute",
@@ -195,9 +193,6 @@ RECURRENCE_CAPABILITIES = (
                     "truncation_order": 6,
                 },
             ),
-        ),
-        relation_id=(
-            "combinatorics.generating_function.coefficient_truncation.relation"
         ),
     ),
 )

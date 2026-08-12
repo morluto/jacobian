@@ -1,10 +1,7 @@
 """Combinatorics operation declarations."""
 
-from jacobian.operations import (
-    ComputedOperationFactory,
-    MaterializedOperationFactory,
-    OperationFailure,
-)
+from jacobian.operation_bindings import DurableOperationFactory, InlineOperationFactory
+from jacobian.operations import OperationFailure
 
 _FAILURE = OperationFailure(
     code="COMBINATORICS_OPERATION_NOT_APPLICABLE",
@@ -13,5 +10,5 @@ _FAILURE = OperationFailure(
     exceptions=(TypeError, ValueError, ArithmeticError),
 )
 
-combinatorics_operation = ComputedOperationFactory(_FAILURE)
-materialized_combinatorics_operation = MaterializedOperationFactory(_FAILURE)
+combinatorics_operation = InlineOperationFactory(_FAILURE)
+materialized_combinatorics_operation = DurableOperationFactory(_FAILURE)

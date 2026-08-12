@@ -67,9 +67,8 @@ The frozen public matched evaluation in
 used three control/treatment pairs. All treatments autonomously discovered the
 producer and verifier, preserved independently replayable matrix evidence, and
 correctly derived a restricted-set distance profile without substituting
-diameter, radius, or eccentricity. The composed profile remained
-`SELF_CHECKED` or `COMPUTED` and `UNVERIFIED`; only the exact matrix was
-`VERIFIED`.
+diameter, radius, or eccentricity. Only the exact matrix received a bound
+verification record; the derived profile did not.
 
 This public answer-visible result is regression evidence for composition, not
 a broad portfolio-value claim. It does not justify adding a restricted-set

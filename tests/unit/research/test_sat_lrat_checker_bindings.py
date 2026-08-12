@@ -5,6 +5,8 @@ import hashlib
 from copy import deepcopy
 from typing import Any
 
+import pytest
+
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.sat import SatLratResourceLimits, canonicalize_cnf
 from jacobian_checkers.sat_lrat import check_lrat
@@ -32,10 +34,14 @@ def _artifact(
     }
 
 
-def _request(proof: bytes = b"3 0 1 2 0\n") -> dict[str, Any]:
+def _request(
+    proof: bytes = b"3 0 1 2 0\n",
+    *,
+    limits: SatLratResourceLimits | None = None,
+) -> dict[str, Any]:
     cnf = canonicalize_cnf(variable_names=("x",), clauses=((-1,), (1,)))
     claim = _artifact("a", cnf.model_dump(mode="json"))
-    limits = SatLratResourceLimits()
+    limits = limits or SatLratResourceLimits()
     cnf_binding = {
         "binding_version": "1",
         "cnf_artifact_uri": claim["artifact_uri"],
@@ -99,6 +105,30 @@ def test_lrat_checker_accepts_the_exact_frozen_binding_shape() -> None:
 
     assert decision["accepted"] is True
     assert decision["conclusion"] == "TRUE"
+
+
+@pytest.mark.parametrize(
+    ("proof", "limits", "message"),
+    (
+        (
+            b"3 0 1 2 0\n4 0 1 2 0\n",
+            SatLratResourceLimits(max_steps=1),
+            "max_steps",
+        ),
+        (
+            b"3 1 0 1 2 0\n",
+            SatLratResourceLimits(max_clause_literals=0),
+            "max_clause_literals",
+        ),
+    ),
+)
+def test_lrat_checker_propagates_resource_exhaustion(
+    proof: bytes,
+    limits: SatLratResourceLimits,
+    message: str,
+) -> None:
+    with pytest.raises(OverflowError, match=message):
+        check_lrat(_request(proof, limits=limits))
 
 
 def test_lrat_checker_rejects_binding_and_lineage_mutations() -> None:

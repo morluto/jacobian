@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.artifacts import ArtifactService
+from jacobian.capability_service import CapabilityAdapter
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
@@ -45,6 +46,7 @@ from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification import VerificationService
+from jacobian.verification_capabilities import witness_verification_adapter
 
 
 def install_polynomial_capabilities(
@@ -55,22 +57,7 @@ def install_polynomial_capabilities(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[
-    tuple[
-        PolynomialMapEvaluationAdapter,
-        PolynomialJacobianAdapter,
-        PolynomialKellerConditionVerifyAdapter,
-        PolynomialCollisionAdapter,
-        PolynomialIdentityAdapter,
-        RationalFunctionIdentityAdapter,
-        PolynomialCollisionSearchAdapter,
-        PolynomialCollisionVerifyAdapter,
-        PolynomialMapInverseCollisionVerifyAdapter,
-        PolynomialMapInverseSynthesizeAdapter,
-        PolynomialMapInverseVerifyAdapter,
-    ],
-    PolynomialInstallation,
-]:
+) -> tuple[tuple[CapabilityAdapter, ...], PolynomialInstallation]:
     """Register exact polynomial-map schemas, adapters, and optional checker."""
 
     semantics_uri = store.register_descriptor(
@@ -412,6 +399,17 @@ def install_polynomial_capabilities(
         verification=verification,
         installation=installation,
     )
+    collision_evidence_verify = witness_verification_adapter(
+        capability_id="polynomial.map.collision_evidence.verify",
+        title="Verify stored polynomial-map collision evidence",
+        description=(
+            "Independently replay one exact stored collision witness against its "
+            "bound map and injectivity claim."
+        ),
+        checker_id=collision_checker_id,
+        tags=("polynomial", "map", "collision"),
+        verification=verification,
+    )
     return (
         (
             PolynomialMapEvaluationAdapter(resources),
@@ -422,6 +420,7 @@ def install_polynomial_capabilities(
                 else ()
             ),
             PolynomialCollisionAdapter(resources),
+            *((collision_evidence_verify,) if collision_evidence_verify else ()),
             PolynomialIdentityAdapter(resources),
             *(
                 (RationalFunctionIdentityAdapter(resources),)

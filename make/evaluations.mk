@@ -35,9 +35,7 @@ else
 EVAL_CONFIG ?= benchmarks/config/mathematical-benchmarks-v1-control.json
 endif
 override MCP_CONFIG :=
-override JACOBIAN_EVAL_SKILL :=
 else
-JACOBIAN_EVAL_SKILL ?= .agents/skills/jacobian-math
 ifeq ($(JACOBIAN_EVAL_PROXY),1)
 EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)/jobs/jacobian-observation-proxy.json
 MCP_CONFIG ?= benchmarks/config/jacobian-loopback.mcp.json
@@ -70,7 +68,6 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 	if [ "$(JACOBIAN_ENABLED)" = "1" ]; then \
 		test -n "$${JACOBIAN_IMAGE:-}" || { echo "JACOBIAN_IMAGE must be exported" >&2; exit 2; }; \
 		test -n "$(RUNTIME_SNAPSHOT)" || { echo "RUNTIME_SNAPSHOT is required for a Jacobian-enabled run" >&2; exit 2; }; \
-		test -f "$(JACOBIAN_EVAL_SKILL)/SKILL.md" || { echo "JACOBIAN_EVAL_SKILL must contain SKILL.md: $(JACOBIAN_EVAL_SKILL)" >&2; exit 2; }; \
 		$(UV_RUN) python -m tools.manage_jacobian_image bind-runtime \
 			--image "$${JACOBIAN_IMAGE}" --runtime-snapshot "$(RUNTIME_SNAPSHOT)"; \
 	fi; \
@@ -86,7 +83,6 @@ agent-eval: ## Run a Harbor evaluation (JACOBIAN_ENABLED=0|1, JACOBIAN_EVAL_PROX
 		-m "$${JACOBIAN_MODEL}" \
 		--ak "web_search=$(CODEX_WEB_SEARCH)" \
 		$(if $(MCP_CONFIG),--mcp-config "$(MCP_CONFIG)",) \
-		$(if $(JACOBIAN_EVAL_SKILL),--skill "$(JACOBIAN_EVAL_SKILL)",) \
 		$(if $(TASKS),-p "benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)" $(foreach task,$(TASKS),--include-task-name "$(task)"),) \
 		$(EVAL_ARGS)
 
@@ -124,8 +120,7 @@ codex-visibility: ## Measure Codex adoption of Jacobian (VISIBILITY_EXECUTE=1, V
 		--model "$(VISIBILITY_MODEL)" --reasoning-effort "$(VISIBILITY_REASONING_EFFORT)" \
 		--tool-mode "$(VISIBILITY_TOOL_MODE)" \
 		--repetitions "$(VISIBILITY_REPETITIONS)" --output "$(VISIBILITY_OUTPUT)" \
-		$(foreach case,$(VISIBILITY_CASES_SELECTED),--case "$(case)") \
-		$(if $(VISIBILITY_SKILL),--skill "$(VISIBILITY_SKILL)",)
+		$(foreach case,$(VISIBILITY_CASES_SELECTED),--case "$(case)")
 
 codex-tool-context: ## Measure ALL_TOOLS projection cost in Codex ATIF traces (TRAJECTORIES="...").
 	@test -n "$(TRAJECTORIES)" || { echo "TRAJECTORIES is required" >&2; exit 2; }

@@ -181,6 +181,11 @@ def test_mathlib_checker_gives_lake_a_bounded_path_with_git(
     git.write_bytes(b"git")
     runtime = tmp_path / "runtime"
     runtime.mkdir()
+    checkout = runtime / ".lake" / "packages" / "repl"
+    checkout.mkdir(parents=True)
+    (runtime / "lake-manifest.json").write_text(
+        '{"packages":[{"name":"repl"}]}', encoding="utf-8"
+    )
     requests = []
 
     monkeypatch.delenv("PATH", raising=False)
@@ -216,6 +221,56 @@ def test_mathlib_checker_gives_lake_a_bounded_path_with_git(
     assert requests[0].environment["PATH"] == (
         f"{toolchain.resolve()}:{system_bin.resolve()}"
     )
+    assert requests[0].environment["GIT_CONFIG_COUNT"] == "1"
+    assert requests[0].environment["GIT_CONFIG_KEY_0"] == "safe.directory"
+    assert requests[0].environment["GIT_CONFIG_VALUE_0"] == str(checkout.resolve())
+    assert requests[0].environment["GIT_CONFIG_NOSYSTEM"] == "1"
+
+
+def test_mathlib_package_validation_authorizes_only_the_exact_checkout_for_git(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    packages = tmp_path / "packages"
+    checkout = packages / "repl"
+    checkout.mkdir(parents=True)
+    git = tmp_path / "git"
+    git.write_bytes(b"git")
+    revision = "a" * 40
+    requests = []
+    monkeypatch.setattr(
+        lean4_checker.shutil,
+        "which",
+        lambda name: str(git) if name == "git" else None,
+    )
+
+    def execute(request):
+        requests.append(request)
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
+            returncode=0,
+            stdout=(revision.encode() if "rev-parse" in request.arguments else b""),
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+        )
+
+    monkeypatch.setattr(lean4_checker, "execute_process", execute)
+
+    lean4_checker._validate_package_checkout(
+        packages,
+        {"type": "git", "name": "repl", "rev": revision},
+    )
+
+    assert len(requests) == 2
+    for request in requests:
+        assert request.arguments[:4] == (
+            "-c",
+            f"safe.directory={checkout}",
+            "-C",
+            str(checkout),
+        )
+        assert request.timeout_seconds == 15.0
 
 
 def test_lean_checker_rejects_replaced_authorized_executable(

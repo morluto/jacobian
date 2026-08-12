@@ -421,7 +421,6 @@ class PosetExactResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["networkx"] = "networkx"
     backend_version: Literal["3.6.1"] = "3.6.1"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
 
 class FinitePosetMaterializationResult(PosetExactResult):

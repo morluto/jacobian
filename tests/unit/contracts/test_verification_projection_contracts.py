@@ -92,7 +92,6 @@ def test_nullstellensatz_and_finite_coverage_bind_records_to_true_results() -> N
             evidence_uri=_uri("3"),
             checker_id=_checker(),
             conclusion="TRUE",
-            assurance="VERIFIED",
             checked_chart_count=12,
         )
 

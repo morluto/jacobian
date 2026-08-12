@@ -57,9 +57,7 @@
       "providers": [
         "cvc5",
         "external_sat",
-        "flint",
-        "graph",
-        "sympy"
+        "flint"
       ]
     },
     "lean": {
@@ -171,8 +169,7 @@
         "src/jacobian/artifacts.py",
         "src/jacobian/checker_artifacts.py",
         "src/jacobian/registry.py",
-        "src/jacobian/schema_registry.py",
-        "src/jacobian/plugins/registry.py"
+        "src/jacobian/schema_registry.py"
       ],
       "suites": [
         "unit",
@@ -219,7 +216,6 @@
         "src/jacobian/contracts/checkers.py",
         "src/jacobian/contracts/common.py",
         "src/jacobian/contracts/evidence.py",
-        "src/jacobian/contracts/plugins.py",
         "src/jacobian/contracts/results.py",
         "src/jacobian/contracts/verification.py"
       ],
@@ -506,10 +502,6 @@
         "tests/support/core_capability_harnesses.py",
         "tests/support/mcp_projection_catalog.py",
         "tests/support/process_entrypoints.py",
-        "tests/support/search_entrypoints.py",
-        "tests/support/conjecture_entrypoints.py",
-        "tests/support/shrinking_entrypoints.py",
-        "tests/support/plugin_noisy_module.py",
         "tests/support/services.py",
         "tests/support/state.py",
         "tests/support/artifacts.py",
@@ -517,7 +509,6 @@
         "tests/support/capability_installations.py",
         "tests/support/nullstellensatz.py",
         "tests/support/polynomials.py",
-        "tests/support/mcp.py",
         "tests/conftest.py"
       ],
       "suites": [
@@ -663,9 +654,7 @@
       "patterns": [
         "tests/boundary/providers/cvc5/**",
         "tests/boundary/providers/external_sat/**",
-        "tests/boundary/providers/flint/**",
-        "tests/boundary/providers/graph/**",
-        "tests/boundary/providers/sympy/**"
+        "tests/boundary/providers/flint/**"
       ],
       "suites": [
         "provider",

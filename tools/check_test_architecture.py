@@ -334,7 +334,6 @@ def _complete_runtime_fixture_import_violations(
         "tests/e2e/conftest.py",
         "tests/boundary/storage/conftest.py",
         "tests/boundary/providers/conftest.py",
-        "tests/boundary/mcp/conftest.py",
         "tests/support/complete_runtime_fixtures.py",
     )
     if relative in owners:

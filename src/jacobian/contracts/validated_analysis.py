@@ -73,7 +73,6 @@ class ExactDyadic(ContractModel):
 
 class ArbPointEnclosureResult(ContractModel):
     status: Literal["ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR"]
-    conclusion: Literal["UNKNOWN"] = "UNKNOWN"
     function: RealUnaryFunction
     argument: CanonicalRational
     precision_bits: StrictInt = Field(ge=32, le=4096)
@@ -81,9 +80,6 @@ class ArbPointEnclosureResult(ContractModel):
     upper: ExactDyadic | None = None
     relative_accuracy_bits: StrictInt | None = None
     exact: bool = False
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
     detail: str = Field(min_length=1, max_length=1024)
 
     @model_validator(mode="after")
@@ -103,21 +99,6 @@ class ArbPointEnclosureResult(ContractModel):
                     "exact enclosures omit relative accuracy; inexact ones report it"
                 )
         return self
-
-
-class ArbPointEnclosureObligation(ContractModel):
-    obligation_type: Literal["INDEPENDENT_ENCLOSURE_REPLAY"] = (
-        "INDEPENDENT_ENCLOSURE_REPLAY"
-    )
-    function: RealUnaryFunction
-    argument: CanonicalRational
-    precision_bits: StrictInt = Field(ge=32, le=4096)
-    claimed_lower: ExactDyadic | None = None
-    claimed_upper: ExactDyadic | None = None
-    status: Literal["ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR"]
-    required_checker: Literal["AUTHORIZED_INDEPENDENT_BALL_ARITHMETIC"] = (
-        "AUTHORIZED_INDEPENDENT_BALL_ARITHMETIC"
-    )
 
 
 class FiniteRawMomentRequest(ContractModel):
@@ -147,11 +128,6 @@ class FiniteRawMomentResult(ContractModel):
         min_length=1,
         max_length=256,
     )
-    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def bind_exact_contributions(self) -> Self:
@@ -219,17 +195,12 @@ class RationalLinearProgramRequest(ContractModel):
 
 class RationalLinearProgramResult(ContractModel):
     status: RationalLinearProgramStatus
-    conclusion: Literal["UNKNOWN"] = "UNKNOWN"
     primal_candidate: tuple[CanonicalRational, ...] | None = None
     dual_candidate: tuple[CanonicalRational, ...] | None = None
     primal_objective: CanonicalRational | None = None
     dual_objective: CanonicalRational | None = None
     primal_residuals: tuple[CanonicalRational, ...] | None = None
     dual_slacks: tuple[CanonicalRational, ...] | None = None
-    certificate_available: bool = False
-    backend: Literal["sympy"] = "sympy"
-    backend_version: Literal["1.14.0"] = "1.14.0"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
     detail: str = Field(min_length=1, max_length=1024)
 
     @model_validator(mode="after")
@@ -243,10 +214,7 @@ class RationalLinearProgramResult(ContractModel):
             self.primal_residuals,
             self.dual_slacks,
         )
-        if complete != (
-            self.certificate_available
-            and all(value is not None for value in certificate_fields)
-        ):
+        if complete != all(value is not None for value in certificate_fields):
             raise ValueError(
                 "a produced certificate requires both candidates and replay data"
             )

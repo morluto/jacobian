@@ -13,7 +13,7 @@ the other.
 
 ## Input contract
 
-The producer accepts one [`IntegerMatrix`](../index.md#shared-matrix-values)
+The producer accepts one [`IntegerMatrix`](index.md#shared-matrix-values)
 from `jacobian.contracts.matrices`: a nonempty rectangular matrix over `ZZ`
 with 1 to 32 rows and 1 to 32 columns. The shared `IntegerMatrix` model
 permits up to 32,768 canonical digits per entry; the HNF request model
@@ -25,7 +25,7 @@ The request includes a wall-clock budget from 1 to 60 seconds. The default is
 
 ## Computed evidence
 
-The optional `flint` extra pins Python-FLINT 0.9.0 and its linked FLINT 3.6.0
+The base package pins Python-FLINT 0.9.0 and its linked FLINT 3.6.0
 library for this profile. Its HNF operation calls
 `fmpz_mat.hnf(transform=True)` in an isolated process and returns two exact
 integer matrices:

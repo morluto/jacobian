@@ -5,13 +5,12 @@
 This tutorial **finds and runs ordinary Lean tools** (search/inspect
 declarations), then runs the separate **checker tool** `lean.check`. Search and
 inspect return declaration **values**; only the checker accepts or rejects a
-proof. Runnable snippets may still pass a legacy `mode` field until
-[#1143](https://github.com/morluto/jacobian/issues/1143).
+proof.
 
 ## Prerequisites
 
 Install the locked Python environment and prepare the pinned Lean runtime as
-described in [Install optional backends](../how-to/install-optional-backends.md#lean-certificates).
+described in [Install native and formal providers](../how-to/install-native-and-formal-providers.md#lean-certificates).
 
 ## Run the public composition
 
@@ -48,7 +47,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "lean.declaration.search",
-                "mode": "EXPLORE",  # legacy wire; see #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "name_contains": "irrational_sqrt_two",
@@ -57,7 +55,7 @@ async def main() -> None:
             },
         )
         # Ordinary tools: primary result is declaration metadata (values).
-        declaration_name = searched["output"]["declarations"][0]["name"]
+        declaration_name = searched["output"]["result"]["declarations"][0]["name"]
         assert searched["execution"]["status"] == "COMPLETED"
         assert declaration_name
 
@@ -66,17 +64,16 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "lean.declaration.inspect",
-                "mode": "EXPLORE",  # legacy wire; see #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "declaration_name": declaration_name,
                 },
             },
         )
-        assert inspected["output"]["declaration"]["type"] == "Irrational √2"
+        assert inspected["output"]["result"]["declaration"]["type"] == "Irrational √2"
         assert (
-            inspected["output"]["environment_digest"]
-            == searched["output"]["environment_digest"]
+            inspected["output"]["result"]["environment_digest"]
+            == searched["output"]["result"]["environment_digest"]
         )
 
         # Separate checker tool — not a mode on search/inspect.
@@ -85,7 +82,6 @@ async def main() -> None:
             "math.run",
             {
                 "capability_id": "lean.check",
-                "mode": "VERIFY",  # legacy wire until #1143
                 "payload": {
                     "environment": "MATHLIB",
                     "statement": "Irrational (Real.sqrt 2)",

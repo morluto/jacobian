@@ -7,7 +7,6 @@ from pathlib import Path
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityService
 from jacobian.operation_installation import OperationInstaller
-from jacobian.plugins.registry import PluginRegistry
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
@@ -16,6 +15,7 @@ from jacobian.sat_smt.sat import install_sat_artifacts
 from jacobian.sat_smt.smt import install_smt_artifacts
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.value_references import ValueReferenceStore
 
 
 def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreServices:
@@ -25,7 +25,8 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
     try:
         schemas = SchemaRegistry(store)
         artifacts = ArtifactService(store, schemas)
-        operations = OperationInstaller(store, schemas, artifacts)
+        values = ValueReferenceStore()
+        operations = OperationInstaller(store, schemas, artifacts, values)
         with store.transaction():
             sat = install_sat_artifacts(store, schemas, artifacts)
             smt = install_smt_artifacts(store, schemas, artifacts)
@@ -34,7 +35,6 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
                 schemas,
                 artifacts,
             )
-        plugins = PluginRegistry(store, schemas)
         checkers = CheckerRegistry(store)
         checkers.bind_existing_when_omitted = (
             options.checker_authority is CheckerAuthorityMode.HYDRATE_EXISTING
@@ -47,11 +47,11 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
             store=store,
             schemas=schemas,
             artifacts=artifacts,
+            values=values,
             operations=operations,
             sat=sat,
             smt=smt,
             polynomial_expressions=polynomial_expressions,
-            plugins=plugins,
             checkers=checkers,
             capabilities=capabilities,
         )

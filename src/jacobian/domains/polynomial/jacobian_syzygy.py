@@ -409,7 +409,6 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
             },
         ),
     ),
-    relation_id="polynomial.jacobian_syzygy.minimum_degree.relation",
 )
 
 JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY = materialized_polynomial_operation(
@@ -427,7 +426,6 @@ JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY = materialized_polynomial_operatio
     "syzygy",
     "coefficient-ledger",
     "evidence",
-    relation_id="polynomial.jacobian_syzygy.coefficients.relation",
     resource_reason=(
         "the full sparse graded coefficient ledger is retained as explicit bulk "
         "evidence for independent replay"

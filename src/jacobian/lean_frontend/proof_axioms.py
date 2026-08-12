@@ -16,17 +16,12 @@ from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_proof_axioms import (
@@ -261,7 +256,6 @@ class LeanProofAxiomsAdapter:
             **artifact_payload.model_dump(mode="python"),
             proof_axioms_uri=artifact.artifact_uri,
         )
-        complete = artifact_payload.inspection_complete
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
             capability_version=self.descriptor.version,
@@ -271,38 +265,7 @@ class LeanProofAxiomsAdapter:
                 detail=inspection["detail"],
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="one exact statement/proof source in one pinned environment",
-                parameters={
-                    "environment": validated.environment.value,
-                    "statement_digest": _digest_text(validated.statement),
-                    "proof_digest": _digest_text(validated.proof),
-                },
-                artifact_uri=artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=(
-                    CapabilityCompletenessStatus.COMPLETE
-                    if complete
-                    else CapabilityCompletenessStatus.UNKNOWN
-                ),
-                basis=(
-                    "Lean elaborated the source and emitted its exact axiom report"
-                    if complete
-                    else "Lean did not provide a complete elaboration and axiom report"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "facts parsed from the pinned Lean process; no trust policy "
-                    "or theorem verification is asserted"
-                ),
-            ),
             artifact_uris=(artifact.artifact_uri,),
-            provider=runtime.provider,
-            provider_digest=runtime.digest,
         )
 
 
@@ -570,10 +533,6 @@ def _environment_digest(
 
 def _digest_file(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _digest_text(value: str) -> str:
-    return "sha256:" + hashlib.sha256(value.encode()).hexdigest()
 
 
 def _lean_commit(

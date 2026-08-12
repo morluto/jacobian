@@ -34,7 +34,6 @@ def _result() -> dict[str, object]:
         "determinism": "DETERMINISTIC",
         "backend": "sympy",
         "backend_version": "1.14.0",
-        "verification": "UNVERIFIED",
     }
 
 

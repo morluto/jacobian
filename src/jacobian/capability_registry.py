@@ -8,7 +8,6 @@ from jacobian.capability_errors import CapabilityError
 from jacobian.capability_validation import validator
 from jacobian.contracts.capabilities import (
     CapabilityCatalog,
-    CapabilityCatalogRelationshipKind,
     CapabilityDescriptor,
     CapabilityProviderAvailability,
 )
@@ -46,18 +45,6 @@ class CapabilityRegistryMixin:
                 f"capability {descriptor.capability_id} is unavailable: "
                 f"{descriptor.provider_runtime.diagnostic}"
             )
-        verification_relationship_kinds = {
-            CapabilityCatalogRelationshipKind.INDEPENDENT_VERIFIER,
-            CapabilityCatalogRelationshipKind.VERIFIABLE_RESULT_PRODUCER,
-        }
-        if any(
-            relationship.kind in verification_relationship_kinds
-            for relationship in descriptor.related_capabilities
-        ):
-            raise CapabilityError(
-                "verification-sensitive catalog relationships require "
-                "operator-authorized checker registration"
-            )
         validator(descriptor.input_schema)
         validator(descriptor.output_schema)
         for example in descriptor.invocation_examples:
@@ -79,38 +66,10 @@ class CapabilityRegistryMixin:
             for name in sorted(self._adapters)
             if (projected := self.policy.project(self._descriptors[name])) is not None
         )
-        visible_ids = {descriptor.capability_id for descriptor in projected}
-        visible = []
-        for descriptor in projected:
-            relationships = {
-                item.capability_id: item for item in descriptor.related_capabilities
-            }
-            for related_id, relationship in self._catalog_relationships.get(
-                descriptor.capability_id, {}
-            ).items():
-                previous = relationships.get(related_id)
-                if previous is not None and previous != relationship:
-                    raise CapabilityError(
-                        "conflicting projected catalog relationship: "
-                        f"{descriptor.capability_id} -> {related_id}"
-                    )
-                relationships[related_id] = relationship
-            visible.append(
-                descriptor.model_copy(
-                    update={
-                        "related_capabilities": tuple(
-                            relationships[related_id]
-                            for related_id in sorted(relationships)
-                            if related_id in visible_ids
-                            and related_id != descriptor.capability_id
-                        )
-                    }
-                )
-            )
         return CapabilityCatalog(
             policy_profile=self.policy.profile,
             policy_digest=self.policy.digest,
-            capabilities=tuple(visible),
+            capabilities=projected,
         )
 
 

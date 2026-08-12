@@ -6,14 +6,16 @@ import hashlib
 from typing import Any
 
 from jacobian.canonical import canonicalize_json
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateArtifact
-from jacobian.references import LeanCheckerInstallation
+
+_PROOF_STATE_STATEMENT_PREFIX = "example : "
 
 
 def _proof_state_command(*, statement: str, proof_prefix: tuple[str, ...]) -> str:
     proof = "\n".join(f"  {line}" for line in (*proof_prefix, "sorry"))
-    return f"example : {statement} := by\n{proof}"
+    return f"{_PROOF_STATE_STATEMENT_PREFIX}{statement} := by\n{proof}"
 
 
 def _digest(value: Any) -> str:
@@ -131,6 +133,7 @@ def _state_digest_payload(state: LeanProofStateArtifact) -> str:
 
 
 __all__ = [
+    "_PROOF_STATE_STATEMENT_PREFIX",
     "_digest",
     "_environment_digest",
     "_environment_imports",

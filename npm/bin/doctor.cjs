@@ -358,6 +358,14 @@ async function run(options = {}) {
           "restart the configured client, and retry `npx jacobian doctor`.",
       );
     }
+    const sourceLauncher = typeof verifiedLauncher.source === "string";
+    if (!sourceLauncher && serverVersion !== version) {
+      throw new Error(
+        `The configured Jacobian MCP server reports version ${serverVersion || "unknown"}, ` +
+          `but this package requires ${version}. Run \`npx jacobian setup\`, ` +
+          "restart the configured client, and retry `npx jacobian doctor`.",
+      );
+    }
 
     // 2. Send initialized notification.
     sendMessage(child, {

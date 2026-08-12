@@ -691,37 +691,3 @@ class DiscreteLogarithmResult(ContractModel):
         elif self.discrete_log is not None:
             raise ValueError("unsolvable discrete logarithm cannot carry an exponent")
         return self
-
-
-class DiscreteLogarithmObligation(ContractModel):
-    """Independent checks still open for a completed producer result."""
-
-    obligation_schema_version: Literal["1"] = "1"
-    predicate: Literal["MODULAR_DISCRETE_LOGARITHM"] = "MODULAR_DISCRETE_LOGARITHM"
-    base: StrictInt = Field(ge=0, le=_MAX_MODULUS)
-    target: StrictInt = Field(ge=0, le=_MAX_MODULUS)
-    modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
-    status: Literal["SOLVED", "UNSOLVABLE"]
-    discrete_log: StrictInt | None = Field(default=None, ge=0)
-    required_checks: tuple[
-        Literal[
-            "DISCRETE_LOG_WITNESS_REPLAY",
-            "DISCRETE_LOG_NONSOLVABILITY",
-        ],
-        ...,
-    ]
-
-    @model_validator(mode="after")
-    def require_status_specific_check(self) -> Self:
-        if self.base >= self.modulus or self.target >= self.modulus:
-            raise ValueError("base and target must be less than the modulus")
-        expected = (
-            ("DISCRETE_LOG_WITNESS_REPLAY",)
-            if self.status == "SOLVED"
-            else ("DISCRETE_LOG_NONSOLVABILITY",)
-        )
-        if self.required_checks != expected:
-            raise ValueError("required checks must match the discrete-log status")
-        if (self.discrete_log is None) != (self.status == "UNSOLVABLE"):
-            raise ValueError("candidate exponent must match the discrete-log status")
-        return self

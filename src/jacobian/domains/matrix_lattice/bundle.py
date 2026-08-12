@@ -30,7 +30,6 @@ def build_matrix_bundle() -> DomainBundle:
                 "smith_normal_form": (
                     "positive divisibility diagonal; transformations unavailable"
                 ),
-                "assurance": "computed; no producer result is independently verified",
             },
         ),
         provider_runtime=known_provider_runtime(
@@ -59,11 +58,5 @@ def build_matrix_bundle() -> DomainBundle:
                 ),
             )
         ),
-        scope_description="the complete supplied bounded exact matrix",
-        completeness_basis=(
-            "exact symbolic computation covered the full finite matrix; "
-            "not independently verified"
-        ),
-        assurance_basis="exact SymPy arithmetic; no independent checker invoked",
         checker_declarations=MATRIX_EXACT_REPLAY_CHECKERS,
     )

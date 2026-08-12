@@ -184,7 +184,6 @@ def _minimum_weight_triangulation(claim: object) -> dict[str, object]:
         "objective": "NON_HULL_DIAGONAL_WEIGHT_SUM",
         "tie_break": "LOWEST_SPLIT_INDEX",
         "exactness": "EXACT_RATIONAL",
-        "verification": "UNVERIFIED",
     }
 
 
@@ -198,7 +197,6 @@ def _triangulation_candidate(payload: dict[str, object]) -> dict[str, object]:
         "objective",
         "tie_break",
         "exactness",
-        "verification",
     }:
         raise ValueError("triangulation candidate has an invalid shape")
     result = dict(payload)

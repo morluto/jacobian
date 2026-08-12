@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 
 from jacobian.canonical import canonicalize_json
-from jacobian.eval.telemetry import parse_agent_transcript
+from jacobian.eval.telemetry import (
+    parse_agent_transcript,
+    parse_agent_transcript_bytes,
+)
 
 
 def _tool_event(
@@ -47,6 +50,22 @@ def test_agent_telemetry_records_itemless_turn_usage(tmp_path: Path) -> None:
     assert telemetry["usage"] == usage
 
 
+def test_agent_telemetry_parses_preverified_bytes_without_a_path() -> None:
+    payload = (
+        json.dumps(
+            {
+                "type": "turn.completed",
+                "usage": {"input_tokens": 7, "output_tokens": 3},
+            }
+        ).encode()
+        + b"\n"
+    )
+
+    telemetry = parse_agent_transcript_bytes(payload)
+
+    assert telemetry["usage"] == {"input_tokens": 7, "output_tokens": 3}
+
+
 def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
     tmp_path: Path,
 ) -> None:
@@ -54,8 +73,11 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         _tool_event(
             "math.find",
             {
-                "query": "find a graph counterexample",
-                "domain": "graph",
+                "request": {
+                    "op": "search",
+                    "query": "find a graph counterexample",
+                    "domain": "graph",
+                }
             },
             {
                 "kind": "discovery",
@@ -67,7 +89,12 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         ),
         _tool_event(
             "math.find",
-            {"capability_id": "graph.search.atlas"},
+            {
+                "request": {
+                    "op": "inspect",
+                    "capability_id": "graph.search.atlas",
+                }
+            },
             {
                 "kind": "capability",
                 "capability": {"capability_id": "graph.search.atlas"},
@@ -84,8 +111,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
                 "execution": {"status": "COMPLETED"},
                 "output": {"status": "FOUND"},
                 "artifact_uris": [],
-                "assurance": {"level": "COMPUTED"},
-                "completeness": {"status": "COMPLETE"},
+                "verification_record_uri": None,
             },
         ),
     ]
@@ -117,7 +143,96 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         },
     ]
     assert telemetry["capability_attempt_ids"] == ["graph.search.atlas"]
+    assert telemetry["capability_attempts"] == [
+        {
+            "capability_id": "graph.search.atlas",
+            "input": {"order": 7},
+            "successful": True,
+        }
+    ]
     assert telemetry["capability_ids"] == ["graph.search.atlas"]
+
+
+def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> None:
+    failed = {
+        "type": "item.completed",
+        "item": {
+            "type": "mcp_tool_call",
+            "tool": "math.run",
+            "arguments": {"payload": {"malformed": True}},
+            "status": "failed",
+            "result": None,
+            "error": "invalid request",
+        },
+    }
+    succeeded = _tool_event(
+        "math.run",
+        {"capability_id": "lean.check", "payload": {"statement": "True"}},
+        {
+            "capability_id": "lean.check",
+            "execution": {"status": "COMPLETED"},
+            "output": {"conclusion": "UNKNOWN"},
+        },
+    )
+    domain_failure = _tool_event(
+        "math.run",
+        {
+            "capability_id": "lean.retrieve.premises",
+            "payload": {"statement": "True", "proof_prefix": ["by"]},
+        },
+        {
+            "capability_id": "lean.retrieve.premises",
+            "execution": {"status": "ERROR"},
+            "output": {
+                "error": {
+                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "stage": "request_validation",
+                    "message": "proof_prefix must not include by",
+                }
+            },
+            "diagnostics": [
+                {
+                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "stage": "request_validation",
+                    "message": "proof_prefix must not include by",
+                }
+            ],
+        },
+    )
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        "\n".join(json.dumps(event) for event in (failed, domain_failure, succeeded))
+        + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["capability_attempts"] == [
+        {"capability_id": None, "input": {"malformed": True}, "successful": False},
+        {
+            "capability_id": "lean.retrieve.premises",
+            "input": {"statement": "True", "proof_prefix": ["by"]},
+            "successful": False,
+            "diagnostic_codes": ["INVALID_LEAN_RETRIEVAL_REQUEST"],
+            "diagnostics": [
+                {
+                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "stage": "request_validation",
+                }
+            ],
+        },
+        {
+            "capability_id": "lean.check",
+            "input": {"statement": "True"},
+            "successful": True,
+        },
+    ]
+    assert telemetry["capability_attempt_ids"] == [
+        "lean.retrieve.premises",
+        "lean.check",
+    ]
+    assert telemetry["capability_ids"] == ["lean.check"]
 
 
 def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
@@ -126,17 +241,22 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
     events = [
         _tool_event(
             "math.find",
-            {},
+            {"request": {"op": "search", "query": "SAT materialization"}},
             {"matches": [{"capability_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
             "math.find",
-            {},
+            {"request": {"op": "search", "query": "SAT materialization"}},
             {"matches": [{"capability_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
             "math.find",
-            {"capability_id": "sat.cnf.materialize"},
+            {
+                "request": {
+                    "op": "inspect",
+                    "capability_id": "sat.cnf.materialize",
+                }
+            },
             {"capability": {"capability_id": "sat.cnf.materialize"}},
         ),
     ]
@@ -210,8 +330,7 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
         "execution": {"status": "COMPLETED"},
         "output": {"status": "FOUND", "graphs": [{"edges": [[0, 1]]}]},
         "artifact_uris": ["artifact://sha256/" + ("a" * 64)],
-        "assurance": {"level": "COMPUTED"},
-        "completeness": {"status": "COMPLETE"},
+        "verification_record_uri": None,
     }
     event = {
         "type": "item.completed",

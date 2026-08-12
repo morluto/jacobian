@@ -44,3 +44,10 @@ artifact it binds; those two URIs are exposed in `artifact_uris`. The ordinary
 polynomial input and candidate remain inline. Rejection, timeout, cancellation,
 malformed values, and unsupported relations create no record and remain
 non-conclusions.
+
+`polynomial.identity.verify` version 2 returns
+`first_coefficient_mismatch` with every verified `FALSE` conclusion. The
+witness identifies the first monomial in descending canonical exponent order,
+the exact left and right rational coefficients (using zero for an omitted
+term), and their exact difference. It is mathematical output, not a generic
+runtime diagnostic. `TRUE` and `UNKNOWN` results cannot carry it.

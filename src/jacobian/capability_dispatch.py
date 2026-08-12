@@ -4,18 +4,20 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Protocol
+from typing import Any
 
+from pydantic import ValidationError
+
+from jacobian.capability_adapters import CapabilityAdapter, TypedInputAdapter
 from jacobian.capability_errors import (
     CapabilityError,
     CapabilityInvocationError,
     PayloadValidationError,
+    enriched_invalid_request,
 )
 from jacobian.capability_telemetry import log_invocation
 from jacobian.capability_validation import json_value_type, validate_payload
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
     CapabilityDiagnostic,
     CapabilityRequest,
     CapabilityResult,
@@ -29,20 +31,13 @@ from jacobian.provider_runtime import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class AdapterLike(Protocol):
-    @property
-    def descriptor(self) -> Any: ...
-
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult: ...
-
-
 class CapabilityDispatchMixin:
     """Own the invocation state machine after registry resolution."""
 
     def invoke(self: Any, request: CapabilityRequest) -> CapabilityResult:
         started = time.monotonic()
         try:
-            adapter: AdapterLike = self._adapters[request.capability_id]
+            adapter: CapabilityAdapter = self._adapters[request.capability_id]
         except KeyError:
             result = _unknown_capability_failure(self, request)
             log_invocation(result, started)
@@ -53,12 +48,11 @@ class CapabilityDispatchMixin:
             log_invocation(resolution, started)
             return resolution
         try:
-            normalized_input = validate_payload(descriptor.input_schema, request.input)
+            normalized_request = _normalize_request(adapter, descriptor, request)
         except CapabilityError as exc:
             result = _input_validation_failure(descriptor, request, exc)
             log_invocation(result, started)
             return result
-        normalized_request = request.model_copy(update={"input": normalized_input})
         try:
             result = invoke_ready_adapter(
                 adapter=adapter,
@@ -95,9 +89,9 @@ class CapabilityDispatchMixin:
         if invalid is not None:
             log_invocation(invalid, started)
             return invalid
-        provenance = provider_provenance(descriptor)
-        result = result.model_copy(update=provenance)
-        if result.execution.status is ExecutionStatus.COMPLETED:
+        if result.execution.status is ExecutionStatus.COMPLETED and not isinstance(
+            adapter, TypedInputAdapter
+        ):
             result = _normalize_completed_adapter_output(
                 descriptor=descriptor,
                 request=request,
@@ -106,10 +100,30 @@ class CapabilityDispatchMixin:
             )
             if result.execution.status is not ExecutionStatus.COMPLETED:
                 return result
-        self._validate_artifact_references(result)
         self._validate_verified_result(result)
         log_invocation(result, started)
         return result
+
+
+def _normalize_request(
+    adapter: CapabilityAdapter,
+    descriptor: Any,
+    request: CapabilityRequest,
+) -> CapabilityRequest:
+    """Use the adapter's typed parser or the external schema-only boundary."""
+
+    if request.inputs and not descriptor.input_ports:
+        raise PayloadValidationError(
+            "the selected capability declares no typed value inputs",
+            path="inputs",
+            actual_type="object",
+            expected="no value references",
+            details={"unknown_input_ports": sorted(request.inputs)},
+        )
+    if isinstance(adapter, TypedInputAdapter):
+        return request
+    normalized_input = validate_payload(descriptor.input_schema, request.input)
+    return request.model_copy(update={"input": normalized_input})
 
 
 def _unknown_capability_failure(
@@ -168,7 +182,7 @@ def _capability_resolution_failure(
             ),
             context={"capability_policy": dispatch.policy.definition},
         )
-        return result.model_copy(update=provider_provenance(descriptor))
+        return result
     return None
 
 
@@ -177,6 +191,19 @@ def _adapter_execution_failure(
     request: CapabilityRequest,
     exc: Exception,
 ) -> CapabilityResult:
+    if isinstance(exc, ValidationError):
+        return failed_result(
+            descriptor=descriptor,
+            request=request,
+            diagnostic=enriched_invalid_request(
+                CapabilityDiagnostic(
+                    code="INVALID_REQUEST",
+                    stage="capability_input_validation",
+                    message="The capability request is invalid.",
+                ),
+                exc,
+            ),
+        )
     _LOGGER.warning(
         "capability %s stopped during execution",
         request.capability_id,
@@ -261,32 +288,6 @@ def _adapter_result_identity_failure(
                 hint="The capability adapter produced a result for a different capability.",
             ),
         )
-    if result.provider is not None and result.provider != descriptor.provider:
-        return failed_result(
-            descriptor=descriptor,
-            request=request,
-            diagnostic=CapabilityDiagnostic(
-                code="ADAPTER_RESULT_INVALID",
-                stage="adapter_execution",
-                message="The adapter returned a result from a different provider runtime.",
-                hint="The capability adapter produced a result from a provider that differs from its descriptor.",
-            ),
-        )
-    provenance = provider_provenance(descriptor)
-    if (
-        result.provider_digest is not None
-        and result.provider_digest != provenance["provider_digest"]
-    ):
-        return failed_result(
-            descriptor=descriptor,
-            request=request,
-            diagnostic=CapabilityDiagnostic(
-                code="ADAPTER_RESULT_INVALID",
-                stage="adapter_execution",
-                message="The adapter returned a result with a mismatched provider digest.",
-                hint="The capability adapter produced a result with a provider digest that differs from its descriptor.",
-            ),
-        )
     return None
 
 
@@ -328,24 +329,17 @@ def _normalize_completed_adapter_output(
 def failed_result(
     *, descriptor: Any, request: CapabilityRequest, diagnostic: CapabilityDiagnostic
 ) -> CapabilityResult:
-    provenance = provider_provenance(descriptor)
     return CapabilityResult(
         capability_id=descriptor.capability_id,
         capability_version=descriptor.version,
         execution=Execution(status=ExecutionStatus.ERROR, detail=diagnostic.message),
         output={"error": diagnostic.model_dump(mode="json", exclude_none=True)},
         diagnostics=(diagnostic,),
-        assurance=CapabilityAssurance(
-            level=CapabilityAssuranceLevel.HEURISTIC,
-            basis="execution or input failure; no mathematical conclusion",
-        ),
-        provider=provenance["provider"],
-        provider_digest=provenance["provider_digest"],
     )
 
 
 def invoke_ready_adapter(
-    *, adapter: AdapterLike, descriptor: Any, request: CapabilityRequest
+    *, adapter: CapabilityAdapter, descriptor: Any, request: CapabilityRequest
 ) -> CapabilityResult:
     runtime = descriptor.provider_runtime
     if runtime is None:
@@ -372,21 +366,6 @@ def invoke_ready_adapter(
     return CapabilityResult.model_validate(adapter.invoke(request))
 
 
-def provider_provenance(descriptor: Any) -> dict[str, str]:
-    if descriptor.provider_runtime is None:
-        raise CapabilityError(
-            f"capability {descriptor.capability_id} has no provider runtime identity"
-        )
-    if descriptor.provider_runtime.digest is None:
-        raise CapabilityError(
-            f"capability {descriptor.capability_id} has no provider runtime digest"
-        )
-    return {
-        "provider": descriptor.provider,
-        "provider_digest": descriptor.provider_runtime.digest,
-    }
-
-
 def resolution_failure(
     *,
     request: CapabilityRequest,
@@ -403,10 +382,6 @@ def resolution_failure(
             **context,
         },
         diagnostics=(diagnostic,),
-        assurance=CapabilityAssurance(
-            level=CapabilityAssuranceLevel.HEURISTIC,
-            basis="capability resolution failed; no mathematical conclusion",
-        ),
     )
 
 
@@ -415,4 +390,4 @@ def error_path(exc: Exception) -> str | None:
     return path if separator else None
 
 
-__all__ = ["CapabilityDispatchMixin", "provider_provenance"]
+__all__ = ["CapabilityDispatchMixin"]

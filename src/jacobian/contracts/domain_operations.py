@@ -6,19 +6,27 @@ from typing import Self
 
 from pydantic import model_validator
 
-from jacobian.contracts.common import ArtifactUri
+from jacobian.contracts.common import ArtifactUri, ValueUri
 from jacobian.contracts.results import ContractModel
 
 
-class ComputedOperationOutput[ResultT: ContractModel](ContractModel):
-    """Inline typed computed result with backend provenance, no artifacts."""
+class InlineOperationOutput[ResultT: ContractModel](ContractModel):
+    """Inline typed mathematical value with backend provenance."""
 
     result: ResultT
     backend_version: str
 
 
-class MaterializedOperationOutput[PreviewT: ContractModel](ContractModel):
-    """Artifact-linked output with an optional typed preview of the result."""
+class ReferencedInlineOperationOutput[ResultT: ContractModel](ContractModel):
+    """Inline value with one or more runtime-local composition carriers."""
+
+    result: ResultT
+    backend_version: str
+    value_refs: dict[str, ValueUri]
+
+
+class DurableOperationOutput[PreviewT: ContractModel](ContractModel):
+    """Durable artifact carriers with an optional typed preview."""
 
     input_uri: ArtifactUri
     result_uri: ArtifactUri

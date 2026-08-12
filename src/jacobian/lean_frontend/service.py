@@ -10,6 +10,7 @@ from collections import OrderedDict
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
+from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.lean import (
     LeanCandidate,
@@ -20,11 +21,11 @@ from jacobian.contracts.lean import (
 from jacobian.contracts.results import (
     Execution,
     ExecutionStatus,
-    ResultEnvelope,
-    Verification,
+    InputStatus,
+    VerificationResult,
 )
 from jacobian.contracts.verification import VerificationRecord
-from jacobian.references import LeanCheckerInstallation
+from jacobian.lean_frontend.diagnostics import checker_diagnostics
 from jacobian.registry import CheckerRegistryError
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
@@ -48,7 +49,7 @@ class LeanService:
         self.artifacts = artifacts
         self.verification = verification
         self.installations = installations
-        self._cache: OrderedDict[str, tuple[str, ResultEnvelope]] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[str, VerificationResult]] = OrderedDict()
         self._cache_lock = threading.Lock()
         self._certificate_locks: weakref.WeakValueDictionary[str, threading.Lock] = (
             weakref.WeakValueDictionary()
@@ -56,8 +57,6 @@ class LeanService:
         self._warmup_started = False
         self._warmup_thread: threading.Thread | None = None
         self._closing = False
-        self._mathlib_warmup_status = "NOT_STARTED"
-        self._mathlib_warmup_detail: str | None = None
 
     def verify(
         self,
@@ -150,7 +149,10 @@ class LeanService:
                     checker_id=installation.checker_id,
                     timeout_seconds=installation.checker_timeout_seconds,
                 )
-                if result.execution.status is ExecutionStatus.COMPLETED:
+                if (
+                    result.execution.status is ExecutionStatus.COMPLETED
+                    and result.input.status is InputStatus.ACCEPTED
+                ):
                     try:
                         registration = (
                             self.verification.checker_registry.require_active(
@@ -168,11 +170,18 @@ class LeanService:
                             self._cache.move_to_end(certificate.artifact_uri)
                             while len(self._cache) > _RESULT_CACHE_SIZE:
                                 self._cache.popitem(last=False)
+        diagnostics = checker_diagnostics(
+            result,
+            statement=statement,
+            proof=proof,
+            environment=environment,
+        )
         return LeanVerifyResult(
             claim_uri=claim.artifact_uri,
             candidate_uri=candidate.artifact_uri,
             certificate_uri=certificate.artifact_uri,
             result=result,
+            diagnostics=diagnostics,
             cache_hit=cache_hit,
         )
 
@@ -188,7 +197,6 @@ class LeanService:
             if self._warmup_started or self._closing:
                 return False
             self._warmup_started = True
-            self._mathlib_warmup_status = "RUNNING"
             self._warmup_thread = thread
             thread.start()
         return True
@@ -217,47 +225,20 @@ class LeanService:
 
     def _warm_mathlib(self) -> None:
         try:
-            checked = self.verify(
+            self.verify(
                 statement="True",
                 proof="by trivial",
                 environment=LeanEnvironment.MATHLIB,
             )
-            healthy = (
-                checked.result.execution.status is ExecutionStatus.COMPLETED
-                and checked.result.assurance.verification is Verification.VERIFIED
-            )
-            with self._cache_lock:
-                self._mathlib_warmup_status = "HEALTHY" if healthy else "UNHEALTHY"
-                self._mathlib_warmup_detail = (
-                    None
-                    if healthy
-                    else (
-                        checked.result.input.errors[0]
-                        if checked.result.input.errors
-                        else "the MATHLIB smoke proof was not accepted"
-                    )
-                )
-        except Exception as exc:
-            with self._cache_lock:
-                self._mathlib_warmup_status = "UNHEALTHY"
-                self._mathlib_warmup_detail = type(exc).__name__
+        except Exception:
             _LOGGER.exception("Lean Mathlib warm-up failed")
-
-    def mathlib_warmup_health(self) -> dict[str, str | None]:
-        """Return model-facing health without exposing runtime paths."""
-
-        with self._cache_lock:
-            return {
-                "status": self._mathlib_warmup_status,
-                "detail": self._mathlib_warmup_detail,
-            }
 
     def _cached_result(
         self,
         *,
         certificate_uri: str,
         installation: LeanCheckerInstallation,
-    ) -> ResultEnvelope | None:
+    ) -> VerificationResult | None:
         if installation.checker_id is None:
             return None
         with self._cache_lock:

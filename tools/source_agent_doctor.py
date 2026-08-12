@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -21,8 +22,9 @@ from benchmarks.tooling.command_runner import (  # noqa: E402
 )
 
 import jacobian  # noqa: E402
-from jacobian.adapters.mcp.projections import _catalog_digest  # noqa: E402
+from jacobian.canonical import canonicalize_json  # noqa: E402
 from jacobian.contracts.capabilities import (  # noqa: E402
+    CapabilityCatalog,
     CapabilityProviderAvailability,
 )
 from jacobian.persistence.migrations import (  # noqa: E402
@@ -43,6 +45,17 @@ from jacobian.runtime import CheckerAuthorityMode, create_runtime  # noqa: E402
 from tools.development_profiles import PROFILE_NAMES, PROFILES  # noqa: E402
 
 _PROFILE_PROVIDERS = {name: selected.providers for name, selected in PROFILES.items()}
+
+
+def _catalog_digest(catalog: CapabilityCatalog) -> str:
+    payload = {
+        "catalog_version": catalog.catalog_version,
+        "capabilities": [
+            descriptor.model_dump(mode="json")
+            for descriptor in catalog.capabilities
+        ],
+    }
+    return f"sha256:{hashlib.sha256(canonicalize_json(payload)).hexdigest()}"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -198,7 +211,7 @@ def inspect_installation(
     ) as runtime:
         catalog = runtime.core.capabilities.catalog()
         providers = _provider_report(runtime)
-        digest = _catalog_digest(catalog.catalog_version, catalog.capabilities)
+        digest = _catalog_digest(catalog)
         diagnostics = [
             {
                 "code": item.code,

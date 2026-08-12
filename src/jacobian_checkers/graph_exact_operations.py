@@ -748,7 +748,6 @@ def _graph_symmetry_generator_orbits(
         "determinism": "DETERMINISTIC",
         "backend": "networkx",
         "backend_version": "3.6.1",
-        "verification": "UNVERIFIED",
     }
     return result == expected
 

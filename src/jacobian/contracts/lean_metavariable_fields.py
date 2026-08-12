@@ -87,7 +87,6 @@ class LeanMetavariableFieldsArtifact(ContractModel):
     lean_version: str
     lean_commit: str
     mathlib_commit: str | None = None
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
     @model_validator(mode="after")
     def require_contiguous_metavariable_indices(self) -> Self:

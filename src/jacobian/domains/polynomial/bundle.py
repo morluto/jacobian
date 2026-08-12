@@ -50,7 +50,6 @@ def build_polynomial_bundle() -> DomainBundle:
                     "three-variable homogeneous coefficient maps use descending "
                     "lexicographic monomial bases and bounded exact rank search"
                 ),
-                "assurance": "computed; no independent checker",
             },
         ),
         provider_runtime=known_provider_runtime(
@@ -74,12 +73,6 @@ def build_polynomial_bundle() -> DomainBundle:
                 hint="Use canonical sparse QQ polynomials and inspect the operation limits.",
             )
         ),
-        scope_description="the complete supplied bounded rational-polynomial input",
-        completeness_basis=(
-            "exact symbolic computation covered the supplied finite input; "
-            "not independently verified"
-        ),
-        assurance_basis="exact SymPy polynomial computation; no checker invoked",
         checker_declarations=POLYNOMIAL_EXACT_REPLAY_CHECKERS,
     )
 

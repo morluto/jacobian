@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from jacobian.contracts.common import ArtifactUri, CheckerUri
+from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.results import ContractModel
 
@@ -194,17 +194,10 @@ class GraphNeighborhoodIndependenceOutput(ContractModel):
     invariant_uri: ArtifactUri
     claim_uri: ArtifactUri
     certificate_uri: ArtifactUri
-    checker_id: CheckerUri | None = None
     records: tuple[GraphNeighborhoodIndependenceRecord, ...]
     total: int
     average: CanonicalRational
-    exactness: Literal["EXACT"] = "EXACT"
     completeness: Literal["COMPLETE"] = "COMPLETE"
-    determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    certificate_available: Literal[True] = True
-    backend: Literal["networkx"] = "networkx"
-    backend_version: str
 
     @model_validator(mode="after")
     def require_consistent_summary(self) -> Self:

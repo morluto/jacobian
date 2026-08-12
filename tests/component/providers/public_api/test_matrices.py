@@ -8,10 +8,25 @@ from jacobian.math import matrices
 
 def test_exact_matrix_operations() -> None:
     source = sympy.Matrix([[1, 2], [3, 4]])
+    assert matrices.adjugate(source) == sympy.Matrix([[4, -2], [-3, 1]])
+    assert matrices.characteristic_polynomial(source, "lambda").all_coeffs() == [
+        1,
+        -5,
+        -2,
+    ]
+    assert matrices.determinant(source) == -2
+    assert matrices.rank(source) == (2, (0, 1))
     assert matrices.inverse(source) == sympy.Matrix(
         [[-2, 1], [sympy.Rational(3, 2), sympy.Rational(-1, 2)]]
     )
     assert matrices.trace(source) == 5
+    assert matrices.multiply(source, sympy.eye(2)) == source
+    assert matrices.smith_normal_form(sympy.eye(2)) == sympy.eye(2)
+    solution, parameters = matrices.solve_linear_system(
+        sympy.eye(2), sympy.Matrix([3, 4])
+    )
+    assert solution == sympy.Matrix([3, 4])
+    assert parameters.rows == 0
     reduced, pivots = matrices.rref(sympy.Matrix([[1, 2], [2, 4]]))
     assert reduced == sympy.Matrix([[1, 2], [0, 0]])
     assert pivots == (0,)

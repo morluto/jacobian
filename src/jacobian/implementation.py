@@ -1,4 +1,4 @@
-"""Source identity for installed Python plugin and checker entrypoints."""
+"""Source identity for installed Python provider and checker entrypoints."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ class _SourceOnlyFinder(importlib.abc.MetaPathFinder):
             return specification
         if not specification.origin.endswith(".py"):
             raise ImportError(
-                f"plugin package module is not Python source: {specification.origin}"
+                f"provider package module is not Python source: {specification.origin}"
             )
         locations = specification.submodule_search_locations
         return importlib.util.spec_from_file_location(

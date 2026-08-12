@@ -1,4 +1,4 @@
-"""Provider-owned probes for optional SAT and SMT runtimes."""
+"""Provider-owned probes for packaged and external SAT/SMT runtimes."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def cadical_provider_runtime(
 
 
 def cvc5_provider_runtime() -> CapabilityProviderRuntime:
-    """Inspect the exact optional cvc5 Python distribution used for Alethe."""
+    """Inspect the exact packaged cvc5 Python distribution used for Alethe."""
 
     runtime = python_distribution_provider_runtime(
         "cvc5",

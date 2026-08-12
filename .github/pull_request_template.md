@@ -26,7 +26,13 @@ compatibility, packaging, security, and exhaustive-matrix surface. See
 ## Trust & Compatibility Impact
 <!-- Does this change affect the verification kernel, checker registry, artifact format, or public API? -->
 
+## Architecture Budget
+<!-- For an ordinary operation, list its public function, request/result models, OperationSpec, and any non-inline publication binding. -->
+<!-- If this introduces a shared abstraction, name the two surviving production paths whose duplication it replaces in this PR. -->
+
 ## Checklist
 - [ ] `make check-changed BASE=origin/main` passes
 - [ ] Explicitly relevant specialist validation is listed above (boundary, Lean, provider, Harbor/Oracle)
 - [ ] Harbor task or verifier changes ran `make harbor-prepare-task` then `make harbor-validate-task` (if applicable)
+- [ ] New ordinary operations fit the documented operation budget (if applicable)
+- [ ] New shared abstractions replace duplication in at least two surviving production paths (if applicable)

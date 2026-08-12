@@ -20,17 +20,12 @@ from pydantic import ValidationError
 import jacobian.lean_frontend.exploration as _exploration_support
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.lean_metavariable_fields import (
     LeanMetavariableFieldsArtifact,
@@ -265,36 +260,6 @@ class LeanMetavariableFieldsAdapter:
                 detail=None,
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "structured metavariable and elaboration fields for one "
-                    "replayed proof state"
-                ),
-                parameters={
-                    "environment": validated.environment.value,
-                    "state_uri": validated.state_uri,
-                    "state_digest": bound_state.state_digest,
-                    "environment_digest": environment_digest,
-                },
-                artifact_uri=artifact.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "the helper reported every open goal's metavariable "
-                    "fields for this state"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "a clean pinned Lean process reconstructed the bound "
-                    "state and exposed maintained MetaM fields; coercion "
-                    "provenance is UNAVAILABLE and this is not a "
-                    "theorem-verification record"
-                ),
-            ),
             artifact_uris=(validated.state_uri, artifact.artifact_uri),
         )
 

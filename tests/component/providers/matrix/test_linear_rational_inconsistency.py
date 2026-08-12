@@ -7,7 +7,6 @@ from tests.support.capabilities import invoke_capability
 from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.linear import (
@@ -113,4 +112,4 @@ def test_inconsistency_candidate_is_inline_and_replayable(tmp_path: Path) -> Non
             )
         )
         assert verified.output["status"] == "VERIFIED"
-        assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+        assert verified.verification_record_uri is not None

@@ -9,7 +9,6 @@ from pydantic import ValidationError
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -86,7 +85,6 @@ def test_materialization_is_canonical_complete_and_inline(
     assert poset["cover_relations"] == _DIAMOND["relation"]
     assert poset["incomparable_pairs"] == [{"left": "a", "right": "b"}]
     assert poset["graded"] is True
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.artifact_uris == ()
 
 
@@ -127,7 +125,7 @@ def test_width_rejects_artifact_uri_input_at_the_contract_boundary(
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].code == "INVALID_FINITE_POSET_REQUEST"
     assert result.artifact_uris == ()
 
 

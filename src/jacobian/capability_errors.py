@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 
 
 class CapabilityError(RuntimeError):
-    """A capability descriptor, request, or assurance boundary is invalid."""
+    """A capability descriptor, request, or verification boundary is invalid."""
 
 
 class PayloadValidationError(CapabilityError):
@@ -42,9 +44,33 @@ class CapabilityInvocationError(RuntimeError):
         self.diagnostic = diagnostic
 
 
+def enriched_invalid_request(
+    base: CapabilityDiagnostic,
+    exc: ValidationError,
+) -> CapabilityDiagnostic:
+    """Add the first Pydantic error location to an invocation diagnostic."""
+
+    errors = exc.errors()
+    if not errors:
+        return base
+    first = errors[0]
+    loc = first.get("loc", ())
+    path = "/".join(str(part) for part in loc) if loc else None
+    message = str(first.get("msg", ""))
+    if message.startswith("Value error, "):
+        message = message[len("Value error, ") :]
+    return base.model_copy(
+        update={
+            "path": path,
+            "hint": message if message else base.hint,
+        }
+    )
+
+
 __all__ = [
     "CapabilityDiscoveryCursorError",
     "CapabilityError",
     "CapabilityInvocationError",
     "PayloadValidationError",
+    "enriched_invalid_request",
 ]

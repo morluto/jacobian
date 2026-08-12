@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityAdapter, CapabilityService
-from jacobian.contracts.capabilities import CapabilityCatalogRelationship
 from jacobian.operation_installation import OperationInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -18,7 +17,7 @@ from jacobian.verification import VerificationService
 
 if TYPE_CHECKING:
     from jacobian.runtime.config import RuntimeOptions
-    from jacobian.runtime.services import ApplicationServices, CoreServices
+    from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +33,6 @@ class InstallationContext:
     operations: OperationInstaller
     checker_authority: CheckerAuthorityMode
     register_capability: Callable[[CapabilityAdapter], None]
-    register_checker_relationship: Callable[[str, CapabilityCatalogRelationship], None]
 
     @property
     def authorizes_bundled_checkers(self) -> bool:
@@ -45,13 +43,13 @@ class InstallationContext:
 
 def create_installation_context(
     core: CoreServices,
-    application: ApplicationServices,
+    services: RuntimeServices,
     options: RuntimeOptions,
 ) -> InstallationContext:
     """Build the production installation context for one service graph.
 
     Installation contexts are deliberately derived from the explicit core and
-    application graphs.  Keeping this wiring here gives domain and composition
+    runtime graphs.  Keeping this wiring here gives domain and composition
     callers one production seam while preserving capability exclusions and the
     operator-owned checker authority configured on ``RuntimeOptions``.
 
@@ -61,8 +59,8 @@ def create_installation_context(
     same policy.
     """
 
-    if application.core is not core:
-        raise ValueError("application services must be built from the supplied core")
+    if services.core is not core:
+        raise ValueError("runtime services must be built from the supplied core")
 
     excluded = options.capability_exclusions
 
@@ -70,23 +68,14 @@ def create_installation_context(
         if adapter.descriptor.capability_id not in excluded:
             core.capabilities.register(adapter)
 
-    def register_checker_relationship(
-        source_capability_id: str,
-        relationship: CapabilityCatalogRelationship,
-    ) -> None:
-        core.capabilities._register_catalog_relationship(
-            source_capability_id, relationship
-        )
-
     return InstallationContext(
         store=core.store,
         schemas=core.schemas,
         artifacts=core.artifacts,
         capabilities=core.capabilities,
         checkers=core.checkers,
-        verification=application.verification,
+        verification=services.verification,
         operations=core.operations,
         checker_authority=options.checker_authority,
         register_capability=register,
-        register_checker_relationship=register_checker_relationship,
     )

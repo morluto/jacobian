@@ -3,36 +3,34 @@
 from __future__ import annotations
 
 import hashlib
+from fractions import Fraction
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityInvocationExample,
-    CapabilityRelationship,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
 )
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.polynomials import (
+    PolynomialCoefficientMismatch,
     PolynomialIdentityClaim,
     PolynomialIdentityOutput,
     PolynomialIdentityReplayPayload,
     PolynomialIdentityRequest,
     RationalPolynomial,
+    SparseRationalPolynomial,
 )
 from jacobian.contracts.results import (
     Conclusion,
 )
 from jacobian.polynomials._support import (
+    PolynomialOperationResult,
     _polynomial_error,
     _validate_request,
 )
@@ -53,11 +51,13 @@ class PolynomialIdentityAdapter:
         )
         self._descriptor = CapabilityDescriptor(
             capability_id="polynomial.identity.verify",
-            version="1",
-            title="Verify an exact polynomial identity",
+            version="2",
+            title="Compare exact polynomials coefficient by coefficient",
             description=(
                 "Independently compare every exact coefficient of two sparse "
-                "polynomials in one declared QQ polynomial ring."
+                "polynomials in one declared QQ polynomial ring. A false identity "
+                "returns the first canonical monomial coefficient mismatch and its "
+                "exact rational difference."
             ),
             provider="jacobian.sparse-polynomial-checker",
             provider_runtime=known_provider_runtime(
@@ -67,7 +67,15 @@ class PolynomialIdentityAdapter:
             ),
             input_schema=model_schema(PolynomialIdentityRequest),
             output_schema=model_schema(PolynomialIdentityOutput),
-            tags=("polynomial", "identity", "verification", "exact-rational"),
+            tags=(
+                "polynomial",
+                "identity",
+                "equality",
+                "verification",
+                "exact-rational",
+                "coefficient-mismatch",
+                "counter-witness",
+            ),
             invocation_examples=(
                 CapabilityInvocationExample(
                     name="zero_identity",
@@ -97,6 +105,14 @@ class PolynomialIdentityAdapter:
             code="INVALID_POLYNOMIAL_IDENTITY_REQUEST",
             operation="identity verification",
         )
+        return self.verify(validated).project(self.descriptor)
+
+    def verify(
+        self,
+        validated: PolynomialIdentityRequest,
+    ) -> PolynomialOperationResult[PolynomialIdentityOutput]:
+        """Verify one validated identity without re-entering the adapter."""
+
         checker_id = self.resources.installation.identity_checker_id
         if checker_id is None:
             raise _polynomial_error(
@@ -179,6 +195,11 @@ class PolynomialIdentityAdapter:
             Conclusion.FALSE: False,
             Conclusion.UNKNOWN: None,
         }[conclusion]
+        mismatch = (
+            _first_coefficient_mismatch(validated.left, validated.right)
+            if conclusion is Conclusion.FALSE
+            else None
+        )
         output = PolynomialIdentityOutput(
             identical=identical,
             conclusion=conclusion,
@@ -188,56 +209,12 @@ class PolynomialIdentityAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             verification_record_uri=record_uri,
             checker_id=checker_id,
+            first_coefficient_mismatch=mismatch,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
+            value=output,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="global coefficient equality in one declared QQ ring",
-                parameters={"variables": list(validated.variables)},
-                artifact_uri=left.artifact_uri,
-            ),
-            completeness=(
-                CapabilityCompleteness(
-                    status=CapabilityCompletenessStatus.COMPLETE,
-                    basis=(
-                        "every canonical sparse coefficient was replayed independently"
-                    ),
-                    assurance_level=CapabilityAssuranceLevel.VERIFIED,
-                    verification_record_uri=record_uri,
-                )
-                if verified
-                else CapabilityCompleteness(
-                    status=CapabilityCompletenessStatus.UNKNOWN,
-                    basis="the independent checker did not accept the replay",
-                )
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id="polynomial.relation.identity",
-                    source_artifact_uris=(left.artifact_uri,),
-                    target_artifact_uris=(right.artifact_uri,),
-                    status=CapabilityRelationshipStatus.VERIFIED,
-                    verification_record_uri=record_uri,
-                ),
-            )
-            if conclusion is Conclusion.TRUE and verified
-            else (),
-            assurance=CapabilityAssurance(
-                level=(
-                    CapabilityAssuranceLevel.VERIFIED
-                    if verified
-                    else CapabilityAssuranceLevel.HEURISTIC
-                ),
-                basis=(
-                    "accepted by the authorized independent sparse-polynomial checker"
-                    if verified
-                    else "the independent checker did not accept the identity request"
-                ),
-                verification_record_uri=record_uri,
-            ),
+            verification_record_uri=(record_uri if verified else None),
             artifact_uris=(
                 left.artifact_uri,
                 right.artifact_uri,
@@ -246,3 +223,25 @@ class PolynomialIdentityAdapter:
                 *((record_uri,) if record_uri is not None else ()),
             ),
         )
+
+
+def _first_coefficient_mismatch(
+    left: SparseRationalPolynomial,
+    right: SparseRationalPolynomial,
+) -> PolynomialCoefficientMismatch:
+    left_terms = {term.exponents: term.coefficient for term in left.terms}
+    right_terms = {term.exponents: term.coefficient for term in right.terms}
+    zero = CanonicalRational.from_fraction(Fraction(0))
+    for exponents in sorted(set(left_terms) | set(right_terms), reverse=True):
+        left_coefficient = left_terms.get(exponents, zero)
+        right_coefficient = right_terms.get(exponents, zero)
+        if left_coefficient != right_coefficient:
+            return PolynomialCoefficientMismatch(
+                exponents=exponents,
+                left_coefficient=left_coefficient,
+                right_coefficient=right_coefficient,
+                left_minus_right=CanonicalRational.from_fraction(
+                    left_coefficient.as_fraction() - right_coefficient.as_fraction()
+                ),
+            )
+    raise RuntimeError("false polynomial identity has no coefficient mismatch")

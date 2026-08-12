@@ -7,8 +7,6 @@ from tests.support.provider_lean import (
 )
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-    CapabilityCompletenessStatus,
     CapabilityRequest,
 )
 
@@ -39,13 +37,8 @@ def test_exact_proof_edit_is_bound_to_authorized_lean_check(
     assert result.output["accepted"] is True
     assert result.output["baseline_accepted"] is True
     assert result.output["baseline_verification_record_uri"] in result.artifact_uris
-    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert (
-        result.assurance.verification_record_uri
-        == (result.output["verification_record_uri"])
-    )
+    assert result.verification_record_uri is not None
     assert result.output["verification_record_uri"] in result.artifact_uris
-    assert result.completeness.status is CapabilityCompletenessStatus.NOT_APPLICABLE
     assert result.output["proof_edit_uri"] in result.artifact_uris
     edit = authorized_complete_runtime.core.store.get(result.output["proof_edit_uri"])
     assert edit.payload["edited_proof"] == "by\n  trivial"
@@ -97,8 +90,10 @@ def test_rejected_edit_keeps_checker_evidence_without_becoming_accepted(
     assert result.output["accepted"] is False
     assert result.output["verification_record_uri"] is None
     assert result.output["certificate_uri"] in result.artifact_uris
-    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
-    assert result.assurance.verification_record_uri is None
+    assert result.output["baseline_diagnostics"] == []
+    assert result.output["diagnostics"]
+    assert result.output["diagnostics"][0]["phase"] == "KERNEL_CHECK"
+    assert result.output["diagnostics"][0]["source_span"]["source"] == "PROOF"
 
 
 def test_valid_edit_is_not_accepted_when_original_baseline_is_invalid(
@@ -120,5 +115,4 @@ def test_valid_edit_is_not_accepted_when_original_baseline_is_invalid(
     assert result.output["baseline_accepted"] is False
     assert result.output["accepted"] is False
     assert result.output["verification_record_uri"] is not None
-    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
-    assert result.assurance.verification_record_uri is None
+    assert result.verification_record_uri is None

@@ -32,7 +32,6 @@ def build_lattice_bundle() -> DomainBundle:
                 "eta": "FLINT double 0.51",
                 "relation": "reduced_basis = transformation * source_basis",
                 "timeout": "operational TIMEOUT with no retained result artifacts",
-                "assurance": "computed; no independent checker",
             },
         ),
         provider_runtime=LATTICE_RUNTIME,
@@ -50,13 +49,5 @@ def build_lattice_bundle() -> DomainBundle:
                     "at most 256 digits, and wall_seconds from 1 through 60."
                 ),
             )
-        ),
-        scope_description="the complete supplied bounded integer row basis",
-        completeness_basis=(
-            "Python-FLINT completed exact-gram LLL and returned the full reduced "
-            "basis and transformation"
-        ),
-        assurance_basis=(
-            "bounded pinned Python-FLINT LLL computation; no independent checker invoked"
         ),
     )

@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.guidance import (
     MATH_FIND_DESCRIPTION,
     MATH_RUN_DESCRIPTION,
     SERVER_INSTRUCTIONS,
 )
 from jacobian.adapters.mcp.server import JacobianCoreExtension
+from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 
 
 def test_core_extension_exposes_exactly_the_stable_math_tools() -> None:
-    extension = JacobianCoreExtension(None, None)
+    extension = JacobianCoreExtension(
+        AppState(lambda: None, MCPBlockingWorkerRegistry())  # type: ignore[arg-type]
+    )
     assert extension.identifier == "io.jacobian/core"
     assert extension.settings() == {"version": "2"}
     assert tuple(binding.kwargs["name"] for binding in extension.tools()) == (
@@ -50,6 +54,14 @@ def test_server_instructions_front_load_implicit_activation_signal() -> None:
 def test_server_instructions_allow_known_contracts_to_run_directly() -> None:
     assert "exact installed capability ID" in SERVER_INSTRUCTIONS
     assert "math.run may execute a known contract directly" in SERVER_INSTRUCTIONS
+
+
+def test_server_instructions_route_pinned_lean_declaration_queries() -> None:
+    assert (
+        "explicitly targeting Jacobian's pinned CORE or MATHLIB" in SERVER_INSTRUCTIONS
+    )
+    assert "Project-local Lean declarations are outside" in SERVER_INSTRUCTIONS
+    assert "may require project-local tools" in SERVER_INSTRUCTIONS
 
 
 def test_guidance_rejects_verification_transfer_to_derived_claims() -> None:

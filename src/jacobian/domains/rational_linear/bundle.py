@@ -16,11 +16,12 @@ from jacobian.domains.rational_linear.operations import (
     compute_rational_inconsistency,
     compute_rational_solution,
 )
+from jacobian.operation_bindings import inline_operation
 from jacobian.operations import (
-    ComputedOperation,
     DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
+    OperationSpec,
 )
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION, known_provider_runtime
 
@@ -28,39 +29,45 @@ from jacobian.provider_runtime import PYTHON_FLINT_VERSION, known_provider_runti
 def build_rational_linear_bundle() -> DomainBundle:
     producer_runtime = RUNTIME
     capabilities = (
-        ComputedOperation(
-            capability_id="linear.rational_solution.compute",
-            title="Compute an exact rational solution",
-            description="Return one total bounded rational solution candidate inline.",
-            request_model=LinearRationalSolutionFindRequest,
-            result_model=LinearRationalSolutionResult,
-            implementation=compute_rational_solution,
-            relation_id="linear.rational_solution.relation",
-            tags=("linear-algebra", "rational", "solution", "exact"),
-            provider_runtime=producer_runtime,
-            invocation_examples=(
-                example(
-                    "identity_solution",
-                    "Solve a one-variable identity system.",
-                    {
-                        "system": {
-                            "variables": ["x"],
-                            "coefficients": {"entries": [[{"num": "1", "den": "1"}]]},
-                            "rhs": [{"num": "2", "den": "1"}],
-                        }
-                    },
+        inline_operation(
+            OperationSpec(
+                operation_id="linear.rational_solution.compute",
+                version="2",
+                title="Compute an exact rational solution",
+                description="Return one total bounded rational solution candidate inline.",
+                request_type=LinearRationalSolutionFindRequest,
+                result_type=LinearRationalSolutionResult,
+                execute=compute_rational_solution,
+                tags=("linear-algebra", "rational", "solution", "exact"),
+                invocation_examples=(
+                    example(
+                        "identity_solution",
+                        "Solve a one-variable identity system.",
+                        {
+                            "system": {
+                                "variables": ["x"],
+                                "coefficients": {
+                                    "entries": [[{"num": "1", "den": "1"}]]
+                                },
+                                "rhs": [{"num": "2", "den": "1"}],
+                            }
+                        },
+                    ),
                 ),
             ),
+            provider_runtime=producer_runtime,
         ),
-        ComputedOperation(
-            capability_id="linear.rational_inconsistency.compute",
-            title="Compute an exact rational inconsistency witness",
-            description="Return one normalized left witness inline when the system is inconsistent.",
-            request_model=LinearRationalInconsistencyFindRequest,
-            result_model=LinearRationalInconsistencyResult,
-            implementation=compute_rational_inconsistency,
-            relation_id="linear.rational_inconsistency.relation",
-            tags=("linear-algebra", "rational", "inconsistency", "exact"),
+        inline_operation(
+            OperationSpec(
+                operation_id="linear.rational_inconsistency.compute",
+                version="2",
+                title="Compute an exact rational inconsistency witness",
+                description="Return one normalized left witness inline when the system is inconsistent.",
+                request_type=LinearRationalInconsistencyFindRequest,
+                result_type=LinearRationalInconsistencyResult,
+                execute=compute_rational_inconsistency,
+                tags=("linear-algebra", "rational", "inconsistency", "exact"),
+            ),
             provider_runtime=producer_runtime,
         ),
     )
@@ -90,9 +97,6 @@ def build_rational_linear_bundle() -> DomainBundle:
                 hint="Use canonical rational components and bounded dimensions.",
             )
         ),
-        scope_description="the complete supplied rational linear system",
-        completeness_basis="the pinned FLINT producer completed its bounded computation",
-        assurance_basis="computed candidate only; independent verification is separate",
         checker_declarations=RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS,
     )
 

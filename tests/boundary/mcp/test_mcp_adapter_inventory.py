@@ -8,11 +8,44 @@ from pathlib import Path
 import pytest
 from mcp.shared.exceptions import MCPError
 
-from jacobian.adapters.mcp.guidance import OPERATING_GUIDE
+from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.server import create_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
+
+
+def test_managed_server_advertises_immutable_deployment_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = DeploymentIdentity(
+        revision="a" * 40,
+        package_version=version("jacobian"),
+    )
+    monkeypatch.setattr(
+        "jacobian.adapters.mcp.server.load_deployment_identity",
+        lambda: identity,
+    )
+    server = create_server(tmp_path)
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(server, raise_exceptions=True) as client:
+            resources = await client.list_resources()
+            assert {
+                (resource.name, str(resource.uri)) for resource in resources.resources
+            } == {
+                ("capability-catalog", "capability://catalog"),
+                ("deployment-identity", "deployment://identity"),
+            }
+            result = await client.read_resource("deployment://identity")
+            assert json.loads(result.contents[0].text) == identity.model_dump(
+                mode="json"
+            )
+
+    asyncio.run(scenario())
 
 
 def test_mcp_exposes_only_math_tools_with_read_only_resources(
@@ -20,7 +53,7 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
 ) -> None:
     server = create_server(tmp_path)
     assert server.instructions is not None
-    assert "assurance level VERIFIED" in server.instructions
+    assert "local verification record URI" in server.instructions
 
     async def scenario() -> None:
         from mcp import Client
@@ -42,7 +75,9 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert tools["math.find"].annotations is not None
             assert tools["math.find"].annotations.read_only_hint is True
             assert tools["math.run"].annotations is not None
-            assert tools["math.run"].annotations.destructive_hint is True
+            assert tools["math.run"].annotations.destructive_hint is False
+            assert tools["math.run"].annotations.read_only_hint is False
+            assert tools["math.run"].annotations.idempotent_hint is False
             assert (
                 "ranking is deterministic lexical retrieval"
                 in (tools["math.find"].description or "").lower()
@@ -52,18 +87,12 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 tool.input_schema.get("additionalProperties") is False
                 for tool in tools.values()
             )
-            assert set(describe_schema["properties"]) == {
-                "capability_id",
-                "query",
-                "domain",
-                "input_kind",
-                "artifact_type",
-                "limit",
-                "cursor",
-                "view",
-            }
+            assert set(describe_schema["properties"]) == {"request"}
+            request_schema = describe_schema["properties"]["request"]
+            assert request_schema["discriminator"]["propertyName"] == "op"
             assert set(tools["math.run"].input_schema["properties"]) == {
                 "capability_id",
+                "inputs",
                 "payload",
             }
             with pytest.raises(MCPError) as unknown_argument:
@@ -79,18 +108,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             }
             assert resource_inventory == {
                 (
-                    "jacobian-instructions",
-                    "jacobian://instructions",
-                    "text/markdown",
-                ),
-                (
                     "capability-catalog",
                     "capability://catalog",
-                    "application/json",
-                ),
-                (
-                    "reference-catalog",
-                    "reference://catalog",
                     "application/json",
                 ),
             }
@@ -106,48 +125,19 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                     "artifact://sha256/{digest}",
                     "application/json",
                 ),
-                (
-                    "experiment",
-                    "experiment://{experiment_id}",
-                    "application/json",
-                ),
-                (
-                    "experiment-accounting",
-                    "experiment://{experiment_id}/accounting",
-                    "application/json",
-                ),
-                (
-                    "experiment-scope",
-                    "experiment://{experiment_id}/scope",
-                    "application/json",
-                ),
-                (
-                    "experiment-archive",
-                    "experiment://{experiment_id}/archive",
-                    "application/json",
-                ),
             }
-            instructions = await client.read_resource("jacobian://instructions")
-            assert instructions.contents[0].text == OPERATING_GUIDE
-
             prompts = await client.list_prompts()
-            prompt_names = {prompt.name for prompt in prompts.prompts}
-            assert prompt_names == {
-                "jacobian-check-evidence",
-                "jacobian-discover",
-            }
-            discovery_prompt = await client.get_prompt(
-                "jacobian-discover",
-                {"task": "Explore structures related to a conjecture."},
-            )
-            rendered_prompt = discovery_prompt.messages[0].content.text
-            assert "research strategy" in rendered_prompt
-            assert "desired local mathematical outcome" in rendered_prompt
-            assert "Available affordances" in rendered_prompt
+            assert prompts.prompts == []
 
             discovery_result = await client.call_tool(
                 "math.find",
-                {"query": "search mathematical knowledge", "limit": 3},
+                {
+                    "request": {
+                        "op": "search",
+                        "query": "search mathematical knowledge",
+                        "limit": 3,
+                    }
+                },
             )
             assert isinstance(discovery_result.structured_content, dict)
             discovery = discovery_result.structured_content
@@ -158,102 +148,39 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert "routing_guidance" not in discovery
             operation_card = discovery["matches"][0]
             assert operation_card["accepted_input_kinds"]
-            assert "output_schema_summary" in operation_card
-            assert operation_card["scope"] == "EXACT_SUPPLIED_INPUT_OR_CLAIM"
             assert operation_card["provider_availability"] == "AVAILABLE"
-            assert isinstance(operation_card["related_capabilities"], list)
+            assert "input_schema" not in operation_card
 
             absent_result = await client.call_tool(
                 "math.find",
-                {"query": "quuxonium frobnicator", "domain": "polynomial"},
+                {
+                    "request": {
+                        "op": "search",
+                        "query": "quuxonium frobnicator",
+                        "domain": "polynomial",
+                    }
+                },
             )
             assert isinstance(absent_result.structured_content, dict)
             absent = absent_result.structured_content
-            assert absent["portfolio_fit"] == "NO_LEXICAL_MATCHES"
             assert absent["matches"] == []
-            recovery_actions = {
-                option["action"] for option in absent["available_recovery_paths"]
-            }
-            assert recovery_actions == {
-                "reformulate_query",
-                "remove_filters",
-                "browse",
-                "inspect_catalog",
-            }
-            browse = next(
-                option
-                for option in absent["available_recovery_paths"]
-                if option["action"] == "browse"
-            )
-            assert browse == {
-                "action": "browse",
-                "tool": "math.find",
-                "arguments": {},
-            }
+            assert absent["catalog_resource"] == "capability://catalog"
 
             unknown_domain_result = await client.call_tool(
                 "math.find",
                 {
-                    "query": "compute exact event probability",
-                    "domain": "arithmetic",
+                    "request": {
+                        "op": "search",
+                        "query": "compute exact event probability",
+                        "domain": "arithmetic",
+                    }
                 },
             )
             assert isinstance(unknown_domain_result.structured_content, dict)
             unknown_domain = unknown_domain_result.structured_content
-            assert unknown_domain["domain_filter_status"] == "UNKNOWN"
-            assert (
-                "matches no installed capability"
-                in unknown_domain["domain_filter_basis"]
-            )
-            assert (
-                "lexical fit outside that filter was not assessed"
-                in (unknown_domain["portfolio_fit_basis"])
-            )
-            assert unknown_domain["recovery_paths_are_unranked"] is True
-            assert {
-                "action": "remove_unknown_domain_filter",
-                "tool": "math.find",
-                "rejected_domain": "arithmetic",
-                "change": "Retry without the unrecognized domain filter.",
-            } in unknown_domain["available_recovery_paths"]
-            assert {
-                "action": "reformulate_query",
-                "tool": "math.find",
-                "change": "Use different or broader mathematical language for query.",
-            } in unknown_domain["available_recovery_paths"]
-
-            browse_unknown_result = await client.call_tool(
-                "math.find",
-                {"domain": "arithmetic"},
-            )
-            assert isinstance(browse_unknown_result.structured_content, dict)
-            browse_unknown = browse_unknown_result.structured_content
-            assert browse_unknown["domain_filter_status"] == "UNKNOWN"
-            assert browse_unknown["portfolio_fit"] == "UNFILTERED"
-            assert browse_unknown["routing_status"] == "UNFILTERED"
-            assert browse_unknown["recovery_paths_are_unranked"] is True
-            assert {
-                "action": "remove_unknown_domain_filter",
-                "tool": "math.find",
-                "rejected_domain": "arithmetic",
-                "change": "Retry without the unrecognized domain filter.",
-            } in browse_unknown["available_recovery_paths"]
-            assert all(
-                option["action"] != "reformulate_query"
-                for option in browse_unknown["available_recovery_paths"]
-            )
-
-            hidden_domain_result = await client.call_tool(
-                "math.find",
-                {"domain": "artifact"},
-            )
-            assert isinstance(hidden_domain_result.structured_content, dict)
-            hidden_domain = hidden_domain_result.structured_content
-            assert hidden_domain["domain_filter_status"] == "MATCHED"
-            assert hidden_domain["matches"] == []
-            assert "artifact.put" not in {
-                match["capability_id"] for match in hidden_domain["matches"]
-            }
+            assert unknown_domain["domain"] == "arithmetic"
+            assert unknown_domain["matches"] == []
+            assert unknown_domain["catalog_resource"] == "capability://catalog"
 
             catalog_result = await client.read_resource("capability://catalog")
             catalog = json.loads(catalog_result.contents[0].text)
@@ -267,11 +194,15 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             if "lean.check" in capability_ids:
                 lean_result = await client.call_tool(
                     "math.find",
-                    {"capability_id": "lean.check", "view": "FULL"},
+                    {
+                        "request": {
+                            "op": "inspect",
+                            "capability_id": "lean.check",
+                        }
+                    },
                 )
                 assert isinstance(lean_result.structured_content, dict)
                 lean_contract = lean_result.structured_content
-                assert lean_contract["view"] == "FULL"
                 lean_runtime = lean_contract["capability"]["provider_runtime"]
                 assert lean_runtime["install_tier"] == "T3"
                 assert (
@@ -281,9 +212,5 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                     == "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
                 )
                 assert "runtime" not in lean_contract
-
-            reference_result = await client.read_resource("reference://catalog")
-            references = json.loads(reference_result.contents[0].text)
-            assert references["matrices"]["plugin_id"].startswith("artifact://sha256/")
 
     asyncio.run(scenario())

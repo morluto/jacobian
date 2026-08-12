@@ -3,7 +3,6 @@ from __future__ import annotations
 from tests.support.rationals import rational_payload
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 
@@ -38,7 +37,7 @@ def test_matrix_rank_verify_independently_recomputes_rank(
     )
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["conclusion"] == "TRUE"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
 
 
 def test_matrix_rank_verify_rejects_wrong_rank(matrix_services) -> None:

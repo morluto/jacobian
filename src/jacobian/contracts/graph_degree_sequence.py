@@ -6,7 +6,7 @@ from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian.contracts.common import ArtifactUri, CheckerUri
+from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.results import ContractModel
 
 
@@ -123,9 +123,6 @@ class GraphDegreeSequenceOutput(ContractModel):
     result_uri: ArtifactUri
     claim_uri: ArtifactUri
     certificate_uri: ArtifactUri
-    checker_id: CheckerUri | None = None
     exactness: Literal["EXACT"] = "EXACT"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
-    certificate_available: Literal[True] = True
     backend: Literal["networkx"] = "networkx"
     backend_version: str

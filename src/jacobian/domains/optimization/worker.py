@@ -135,7 +135,6 @@ def _linear_program(
         dual_candidate=tuple(_wire(value) for value in dual),
         dual_objective=_wire(dual_value),
         dual_slacks=tuple(_wire(value) for value in slacks),
-        certificate_available=True,
         detail=(
             "SymPy produced exact primal and dual candidates with equal "
             "objective values; independent replay remains required."

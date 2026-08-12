@@ -15,22 +15,23 @@ def log_invocation(result: CapabilityResult, started: float) -> None:
     diagnostic_codes = (
         ",".join(diagnostic.code for diagnostic in result.diagnostics) or "-"
     )
+    verification_record_uri_present = result.verification_record_uri is not None
     _LOGGER.info(
         (
             "capability invocation capability_id=%s version=%s "
-            "status=%s assurance=%s elapsed_ms=%d diagnostics=%s"
+            "status=%s verification_record_uri_present=%s elapsed_ms=%d diagnostics=%s"
         ),
         result.capability_id,
         result.capability_version,
         result.execution.status.value,
-        result.assurance.level.value,
+        verification_record_uri_present,
         elapsed_ms,
         diagnostic_codes,
         extra={
             "jacobian_capability_id": result.capability_id,
             "jacobian_capability_version": result.capability_version,
             "jacobian_execution_status": result.execution.status.value,
-            "jacobian_assurance_level": result.assurance.level.value,
+            "jacobian_verification_record_uri_present": verification_record_uri_present,
             "jacobian_elapsed_ms": elapsed_ms,
             "jacobian_diagnostic_codes": tuple(
                 diagnostic.code for diagnostic in result.diagnostics

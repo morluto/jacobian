@@ -5,13 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.capability_installations import install_capability_bundle
-from tests.support.polynomials import univariate_term as _term
 
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
-    CapabilityRelationshipStatus,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -19,6 +15,8 @@ from jacobian.polynomial_interval_capabilities import (
     PolynomialIntervalEnclosureVerifyAdapter,
     install_polynomial_interval_capabilities,
 )
+from tests.support.capability_installations import install_capability_bundle
+from tests.support.polynomials import univariate_term as _term
 
 
 def _polynomial(variable: str, terms: list[dict[str, Any]]) -> dict[str, Any]:
@@ -76,14 +74,8 @@ def test_enclose_capability_computes_a_valid_bernstein_enclosure(
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.output["verification"] == "UNVERIFIED"
-    assert result.output["certificate_available"] is False
-    assert result.output["checker_id"] is None
     assert result.output["enclosure_kind"] == "BERNSTEIN_COEFFICIENT_BOUND"
     assert result.output["range_exactness"] == "ENCLOSURE_VALID_NOT_EXACT"
-    assert result.output["exactness"] == "EXACT_RATIONAL"
-    assert result.output["determinism"] == "DETERMINISTIC"
     assert result.output["degree"] == 1
     assert result.output["bernstein_coefficients"] == [
         {"num": "1", "den": "1"},
@@ -91,8 +83,6 @@ def test_enclose_capability_computes_a_valid_bernstein_enclosure(
     ]
     assert result.output["lo"] == {"num": "1", "den": "1"}
     assert result.output["hi"] == {"num": "3", "den": "1"}
-    assert result.relationships[0].relation_id == "polynomial.relation.enclosure-of"
-    assert result.relationships[0].status is CapabilityRelationshipStatus.PROPOSED
 
 
 def test_enclose_capability_handles_a_quadratic_on_a_shifted_interval(
@@ -155,15 +145,9 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert result.output["enclosure_assurance"] == "VERIFIED"
     assert result.output["conclusion"] == "TRUE"
     assert result.output["checker_id"] is not None
     assert result.output["verification_record_uri"] is not None
-    assert result.relationships[0].relation_id == (
-        "polynomial.relation.valid-bernstein-enclosure"
-    )
-    assert result.relationships[0].status is CapabilityRelationshipStatus.VERIFIED
 
 
 def test_verify_capability_rejects_a_false_enclosure(installation) -> None:
@@ -190,10 +174,8 @@ def test_verify_capability_rejects_a_false_enclosure(installation) -> None:
     )
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
-    assert result.output["enclosure_assurance"] == "VERIFIED"
+    assert result.verification_record_uri is not None
     assert result.output["conclusion"] == "FALSE"
-    assert result.relationships == ()
 
 
 def test_enclose_capability_rejects_a_degenerate_interval(installation) -> None:

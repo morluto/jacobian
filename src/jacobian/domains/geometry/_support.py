@@ -1,8 +1,9 @@
 """Geometry operation declarations."""
 
-from jacobian.operations import ComputedOperationFactory, OperationFailure
+from jacobian.operation_bindings import InlineOperationFactory
+from jacobian.operations import OperationFailure
 
-geometry_operation = ComputedOperationFactory(
+geometry_operation = InlineOperationFactory(
     OperationFailure(
         code="GEOMETRY_OPERATION_NOT_APPLICABLE",
         stage="geometry_computation",

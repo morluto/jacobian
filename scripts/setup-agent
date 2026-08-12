@@ -18,13 +18,12 @@ usage() {
 # Source-aware Jacobian agent bootstrap.
 #
 # Usage:
-#   ./scripts/setup-agent --client codex --profile full-python [options]
+#   ./scripts/setup-agent --client codex --profile core [options]
 #
 # Profiles:
-#   core            Locked base Python dependencies.
-#   full-python     Base plus all maintained Python extras (Flint and cvc5).
-#   lean            full-python plus the pinned Lean project build.
-#   external-proof  full-python plus fail-closed checks for pinned external
+#   core            Complete maintained Python backend stack.
+#   lean            core plus the pinned Lean project build.
+#   external-proof  core plus fail-closed checks for pinned external
 #                   CaDiCaL, DRAT-trim, and Carcara executables.
 #
 # Options:

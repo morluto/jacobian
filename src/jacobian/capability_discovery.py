@@ -32,27 +32,10 @@ class CapabilityDiscoveryMixin:
         self: DiscoveryOwner,
         request: CapabilityDiscoveryRequest,
     ) -> CapabilityDiscoveryResult:
-        catalog_descriptors = self.catalog().capabilities
-        descriptors = tuple(
-            descriptor
-            for descriptor in catalog_descriptors
-            if descriptor.discovery_visible
-        )
-        available_domains = tuple(
-            sorted({capability_domain(descriptor) for descriptor in descriptors})
-        )
+        descriptors = self.catalog().capabilities
         normalized_domain = (
             normalize_domain(request.domain) if request.domain is not None else None
         )
-        domain_filter_status, domain_filter_basis = discovery_domain_filter_status(
-            catalog_descriptors,
-            normalized_domain,
-        )
-        resolved_input_kind = request.input_kind or infer_discovery_input_kind(
-            request.query
-        )
-        contract_route_count = 0
-        lexical_candidates: list[CapabilityDiscoveryMatch] = []
         ranked: list[tuple[int, CapabilityDiscoveryMatch]] = []
         for descriptor in descriptors:
             if normalized_domain is not None and not matches_domain(
@@ -60,38 +43,23 @@ class CapabilityDiscoveryMixin:
                 normalized_domain,
             ):
                 continue
-            input_compatible = accepts_discovery_input(
+            applicability, applicability_code = discovery_applicability(
                 descriptor,
-                resolved_input_kind,
+                request.input_kind,
                 request.artifact_type,
             )
-            if input_compatible:
-                contract_route_count += 1
-            (
-                score,
-                matched_on,
-                matched_terms,
-                query_term_count,
-                query_coverage_milli,
-                lexical_fit,
-            ) = discovery_relevance(descriptor, request.query)
+            score = discovery_relevance(descriptor, request.query)
             match = CapabilityDiscoveryMatch(
                 capability_id=descriptor.capability_id,
                 title=descriptor.title,
                 description=descriptor.description,
                 tags=descriptor.tags,
-                matched_on=matched_on,
-                matched_terms=matched_terms,
-                has_invocation_examples=bool(descriptor.invocation_examples),
                 relevance_score=score,
-                query_term_count=query_term_count,
-                query_coverage_milli=query_coverage_milli,
-                lexical_fit=lexical_fit,
+                applicability=applicability,
+                applicability_code=applicability_code,
             )
-            if request.query is None or score > 0:
-                lexical_candidates.append(match)
-                if input_compatible:
-                    ranked.append((score, match))
+            if score > 0:
+                ranked.append((score, match))
         ranked.sort(key=lambda item: (-item[0], item[1].capability_id))
         total_matches = len(ranked)
         start = 0
@@ -115,66 +83,16 @@ class CapabilityDiscoveryMixin:
             if page and start + len(page) < total_matches
             else None
         )
-        portfolio_fit, portfolio_fit_basis = discovery_portfolio_fit(
-            request.query,
-            lexical_candidates,
-        )
-        routing_status, routing_basis = discovery_routing_status(
-            resolved_input_kind,
-            request.artifact_type,
-            contract_route_count,
-        )
-        if domain_filter_status == "UNKNOWN":
-            portfolio_fit = "UNFILTERED"
-            portfolio_fit_basis = (
-                f"The requested domain filter {normalized_domain!r} matched no "
-                "installed capability; lexical fit outside that filter was not "
-                "assessed."
-            )
-            routing_status = "UNFILTERED"
-            routing_basis = (
-                f"The routing status was not assessed because the requested "
-                f"domain filter {normalized_domain!r} matched no installed "
-                "capability."
-            )
         return CapabilityDiscoveryResult(
             query=request.query,
             domain=normalized_domain,
-            domain_filter_status=domain_filter_status,
-            domain_filter_basis=domain_filter_basis,
-            resolved_input_kind=resolved_input_kind,
+            input_kind=request.input_kind,
             artifact_type=request.artifact_type,
-            routing_status=routing_status,
-            routing_basis=routing_basis,
             matches=tuple(match for _, match in page),
             total_matches=total_matches,
             truncated=next_cursor is not None,
             next_cursor=next_cursor,
-            available_domains=available_domains,
-            portfolio_fit=portfolio_fit,
-            portfolio_fit_basis=portfolio_fit_basis,
         )
-
-
-def discovery_domain_filter_status(
-    descriptors: tuple[CapabilityDescriptor, ...],
-    normalized_domain: str | None,
-) -> tuple[Literal["UNFILTERED", "MATCHED", "UNKNOWN"], str]:
-    """Classify a requested domain independently from lexical query fit."""
-
-    if normalized_domain is None:
-        return "UNFILTERED", "No domain filter was supplied."
-    if any(matches_domain(descriptor, normalized_domain) for descriptor in descriptors):
-        return (
-            "MATCHED",
-            f"The requested domain filter {normalized_domain!r} matches at least "
-            "one installed capability domain or tag.",
-        )
-    return (
-        "UNKNOWN",
-        f"The requested domain filter {normalized_domain!r} matches no installed "
-        "capability domain or tag.",
-    )
 
 
 def normalize_discovery_text(value: str) -> str:
@@ -189,90 +107,28 @@ def discovery_terms(query: str) -> frozenset[str]:
     )
 
 
-def accepts_discovery_input(
+def discovery_applicability(
     descriptor: CapabilityDescriptor,
     input_kind: CapabilityInputKind | None,
     artifact_type: str | None,
-) -> bool:
-    return (input_kind is None or input_kind in descriptor.accepted_input_kinds) and (
-        artifact_type is None or artifact_type in descriptor.accepted_artifact_types
-    )
-
-
-def discovery_portfolio_fit(
-    query: str | None,
-    lexical_candidates: list[CapabilityDiscoveryMatch],
 ) -> tuple[
+    Literal["INCOMPATIBLE", "NEEDS_MORE_TYPED_REQUIREMENTS"],
     Literal[
-        "UNFILTERED",
-        "STRONG_CANDIDATES_FOUND",
-        "ONLY_WEAK_LEXICAL_MATCHES",
-        "NO_LEXICAL_MATCHES",
+        "FULL_REQUEST_REQUIRED",
+        "INPUT_KIND_MISMATCH",
+        "ARTIFACT_TYPE_MISMATCH",
     ],
-    str,
 ]:
-    if query is None:
-        return (
-            "UNFILTERED",
-            "No query was supplied; results are an unranked installed-portfolio "
-            "listing and make no suitability claim.",
-        )
-    if not lexical_candidates:
-        return (
-            "NO_LEXICAL_MATCHES",
-            "No installed descriptor shared a meaningful query term. This is "
-            "not proof that the mathematical outcome is impossible.",
-        )
-    if any(match.lexical_fit == "STRONG_CANDIDATE" for match in lexical_candidates):
-        return (
-            "STRONG_CANDIDATES_FOUND",
-            "At least one installed descriptor has substantial lexical query "
-            "coverage; inspect its contract before treating it as suitable.",
-        )
-    return (
-        "ONLY_WEAK_LEXICAL_MATCHES",
-        "Installed results share only weak lexical evidence with the query. "
-        "Do not infer capability fit from top-N ordering alone.",
-    )
+    """Return only compatibility facts established by the supplied filters."""
 
-
-def discovery_routing_status(
-    input_kind: CapabilityInputKind | None,
-    artifact_type: str | None,
-    route_count: int,
-) -> tuple[Literal["UNFILTERED", "ROUTES_FOUND", "NO_ROUTE"], str]:
-    if input_kind is None:
-        return (
-            "UNFILTERED",
-            "No input kind was declared or safely inferred; inspect the selected "
-            "capability contract before invocation.",
-        )
-    artifact_basis = (
-        f" and artifact type {artifact_type!r}." if artifact_type is not None else "."
-    )
-    if route_count:
-        return (
-            "ROUTES_FOUND",
-            "Installed routes match the declared or safely inferred input kind"
-            + artifact_basis,
-        )
-    return (
-        "NO_ROUTE",
-        "No installed capability accepts the declared or safely inferred input kind"
-        + artifact_basis,
-    )
-
-
-def infer_discovery_input_kind(query: str | None) -> CapabilityInputKind | None:
-    if query is None:
-        return None
-    normalized = " ".join(_DISCOVERY_TOKEN_PATTERN.findall(query.casefold()))
-    if any(
-        phrase in normalized
-        for phrase in ("natural language proof", "informal proof", "proof prose")
+    if input_kind is not None and input_kind not in descriptor.accepted_input_kinds:
+        return "INCOMPATIBLE", "INPUT_KIND_MISMATCH"
+    if (
+        artifact_type is not None
+        and artifact_type not in descriptor.accepted_artifact_types
     ):
-        return CapabilityInputKind.NATURAL_LANGUAGE_PROOF
-    return None
+        return "INCOMPATIBLE", "ARTIFACT_TYPE_MISMATCH"
+    return "NEEDS_MORE_TYPED_REQUIREMENTS", "FULL_REQUEST_REQUIRED"
 
 
 def token_set(value: str) -> frozenset[str]:
@@ -281,62 +137,32 @@ def token_set(value: str) -> frozenset[str]:
 
 def discovery_relevance(
     descriptor: CapabilityDescriptor,
-    query: str | None,
-) -> tuple[
-    int,
-    tuple[str, ...],
-    tuple[str, ...],
-    int,
-    int,
-    Literal["STRONG_CANDIDATE", "WEAK_LEXICAL_MATCH"],
-]:
-    if query is None:
-        return 0, (), (), 0, 0, "WEAK_LEXICAL_MATCH"
+    query: str,
+) -> int:
     query_terms = discovery_terms(query)
     if not query_terms:
-        return 0, (), (), 0, 0, "WEAK_LEXICAL_MATCH"
+        return 0
     identifier_terms = token_set(descriptor.capability_id)
     tag_terms = frozenset(term for tag in descriptor.tags for term in token_set(tag))
     title_terms = token_set(descriptor.title)
     description_terms = token_set(descriptor.description)
     score = 0
-    matched_on: list[str] = []
-    matched_terms: set[str] = set()
-    for label, terms, weight in (
-        ("capability_id", identifier_terms, 12),
-        ("tags", tag_terms, 10),
-        ("title", title_terms, 8),
-        ("description", description_terms, 3),
+    for terms, weight in (
+        (identifier_terms, 12),
+        (tag_terms, 10),
+        (title_terms, 8),
+        (description_terms, 3),
     ):
         overlap = query_terms & terms
         if overlap:
             score += weight * len(overlap)
-            matched_on.append(label)
-            matched_terms.update(overlap)
     normalized_query = normalize_discovery_text(query)
     normalized_text = normalize_discovery_text(
         f"{descriptor.capability_id} {descriptor.title} {descriptor.description}"
     )
     if normalized_query and f"-{normalized_query}-" in f"-{normalized_text}-":
         score += 20
-        matched_on.append("phrase")
-    query_term_count = len(query_terms)
-    query_coverage_milli = (
-        1000 * len(matched_terms) // query_term_count if query_term_count else 0
-    )
-    strong = "phrase" in matched_on or (
-        query_coverage_milli >= 500
-        and (len(matched_terms) >= 2 or query_term_count == 1)
-        and any(label in matched_on for label in ("capability_id", "tags", "title"))
-    )
-    return (
-        score,
-        tuple(matched_on),
-        tuple(sorted(matched_terms)),
-        query_term_count,
-        query_coverage_milli,
-        "STRONG_CANDIDATE" if strong else "WEAK_LEXICAL_MATCH",
-    )
+    return score
 
 
 def normalize_domain(value: str) -> str:
@@ -357,11 +183,9 @@ def matches_domain(descriptor: CapabilityDescriptor, normalized_domain: str) -> 
 
 __all__ = [
     "CapabilityDiscoveryMixin",
-    "accepts_discovery_input",
     "capability_domain",
-    "discovery_domain_filter_status",
+    "discovery_applicability",
     "discovery_relevance",
-    "infer_discovery_input_kind",
     "matches_domain",
     "normalize_domain",
 ]

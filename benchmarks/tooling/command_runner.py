@@ -192,6 +192,24 @@ def git_head_sha(root: Path) -> str | None:
     return value if _GIT_SHA.fullmatch(value) is not None else None
 
 
+def git_tracked_worktree_is_clean(root: Path) -> bool:
+    """Return whether committed and staged source matches HEAD, ignoring untracked data."""
+
+    result = run_operator_command(
+        "git",
+        ("status", "--porcelain=v1", "--untracked-files=no"),
+        cwd=root,
+        timeout_seconds=30.0,
+        stdout_limit_bytes=1024 * 1024,
+        stderr_limit_bytes=1024 * 1024,
+    )
+    return bool(
+        result.status is ToolCommandStatus.EXITED
+        and result.exit_code == 0
+        and not result.stdout.strip()
+    )
+
+
 def operator_environment(
     *,
     source: Mapping[str, str] | None = None,

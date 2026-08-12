@@ -11,15 +11,10 @@ from jacobian.artifacts import ArtifactService
 from jacobian.canonical import format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.exact import CanonicalRational, bounded_rational_scalars
 from jacobian.contracts.polynomial_systems import (
@@ -145,7 +140,6 @@ class PolynomialSystemRationalSearchAdapter:
             assignment=assignment,
             examined_assignment_count=examined,
             grid_assignment_count=grid_assignment_count,
-            checker_id=self.installation.checker_id,
         )
         uris = (system.artifact_uri,) + (
             (assignment_uri,) if assignment_uri is not None else ()
@@ -158,22 +152,5 @@ class PolynomialSystemRationalSearchAdapter:
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description="one complete declared finite rational grid",
-                parameters={
-                    "grid_assignment_count": grid_assignment_count,
-                    "examined": examined,
-                },
-                artifact_uri=system.artifact_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis="the search stopped at its first match or exhausted the declared grid",
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis="deterministic exact rational enumeration; candidate remains unverified",
-            ),
             artifact_uris=uris,
         )

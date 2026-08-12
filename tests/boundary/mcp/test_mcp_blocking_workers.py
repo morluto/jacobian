@@ -9,7 +9,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from jacobian.adapters.mcp.context import AppState, _runtime, _runtime_scope
+from jacobian.adapters.mcp.context import (
+    AppState,
+    RuntimeLease,
+    _runtime,
+    _runtime_scope,
+)
 from jacobian.adapters.mcp.server import _runtime_lifespan
 from jacobian.adapters.mcp.tooling import (
     MCPBlockingWorkerRegistry,
@@ -310,6 +315,10 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
         def close(self) -> None:
             closed.append("router")
 
+    def close_owners() -> None:
+        Runtime().close()
+        Router().close()
+
     class ImmediateShutdownRegistry(MCPBlockingWorkerRegistry):
         async def close(self) -> None:
             await super().close(timeout_seconds=0)
@@ -328,11 +337,14 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
         worker = asyncio.create_task(late_worker())
         registry.register(worker, request_scope=None)
         with pytest.raises(MCPBlockingWorkerShutdownError):
+            state = AppState(
+                acquire_runtime=lambda: RuntimeLease(Runtime()),  # type: ignore[arg-type]
+                worker_registry=registry,
+            )
             async with _runtime_lifespan(
                 None,
-                runtime=Runtime(),  # type: ignore[arg-type]
-                tenant_router=Router(),  # type: ignore[arg-type]
-                worker_registry=registry,
+                state=state,
+                close_owner=close_owners,
             ):
                 pass
         assert closed == []
@@ -352,23 +364,16 @@ def test_failed_tenant_warmup_releases_the_acquired_lease(
     released = threading.Event()
     acquired = 0
 
-    class Lease:
-        runtime = object()
+    runtime = object()
 
-        def release(self) -> None:
-            released.set()
-
-    class Router:
-        def lease_for(self, subject: str | None) -> Lease:
-            nonlocal acquired
-            assert subject is None
-            acquired += 1
-            return Lease()
+    def acquire_runtime() -> RuntimeLease:
+        nonlocal acquired
+        acquired += 1
+        return RuntimeLease(runtime, released.set)  # type: ignore[arg-type]
 
     state = AppState(
-        runtime=None,
+        acquire_runtime=acquire_runtime,
         worker_registry=MCPBlockingWorkerRegistry(),
-        tenant_router=Router(),  # type: ignore[arg-type]
     )
     ctx = SimpleNamespace(
         request_context=SimpleNamespace(lifespan_context=state),
@@ -397,25 +402,18 @@ def test_injected_context_reuses_the_interceptor_tenant_lease(
     released = 0
     runtime = object()
 
-    class Lease:
-        def __init__(self) -> None:
-            self.runtime = runtime
+    def release_runtime() -> None:
+        nonlocal released
+        released += 1
 
-        def release(self) -> None:
-            nonlocal released
-            released += 1
-
-    class Router:
-        def lease_for(self, subject: str | None) -> Lease:
-            nonlocal acquired
-            assert subject is None
-            acquired += 1
-            return Lease()
+    def acquire_runtime() -> RuntimeLease:
+        nonlocal acquired
+        acquired += 1
+        return RuntimeLease(runtime, release_runtime)  # type: ignore[arg-type]
 
     state = AppState(
-        runtime=None,
+        acquire_runtime=acquire_runtime,
         worker_registry=MCPBlockingWorkerRegistry(),
-        tenant_router=Router(),  # type: ignore[arg-type]
     )
     ctx = SimpleNamespace(
         request_context=SimpleNamespace(lifespan_context=state),

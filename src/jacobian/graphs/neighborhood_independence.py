@@ -13,17 +13,11 @@ from pydantic import ValidationError
 from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssurance,
-    CapabilityAssuranceLevel,
-    CapabilityCompleteness,
-    CapabilityCompletenessStatus,
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityRelationship,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityScope,
 )
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.exact import CanonicalRational
@@ -216,11 +210,9 @@ class GraphNeighborhoodIndependenceAdapter:
             invariant_uri=invariant_artifact.artifact_uri,
             claim_uri=claim_artifact.artifact_uri,
             certificate_uri=certificate_artifact.artifact_uri,
-            checker_id=self.resources.neighborhood_checker_id,
             records=tuple(records),
             total=total,
             average=average_wire,
-            backend_version=nx().__version__,
         )
         return CapabilityResult(
             capability_id=self.descriptor.capability_id,
@@ -230,39 +222,6 @@ class GraphNeighborhoodIndependenceAdapter:
                 runtime_ms=runtime_ms(started),
             ),
             output=output.model_dump(mode="json"),
-            scope=CapabilityScope(
-                description=(
-                    "all open neighborhoods of one finite simple undirected graph"
-                ),
-                parameters={
-                    "graph_uri": validated.graph_uri,
-                    "graph_order": graph.number_of_nodes(),
-                    "maximum_neighborhood_order": 24,
-                },
-                artifact_uri=validated.graph_uri,
-            ),
-            completeness=CapabilityCompleteness(
-                status=CapabilityCompletenessStatus.COMPLETE,
-                basis=(
-                    "every open neighborhood was solved exactly within the "
-                    "advertised 24-vertex limit; verification remains separate"
-                ),
-                assurance_level=CapabilityAssuranceLevel.COMPUTED,
-            ),
-            relationships=(
-                CapabilityRelationship(
-                    relation_id=("graph.relation.neighborhood-independence-profile-of"),
-                    source_artifact_uris=(validated.graph_uri,),
-                    target_artifact_uris=(invariant_artifact.artifact_uri,),
-                ),
-            ),
-            assurance=CapabilityAssurance(
-                level=CapabilityAssuranceLevel.COMPUTED,
-                basis=(
-                    "NetworkX exact maximum-clique computations on complement "
-                    "neighborhoods; the bundled certificate was not invoked"
-                ),
-            ),
             artifact_uris=(
                 validated.graph_uri,
                 invariant_artifact.artifact_uri,

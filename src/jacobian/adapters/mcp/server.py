@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -12,7 +12,7 @@ from typing import Any
 from mcp.server import MCPServer
 from mcp.server.extension import Extension, ResourceBinding, ToolBinding
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.server.mcpserver.resources import FunctionResource, TextResource
+from mcp.server.mcpserver.resources import FunctionResource
 from mcp.shared.exceptions import MCPError
 from mcp_types import INVALID_PARAMS, CallToolResult, InputRequiredResult
 from mcp_types import Tool as MCPTool
@@ -20,25 +20,24 @@ from mcp_types import Tool as MCPTool
 from jacobian import __version__
 from jacobian.adapters.mcp.context import (
     AppState,
+    RuntimeLease,
     _configured_root,
     _public_tool_error,
     _runtime_scope,
     _start_lean_warmup,
     _static_resource_runtime,
 )
+from jacobian.adapters.mcp.deployment_identity import (
+    DeploymentIdentity,
+    load_deployment_identity,
+)
 from jacobian.adapters.mcp.guidance import (
     MATH_FIND_DESCRIPTION,
     MATH_RUN_DESCRIPTION,
-    OPERATING_GUIDE,
     SERVER_DESCRIPTION,
     SERVER_INSTRUCTIONS,
 )
-from jacobian.adapters.mcp.remote import (
-    DEFAULT_MAX_TENANT_RUNTIMES,
-    DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
-    TenantRuntimeRouter,
-)
-from jacobian.adapters.mcp.resources import _register_resources_and_prompts
+from jacobian.adapters.mcp.resources import _register_resources
 from jacobian.adapters.mcp.tooling import (
     AgentRecoveryError,
     MCPBlockingWorkerRegistry,
@@ -55,9 +54,7 @@ from jacobian.adapters.mcp.tools import (
 )
 from jacobian.capability_service import CapabilityPolicy
 from jacobian.contracts.capabilities import CapabilityCatalog
-from jacobian.references import reference_catalog
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
-from jacobian.runtime.model import JacobianRuntime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,11 +117,11 @@ class JacobianCoreExtension(Extension):
 
     def __init__(
         self,
-        runtime: JacobianRuntime | None,
-        tenant_router: TenantRuntimeRouter | None,
+        state: AppState,
+        deployment_identity: DeploymentIdentity | None = None,
     ) -> None:
-        self._runtime = runtime
-        self._tenant_router = tenant_router
+        self._state = state
+        self._deployment_identity = deployment_identity
 
     def settings(self) -> dict[str, Any]:
         return {"version": "2"}
@@ -147,29 +144,17 @@ class JacobianCoreExtension(Extension):
                     "name": "math.run",
                     "title": "Run a mathematical operation",
                     "description": MATH_RUN_DESCRIPTION,
-                    # math.run dispatches the installed portfolio, including
-                    # state-changing operations such as experiment.cancel.
-                    "annotations": _tool_annotations(destructive=True),
+                    # The selected operation may publish artifacts, so math.run is
+                    # not globally read-only or idempotent. Retained operations are
+                    # nevertheless non-destructive.
+                    "annotations": _tool_annotations(),
                     "structured_output": True,
                 },
             ),
         )
 
     def resources(self) -> tuple[ResourceBinding, ...]:
-        return (
-            ResourceBinding(
-                TextResource(
-                    uri="jacobian://instructions",
-                    name="jacobian-instructions",
-                    title="Jacobian operating guide",
-                    description=(
-                        "Complete guidance for discovering, invoking, and independently "
-                        "checking Jacobian mathematical capabilities."
-                    ),
-                    mime_type="text/markdown",
-                    text=OPERATING_GUIDE,
-                )
-            ),
+        bindings = [
             ResourceBinding(
                 FunctionResource.from_function(
                     self._capability_catalog,
@@ -182,38 +167,33 @@ class JacobianCoreExtension(Extension):
                     mime_type="application/json",
                 )
             ),
-            ResourceBinding(
-                FunctionResource.from_function(
-                    self._reference_catalog,
-                    uri="reference://catalog",
-                    name="reference-catalog",
-                    description=(
-                        "Read installed domain schema, semantics, plugin, and checker IDs."
-                    ),
-                    mime_type="application/json",
+        ]
+        if self._deployment_identity is not None:
+            bindings.append(
+                ResourceBinding(
+                    FunctionResource.from_function(
+                        self._managed_deployment_identity,
+                        uri="deployment://identity",
+                        name="deployment-identity",
+                        description=(
+                            "Immutable Git revision and package version for this "
+                            "managed Jacobian release."
+                        ),
+                        mime_type="application/json",
+                    )
                 )
-            ),
-        )
+            )
+        return tuple(bindings)
 
     async def _capability_catalog(self) -> CapabilityCatalog:
-        with _static_resource_runtime(
-            self._runtime, self._tenant_router
-        ) as active_runtime:
+        with _static_resource_runtime(self._state) as active_runtime:
             return active_runtime.core.capabilities.catalog()
 
-    async def _reference_catalog(self) -> dict[str, Any]:
-        with _static_resource_runtime(
-            self._runtime, self._tenant_router
-        ) as active_runtime:
-            return reference_catalog(
-                active_runtime.portfolio.references,
-                graph=active_runtime.portfolio.graph,
-                polytope=active_runtime.services.polytope,
-                polytope_checkers=active_runtime.portfolio.polytope_checkers,
-                polynomial=active_runtime.portfolio.polynomial,
-                universal_algebra=active_runtime.portfolio.universal_algebra,
-                lean=active_runtime.portfolio.lean_checkers,
-            )
+    async def _managed_deployment_identity(self) -> DeploymentIdentity:
+        identity = self._deployment_identity
+        if identity is None:
+            raise RuntimeError("managed deployment identity is unavailable")
+        return identity
 
     async def intercept_tool_call(
         self,
@@ -312,124 +292,73 @@ def _selected_checker_authority(
 async def _runtime_lifespan(
     _server: Any,
     *,
-    runtime: JacobianRuntime | None,
-    tenant_router: TenantRuntimeRouter | None,
-    worker_registry: MCPBlockingWorkerRegistry,
+    state: AppState,
+    close_owner: Callable[[], None],
+    start_owner: Callable[[], None] | None = None,
 ) -> AsyncIterator[AppState]:
-    if runtime is not None:
-        _start_lean_warmup(runtime)
+    if start_owner is not None:
+        start_owner()
     try:
-        yield AppState(
-            runtime=runtime,
-            worker_registry=worker_registry,
-            tenant_router=tenant_router,
-        )
+        yield state
     finally:
         try:
-            await worker_registry.close()
+            await state.worker_registry.close()
         except MCPBlockingWorkerShutdownError as exc:
             # A late thread still has a registry-owned tenant lease.  Closing its
             # runtime now would let it use a torn-down store.  Keep ownership in
             # the registry and close it once the final late worker has released
             # its request scope.
-            worker_registry.defer_until_quiescent(
-                lambda: _close_runtime_owners(runtime, tenant_router)
-            )
+            state.worker_registry.defer_until_quiescent(close_owner)
             raise exc from None
-        _close_runtime_owners(runtime, tenant_router)
-
-
-def _close_runtime_owners(
-    runtime: JacobianRuntime | None,
-    tenant_router: TenantRuntimeRouter | None,
-) -> None:
-    """Close runtime owners once no request worker can still use them."""
-
-    cleanup_failures: list[BaseException] = []
-    if runtime is not None:
-        try:
-            runtime.close()
-        except BaseException as exc:
-            cleanup_failures.append(exc)
-    if tenant_router is not None:
-        try:
-            tenant_router.close()
-        except BaseException as exc:
-            cleanup_failures.append(exc)
-    if cleanup_failures:
-        if len(cleanup_failures) == 1:
-            raise cleanup_failures[0]
-        raise BaseExceptionGroup(
-            "runtime and tenant router cleanup failed", cleanup_failures
-        )
+        close_owner()
 
 
 def create_server(
     state_dir: str | Path | None = None,
     *,
     checker_authority: CheckerAuthorityMode | None = None,
-    tenant_isolation: bool = False,
-    allow_anonymous: bool = False,
-    anonymous_tenant_id: str = "anonymous",
-    token_verifier: Any | None = None,
-    auth: Any | None = None,
-    capability_adapter_entrypoints: tuple[str, ...] = (),
     capability_exclusions: frozenset[str] = frozenset(),
     capability_policy: CapabilityPolicy | None = None,
-    max_tenant_runtimes: int | None = None,
-    tenant_idle_timeout_seconds: float | None = None,
 ) -> MCPServer[AppState]:
-    """Create a local or tenant-routed adapter over a Jacobian runtime."""
+    """Create one local server owning one mathematical runtime."""
 
-    if tenant_isolation and capability_exclusions:
-        raise ValueError("capability exclusions are supported only by local evaluation")
-
-    selected_authority = _selected_checker_authority(checker_authority)
-    configured_root = _configured_root(state_dir)
-    runtime = (
-        None
-        if tenant_isolation
-        else create_runtime(
-            configured_root,
-            checker_authority=selected_authority,
-            capability_adapter_entrypoints=capability_adapter_entrypoints,
-            capability_exclusions=capability_exclusions,
-            capability_policy=capability_policy,
-        )
-    )
-    tenant_router = (
-        TenantRuntimeRouter(
-            configured_root,
-            checker_authority=selected_authority,
-            allow_anonymous=allow_anonymous,
-            anonymous_tenant_id=anonymous_tenant_id,
-            capability_adapter_entrypoints=capability_adapter_entrypoints,
-            capability_policy=capability_policy,
-            max_tenant_runtimes=(
-                DEFAULT_MAX_TENANT_RUNTIMES
-                if max_tenant_runtimes is None
-                else max_tenant_runtimes
-            ),
-            idle_timeout_seconds=(
-                DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS
-                if tenant_idle_timeout_seconds is None
-                else tenant_idle_timeout_seconds
-            ),
-        )
-        if tenant_isolation
-        else None
+    runtime = create_runtime(
+        _configured_root(state_dir),
+        checker_authority=_selected_checker_authority(checker_authority),
+        capability_exclusions=capability_exclusions,
+        capability_policy=capability_policy,
     )
     worker_registry = MCPBlockingWorkerRegistry()
+    state = AppState(
+        acquire_runtime=lambda: RuntimeLease(runtime),
+        worker_registry=worker_registry,
+    )
+    return _build_server(
+        state=state,
+        close_owner=runtime.close,
+        start_owner=lambda: _start_lean_warmup(runtime),
+    )
+
+
+def _build_server(
+    *,
+    state: AppState,
+    close_owner: Callable[[], None],
+    start_owner: Callable[[], None] | None = None,
+    token_verifier: Any | None = None,
+    auth: Any | None = None,
+) -> MCPServer[AppState]:
+    """Register the fixed MCP projection over exactly one runtime owner."""
 
     @asynccontextmanager
     async def lifespan(server: MCPServer[AppState]) -> AsyncIterator[AppState]:
         async with _runtime_lifespan(
             server,
-            runtime=runtime,
-            tenant_router=tenant_router,
-            worker_registry=worker_registry,
-        ) as state:
-            yield state
+            state=state,
+            close_owner=close_owner,
+            start_owner=start_owner,
+        ) as active_state:
+            yield active_state
 
     server: MCPServer[AppState] = JacobianMCPServer(
         name="jacobian",
@@ -442,13 +371,13 @@ def create_server(
         auth=auth,
         extensions=[
             JacobianCoreExtension(
-                runtime,
-                tenant_router,
+                state,
+                load_deployment_identity(),
             )
         ],
     )
 
-    _register_resources_and_prompts(server)
+    _register_resources(server)
     return server
 
 

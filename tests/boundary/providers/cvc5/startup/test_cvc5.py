@@ -9,7 +9,6 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityInstallTier,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
@@ -18,6 +17,7 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermination
 from jacobian.provider_measurements import measure_provider
+from jacobian.provider_runtime import ProviderRuntimeError
 from jacobian.providers.external_solver_runtime import cvc5_provider_runtime
 from jacobian.runtime import create_runtime
 from jacobian.sat_smt.cvc5 import install_cvc5_capability
@@ -128,13 +128,10 @@ def test_qf_uf_proof_is_durable_computed_evidence(
     result = _invoke(cvc5_services, _QF_UF_UNSAT)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert result.output["status"] == "PROOF_PRODUCED"
     assert result.output["solver_status"] == "UNSATISFIABLE"
-    assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["contains_holes"] is False
     assert result.output["alethe_hole_count"] == 0
-    assert result.assurance.verification_record_uri is None
     assert len(result.artifact_uris) == 2
 
     resolved = cvc5_services.core.smt.resolve_proof(result.output["proof_uri"])
@@ -160,11 +157,8 @@ def test_linear_arithmetic_holes_stay_explicit_and_unverified(
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "PROOF_PRODUCED"
-    assert result.output["conclusion"] == "UNKNOWN"
     assert result.output["contains_holes"] is True
     assert result.output["alethe_hole_count"] >= 1
-    assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-    assert result.assurance.verification_record_uri is None
 
 
 def test_sat_report_produces_no_unsat_artifact_or_conclusion(
@@ -175,7 +169,6 @@ def test_sat_report_produces_no_unsat_artifact_or_conclusion(
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output == {
         "alethe_hole_count": None,
-        "conclusion": "UNKNOWN",
         "contains_holes": None,
         "detail": (
             "cvc5 reported SATISFIABLE without producing an UNSAT proof; "
@@ -224,7 +217,6 @@ def test_theory_outside_declared_logic_fails_in_isolated_parser(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output == {}
-    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
     assert result.diagnostics[0].code == "CVC5_EXECUTION_FAILED"
     assert len(result.artifact_uris) == 1
 
@@ -275,7 +267,6 @@ def test_worker_proof_metadata_mismatch_fails_closed(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output == {}
-    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
     assert result.diagnostics[0].code == "CVC5_PROOF_METADATA_MISMATCH"
     assert len(result.artifact_uris) == 1
 
@@ -300,12 +291,11 @@ def test_worker_timeout_fails_without_solver_conclusion(
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.output == {}
-    assert result.assurance.level is CapabilityAssuranceLevel.HEURISTIC
     assert result.diagnostics[0].code == "CVC5_TIMEOUT"
     assert len(result.artifact_uris) == 1
 
 
-def test_missing_optional_cvc5_leaves_artifact_boundary_but_no_capability(
+def test_runtime_rejects_a_base_installation_without_cvc5(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -322,11 +312,8 @@ def test_missing_optional_cvc5_leaves_artifact_boundary_but_no_capability(
         lambda: unavailable,
     )
 
-    with create_runtime(tmp_path) as without_cvc5:
-        assert "smt.unsat_proof.find" not in {
-            descriptor.capability_id
-            for descriptor in without_cvc5.core.capabilities.catalog().capabilities
-        }
-        assert without_cvc5.core.smt.installation.problem_schema_uri.startswith(
-            "artifact://sha256/"
-        )
+    with pytest.raises(
+        ProviderRuntimeError,
+        match="required Python providers are unavailable: cvc5",
+    ):
+        create_runtime(tmp_path)

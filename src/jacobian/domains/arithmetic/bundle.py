@@ -39,7 +39,6 @@ def build_arithmetic_bundle() -> DomainBundle:
                 "integer_encoding": "canonical decimal string",
                 "rational_encoding": "canonical reduced num/den with positive denominator",
                 "arithmetic": "exact via stdlib and maintained SymPy APIs",
-                "assurance": "computed; no independent checker",
             },
         ),
         provider_runtime=known_provider_runtime(
@@ -62,14 +61,5 @@ def build_arithmetic_bundle() -> DomainBundle:
                     "inspect the operation's request schema."
                 ),
             )
-        ),
-        scope_description="the complete supplied bounded exact arithmetic input",
-        completeness_basis=(
-            "deterministic exact computation covered the supplied input; "
-            "not independently verified"
-        ),
-        assurance_basis=(
-            "deterministic exact arithmetic from the pinned stdlib/SymPy runtime; "
-            "no independent checker invoked"
         ),
     )

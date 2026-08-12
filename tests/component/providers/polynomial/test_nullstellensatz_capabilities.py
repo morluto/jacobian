@@ -11,31 +11,25 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.capability_service import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
     CapabilityResult,
 )
 from jacobian.contracts.nullstellensatz import NullstellensatzCertificateBundle
 from jacobian.contracts.results import (
-    Arithmetic,
-    Assurance,
     Conclusion,
-    Coverage,
     Execution,
     ExecutionStatus,
     InputStatus,
     InputValidation,
-    Method,
-    ResultEnvelope,
-    Verification,
-)
-from jacobian.domains.polynomial_nullstellensatz import (
-    build_nullstellensatz_core_bundle,
+    VerificationResult,
 )
 from jacobian.domains.polynomial_nullstellensatz.core import (
     MATERIALIZE_CAPABILITY_ID,
     VERIFY_CAPABILITY_ID,
     _failure_details,
+)
+from jacobian.portfolio.nullstellensatz_installation import (
+    build_nullstellensatz_core_component,
 )
 from jacobian.runtime import CheckerAuthorityMode
 
@@ -62,7 +56,7 @@ def test_invalid_request_uri_values_are_summarized_without_echoing(
     oversized_uri = "secret" * 200_000
     with open_domain_services(
         tmp_path,
-        build_nullstellensatz_core_bundle(),
+        build_nullstellensatz_core_component(),
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         adapter = services.core.capabilities._adapters[VERIFY_CAPABILITY_ID]
@@ -133,7 +127,7 @@ def _persist_certificate(
 def test_authorized_checker_verifies_complete_bundle(tmp_path: Path) -> None:
     with open_domain_services(
         tmp_path,
-        build_nullstellensatz_core_bundle(),
+        build_nullstellensatz_core_component(),
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         materialized = _invoke(
@@ -154,16 +148,14 @@ def test_authorized_checker_verifies_complete_bundle(tmp_path: Path) -> None:
 
         assert result.output["claim"] == "SYSTEM_INFEASIBLE"
         assert result.output["conclusion"] == "TRUE"
-        assert result.output["assurance"] == "VERIFIED"
-        assert result.assurance.level is CapabilityAssuranceLevel.VERIFIED
         assert result.output["verification_record_uri"] in result.artifact_uris
-        assert result.relationships[0].status.value == "VERIFIED"
+        assert result.verification_record_uri is not None
 
 
 def test_unavailable_checker_never_false_certifies(tmp_path: Path) -> None:
     with open_domain_services(
         tmp_path,
-        build_nullstellensatz_core_bundle(),
+        build_nullstellensatz_core_component(),
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         materialized = _invoke(
@@ -184,14 +176,12 @@ def test_unavailable_checker_never_false_certifies(tmp_path: Path) -> None:
 
         assert result.output["conclusion"] == "UNKNOWN"
         assert result.output["verification_record_uri"] is None
-        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
-        assert not result.relationships
 
 
 def test_mutated_certificate_cannot_return_verified(tmp_path: Path) -> None:
     with open_domain_services(
         tmp_path,
-        build_nullstellensatz_core_bundle(),
+        build_nullstellensatz_core_component(),
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         materialized = _invoke(
@@ -223,14 +213,13 @@ def test_mutated_certificate_cannot_return_verified(tmp_path: Path) -> None:
         )
 
         assert result.output["conclusion"] == "UNKNOWN"
-        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED
         assert result.output["verification_record_uri"] is None
 
 
 def test_stale_artifact_binding_is_rejected_before_checker(tmp_path: Path) -> None:
     with open_domain_services(
         tmp_path,
-        build_nullstellensatz_core_bundle(),
+        build_nullstellensatz_core_component(),
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         materialized = _invoke(
@@ -285,7 +274,7 @@ def test_wrong_bundle_schema_reports_actionable_artifact_diagnostics(
 ) -> None:
     with open_domain_services(
         tmp_path,
-        build_nullstellensatz_core_bundle(),
+        build_nullstellensatz_core_component(),
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         materialized = _invoke(
@@ -331,7 +320,7 @@ def test_checker_timeout_never_verifies(
 ) -> None:
     with open_domain_services(
         tmp_path,
-        build_nullstellensatz_core_bundle(),
+        build_nullstellensatz_core_component(),
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         materialized = _invoke(
@@ -343,16 +332,10 @@ def test_checker_timeout_never_verifies(
         monkeypatch.setattr(
             services.application.verification,
             "verify_certificate",
-            lambda **_kwargs: ResultEnvelope(
+            lambda **_kwargs: VerificationResult(
                 execution=Execution(status=ExecutionStatus.TIMEOUT),
                 input=InputValidation(status=InputStatus.ACCEPTED),
                 conclusion=Conclusion.UNKNOWN,
-                assurance=Assurance(
-                    arithmetic=Arithmetic.EXACT_RATIONAL,
-                    method=Method.CHECKED_CERTIFICATE,
-                    coverage=Coverage.EXHAUSTIVE,
-                    verification=Verification.UNVERIFIED,
-                ),
             ),
         )
 
@@ -368,4 +351,3 @@ def test_checker_timeout_never_verifies(
         assert result.execution.status is ExecutionStatus.TIMEOUT
         assert result.output["conclusion"] == "UNKNOWN"
         assert result.output["verification_record_uri"] is None
-        assert result.assurance.level is CapabilityAssuranceLevel.COMPUTED

@@ -4,7 +4,6 @@ from copy import deepcopy
 from typing import Any
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -59,13 +58,11 @@ def test_graph_symmetry_orbits_are_independently_replayed(
         )
     )
 
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == (
         "graph.symmetry.generator_orbits.compute"
     )
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.output["verification_record_uri"] is not None
 
 
@@ -108,4 +105,3 @@ def test_graph_symmetry_checker_rejects_forged_orbit_partition(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED

@@ -10,7 +10,6 @@ from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
-    CapabilityAssuranceLevel,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
@@ -72,7 +71,6 @@ def test_weighted_minimum_spanning_tree_is_independently_verified(
     )
 
     assert computed.execution.status is ExecutionStatus.COMPLETED
-    assert computed.assurance.level is CapabilityAssuranceLevel.COMPUTED
     assert computed.output["result"]["total_weight"] == _q(3)
     assert computed.artifact_uris == ()
     assert verified.execution.status is ExecutionStatus.COMPLETED
@@ -81,7 +79,6 @@ def test_weighted_minimum_spanning_tree_is_independently_verified(
     assert verified.output["operation_id"] == ("graph.spanning_tree.minimum.compute")
     assert verified.output["verification_record_uri"] is not None
     assert verified.output["verification_record_uri"] in verified.artifact_uris
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
     assert verified.execution.detail == (
         "independent fundamental-cycle optimality certificate replay accepted "
         "graph.spanning_tree.minimum.compute"
@@ -144,7 +141,6 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
-    assert rejected.assurance.level is CapabilityAssuranceLevel.COMPUTED
 
 
 def test_disconnected_no_spanning_tree_result_is_completely_replayed(
@@ -171,7 +167,7 @@ def test_disconnected_no_spanning_tree_result_is_completely_replayed(
 
     assert computed.output["result"]["status"] == "NO_SPANNING_TREE"
     assert verified.output["status"] == "VERIFIED"
-    assert verified.assurance.level is CapabilityAssuranceLevel.VERIFIED
+    assert verified.verification_record_uri is not None
     assert verified.execution.detail == (
         "independent finite connectivity replay accepted "
         "graph.spanning_tree.minimum.compute"

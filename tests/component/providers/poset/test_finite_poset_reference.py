@@ -47,17 +47,17 @@ def test_all_forward_dag_presentations_through_order_five() -> None:
             poset = _materialized_poset(request)
             source = {"poset": poset.model_dump(mode="json")}
 
-            width = _width(PosetRequest(poset=poset)).value.model_dump(mode="json")
+            width = _width(PosetRequest(poset=poset)).model_dump(mode="json")
             assert _replay_width(source, width)
 
-            linear = _linear_extensions(
-                LinearExtensionRequest(poset=poset)
-            ).value.model_dump(mode="json")
+            linear = _linear_extensions(LinearExtensionRequest(poset=poset)).model_dump(
+                mode="json"
+            )
             assert linear["count"] == sum(1 for _ in nx.all_topological_sorts(graph))
             assert _replay_linear_extensions(source, linear)
 
             mobius_request = MobiusFunctionRequest(poset=poset)
-            mobius = _mobius(mobius_request).value.model_dump(mode="json")
+            mobius = _mobius(mobius_request).model_dump(mode="json")
             assert _replay_mobius(
                 mobius_request.model_dump(mode="json"),
                 mobius,

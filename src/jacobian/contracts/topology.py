@@ -295,7 +295,6 @@ class TopologyExactResult(ContractModel):
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
     backend: Literal["jacobian.topology"] = "jacobian.topology"
     backend_version: Literal["1"] = "1"
-    verification: Literal["UNVERIFIED"] = "UNVERIFIED"
 
 
 class SimplicialComplexCanonicalizationResult(TopologyExactResult):
@@ -785,9 +784,6 @@ __all__ = [
     "SparseBoundaryMatrix",
     "SparseMatrixEntry",
     "VertexLabel",
-    "canonical_simplex",
     "face_closure",
-    "is_bounded_prime",
-    "require_linear_algebra_bounds",
     "simplicial_complex_digest",
 ]

@@ -16,19 +16,17 @@ def create_runtime(
     root: str | Path,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
-    capability_adapter_entrypoints: tuple[str, ...] = (),
     capability_exclusions: frozenset[str] = frozenset(),
     capability_policy: CapabilityPolicy | None = None,
 ) -> JacobianRuntime:
     """Create the single owned runtime for ``root``."""
 
-    from jacobian.runtime.model import JacobianRuntime
+    from jacobian.composition import compose_runtime
 
-    return JacobianRuntime(
+    return compose_runtime(
         root,
         RuntimeOptions(
             checker_authority=checker_authority,
-            capability_adapter_entrypoints=capability_adapter_entrypoints,
             capability_exclusions=capability_exclusions,
             capability_policy=capability_policy,
         ),

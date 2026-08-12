@@ -371,7 +371,6 @@ class SmtUnsatProofFindOutput(ContractModel):
 
     status: Literal["PROOF_PRODUCED", "NO_PROOF_PRODUCED"]
     solver_status: Literal["SATISFIABLE", "UNSATISFIABLE", "UNKNOWN"]
-    conclusion: Literal["UNKNOWN"] = "UNKNOWN"
     problem_uri: ArtifactUri
     proof_uri: ArtifactUri | None = None
     contains_holes: StrictBool | None = None

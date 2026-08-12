@@ -16,7 +16,6 @@ NULLSTELLENSATZ_TERMS_PER_POLYNOMIAL_LIMIT = 1024
 NULLSTELLENSATZ_TERMS_PER_CHART_LIMIT = 4096
 NULLSTELLENSATZ_TERMS_PER_BUNDLE_LIMIT = 16384
 NULLSTELLENSATZ_COEFFICIENT_DIGIT_LIMIT = 256
-NULLSTELLENSATZ_CERTIFICATE_BYTE_LIMIT = 2_000_000
 
 
 class BoundedRationalPolynomialTerm(ContractModel):
@@ -145,7 +144,6 @@ class JacobianDegreeSliceMaterializeOutput(ContractModel):
     chart_count: Literal[12] = 12
     generator_count_per_chart: Literal[10] = 10
     coefficient_domain: Literal["QQ"] = "QQ"
-    conclusion: Literal["NOT_EVALUATED"] = "NOT_EVALUATED"
 
 
 class NullstellensatzResourceBudget(ContractModel):
@@ -250,7 +248,6 @@ class NullstellensatzCertificateOutput(ContractModel):
     chart_count: Literal[12] = 12
     conclusion: Literal["INFEASIBLE"] = "INFEASIBLE"
     identity: Literal["sum(h_i*f_i)=1"] = "sum(h_i*f_i)=1"
-    assurance: Literal["COMPUTED"] = "COMPUTED"
     producer: Literal["singular"] = "singular"
     producer_version: str = Field(min_length=1, max_length=64)
 
@@ -269,18 +266,15 @@ class NullstellensatzVerificationOutput(ContractModel):
     checker_id: CheckerUri | None = None
     claim: Literal["SYSTEM_INFEASIBLE"] = "SYSTEM_INFEASIBLE"
     conclusion: Literal["TRUE", "UNKNOWN"]
-    assurance: Literal["VERIFIED", "COMPUTED"]
     checked_chart_count: int = Field(ge=0, le=12)
 
     @model_validator(mode="after")
     def bind_verification_evidence(self) -> Self:
-        verified = self.assurance == "VERIFIED"
-        if verified != (self.conclusion == "TRUE"):
-            raise ValueError("verified assurance must agree with a true conclusion")
+        verified = self.conclusion == "TRUE"
         if verified != (
             self.verification_record_uri is not None and self.checker_id is not None
         ):
-            raise ValueError("verified assurance requires a checker-backed record")
+            raise ValueError("a true conclusion requires a checker-backed record")
         if self.checked_chart_count != (12 if verified else 0):
             raise ValueError("checked chart count must agree with verification")
         return self

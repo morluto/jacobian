@@ -44,12 +44,11 @@ from jacobian.domains.number_theory.factorization_protocol import (
     SquarefreeWorkerResponse,
     parse_factorization_worker_response,
 )
+from jacobian.operation_bindings import InstalledOperation, inline_operation
 from jacobian.operations import (
-    ComputedNotApplicable,
-    ComputedOperation,
-    ComputedOutcome,
-    ComputedSuccess,
-    OperationExecutionFailure,
+    OperationAbortError,
+    OperationRefusalError,
+    OperationSpec,
 )
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
@@ -70,29 +69,29 @@ def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
 
 def _classify_termination(
     completed: Any,
-) -> OperationExecutionFailure | None:
-    """Map a bounded worker termination to a failure outcome, or None if clean."""
+) -> None:
+    """Raise a typed execution signal for an unsuccessful worker termination."""
 
     if completed.termination is ProcessTermination.START_FAILED:
-        return OperationExecutionFailure(
-            status=ExecutionStatus.ERROR,
-            diagnostic=_diagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            _diagnostic(
                 "INTEGER_FACTORIZATION_WORKER_START_FAILED",
                 "The isolated SymPy worker could not be started safely.",
             ),
         )
     if completed.termination is ProcessTermination.TIMED_OUT:
-        return OperationExecutionFailure(
-            status=ExecutionStatus.TIMEOUT,
-            diagnostic=_diagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.TIMEOUT,
+            _diagnostic(
                 "INTEGER_FACTORIZATION_TIMEOUT",
                 "The factorization budget expired; no complete result is available.",
             ),
         )
     if completed.stdout_exceeded or completed.stderr_exceeded:
-        return OperationExecutionFailure(
-            status=ExecutionStatus.ERROR,
-            diagnostic=_diagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            _diagnostic(
                 "INTEGER_FACTORIZATION_OUTPUT_LIMIT_EXCEEDED",
                 "The worker exceeded its bounded output protocol.",
             ),
@@ -101,17 +100,17 @@ def _classify_termination(
     if (cpu_signal := getattr(signal, "SIGXCPU", None)) is not None:
         resource_signals.add(-cpu_signal)
     if completed.returncode in resource_signals:
-        return OperationExecutionFailure(
-            status=ExecutionStatus.TIMEOUT,
-            diagnostic=_diagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.TIMEOUT,
+            _diagnostic(
                 "INTEGER_FACTORIZATION_RESOURCE_LIMIT_EXCEEDED",
                 "The worker exhausted its CPU or process resource budget; no complete result is available.",
             ),
         )
     if completed.returncode != 0:
-        return OperationExecutionFailure(
-            status=ExecutionStatus.ERROR,
-            diagnostic=_diagnostic(
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            _diagnostic(
                 "INTEGER_FACTORIZATION_WORKER_FAILED",
                 "The isolated SymPy computation failed without a conclusion.",
             ),
@@ -122,42 +121,42 @@ def _classify_termination(
 @overload
 def _run_worker(
     request: DivisorsWorkerRequest,
-) -> DivisorsWorkerResponse | OperationExecutionFailure: ...
+) -> DivisorsWorkerResponse: ...
 
 
 @overload
 def _run_worker(
     request: ProperDivisorsWorkerRequest,
-) -> ProperDivisorsWorkerResponse | OperationExecutionFailure: ...
+) -> ProperDivisorsWorkerResponse: ...
 
 
 @overload
 def _run_worker(
     request: PrimeFactorizationWorkerRequest,
-) -> PrimeFactorizationWorkerResponse | OperationExecutionFailure: ...
+) -> PrimeFactorizationWorkerResponse: ...
 
 
 @overload
 def _run_worker(
     request: PowerfulWorkerRequest,
-) -> PowerfulWorkerResponse | OperationExecutionFailure: ...
+) -> PowerfulWorkerResponse: ...
 
 
 @overload
 def _run_worker(
     request: SquarefreeWorkerRequest,
-) -> SquarefreeWorkerResponse | OperationExecutionFailure: ...
+) -> SquarefreeWorkerResponse: ...
 
 
 @overload
 def _run_worker(
     request: RadicalWorkerRequest,
-) -> RadicalWorkerResponse | OperationExecutionFailure: ...
+) -> RadicalWorkerResponse: ...
 
 
 def _run_worker(
     request: FactorizationWorkerRequest,
-) -> FactorizationWorkerResponse | OperationExecutionFailure:
+) -> FactorizationWorkerResponse:
     wall_seconds = int(request.request.resource_budget.wall_seconds)
     completed = execute_process(
         ProcessRequest(
@@ -179,43 +178,37 @@ def _run_worker(
             ),
         )
     )
-    failure = _classify_termination(completed)
-    if failure is not None:
-        return failure
+    _classify_termination(completed)
     try:
         payload = loads_strict_json(completed.stdout)
         return parse_factorization_worker_response(
             payload,
             expected_operation=request.operation,
         )
-    except (TypeError, ValueError):
-        return OperationExecutionFailure(
-            status=ExecutionStatus.ERROR,
-            diagnostic=_diagnostic(
+    except (TypeError, ValueError) as exc:
+        raise OperationAbortError(
+            ExecutionStatus.ERROR,
+            _diagnostic(
                 "INTEGER_FACTORIZATION_PROTOCOL_INVALID",
                 "The worker returned data outside the exact result contract.",
             ),
-        )
+        ) from exc
 
 
-def _zero_is_not_applicable(
-    request: FactorizationRequest,
-) -> ComputedNotApplicable | None:
-    if int(request.value) != 0:
-        return None
-    return ComputedNotApplicable(
-        _diagnostic(
-            "INTEGER_FACTORIZATION_NOT_APPLICABLE",
-            "Zero has no finite factorization or divisor enumeration.",
+def _reject_zero(request: FactorizationRequest) -> None:
+    if int(request.value) == 0:
+        raise OperationRefusalError(
+            _diagnostic(
+                "INTEGER_FACTORIZATION_NOT_APPLICABLE",
+                "Zero has no finite factorization or divisor enumeration.",
+            )
         )
-    )
 
 
 def _compute_divisors(
     request: FactorizationRequest,
-) -> ComputedOutcome[DivisorListResult]:
-    if (not_applicable := _zero_is_not_applicable(request)) is not None:
-        return not_applicable
+) -> DivisorListResult:
+    _reject_zero(request)
     response = _run_worker(
         DivisorsWorkerRequest(
             protocol=PROTOCOL,
@@ -223,16 +216,13 @@ def _compute_divisors(
             request=request,
         )
     )
-    if isinstance(response, OperationExecutionFailure):
-        return response
-    return ComputedSuccess(response.result)
+    return response.result
 
 
 def _compute_proper_divisors(
     request: FactorizationRequest,
-) -> ComputedOutcome[DivisorListResult]:
-    if (not_applicable := _zero_is_not_applicable(request)) is not None:
-        return not_applicable
+) -> DivisorListResult:
+    _reject_zero(request)
     response = _run_worker(
         ProperDivisorsWorkerRequest(
             protocol=PROTOCOL,
@@ -240,16 +230,13 @@ def _compute_proper_divisors(
             request=request,
         )
     )
-    if isinstance(response, OperationExecutionFailure):
-        return response
-    return ComputedSuccess(response.result)
+    return response.result
 
 
 def _compute_prime_factorization(
     request: FactorizationRequest,
-) -> ComputedOutcome[PrimeFactorizationResult]:
-    if (not_applicable := _zero_is_not_applicable(request)) is not None:
-        return not_applicable
+) -> PrimeFactorizationResult:
+    _reject_zero(request)
     response = _run_worker(
         PrimeFactorizationWorkerRequest(
             protocol=PROTOCOL,
@@ -257,14 +244,12 @@ def _compute_prime_factorization(
             request=request,
         )
     )
-    if isinstance(response, OperationExecutionFailure):
-        return response
-    return ComputedSuccess(response.result)
+    return response.result
 
 
 def _compute_powerful(
     request: PowerfulNumberRequest,
-) -> ComputedOutcome[PowerfulNumberResult]:
+) -> PowerfulNumberResult:
     response = _run_worker(
         PowerfulWorkerRequest(
             protocol=PROTOCOL,
@@ -272,14 +257,12 @@ def _compute_powerful(
             request=request,
         )
     )
-    if isinstance(response, OperationExecutionFailure):
-        return response
-    return ComputedSuccess(response.result)
+    return response.result
 
 
 def _compute_squarefree(
     request: ArithmeticFunctionRequest,
-) -> ComputedOutcome[BooleanResult]:
+) -> BooleanResult:
     response = _run_worker(
         SquarefreeWorkerRequest(
             protocol=PROTOCOL,
@@ -287,14 +270,12 @@ def _compute_squarefree(
             request=request,
         )
     )
-    if isinstance(response, OperationExecutionFailure):
-        return response
-    return ComputedSuccess(response.result)
+    return response.result
 
 
 def _compute_radical(
     request: ArithmeticFunctionRequest,
-) -> ComputedOutcome[IntegerValueResult]:
+) -> IntegerValueResult:
     response = _run_worker(
         RadicalWorkerRequest(
             protocol=PROTOCOL,
@@ -302,9 +283,7 @@ def _compute_radical(
             request=request,
         )
     )
-    if isinstance(response, OperationExecutionFailure):
-        return response
-    return ComputedSuccess(response.result)
+    return response.result
 
 
 def _operation[RequestT: ContractModel, ResultT: ContractModel](
@@ -314,20 +293,22 @@ def _operation[RequestT: ContractModel, ResultT: ContractModel](
     description: str,
     request_model: type[RequestT],
     result_model: type[ResultT],
-    implementation: Callable[[RequestT], ComputedOutcome[ResultT]],
+    implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
-) -> ComputedOperation[RequestT, ResultT]:
-    return ComputedOperation(
-        capability_id=capability_id,
-        title=title,
-        description=description,
-        request_model=request_model,
-        result_model=result_model,
-        implementation=implementation,
-        relation_id=capability_id.replace(".compute.", ".relation.", 1),
-        tags=tags,
-        invocation_examples=invocation_examples,
+) -> InstalledOperation[RequestT, ResultT]:
+    return inline_operation(
+        OperationSpec(
+            operation_id=capability_id,
+            version="2",
+            title=title,
+            description=description,
+            request_type=request_model,
+            result_type=result_model,
+            execute=implementation,
+            tags=tags,
+            invocation_examples=invocation_examples,
+        )
     )
 
 

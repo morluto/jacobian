@@ -64,7 +64,7 @@ def test_canonical_complex_composes_as_the_authoritative_object() -> None:
             vertices=("c", "a", "b"),
             facets=(("b", "a"), ("c", "b"), ("c", "a")),
         )
-    ).value
+    )
 
     complex_ = canonical.complex
     chain = _chain_result(
@@ -74,7 +74,7 @@ def test_canonical_complex_composes_as_the_authoritative_object() -> None:
             prime=2,
         )
     )
-    homology = _homology(SimplicialHomologyRequest(complex=complex_, prime=2)).value
+    homology = _homology(SimplicialHomologyRequest(complex=complex_, prime=2))
 
     assert chain.complex_digest == complex_.complex_digest
     assert homology.complex_digest == complex_.complex_digest

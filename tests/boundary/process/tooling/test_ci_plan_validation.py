@@ -20,7 +20,7 @@ def _encoded(plan: dict[str, str]) -> str:
         ("npm/package.json",),
         ("src/jacobian/runtime/model.py",),
         ("tests/unit/test_runtime.py",),
-        ("tests/composition/runtime/test_runtime_lifecycle.py",),
+        ("tests/composition/runtime/test_portfolio_installation.py",),
         ("lean/JacobianLeanRuntime.lean",),
         ("tests/unit/test_runtime.py", "lean/JacobianLeanRuntime.lean"),
         ("--force-lean", "--", "README.md"),
@@ -115,7 +115,7 @@ def test_ci_plan_validator_rejects_malformed_or_incoherent_plans(plan: str) -> N
         {**_plan_for("README.md"), "classification": "full"},
         {**_plan_for("tests/unit/test_runtime.py"), "classification": "docs"},
         {
-            **_plan_for("tests/composition/runtime/test_runtime_lifecycle.py"),
+            **_plan_for("tests/composition/runtime/test_portfolio_installation.py"),
             "classification": "docs",
         },
     ],

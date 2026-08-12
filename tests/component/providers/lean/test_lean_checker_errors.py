@@ -40,6 +40,18 @@ def test_lean_rejection_has_a_generic_recovery_for_unknown_output() -> None:
     )
 
 
+def test_lean_rejection_accepts_named_lean_diagnostics() -> None:
+    detail = _lean_rejection(
+        "<stdin>:6:8: error(lean.unknownIdentifier): Unknown identifier "
+        "`not_a_mathlib_theorem`"
+    )
+
+    assert detail == (
+        "Lean rejected the proof at line 6, column 8: Unknown identifier "
+        "`not_a_mathlib_theorem`. Correct the proof body and retry."
+    )
+
+
 @pytest.mark.parametrize(
     "diagnostic",
     [
@@ -190,7 +202,7 @@ def test_system_elan_uses_the_original_user_toolchain_home(
     )
 
 
-def test_mathlib_validates_the_exact_lake_compiler_command(
+def test_mathlib_validates_lean_before_the_digest_bound_lake_compiler(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -212,6 +224,10 @@ def test_mathlib_validates_the_exact_lake_compiler_command(
         lambda _command: "/usr/bin",
     )
     monkeypatch.setattr(
+        "jacobian_checkers.lean4._mathlib_git_config",
+        lambda _runtime: {},
+    )
+    monkeypatch.setattr(
         "jacobian_checkers.lean4.execute_process",
         lambda *_args, **_kwargs: ProcessResult(
             termination=ProcessTermination.EXITED,
@@ -225,7 +241,7 @@ def test_mathlib_validates_the_exact_lake_compiler_command(
 
     _run_lean("", environment_name="MATHLIB")
 
-    assert validated == [(("/usr/bin/lake", "env", "lean"), tmp_path)]
+    assert validated == [(("/usr/bin/lean",), tmp_path)]
 
 
 def test_source_accepts_let_expressions_and_inline_by_terms() -> None:

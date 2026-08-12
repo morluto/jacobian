@@ -32,17 +32,22 @@ from jacobian.contracts.evidence import (
 )
 from jacobian.contracts.results import (
     Conclusion,
-    Execution,
     ExecutionStatus,
 )
 from jacobian.contracts.sat import (
+    CanonicalCnf,
     SatAssignmentVerificationOutput,
     SatAssignmentVerificationRequest,
     SatCnfMaterializationOutput,
     SatCnfMaterializationRequest,
     SatUnsatProofVerificationOutput,
     SatUnsatProofVerificationRequest,
+    canonicalize_cnf,
 )
+from jacobian.operation_execution import execute_operation
+from jacobian.operation_projection import project_operation_result
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, OperationSpec
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactError, SatArtifactService
@@ -71,9 +76,12 @@ class SatCnfMaterializationAdapter:
 
     def __init__(self, sat: SatArtifactService) -> None:
         self.sat = sat
-        self._descriptor = CapabilityDescriptor(
-            capability_id="sat.cnf.materialize",
+        self.spec = OperationSpec(
+            operation_id="sat.cnf.materialize",
             version="1",
+            request_type=SatCnfMaterializationRequest,
+            result_type=CanonicalCnf,
+            execute=_canonical_cnf,
             title="Materialize a canonical SAT CNF",
             description=(
                 "Encode exact finite existence problems, including finite colorings "
@@ -81,13 +89,6 @@ class SatCnfMaterializationAdapter:
                 "clauses. Canonicalize and store the exact CNF consumed by SAT model "
                 "and certified exhaustive UNSAT search capabilities."
             ),
-            provider="jacobian.sat",
-            provider_runtime=known_provider_runtime(
-                "jacobian.sat",
-                features=("canonical-cnf", "cnf-materialization"),
-            ),
-            input_schema=model_schema(SatCnfMaterializationRequest),
-            output_schema=model_schema(SatCnfMaterializationOutput),
             tags=(
                 "sat",
                 "cnf",
@@ -128,6 +129,21 @@ class SatCnfMaterializationAdapter:
                 ),
             ),
         )
+        self._descriptor = CapabilityDescriptor(
+            capability_id=self.spec.operation_id,
+            version=self.spec.version,
+            title=self.spec.title,
+            description=self.spec.description,
+            provider="jacobian.sat",
+            provider_runtime=known_provider_runtime(
+                "jacobian.sat",
+                features=("canonical-cnf", "cnf-materialization"),
+            ),
+            input_schema=model_schema(SatCnfMaterializationRequest),
+            output_schema=model_schema(SatCnfMaterializationOutput),
+            tags=self.spec.tags,
+            invocation_examples=self.spec.invocation_examples,
+        )
 
     @property
     def descriptor(self) -> CapabilityDescriptor:
@@ -153,10 +169,15 @@ class SatCnfMaterializationAdapter:
                 )
             ) from exc
 
-        stored = self.sat.put_cnf(
-            variable_names=validated.variable_names,
-            clauses=validated.clauses,
-        )
+        terminal = execute_operation(self.spec, validated)
+        if not isinstance(terminal, Completed):
+            return project_operation_result(
+                operation_id=self.spec.operation_id,
+                version=self.spec.version,
+                terminal=terminal,
+            )
+
+        stored = self.sat.put_canonical_cnf(terminal.value)
         resolved = self.sat.resolve_cnf(stored.artifact_uri)
         binding = resolved.binding
         canonical_bindings = resolved.cnf.variables
@@ -192,13 +213,22 @@ class SatCnfMaterializationAdapter:
                 )
             ),
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(status=ExecutionStatus.COMPLETED),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(binding.cnf_artifact_uri,),
+        return project_operation_result(
+            operation_id=self.spec.operation_id,
+            version=self.spec.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(binding.cnf_artifact_uri,),
+            ),
         )
+
+
+def _canonical_cnf(request: SatCnfMaterializationRequest) -> CanonicalCnf:
+    return canonicalize_cnf(
+        variable_names=request.variable_names,
+        clauses=request.clauses,
+    )
 
 
 def install_sat_assignment_checker(

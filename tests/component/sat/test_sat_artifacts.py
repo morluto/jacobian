@@ -135,12 +135,16 @@ def test_sat_cnf_materialization_validates_before_artifact_write(
     services = sat_materialization_services
     called = False
 
-    def unexpected_put_cnf(**_kwargs: object) -> None:
+    def unexpected_put_canonical_cnf(_cnf: CanonicalCnf) -> None:
         nonlocal called
         called = True
         raise AssertionError("invalid request reached artifact write")
 
-    monkeypatch.setattr(services.core.sat, "put_cnf", unexpected_put_cnf)
+    monkeypatch.setattr(
+        services.core.sat,
+        "put_canonical_cnf",
+        unexpected_put_canonical_cnf,
+    )
     result = services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="sat.cnf.materialize",

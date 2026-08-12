@@ -18,12 +18,12 @@ from jacobian.contracts.graph_composition import (
     GraphExplicitConstructionOutput,
     GraphExplicitConstructionRequest,
 )
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.graphs.artifacts import (
     GraphArtifactResources,
     publish_graph,
 )
-from jacobian.math.graphs import explicit_graph
+from jacobian.graphs.conversions import graph_contract_from_value
+from jacobian.math.graphs import SimpleUndirectedGraph, explicit_graph
 from jacobian.operation_execution import execute_operation
 from jacobian.operation_projection import project_operation_result
 from jacobian.operation_publication import PublishedOperation
@@ -139,7 +139,7 @@ class GraphExplicitConstructionAdapter:
             graph_object_digest=stored.object_digest,
             graph_schema_uri=self.resources.graph.graph_schema_uri,
             graph_semantics_uri=self.resources.graph.semantics_uri,
-            graph=graph,
+            graph=graph_contract_from_value(graph),
             order=len(graph.vertices),
             size=len(graph.edges),
         )

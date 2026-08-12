@@ -6,8 +6,7 @@ from typing import Any, cast
 
 import networkx as nx
 
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
-from jacobian.math.graphs.values import GraphCompositionInput
+from jacobian.math.graphs.values import GraphCompositionInput, SimpleUndirectedGraph
 
 
 def simple_graph(graph: nx.Graph[Any]) -> nx.Graph[Any]:

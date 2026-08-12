@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
-from jacobian.math.graphs.values import GraphCompositionInput
+from jacobian.math.graphs.values import GraphCompositionInput, SimpleUndirectedGraph
 
 if TYPE_CHECKING:
     import networkx as nx

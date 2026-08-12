@@ -43,7 +43,6 @@ from jacobian.contracts.graph_composition import (
     GraphEnumerationRequest,
     GraphEnumerationScopeArtifact,
 )
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import (
@@ -55,7 +54,12 @@ from jacobian.graphs.artifacts import (
     publish_graph,
 )
 from jacobian.graphs.atlas import graph_atlas_order, networkx_loader
-from jacobian.math.graphs import GraphCompositionInput, compose_graphs
+from jacobian.graphs.conversions import graph_contract_from_value
+from jacobian.math.graphs import (
+    GraphCompositionInput,
+    SimpleUndirectedGraph,
+    compose_graphs,
+)
 from jacobian.operation_execution import execute_operation
 from jacobian.operation_projection import project_operation_result
 from jacobian.operation_publication import PublishedOperation
@@ -260,7 +264,7 @@ class GraphComposeAdapter:
         output = GraphCompositionOutput(
             operation=validated.operation,
             result_graph_uri=result_artifact.artifact_uri,
-            result_graph=terminal.value,
+            result_graph=graph_contract_from_value(terminal.value),
             composition_artifact_uri=composition_artifact.artifact_uri,
             backend=backend,
             backend_version=backend_module.__version__,

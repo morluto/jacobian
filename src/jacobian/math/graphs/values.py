@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.base import ContractModel
 
 GraphCompositionOperation = Literal[
     "DISJOINT_UNION",
@@ -15,6 +15,31 @@ GraphCompositionOperation = Literal[
     "COMPLEMENT",
     "LEXICOGRAPHIC_PRODUCT",
 ]
+
+
+class SimpleUndirectedGraph(ContractModel):
+    """Immutable canonical value for a finite simple undirected graph."""
+
+    graph_schema_version: Literal["1"] = "1"
+    vertices: tuple[str, ...] = Field(max_length=256)
+    edges: tuple[tuple[str, str], ...] = Field(max_length=32640)
+
+    @model_validator(mode="after")
+    def require_canonical_simple_graph(self) -> Self:
+        if any(
+            not unicodedata.is_normalized("NFC", vertex) for vertex in self.vertices
+        ):
+            raise ValueError("graph vertices must use Unicode NFC")
+        if len(set(self.vertices)) != len(self.vertices):
+            raise ValueError("graph vertices must be unique")
+        if any(
+            left >= right or left not in self.vertices or right not in self.vertices
+            for left, right in self.edges
+        ):
+            raise ValueError("edges must contain two declared vertices in order")
+        if len(set(self.edges)) != len(self.edges):
+            raise ValueError("graph edges must be unique")
+        return self
 
 
 class GraphCompositionInput(ContractModel):

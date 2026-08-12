@@ -2,6 +2,7 @@ import networkx as nx
 import pytest
 
 from jacobian.math import graphs
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def test_graph_algorithms_use_networkx_objects() -> None:
@@ -35,3 +36,5 @@ def test_graph_construction_functions_use_immutable_graph_values() -> None:
 
     assert complement.vertices == ("v0", "v1", "v2")
     assert complement.edges == (("v0", "v2"),)
+    assert type(explicit) is SimpleUndirectedGraph
+    assert SimpleUndirectedGraph.__module__ == "jacobian.math.graphs.values"

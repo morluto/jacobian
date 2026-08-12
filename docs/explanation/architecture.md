@@ -179,6 +179,15 @@ A postcondition runs before publication. Failure exposes no value reference,
 artifact, or verification record. Terminal execution state remains separate from the
 mathematical result and from verification authority.
 
+`CapabilityResult` is a wire projection, not an in-process return type. Domain
+functions, operation executors, artifact services, and checker services return
+their owned typed values or terminal states. The final capability adapter
+constructs the wire envelope once, after publication has returned the complete
+artifact closure. Artifact-producing operations must not move storage writes
+into `OperationSpec.execute`; a domain-specific publisher may preserve an
+established durable schema and parent closure without expanding the generic
+publication policy.
+
 The v2 wire envelope carries a top-level `verification_record_uri` when an
 independent checker accepted the result. That pointer is not an input to
 execution, discovery, publication, or mathematical identity. Ordinary

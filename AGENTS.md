@@ -109,6 +109,15 @@ publication binding only when inline transport is insufficient. Publication
 owns transport only; it does not own mathematical validation, applicability,
 provider selection, effects, parsing, or checker authority.
 
+Construct wire envelopes only at the final capability or protocol projection.
+Mathematical functions, typed operation executors, artifact services, and
+checker services return their owned typed values or terminal states; they do
+not construct `CapabilityResult`. Do not hide artifact writes inside an
+`OperationSpec.execute` callable to satisfy this rule. When an operation needs
+a domain-specific durable schema or parent closure, keep that publication in a
+narrow named domain publisher and pass its typed projection to the one final
+envelope constructor.
+
 At the MCP boundary, prefer MCP Python SDK 2.0 high-level typed returns. Return
 Pydantic result models directly and let the SDK derive the output schema,
 validate results, and populate `content` and `structured_content`. Use an

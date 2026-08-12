@@ -217,17 +217,17 @@ redeploy; an unchanged catalog does not prove that the backend restarted.
 This is a Python 3.12 project managed with `uv`; the base image ships Python 3.12
 and Node but not `uv`. The startup update script installs `uv` (to
 `~/.local/bin`, added to `PATH` via `.bashrc`/`.profile`) and runs
-`uv sync --locked --dev`, so dependencies (including the `flint`/`smt` dev-group
-backends `python-flint`, `cvc5`, `z3-solver`) are already installed when a
-session starts. Standard dev, test, lint, and build commands live in the
-`Makefile` (`make help`) and `CONTRIBUTING.md`; use those rather than duplicating
-them.
+`uv sync --locked --dev`. The base dependency set includes the pinned SymPy,
+NetworkX, Python-FLINT, Z3, and cvc5 providers. Standard dev, test, lint, and
+build commands live in the `Makefile` (`make help`) and `CONTRIBUTING.md`; use
+those rather than duplicating them.
 
 Non-obvious caveats:
 
 - If a fresh non-login shell can't find `uv`, run `export PATH="$HOME/.local/bin:$PATH"`.
-- Optional backends are absent by default and their capabilities are correctly
-  omitted: `lean.check` prints `lean.check is not installed` on `init`/startup
+- Optional native and formal backends are absent by default and their
+  capabilities are correctly omitted: `lean.check` prints
+  `lean.check is not installed` on `init`/startup
   (the pinned Lean 4.31.0 toolchain is not installed), and external solver
   executables (`cadical`, `drat-trim`, `carcara`) are not on `PATH`. This does
   not break the kernel, catalog, or the core test suites. Only install Lean/elan

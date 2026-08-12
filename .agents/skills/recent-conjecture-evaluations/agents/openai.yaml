@@ -1,0 +1,4 @@
+interface:
+  display_name: "Recent Conjecture Evaluations"
+  short_description: "Run source-grounded Jacobian reliability probes"
+  default_prompt: "Use $recent-conjecture-evaluations to run one source-grounded Jacobian reliability cycle."

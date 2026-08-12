@@ -184,6 +184,27 @@ def test_polynomial_coefficient_recurrence_exposes_exact_terms_and_residuals(
     }
 
 
+@pytest.mark.parametrize("domain", ("sequence", "polynomial"))
+def test_polynomial_coefficient_recurrence_is_discoverable_by_intuitive_domain(
+    combinatorics_services,
+    domain: str,
+) -> None:
+    discovered = combinatorics_services.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query=(
+                "exactly compute terms of a sequence and residuals of a "
+                "variable-coefficient polynomial recurrence"
+            ),
+            domain=domain,
+            limit=5,
+        )
+    )
+
+    assert "combinatorics.recurrence.p_recursive.evaluate" in {
+        match.capability_id for match in discovered.matches
+    }
+
+
 def test_polynomial_coefficient_recurrence_rejects_singular_required_step(
     combinatorics_services,
 ) -> None:

@@ -77,13 +77,20 @@ def _run(worker_request: LllWorkerRequest) -> LllWorkerResponse:
             for row in worker_request.request.basis.entries
         ]
         source = flint.fmpz_mat(entries)
-        reduced, transformation = source.lll(
-            transform=True,
-            delta=0.99,
-            eta=0.51,
-            rep="zbasis",
-            gram="exact",
-        )
+        if source.nrows() == 1:
+            # Every one-row integer basis is already LLL-reduced.  FLINT rejects
+            # this mathematically valid boundary case, so preserve it exactly
+            # with the unique one-dimensional identity transformation.
+            reduced = source
+            transformation = flint.fmpz_mat([[1]])
+        else:
+            reduced, transformation = source.lll(
+                transform=True,
+                delta=0.99,
+                eta=0.51,
+                rep="zbasis",
+                gram="exact",
+            )
         if transformation * source != reduced:
             raise WorkerError(LllWorkerErrorCode.RELATION_INVALID)
     except WorkerError:

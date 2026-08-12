@@ -266,6 +266,105 @@ def _run(
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
+def _dot(left: list[fmpq], right: list[fmpq]) -> fmpq:
+    if len(left) != len(right):
+        raise ValueError("rational vectors have different dimensions")
+    return sum((a * b for a, b in zip(left, right, strict=True)), fmpq(0))
+
+
+def _rational_linear_optimum(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(source) != {"program", "wall_seconds"}:
+        return False
+    if type(source["wall_seconds"]) is not int or not 1 <= source["wall_seconds"] <= 60:
+        raise ValueError("LP wall-clock budget is malformed")
+    program = source["program"]
+    if not isinstance(program, dict) or set(program) != {
+        "variables", "objective", "coefficients", "rhs"
+    }:
+        return False
+    if set(result) != {
+        "status",
+        "primal_candidate",
+        "dual_candidate",
+        "primal_objective",
+        "dual_objective",
+        "primal_residuals",
+        "dual_slacks",
+        "detail",
+    } or result["status"] != "CERTIFICATE_PRODUCED":
+        return False
+
+    variables = program["variables"]
+    coefficients_wire = program["coefficients"]
+    if (
+        not isinstance(variables, list)
+        or not variables
+        or len(variables) > 32
+        or len(set(variables)) != len(variables)
+        or not isinstance(coefficients_wire, list)
+        or not coefficients_wire
+        or len(coefficients_wire) > 64
+    ):
+        raise ValueError("LP dimensions are malformed")
+    objective = [_q(value) for value in program["objective"]]
+    rhs = [_q(value) for value in program["rhs"]]
+    coefficients = [[_q(value) for value in row] for row in coefficients_wire]
+    width = len(variables)
+    if (
+        len(objective) != width
+        or len(coefficients) != len(rhs)
+        or any(len(row) != width for row in coefficients)
+    ):
+        raise ValueError("LP dimensions are inconsistent")
+
+    if any(result[field] is None for field in (
+        "primal_candidate",
+        "dual_candidate",
+        "primal_objective",
+        "dual_objective",
+        "primal_residuals",
+        "dual_slacks",
+    )):
+        return False
+    primal = [_q(value) for value in result["primal_candidate"]]
+    dual = [_q(value) for value in result["dual_candidate"]]
+    if len(primal) != width or len(dual) != len(rhs):
+        raise ValueError("LP candidate dimensions are inconsistent")
+    primal_residuals = [
+        _dot(row, primal) - bound
+        for row, bound in zip(coefficients, rhs, strict=True)
+    ]
+    dual_slacks = [
+        objective[column]
+        - sum(
+            (coefficients[row][column] * dual[row] for row in range(len(rhs))),
+            fmpq(0),
+        )
+        for column in range(width)
+    ]
+    primal_objective = _dot(objective, primal)
+    dual_objective = _dot(rhs, dual)
+    return (
+        all(value >= 0 for value in primal)
+        and all(value == 0 for value in primal_residuals)
+        and all(value >= 0 for value in dual_slacks)
+        and primal_objective == dual_objective
+        and [_q(value) for value in result["primal_residuals"]] == primal_residuals
+        and [_q(value) for value in result["dual_slacks"]] == dual_slacks
+        and _q(result["primal_objective"]) == primal_objective
+        and _q(result["dual_objective"]) == dual_objective
+    )
+
+
+def check_rational_linear_optimum(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="optimization.linear.rational_optimum.compute",
+        witness_format="optimization.linear.rational-optimum.fraction-replay",
+        replay=_rational_linear_optimum,
+    )
+
+
 def _factorization_value(source: dict[str, Any], *, positive: bool) -> Any:
     if set(source) != {"value", "resource_budget"}:
         raise ValueError("factorization source is malformed")
@@ -1125,6 +1224,7 @@ def check_matrix_smith_normal_form(request: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "check_rational_linear_optimum",
     "check_integer_powerful_number",
     "check_integer_prime_factorization",
     "check_matrix_characteristic_polynomial",

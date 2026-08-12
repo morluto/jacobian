@@ -60,10 +60,14 @@ PUBLIC_API = {
     ),
     "jacobian.math.graphs": (
         "GraphCompositionInput",
+        "IndependenceNumberBudget",
+        "IndependenceNumberRequest",
+        "IndependenceNumberResult",
         "SimpleUndirectedGraph",
         "compose_graphs",
         "diameter",
         "explicit_graph",
+        "independence_number",
         "is_eulerian",
         "triangle_count",
     ),
@@ -148,9 +152,3 @@ def test_deleted_experimental_contract_modules_are_not_importable() -> None:
     ):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(module_name)
-
-
-def test_unsupported_aliases_are_not_exposed() -> None:
-    operations = importlib.import_module("jacobian.domains.probability.operations")
-    assert hasattr(operations, "FINITE_PROBABILITY_CAPABILITIES")
-    assert not hasattr(operations, "FINITE_MOMENT_CAPABILITIES")

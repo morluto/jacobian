@@ -15,7 +15,6 @@ import os
 import platform
 import sqlite3
 import statistics
-import subprocess
 import sys
 import tempfile
 import time
@@ -26,8 +25,18 @@ from pathlib import Path
 from threading import Lock, local
 from typing import Protocol
 
-from jacobian.canonical import sha256_digest
-from jacobian.storage.repository import ArtifactRepository
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from benchmarks.tooling.command_runner import (  # noqa: E402
+    ToolCommandRequest,
+    ToolCommandStatus,
+    run_tool_command,
+)
+
+from jacobian.canonical import sha256_digest  # noqa: E402
+from jacobian.storage.repository import ArtifactRepository  # noqa: E402
 
 DEFAULT_SIZES = (1_024, 100 * 1_024, 1_024 * 1_024, 10 * 1_024 * 1_024)
 DEFAULT_CONCURRENCY = (1, 4, 16)
@@ -119,9 +128,11 @@ class _SQLiteBlobSpike:
         return digest
 
     def get(self, digest: str, *, maximum_bytes: int | None = None) -> bytes:
-        row = self._connection().execute(
-            "SELECT size_bytes, data FROM blobs WHERE digest = ?", (digest,)
-        ).fetchone()
+        row = (
+            self._connection()
+            .execute("SELECT size_bytes, data FROM blobs WHERE digest = ?", (digest,))
+            .fetchone()
+        )
         if row is None:
             raise KeyError(digest)
         size = int(row[0])
@@ -253,13 +264,17 @@ def _sqlite_correctness(root: Path) -> dict[str, bool]:
 
 
 def _rollback_probe(path: Path) -> bool:
-    completed = subprocess.run(
-        [sys.executable, __file__, "--rollback-child", str(path)],
-        check=False,
-        capture_output=True,
-        timeout=10,
+    completed = run_tool_command(
+        ToolCommandRequest(
+            executable=sys.executable,
+            arguments=(__file__, "--rollback-child", str(path)),
+            cwd=str(Path(__file__).resolve().parents[1]),
+            timeout_seconds=10,
+            stdout_limit_bytes=1024,
+            stderr_limit_bytes=1024,
+        )
     )
-    if completed.returncode == 0:
+    if completed.status is not ToolCommandStatus.EXITED or completed.exit_code != 17:
         return False
     with sqlite3.connect(path) as connection:
         row = connection.execute(

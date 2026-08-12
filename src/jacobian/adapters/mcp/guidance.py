@@ -63,8 +63,9 @@ inspect the exact operation with math.find.
 
 When a completed output contains `value_refs`, an inspected consumer may declare a
 matching named `input_port`. Bind that opaque runtime-local reference through
-`inputs`; keep the consumer's other request fields in `payload`. A value reference
-avoids retranscribing the typed value but carries no verification authority.
+`inputs`; keep only the consumer's other request fields in `payload`, and do not
+repeat the port-bound field there. A value reference avoids retranscribing the typed
+value but carries no verification authority.
 
 Ordinary tools return calculations. Independent checking uses a separate checker
 tool ID (for example `polynomial.identity.verify`), not a switch on the producer.

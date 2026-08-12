@@ -43,8 +43,6 @@ checker tool—even if shell code could also calculate the answer.
 Forms:
 - `request.op="search"`: plain-language mathematical outcome (compact cards).
 - Optional `domain` filter; `limit` 1-20 (default 5).
-- `input_kind="TYPED_ARTIFACT"` is only for an exact `artifact_type` URI; typed
-  inline matrix and polynomial payloads remain `STRUCTURED_REQUEST`.
 - Follow `next_cursor` with the same query and filters to continue.
 - Ranking is deterministic lexical retrieval; matches are not recommendations.
 - `request.op="inspect"`: exact ID with authoritative schemas and examples.
@@ -74,6 +72,5 @@ Failed or incomplete runs are not mathematical conclusions.
 
 Examples:
 - `{"capability_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}`
-- `{"capability_id":"matrix.normal_form.smith.verify","payload":{"input":{"matrix":{"entries":[["2","4"],["6","8"]]}}},"inputs":{"candidate":{"value_ref":"value://..."}}}`
 - `{"capability_id":"polynomial.identity.verify","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
 """

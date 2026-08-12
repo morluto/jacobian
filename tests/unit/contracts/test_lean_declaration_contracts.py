@@ -116,6 +116,8 @@ def test_search_stop_reason_and_match_reasons_bind_the_query() -> None:
         LeanDeclarationSearchOutput(
             environment="CORE",
             environment_digest="sha256:" + "a" * 64,
+            lean_version="4.31.0",
+            lean_commit="lean-commit",
             query=query,
             declarations=(
                 {
@@ -133,6 +135,8 @@ def test_search_stop_reason_and_match_reasons_bind_the_query() -> None:
         LeanDeclarationSearchOutput(
             environment="CORE",
             environment_digest="sha256:" + "a" * 64,
+            lean_version="4.31.0",
+            lean_commit="lean-commit",
             query=query,
             declarations=(
                 {

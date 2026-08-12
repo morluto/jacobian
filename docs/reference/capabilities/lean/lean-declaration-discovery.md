@@ -3,7 +3,8 @@
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
 Jacobian exposes two ordinary, read-only math tools over the installed, pinned
-Lean runtime:
+Lean runtime. Use them to query the formal environment directly instead of
+shell-searching a local Mathlib checkout, source tree, or cache:
 
 - `lean.declaration.search` performs bounded declaration retrieval; and
 - `lean.declaration.inspect` resolves one exact declaration name.
@@ -33,6 +34,10 @@ in deterministic `Name.lt` order. Each result carries its elaborated
 pretty-printed type, declaration kind, namespace when present, optional source
 module and range, and explicit match reasons.
 
+For example, a `MATHLIB` name search for `irrational_sqrt` returns candidates
+such as `irrational_sqrt_two`; pass the exact returned name to inspection rather
+than guessing namespace qualification.
+
 The first name search in one backend session atomically materializes a compact
 catalog of imported public declaration names, source modules, and kinds. Later
 name searches use that catalog to select ordered candidates and their exact scan
@@ -60,7 +65,10 @@ uses Lean's environment lookup directly; it does not linearly scan the catalog.
 
 ## Environment identity and execution bounds
 
-Both outputs carry `environment_digest`. The
+Both outputs carry `environment_digest`, `lean_version`, `lean_commit`, and
+`mathlib_commit` (null for `CORE`). These caller-visible fields report the same
+pinned runtime identity used to compute the declaration metadata, so a caller
+does not need to invoke an unrelated proof-inspection tool for version data. The
 `jacobian.lean.environment-manifest/v2` digest binds the selected import,
 platform, pinned Lean version, executable provider digest, and a digest of the
 measured semantic runtime. For `MATHLIB`, that runtime includes the Lake

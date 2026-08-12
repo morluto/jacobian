@@ -52,9 +52,15 @@ must not be interpreted as negative mathematical conclusions.
 
 ## Proof-state transitions
 
-`lean.proof_state.apply_tactic` accepts an environment, one statement, a
-bounded tuple of proof-prefix tactics, and one next tactic. It replays the
-prefix before applying the new tactic, then returns:
+`lean.proof_state.apply_tactic` has two mutually exclusive request modes:
+
+- **fresh**: `environment`, `statement`, optional `proof_prefix`, and `tactic`;
+- **continuation**: the returned `state_uri`, matching `environment`, and
+  `tactic`, with `statement` and `proof_prefix` omitted.
+
+`proof_prefix` contains tactic bodies after Lean's surrounding `by`; it must not
+contain `by` itself. The tool replays a fresh prefix or reconstructs the bound
+immutable state before applying the new tactic, then returns:
 
 - the exact replay source;
 - rendered goals and typed goals;
@@ -76,6 +82,13 @@ operational failure rather than evidence that the statement is unprovable.
 `lean.retrieve.premises` is available only for the pinned `MATHLIB` profile. It
 replays the statement and proof prefix, invokes Mathlib's `exact?` diagnostic,
 and returns a bounded ranked list of tactic candidates.
+
+As with proof-state transitions, `proof_prefix` is a sequence of tactic bodies
+after `by`. For example, use `["intro x"]`, not `["by", "intro x"]`. Invalid
+prefixes fail during request validation before a Lean process starts, with a
+field path and bounded validation evidence. Backend failures remain
+`LEAN_RETRIEVAL_FAILED` operational non-conclusions and retain a bounded raw
+backend message for repair.
 
 Each candidate records whether its tactic replayed and which declaration names
 were extracted. Name extraction is explicitly a display-text heuristic.

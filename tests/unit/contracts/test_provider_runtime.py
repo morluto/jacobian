@@ -443,6 +443,13 @@ def test_lean_frontend_runtime_binds_the_pinned_executable(
     assert runtime.features == ("CORE", "elaboration", "lean-statement")
     assert runtime.configuration["executable"] == str(executable)
     assert runtime.configuration["profiles"]["CORE"]["import_name"] == "Init.Prelude"
+    assert runtime.configuration["profiles"]["CORE"]["lean_version"] == (
+        lean4.LEAN_VERSION
+    )
+    assert runtime.configuration["profiles"]["CORE"]["lean_commit"] == (
+        lean4.LEAN_COMMIT
+    )
+    assert runtime.configuration["profiles"]["CORE"]["mathlib_commit"] is None
 
 
 def test_lean_frontend_runtime_preserves_actionable_probe_diagnostic(

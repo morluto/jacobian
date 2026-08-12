@@ -75,9 +75,12 @@ than an empty or negative observation.
 ### Lean diagnostic recovery ablation
 
 `benchmarks/config/lean-diagnostic-recovery-v1.json` is a targeted engineering
-ablation, not the no-Jacobian toolbox outcome comparison above. It freezes three
-deliberately broken Lean payloads across CORE, MATHLIB, and proof-edit
-validation, then compares the recorded base revision with a candidate revision
+ablation, not the no-Jacobian toolbox outcome comparison above. It freezes five
+deliberately broken Lean proof/request injections across CORE, MATHLIB,
+proof-edit validation, and proof-state source-mode validation. The premise case
+records its malformed-prefix failure as a separate diagnostic probe while its
+primary recovery metric is anchored to a proof rejection observable in both
+conditions. It then compares the recorded base revision with a candidate revision
 using `benchmarks.tooling.lean_diagnostic_recovery`. Both conditions expose only
 the Jacobian MCP surface; no Skill, prescribed workflow, or retry policy is
 added to either condition. The result supports descriptive diagnostic-recovery
@@ -111,9 +114,12 @@ metrics must equal the recomputed values before any delta is emitted. The
 selected suite bytes and retained MCP surface are also rehashed.
 
 The exact injected payload may appear anywhere in the freely composed tool
-trace, but it must produce proof-specific rejection evidence before a later
-checker-backed success can count as repair. Whether it was the first Jacobian
-attempt is retained as a separate descriptive protocol field and never gates
+trace, but it must produce proof-specific rejection evidence or a retained
+Lean-owned request diagnostic before a later checker-backed success can count
+as repair. Failed `math.run` attempts retain bounded diagnostic codes in
+evaluation telemetry; these metrics never enter runtime responses. Whether the
+first injected attempt was the first Jacobian attempt is retained as a separate
+descriptive protocol field and never gates
 repair success. Runtime setup, toolchain, Mathlib-manifest, and timeout failures
 remain non-conclusions. The terminal result must preserve each case's immutable
 claim fields. Recovery metrics remain evaluation artifacts and never enter an

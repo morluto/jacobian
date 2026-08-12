@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
+    CapabilityInvocationExample,
     CapabilityProviderRuntime,
 )
 from jacobian.contracts.lean import (
@@ -91,38 +92,87 @@ def build_lean_declaration_query_bundle(
             inline_operation(
                 OperationSpec(
                     operation_id="lean.declaration.search",
-                    version="1",
+                    version="2",
                     request_type=LeanDeclarationSearchRequest,
                     result_type=LeanDeclarationSearchOutput,
                     execute=search,
-                    title="Search Lean declarations",
+                    title="Search pinned Lean and Mathlib declarations",
                     description=(
-                        "Search a pinned Lean environment by a case-sensitive name "
-                        "substring and/or exact constants occurring in elaborated "
-                        "declaration types."
+                        "Find theorem, definition, and other declaration names "
+                        "directly in the installed pinned Lean CORE or MATHLIB "
+                        "environment. Search by a case-sensitive name substring "
+                        "and/or exact constants occurring in elaborated declaration "
+                        "types; use this instead of shell-searching local Mathlib "
+                        "source or caches. Results include portable pinned "
+                        "Lean/Mathlib version and commit identity."
                     ),
                     tags=(
                         "lean",
+                        "mathlib",
                         "declaration",
+                        "theorem-search",
+                        "formal-environment",
                         "retrieval",
                         "premise-discovery",
+                    ),
+                    invocation_examples=(
+                        CapabilityInvocationExample(
+                            name="find_sqrt_two_irrationality",
+                            description=(
+                                "Search pinned Mathlib for declarations whose name "
+                                "mentions irrational square root."
+                            ),
+                            input=LeanDeclarationSearchRequest.model_validate(
+                                {
+                                    "environment": "MATHLIB",
+                                    "name_contains": "irrational_sqrt",
+                                    "kinds": ["THEOREM"],
+                                    "result_limit": 10,
+                                }
+                            ).model_dump(mode="json"),
+                        ),
                     ),
                 )
             ),
             inline_operation(
                 OperationSpec(
                     operation_id="lean.declaration.inspect",
-                    version="1",
+                    version="2",
                     request_type=LeanDeclarationInspectRequest,
                     result_type=LeanDeclarationInspectOutput,
                     execute=inspect,
-                    title="Inspect a Lean declaration",
+                    title="Inspect an exact Lean or Mathlib declaration",
                     description=(
-                        "Resolve one exact declaration in a pinned Lean environment "
-                        "and return its elaborated type, kind, docs, source metadata, "
-                        "and environment digest."
+                        "Resolve one exact fully qualified declaration name directly "
+                        "in the installed pinned Lean CORE or MATHLIB environment. "
+                        "Return its elaborated type, kind, docs, source metadata, "
+                        "environment digest, and portable pinned Lean/Mathlib version "
+                        "and commit identity."
                     ),
-                    tags=("lean", "declaration", "retrieval", "inspection"),
+                    tags=(
+                        "lean",
+                        "mathlib",
+                        "declaration",
+                        "theorem-inspection",
+                        "formal-environment",
+                        "retrieval",
+                        "inspection",
+                    ),
+                    invocation_examples=(
+                        CapabilityInvocationExample(
+                            name="inspect_sqrt_two_irrationality",
+                            description=(
+                                "Inspect the exact Mathlib declaration returned by "
+                                "declaration search."
+                            ),
+                            input=LeanDeclarationInspectRequest.model_validate(
+                                {
+                                    "environment": "MATHLIB",
+                                    "declaration_name": "irrational_sqrt_two",
+                                }
+                            ).model_dump(mode="json"),
+                        ),
+                    ),
                 )
             ),
             durable_operation(

@@ -57,7 +57,54 @@
         "statement",
         "original_proof"
       ],
-      "prompt": "Repair this exact Lean proof edit without changing the statement. Before claiming a repair, submit lean.proof_edit.validate with exactly environment `CORE`, statement `True`, original_proof `by\n  trivial`, and edited_proof `by\n  exact False.elim True.intro`, and observe that rejection. You may freely use other atomic math operations before or after that injection. Then repair only edited_proof and obtain an accepted checker-backed proof-edit result. Report the corrected edit and its assurance."
+      "prompt": "Repair this exact Lean proof edit without changing the statement. Before claiming a repair, submit lean.proof_edit.validate with exactly environment `CORE`, statement `True`, original_proof `by\n  trivial`, and edited_proof `by\n  exact False.elim True.intro`, and observe that rejection. You may freely use other atomic math operations before or after that injection. Then repair only edited_proof and obtain an accepted checker-backed proof-edit result. Report the corrected edit and its verification evidence."
+    },
+    {
+      "case_id": "premise-prefix-includes-by",
+      "diagnostic_probe": {
+        "capability_id": "lean.retrieve.premises",
+        "payload": {
+          "environment": "MATHLIB",
+          "statement": "∀ x : ℝ, x ^ 2 ≥ 0",
+          "proof_prefix": ["by", "intro x"],
+          "limit": 5
+        },
+        "expected_diagnostic_evidence": {
+          "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+          "path": "proof_prefix.0",
+          "validation_error_paths": ["proof_prefix.0"]
+        }
+      },
+      "injected_capability_id": "lean.check",
+      "injected_payload": {
+        "environment": "MATHLIB",
+        "statement": "∀ x : ℝ, x ^ 2 ≥ 0",
+        "proof": "by\n  intro x\n  exact missing_square_nonneg x"
+      },
+      "expected_diagnostic_codes": ["LEAN_UNKNOWN_IDENTIFIER"],
+      "terminal_capability_id": "lean.check",
+      "terminal_immutable_input_fields": ["environment", "statement"],
+      "prompt": "Repair and independently verify this exact Lean MATHLIB theorem. First submit lean.retrieve.premises with exactly environment `MATHLIB`, statement `∀ x : ℝ, x ^ 2 ≥ 0`, proof_prefix [`by`, `intro x`], and limit 5, and observe its diagnostic result. Before claiming a repair, also submit lean.check with exactly environment `MATHLIB`, statement `∀ x : ℝ, x ^ 2 ≥ 0`, and proof `by\n  intro x\n  exact missing_square_nonneg x`, and observe that proof rejection. Then correct the premise prefix, use any useful returned premise, and finish with a successful lean.check verification of the unchanged statement and environment. Report the corrected prefix, selected premise, final proof, and verification evidence."
+    },
+    {
+      "case_id": "proof-state-source-conflict",
+      "injected_capability_id": "lean.proof_state.apply_tactic",
+      "injected_payload": {
+        "environment": "CORE",
+        "state_uri": "artifact://sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "statement": "True",
+        "proof_prefix": ["skip"],
+        "tactic": "trivial"
+      },
+      "expected_diagnostic_codes": ["INVALID_LEAN_TRANSITION_REQUEST"],
+      "expected_diagnostic_evidence": {
+        "code": "INVALID_LEAN_TRANSITION_REQUEST",
+        "path": "$",
+        "validation_error_paths": ["$"]
+      },
+      "terminal_capability_id": "lean.check",
+      "terminal_immutable_input_fields": ["environment", "statement"],
+      "prompt": "Repair and independently verify the exact Lean CORE theorem `True`. First submit lean.proof_state.apply_tactic with exactly environment `CORE`, state_uri `artifact://sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, statement `True`, proof_prefix [`skip`], and tactic `trivial`, and observe the cross-field request rejection. Then use the returned evidence to open a valid fresh proof state, complete it with atomic tactic transitions, and finish with a successful lean.check verification of the unchanged statement and environment. Report the corrected request mode, final proof, and verification evidence."
     }
   ],
   "execution": {

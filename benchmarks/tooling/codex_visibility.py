@@ -73,6 +73,24 @@ class ToolMode(StrEnum):
     UNIFIED_EXEC = "unified_exec"
 
 
+class VisibilityOutputOutcome(BaseModel):
+    """One acceptable completed-operation output shape for a USE case."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    capability_id: str = Field(min_length=1)
+    required_output_fields: tuple[str, ...] = Field(min_length=1)
+    expected_output_values: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _valid_output_fields(self) -> VisibilityOutputOutcome:
+        if len(set(self.required_output_fields)) != len(self.required_output_fields):
+            raise ValueError("required_output_fields must be unique")
+        if not set(self.expected_output_values).issubset(self.required_output_fields):
+            raise ValueError("expected output values must name required output fields")
+        return self
+
+
 class VisibilityCase(BaseModel):
     """One agent-visible prompt plus hidden trajectory expectations."""
 
@@ -83,22 +101,39 @@ class VisibilityCase(BaseModel):
     prompt: str = Field(min_length=1)
     expectation: AdoptionExpectation = AdoptionExpectation.USE
     expected_capability_ids: tuple[str, ...] = ()
+    diagnostic_capability_ids: tuple[str, ...] = ()
+    acceptable_output_outcomes: tuple[VisibilityOutputOutcome, ...] = ()
     require_verified: bool = False
 
     @model_validator(mode="after")
     def _valid_expectation(self) -> VisibilityCase:
         if len(set(self.expected_capability_ids)) != len(self.expected_capability_ids):
             raise ValueError("expected_capability_ids must be unique")
+        if len(set(self.diagnostic_capability_ids)) != len(
+            self.diagnostic_capability_ids
+        ):
+            raise ValueError("diagnostic_capability_ids must be unique")
+        if set(self.expected_capability_ids) & set(self.diagnostic_capability_ids):
+            raise ValueError("required and diagnostic capability IDs must be disjoint")
+        outcome_ids = {
+            outcome.capability_id for outcome in self.acceptable_output_outcomes
+        }
+        if not outcome_ids.issubset(
+            set(self.expected_capability_ids) | set(self.diagnostic_capability_ids)
+        ):
+            raise ValueError("output-outcome capability IDs must be tracked")
         if (
             self.expectation is AdoptionExpectation.USE
             and not self.expected_capability_ids
+            and not self.acceptable_output_outcomes
         ):
-            raise ValueError("USE cases require expected_capability_ids")
-        if (
-            self.expectation is AdoptionExpectation.ABSTAIN
-            and self.expected_capability_ids
+            raise ValueError("USE cases require an operation or output outcome")
+        if self.expectation is AdoptionExpectation.ABSTAIN and (
+            self.expected_capability_ids
+            or self.diagnostic_capability_ids
+            or self.acceptable_output_outcomes
         ):
-            raise ValueError("ABSTAIN cases cannot declare expected_capability_ids")
+            raise ValueError("ABSTAIN cases cannot declare operations or outcomes")
         if self.expectation is AdoptionExpectation.ABSTAIN and self.require_verified:
             raise ValueError("ABSTAIN cases cannot require verification")
         return self
@@ -155,6 +190,49 @@ def _is_verified_invocation(invocation: object) -> bool:
     return isinstance(uri, str) and uri.startswith(_LOCAL_VERIFICATION_URI_PREFIX)
 
 
+def _output_field(output: object, path: str) -> tuple[bool, object]:
+    current = output
+    for component in path.split("."):
+        if isinstance(current, Mapping) and component in current:
+            current = current[component]
+            continue
+        if isinstance(current, list) and component.isdigit():
+            index = int(component)
+            if index < len(current):
+                current = current[index]
+                continue
+        return False, None
+    return True, current
+
+
+def _substantive_output_value(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str | list | tuple | Mapping):
+        return bool(value)
+    return True
+
+
+def _output_outcome_matches(
+    outcome: VisibilityOutputOutcome,
+    invocation: object,
+) -> bool:
+    if not isinstance(invocation, Mapping) or (
+        invocation.get("capability_id") != outcome.capability_id
+    ):
+        return False
+    observed: dict[str, object] = {}
+    for path in outcome.required_output_fields:
+        present, value = _output_field(invocation.get("output"), path)
+        if not present or not _substantive_output_value(value):
+            return False
+        observed[path] = value
+    return all(
+        observed[path] == expected
+        for path, expected in outcome.expected_output_values.items()
+    )
+
+
 def classify_visibility(
     case: VisibilityCase,
     telemetry: Mapping[str, Any],
@@ -162,6 +240,9 @@ def classify_visibility(
     """Classify only observable adoption stages; do not grade answer prose."""
 
     expected = set(case.expected_capability_ids)
+    diagnostic = set(case.diagnostic_capability_ids)
+    outcome_ids = {outcome.capability_id for outcome in case.acceptable_output_outcomes}
+    tracked = expected | diagnostic | outcome_ids
     described = {
         capability_id
         for description in telemetry.get("capability_descriptions", [])
@@ -183,12 +264,24 @@ def classify_visibility(
         value for value in telemetry.get("capability_ids", []) if isinstance(value, str)
     ]
     completed = set(completed_sequence)
+    invocations = tuple(
+        invocation
+        for invocation in telemetry.get("capability_invocations", [])
+        if isinstance(invocation, Mapping)
+    )
     verified = any(
         isinstance(invocation, Mapping)
         and isinstance(invocation.get("capability_id"), str)
         and invocation.get("capability_id") in expected
         and _is_verified_invocation(invocation)
-        for invocation in telemetry.get("capability_invocations", [])
+        for invocation in invocations
+    )
+    matched_outcomes = tuple(
+        outcome
+        for outcome in case.acceptable_output_outcomes
+        if any(
+            _output_outcome_matches(outcome, invocation) for invocation in invocations
+        )
     )
     mcp_calls = [
         value for value in telemetry.get("mcp_calls", []) if isinstance(value, str)
@@ -214,11 +307,19 @@ def classify_visibility(
         "completed": sorted(expected & completed),
         "missing_completed": sorted(expected - completed),
     }
+    diagnostic_observed = {
+        "described": sorted(diagnostic & described),
+        "attempted": sorted(diagnostic & attempted),
+        "completed": sorted(diagnostic & completed),
+        "not_completed": sorted(diagnostic - completed),
+    }
     if case.expectation is AdoptionExpectation.ABSTAIN:
         contract_satisfied = observed["abstained"]
     else:
-        contract_satisfied = not expected_observed["missing_completed"] and (
-            verified or not case.require_verified
+        contract_satisfied = (
+            not expected_observed["missing_completed"]
+            and (verified or not case.require_verified)
+            and (bool(matched_outcomes) or not case.acceptable_output_outcomes)
         )
     usage = telemetry.get("usage")
     uncached_input_tokens = None
@@ -231,9 +332,17 @@ def classify_visibility(
         "expectation": case.expectation,
         "observed": observed,
         "expected_capabilities": expected_observed,
+        "diagnostic_capabilities": diagnostic_observed,
+        "output_outcomes": {
+            "required": bool(case.acceptable_output_outcomes),
+            "satisfied": bool(matched_outcomes),
+            "matched_capability_ids": sorted(
+                {outcome.capability_id for outcome in matched_outcomes}
+            ),
+        },
         "unexpected_capabilities": {
-            "attempted": sorted(attempted - expected),
-            "completed": sorted(completed - expected),
+            "attempted": sorted(attempted - tracked),
+            "completed": sorted(completed - tracked),
         },
         "contract_satisfied": contract_satisfied,
         "tool_error_count": telemetry.get("tool_error_count", 0),

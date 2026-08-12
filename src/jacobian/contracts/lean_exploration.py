@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic import AfterValidator, Field, StrictBool, StrictInt, model_validator
 
 from jacobian.contracts.common import ArtifactUri, Sha256Digest
 from jacobian.contracts.lean import (
@@ -16,22 +17,79 @@ from jacobian.contracts.results import ContractModel
 LeanNormalizedGoal = Annotated[str, Field(min_length=1, max_length=20_000)]
 
 
+def _require_tactic_body(value: str) -> str:
+    if not value.strip():
+        raise ValueError("tactic bodies must be nonempty")
+    if re.match(r"^by(?:\s|$)", value.lstrip()):
+        raise ValueError(
+            "tactic bodies must not include `by`, the surrounding proof introducer"
+        )
+    return value
+
+
+LeanTacticBody = Annotated[
+    str,
+    Field(min_length=1, max_length=1_000),
+    AfterValidator(_require_tactic_body),
+]
+
+
 class LeanProofStateRequest(ContractModel):
-    state_uri: ArtifactUri | None = None
-    environment: LeanEnvironment = LeanEnvironment.CORE
-    statement: str | None = Field(default=None, min_length=1, max_length=2_000)
-    proof_prefix: tuple[str, ...] = Field(default=(), max_length=32)
-    tactic: str = Field(min_length=1, max_length=1_000)
-    max_goals: StrictInt = Field(default=32, ge=1, le=64)
-    max_local_declarations: StrictInt = Field(default=128, ge=1, le=256)
-    max_rendered_bytes: StrictInt = Field(default=65_536, ge=1_024, le=262_144)
+    state_uri: ArtifactUri | None = Field(
+        default=None,
+        description=(
+            "Continuation mode: an immutable successor state URI returned by an "
+            "earlier tactic transition. When supplied, omit statement and proof_prefix."
+        ),
+    )
+    environment: LeanEnvironment = Field(
+        default=LeanEnvironment.CORE,
+        description=(
+            "Pinned Lean environment. It must match the bound state in continuation "
+            "mode."
+        ),
+    )
+    statement: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=2_000,
+        description=(
+            "Fresh mode: one proposition expression to prove. Required when state_uri "
+            "is omitted and forbidden in continuation mode."
+        ),
+    )
+    proof_prefix: tuple[LeanTacticBody, ...] = Field(
+        default=(),
+        max_length=32,
+        description=(
+            "Fresh-mode tactic bodies already applied after Lean's `by`. Do not "
+            "include `by`; omit this field in continuation mode."
+        ),
+    )
+    tactic: LeanTacticBody = Field(
+        description="Exactly one next tactic body to apply; do not include `by`."
+    )
+    max_goals: StrictInt = Field(
+        default=32,
+        ge=1,
+        le=64,
+        description="Maximum successor goals returned by the typed state extractor.",
+    )
+    max_local_declarations: StrictInt = Field(
+        default=128,
+        ge=1,
+        le=256,
+        description="Maximum local declarations returned across one typed goal.",
+    )
+    max_rendered_bytes: StrictInt = Field(
+        default=65_536,
+        ge=1_024,
+        le=262_144,
+        description="Maximum rendered bytes returned by typed goal extraction.",
+    )
 
     @model_validator(mode="after")
     def require_one_state_source_and_bounded_prefix(self) -> Self:
-        if any(
-            not tactic.strip() or len(tactic) > 1_000 for tactic in self.proof_prefix
-        ):
-            raise ValueError("proof-prefix tactics must be nonempty and bounded")
         if self.state_uri is None and self.statement is None:
             raise ValueError("statement is required when state_uri is omitted")
         if self.state_uri is not None and (
@@ -148,18 +206,29 @@ class LeanProofStateOutput(LeanProofStateTransitionArtifact):
 
 
 class LeanPremiseRetrievalRequest(ContractModel):
-    environment: Literal["MATHLIB"] = "MATHLIB"
-    statement: str = Field(min_length=1, max_length=2_000)
-    proof_prefix: tuple[str, ...] = Field(default=(), max_length=32)
-    limit: int = Field(default=5, ge=1, le=20)
-
-    @model_validator(mode="after")
-    def require_bounded_prefix(self) -> Self:
-        if any(
-            not tactic.strip() or len(tactic) > 1_000 for tactic in self.proof_prefix
-        ):
-            raise ValueError("proof-prefix tactics must be nonempty and bounded")
-        return self
+    environment: Literal["MATHLIB"] = Field(
+        default="MATHLIB",
+        description="Premise retrieval is available only in the pinned MATHLIB profile.",
+    )
+    statement: str = Field(
+        min_length=1,
+        max_length=2_000,
+        description="One Lean proposition expression whose current goal needs a premise.",
+    )
+    proof_prefix: tuple[LeanTacticBody, ...] = Field(
+        default=(),
+        max_length=32,
+        description=(
+            "Tactic bodies already applied after Lean's `by`, for example "
+            "[`intro x`]. Do not include `by`."
+        ),
+    )
+    limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum non-exhaustive Mathlib exact? candidates to return.",
+    )
 
 
 class LeanPremiseCandidate(ContractModel):

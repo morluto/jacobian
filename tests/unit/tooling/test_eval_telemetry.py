@@ -174,9 +174,35 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
             "output": {"conclusion": "UNKNOWN"},
         },
     )
+    domain_failure = _tool_event(
+        "math.run",
+        {
+            "capability_id": "lean.retrieve.premises",
+            "payload": {"statement": "True", "proof_prefix": ["by"]},
+        },
+        {
+            "capability_id": "lean.retrieve.premises",
+            "execution": {"status": "ERROR"},
+            "output": {
+                "error": {
+                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "stage": "request_validation",
+                    "message": "proof_prefix must not include by",
+                }
+            },
+            "diagnostics": [
+                {
+                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "stage": "request_validation",
+                    "message": "proof_prefix must not include by",
+                }
+            ],
+        },
+    )
     transcript = tmp_path / "transcript.jsonl"
     transcript.write_text(
-        "\n".join(json.dumps(event) for event in (failed, succeeded)) + "\n",
+        "\n".join(json.dumps(event) for event in (failed, domain_failure, succeeded))
+        + "\n",
         encoding="utf-8",
     )
 
@@ -185,12 +211,27 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
     assert telemetry["capability_attempts"] == [
         {"capability_id": None, "input": {"malformed": True}, "successful": False},
         {
+            "capability_id": "lean.retrieve.premises",
+            "input": {"statement": "True", "proof_prefix": ["by"]},
+            "successful": False,
+            "diagnostic_codes": ["INVALID_LEAN_RETRIEVAL_REQUEST"],
+            "diagnostics": [
+                {
+                    "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                    "stage": "request_validation",
+                }
+            ],
+        },
+        {
             "capability_id": "lean.check",
             "input": {"statement": "True"},
             "successful": True,
         },
     ]
-    assert telemetry["capability_attempt_ids"] == ["lean.check"]
+    assert telemetry["capability_attempt_ids"] == [
+        "lean.retrieve.premises",
+        "lean.check",
+    ]
     assert telemetry["capability_ids"] == ["lean.check"]
 
 

@@ -340,7 +340,9 @@ def lean_frontend_provider_runtime() -> CapabilityProviderRuntime:
             "profiles": {
                 "CORE": {
                     "import_name": "Init.Prelude",
+                    "lean_version": lean4.LEAN_VERSION,
                     "lean_commit": lean4.LEAN_COMMIT,
+                    "mathlib_commit": None,
                 }
             },
         },

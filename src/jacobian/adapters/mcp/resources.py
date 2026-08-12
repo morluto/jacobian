@@ -38,7 +38,7 @@ async def _read_resource_blocking[ResultT](
         ) from exc
 
 
-def _register_resources(
+def register_resources(
     server: MCPServer[AppState],
 ) -> None:
     """Register the durable artifact resource handler."""
@@ -63,3 +63,6 @@ def _register_resources(
                 manifest=artifact.manifest,
                 payload=artifact.payload,
             )
+
+
+__all__ = ["register_resources"]

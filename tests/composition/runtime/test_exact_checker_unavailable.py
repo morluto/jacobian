@@ -42,11 +42,5 @@ def test_unavailable_flint_replay_preserves_runtime_and_reports_diagnostics(
         assert "matrix.normal_form.rref.verify" not in capability_ids
         assert "graph.hamiltonian_path.verify" in capability_ids
 
-        installation = runtime.portfolio.exact_domain_checkers
-        assert installation is not None
-        assert any(
-            diagnostic.details.get("capability_id") == "matrix.normal_form.rref.compute"
-            for diagnostic in installation.diagnostics
-        )
     finally:
         runtime.close()

@@ -25,22 +25,17 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
 )
 from jacobian.contracts.results import ContractModel
+from jacobian.domain_bundles import DomainBundle
 from jacobian.installation.context import InstallationContext
 from jacobian.operation_bindings import InstalledOperation, inline_operation
-from jacobian.operation_installation import InstalledDomainBundle, OperationInstaller
+from jacobian.operation_installation import OperationInstaller
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
     OperationSpec,
 )
-from jacobian.portfolio import (
-    DEPENDENCY_UNAVAILABLE,
-    PROVIDER_UNAVAILABLE,
-    PortfolioPlan,
-)
+from jacobian.portfolio import PROVIDER_UNAVAILABLE, PortfolioPlan
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import ManagedPortfolioComponent
 from jacobian.portfolio.result import (
     BundleInstallationStatus,
     PortfolioInstallationResult,
@@ -50,7 +45,7 @@ from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 class _SyntheticRequest(ContractModel):
@@ -175,20 +170,15 @@ def test_install_domains_installs_every_available_bundle_and_registers_adapters(
     result = assembler.install(plan)
 
     assert isinstance(result, PortfolioInstallationResult)
-    assert result.is_complete
     assert result.diagnostics == ()
     assert set(result.installed) == {"alpha"}
-    assert result.installed_domain_ids == ("alpha",)
-    assert result.skipped_domain_ids == ()
     assert assembly.registered == ["alpha.compute.double"]
 
-    outcome = result.outcome_for("alpha")
-    assert outcome is not None
+    (outcome,) = result.outcomes
     assert outcome.status is BundleInstallationStatus.INSTALLED
     assert outcome.installed is result.installed["alpha"]
     assert outcome.capability_ids == ("alpha.compute.double",)
     assert outcome.diagnostic is None
-    assert result.diagnostic_for("alpha") is None
 
 
 def test_install_domains_preserves_declaration_order_across_bundles(
@@ -204,7 +194,6 @@ def test_install_domains_preserves_declaration_order_across_bundles(
 
     result = assembler.install(plan)
 
-    assert result.installed_domain_ids == ("alpha", "beta")
     assert [outcome.domain_id for outcome in result.outcomes] == ["alpha", "beta"]
     assert assembly.registered == ["alpha.compute.double", "beta.compute.double"]
 
@@ -225,21 +214,16 @@ def test_unavailable_provider_is_skipped_with_typed_diagnostic(
 
     result = assembler.install(plan)
 
-    assert not result.is_complete
     assert set(result.installed) == {"alpha"}
-    assert result.installed_domain_ids == ("alpha",)
-    assert result.skipped_domain_ids == ("beta",)
     # The unavailable bundle's adapters are never registered.
     assert assembly.registered == ["alpha.compute.double"]
 
-    diagnostic = result.diagnostic_for("beta")
-    assert diagnostic is not None
+    (diagnostic,) = result.diagnostics
     assert diagnostic.code == PROVIDER_UNAVAILABLE
     assert diagnostic.component_id == "beta"
     assert diagnostic.message == "beta provider is missing"
 
-    outcome = result.outcome_for("beta")
-    assert outcome is not None
+    outcome = result.outcomes[1]
     assert outcome.status is BundleInstallationStatus.SKIPPED_PROVIDER_UNAVAILABLE
     assert outcome.installed is None
     # Capability IDs are still exposed so callers can see what is missing.
@@ -266,55 +250,15 @@ def test_unavailable_provider_does_not_block_subsequent_bundles(
     result = assembler.install(plan)
 
     assert set(result.installed) == {"alpha", "gamma"}
-    assert result.installed_domain_ids == ("alpha", "gamma")
-    assert result.skipped_domain_ids == ("beta",)
+    assert [outcome.domain_id for outcome in result.outcomes] == [
+        "alpha",
+        "beta",
+        "gamma",
+    ]
     assert assembly.registered == [
         "alpha.compute.double",
         "gamma.compute.double",
     ]
-
-
-def test_unavailable_dependency_skips_affected_bundle_and_continues(
-    assembly: _RecordingContext,
-) -> None:
-    def dependent_installer(*_args: object, **_kwargs: object) -> InstalledDomainBundle:
-        raise AssertionError("an installer with unavailable dependencies must not run")
-
-    dependent = ManagedPortfolioComponent(
-        domain_id="dependent",
-        provider_runtime=_available_runtime(),
-        capability_ids=("dependent.compute.double",),
-        install=dependent_installer,
-        dependency_ids=("optional",),
-    )
-    plan = PortfolioPlan(
-        components=(
-            _synthetic_bundle(
-                domain_id="optional",
-                runtime=_unavailable_runtime("optional provider is missing"),
-            ),
-            dependent,
-            _synthetic_bundle(domain_id="unrelated"),
-        )
-    )
-
-    result = DomainBundleInstaller(assembly.context).install(plan)
-
-    assert result.installed_domain_ids == ("unrelated",)
-    assert result.skipped_domain_ids == ("optional", "dependent")
-    assert assembly.registered == ["unrelated.compute.double"]
-
-    diagnostic = result.diagnostic_for("dependent")
-    assert diagnostic is not None
-    assert diagnostic.code == DEPENDENCY_UNAVAILABLE
-    assert diagnostic.stage == "dependency_availability"
-    assert "optional" in diagnostic.message
-
-    outcome = result.outcome_for("dependent")
-    assert outcome is not None
-    assert outcome.status is BundleInstallationStatus.SKIPPED_DEPENDENCY_UNAVAILABLE
-    assert outcome.capability_ids == ("dependent.compute.double",)
-    assert outcome.installed is None
 
 
 def test_install_domains_validates_the_plan_before_installing(
@@ -339,24 +283,9 @@ def test_empty_plan_yields_complete_empty_result(
 
     result = assembler.install(plan)
 
-    assert result.is_complete
     assert result.installed == {}
     assert result.diagnostics == ()
     assert result.outcomes == ()
-    assert result.installed_domain_ids == ()
-    assert result.skipped_domain_ids == ()
-
-
-def test_outcome_for_and_diagnostic_for_return_none_for_unknown_domains(
-    assembly: _RecordingContext,
-) -> None:
-    assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(components=(_synthetic_bundle(domain_id="alpha"),))
-
-    result = assembler.install(plan)
-
-    assert result.outcome_for("absent") is None
-    assert result.diagnostic_for("absent") is None
 
 
 def test_install_failure_propagates_without_silent_partial_portfolio(

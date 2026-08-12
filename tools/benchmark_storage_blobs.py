@@ -55,10 +55,10 @@ class _CurrentCas:
         self._repository = ArtifactRepository(root)
 
     def put(self, data: bytes) -> str:
-        return self._repository._write_blob(data)
+        return self._repository._blobs.write(data)
 
     def get(self, digest: str, *, maximum_bytes: int | None = None) -> bytes:
-        data = self._repository._read_blob(digest)
+        data = self._repository._blobs.read(digest)
         if maximum_bytes is not None and len(data) > maximum_bytes:
             raise ValueError("blob exceeds the requested read bound")
         return data

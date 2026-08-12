@@ -223,7 +223,7 @@ def test_repeated_put_validates_without_blob_or_metadata_writes(
     def reject_blob_write(_data: bytes) -> str:
         pytest.fail("an idempotent put must not publish blobs")
 
-    monkeypatch.setattr(store, "_write_blob", reject_blob_write)
+    monkeypatch.setattr(store._blobs, "write", reject_blob_write)
 
     try:
         repeated = store.put(
@@ -284,7 +284,7 @@ def test_repeated_descriptor_registration_rejects_corrupted_blob(
         definition=definition,
     )
     descriptor = store.get(descriptor_uri)
-    store._blob_path(descriptor.manifest.payload_digest).write_bytes(b"corrupt")
+    store._blobs.blob_path(descriptor.manifest.payload_digest).write_bytes(b"corrupt")
 
     with pytest.raises(ArtifactIntegrityError, match="blob digest mismatch"):
         store.register_descriptor(
@@ -426,11 +426,11 @@ def test_missing_reference_metadata_is_rejected_on_read(
 def test_duplicate_put_rechecks_a_changed_blob(tmp_path: Path) -> None:
     store = ArtifactRepository(tmp_path)
     original = b"original"
-    digest = store._write_blob(original)
-    store._blob_path(digest).write_bytes(b"tampered")
+    digest = store._blobs.write(original)
+    store._blobs.blob_path(digest).write_bytes(b"tampered")
 
     with pytest.raises(ArtifactIntegrityError, match="does not match"):
-        store._write_blob(original)
+        store._blobs.write(original)
 
 
 def test_store_keeps_filesystem_paths_local(

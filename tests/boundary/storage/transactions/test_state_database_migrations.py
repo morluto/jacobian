@@ -358,7 +358,46 @@ def test_previous_pre_stable_head_requires_fresh_store(tmp_path: Path) -> None:
     with pytest.raises(UnsupportedStateVersionError) as exc_info:
         ArtifactRepository(tmp_path)
     assert exc_info.value.detected_revision == 7
-    assert exc_info.value.minimum_revision == 8
+    assert exc_info.value.minimum_revision == SUPPORTED_STATE_FLOOR
+
+
+def test_checker_distribution_identity_rejects_existing_authorizations(
+    tmp_path: Path,
+) -> None:
+    with ArtifactRepository(tmp_path):
+        pass
+    connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
+    try:
+        connection.execute("DELETE FROM jacobian_schema_migrations WHERE revision = 10")
+        connection.execute(
+            "UPDATE jacobian_state_format SET format_revision = 9 WHERE id = 0"
+        )
+        connection.execute(
+            """
+            INSERT INTO checkers(
+                checker_id, registration_json, authorized, implementation_digest
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (
+                "checker://sha256/legacy-authorization",
+                b"{}",
+                1,
+                "sha256:legacy-implementation",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    database = StateDatabase(tmp_path / "metadata.sqlite3", synchronous="FULL")
+    try:
+        with pytest.raises(
+            RuntimeError,
+            match="checker distribution identity requires a fresh state directory",
+        ):
+            database.migrate(STATE_MIGRATIONS)
+    finally:
+        database.close(checkpoint=False)
 
 
 def test_current_head_bootstrap_performs_no_sqlite_writes(

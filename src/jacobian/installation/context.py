@@ -7,13 +7,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityAdapter, CapabilityService
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_service import CapabilityService
 from jacobian.operation_installation import OperationInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 if TYPE_CHECKING:
     from jacobian.runtime.config import RuntimeOptions

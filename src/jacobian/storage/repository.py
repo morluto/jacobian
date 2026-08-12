@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import sqlite3
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from pathlib import Path
+from typing import Any, Self
 
 from jacobian.canonical import CanonicalLimits
+from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.persistence import (
     PersistenceLock,
     StateDatabase,
@@ -17,19 +20,26 @@ from jacobian.persistence.migrations import (
     STATE_MIGRATIONS,
     SUPPORTED_STATE_FLOOR,
 )
-from jacobian.storage.blobs import BlobPublisher
+from jacobian.storage.blobs import FilesystemBlobStore
 from jacobian.storage.errors import (
     StorageCorruptionError,
     StorageError,
     UnsupportedStateVersionError,
 )
-from jacobian.storage.metadata import ArtifactMetadata
-from jacobian.storage.models import StorageLimits
-from jacobian.storage.transactions import TransactionCoordinator
+from jacobian.storage.metadata import ArtifactMetadataStore
+from jacobian.storage.models import StorageLimits, StoredArtifact
+from jacobian.storage.transactions import ArtifactTransactions
 
 
-class ArtifactRepository(TransactionCoordinator, BlobPublisher, ArtifactMetadata):
-    """Content-addressed blobs plus immutable SQLite artifact metadata."""
+class ArtifactRepository:
+    """Content-addressed blobs plus immutable SQLite artifact metadata.
+
+    This public aggregate owns three concrete collaborators: ``ArtifactTransactions``
+    coordinates SQLite and recovery markers, ``FilesystemBlobStore`` owns the
+    CAS and quota ledger, and ``ArtifactMetadataStore`` owns artifact identity
+    and metadata. They are intentionally filesystem-specific collaborators,
+    not a portable storage-backend abstraction.
+    """
 
     def __init__(
         self,
@@ -48,25 +58,34 @@ class ArtifactRepository(TransactionCoordinator, BlobPublisher, ArtifactMetadata
         normalized_synchronous = synchronous.upper()
         if normalized_synchronous not in {"OFF", "NORMAL", "FULL", "EXTRA"}:
             raise ValueError("synchronous must be one of OFF, NORMAL, FULL, or EXTRA")
-        # FULL remains the default: callers must opt into a weaker SQLite
-        # synchronization policy explicitly.  This is useful for benchmarks
-        # and disposable test stores without silently changing durability.
         self.synchronous = normalized_synchronous
         self.blob_root = self.root / "blobs" / "sha256"
         self.staging_root = self.root / "staging"
         self.db_path = self.root / "metadata.sqlite3"
         self.blob_lock_path = self.root / ".blob-quota.lock"
-        self._blob_lock = PersistenceLock(self.blob_lock_path)
         self.transaction_recovery_path = self.root / ".transaction-recovery"
-        self._validated_blobs: dict[str, tuple[int, int, int, int, int]] = {}
-        self.database = StateDatabase(
-            self.db_path,
-            synchronous=self.synchronous,
-        )
-        self._closed = False
-        self._recovery_required = False
+        self.database = StateDatabase(self.db_path, synchronous=self.synchronous)
         self.blob_root.mkdir(parents=True, exist_ok=True)
         self.staging_root.mkdir(parents=True, exist_ok=True)
+        self._transactions = ArtifactTransactions(
+            blob_root=self.blob_root,
+            db_path=self.db_path,
+            transaction_recovery_path=self.transaction_recovery_path,
+            database=self.database,
+            blob_lock=PersistenceLock(self.blob_lock_path),
+        )
+        self._blobs = FilesystemBlobStore(
+            blob_root=self.blob_root,
+            staging_root=self.staging_root,
+            limits=self.limits,
+            transactions=self._transactions,
+        )
+        self._metadata = ArtifactMetadataStore(
+            limits=self.limits,
+            canonical_limits=self.canonical_limits,
+            transactions=self._transactions,
+            blobs=self._blobs,
+        )
         try:
             self._reject_unsupported_state_revision()
             self.database.migrate(STATE_MIGRATIONS)
@@ -82,7 +101,109 @@ class ArtifactRepository(TransactionCoordinator, BlobPublisher, ArtifactMetadata
             with suppress(StateDatabaseError):
                 self.database.close(checkpoint=False)
             raise StorageError("artifact store schema migration failed") from exc
-        self._reconcile_blob_quota()
+        self._blobs.reconcile_quota()
+
+    def close(self) -> None:
+        """Checkpoint SQLite and end this store's owned lifetime."""
+
+        self._transactions.close()
+
+    def __enter__(self) -> Self:
+        self._transactions.ensure_open()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    @contextmanager
+    def connection(self) -> Iterator[sqlite3.Connection]:
+        """Yield this thread's transaction connection or one owned connection."""
+
+        with self._transactions.connection() as connection:
+            yield connection
+
+    @property
+    def transaction_active(self) -> bool:
+        """Whether this thread is inside an explicit store transaction."""
+
+        return self._transactions.transaction_active
+
+    @property
+    def transaction_identity(self) -> int | None:
+        """Process-local identity of this thread's active transaction."""
+
+        return self._transactions.transaction_identity
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Commit related store operations through one SQLite transaction."""
+
+        with self._transactions.transaction(self._blobs):
+            yield
+
+    def register_descriptor(
+        self,
+        *,
+        kind: str,
+        name: str,
+        version: str,
+        definition: Any,
+    ) -> str:
+        return self._metadata.register_descriptor(
+            kind=kind,
+            name=name,
+            version=version,
+            definition=definition,
+        )
+
+    def descriptor_uri(
+        self,
+        *,
+        kind: str,
+        name: str,
+        version: str,
+        definition: Any,
+    ) -> str:
+        return self._metadata.descriptor_uri(
+            kind=kind,
+            name=name,
+            version=version,
+            definition=definition,
+        )
+
+    def get_descriptor(
+        self,
+        artifact_uri: str,
+        *,
+        expected_kind: str | None = None,
+    ) -> dict[str, Any]:
+        return self._metadata.get_descriptor(
+            artifact_uri,
+            expected_kind=expected_kind,
+        )
+
+    def put(
+        self,
+        *,
+        schema_uri: str,
+        semantics_uri: str,
+        payload: Any,
+        parents: tuple[str, ...] | list[str] = (),
+        summary: str = "",
+    ) -> ArtifactPutResult:
+        return self._metadata.put(
+            schema_uri=schema_uri,
+            semantics_uri=semantics_uri,
+            payload=payload,
+            parents=parents,
+            summary=summary,
+        )
+
+    def get(self, artifact_uri: str) -> StoredArtifact:
+        return self._metadata.get(artifact_uri)
+
+    def find_by_object_digest(self, object_digest: str) -> tuple[str, ...]:
+        return self._metadata.find_by_object_digest(object_digest)
 
     def _reject_unsupported_state_revision(self) -> None:
         """Reject old and future ledgers before the migration runner can act."""

@@ -124,6 +124,19 @@ def test_authorized_portfolio_template_is_quiescent_and_copyable(
         destination,
         checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
     ) as runtime:
-        assert runtime.portfolio.polytope_checkers is not None
-        assert runtime.portfolio.polytope_checkers.witness_checker_id is not None
-        assert runtime.portfolio.polytope_checkers.certificate_checker_id is not None
+        assert runtime.core.checkers.select_compatible(
+            evidence_kind="WITNESS",
+            format_id="polytope.convex_combination",
+            format_version="1",
+            claim_schema_uri=runtime.services.polytope.claim_schema_uri,
+            semantics_uri=runtime.services.polytope.semantics_uri,
+            candidate_schema_uri=runtime.services.polytope.point_schema_uri,
+        )
+        assert runtime.core.checkers.select_compatible(
+            evidence_kind="CERTIFICATE",
+            format_id="polytope.linear_separator",
+            format_version="1",
+            claim_schema_uri=runtime.services.polytope.claim_schema_uri,
+            semantics_uri=runtime.services.polytope.semantics_uri,
+            candidate_schema_uri=runtime.services.polytope.point_schema_uri,
+        )

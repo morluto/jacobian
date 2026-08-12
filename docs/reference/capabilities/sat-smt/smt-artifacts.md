@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Experimental pre-stable producer and verifier contracts
+- Status: Experimental producer and verifier contracts
 - Producer operation: `smt.unsat_proof.find`, backed by the exact packaged
   cvc5 1.3.4 Python distribution
 - Verification operation: `smt.unsat_proof.verify` for the pinned zero-hole

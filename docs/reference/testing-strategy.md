@@ -109,23 +109,9 @@ behavioral regression proof is infeasible, state the proof gap.
 - links pass; and
 - capability membership remains sourced from the live catalog.
 
-## Deletion acceptance
-
-- deleted services are not imported, constructed, registered, or closed;
-- removed operation IDs and resources are absent from catalog/MCP inventory;
-- retained mathematical operations and independently authorized checkers still
-  start and run;
-- missing optional native or formal providers remove only their affected
-  operations; a missing packaged Python backend is an installation failure;
-- runtime startup and shutdown have fewer states and owners; and
-- source, tests, and documentation show material net deletion.
-
-Negative import and inventory tests must prove absence. Do not keep compatibility
-aliases or test-only registration paths merely to make old tests pass.
-
 ## `jacobian.math` acceptance
 
-For each migrated domain:
+For each public domain:
 
 - Python callers construct no runtime, catalog, store, or MCP object;
 - installed operations call the same public semantic implementation;
@@ -137,8 +123,8 @@ For each migrated domain:
   contract permits them; and
 - Import Linter prevents upward dependencies.
 
-The narrow Import Linter contract grows with each pilot and becomes exhaustive
-after the domain cutover. Value modules cannot import private provider adapters.
+Import Linter prevents upward dependencies. Value modules cannot import private
+provider adapters.
 
 ## Operation execution acceptance
 
@@ -180,15 +166,15 @@ Composition tests use independent producer and consumer operations. They cover:
 - no assurance propagation through compatibility or carriers.
 
 Installation tests validate supported port accessors against their declared
-value type. #905 Slices A and B use the same whole-value input and output ports;
-the tests reject any declaration whose accessor disagrees with the Pydantic
-request or result type.
+value type. Finite-field linear algebra and polynomial maps use the same
+whole-value input and output ports; tests reject any declaration whose accessor
+disagrees with the Pydantic request or result type.
 
-## #905 acceptance
+## Finite-field composition acceptance
 
-Slice A tests bind the exact finite-field modulus, generator, ordered basis,
-encoding version, and presentation digest. They reject differently presented
-isomorphic fields and wrong axes/bases, construct the explicit
+Direction-ledger tests bind the exact finite-field modulus, generator, ordered
+basis, encoding version, and presentation digest. They reject differently
+presented isomorphic fields and wrong axes/bases, construct the explicit
 `F₂⁴ → F₂⁶` restricted-scalar map, agree on rank between Python-FLINT and the
 independent prime-field path, preserve all nine projective directions in the
 rank ledger, and independently replay the final orbit distribution.
@@ -197,7 +183,7 @@ Adversarial cases mutate presentation, axes, basis, rank, direction identity,
 and ledger bindings. Cost admission occurs before allocation/publication and no
 input assurance is inherited.
 
-Slice B tests reuse the same field presentation, element values, codec,
+Polynomial-map tests reuse the same field presentation, element values, codec,
 carriers, and references. A finite map table binds exact domain and codomain;
 fibers partition the complete exact field; collision and permutation
 certificates bind the exact map and enumeration scope; forged or incomplete

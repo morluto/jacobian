@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Current implementation reference; contracts are experimental
+- Status: Experimental contracts
 - Domain: `geometry`
 - Producer backend: pinned SymPy exact rational geometry
 - Checker backend: Python standard-library `Fraction`, isolated from SymPy
@@ -25,10 +25,6 @@ result preserves exactly one of:
 
 The result never collapses a collinear overlap or a degenerate touch into an
 untyped boolean.
-
-The older `geometry.segment.compute.midpoint` ID remains unchanged. The
-singular/plural difference is retained for compatibility: this addition does
-not rename or alias existing capability IDs.
 
 ## Polygon decisions
 

@@ -70,26 +70,9 @@ candidate is `REJECTED` with conclusion `UNKNOWN`; it is never converted into
 a contrary theorem. Checker unavailability, timeout, cancellation, or error is
 also non-conclusive.
 
-## Public reproduction and limits
+## Scope limits
 
-The public challenge `jcb-postdoc-016` asks about a bounded statement through
-`10^14` and an unbounded conjecture concerning three consecutive powerful
-numbers. Invoke this capability separately on `8`, `9`, and `10` to obtain
-inspectable single-value evidence:
-
-- `8 = 2^3` is powerful;
-- `9 = 3^2` is powerful; and
-- `10 = 2 × 5` is not powerful, with violating primes `2` and `5`.
-
-Those three completed decisions establish only those three cases. Repeating
-the capability over any finite caller-chosen sample does not certify exhaustive
-coverage of a range, replay the external `10^14` artifact, or prove the global
+Each invocation decides one integer. Repeating it over a finite caller-chosen
+sample does not certify exhaustive coverage of a range or prove an unbounded
 conjecture. Those claims require separately scoped enumeration or formal
 certificate evidence.
-
-## Compatibility
-
-The capability adds one request subtype, one result model, and one operation to
-the existing number-theory bundle. Existing factorization request/result
-contracts, worker operations, capability IDs, provider runtime, and runtime
-installation paths are unchanged.

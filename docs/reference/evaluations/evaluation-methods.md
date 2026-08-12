@@ -149,17 +149,17 @@ evidence only and does not relax the final `lean.check` boundary.
 Performance never relaxes validation, evidence binding, resource admission, or
 checker independence. A fast checker that accepts forged evidence is broken.
 
-## #905 evaluation
+## Finite-field composition evaluation
 
-Slice A tasks must require the exact finite-field presentation, explicit
+Direction-ledger tasks require the exact finite-field presentation, explicit
 restriction of scalars, the `F₂⁴ → F₂⁶` map, nine direction-bound ranks, and an
 orbit distribution. Trap cases use differently presented isomorphic fields,
 wrong axes/bases, rank substitutions, and missing directions.
 
-Slice B tasks require reuse of Slice A field identity and codecs, a complete
-finite polynomial map table, exact fiber partition, and collision/permutation
-certificates. Trap cases forge or truncate enumeration and substitute the map
-or parent.
+Polynomial-map tasks require reuse of the same field identity and codecs, a
+complete finite polynomial map table, exact fiber partition, and
+collision/permutation certificates. Trap cases forge or truncate enumeration
+and substitute the map or parent.
 
 Evaluate producer and checker code paths separately. They may share passive
 formats and expected digests, never executable enumeration, conversion, or

@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Current implementation reference; contracts are pre-stable
+- Status: Experimental contracts
 - Related tutorial:
   [Retrieve a Lean theorem and check a proof](../../../tutorials/lean-declaration-discovery.md)
 

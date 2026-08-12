@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Current implementation reference; contracts are experimental
+- Status: Experimental contracts
 - Domain: `topology`
 - Producer backend: Jacobian standard-library exact finite and modular arithmetic
 - Checker backend: isolated standard-library replay with no producer imports

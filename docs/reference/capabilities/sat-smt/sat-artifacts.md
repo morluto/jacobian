@@ -2,7 +2,7 @@
 
 [Documentation home](../../../index.md)
 
-- Status: Experimental pre-stable contract
+- Status: Experimental contract
 - Installed operation: `sat.cnf.materialize`
 - Optional operations: `sat.model.find` and `sat.unsat_proof.find` when exact
   CaDiCaL 3.0.1 is installed; `sat.unsat_proof.verify` when the operator
@@ -319,30 +319,6 @@ conclusion.
 Acceptance creates the ordinary runtime `VerificationRecord`, bound to the
 certificate and all three artifacts, and permits `VERIFIED_UNSAT` with
 conclusion `TRUE`. Rejection reports `UNKNOWN`; it does not establish SAT.
-
-## Public reproductions
-
-The unscored manifest
-[`sat-small`](../../../../benchmarks/datasets/public-reproductions-v1/sat-small/)
-replays three public cases through the real installed backends:
-
-- the complete `BOOL-MUS-001` formula, without treating later shrinking as
-  part of this capability slice;
-- one small satisfiable CNF; and
-- the three-pigeons/two-holes UNSAT instance.
-
-The manifest records `scored: false`; these cases exercise compatibility and
-regression behavior and are never hidden evaluation. Run the actual
-CaDiCaL-to-checker path with:
-
-```sh
-uv run pytest -n 0 tests/boundary/providers/external_sat/test_sat_public_reproductions.py
-```
-
-The `BOOL-MUS-001` replay exposed CaDiCaL cleanup deletions after its empty
-clause. Preserving the raw proof and using DRAT-trim's forward check accepted
-that valid producer output without weakening rejection of concatenated
-post-contradiction additions.
 
 ## Trust boundary
 

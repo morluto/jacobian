@@ -56,8 +56,8 @@ value in `output` first, then execution status. If the payload shape is unknown,
 inspect the exact operation with math.find.
 
 Ordinary tools return calculations. Independent checking uses a separate checker
-tool ID (for example `polynomial.identity.verify` or `case.partition.finite.verify`),
-not a switch on the producer. Failed or incomplete runs are not mathematical conclusions.
+tool ID (for example `polynomial.identity.verify`), not a switch on the producer.
+Failed or incomplete runs are not mathematical conclusions.
 
 Examples:
 - `{"capability_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}`

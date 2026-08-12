@@ -118,7 +118,10 @@ class CheckerPortfolioInstaller:
             _LOGGER.warning("lean.check is not installed: no active Lean checker")
             return
         try:
-            result.lean_declarations = installed_lean_declaration_service(runtime)
+            result.lean_declarations = installed_lean_declaration_service(
+                runtime,
+                cache_root=ctx.store.root / "cache" / "lean-declarations",
+            )
         except (OSError, RuntimeError) as exc:
             _LOGGER.warning("Lean declaration discovery is not installed: %s", exc)
         self._install_lean_declaration_adapters(result, runtime)

@@ -152,6 +152,18 @@ retain corpus digests and correctness checks with latency, and pass
 so pyperf workers receive the selected cell identity. This is operational
 evidence only and does not relax the final `lean.check` boundary.
 
+For Lean declaration lookup comparisons, run
+`benchmarks.tooling.lean_declaration_backend_benchmark` for each relevant
+`CORE`/`MATHLIB`, `search`/`inspect`, and `cold`/`indexed`/`warm`/`persistent`
+cell. `cold` reconstructs the clean backend without a portable index;
+`indexed` restores an environment-bound catalog but still starts a clean Lean
+process; `warm` measures the bounded typed-result LRU; and `persistent` retains
+one imported environment while disabling the result LRU. Every sample validates
+the same typed declaration payload. The persistent cell remains an
+evaluation-only backend candidate, not an agent-facing tool or a production
+default. Preserve the pyperf JSON, pinned commits, source revision, corpus
+digest, and same-host cold/warm ordering when reporting a comparison.
+
 Performance never relaxes validation, evidence binding, resource admission, or
 checker independence. A fast checker that accepts forged evidence is broken.
 

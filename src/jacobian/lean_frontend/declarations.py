@@ -5,13 +5,16 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import shutil
 import tempfile
 import threading
+import time
 import uuid
 import weakref
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import ValidationError
 
@@ -43,7 +46,14 @@ from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationSearchPayload,
     LeanDeclarationSearchQuery,
 )
+from jacobian.lean_frontend.repl_protocol import (
+    LeanReplCommandResponse,
+    LeanReplErrorResponse,
+)
 from jacobian.process_policy import (
+    BoundedInteractiveProcess,
+    InteractiveProcessError,
+    InteractiveProcessRequest,
     ProcessRequest,
     ProcessTermination,
     execute_process,
@@ -63,8 +73,15 @@ _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _MAX_STDERR_BYTES = 128 * 1024
 _MAX_CATALOG_CANDIDATES = 10_000
 _MAX_CATALOG_NAME_BYTES = 2 * 1024 * 1024
+_MAX_INDEX_BYTES = 128 * 1024 * 1024
+_RESULT_CACHE_ENTRIES = 128
+_RESULT_CACHE_BYTES = 32 * 1024 * 1024
+_PERSISTENT_MAX_REQUESTS = 64
+_PERSISTENT_MAX_AGE_SECONDS = 600.0
 _QUERY_SOURCE = Path(__file__).with_name("_lean_declaration_query.lean")
 _IMPORT_TOKEN = "{{JACOBIAN_IMPORT}}"
+_ENTRYPOINT_MARKER = "-- JACOBIAN_DECLARATION_ENTRYPOINT"
+_INDEX_FORMAT = "jacobian.lean.declaration-index/v1"
 
 
 class LeanDeclarationBackend(Protocol):
@@ -88,6 +105,51 @@ class LeanDeclarationBackendError(RuntimeError):
         self.message = message
 
 
+class _TypedPayloadCache:
+    """Bounded LRU of immutable, validated declaration payloads."""
+
+    def __init__(self, *, enabled: bool) -> None:
+        self._enabled = enabled
+        self._entries: OrderedDict[str, tuple[LeanDeclarationPayload, int]] = (
+            OrderedDict()
+        )
+        self._retained_bytes = 0
+
+    def get(self, query: LeanDeclarationQuery) -> LeanDeclarationPayload | None:
+        if not self._enabled or not _cacheable_query(query):
+            return None
+        key = _query_cache_key(query)
+        cached = self._entries.get(key)
+        if cached is None:
+            return None
+        self._entries.move_to_end(key)
+        return cached[0]
+
+    def put(
+        self,
+        query: LeanDeclarationQuery,
+        payload: LeanDeclarationPayload,
+    ) -> None:
+        if not self._enabled or not _cacheable_query(query):
+            return
+        serialized = canonicalize_json(payload.model_dump(mode="json"))
+        size = len(serialized)
+        if size > _RESULT_CACHE_BYTES:
+            return
+        key = _query_cache_key(query)
+        previous = self._entries.pop(key, None)
+        if previous is not None:
+            self._retained_bytes -= previous[1]
+        self._entries[key] = (payload, size)
+        self._retained_bytes += size
+        while (
+            len(self._entries) > _RESULT_CACHE_ENTRIES
+            or self._retained_bytes > _RESULT_CACHE_BYTES
+        ):
+            _, (_, evicted_size) = self._entries.popitem(last=False)
+            self._retained_bytes -= evicted_size
+
+
 class _DeclarationQuerySession(Protocol):
     def request(
         self,
@@ -100,7 +162,7 @@ class _DeclarationQuerySession(Protocol):
 
 
 class _ReusableLeanQuerySession:
-    """Run bounded queries while reusing one environment-bound name index."""
+    """Run clean bounded queries with a reusable index and typed result cache."""
 
     def __init__(
         self,
@@ -112,6 +174,8 @@ class _ReusableLeanQuerySession:
         memory_mb: str,
         isolated_home: bool,
         environment_digest: str,
+        index_cache_path: Path | None,
+        cache_results: bool,
     ) -> None:
         self._closed = False
         self._temporary_directory = tempfile.TemporaryDirectory(
@@ -123,6 +187,8 @@ class _ReusableLeanQuerySession:
         self._request_path = temporary_root / "query.json"
         self._index_path = temporary_root / "declarations.index"
         self._index_digest: str | None = None
+        self._index_cache_path = index_cache_path
+        self._payload_cache = _TypedPayloadCache(enabled=cache_results)
         self._environment_digest = environment_digest
         self._command = command
         self._cwd = cwd
@@ -137,6 +203,7 @@ class _ReusableLeanQuerySession:
         )
         if isolated_home:
             self._process_environment["HOME"] = str(temporary_root)
+        self._restore_index_cache()
 
     def request(
         self,
@@ -147,6 +214,9 @@ class _ReusableLeanQuerySession:
         if self._closed:
             raise _query_failed()
         self._check_index_identity()
+        cached = self._payload_cache.get(query)
+        if cached is not None:
+            return cached
         request_id = uuid.uuid4().hex
         wire_query = self._catalog_query(query)
         wire_payload = {
@@ -208,6 +278,7 @@ class _ReusableLeanQuerySession:
             expected_request_id=request_id,
         )
         self._record_or_check_index(query)
+        self._payload_cache.put(query, output)
         return output
 
     def close(self) -> None:
@@ -231,13 +302,56 @@ class _ReusableLeanQuerySession:
             return
         try:
             current_digest = _sha256_file(self._index_path)
-            self._validate_index_header()
-        except OSError as exc:
+            _validate_declaration_index(
+                self._index_path,
+                environment_digest=self._environment_digest,
+            )
+        except (OSError, ValueError) as exc:
             raise _protocol_error() from exc
         if self._index_digest is None:
             self._index_digest = current_digest
+            self._publish_index_cache()
         elif current_digest != self._index_digest:
             raise _index_changed()
+
+    def _restore_index_cache(self) -> None:
+        cache_path = self._index_cache_path
+        if cache_path is None or not cache_path.is_file():
+            return
+        try:
+            shutil.copyfile(cache_path, self._index_path)
+            _validate_declaration_index(
+                self._index_path,
+                environment_digest=self._environment_digest,
+            )
+            self._index_digest = _sha256_file(self._index_path)
+        except (OSError, ValueError):
+            self._index_path.unlink(missing_ok=True)
+            self._index_digest = None
+
+    def _publish_index_cache(self) -> None:
+        cache_path = self._index_cache_path
+        if cache_path is None:
+            return
+        temporary_path: Path | None = None
+        try:
+            cache_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                prefix=f".{cache_path.name}.",
+                dir=cache_path.parent,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                with self._index_path.open("rb") as source:
+                    shutil.copyfileobj(source, temporary)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            temporary_path.chmod(0o600)
+            temporary_path.replace(cache_path)
+        except OSError:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
     def _catalog_query(
         self,
@@ -294,10 +408,154 @@ class _ReusableLeanQuerySession:
             }
         )
 
-    def _validate_index_header(self) -> None:
-        with self._index_path.open(encoding="utf-8") as stream:
-            if stream.readline().rstrip("\n") != self._environment_digest:
-                raise OSError("declaration index environment mismatch")
+
+class _PersistentLeanQuerySession:
+    """Bounded benchmark candidate retaining one imported Lean environment."""
+
+    def __init__(
+        self,
+        *,
+        command: list[str],
+        cwd: Path,
+        process_environment: dict[str, str],
+        base_command: str,
+        memory_mb: str,
+        environment_digest: str,
+        cache_results: bool,
+    ) -> None:
+        self._closed = False
+        self._temporary_directory = tempfile.TemporaryDirectory(
+            prefix="jacobian-lean-declarations-persistent-"
+        )
+        temporary_root = Path(self._temporary_directory.name)
+        self._request_path = temporary_root / "query.json"
+        self._index_path = temporary_root / "declarations.index"
+        self._command = command
+        self._cwd = cwd
+        self._base_command = base_command
+        self._process_environment = dict(process_environment)
+        self._process_environment.update(
+            {
+                "JACOBIAN_LEAN_ENVIRONMENT_DIGEST": environment_digest,
+                "JACOBIAN_LEAN_INDEX_FILE": str(self._index_path),
+                "JACOBIAN_LEAN_QUERY_FILE": str(self._request_path),
+            }
+        )
+        self._max_rss_kb = int(memory_mb) * 1024
+        self._process: BoundedInteractiveProcess | None = None
+        self._base_env: int | None = None
+        self._started_at = 0.0
+        self._requests = 0
+        self._payload_cache = _TypedPayloadCache(enabled=cache_results)
+
+    def request(
+        self,
+        query: LeanDeclarationQuery,
+        *,
+        timeout_seconds: int,
+    ) -> LeanDeclarationPayload:
+        if self._closed:
+            raise _query_failed()
+        cached = self._payload_cache.get(query)
+        if cached is not None:
+            return cached
+        self._ensure_process(timeout_seconds)
+        process = self._process
+        if process is None:
+            raise _query_failed()
+        request_id = uuid.uuid4().hex
+        wire_payload = {
+            **query.model_dump(mode="json"),
+            "request_id": request_id,
+        }
+        self._request_path.write_bytes(canonicalize_json(wire_payload))
+        try:
+            decoded = process.exchange(
+                {
+                    "cmd": "#jacobian_declaration_query",
+                    "env": self._base_env,
+                },
+                timeout_seconds=float(timeout_seconds),
+            )
+        except InteractiveProcessError as exc:
+            self._stop_process()
+            detail = str(exc)
+            if "timed out" in detail:
+                raise LeanDeclarationBackendError(
+                    "LEAN_QUERY_TIMEOUT",
+                    (
+                        "Lean declaration discovery exceeded the "
+                        f"{timeout_seconds}-second per-query budget."
+                    ),
+                ) from exc
+            if "stderr limit" in detail or "memory limit" in detail:
+                raise LeanDeclarationBackendError(
+                    "LEAN_QUERY_OUTPUT_LIMIT",
+                    "The persistent Lean declaration backend exceeded its resource budget.",
+                ) from exc
+            raise _query_failed() from exc
+        output = _parse_persistent_response(
+            decoded,
+            expected_request_id=request_id,
+        )
+        self._requests += 1
+        self._payload_cache.put(query, output)
+        return output
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._stop_process()
+        self._temporary_directory.cleanup()
+
+    def _ensure_process(self, timeout_seconds: int) -> None:
+        if self._process is not None and (
+            not self._process.is_running
+            or self._requests >= _PERSISTENT_MAX_REQUESTS
+            or time.monotonic() - self._started_at >= _PERSISTENT_MAX_AGE_SECONDS
+        ):
+            self._stop_process()
+        if self._process is not None:
+            return
+        process = BoundedInteractiveProcess(
+            InteractiveProcessRequest(
+                executable=self._command[0],
+                arguments=tuple(self._command[1:]),
+                environment=self._process_environment,
+                cwd=str(self._cwd.resolve(strict=True)),
+                startup_timeout_seconds=float(timeout_seconds),
+                read_timeout_seconds=float(timeout_seconds),
+                shutdown_timeout_seconds=2.0,
+                stderr_limit_bytes=_MAX_STDERR_BYTES,
+                base_command=self._base_command,
+                max_rss_kb=self._max_rss_kb,
+            )
+        )
+        try:
+            process.start()
+        except InteractiveProcessError as exc:
+            raise _query_failed() from exc
+        base_response = process.base_response
+        try:
+            parsed_base = LeanReplCommandResponse.model_validate(base_response)
+        except ValidationError as exc:
+            process.close()
+            raise _protocol_error() from exc
+        if any(message.severity == "error" for message in parsed_base.messages):
+            process.close()
+            raise _query_failed()
+        self._process = process
+        self._base_env = parsed_base.env
+        self._started_at = time.monotonic()
+        self._requests = 0
+
+    def _stop_process(self) -> None:
+        process = self._process
+        self._process = None
+        self._base_env = None
+        if process is not None:
+            process.close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,7 +576,7 @@ def _close_declaration_sessions(
 
 
 class LeanSubprocessDeclarationBackend:
-    """Reuse one catalog across bounded processes for each validated environment."""
+    """Reuse typed metadata across bounded, environment-bound sessions."""
 
     def __init__(
         self,
@@ -326,14 +584,25 @@ class LeanSubprocessDeclarationBackend:
         lean_executable: Path,
         mathlib_runtime: Path | None,
         provider_runtime: CapabilityProviderRuntime,
+        cache_root: Path | None = None,
+        session_backend: Literal["clean", "persistent"] = "clean",
+        cache_results: bool = True,
     ) -> None:
+        if session_backend not in {"clean", "persistent"}:
+            raise ValueError("declaration session backend must be clean or persistent")
         self.lean_executable = lean_executable
         self.mathlib_runtime = mathlib_runtime
         self.provider_runtime = provider_runtime
+        self.cache_root = cache_root
+        self.session_backend = session_backend
+        self.cache_results = cache_results
         self._source_template = _QUERY_SOURCE.read_text(encoding="utf-8")
-        if self._source_template.count(_IMPORT_TOKEN) != 1:
+        if (
+            self._source_template.count(_IMPORT_TOKEN) != 1
+            or self._source_template.count(_ENTRYPOINT_MARKER) != 1
+        ):
             raise RuntimeError(
-                "Lean declaration query source has an invalid import token"
+                "Lean declaration query source has invalid template markers"
             )
         self._sessions: dict[LeanEnvironment, _SessionEntry] = {}
         self._session_locks = {
@@ -539,6 +808,22 @@ class LeanSubprocessDeclarationBackend:
         )
         source = self._source_template.replace(_IMPORT_TOKEN, import_name)
         temporary_root = Path(tempfile.gettempdir())
+        if self.session_backend == "persistent":
+            command, cwd = self._persistent_command()
+            process_environment = self._process_environment(
+                LeanEnvironment.MATHLIB,
+                temporary_root,
+            )
+            base_command = source.split(_ENTRYPOINT_MARKER, maxsplit=1)[0]
+            return _PersistentLeanQuerySession(
+                command=command,
+                cwd=cwd,
+                process_environment=process_environment,
+                base_command=base_command,
+                memory_mb="8192",
+                environment_digest=environment_digest,
+                cache_results=self.cache_results,
+            )
         command, cwd, memory_mb, _ = self._command(
             environment,
             temporary_root,
@@ -555,7 +840,63 @@ class LeanSubprocessDeclarationBackend:
             memory_mb=memory_mb,
             isolated_home=environment is LeanEnvironment.CORE,
             environment_digest=environment_digest,
+            index_cache_path=self._index_cache_path(
+                environment,
+                environment_digest,
+            ),
+            cache_results=self.cache_results,
         )
+
+    def _persistent_command(self) -> tuple[list[str], Path]:
+        if self.mathlib_runtime is None:
+            raise LeanDeclarationBackendError(
+                "LEAN_ENVIRONMENT_UNAVAILABLE",
+                "The pinned Lean REPL project is unavailable.",
+            )
+        elan = shutil.which("elan")
+        repl = (
+            self.mathlib_runtime
+            / ".lake"
+            / "packages"
+            / "repl"
+            / ".lake"
+            / "build"
+            / "bin"
+            / ("repl.exe" if os.name == "nt" else "repl")
+        )
+        if elan is None or not repl.is_file():
+            raise LeanDeclarationBackendError(
+                "LEAN_ENVIRONMENT_UNAVAILABLE",
+                "The pinned persistent Lean REPL backend is unavailable.",
+            )
+        return (
+            [
+                str(Path(elan).resolve(strict=True)),
+                "run",
+                f"leanprover/lean4:v{self.provider_runtime.version}",
+                "lake",
+                "env",
+                str(repl.resolve(strict=True)),
+            ],
+            self.mathlib_runtime,
+        )
+
+    def _index_cache_path(
+        self,
+        environment: LeanEnvironment,
+        environment_digest: str,
+    ) -> Path | None:
+        if self.cache_root is None:
+            return None
+        identity = canonicalize_json(
+            {
+                "format": _INDEX_FORMAT,
+                "environment": environment.value,
+                "environment_digest": environment_digest,
+            }
+        )
+        digest = hashlib.sha256(identity).hexdigest()
+        return self.cache_root / f"{environment.value.casefold()}-{digest}.index"
 
     def _discard_session(self, environment: LeanEnvironment) -> None:
         entry = self._sessions.pop(environment, None)
@@ -775,6 +1116,8 @@ class LeanDeclarationService:
 
 def installed_lean_declaration_service(
     provider_runtime: CapabilityProviderRuntime,
+    *,
+    cache_root: Path | None = None,
 ) -> LeanDeclarationService:
     """Bind discovery to the same separately validated pinned runtime identity."""
 
@@ -786,6 +1129,7 @@ def installed_lean_declaration_service(
             lean_executable=lean_executable,
             mathlib_runtime=mathlib_runtime,
             provider_runtime=provider_runtime,
+            cache_root=cache_root,
         )
     )
 
@@ -815,6 +1159,7 @@ def _parse_session_response(
     *,
     expected_request_id: str,
 ) -> LeanDeclarationPayload:
+    response_kind: Literal["result", "error"]
     if line.startswith(_RESULT_PREFIX):
         response_kind = "result"
         serialized = line.removeprefix(_RESULT_PREFIX)
@@ -827,6 +1172,54 @@ def _parse_session_response(
         decoded = loads_strict_json(serialized)
     except CanonicalizationError as exc:
         raise _protocol_error() from exc
+    if not isinstance(decoded, dict):
+        raise _protocol_error()
+    return _parse_decoded_response(
+        decoded,
+        expected_request_id=expected_request_id,
+        response_kind=response_kind,
+    )
+
+
+def _parse_persistent_response(
+    decoded: dict[str, Any],
+    *,
+    expected_request_id: str,
+) -> LeanDeclarationPayload:
+    try:
+        response = LeanReplCommandResponse.model_validate(decoded)
+    except ValidationError as command_error:
+        try:
+            LeanReplErrorResponse.model_validate(decoded)
+        except ValidationError:
+            raise _protocol_error() from command_error
+        raise _query_failed() from command_error
+    markers = tuple(
+        message.data
+        for message in response.messages
+        if message.data.startswith((_RESULT_PREFIX, _ERROR_PREFIX))
+    )
+    if len(markers) != 1:
+        raise _protocol_error()
+    return _parse_session_response(
+        markers[0],
+        expected_request_id=expected_request_id,
+    )
+
+
+def _parse_decoded_response(
+    decoded: dict[str, Any],
+    *,
+    expected_request_id: str,
+    response_kind: Literal["result", "error"] | None = None,
+) -> LeanDeclarationPayload:
+    if response_kind is None:
+        if "payload" in decoded and "code" not in decoded:
+            response_kind = "result"
+        elif "code" in decoded and "payload" not in decoded:
+            response_kind = "error"
+        else:
+            raise _protocol_error()
     if response_kind == "result":
         try:
             envelope = LeanDeclarationResultEnvelope.model_validate(decoded)
@@ -885,6 +1278,31 @@ def _index_changed() -> LeanDeclarationBackendError:
         "LEAN_QUERY_INDEX_CHANGED",
         "The reusable Lean declaration index changed between bounded queries.",
     )
+
+
+def _cacheable_query(query: LeanDeclarationQuery) -> bool:
+    return isinstance(query, LeanDeclarationSearchQuery | LeanDeclarationInspectQuery)
+
+
+def _query_cache_key(query: LeanDeclarationQuery) -> str:
+    serialized = canonicalize_json(query.model_dump(mode="json"))
+    return "sha256:" + hashlib.sha256(serialized).hexdigest()
+
+
+def _validate_declaration_index(
+    path: Path,
+    *,
+    environment_digest: str,
+) -> None:
+    if path.stat().st_size > _MAX_INDEX_BYTES:
+        raise ValueError("declaration index exceeds its size bound")
+    with path.open(encoding="utf-8") as stream:
+        if stream.readline().rstrip("\n") != environment_digest:
+            raise ValueError("declaration index environment mismatch")
+        for line in stream:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) != 3 or any(not field for field in fields):
+                raise ValueError("declaration index row is malformed")
 
 
 def _prefix_matches(value: str, prefixes: tuple[str, ...]) -> bool:

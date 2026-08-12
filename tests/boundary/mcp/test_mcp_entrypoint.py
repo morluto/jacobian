@@ -49,7 +49,9 @@ def test_mcp_entrypoint_has_nonstarting_help() -> None:
     )
 
     assert completed.returncode == 0
-    assert "Run the Jacobian MCP server" in completed.stdout
+    assert "Run one local Jacobian MCP server over stdio" in completed.stdout
+    assert "--transport" not in completed.stdout
+    assert "--auth-tokens-file" not in completed.stdout
     assert "--tool-profile" not in completed.stdout
     assert "--tool-name-profile" not in completed.stdout
     assert "--reasoning-log-mode" not in completed.stdout

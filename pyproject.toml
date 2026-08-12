@@ -33,6 +33,7 @@ dependencies = [
 [project.scripts]
 jacobian = "jacobian.cli:app"
 jacobian-mcp = "jacobian.adapters.mcp.cli:main"
+jacobian-remote-mcp = "jacobian.adapters.mcp.remote_cli:main"
 
 [dependency-groups]
 dev-core = [

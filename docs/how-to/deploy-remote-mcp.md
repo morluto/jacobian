@@ -151,7 +151,7 @@ or Jacobian artifacts.
 ## Start Streamable HTTP
 
 ```sh
-uv run jacobian-mcp \
+uv run jacobian-remote-mcp \
   --transport streamable-http \
   --host 127.0.0.1 \
   --port 8000 \
@@ -177,7 +177,7 @@ background reaper. Set `--max-tenant-runtimes` and
 For a disposable local transport test only:
 
 ```sh
-uv run jacobian-mcp \
+uv run jacobian-remote-mcp \
   --transport streamable-http \
   --max-tenant-runtimes 32 \
   --tenant-idle-timeout-seconds 900 \
@@ -313,7 +313,7 @@ Prepare and validate the new immutable checkout first:
 ```sh
 uv sync --locked --dev
 make check
-uv run jacobian-mcp --version
+uv run jacobian-remote-mcp --version
 ```
 
 After moving `/opt/jacobian/current` to that checkout, restart only the backend

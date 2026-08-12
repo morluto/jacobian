@@ -241,9 +241,10 @@ Non-obvious caveats:
   suites must be reproduced with the owning focused test before it is treated
   as a product defect.
 - Quick end-to-end smoke of the product surface: `uv run jacobian --state-dir .jacobian init`
-  (CLI), or start the MCP server with
-  `uv run jacobian-mcp --transport streamable-http --host 127.0.0.1 --port 8000 --allow-anonymous`
-  (remote transports require `--allow-anonymous` or `--auth-tokens-file`; stdio is
-  the default transport). The runnable
+  (CLI), `uv run jacobian-mcp` for one local stdio server, or
+  `uv run jacobian-remote-mcp --host 127.0.0.1 --port 8000 --allow-anonymous`
+  for an explicit remote test host. Remote hosting requires `--allow-anonymous`
+  or `--auth-tokens-file`; those options are intentionally absent from the local
+  entry point. The runnable
   `docs/tutorials/first-verified-result.md` script demonstrates one end-to-end
   investigation that includes discovery and independent verification.

@@ -161,7 +161,7 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
         [
             sys.executable,
             "-m",
-            "jacobian.adapters.mcp.server",
+            "jacobian.adapters.mcp.remote_cli",
             "--transport",
             "streamable-http",
         ],
@@ -171,13 +171,13 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
         timeout=10,
     )
     assert completed.returncode != 0
-    assert "require --auth-tokens-file" in completed.stderr
+    assert "requires --auth-tokens-file" in completed.stderr
 
     named_without_anonymous = subprocess.run(
         [
             sys.executable,
             "-m",
-            "jacobian.adapters.mcp.server",
+            "jacobian.adapters.mcp.remote_cli",
             "--transport",
             "streamable-http",
             "--anonymous-tenant-id",
@@ -197,7 +197,7 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
         [
             sys.executable,
             "-m",
-            "jacobian.adapters.mcp.server",
+            "jacobian.adapters.mcp.remote_cli",
             "--transport",
             "streamable-http",
             "--allow-anonymous",
@@ -216,7 +216,7 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
         [
             sys.executable,
             "-m",
-            "jacobian.adapters.mcp.server",
+            "jacobian.adapters.mcp.remote_cli",
             "--transport",
             "streamable-http",
             "--allow-anonymous",

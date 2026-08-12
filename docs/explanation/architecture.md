@@ -300,6 +300,8 @@ owns one concrete local runtime, while `remote.create_remote_server` owns
 authentication and isolated tenant runtimes. Their only shared request boundary
 acquires one runtime lease; local state has no nullable tenant router, and remote
 admission, eviction, and quarantine do not enter the local server module.
+The `jacobian-mcp` entry point is local stdio only. Remote transports use the
+separate `jacobian-remote-mcp` operator entry point.
 
 The CLI projects the same installed declarations and execution path through
 `catalog`, `inspect`, and `run`. Operator administration remains separate from

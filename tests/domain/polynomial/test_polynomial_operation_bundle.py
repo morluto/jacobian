@@ -43,6 +43,24 @@ def _polynomial(
     }
 
 
+def test_groebner_advertised_example_completes(
+    polynomial_services: DomainTestServices,
+) -> None:
+    descriptor = next(
+        item
+        for item in polynomial_services.core.capabilities.catalog().capabilities
+        if item.capability_id == "polynomial.groebner_basis.compute"
+    )
+
+    result = _invoke(
+        polynomial_services,
+        descriptor.capability_id,
+        descriptor.invocation_examples[0].input,
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+
+
 def test_polynomial_bundle_installs_and_computes_exact_invariants(
     polynomial_services,
     monkeypatch: pytest.MonkeyPatch,

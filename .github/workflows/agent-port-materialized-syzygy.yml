@@ -1,0 +1,91 @@
+name: agent-port-materialized-syzygy
+
+on:
+  push:
+    branches:
+      - agent/verify-materialized-syzygy-ledgers
+
+permissions:
+  contents: write
+
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/verify-materialized-syzygy-ledgers
+          fetch-depth: 0
+      - name: Port materialized syzygy verifier
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one match in {path}: {old!r}, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "src/jacobian/domains/polynomial/checkers.py",
+              '''    ExactReplayCheckerDeclaration(\n        "polynomial.compute.gcd",\n''',
+              '''    ExactReplayCheckerDeclaration(\n        "polynomial.jacobian_syzygy.coefficients.materialize",\n        GradedJacobianSyzygyRequest,\n        "check_materialized_graded_jacobian_syzygy",\n        "polynomial.jacobian-syzygy.graded-fraction-replay",\n        entrypoint_module="jacobian_checkers.jacobian_syzygy",\n        replay_method="standard-library exact rational graded-map replay",\n        reason=(\n            "operator-authorized exact rational checker independently reconstructs "\n            "the retained homogeneous coefficient ledger without importing the "\n            "SymPy producer"\n        ),\n        verification_capability_id="polynomial.jacobian_syzygy.coefficients.verify",\n        verification_title="Verify a materialized Jacobian syzygy coefficient ledger",\n        verification_description=(\n            "Independently reconstruct every bounded homogeneous coefficient map, "\n            "sparse entry, rank ledger, nonzero minor, and first kernel from the "\n            "retained producer result."\n        ),\n        verification_tags=(\n            "verification",\n            "exact",\n            "polynomial",\n            "jacobian",\n            "syzygy",\n            "coefficient-ledger",\n        ),\n    ),\n    ExactReplayCheckerDeclaration(\n        "polynomial.compute.gcd",\n''',
+          )
+
+          helper = '''def _syzygy_checker_supports(payload: dict[str, Any]) -> bool:\n    polynomial = payload.get("polynomial")\n    factors = payload.get("linear_factors")\n    maximum_degree = payload.get("max_degree")\n    if type(maximum_degree) is not int:\n        return False\n    if isinstance(polynomial, dict):\n        body = polynomial.get("polynomial")\n        terms = body.get("terms") if isinstance(body, dict) else None\n        if not isinstance(terms, list):\n            return False\n        homogeneous_degree = max(\n            (\n                sum(term.get("exponents", ()))\n                for term in terms\n                if isinstance(term, dict)\n                and isinstance(term.get("exponents"), list)\n                and all(type(value) is int for value in term["exponents"])\n            ),\n            default=0,\n        )\n        term_count = len(terms)\n        if (\n            terms\n            and all(\n                isinstance(term, dict)\n                and isinstance(term.get("exponents"), list)\n                and len(term["exponents"]) == 3\n                for term in terms\n            )\n            and any(\n                all(term["exponents"][variable] == 0 for term in terms)\n                for variable in range(3)\n            )\n        ):\n            maximum_degree = 0\n    elif isinstance(factors, list):\n        homogeneous_degree = len(factors)\n        support: set[tuple[int, ...]] = {(0, 0, 0)}\n        for factor in factors:\n            coefficients = factor.get("coefficients") if isinstance(factor, dict) else None\n            if not isinstance(coefficients, list) or len(coefficients) != 3:\n                return False\n            active_variables = tuple(\n                index\n                for index, coefficient in enumerate(coefficients)\n                if isinstance(coefficient, dict) and coefficient.get("num") != "0"\n            )\n            if not active_variables:\n                return False\n            support = {\n                tuple(\n                    exponent + (1 if variable == index else 0)\n                    for index, exponent in enumerate(monomial)\n                )\n                for monomial in support\n                for variable in active_variables\n            }\n        term_count = len(support)\n        if len(support) == 1 and sum(value > 0 for value in next(iter(support))) < 3:\n            maximum_degree = 0\n    else:\n        return False\n    replay_cells = sum(\n        (3 * ((degree + 2) * (degree + 1) // 2))\n        * ((homogeneous_degree + degree + 1) * (homogeneous_degree + degree) // 2)\n        for degree in range(maximum_degree + 1)\n    )\n    return term_count * replay_cells <= 1_000_000\n\n\n'''
+          replace_once(
+              "src/jacobian/exact_domain_checkers.py",
+              "def _checker_supports(operation_id: str, payload: object) -> bool:\n",
+              helper + "def _checker_supports(operation_id: str, payload: object) -> bool:\n",
+          )
+          replace_once(
+              "src/jacobian/exact_domain_checkers.py",
+              '''    if operation_id == "polynomial.jacobian_syzygy.minimum_degree.compute":\n        return True\n''',
+              '''    if operation_id in {\n        "polynomial.jacobian_syzygy.minimum_degree.compute",\n        "polynomial.jacobian_syzygy.coefficients.materialize",\n    }:\n        return _syzygy_checker_supports(payload)\n''',
+          )
+
+          replace_once(
+              "src/jacobian_checkers/jacobian_syzygy.py",
+              "from typing import Any\n\nfrom jacobian_checkers.bound_artifacts import bound_request\n",
+              "from typing import Any\n\nfrom jacobian.canonical import format_canonical_integer, parse_canonical_integer\nfrom jacobian_checkers.bound_artifacts import bound_request\n",
+          )
+          replace_once(
+              "src/jacobian_checkers/jacobian_syzygy.py",
+              '''    fraction = Fraction(int(numerator), int(denominator))\n    if numerator != str(fraction.numerator) or denominator != str(fraction.denominator):\n        raise ValueError("noncanonical rational")\n    return fraction\n\n\ndef _wire_rational(value: Fraction) -> dict[str, str]:\n    return {"num": str(value.numerator), "den": str(value.denominator)}\n''',
+              '''    fraction = Fraction(\n        parse_canonical_integer(numerator), parse_canonical_integer(denominator)\n    )\n    if numerator != format_canonical_integer(\n        fraction.numerator\n    ) or denominator != format_canonical_integer(fraction.denominator):\n        raise ValueError("noncanonical rational")\n    return fraction\n\n\ndef _wire_rational(value: Fraction) -> dict[str, str]:\n    return {\n        "num": format_canonical_integer(value.numerator),\n        "den": format_canonical_integer(value.denominator),\n    }\n''',
+          )
+          replace_once(
+              "src/jacobian_checkers/jacobian_syzygy.py",
+              '''            [row, column, f"{value.numerator}/{value.denominator}"]\n''',
+              '''            [\n                row,\n                column,\n                (\n                    f"{format_canonical_integer(value.numerator)}/"\n                    f"{format_canonical_integer(value.denominator)}"\n                ),\n            ]\n''',
+          )
+          replace_once(
+              "src/jacobian_checkers/jacobian_syzygy.py",
+              "def _expected_result(source: dict[str, Any]) -> dict[str, Any]:\n    max_degree, detail = _validate_syzygy_request(source)\n",
+              '''def _expected_result(source: dict[str, Any], *, operation_id: str) -> dict[str, Any]:\n    if operation_id == "polynomial.jacobian_syzygy.coefficients.materialize":\n        source = {**source, "coefficient_map_detail": "SPARSE_ENTRIES"}\n    max_degree, detail = _validate_syzygy_request(source)\n''',
+          )
+          replace_once(
+              "src/jacobian_checkers/jacobian_syzygy.py",
+              '''def check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:\n    try:\n        source, result = bound_request(\n            request,\n            operation_id="polynomial.jacobian_syzygy.minimum_degree.compute",\n            witness_format="polynomial.jacobian-syzygy.graded-fraction-replay",\n        )\n        expected = _expected_result(source)\n        if result != expected:\n            return _reject(\n                "stored result does not match independent exact graded-map replay"\n            )\n        return _accept(\n            "independent exact rational replay accepted the complete graded rank "\n            "ledger and first-kernel claim"\n        )\n    except (KeyError, TypeError, ValueError, OverflowError, ZeroDivisionError):\n        return _reject("malformed, unsupported, or mismatched checker request")\n\n\n__all__ = ["check_graded_jacobian_syzygy"]\n''',
+              '''def _check_graded_jacobian_syzygy(\n    request: dict[str, Any], *, operation_id: str\n) -> dict[str, Any]:\n    try:\n        source, result = bound_request(\n            request,\n            operation_id=operation_id,\n            witness_format="polynomial.jacobian-syzygy.graded-fraction-replay",\n        )\n        expected = _expected_result(source, operation_id=operation_id)\n        if result != expected:\n            return _reject(\n                "stored result does not match independent exact graded-map replay"\n            )\n        return _accept(\n            "independent exact rational replay accepted the complete graded rank "\n            "ledger and first-kernel claim"\n        )\n    except (KeyError, TypeError, ValueError, OverflowError, ZeroDivisionError):\n        return _reject("malformed, unsupported, or mismatched checker request")\n\n\ndef check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:\n    return _check_graded_jacobian_syzygy(\n        request, operation_id="polynomial.jacobian_syzygy.minimum_degree.compute"\n    )\n\n\ndef check_materialized_graded_jacobian_syzygy(\n    request: dict[str, Any],\n) -> dict[str, Any]:\n    return _check_graded_jacobian_syzygy(\n        request, operation_id="polynomial.jacobian_syzygy.coefficients.materialize"\n    )\n\n\n__all__ = [\n    "check_graded_jacobian_syzygy",\n    "check_materialized_graded_jacobian_syzygy",\n]\n''',
+          )
+
+          Path("tests/domain/polynomial/test_materialized_syzygy_verification.py").write_text('''from __future__ import annotations\n\nfrom collections.abc import Iterator\nfrom pathlib import Path\n\nimport pytest\nfrom tests.support.exact_domain import open_exact_domain_services\nfrom tests.support.services import DomainTestServices\n\nfrom jacobian.contracts.capabilities import CapabilityRequest\nfrom jacobian.contracts.results import ExecutionStatus\nfrom jacobian.domains.polynomial.bundle import build_polynomial_bundle\n\n\n@pytest.fixture\ndef polynomial_services(tmp_path: Path) -> Iterator[DomainTestServices]:\n    with open_exact_domain_services(\n        tmp_path / "state", build_polynomial_bundle()\n    ) as services:\n        yield services\n\n\ndef _polynomial() -> dict[str, object]:\n    return {\n        "variables": ["x", "y", "z"],\n        "polynomial": {\n            "terms": [\n                {\n                    "coefficient": {"num": "1", "den": "1"},\n                    "exponents": [1, 1, 1],\n                }\n            ]\n        },\n    }\n\n\ndef test_materialized_syzygy_ledger_is_independently_verified(\n    polynomial_services: DomainTestServices,\n) -> None:\n    computed = polynomial_services.core.capabilities.invoke(\n        CapabilityRequest(\n            capability_id="polynomial.jacobian_syzygy.coefficients.materialize",\n            input={\n                "polynomial": _polynomial(),\n                "max_degree": 1,\n                "coefficient_map_detail": "CERTIFICATES",\n            },\n        )\n    )\n    verified = polynomial_services.core.capabilities.invoke(\n        CapabilityRequest(\n            capability_id="polynomial.jacobian_syzygy.coefficients.verify",\n            input={"result_uri": computed.output["result_uri"]},\n        )\n    )\n    assert computed.execution.status is ExecutionStatus.COMPLETED\n    assert verified.execution.status is ExecutionStatus.COMPLETED\n    assert verified.output["status"] == "VERIFIED"\n    assert verified.output["result_uri"] == computed.output["result_uri"]\n    assert verified.verification_record_uri is not None\n    assert verified.output["verification_record_uri"] in verified.artifact_uris\n''')
+
+          Path("tests/unit/checkers/test_jacobian_syzygy_integer_format.py").write_text('''from __future__ import annotations\n\nfrom fractions import Fraction\n\nfrom jacobian.canonical import format_canonical_integer\nfrom jacobian_checkers.jacobian_syzygy import _rational, _wire_rational\n\n\ndef test_syzygy_checker_round_trips_canonical_large_coefficients() -> None:\n    numerator = 10**4_500 + 7\n    value = {"num": format_canonical_integer(numerator), "den": "3"}\n    parsed = _rational(value)\n    assert parsed == Fraction(numerator, 3)\n    assert _wire_rational(parsed) == value\n''')
+          Path(".github/workflows/agent-port-materialized-syzygy.yml").unlink()
+          PY
+      - name: Validate focused port
+        run: python -m compileall -q src/jacobian/domains/polynomial/checkers.py src/jacobian/exact_domain_checkers.py src/jacobian_checkers/jacobian_syzygy.py tests/domain/polynomial/test_materialized_syzygy_verification.py
+      - name: Commit port
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat(checkers): verify materialized syzygy ledgers"
+          git push origin HEAD:agent/verify-materialized-syzygy-ledgers

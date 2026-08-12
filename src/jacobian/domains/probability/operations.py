@@ -446,12 +446,22 @@ FINITE_PROBABILITY_CAPABILITIES = (
             title="Exact finite-distribution raw moment",
             description=(
                 "Compute one bounded raw moment of a normalized finite exact "
-                "rational distribution, preserving every atom contribution."
+                "rational distribution, preserving every atom contribution. "
+                "Order one is the distribution's exact expectation or expected value."
             ),
             request_type=FiniteRawMomentRequest,
             result_type=FiniteRawMomentResult,
             execute=_raw_moment,
-            tags=("probability", "moment", "finite", "exact", "python-flint"),
+            tags=(
+                "probability",
+                "moment",
+                "expectation",
+                "expected-value",
+                "discrete-random-variable",
+                "finite",
+                "exact",
+                "python-flint",
+            ),
             invocation_examples=(
                 example(
                     "fair_bit_second_moment",

@@ -57,6 +57,7 @@ not install prompts, skills, or client-specific mathematical workflows.
 | Profile | Installed or checked surface |
 | --- | --- |
 | `core` | Complete locked Python backend stack: SymPy, NetworkX, Z3, Python-FLINT, and cvc5 |
+| `unit` | Runtime dependencies plus only the locked `test-core` pytest group |
 | `lean` | `core` plus a build of the pinned `lean/lean-toolchain` project; `elan`/`lake` must already be on `PATH` |
 | `external-proof` | `core` plus fail-closed availability checks for pinned CaDiCaL, DRAT-trim, and Carcara executables |
 

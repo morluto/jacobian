@@ -1,5 +1,6 @@
 """Explicit mathematical portfolio installation."""
 
+from jacobian.portfolio.application import OpenedApplication, open_application
 from jacobian.portfolio.application_plan import (
     ApplicationInstallPlan,
     InstallationReceipt,
@@ -25,11 +26,13 @@ __all__ = [
     "BundleInstallation",
     "BundleInstallationStatus",
     "InstallationReceipt",
+    "OpenedApplication",
     "PortfolioDiagnostic",
     "PortfolioInstallation",
     "PortfolioInstallationResult",
     "PortfolioPlan",
     "build_builtin_portfolio",
     "install_portfolio",
+    "open_application",
     "receipt_from_installed_bundles",
 ]

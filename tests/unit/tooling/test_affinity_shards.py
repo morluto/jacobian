@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from tools.test_plan.affinity import (
     AffinityNode,
+    affinity_for_nodeid,
     affinity_index_from_inventory,
     balance_affinity_shards,
+    inventory_rows_from_durations,
 )
 
 
@@ -29,3 +31,19 @@ def test_affinity_index_from_inventory_defaults_missing_affinity() -> None:
         {"x::test": 2.5},
     )
     assert nodes == (AffinityNode("x::test", "default", 2.5),)
+
+
+def test_inventory_rows_from_durations_infer_suite_affinity() -> None:
+    rows = inventory_rows_from_durations(
+        {
+            "tests/composition/runtime/test_x.py::test_a": 3.0,
+            "tests/domain/finite/test_y.py::test_b": 1.0,
+        },
+        suite="composition",
+    )
+    by_id = {str(row["nodeid"]): row["setup_affinity"] for row in rows}
+    assert by_id["tests/composition/runtime/test_x.py::test_a"] == ["complete-runtime"]
+    assert (
+        affinity_for_nodeid("tests/domain/finite/test_y.py::test_b", suite="domain")
+        == "sqlite"
+    )

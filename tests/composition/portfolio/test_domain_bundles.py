@@ -6,6 +6,11 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityService
@@ -79,6 +84,12 @@ def test_installed_bundles_expose_operations() -> None:
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="portfolio-domain-bundles-v1",
+    setup_affinity="sqlite",
+)
 def service(tmp_path: Path) -> Iterator[CapabilityService]:
     store = ArtifactRepository(tmp_path / "state")
     schemas = SchemaRegistry(store)

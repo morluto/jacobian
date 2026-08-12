@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
-UV_RUN := uv run --locked
+# Never let a Make invocation widen a deliberately narrow synced environment.
+UV_RUN := uv run --locked --no-sync
 PYTEST_ARGS ?=
 TESTS ?=
 EVAL_ARGS ?=
@@ -159,7 +160,7 @@ precommit: ## Fix and run every routine local handoff check.
 	$(MAKE) fix
 	$(MAKE) check
 
-check-static: lint-full typecheck test-architecture import-contracts compile-test-plan-check test-runtime-inventory architecture todo-check build ## Run CI-owned static checks plus a local package build.
+check-static: lint-full typecheck test-architecture import-contracts compile-test-plan-check compile-benchmark-plan-check test-runtime-inventory architecture todo-check build ## Run CI-owned static checks plus a local package build.
 
 clean: ## Remove local caches, build outputs, and coverage artifacts.
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build htmlcov

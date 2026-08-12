@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-runtime-inventory compile-test-plan compile-test-plan-check architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-runtime-inventory compile-test-plan compile-test-plan-check compile-benchmark-plan-check architecture docs-command-check docs-linkcheck
 
 PROFILE ?= core
 
@@ -73,6 +73,9 @@ compile-test-plan: ## Regenerate topology, CI impact, and Make lanes from plan_m
 
 compile-test-plan-check: ## Fail when topology, CI impact, or Make lane projections are stale.
 	$(UV_RUN) python -m tools.test_plan.compile --check
+
+compile-benchmark-plan-check: ## Check benchmark compiler and validator contracts align.
+	$(UV_RUN) python -m tools.benchmark_plan.check_consistency
 
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
 	$(UV_RUN) python tools/check_architecture.py

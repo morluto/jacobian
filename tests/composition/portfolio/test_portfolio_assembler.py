@@ -15,6 +15,11 @@ from typing import Any
 
 import pytest
 from pydantic import Field
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityService
@@ -133,6 +138,12 @@ class _RecordingContext:
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="portfolio-assembler-v1",
+    setup_affinity="sqlite",
+)
 def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
     """Build a real, narrow InstallationContext without the full runtime."""
 

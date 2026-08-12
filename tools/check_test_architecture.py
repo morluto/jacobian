@@ -719,6 +719,23 @@ def _composition_admission_value(tree: ast.AST) -> tuple[str | None, int | None]
     return None, None
 
 
+def _composition_admission_markers(tree: ast.AST) -> tuple[tuple[str, int], ...]:
+    markers: list[tuple[str, int]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        target = node.func
+        if (
+            not isinstance(target, ast.Attribute)
+            or target.attr != "composition_admission"
+        ):
+            continue
+        value = node.args[0]
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            markers.append((value.value, node.lineno))
+    return tuple(markers)
+
+
 def _composition_admission_violations(tree: ast.AST, relative: str) -> list[Violation]:
     """Composition modules that hydrate a complete runtime must declare admission."""
 
@@ -729,6 +746,27 @@ def _composition_admission_violations(tree: ast.AST, relative: str) -> list[Viol
         return []
     if not _uses_complete_runtime_fixture(tree):
         return []
+    markers = _composition_admission_markers(tree)
+    invalid_markers = [
+        (value, line)
+        for value, line in markers
+        if value not in _COMPOSITION_ADMISSION_CATEGORIES
+    ]
+    if invalid_markers:
+        value, line = invalid_markers[0]
+        return [
+            Violation(
+                relative,
+                "composition-admission-invalid",
+                (
+                    f"composition_admission({value!r}) is not one of "
+                    f"{sorted(_COMPOSITION_ADMISSION_CATEGORIES)}"
+                ),
+                line,
+            )
+        ]
+    if markers:
+        return []
     value, line = _composition_admission_value(tree)
     if value is None:
         return [
@@ -736,7 +774,8 @@ def _composition_admission_violations(tree: ast.AST, relative: str) -> list[Viol
                 relative,
                 "composition-admission-missing",
                 (
-                    "declare COMPOSITION_ADMISSION as one of "
+                    "mark at least one node with composition_admission or declare "
+                    "legacy COMPOSITION_ADMISSION as one of "
                     f"{sorted(_COMPOSITION_ADMISSION_CATEGORIES)} when using "
                     "complete-runtime fixtures"
                 ),

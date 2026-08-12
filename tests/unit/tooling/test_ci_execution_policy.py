@@ -224,6 +224,17 @@ def test_documentation_job_installs_uv_before_make_docs_linkcheck() -> None:
     assert "run: make docs-linkcheck" in docs
 
 
+def test_unit_and_security_jobs_use_narrow_dependency_profiles() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    unit = workflow.split("  unit-test:", 1)[1].split("  domain-test:", 1)[0]
+    security = workflow.split("  security-audit:", 1)[1].split(
+        "  validate-built-package:", 1
+    )[0]
+
+    assert "dependency-profile: test-core" in unit
+    assert "dependency-profile: security" in security
+
+
 def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
     for workflow_name in ("ci.yml", "benchmarks.yml"):
         workflow = (ROOT / ".github/workflows" / workflow_name).read_text(
@@ -267,6 +278,16 @@ def test_composition_lane_uses_timing_shards() -> None:
     assert "composition-test:" in workflow
     assert "--splits ${{ needs.plan.outputs.composition-shard-count }}" in workflow
     assert "composition-test-durations-input" in workflow
+    assert "composition-affinity-shards.json" in workflow
+
+
+def test_domain_prepare_publishes_affinity_shards() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "domain-affinity-shards.json" in workflow
+    timings = (ROOT / ".github/scripts/manage-test-timings").read_text(encoding="utf-8")
+    assert "inventory_rows_from_durations" in timings
+    assert "balance_affinity_shards" in timings
 
 
 def test_timing_shard_configuration_matches_topology() -> None:
@@ -316,7 +337,9 @@ def test_static_validation_enforces_test_architecture() -> None:
     development = (ROOT / "make" / "development.mk").read_text(encoding="utf-8")
 
     assert "test-architecture:" in development
+    assert "compile-benchmark-plan-check:" in development
     assert "check-static: lint-full typecheck test-architecture" in makefile
+    assert "compile-benchmark-plan-check" in makefile
 
 
 def test_process_and_provider_lanes_have_explicit_resource_policies() -> None:

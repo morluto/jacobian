@@ -59,6 +59,50 @@ def balance_affinity_shards(
     return tuple(tuple(shard) for shard in shards)
 
 
+def affinity_for_nodeid(nodeid: str, *, suite: str) -> str:
+    """Infer setup affinity from a historical duration node id and suite."""
+
+    path = nodeid.split("::", 1)[0]
+    if suite == "composition" or "/composition/" in path:
+        return "complete-runtime"
+    if "/boundary/storage/" in path or path.startswith("tests/boundary/storage"):
+        return "sqlite"
+    if "/boundary/mcp/" in path:
+        return "mcp"
+    if "/boundary/providers/lean/" in path:
+        return "lean"
+    if "/boundary/providers/" in path:
+        return "provider"
+    if "/domain/" in path and any(
+        token in path
+        for token in (
+            "/finite/",
+            "/matrix/",
+            "/polynomial/",
+            "/universal_algebra/",
+            "/graph_symmetry/",
+        )
+    ):
+        return "sqlite"
+    return "default"
+
+
+def inventory_rows_from_durations(
+    durations: dict[str, float],
+    *,
+    suite: str,
+) -> list[dict[str, object]]:
+    """Build inventory rows for affinity packing from a durations map."""
+
+    return [
+        {
+            "nodeid": nodeid,
+            "setup_affinity": [affinity_for_nodeid(nodeid, suite=suite)],
+        }
+        for nodeid in sorted(durations)
+    ]
+
+
 def affinity_index_from_inventory(
     inventory_rows: list[dict[str, object]],
     durations: dict[str, float],
@@ -89,6 +133,8 @@ def affinity_index_from_inventory(
 
 __all__ = [
     "AffinityNode",
+    "affinity_for_nodeid",
     "affinity_index_from_inventory",
     "balance_affinity_shards",
+    "inventory_rows_from_durations",
 ]

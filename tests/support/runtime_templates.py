@@ -11,12 +11,19 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.portfolio import ApplicationInstallPlan, open_application
+from jacobian.runtime import CheckerAuthorityMode
 from tests.support.state import (
     publish_template,
     quiesce_sqlite_template,
     worker_template_target,
 )
+
+
+def application_template_key(plan: ApplicationInstallPlan) -> str:
+    """Return the immutable cache key for one application plan."""
+
+    return f"application-{plan.digest()}"
 
 
 def template_target(
@@ -40,15 +47,16 @@ def build_complete_portfolio_template(
 ) -> Path:
     """Publish one immutable fully materialized portfolio snapshot."""
 
+    plan = ApplicationInstallPlan.complete()
     target, lock = template_target(
         tmp_path_factory,
         request,
-        "complete-portfolio-template",
+        application_template_key(plan),
     )
 
     def build(staging: Path) -> None:
-        runtime = create_runtime(staging)
-        runtime.close()
+        application = open_application(staging, plan)
+        application.close()
         quiesce_sqlite_template(staging)
 
     return publish_template(target, build, lock=lock)
@@ -60,18 +68,18 @@ def build_authorized_portfolio_template(
 ) -> Path:
     """Publish one immutable snapshot with bundled checker authority."""
 
+    plan = ApplicationInstallPlan.complete(
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    )
     target, lock = template_target(
         tmp_path_factory,
         request,
-        "authorized-portfolio-template",
+        application_template_key(plan),
     )
 
     def build(staging: Path) -> None:
-        runtime = create_runtime(
-            staging,
-            checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-        )
-        runtime.close()
+        application = open_application(staging, plan)
+        application.close()
         quiesce_sqlite_template(staging)
 
     return publish_template(target, build, lock=lock)

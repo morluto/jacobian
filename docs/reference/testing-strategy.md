@@ -72,6 +72,10 @@ runtimes declare `@resource_fixture` contracts in
 [`tests/support/resource_contracts.py`](../../tests/support/resource_contracts.py).
 Collection enforces the transitive closure via
 [`tests/support/resource_closure_plugin.py`](../../tests/support/resource_closure_plugin.py).
+Process isolation is currently lane-scoped through the process lane's
+`required_environment = ["process-group"]`; no pytest fixture currently owns a
+child-process lifecycle. Add a `PROCESS_GROUP` resource contract when such a
+fixture is introduced.
 
 Inspect usage with:
 
@@ -79,12 +83,18 @@ Inspect usage with:
 make test-runtime-inventory
 ```
 
+Collection inventory records per-node resources, setup affinity, and admission.
+Domain/composition timing prepare also emits affinity membership
+(`*-affinity-shards.json`) so shared setup can be co-located; pytest-split
+remains the runtime partition while historical inventories are incomplete.
+
 ### Composition admission
 
-Complete-runtime composition tests declare both:
-
-- module-level `COMPOSITION_ADMISSION` for the static architecture ratchet; and
-- per-node `@pytest.mark.composition_admission("…")` for collection policy.
+Per-node `@pytest.mark.composition_admission("…")` markers are authoritative
+for complete-runtime composition tests and collection policy. A module-level
+`COMPOSITION_ADMISSION` remains accepted by the static architecture checker as
+a legacy optional declaration; modules with per-node markers do not need it.
+Composition modules that do not use complete-runtime fixtures need neither.
 
 Allowed kinds: `AUTHORITY`, `WIRING`, `LIFECYCLE`, `DISCOVERY`, `REFERENCE`.
 
@@ -292,8 +302,8 @@ CI may sync a narrow locked group via
 `.github/actions/setup-python-tests` `dependency-profile`
 (`test-core`, `lint`, `typecheck`, `security`, `benchmark`, or the
 `dev`/`contributor` umbrella). Local `make setup` still installs the full
-contributor environment. CVC5 and python-flint remain runtime package
-dependencies.
+contributor environment by default; `make setup PROFILE=unit` installs only
+the `test-core` group. CVC5 and python-flint remain runtime package dependencies.
 
 ## Final validation
 

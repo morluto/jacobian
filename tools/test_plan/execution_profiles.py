@@ -72,12 +72,11 @@ _RESOURCE_DOMINANCE: dict[str, ExecutionProfile] = {
         setup_affinity="mcp",
     ),
 }
+_RESOURCE_DOMINANCE_ORDER = ("lean", "sqlite", "process-group", "mcp")
 
 
 def resources_from_environment(tags: tuple[str, ...] | list[str]) -> frozenset[str]:
-    return frozenset(
-        _ENV_RESOURCE_MAP[tag] for tag in tags if tag in _ENV_RESOURCE_MAP
-    )
+    return frozenset(_ENV_RESOURCE_MAP[tag] for tag in tags if tag in _ENV_RESOURCE_MAP)
 
 
 def compile_execution_profile(
@@ -88,11 +87,22 @@ def compile_execution_profile(
     default_timeout: int = 120,
     default_distribution: Scheduler = "worksteal",
 ) -> ExecutionProfile:
-    """Apply resource dominance rules over a semantic lane default."""
+    """Apply lean > sqlite > process-group > mcp resource dominance."""
 
-    for resource in ("lean", "process-group", "sqlite", "mcp"):
+    for resource in _RESOURCE_DOMINANCE_ORDER:
         if resource in resources:
-            return _RESOURCE_DOMINANCE[resource]
+            profile = _RESOURCE_DOMINANCE[resource]
+            if "process-group" not in resources or profile.process_supervision:
+                return profile
+            return ExecutionProfile(
+                name=profile.name,
+                workers=profile.workers,
+                distribution=profile.distribution,
+                timeout_seconds=profile.timeout_seconds,
+                process_supervision=True,
+                sqlite_serial=profile.sqlite_serial,
+                setup_affinity=profile.setup_affinity,
+            )
     return ExecutionProfile(
         name=f"{semantic_owner}-default",
         workers=default_workers,
@@ -159,11 +169,7 @@ def validate_lane_against_profile(
 
     resources = resources_from_environment(tuple(required_environment))
     dominant = next(
-        (
-            resource
-            for resource in ("lean", "process-group", "sqlite", "mcp")
-            if resource in resources
-        ),
+        (resource for resource in _RESOURCE_DOMINANCE_ORDER if resource in resources),
         None,
     )
     if dominant is None:

@@ -29,6 +29,7 @@ BENCHMARK_CONTROL_PATHS = frozenset(
         "tools/benchmark_plan/__init__.py",
         "tools/benchmark_plan/control_paths.py",
         "tools/benchmark_plan/compiler.py",
+        "tools/benchmark_plan/validation.py",
         "tools/benchmark_plan/affinity.py",
         "tools/test_plan/affinity.py",
     }

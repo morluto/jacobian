@@ -50,6 +50,7 @@ PLANNER_DIGEST_SOURCES = (
     ROOT / "tools" / "benchmark_plan" / "__init__.py",
     ROOT / "tools" / "benchmark_plan" / "control_paths.py",
     ROOT / "tools" / "benchmark_plan" / "compiler.py",
+    ROOT / "tools" / "benchmark_plan" / "validation.py",
 )
 
 PLAN_VERSION = "2"

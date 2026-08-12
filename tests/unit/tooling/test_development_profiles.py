@@ -10,6 +10,12 @@ import pytest
 ROOT = Path(__file__).parents[3]
 
 
+def test_make_commands_never_implicitly_sync_dependencies() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "UV_RUN := uv run --locked --no-sync" in makefile
+
+
 def _load_profiles() -> ModuleType:
     path = ROOT / "tools" / "development_profiles.py"
     spec = importlib.util.spec_from_file_location("development_profiles", path)
@@ -25,23 +31,43 @@ def test_profiles_share_locked_sync_contracts() -> None:
 
     assert profiles.PROFILE_NAMES == (
         "core",
+        "unit",
         "lean",
         "external-proof",
     )
-    assert profiles.sync_arguments("core") == ("sync", "--locked", "--dev")
+    assert profiles.sync_arguments("core") == (
+        "sync",
+        "--locked",
+        "--no-default-groups",
+        "--group",
+        "contributor",
+    )
+    assert profiles.sync_arguments("unit") == (
+        "sync",
+        "--locked",
+        "--no-default-groups",
+        "--group",
+        "test-core",
+    )
     assert profiles.sync_arguments("core", development=False) == (
         "sync",
         "--locked",
-        "--no-dev",
+        "--no-default-groups",
     )
     for name in ("lean", "external-proof"):
-        assert profiles.sync_arguments(name) == ("sync", "--locked", "--dev")
+        assert profiles.sync_arguments(name) == (
+            "sync",
+            "--locked",
+            "--no-default-groups",
+            "--group",
+            "contributor",
+        )
 
 
 def test_invalid_profile_reports_all_supported_choices() -> None:
     profiles = _load_profiles()
 
-    with pytest.raises(ValueError, match="core, lean, external-proof"):
+    with pytest.raises(ValueError, match="core, unit, lean, external-proof"):
         profiles.profile("everything")
 
 
@@ -72,7 +98,17 @@ def test_lean_setup_installs_pin_then_gets_cache_and_builds_without_update(
     profiles.setup_profile(repo, "lean", run=record)
 
     assert commands[:4] == [
-        (("uv", "sync", "--locked", "--dev"), repo),
+        (
+            (
+                "uv",
+                "sync",
+                "--locked",
+                "--no-default-groups",
+                "--group",
+                "contributor",
+            ),
+            repo,
+        ),
         (
             ("elan", "toolchain", "install", "leanprover/lean4:v4.31.0"),
             repo,
@@ -120,7 +156,9 @@ def test_external_proof_setup_never_downloads_executables(
         "uv",
         "sync",
         "--locked",
-        "--dev",
+        "--no-default-groups",
+        "--group",
+        "contributor",
     )
     assert commands == [*first_run, *first_run]
     assert all(command[0] == "uv" for command in commands)

@@ -23,6 +23,7 @@ if str(ROOT) not in sys.path:
 from tools.test_plan.affinity import (  # noqa: E402
     affinity_index_from_inventory,
     balance_affinity_shards,
+    inventory_rows_from_durations,
 )
 
 CONFIG = ROOT / ".github" / "ci-config.json"
@@ -331,6 +332,25 @@ def prepare(output: Path, suite: str) -> None:
         warning(f"{exc}; {suite} shards will use equal weighting")
         durations = {}
     write_durations(output, durations)
+    if suite in CI_SHARDED_SUITES and durations:
+        affinity_output = output.with_name(f"{suite}-affinity-shards.json")
+        inventory = inventory_rows_from_durations(durations, suite=suite)
+        nodes = affinity_index_from_inventory(inventory, durations)
+        shards = balance_affinity_shards(nodes, shard_count=shard_count(suite))
+        affinity_output.parent.mkdir(parents=True, exist_ok=True)
+        affinity_output.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "suite": suite,
+                    "shard_count": shard_count(suite),
+                    "shards": [list(shard) for shard in shards],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
 
 def merge(

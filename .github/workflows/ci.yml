@@ -156,7 +156,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: domain-test-durations-input
-          path: .ci/test-durations.json
+          path: |
+            .ci/test-durations.json
+            .ci/domain-affinity-shards.json
           include-hidden-files: true
           retention-days: 1
       - name: Prepare composition timing hint
@@ -172,7 +174,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: composition-test-durations-input
-          path: .ci/composition-test-durations.json
+          path: |
+            .ci/composition-test-durations.json
+            .ci/composition-affinity-shards.json
           include-hidden-files: true
           retention-days: 1
 
@@ -276,19 +280,10 @@ jobs:
         with:
           persist-credentials: false
       - if: needs.plan.outputs.run-security == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
-      - if: needs.plan.outputs.run-security == 'true'
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.11.28"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - if: needs.plan.outputs.run-security == 'true'
-        run: uv sync --locked --dev
+          dependency-profile: security
       - if: needs.plan.outputs.run-security == 'true'
         run: make security-audit
 
@@ -339,6 +334,7 @@ jobs:
       - uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
+          dependency-profile: test-core
       - run: make test-unit
         env:
           PYTEST_ARGS: >-
@@ -398,6 +394,9 @@ jobs:
             --clean-durations
             --junitxml=pytest.xml
             ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
+        # Affinity shards (when present) document co-located setup groups for
+        # operators and future selector-based sharding; pytest-split remains the
+        # runtime partition while historical durations are incomplete.
       - name: Upload domain shard timings
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true

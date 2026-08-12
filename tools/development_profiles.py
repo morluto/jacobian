@@ -28,12 +28,19 @@ class DevelopmentProfile:
 
     name: str
     providers: tuple[str, ...]
+    uv_groups: tuple[str, ...]
 
 
 PROFILES = {
     "core": DevelopmentProfile(
         "core",
         ("networkx", "sympy", "z3", "python-flint", "python-flint-hnf", "cvc5"),
+        ("contributor",),
+    ),
+    "unit": DevelopmentProfile(
+        "unit",
+        ("networkx", "sympy", "z3", "python-flint", "python-flint-hnf", "cvc5"),
+        ("test-core",),
     ),
     "lean": DevelopmentProfile(
         "lean",
@@ -46,6 +53,7 @@ PROFILES = {
             "cvc5",
             "lean",
         ),
+        ("contributor",),
     ),
     "external-proof": DevelopmentProfile(
         "external-proof",
@@ -60,6 +68,7 @@ PROFILES = {
             "drat-trim",
             "carcara",
         ),
+        ("contributor",),
     ),
 }
 PROFILE_NAMES = tuple(PROFILES)
@@ -93,13 +102,17 @@ def profile(name: str) -> DevelopmentProfile:
 def sync_arguments(name: str, *, development: bool = True) -> tuple[str, ...]:
     """Return locked uv sync arguments for a profile.
 
-    Development profiles install the ``dev``/``contributor`` umbrella (same
-    packages). CI jobs may instead sync a narrower group via
-    ``setup-python-tests`` ``dependency-profile``.
+    Each development profile owns its dependency groups. Passing
+    ``development=False`` syncs only runtime dependencies.
     """
 
-    profile(name)
-    return ("sync", "--locked", "--dev" if development else "--no-dev")
+    selected = profile(name)
+    arguments = ["sync", "--locked", "--no-default-groups"]
+    if development:
+        for group in selected.uv_groups:
+            arguments.extend(("--group", group))
+    return tuple(arguments)
+
 
 def _run(arguments: Sequence[str], cwd: Path) -> int:
     from benchmarks.tooling.command_runner import (
@@ -258,7 +271,7 @@ def _distribution_diagnostic(
         recovery=f"Run `make setup PROFILE={profile_name}`",
         documentation=(
             NATIVE_PROVIDER_DOCUMENTATION
-            if profile_name != "core"
+            if profile_name in {"lean", "external-proof"}
             else PROFILE_DOCUMENTATION
         ),
     )

@@ -7,6 +7,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+from tools.benchmark_plan.validation import (
+    BenchmarkPlanValidationError,
+    validate_plan,
+)
+
 ROOT = Path(__file__).parents[2]
 VALIDATOR = ROOT / ".github" / "scripts" / "validate-benchmark-plan"
 
@@ -72,6 +78,14 @@ def test_valid_benchmark_plan_is_accepted() -> None:
     result = _run(_plan())
 
     assert result.returncode == 0, result.stderr
+
+
+def test_validation_api_raises_a_value_error_for_an_invalid_plan() -> None:
+    plan = _plan()
+    plan["benchmark-plan-version"] = "3"
+
+    with pytest.raises(BenchmarkPlanValidationError, match="version"):
+        validate_plan(plan)
 
 
 def test_skipped_plan_is_accepted_with_empty_topology_and_no_lanes() -> None:

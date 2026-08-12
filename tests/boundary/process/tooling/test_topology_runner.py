@@ -99,9 +99,7 @@ def test_ordinary_lane_runs_pytest_directly(monkeypatch) -> None:
     topology = test_topology.load_topology()
     observed: dict[str, object] = {}
 
-    def fake_direct(
-        command: object, *, root: object, environment: object
-    ) -> int:
+    def fake_direct(command: object, *, root: object, environment: object) -> int:
         observed.update(command=command, root=root, environment=environment)
         return 0
 

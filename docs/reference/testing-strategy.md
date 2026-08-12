@@ -85,8 +85,8 @@ make test-runtime-inventory
 
 Collection inventory records per-node resources, setup affinity, and admission.
 Domain/composition timing prepare also emits affinity membership
-(`*-affinity-shards.json`) so shared setup can be co-located; pytest-split
-remains the runtime partition while historical inventories are incomplete.
+(`*-affinity-shards.json`) for diagnostics. CI collects the current suite and
+uses historical durations as weights for affinity-aware node-ID selection.
 
 ### Composition admission
 

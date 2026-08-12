@@ -1,6 +1,6 @@
-"""Behavioral tests for the portfolio assembler's installation absorption.
+"""Behavioral tests for DomainBundleInstaller's installation absorption.
 
-The assembler records declared provider unavailability and bundles affected by
+The installer records declared provider unavailability and bundles affected by
 an unavailable declared dependency. Every other installation failure
 (programming, schema, store, or configuration defects) must propagate so the
 caller's enclosing transaction rolls back atomically.
@@ -141,7 +141,7 @@ class _RecordingContext:
 @resource_fixture(
     resources={ResourceKind.SQLITE},
     isolation=IsolationClass.LIFECYCLE_OWNER,
-    profile_key="portfolio-assembler-v1",
+    profile_key="domain-bundle-installer-v1",
     setup_affinity="sqlite",
 )
 def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
@@ -375,7 +375,7 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
 ) -> None:
     """A bundle installation defect must propagate, not be absorbed.
 
-    OperationInstaller rejects an empty-capability bundle. The assembler must
+    OperationInstaller rejects an empty-capability bundle. The installer must
     not normalize that into a diagnostic; it must raise so the caller's
     enclosing transaction rolls back the partial portfolio atomically.
     """
@@ -394,7 +394,7 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
         assembler.install(plan)
 
     # The earlier bundle's adapter registration happened in-memory only and the
-    # caller is expected to roll back its enclosing transaction; the assembler
+    # caller is expected to roll back its enclosing transaction; the installer
     # itself never returns a silently-degraded result.
     assert "broken" not in assembly.registered
 
@@ -404,7 +404,7 @@ def test_duplicate_capability_id_within_a_bundle_propagates(
 ) -> None:
     """OperationInstaller rejects duplicate capability IDs within a bundle.
 
-    The assembler must propagate that defect rather than recording a skip.
+    The installer must propagate that defect rather than recording a skip.
     """
 
     assembler = DomainBundleInstaller(assembly.context)

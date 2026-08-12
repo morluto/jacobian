@@ -382,21 +382,32 @@ jobs:
       - uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
-      - run: make test-domain
+      - name: Select domain affinity shard
+        run: >-
+          uv run --locked python tools/select_affinity_shard.py
+          --suite domain
+          --shard ${{ matrix.shard }}
+          --shard-count ${{ needs.plan.outputs.domain-shard-count }}
+          --durations .ci/test-durations.json
+          --output .ci/shard-nodeids.txt
+      - name: Run domain affinity shard
+        run: |
+          if [ ! -s .ci/shard-nodeids.txt ]; then
+            printf '{}\n' > .ci/test-durations.json
+            echo "empty affinity shard"
+            exit 0
+          fi
+          make test-domain TESTS="@.ci/shard-nodeids.txt"
         env:
           PYTEST_ARGS: >-
-            --splits ${{ needs.plan.outputs.domain-shard-count }}
-            --group ${{ matrix.shard }}
-            --splitting-algorithm least_duration
+            -n 4
+            --dist worksteal
             --durations-path .ci/test-durations.json
             --randomly-seed ${{ needs.plan.outputs.pytest-randomly-shard-seed }}
             --store-durations
             --clean-durations
             --junitxml=pytest.xml
             ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
-        # Affinity shards (when present) document co-located setup groups for
-        # operators and future selector-based sharding; pytest-split remains the
-        # runtime partition while historical durations are incomplete.
       - name: Upload domain shard timings
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
@@ -416,7 +427,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - if: needs.plan.outputs.run-coverage == 'true'
-        run: mv .coverage .coverage.domain-${{ matrix.shard }}
+        run: |
+          if [ -f .coverage ]; then
+            mv .coverage .coverage.domain-${{ matrix.shard }}
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() && needs.plan.outputs.run-coverage == 'true' }}
         with:
@@ -448,12 +462,26 @@ jobs:
       - uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
-      - run: make test-composition
+      - name: Select composition affinity shard
+        run: >-
+          uv run --locked python tools/select_affinity_shard.py
+          --suite composition
+          --shard ${{ matrix.shard }}
+          --shard-count ${{ needs.plan.outputs.composition-shard-count }}
+          --durations .ci/composition-test-durations.json
+          --output .ci/shard-nodeids.txt
+      - name: Run composition affinity shard
+        run: |
+          if [ ! -s .ci/shard-nodeids.txt ]; then
+            printf '{}\n' > .ci/composition-test-durations.json
+            echo "empty affinity shard"
+            exit 0
+          fi
+          make test-composition TESTS="@.ci/shard-nodeids.txt"
         env:
           PYTEST_ARGS: >-
-            --splits ${{ needs.plan.outputs.composition-shard-count }}
-            --group ${{ matrix.shard }}
-            --splitting-algorithm least_duration
+            -n 2
+            --dist worksteal
             --durations-path .ci/composition-test-durations.json
             --randomly-seed ${{ needs.plan.outputs.pytest-randomly-shard-seed }}
             --store-durations
@@ -478,7 +506,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - if: needs.plan.outputs.run-coverage == 'true'
-        run: mv .coverage .coverage.composition-${{ matrix.shard }}
+        run: |
+          if [ -f .coverage ]; then
+            mv .coverage .coverage.composition-${{ matrix.shard }}
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() && needs.plan.outputs.run-coverage == 'true' }}
         with:

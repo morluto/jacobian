@@ -82,6 +82,7 @@ selectors = [
 path = "Makefile"
 selectors = [
   "tests/boundary/process/tooling/test_make_help.py",
+  "tests/boundary/process/tooling/test_topology_runner.py",
   "tests/unit/tooling/test_plan_local_tests.py",
 ]
 
@@ -123,6 +124,20 @@ path = "tools/test_topology.py"
 selectors = [
   "tests/boundary/process/tooling/test_topology_runner.py",
   "tests/unit/tooling/test_topology_manifest.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tools/select_affinity_shard.py"
+selectors = [
+  "tests/unit/tooling/test_affinity_shards.py",
+  "tests/unit/tooling/test_select_affinity_shard.py",
+]
+
+[[local_planning.exact_overrides]]
+path = "tools/test_plan/affinity.py"
+selectors = [
+  "tests/unit/tooling/test_affinity_shards.py",
+  "tests/unit/tooling/test_select_affinity_shard.py",
 ]
 
 [[local_planning.exact_overrides]]

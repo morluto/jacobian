@@ -4,6 +4,7 @@ import argparse
 import json
 import runpy
 import sys
+import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -271,14 +272,47 @@ def test_local_oracle_attempts_are_serialized_on_a_shared_docker_host() -> None:
     assert "export DOCKER_BUILDKIT=0 COMPOSE_BAKE=false" in harbor
 
 
-def test_composition_lane_uses_timing_shards() -> None:
+@pytest.mark.parametrize(
+    ("job_name", "next_job_name", "suite", "duration_path", "workers"),
+    (
+        (
+            "domain-test",
+            "composition-test",
+            "domain",
+            ".ci/test-durations.json",
+            4,
+        ),
+        (
+            "composition-test",
+            "process-test",
+            "composition",
+            ".ci/composition-test-durations.json",
+            2,
+        ),
+    ),
+)
+def test_timing_sharded_lanes_use_affinity_selectors(
+    job_name: str,
+    next_job_name: str,
+    suite: str,
+    duration_path: str,
+    workers: int,
+) -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job = workflow.split(f"  {job_name}:", 1)[1].split(f"  {next_job_name}:", 1)[0]
 
-    assert "composition-shard-count:" in workflow
-    assert "composition-test:" in workflow
-    assert "--splits ${{ needs.plan.outputs.composition-shard-count }}" in workflow
-    assert "composition-test-durations-input" in workflow
-    assert "composition-affinity-shards.json" in workflow
+    assert "tools/select_affinity_shard.py" in job
+    assert f"--suite {suite}" in job
+    assert f"--durations {duration_path}" in job
+    assert "--output .ci/shard-nodeids.txt" in job
+    assert f'make test-{suite} TESTS="@.ci/shard-nodeids.txt"' in job
+    assert f"-n {workers}" in job
+    assert "--dist worksteal" in job
+    assert "--store-durations" in job
+    assert "--clean-durations" in job
+    assert "--splits" not in job
+    assert "--group" not in job
+    assert "--splitting-algorithm" not in job
 
 
 def test_domain_prepare_publishes_affinity_shards() -> None:
@@ -291,8 +325,6 @@ def test_domain_prepare_publishes_affinity_shards() -> None:
 
 
 def test_timing_shard_configuration_matches_topology() -> None:
-    import tomllib
-
     topology = tomllib.loads((ROOT / "tests/topology.toml").read_text(encoding="utf-8"))
     config = json.loads((ROOT / ".github/ci-config.json").read_text(encoding="utf-8"))
     timed_lanes = {
@@ -343,8 +375,6 @@ def test_static_validation_enforces_test_architecture() -> None:
 
 
 def test_process_and_provider_lanes_have_explicit_resource_policies() -> None:
-    import tomllib
-
     manifest = tomllib.loads((ROOT / "tests/topology.toml").read_text(encoding="utf-8"))
     lanes = {lane["name"]: lane for lane in manifest["lanes"]}
 

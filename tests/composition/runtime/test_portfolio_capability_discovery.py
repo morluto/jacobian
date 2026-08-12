@@ -113,36 +113,35 @@ def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
 
 
 @pytest.mark.composition_admission("DISCOVERY")
-def test_discovery_finds_resultant_producer_from_plain_language(
-    attached_complete_runtime_read_only: JacobianRuntime,
-) -> None:
-    capabilities = attached_complete_runtime_read_only.core.capabilities
-
-    for query in (
+@pytest.mark.parametrize(
+    "query",
+    (
         "compute the exact resultant of two univariate rational polynomials",
         "compute and independently verify the exact resultant of two univariate rational polynomials",
-    ):
-        discovered = capabilities.discover(
-            CapabilityDiscoveryRequest(query=query, limit=8)
-        )
+    ),
+)
+def test_discovery_finds_resultant_producer_from_plain_language(
+    attached_complete_runtime_read_only: JacobianRuntime,
+    query: str,
+) -> None:
+    capabilities = attached_complete_runtime_read_only.core.capabilities
+    discovered = capabilities.discover(CapabilityDiscoveryRequest(query=query, limit=8))
 
-        ids = [match.capability_id for match in discovered.matches]
-        assert "polynomial.compute.resultant" in ids
-        assert ids.index("polynomial.compute.resultant") <= 1
-        resultant = next(
-            match
-            for match in discovered.matches
-            if match.capability_id == "polynomial.compute.resultant"
-        )
-        assert resultant.relevance_score > 0
+    ids = [match.capability_id for match in discovered.matches]
+    assert "polynomial.compute.resultant" in ids
+    assert ids.index("polynomial.compute.resultant") <= 1
+    resultant = next(
+        match
+        for match in discovered.matches
+        if match.capability_id == "polynomial.compute.resultant"
+    )
+    assert resultant.relevance_score > 0
 
 
 @pytest.mark.composition_admission("DISCOVERY")
-def test_domain_intents_discover_poset_and_topology_operations(
-    attached_complete_runtime_read_only: JacobianRuntime,
-) -> None:
-    capabilities = attached_complete_runtime_read_only.core.capabilities
-    cases = (
+@pytest.mark.parametrize(
+    ("query", "capability_id"),
+    (
         (
             "maximum antichain and minimum chain decomposition of a finite poset",
             "poset.width.compute",
@@ -155,11 +154,15 @@ def test_domain_intents_discover_poset_and_topology_operations(
             "homology of a finite simplicial complex over F_2",
             "topology.simplicial_homology.compute",
         ),
-    )
-    for query, capability_id in cases:
-        discovered = capabilities.discover(
-            CapabilityDiscoveryRequest(query=query, limit=5)
-        )
+    ),
+)
+def test_domain_intents_discover_poset_and_topology_operations(
+    attached_complete_runtime_read_only: JacobianRuntime,
+    query: str,
+    capability_id: str,
+) -> None:
+    capabilities = attached_complete_runtime_read_only.core.capabilities
+    discovered = capabilities.discover(CapabilityDiscoveryRequest(query=query, limit=5))
 
-        assert discovered.matches[0].capability_id == capability_id, query
-        assert discovered.matches[0].relevance_score > 0, query
+    assert discovered.matches[0].capability_id == capability_id, query
+    assert discovered.matches[0].relevance_score > 0, query

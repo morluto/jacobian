@@ -1,9 +1,9 @@
 """Affinity-aware shard balancing for timing-sharded pytest lanes.
 
 Durations alone cannot keep shared setup (complete-runtime templates, SQLite
-services, providers) co-located. This module owns product-test affinity packing;
-Harbor timing helpers may re-export it. Partition node IDs by setup affinity
-first, then greedily pack each affinity group onto shards.
+services, providers) co-located. This module owns product-test affinity packing.
+Small affinity groups stay on one shard; oversized groups are duration-balanced
+across shards so a single shared profile (for example composition) still splits.
 """
 
 from __future__ import annotations
@@ -24,10 +24,11 @@ def balance_affinity_shards(
     *,
     shard_count: int,
 ) -> tuple[tuple[str, ...], ...]:
-    """Return ``shard_count`` shards of node IDs preferring affinity co-location.
+    """Return ``shard_count`` shards preferring affinity co-location.
 
-    Within each affinity group, nodes are packed onto the current lightest shard
-    (least total duration). Empty affinities are treated as ``"default"``.
+    Groups whose total duration is at most ``total / shard_count`` stay on one
+    shard. Larger groups are packed node-by-node onto the lightest shards so a
+    dominant shared profile still parallelizes.
     """
 
     if shard_count <= 0:
@@ -42,19 +43,27 @@ def balance_affinity_shards(
 
     shards: list[list[str]] = [[] for _ in range(shard_count)]
     weights = [0.0] * shard_count
+    total_weight = sum(max(node.duration, 0.0) for node in nodes)
+    colocate_limit = total_weight / shard_count if shard_count else total_weight
 
-    # Larger affinity groups first so shared setup dominates placement.
-    # Place each affinity group onto one shard so shared setup stays co-located.
     ordered_groups = sorted(
         by_affinity.items(),
-        key=lambda item: (-sum(node.duration for node in item[1]), item[0]),
+        key=lambda item: (-sum(max(node.duration, 0.0) for node in item[1]), item[0]),
     )
     for _affinity, group in ordered_groups:
         group_weight = sum(max(node.duration, 0.0) for node in group)
-        target = min(range(shard_count), key=lambda index: (weights[index], index))
-        for node in sorted(group, key=lambda item: item.nodeid):
+        if group_weight <= colocate_limit or len(group) == 1:
+            target = min(range(shard_count), key=lambda index: (weights[index], index))
+            for node in sorted(group, key=lambda item: item.nodeid):
+                shards[target].append(node.nodeid)
+            weights[target] += group_weight
+            continue
+        for node in sorted(
+            group, key=lambda item: (-max(item.duration, 0.0), item.nodeid)
+        ):
+            target = min(range(shard_count), key=lambda index: (weights[index], index))
             shards[target].append(node.nodeid)
-        weights[target] += group_weight
+            weights[target] += max(node.duration, 0.0)
 
     return tuple(tuple(shard) for shard in shards)
 
@@ -131,10 +140,36 @@ def affinity_index_from_inventory(
     return tuple(nodes)
 
 
+def assign_collected_to_shards(
+    collected_nodeids: tuple[str, ...] | list[str],
+    *,
+    suite: str,
+    shard_count: int,
+    durations: dict[str, float] | None = None,
+) -> tuple[tuple[str, ...], ...]:
+    """Partition currently collectable node IDs with affinity-aware balancing.
+
+    Historical durations bias weights; unknown nodes default to ``1.0`` seconds
+    and still receive an inferred affinity so new tests are not dropped.
+    """
+
+    duration_map = dict(durations or {})
+    nodes = tuple(
+        AffinityNode(
+            nodeid=nodeid,
+            affinity=affinity_for_nodeid(nodeid, suite=suite),
+            duration=float(duration_map.get(nodeid, 1.0)),
+        )
+        for nodeid in collected_nodeids
+    )
+    return balance_affinity_shards(nodes, shard_count=shard_count)
+
+
 __all__ = [
     "AffinityNode",
     "affinity_for_nodeid",
     "affinity_index_from_inventory",
+    "assign_collected_to_shards",
     "balance_affinity_shards",
     "inventory_rows_from_durations",
 ]

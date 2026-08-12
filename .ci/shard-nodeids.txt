@@ -1,0 +1,2 @@
+tests/domain/matrix/test_x.py::test_a
+tests/domain/finite/test_y.py::test_b

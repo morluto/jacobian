@@ -99,8 +99,8 @@ check-changed: ## Plan and run the affected local handoff (BASE=origin/main).
 
 define run_topology_lane
 	$(TOPOLOGY_RUNNER) $(1) \
-		--pytest-args "$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)" \
-		$(if $(TESTS),$(TESTS))
+		$(if $(TESTS),$(TESTS)) \
+		--pytest-args "$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)"
 endef
 
 include make/test-lanes.mk

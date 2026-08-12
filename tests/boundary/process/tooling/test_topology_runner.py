@@ -4,8 +4,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from tools import test_topology
 from tools.test_topology import lane_environment, load_topology, main, pytest_command
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -64,13 +66,12 @@ def test_make_semantic_lane_forwards_pytest_arguments() -> None:
     assert '--pytest-args "--durations=10 -k target_test --junitxml=pytest.xml"' in (
         result.stdout
     )
+    assert result.stdout.index(
+        "tests/boundary/process/tooling/test_topology_runner.py"
+    ) < result.stdout.index("--pytest-args")
 
 
 def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None:
-    from types import SimpleNamespace
-
-    from tools import test_topology
-
     topology = test_topology.load_topology()
     observed: dict[str, object] = {}
 
@@ -105,10 +106,6 @@ def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None
 
 
 def test_topology_runner_returns_pytest_failure(monkeypatch) -> None:
-    from types import SimpleNamespace
-
-    from tools import test_topology
-
     topology = test_topology.load_topology()
 
     monkeypatch.setattr(

@@ -139,8 +139,11 @@ Representative groups include:
 - checker plan construction and bounded replay;
 - request-local and durable value transport;
 - MCP stdio and HTTP round trips; and
-- SQLite BLOB storage at 1 KiB, 100 KiB, 1 MiB, and 10 MiB with concurrency
-  1, 4, and 16, including crash/restart and backup/restore.
+- retained filesystem-CAS storage at representative payload sizes and
+  concurrency, including crash/restart, bounded reads, and backup/restore.
+
+The disposable SQLite BLOB comparison is retained only as reproducible decision
+evidence. It is not a production backend or a routine benchmark dimension.
 
 For Lean proof-state backend comparisons, run
 `benchmarks.tooling.lean_repl_backend_benchmark` as a pyperf cell for each

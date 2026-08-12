@@ -113,6 +113,18 @@ publication binding only when inline transport is insufficient. Publication
 owns transport only; it does not own mathematical validation, applicability,
 provider selection, effects, parsing, or checker authority.
 
+Do not introduce pass-through facades to make a dependency graph look cleaner.
+An aggregate may coordinate a public lifecycle or transaction, but it must not
+mirror every collaborator method, bounce callbacks back through itself, or keep
+private forwarding methods solely for tests. Call the concrete owner directly;
+extract a shared abstraction only when two production paths replace their older
+implementations in the same change.
+
+Composition roots retain only resources needed after construction. Do not build
+or return nested installation reports, provider bags, or phase-result mirrors
+that production immediately discards. Keep an installation result only when a
+later production phase consumes that exact typed fact.
+
 Construct wire envelopes only at the final capability or protocol projection.
 Mathematical functions, typed operation executors, artifact services, and
 checker services return their owned typed values or terminal states; they do
@@ -121,6 +133,11 @@ not construct `CapabilityResult`. Do not hide artifact writes inside an
 a domain-specific durable schema or parent closure, keep that publication in a
 narrow named domain publisher and pass its typed projection to the one final
 envelope constructor.
+
+Measure expensive checker source and dependency identity at authorization and
+inside the bounded checker worker, not during catalog discovery, compatibility
+selection, or ordinary runtime startup. Registry reads validate persisted
+identity and authority; the execution boundary remeasures executable bytes.
 
 At the MCP boundary, prefer MCP Python SDK 2.0 high-level typed returns. Return
 Pydantic result models directly and let the SDK derive the output schema,

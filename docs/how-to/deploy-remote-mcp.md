@@ -397,7 +397,7 @@ is first used. This warms Lean and filesystem caches without delaying MCP
 startup.
 
 Lean results are cached only for an exact content-addressed certificate and
-the currently active checker digest. The bounded in-memory cache holds 128
+the currently active checker implementation digest. The bounded in-memory cache holds 128
 entries; a changed proof, statement, environment, checker, or authorization
 state cannot reuse an entry. `math.find` for `lean.check` reports the
 cache policy and the MATHLIB warm-up state (`RUNNING`, `HEALTHY`, or

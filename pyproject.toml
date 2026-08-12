@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "jacobian"
 version = "0.11.0"
-description = "A capability-first MCP workbench for executable mathematics"
+description = "Atomic mathematical tools for agents over MCP and Python"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
@@ -182,6 +182,26 @@ forbidden_modules = [
     "jacobian.storage",
     "jacobian.verification",
     "jacobian.value_references",
+]
+
+[[tool.importlinter.contracts]]
+name = "Semantic operations do not depend on installed layers"
+type = "forbidden"
+source_modules = ["jacobian.operations"]
+forbidden_modules = [
+    "jacobian.adapters",
+    "jacobian.checker_operations",
+    "jacobian.installation",
+    "jacobian.operation_bindings",
+    "jacobian.operation_installation",
+    "jacobian.operation_projection",
+    "jacobian.operation_publication",
+    "jacobian.operation_runtime",
+    "jacobian.persistence",
+    "jacobian.portfolio",
+    "jacobian.runtime",
+    "jacobian.storage",
+    "jacobian.verification",
 ]
 
 [[tool.importlinter.contracts]]

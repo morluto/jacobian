@@ -218,10 +218,11 @@ Python identity, dependency files, native libraries/executables, and sandbox
 policy. Unrelated product changes must not alter checker identity; actual
 checker dependencies must.
 
-Storage experiments remain an independent track. Compare SQLite BLOB behavior
-at 1 KiB, 100 KiB, 1 MiB, and 10 MiB with concurrency 1, 4, and 16, including
-crash/restart, backup/restore, and bounded reads. Performance evidence never
-substitutes for correctness.
+The completed storage experiment retained the filesystem CAS. Its disposable
+SQLite comparison remains reproducible evidence rather than a selectable
+backend. Storage regression tests therefore focus on the retained CAS's
+transaction coordination, quota recovery, bounded reads, crash/restart, and
+backup/restore behavior.
 
 Run the disposable carrier comparison with:
 
@@ -230,9 +231,9 @@ uv run python tools/benchmark_storage_blobs.py --iterations 16 \
   --output storage-blob-benchmark.json
 ```
 
-The spike is decision evidence, not a selectable runtime backend. Its rollback,
-restart, bounded-read, and backup/restore checks must all pass before latency or
-throughput can justify replacing the current two-store recovery protocol.
+The spike is historical decision evidence, not a selectable runtime backend or
+a second production abstraction. Re-run it only when new workload evidence
+justifies reopening the storage decision.
 
 Hosting tests keep local and remote ownership separate. Remote authentication,
 tenants, admission, leases, eviction, and quarantine must not enter the local

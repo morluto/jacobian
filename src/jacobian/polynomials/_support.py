@@ -14,11 +14,10 @@ from typing import TYPE_CHECKING, Any, Self, cast
 from pydantic import Field, ValidationError, model_validator
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
-    CapabilityResult,
 )
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 from jacobian.contracts.polynomials import (
@@ -41,6 +40,9 @@ from jacobian.contracts.results import (
     Execution,
     ExecutionStatus,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.polynomials._sympy import _sympy
 from jacobian.polynomials.resources import PolynomialResources
 from jacobian.provider_runtime import SYMPY_VERSION
@@ -64,14 +66,36 @@ class PolynomialOperationResult[ResultT: ContractModel]:
     artifact_uris: tuple[str, ...]
     verification_record_uri: str | None = None
 
-    def project(self, descriptor: CapabilityDescriptor) -> CapabilityResult:
-        return CapabilityResult(
-            capability_id=descriptor.capability_id,
-            capability_version=descriptor.version,
-            execution=self.execution,
-            output=self.value.model_dump(mode="json"),
+    def project(self, descriptor: CapabilityDescriptor) -> OperationProjection:
+        terminal = (
+            Completed(
+                value=self.value,
+                runtime_ms=self.execution.runtime_ms,
+                detail=self.execution.detail,
+            )
+            if self.execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=self.execution.status,
+                diagnostic=CapabilityDiagnostic(
+                    code="POLYNOMIAL_OPERATION_NOT_COMPLETED",
+                    stage="operation_execution",
+                    message=(
+                        self.execution.detail
+                        or "The polynomial operation did not complete."
+                    ),
+                ),
+                runtime_ms=self.execution.runtime_ms,
+            )
+        )
+        return OperationProjection(
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=self.value,
+                artifact_uris=self.artifact_uris,
+            ),
             verification_record_uri=self.verification_record_uri,
-            artifact_uris=self.artifact_uris,
         )
 
 
@@ -739,21 +763,39 @@ def _materialize_evaluation(
     return evaluation, artifact.artifact_uri
 
 
-def _computed_result(
+def _completed_projection[ResultT: ContractModel](
+    *,
+    descriptor: CapabilityDescriptor,
+    output: ResultT,
+    runtime_ms: int,
+    artifact_uris: tuple[str, ...],
+) -> OperationProjection:
+    """Return one completed polynomial value awaiting public projection."""
+
+    return OperationProjection(
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
+        terminal=Completed(value=output, runtime_ms=runtime_ms),
+        publication=PublishedOperation(
+            output=output,
+            artifact_uris=artifact_uris,
+        ),
+    )
+
+
+def _computed_result[ResultT: ContractModel](
     *,
     descriptor: CapabilityDescriptor,
     started: float,
-    output: dict[str, Any],
+    output: ResultT,
     artifact_uris: tuple[str, ...],
-) -> CapabilityResult:
-    return CapabilityResult(
-        capability_id=descriptor.capability_id,
-        capability_version=descriptor.version,
-        execution=Execution(
-            status=ExecutionStatus.COMPLETED,
-            runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-        ),
+) -> OperationProjection:
+    """Project one ordinary completed polynomial computation."""
+
+    return _completed_projection(
+        descriptor=descriptor,
         output=output,
+        runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
         artifact_uris=artifact_uris,
     )
 

@@ -313,7 +313,7 @@ def test_existing_model_schema_reattaches_without_durable_writes(
     def unexpected_blob_write(_data: bytes) -> str:
         pytest.fail("reattaching a model rewrote durable schema content")
 
-    monkeypatch.setattr(store, "_write_blob", unexpected_blob_write)
+    monkeypatch.setattr(store._blobs, "write", unexpected_blob_write)
 
     assert (
         runtime_registry.register_model(

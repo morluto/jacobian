@@ -417,6 +417,26 @@ def readOrBuildEntries (env : Environment) :
   IO.FS.rename temporaryPath indexPath
   return entries
 
+elab "#jacobian_declaration_query" : command => do
+  let mut query ← readQuery
+  let env ← getEnv
+  let mut names : Array Name := #[]
+  if query.operation == "search" &&
+      query.scanned_declarations_total.isNone then
+    let entries ← readOrBuildEntries env
+    match catalogQuery? query entries with
+    | some catalogQuery => query := catalogQuery
+    | none => names := entries.map (·.name)
+  try
+    match ← executeQuery env names query with
+    | .ok output =>
+      logInfo m!"JACOBIAN_DECLARATION_RESULT {(resultEnvelope query output).compress}"
+    | .error (code, message) =>
+      logInfo m!"JACOBIAN_DECLARATION_ERROR {(errorEnvelope query.request_id code message).compress}"
+  catch _ =>
+    logInfo m!"JACOBIAN_DECLARATION_ERROR {(errorEnvelope query.request_id "LEAN_QUERY_FAILED" "query execution failed").compress}"
+
+-- JACOBIAN_DECLARATION_ENTRYPOINT
 run_cmd do
   let mut query ← readQuery
   let env ← getEnv

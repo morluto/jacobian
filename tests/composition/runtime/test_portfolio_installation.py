@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 
 from jacobian.portfolio import assembler
-from jacobian.portfolio.result import PortfolioInstallation
+from jacobian.runtime.portfolio import PortfolioResources
 
 
 class _RecordingContext:
@@ -70,16 +70,23 @@ def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None
         "ResourceCapabilityInstaller",
         lambda _context: _installer(events, "resource"),
     )
-    monkeypatch.setattr(
-        assembler,
-        "CheckerPortfolioInstaller",
-        lambda _context, _resolver: _installer(events, "checker"),
-    )
+
+    def checker_installer(_context, _resolver):
+        events.append("checker:init")
+        return SimpleNamespace(
+            install=lambda *_args: (
+                events.append("checker:install"),
+                SimpleNamespace(),
+            )[1]
+        )
+
+    monkeypatch.setattr(assembler, "CheckerPortfolioInstaller", checker_installer)
     monkeypatch.setattr(assembler, "cached_package_digests", lambda: nullcontext())
 
-    result = assembler.install_portfolio(context, application)
+    resources = assembler.install_portfolio(context, application)
 
-    assert isinstance(result, PortfolioInstallation)
+    assert isinstance(resources, PortfolioResources)
+    resources.close()
     assert events == [
         "resolver:init",
         "enter:policy",

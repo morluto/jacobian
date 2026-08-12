@@ -13,7 +13,8 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
@@ -23,11 +24,9 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.contracts.universal_algebra import (
     CountermodelSearchStatus,
     FiniteMagma,
@@ -51,11 +50,14 @@ from jacobian.contracts.universal_algebra import (
     UniversalAlgebraEvaluationRequest,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 from jacobian.verification_capabilities import certificate_verification_adapter
 
 _COUNTERMODEL_TIMEOUT_MS = 10_000
@@ -269,7 +271,7 @@ class UniversalAlgebraEvaluateLawsAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = UniversalAlgebraEvaluationRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -349,19 +351,21 @@ class UniversalAlgebraEvaluateLawsAdapter:
             certificate_uri=certificate_artifact.artifact_uri,
             records=records,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(
-                problem_artifact.artifact_uri,
-                evaluation_artifact.artifact_uri,
-                claim_artifact.artifact_uri,
-                certificate_artifact.artifact_uri,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(
+                    problem_artifact.artifact_uri,
+                    evaluation_artifact.artifact_uri,
+                    claim_artifact.artifact_uri,
+                    certificate_artifact.artifact_uri,
+                ),
             ),
         )
 
@@ -486,7 +490,7 @@ class UniversalAlgebraSearchCountermodelAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = UniversalAlgebraCountermodelSearchRequest.model_validate(
                 request.input
@@ -523,15 +527,17 @@ class UniversalAlgebraSearchCountermodelAdapter:
             source_records=search.source_records,
             target_record=search.target_record,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(search_artifact.artifact_uri,),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(search_artifact.artifact_uri,),
+            ),
         )
 
 
@@ -569,7 +575,7 @@ class FiniteMagmaTableEnumerateAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = FiniteMagmaTableEnumerationRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -622,15 +628,17 @@ class FiniteMagmaTableEnumerateAdapter:
             enumerated_count=len(table_uris),
             total_count=total_count,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(enumeration_artifact.artifact_uri, *table_uris),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(enumeration_artifact.artifact_uri, *table_uris),
+            ),
         )
 
 

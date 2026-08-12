@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
+    CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean import (
     LeanCheckOutput,
     LeanEnvironment,
 )
+from jacobian.contracts.results import ExecutionStatus
 from jacobian.lean_frontend.service import LeanService
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 
 
 class LeanCheckAdapter:
@@ -80,7 +84,7 @@ class LeanCheckAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         payload = request.input
         checked = self.lean.verify(
             statement=str(payload["statement"]),
@@ -101,23 +105,44 @@ class LeanCheckAdapter:
             verification_record_uri=checked.result.verification_record_uri,
             cache_hit=checked.cache_hit,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=checked.result.execution,
-            output=output.model_dump(mode="json"),
-            verification_record_uri=(
-                checked.result.verification_record_uri if verified else None
-            ),
+        record_uri = checked.result.verification_record_uri if verified else None
+        publication = PublishedOperation(
+            output=output,
             artifact_uris=(
                 checked.claim_uri,
                 checked.candidate_uri,
                 *evidence,
                 *((scope_uri,) if scope_uri is not None else ()),
-                *(
-                    (checked.result.verification_record_uri,)
-                    if checked.result.verification_record_uri is not None
-                    else ()
+                *((record_uri,) if record_uri is not None else ()),
+            ),
+        )
+        execution = checked.result.execution
+        if execution.status is ExecutionStatus.COMPLETED:
+            return OperationProjection(
+                operation_id=self.descriptor.capability_id,
+                version=self.descriptor.version,
+                terminal=Completed(
+                    value=output,
+                    runtime_ms=execution.runtime_ms,
+                    detail=execution.detail,
+                ),
+                publication=publication,
+                verification_record_uri=record_uri,
+            )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Failed(
+                status=execution.status,
+                runtime_ms=execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="LEAN_CHECK_NONCONCLUSIVE",
+                    stage="verification",
+                    message=(
+                        execution.detail
+                        or "The independent Lean checker reached no conclusion."
+                    ),
                 ),
             ),
+            publication=publication,
         )

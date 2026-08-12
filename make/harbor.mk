@@ -1,3 +1,9 @@
+# Harbor-only. Product CI does not classify or plan from PATHS.
+ifneq ($(strip $(PATHS)),)
+PATHS_FILE := $(shell mktemp)
+$(file >$(PATHS_FILE),$(PATHS))
+endif
+
 HARBOR_VERSION ?= 0.20.0
 HARBOR_RUNNER ?= uvx --from harbor==$(HARBOR_VERSION) harbor
 HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python

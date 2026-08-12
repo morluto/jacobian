@@ -103,6 +103,8 @@ documentation.
 
 Harbor benchmark authoring and verifier work uses the repository-local
 [`harbor-benchmarks`](../.agents/skills/harbor-benchmarks/SKILL.md) skill.
+Source-grounded reliability probes based on recently resolved conjectures use
+[`recent-conjecture-evaluations`](../.agents/skills/recent-conjecture-evaluations/SKILL.md).
 For hosted operation, follow
 [Deploy the remote MCP server](how-to/deploy-remote-mcp.md); ignored `tmp/`
 records are host evidence, not source of truth.

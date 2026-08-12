@@ -24,9 +24,8 @@ from jacobian.portfolio.provider_resolution import (
     ProviderAvailabilityResolver,
     ProviderRuntimePlan,
 )
-from jacobian.portfolio.resource_installation import ResourceCapabilityInstaller
-from jacobian.portfolio.result import PortfolioInstallation
 from jacobian.runtime.config import CheckerAuthorityMode
+from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
@@ -69,7 +68,6 @@ def _provider_plan_with_unavailable_external_solvers() -> ProviderRuntimePlan:
 def test_foundation_solver_phase_skips_unavailable_external_solver(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    result = PortfolioInstallation()
     registered: list[object] = []
     context = SimpleNamespace(register_capability=registered.append)
     adapter = object()
@@ -81,35 +79,25 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
 
     FoundationInstaller(cast(InstallationContext, context)).install_solver_components(
         cast(CoreServices, SimpleNamespace(smt=object())),
-        result,
         _provider_plan_with_unavailable_external_solvers(),
     )
 
-    assert result.cadical_runtime is not None
     assert (
-        result.cadical_runtime.availability
+        _provider_plan_with_unavailable_external_solvers().cadical.availability
         is CapabilityProviderAvailability.UNAVAILABLE
     )
     assert registered == [adapter]
 
 
 def test_core_domain_verification_phase_accepts_empty_bundle_result() -> None:
-    result = PortfolioInstallation()
-    CoreApplicationInstaller(
-        cast(InstallationContext, object())
-    ).install_domain_verification(result, PortfolioPlan(components=()))
-
-    assert result.exact_domain_checkers is None
-
-
-def test_resource_phase_requires_core_graph_installation() -> None:
-    installer = ResourceCapabilityInstaller(cast(InstallationContext, object()))
-
-    with pytest.raises(
-        RuntimeError,
-        match="graph capabilities must precede resource installation",
-    ):
-        installer.install(PortfolioInstallation())
+    assert (
+        CoreApplicationInstaller(
+            cast(InstallationContext, object())
+        ).install_domain_verification(
+            SimpleNamespace(installed={}), PortfolioPlan(components=())
+        )
+        is None
+    )
 
 
 @dataclass
@@ -130,15 +118,11 @@ def test_checker_phase_derives_authority_from_its_context() -> None:
             core=SimpleNamespace(),
         ),
     )
-    result = PortfolioInstallation()
-
     CheckerPortfolioInstaller(
         cast(InstallationContext, context),
         cast(ProviderAvailabilityResolver, object()),
-    ).install(application, result)
+    ).install(application, PortfolioResources())
 
-    assert result.polytope_checkers is None
-    assert result.lean_checkers == {}
     assert context.registered == []
 
 
@@ -152,7 +136,7 @@ def test_portfolio_close_releases_every_owned_lean_resource_once() -> None:
         def close(self) -> None:
             closed.append(self.name)
 
-    result = PortfolioInstallation()
+    result = PortfolioResources()
     result.lean_declarations = cast(Any, Resource("declarations"))
     result.lean_exploration = cast(
         Any,
@@ -181,7 +165,7 @@ def test_portfolio_close_continues_after_keyboard_interrupt() -> None:
         def close(self) -> None:
             closed.append(self.name)
 
-    result = PortfolioInstallation()
+    result = PortfolioResources()
     result.lean_declarations = cast(Any, InterruptingResource())
     result.lean_exploration = cast(
         Any,

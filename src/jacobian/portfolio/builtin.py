@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.analysis import build_real_analysis_bundle
 from jacobian.domains.arithmetic import build_arithmetic_bundle
 from jacobian.domains.certified_snf import build_certified_snf_bundle
@@ -27,15 +28,11 @@ from jacobian.domains.projective_geometry import build_projective_geometry_bundl
 from jacobian.domains.rational_linear import build_rational_linear_bundle
 from jacobian.domains.sequences import build_sequence_bundle
 from jacobian.domains.topology import build_topology_bundle
-from jacobian.portfolio.model import PortfolioComponent, PortfolioPlan
-from jacobian.portfolio.nullstellensatz_installation import (
-    build_nullstellensatz_core_component,
-    build_nullstellensatz_singular_component,
-)
+from jacobian.portfolio.model import PortfolioPlan
 
-type PortfolioComponentFactory = Callable[[], PortfolioComponent]
+type DomainBundleFactory = Callable[[], DomainBundle]
 
-BUILTIN_PORTFOLIO_COMPONENT_FACTORIES: tuple[PortfolioComponentFactory, ...] = (
+BUILTIN_DOMAIN_BUNDLE_FACTORIES: tuple[DomainBundleFactory, ...] = (
     build_arithmetic_bundle,
     build_number_theory_bundle,
     build_combinatorics_bundle,
@@ -53,8 +50,6 @@ BUILTIN_PORTFOLIO_COMPONENT_FACTORIES: tuple[PortfolioComponentFactory, ...] = (
     build_rational_linear_bundle,
     build_lattice_bundle,
     build_polynomial_bundle,
-    build_nullstellensatz_core_component,
-    build_nullstellensatz_singular_component,
     build_real_analysis_bundle,
     build_finite_probability_bundle,
     build_rational_optimization_bundle,
@@ -63,10 +58,10 @@ BUILTIN_PORTFOLIO_COMPONENT_FACTORIES: tuple[PortfolioComponentFactory, ...] = (
 )
 
 
-def build_builtin_portfolio_components() -> tuple[PortfolioComponent, ...]:
+def build_builtin_portfolio_components() -> tuple[DomainBundle, ...]:
     """Construct the ordered built-in portfolio without dynamic discovery."""
 
-    return tuple(factory() for factory in BUILTIN_PORTFOLIO_COMPONENT_FACTORIES)
+    return tuple(factory() for factory in BUILTIN_DOMAIN_BUNDLE_FACTORIES)
 
 
 def build_builtin_portfolio() -> PortfolioPlan:
@@ -76,8 +71,8 @@ def build_builtin_portfolio() -> PortfolioPlan:
 
 
 __all__ = [
-    "BUILTIN_PORTFOLIO_COMPONENT_FACTORIES",
-    "PortfolioComponentFactory",
+    "BUILTIN_DOMAIN_BUNDLE_FACTORIES",
+    "DomainBundleFactory",
     "build_builtin_portfolio",
     "build_builtin_portfolio_components",
 ]

@@ -7,12 +7,11 @@ import time
 from typing import Any
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
@@ -40,8 +39,10 @@ from jacobian.contracts.results import (
     Execution,
     ExecutionStatus,
 )
+from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
     PolynomialOperationResult,
+    _completed_projection,
     _inverse_candidate_map,
     _inverse_coefficient_system,
     _inverse_residual_term_bound,
@@ -429,7 +430,10 @@ class PolynomialMapInverseSynthesizeAdapter:
             verification_artifact_uri,
         )
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(
+        self,
+        request: CapabilityRequest,
+    ) -> OperationProjection:
         started = time.monotonic()
         validated = _validate_request(
             PolynomialMapInverseSynthesisRequest,
@@ -532,20 +536,21 @@ class PolynomialMapInverseSynthesizeAdapter:
                 )
             )
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        if status is not PolynomialInverseSynthesisStatus.TIMEOUT:
+            return _completed_projection(
+                descriptor=self.descriptor,
+                output=output,
+                runtime_ms=elapsed_ms,
+                artifact_uris=artifact_uris,
+            )
+        return PolynomialOperationResult(
+            value=output,
             execution=Execution(
-                status=(
-                    ExecutionStatus.TIMEOUT
-                    if status is PolynomialInverseSynthesisStatus.TIMEOUT
-                    else ExecutionStatus.COMPLETED
-                ),
+                status=ExecutionStatus.TIMEOUT,
                 runtime_ms=elapsed_ms,
             ),
-            output=output.model_dump(mode="json"),
             artifact_uris=artifact_uris,
-        )
+        ).project(self.descriptor)
 
 
 class PolynomialMapInverseVerifyAdapter:
@@ -624,7 +629,7 @@ class PolynomialMapInverseVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialMapInverseVerifyRequest,
             request.input,

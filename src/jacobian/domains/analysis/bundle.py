@@ -1,8 +1,9 @@
 """Validated real-analysis domain bundle."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.analysis.operations import POINT_ENCLOSURE_CAPABILITIES
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION
 from jacobian.providers.flint_runtime import python_flint_analysis_provider_runtime
 

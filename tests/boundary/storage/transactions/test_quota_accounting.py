@@ -71,7 +71,7 @@ def test_concurrent_blob_commits_cannot_oversubscribe_quota(
     second_started = threading.Event()
     call_lock = threading.Lock()
     accounting_calls = 0
-    original_accounting = store._blob_bytes_committed
+    original_accounting = store._blobs.blob_bytes_committed
 
     def paused_accounting() -> int:
         nonlocal accounting_calls
@@ -83,14 +83,14 @@ def test_concurrent_blob_commits_cannot_oversubscribe_quota(
             assert release_first.wait(timeout=2)
         return original_accounting()
 
-    monkeypatch.setattr(store, "_blob_bytes_committed", paused_accounting)
+    monkeypatch.setattr(store._blobs, "blob_bytes_committed", paused_accounting)
     outcomes: list[Any] = []
 
     def commit(data: bytes, *, started: threading.Event | None = None) -> None:
         if started is not None:
             started.set()
         try:
-            outcomes.append(store._write_blob(data))
+            outcomes.append(store._blobs.write(data))
         except Exception as exc:
             outcomes.append(exc)
 
@@ -128,23 +128,23 @@ def test_blob_writes_do_not_rescan_the_blob_tree(
 
     monkeypatch.setattr(Path, "iterdir", unexpected_scan)
     data = b"constant-time quota accounting"
-    digest = store._write_blob(data)
+    digest = store._blobs.write(data)
 
-    assert store._blob_path(digest).read_bytes() == data
-    assert store._blob_bytes_committed() == len(data)
+    assert store._blobs.blob_path(digest).read_bytes() == data
+    assert store._blobs.blob_bytes_committed() == len(data)
 
 
 def test_store_open_reconciles_stale_quota_metadata(tmp_path: Path) -> None:
     store = ArtifactRepository(tmp_path)
-    committed = store._blob_bytes_committed()
-    store._adjust_blob_bytes_committed(
+    committed = store._blobs.blob_bytes_committed()
+    store._blobs.adjust_blob_bytes_committed(
         512,
         reconciliation_required=True,
     )
 
     reopened = ArtifactRepository(tmp_path)
 
-    assert reopened._blob_bytes_committed() == committed
+    assert reopened._blobs.blob_bytes_committed() == committed
 
 
 def test_store_open_migrates_legacy_quota_metadata(tmp_path: Path) -> None:
@@ -176,7 +176,7 @@ def test_store_open_migrates_legacy_quota_metadata(tmp_path: Path) -> None:
         ).fetchone()
     assert "reconciliation_required" in columns
     assert row == (0, 0)
-    assert store._blob_bytes_committed() == 0
+    assert store._blobs.blob_bytes_committed() == 0
 
 
 def test_concurrent_store_open_migrates_legacy_quota_metadata_once(
@@ -224,7 +224,7 @@ def test_failed_blob_publication_releases_quota_reservation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = ArtifactRepository(tmp_path)
-    committed = store._blob_bytes_committed()
+    committed = store._blobs.blob_bytes_committed()
 
     def fail_link(_source: str, _target: str) -> None:
         raise OSError("link failed")
@@ -232,9 +232,9 @@ def test_failed_blob_publication_releases_quota_reservation(
     monkeypatch.setattr(os, "link", fail_link)
 
     with pytest.raises(StorageError, match="could not write"):
-        store._write_blob(b"unpublished")
+        store._blobs.write(b"unpublished")
 
-    assert store._blob_bytes_committed() == committed
+    assert store._blobs.blob_bytes_committed() == committed
 
 
 def test_cross_process_blob_writes_cannot_oversubscribe_quota(
@@ -248,7 +248,7 @@ from jacobian.storage.models import StorageLimits
 
 store = ArtifactRepository(sys.argv[1], limits=StorageLimits(max_total_blob_bytes=900))
 try:
-    store._write_blob(sys.argv[2].encode("ascii") * 600)
+    store._blobs.write(sys.argv[2].encode("ascii") * 600)
 except StorageLimitError:
     print("limited")
 else:

@@ -29,14 +29,13 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -62,7 +61,9 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
+    PolynomialOperationResult,
     _computed_result,
     _validate_request,
     _wire_rational,
@@ -72,7 +73,7 @@ from jacobian.providers import LazyLoader
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 if TYPE_CHECKING:
     from sympy import Poly, Symbol
@@ -305,7 +306,7 @@ class PolynomialIntervalPositivityDecideAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialIntervalPositivityRequest,
             request.input,
@@ -376,7 +377,7 @@ class PolynomialIntervalPositivityDecideAdapter:
         return _computed_result(
             descriptor=self.descriptor,
             started=started,
-            output=output.model_dump(mode="json"),
+            output=output,
             artifact_uris=(
                 polynomial_artifact.artifact_uri,
                 decision_artifact.artifact_uri,
@@ -430,7 +431,7 @@ class PolynomialIntervalPositivityVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialIntervalPositivityVerifyRequest,
             request.input,
@@ -582,14 +583,12 @@ class PolynomialIntervalPositivityVerifyAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
+            value=output,
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
-        )
+        ).project(self.descriptor)
 
 
 def _sturm_positivity(

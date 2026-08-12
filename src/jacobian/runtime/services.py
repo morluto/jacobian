@@ -15,7 +15,7 @@ from jacobian.sat_smt.smt import SmtArtifactService
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceStore
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 @dataclass(slots=True)

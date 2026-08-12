@@ -135,9 +135,7 @@ make harbor-validate-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
 ```
 
 For benchmark paths, treat `make harbor-plan BASE=...` as the authoritative
-planner. The general `make test-plan BASE=...` may classify task bundles as
-documentation because they are evaluation assets; that classification does not
-replace the benchmark contract, host, and Oracle plan.
+planner. Product CI does not classify Harbor task bundles.
 
 ### Distinguish static contracts from executable host validation
 
@@ -155,12 +153,11 @@ tooling. A broad command that exposes a task-local failure is not evidence that
 the aggregate runner, cache, or static contract is the root cause.
 
 Benchmark host shards must partition one deterministic collection. Every shard
-must receive the same `--randomly-seed`, sourced from
-`pytest_randomly_shard_seed` in `.github/ci-config.json`, before
-`pytest-split` selects its group. When shard command construction changes, add
-or run a focused regression proving that every generated shard command carries
-the configured seed. Different per-runner collection orders can create
-overlapping groups even when every individual shard succeeds.
+must receive the same `--randomly-seed` (`0`) before `pytest-split` selects
+its group. When shard command construction changes, add or run a focused
+regression proving that every generated shard command carries the configured
+seed. Different per-runner collection orders can create overlapping groups
+even when every individual shard succeeds.
 
 Published duration maps are merged by test node ID. Duplicate observations are
 reconciled conservatively by retaining the maximum duration and emitting a

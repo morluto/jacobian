@@ -10,7 +10,8 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -22,7 +23,6 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import (
@@ -32,6 +32,8 @@ from jacobian.contracts.evidence import (
 )
 from jacobian.contracts.results import (
     Conclusion,
+    ContractModel,
+    Execution,
     ExecutionStatus,
 )
 from jacobian.contracts.sat import (
@@ -45,16 +47,16 @@ from jacobian.contracts.sat import (
     canonicalize_cnf,
 )
 from jacobian.operation_execution import execute_operation
-from jacobian.operation_projection import project_operation_result
+from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
-from jacobian.operations import Completed, OperationSpec
+from jacobian.operations import Completed, Failed, OperationSpec
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactError, SatArtifactService
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,7 +151,7 @@ class SatCnfMaterializationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = SatCnfMaterializationRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -171,7 +173,7 @@ class SatCnfMaterializationAdapter:
 
         terminal = execute_operation(self.spec, validated)
         if not isinstance(terminal, Completed):
-            return project_operation_result(
+            return OperationProjection(
                 operation_id=self.spec.operation_id,
                 version=self.spec.version,
                 terminal=terminal,
@@ -213,7 +215,7 @@ class SatCnfMaterializationAdapter:
                 )
             ),
         )
-        return project_operation_result(
+        return OperationProjection(
             operation_id=self.spec.operation_id,
             version=self.spec.version,
             terminal=terminal,
@@ -398,7 +400,7 @@ class SatAssignmentVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = SatAssignmentVerificationRequest.model_validate(request.input)
         try:
             resolved = self.sat.resolve_assignment(validated.assignment_uri)
@@ -498,13 +500,14 @@ class SatAssignmentVerificationAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return _verification_projection(
+            descriptor=self.descriptor,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
-            verification_record_uri=record_uri,
+            output=output,
             artifact_uris=tuple(artifact_uris),
+            verification_record_uri=record_uri,
+            failure_code="SAT_ASSIGNMENT_CHECK_NONCONCLUSIVE",
+            detail=detail,
         )
 
 
@@ -568,7 +571,7 @@ class SatUnsatProofVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = SatUnsatProofVerificationRequest.model_validate(request.input)
         try:
             resolved = self.sat.resolve_proof(validated.proof_uri)
@@ -682,11 +685,53 @@ class SatUnsatProofVerificationAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return _verification_projection(
+            descriptor=self.descriptor,
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
-            verification_record_uri=record_uri,
+            output=output,
             artifact_uris=tuple(artifact_uris),
+            verification_record_uri=record_uri,
+            failure_code="SAT_UNSAT_PROOF_CHECK_NONCONCLUSIVE",
+            detail=detail,
         )
+
+
+def _verification_projection(
+    *,
+    descriptor: CapabilityDescriptor,
+    execution: Execution,
+    output: ContractModel,
+    artifact_uris: tuple[str, ...],
+    verification_record_uri: str | None,
+    failure_code: str,
+    detail: str,
+) -> OperationProjection:
+    """Project one SAT checker outcome without promoting a non-conclusion."""
+
+    publication = PublishedOperation(output=output, artifact_uris=artifact_uris)
+    if execution.status is ExecutionStatus.COMPLETED:
+        return OperationProjection(
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
+            terminal=Completed(
+                value=output,
+                runtime_ms=execution.runtime_ms,
+                detail=execution.detail,
+            ),
+            publication=publication,
+            verification_record_uri=verification_record_uri,
+        )
+    return OperationProjection(
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
+        terminal=Failed(
+            status=execution.status,
+            runtime_ms=execution.runtime_ms,
+            diagnostic=CapabilityDiagnostic(
+                code=failure_code,
+                stage="verification",
+                message=detail,
+            ),
+        ),
+        publication=publication,
+    )

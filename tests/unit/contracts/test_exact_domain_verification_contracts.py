@@ -29,6 +29,9 @@ def test_verified_exact_output_requires_true_conclusion_and_record() -> None:
             status="VERIFIED",
             conclusion="TRUE",
             verification_record_uri=_ARTIFACT_URI,
+            claim_digest="sha256:" + "c" * 64,
+            semantics_digest="sha256:" + "d" * 64,
+            candidate_digest="sha256:" + "e" * 64,
         )
     )
     assert verified.verification_record_uri == _ARTIFACT_URI

@@ -5,11 +5,11 @@ from __future__ import annotations
 import platform
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.finite_sets.set_cardinality import SET_CARDINALITY_CAPABILITIES
 from jacobian.domains.finite_sets.set_operations import SET_OPERATION_CAPABILITIES
 from jacobian.domains.finite_sets.set_predicates import SET_PREDICATE_CAPABILITIES
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
 )

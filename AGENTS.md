@@ -113,6 +113,18 @@ publication binding only when inline transport is insufficient. Publication
 owns transport only; it does not own mathematical validation, applicability,
 provider selection, effects, parsing, or checker authority.
 
+Do not introduce pass-through facades to make a dependency graph look cleaner.
+An aggregate may coordinate a public lifecycle or transaction, but it must not
+mirror every collaborator method, bounce callbacks back through itself, or keep
+private forwarding methods solely for tests. Call the concrete owner directly;
+extract a shared abstraction only when two production paths replace their older
+implementations in the same change.
+
+Composition roots retain only resources needed after construction. Do not build
+or return nested installation reports, provider bags, or phase-result mirrors
+that production immediately discards. Keep an installation result only when a
+later production phase consumes that exact typed fact.
+
 Construct wire envelopes only at the final capability or protocol projection.
 Mathematical functions, typed operation executors, artifact services, and
 checker services return their owned typed values or terminal states; they do
@@ -121,6 +133,11 @@ not construct `CapabilityResult`. Do not hide artifact writes inside an
 a domain-specific durable schema or parent closure, keep that publication in a
 narrow named domain publisher and pass its typed projection to the one final
 envelope constructor.
+
+Measure expensive checker source and dependency identity at authorization and
+inside the bounded checker worker, not during catalog discovery, compatibility
+selection, or ordinary runtime startup. Registry reads validate persisted
+identity and authority; the execution boundary remeasures executable bytes.
 
 At the MCP boundary, prefer MCP Python SDK 2.0 high-level typed returns. Return
 Pydantic result models directly and let the SDK derive the output schema,
@@ -175,8 +192,9 @@ checker authorization out of plugins and search code.
 
 ## Repository Gotchas
 
-- Before final validation, use `make test-plan BASE=<revision>` and run the
-  selected gate on the final tree. In a shared checkout, agents must own
+- Before final validation, use `make check` (and `make check-external` when
+  Lean or optional providers change) on the final tree. In a shared checkout,
+  agents must own
   disjoint paths and must not switch branches, stage, commit, clean, or rewrite
   shared files until their work is integrated.
 - Jacobian is pre-stable. Current reference documents and the installed catalog
@@ -207,6 +225,9 @@ development workflow. For Harbor task authoring and verifier changes, use the
 repository-local [`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md)
 skill and its exact task validation path. Control/treatment model evaluations
 are explicit operator-run evidence exercises, not routine development gates.
+For source-grounded held-out reliability probes based on recently resolved
+conjectures, use
+[`recent-conjecture-evaluations`](.agents/skills/recent-conjecture-evaluations/SKILL.md).
 
 For remote MCP operation, use
 [Deploy the remote MCP server](docs/how-to/deploy-remote-mcp.md) and the
@@ -237,16 +258,18 @@ Non-obvious caveats:
   not break the kernel, catalog, or the core test suites. Only install Lean/elan
   or those executables when specifically exercising `lean_runtime` tests or SAT
   proof-artifact capabilities.
-- `make test-unit` is the quick unit lane and `make check` combines it with lint
-  and typecheck. Use `make test-all-ci` only for an explicit exhaustive local
-  reproduction. Never run bare `uv run pytest` across the whole suite — it mixes
-  provider and Lean boundary tests into one pool; use a focused `make test-*`
-  target instead.
+- `make test-unit` is the cheap unit lane. `make quick` adds lint and
+  typecheck. `make check` is the PR-equivalent ordinary pytest run (Lean-free
+  default `testpaths`, same flags as CI `python`). Use `make test-all-ci` only
+  for an explicit exhaustive local reproduction. Default `uv run pytest` does
+  not collect Lean, storage, process, or MCP; use the matching `make test-*`
+  target for those trees. Never run bare `uv run pytest` as a substitute for
+  the complete specialist matrix.
 - Only the coordinating agent may start an exhaustive test lane. Never delegate
   one to a parallel agent sharing the host. Before an exceptional broad run,
   inspect active processes for pytest jobs from this checkout and stop or wait
-  for them; concurrent runtime/store/subprocess suites turn the 60-second test
-  timeout into a host-contention detector rather than useful failure evidence.
+  for them; concurrent runtime/store/subprocess suites turn per-test timeouts
+  into a host-contention detector rather than useful failure evidence.
 - SQLite is one visible contention point, but not the sole cause: full-runtime
   construction also performs durable filesystem publication, subprocess
   startup, schema registration, and CPU-heavy capability setup. A timeout

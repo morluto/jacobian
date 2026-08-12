@@ -95,7 +95,7 @@ def test_transaction_rolls_back_metadata_and_recovers_blob_accounting(
         for blob in prefix.iterdir()
         if blob.is_file()
     )
-    assert store._blob_bytes_committed() == stored_blob_bytes
+    assert store._blobs.blob_bytes_committed() == stored_blob_bytes
 
     committed = store.register_descriptor(
         kind="schema",

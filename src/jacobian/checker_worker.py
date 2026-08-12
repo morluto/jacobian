@@ -18,22 +18,21 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
+from jacobian.checker_identity import (
+    UndeclaredCheckerImportError,
+    checker_implementation_digest,
+    install_manifest_import_guard,
+    require_manifest_unchanged,
+)
 from jacobian.contracts.capabilities import (
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
 )
-from jacobian.implementation import (
-    checker_source_digest,
-    install_source_only_importer,
-)
+from jacobian.contracts.checkers import CheckerManifest
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
     ProviderRuntimeErrorCode,
     require_provider_runtime_unchanged,
-)
-from jacobian.providers.lean_runtime import (
-    LeanRuntimeIdentityError,
-    require_lean_semantic_runtime_identity,
 )
 from jacobian.verification.checker_protocol import (
     CheckerWorkerErrorCode,
@@ -62,19 +61,16 @@ def _resolve(entrypoint: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
 
 
 def _measure_runtime(
-    encoded: str | None,
+    runtime: CapabilityProviderRuntime | None,
 ) -> tuple[CapabilityProviderRuntime | None, str | None]:
     os.environ.pop("JACOBIAN_CHECKER_EXECUTABLE", None)
     os.environ.pop("JACOBIAN_CHECKER_RUNTIME_DIGEST", None)
     os.environ.pop("JACOBIAN_CHECKER_LAKE_DIGEST", None)
     os.environ.pop("JACOBIAN_CHECKER_LEAN_PROJECT_ROOT", None)
-    if encoded is None:
+    if runtime is None:
         return None, None
     try:
-        runtime = CapabilityProviderRuntime.model_validate(loads_strict_json(encoded))
         require_provider_runtime_unchanged(runtime)
-    except (CanonicalizationError, ValidationError) as exc:
-        raise _CheckerWorkerFailureError("MALFORMED_RUNTIME") from exc
     except ProviderRuntimeError as exc:
         code: CheckerWorkerErrorCode = (
             "MALFORMED_RUNTIME"
@@ -108,9 +104,10 @@ def _bind_lean_semantic_environment(runtime: CapabilityProviderRuntime) -> None:
         return
     if not isinstance(semantic_runtime, dict):
         raise _CheckerWorkerFailureError("MALFORMED_RUNTIME")
+    lean_runtime = importlib.import_module("jacobian.providers.lean_runtime")
     try:
-        require_lean_semantic_runtime_identity(runtime)
-    except LeanRuntimeIdentityError as exc:
+        lean_runtime.require_lean_semantic_runtime_identity(runtime)
+    except lean_runtime.LeanRuntimeIdentityError as exc:
         raise _CheckerWorkerFailureError("EXECUTION_FAILED") from exc
     project = semantic_runtime.get("mathlib_project")
     if isinstance(project, dict) and isinstance(project.get("root"), str):
@@ -141,73 +138,67 @@ def _bind_lake_launcher(runtime: CapabilityProviderRuntime) -> None:
     os.environ["JACOBIAN_CHECKER_LAKE_DIGEST"] = lake_digest
 
 
-def main() -> int:
-    if len(sys.argv) not in {3, 4}:
-        print(
-            "usage: python -m jacobian.checker_worker "
-            "module:function expected-digest [provider-runtime-json]",
-            file=sys.stderr,
-        )
-        return 2
-    error_code: CheckerWorkerErrorCode = "EXECUTION_FAILED"
-    request_decoded = False
+def _execute(manifest_json: str, request_bytes: bytes) -> CheckerWorkerSuccess:
+    """Run one manifest-bound checker after validating its complete identity."""
+
     try:
-        request = loads_strict_json(sys.stdin.buffer.read())
-        request_decoded = True
-        if not isinstance(request, dict):
-            error_code = "INVALID_REQUEST"
-            raise _CheckerWorkerFailureError(error_code)
-        measured_before = checker_source_digest(sys.argv[1])
-        if measured_before != sys.argv[2]:
-            error_code = "SOURCE_CHANGED"
-            raise ValueError("checker source differs from its authorized digest")
-        runtime, runtime_digest_before = _measure_runtime(
-            sys.argv[3] if len(sys.argv) == 4 else None
-        )
-        install_source_only_importer(sys.argv[1])
-        with contextlib.redirect_stdout(sys.stderr):
-            checker = _resolve(sys.argv[1])
-            response = checker(request)
-        measured_after = checker_source_digest(sys.argv[1])
-        if measured_after != measured_before:
-            error_code = "SOURCE_CHANGED"
-            raise ValueError("checker source changed during execution")
-        _, runtime_digest_after = _measure_runtime(
-            canonicalize_json(runtime.model_dump(mode="json")).decode("utf-8")
-            if runtime is not None
-            else None
-        )
-        if runtime_digest_after != runtime_digest_before:
-            error_code = "SOURCE_CHANGED"
-            raise ValueError("checker runtime changed during execution")
-        error_code = "RESPONSE_INVALID"
-        success = CheckerWorkerSuccess.model_validate(
+        manifest = CheckerManifest.model_validate(loads_strict_json(manifest_json))
+    except (CanonicalizationError, ValidationError) as exc:
+        raise _CheckerWorkerFailureError("MALFORMED_RUNTIME") from exc
+    try:
+        request = loads_strict_json(request_bytes)
+    except CanonicalizationError as exc:
+        raise _CheckerWorkerFailureError("INVALID_REQUEST") from exc
+    if not isinstance(request, dict):
+        raise _CheckerWorkerFailureError("INVALID_REQUEST")
+    measured_before = require_manifest_unchanged(manifest)
+    if measured_before != checker_implementation_digest(manifest):
+        raise _CheckerWorkerFailureError("SOURCE_CHANGED")
+    runtime, runtime_digest_before = _measure_runtime(manifest.provider_runtime)
+    install_manifest_import_guard(manifest)
+    with contextlib.redirect_stdout(sys.stderr):
+        checker = _resolve(manifest.entrypoint)
+        response = checker(request)
+    measured_after = require_manifest_unchanged(manifest)
+    if measured_after != measured_before:
+        raise _CheckerWorkerFailureError("SOURCE_CHANGED")
+    _, runtime_digest_after = _measure_runtime(runtime)
+    if runtime_digest_after != runtime_digest_before:
+        raise _CheckerWorkerFailureError("SOURCE_CHANGED")
+    try:
+        return CheckerWorkerSuccess.model_validate(
             {
                 "decision": response,
-                "measured_checker_digest": measured_after,
+                "measured_implementation_digest": measured_after,
                 "measured_runtime_digest": runtime_digest_after,
             }
         )
-        sys.stdout.buffer.write(canonicalize_json(success.model_dump(mode="json")))
-        sys.stdout.buffer.write(b"\n")
-        return 0
-    except _CheckerWorkerFailureError as exc:
-        error = CheckerWorkerFailure(error_code=exc.code)
-        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
-        sys.stdout.buffer.write(b"\n")
-        return 1
-    except CanonicalizationError:
-        error = CheckerWorkerFailure(
-            error_code="RESPONSE_INVALID" if request_decoded else "INVALID_REQUEST"
+    except ValidationError as exc:
+        raise _CheckerWorkerFailureError("RESPONSE_INVALID") from exc
+
+
+def _write_response(response: CheckerWorkerSuccess | CheckerWorkerFailure) -> int:
+    sys.stdout.buffer.write(canonicalize_json(response.model_dump(mode="json")))
+    sys.stdout.buffer.write(b"\n")
+    return 0 if isinstance(response, CheckerWorkerSuccess) else 1
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print(
+            "usage: python -m jacobian.checker_worker checker-manifest-json",
+            file=sys.stderr,
         )
-        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
-        sys.stdout.buffer.write(b"\n")
-        return 1
+        return 2
+    try:
+        return _write_response(_execute(sys.argv[1], sys.stdin.buffer.read()))
+    except _CheckerWorkerFailureError as exc:
+        return _write_response(CheckerWorkerFailure(error_code=exc.code))
+    except UndeclaredCheckerImportError as exc:
+        print(str(exc), file=sys.stderr)
+        return _write_response(CheckerWorkerFailure(error_code="UNDECLARED_IMPORT"))
     except Exception:  # checker isolation turns all failures into ERROR
-        error = CheckerWorkerFailure(error_code=error_code)
-        sys.stdout.buffer.write(canonicalize_json(error.model_dump(mode="json")))
-        sys.stdout.buffer.write(b"\n")
-        return 1
+        return _write_response(CheckerWorkerFailure(error_code="EXECUTION_FAILED"))
 
 
 if __name__ == "__main__":

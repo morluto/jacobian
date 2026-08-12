@@ -10,7 +10,8 @@ from typing import Literal
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
@@ -18,7 +19,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -33,13 +33,16 @@ from jacobian.contracts.sat import (
     SatLratVerificationOutput,
     SatLratVerificationRequest,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactError, SatArtifactService
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,7 +161,7 @@ class SatLratVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = SatLratVerificationRequest.model_validate(request.input)
         try:
             resolved = self.sat.resolve_cnf(validated.cnf_uri)
@@ -226,19 +229,20 @@ class SatLratVerificationAdapter:
                 checker_id=checker_id,
                 detail="request was cancelled before replay; no conclusion follows",
             )
-            return CapabilityResult(
-                capability_id=self.descriptor.capability_id,
-                capability_version=self.descriptor.version,
+            return _verification_projection(
+                descriptor=self.descriptor,
                 execution=Execution(
                     status=ExecutionStatus.CANCELLED,
                     detail="cancelled before independent LRAT replay",
                 ),
-                output=output.model_dump(mode="json"),
+                output=output,
                 artifact_uris=(
                     resolved.artifact.artifact_uri,
                     proof_artifact.artifact_uri,
                     certificate_artifact.artifact_uri,
                 ),
+                verification_record_uri=None,
+                detail=output.detail,
             )
         checked = self.verification.verify_certificate(
             certificate_uri=certificate_artifact.artifact_uri,
@@ -269,6 +273,8 @@ class SatLratVerificationAdapter:
             status = "TIMEOUT"
         elif checked.execution.status is ExecutionStatus.COMPLETED:
             status = "REJECTED"
+        elif checked.execution.status is ExecutionStatus.CANCELLED:
+            status = "CANCELLED"
         else:
             status = "ERROR"
         record_uri = checked.verification_record_uri if verified else None
@@ -297,14 +303,54 @@ class SatLratVerificationAdapter:
         ]
         if record_uri:
             uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return _verification_projection(
+            descriptor=self.descriptor,
             execution=projected_execution,
-            output=output.model_dump(mode="json"),
-            verification_record_uri=record_uri,
+            output=output,
             artifact_uris=tuple(uris),
+            verification_record_uri=record_uri,
+            detail=detail,
         )
+
+
+def _verification_projection(
+    *,
+    descriptor: CapabilityDescriptor,
+    execution: Execution,
+    output: SatLratVerificationOutput,
+    artifact_uris: tuple[str, ...],
+    verification_record_uri: str | None,
+    detail: str,
+) -> OperationProjection:
+    """Project one LRAT replay outcome without promoting a non-conclusion."""
+
+    publication = PublishedOperation(output=output, artifact_uris=artifact_uris)
+    if execution.status is ExecutionStatus.COMPLETED:
+        return OperationProjection(
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
+            terminal=Completed(
+                value=output,
+                runtime_ms=execution.runtime_ms,
+                detail=execution.detail,
+            ),
+            publication=publication,
+            verification_record_uri=verification_record_uri,
+        )
+    return OperationProjection(
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
+        terminal=Failed(
+            status=execution.status,
+            runtime_ms=execution.runtime_ms,
+            diagnostic=CapabilityDiagnostic(
+                code="SAT_LRAT_CHECK_NONCONCLUSIVE",
+                stage="verification",
+                message=detail,
+            ),
+        ),
+        publication=publication,
+    )
 
 
 _LINE_REJECTION = re.compile(r"^line (?P<line>\d+): (?P<reason>.+)$")

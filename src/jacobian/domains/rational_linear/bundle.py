@@ -7,6 +7,7 @@ from jacobian.contracts.linear import (
     LinearRationalSolutionFindRequest,
     LinearRationalSolutionResult,
 )
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains._examples import example
 from jacobian.domains.rational_linear.checkers import (
     RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS,
@@ -18,7 +19,6 @@ from jacobian.domains.rational_linear.operations import (
 )
 from jacobian.operation_bindings import inline_operation
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
     OperationSpec,

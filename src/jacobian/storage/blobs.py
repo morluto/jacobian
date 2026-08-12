@@ -1,10 +1,5 @@
 """Content-addressed blob publication and quota accounting."""
 
-# The concrete owner is ArtifactRepository; this mixin is intentionally kept
-# separate from its composition root, so its shared owner attributes are
-# supplied by that root rather than duplicated here.
-# mypy: ignore_errors = True
-
 from __future__ import annotations
 
 import logging
@@ -14,6 +9,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from jacobian.canonical import sha256_digest
 from jacobian.storage.errors import (
@@ -22,26 +18,44 @@ from jacobian.storage.errors import (
     StorageError,
     StorageLimitError,
 )
+from jacobian.storage.models import StorageLimits
+
+if TYPE_CHECKING:
+    from jacobian.storage.transactions import ArtifactTransactions
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class BlobPublisher:
+class FilesystemBlobStore:
     """Publish immutable blobs and maintain crash-recoverable quota metadata."""
 
-    def _blob_path(self, digest: str) -> Path:
+    def __init__(
+        self,
+        *,
+        blob_root: Path,
+        staging_root: Path,
+        limits: StorageLimits,
+        transactions: ArtifactTransactions,
+    ) -> None:
+        self._blob_root = blob_root
+        self._staging_root = staging_root
+        self._limits = limits
+        self._transactions = transactions
+        self._validated_blobs: dict[str, tuple[int, int, int, int, int]] = {}
+
+    def blob_path(self, digest: str) -> Path:
         hex_digest = digest.removeprefix("sha256:")
         if len(hex_digest) != 64 or any(
             char not in "0123456789abcdef"  # pragma: allowlist secret
             for char in hex_digest
         ):
             raise ArtifactIntegrityError(f"invalid blob digest: {digest!r}")
-        return self.blob_root / hex_digest[:2] / hex_digest[2:]
+        return self._blob_root / hex_digest[:2] / hex_digest[2:]
 
     def _scan_blob_bytes_committed(self) -> tuple[int, set[Path]]:
         total = 0
         observed_prefixes: set[Path] = set()
-        for prefix in self.blob_root.iterdir():
+        for prefix in self._blob_root.iterdir():
             if not prefix.is_dir() or prefix.is_symlink():
                 continue
             observed_prefixes.add(prefix)
@@ -77,12 +91,12 @@ class BlobPublisher:
                     total += after.st_size
         return total, observed_prefixes
 
-    def _reconcile_blob_quota(self, *, force: bool = False) -> None:
+    def reconcile_quota(self, *, force: bool = False) -> None:
         """Recover quota accounting only after an interrupted blob mutation."""
 
         with self._exclusive_blob_lock():
-            force = force or self.transaction_recovery_path.exists()
-            with self.connection() as connection:
+            force = force or self._transactions.transaction_recovery_path.exists()
+            with self._transactions.connection() as connection:
                 row = connection.execute(
                     """
                     SELECT reconciliation_required
@@ -108,9 +122,9 @@ class BlobPublisher:
 
             total, observed_prefixes = self._scan_blob_bytes_committed()
             for prefix in sorted(observed_prefixes, key=str):
-                self._sync_directory(prefix)
-            self._sync_directory(self.blob_root)
-            with self.connection() as connection:
+                self._transactions.sync_directory(prefix)
+            self._transactions.sync_directory(self._blob_root)
+            with self._transactions.connection() as connection:
                 connection.execute(
                     """
                     INSERT INTO blob_quota (
@@ -125,11 +139,11 @@ class BlobPublisher:
                     """,
                     (total,),
                 )
-            if self.transaction_recovery_path.exists():
-                self._remove_transaction_recovery_marker()
+            if self._transactions.transaction_recovery_path.exists():
+                self._transactions.remove_recovery_marker()
 
-    def _blob_bytes_committed(self) -> int:
-        with self.connection() as connection:
+    def blob_bytes_committed(self) -> int:
+        with self._transactions.connection() as connection:
             row = connection.execute(
                 """
                 SELECT size_bytes, reconciliation_required
@@ -145,13 +159,13 @@ class BlobPublisher:
             )
         return int(row["size_bytes"])
 
-    def _adjust_blob_bytes_committed(
+    def adjust_blob_bytes_committed(
         self,
         delta: int,
         *,
         reconciliation_required: bool,
     ) -> None:
-        with self.connection() as connection:
+        with self._transactions.connection() as connection:
             cursor = connection.execute(
                 """
                 UPDATE blob_quota
@@ -164,8 +178,8 @@ class BlobPublisher:
         if cursor.rowcount != 1:
             raise ArtifactIntegrityError("artifact store quota metadata is invalid")
 
-    def _mark_blob_quota_reconciled(self) -> None:
-        with self.connection() as connection:
+    def mark_blob_quota_reconciled(self) -> None:
+        with self._transactions.connection() as connection:
             cursor = connection.execute(
                 """
                 UPDATE blob_quota
@@ -180,12 +194,12 @@ class BlobPublisher:
     def _exclusive_blob_lock(self) -> Iterator[None]:
         """Serialize quota accounting and blob publication across processes."""
 
-        with self._blob_lock.hold():
+        with self._transactions.exclusive_blob_lock():
             yield
 
-    def _write_blob(self, data: bytes) -> str:
+    def write(self, data: bytes) -> str:
         try:
-            return self._write_blob_unchecked(data)
+            return self._write_unchecked(data)
         except (OSError, sqlite3.Error) as exc:
             _LOGGER.exception("filesystem error while writing artifact data")
             raise StorageError(
@@ -244,7 +258,7 @@ class BlobPublisher:
         """Write *data* to a temp file, hard-link to *target*, and sync."""
 
         descriptor, temporary_name = tempfile.mkstemp(
-            dir=self.staging_root,
+            dir=self._staging_root,
             prefix="blob-",
         )
         temporary = Path(temporary_name)
@@ -255,10 +269,7 @@ class BlobPublisher:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
-            self._adjust_blob_bytes_committed(
-                len(data),
-                reconciliation_required=True,
-            )
+            self.adjust_blob_bytes_committed(len(data), reconciliation_required=True)
             reserved = True
             try:
                 os.link(temporary, target)
@@ -268,7 +279,7 @@ class BlobPublisher:
                     raise ArtifactIntegrityError(
                         f"concurrent blob does not match digest {digest}"
                     ) from exc
-            self._sync_blob_publication_directories(
+            self._transactions.sync_blob_publication_directories(
                 target.parent,
                 prefix_created=prefix_created,
             )
@@ -276,16 +287,15 @@ class BlobPublisher:
             temporary.unlink(missing_ok=True)
             if reserved and not published:
                 try:
-                    self._adjust_blob_bytes_committed(
-                        -len(data),
-                        reconciliation_required=False,
+                    self.adjust_blob_bytes_committed(
+                        -len(data), reconciliation_required=False
                     )
                 except (ArtifactIntegrityError, sqlite3.Error):
                     _LOGGER.exception(
                         "failed to release an unpublished blob quota reservation"
                     )
         if published:
-            self._mark_blob_quota_reconciled()
+            self.mark_blob_quota_reconciled()
         stat = target.stat()
         self._validated_blobs[digest] = (
             stat.st_dev,
@@ -295,12 +305,18 @@ class BlobPublisher:
             stat.st_ctime_ns,
         )
 
-    def _write_blob_unchecked(self, data: bytes) -> str:
+    def _write_unchecked(
+        self,
+        data: bytes,
+    ) -> str:
         digest = sha256_digest(data)
-        target = self._blob_path(digest)
+        target = self.blob_path(digest)
         with self._exclusive_blob_lock():
-            if not self.transaction_active and self.transaction_recovery_path.exists():
-                self._reconcile_blob_quota(force=True)
+            if (
+                not self._transactions.transaction_active
+                and self._transactions.transaction_recovery_path.exists()
+            ):
+                self.reconcile_quota(force=True)
             prefix_created = not target.parent.exists()
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.parent.is_symlink() or not target.parent.is_dir():
@@ -311,15 +327,15 @@ class BlobPublisher:
             if existing is not None:
                 return existing
             if (
-                self._blob_bytes_committed() + len(data)
-                > self.limits.max_total_blob_bytes
+                self.blob_bytes_committed() + len(data)
+                > self._limits.max_total_blob_bytes
             ):
                 raise StorageLimitError("artifact store blob quota would be exceeded")
             self._publish_new_blob(target, data, digest, prefix_created=prefix_created)
         return digest
 
-    def _read_blob(self, digest: str) -> bytes:
-        path = self._blob_path(digest)
+    def read(self, digest: str) -> bytes:
+        path = self.blob_path(digest)
         if not path.exists():
             raise ArtifactNotFoundError(f"missing blob for digest {digest}")
         if path.is_symlink() or not path.is_file():

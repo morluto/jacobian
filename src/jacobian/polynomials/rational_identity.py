@@ -9,7 +9,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.polynomials import (
@@ -20,7 +19,12 @@ from jacobian.contracts.polynomials import (
     RationalFunctionIdentityRequest,
 )
 from jacobian.contracts.results import Conclusion
-from jacobian.polynomials._support import _polynomial_error, _validate_request
+from jacobian.operation_projection import OperationProjection
+from jacobian.polynomials._support import (
+    PolynomialOperationResult,
+    _polynomial_error,
+    _validate_request,
+)
 from jacobian.polynomials.resources import PolynomialResources
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
@@ -120,7 +124,7 @@ class RationalFunctionIdentityAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             RationalFunctionIdentityRequest,
             request.input,
@@ -226,11 +230,9 @@ class RationalFunctionIdentityAdapter:
             verification_record_uri=record_uri,
             checker_id=checker_id,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
+            value=output,
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=(
                 left.artifact_uri,
@@ -239,4 +241,4 @@ class RationalFunctionIdentityAdapter:
                 certificate_artifact.artifact_uri,
                 *((record_uri,) if record_uri is not None else ()),
             ),
-        )
+        ).project(self.descriptor)

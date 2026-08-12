@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_isomorphism import (

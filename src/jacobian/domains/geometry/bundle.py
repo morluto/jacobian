@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.geometry.checkers import GEOMETRY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.geometry.lines import LINE_CAPABILITIES
 from jacobian.domains.geometry.points import POINT_CAPABILITIES
@@ -10,7 +11,6 @@ from jacobian.domains.geometry.polygons import POLYGON_CAPABILITIES
 from jacobian.domains.geometry.segments import SEGMENT_CAPABILITIES
 from jacobian.domains.geometry.triangles import TRIANGLE_CAPABILITIES
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
 )

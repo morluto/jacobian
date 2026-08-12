@@ -8,7 +8,8 @@ import json
 import re
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -16,6 +17,7 @@ from typing import Any, Literal
 from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken
 
+from jacobian import __version__
 from jacobian.adapters.mcp.context import (
     AppState,
     AuthenticationError,
@@ -23,6 +25,17 @@ from jacobian.adapters.mcp.context import (
     TenantRuntimeLimitError,
     _configured_root,
 )
+from jacobian.adapters.mcp.core import JacobianCoreExtension, JacobianMCPServer
+from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
+from jacobian.adapters.mcp.guidance import (
+    SERVER_DESCRIPTION,
+    SERVER_INSTRUCTIONS,
+)
+from jacobian.adapters.mcp.lifecycle import (
+    runtime_lifespan,
+    selected_checker_authority,
+)
+from jacobian.adapters.mcp.resources import register_resources
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.capability_service import CapabilityPolicy
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
@@ -460,14 +473,9 @@ def create_remote_server(
 
     from mcp.server.auth.middleware.auth_context import get_access_token
 
-    from jacobian.adapters.mcp.server import (
-        _build_server,
-        _selected_checker_authority,
-    )
-
     router = TenantRuntimeRouter(
         _configured_root(state_dir),
-        checker_authority=_selected_checker_authority(checker_authority),
+        checker_authority=selected_checker_authority(checker_authority),
         allow_anonymous=allow_anonymous,
         anonymous_tenant_id=anonymous_tenant_id,
         capability_policy=capability_policy,
@@ -493,9 +501,47 @@ def create_remote_server(
         acquire_runtime=acquire_runtime,
         worker_registry=MCPBlockingWorkerRegistry(),
     )
-    return _build_server(
+    return _build_remote_server(
         state=state,
         close_owner=router.close,
         token_verifier=token_verifier,
         auth=auth,
     )
+
+
+def _build_remote_server(
+    *,
+    state: AppState,
+    close_owner: Callable[[], None],
+    token_verifier: Any | None,
+    auth: Any | None,
+) -> MCPServer[AppState]:
+    """Register the fixed MCP projection with remote-only authentication."""
+
+    @asynccontextmanager
+    async def lifespan(server: MCPServer[AppState]) -> AsyncIterator[AppState]:
+        async with runtime_lifespan(
+            server,
+            state=state,
+            close_owner=close_owner,
+        ) as active_state:
+            yield active_state
+
+    server: MCPServer[AppState] = JacobianMCPServer(
+        name="jacobian",
+        title="Jacobian Mathematical Workbench",
+        description=SERVER_DESCRIPTION,
+        instructions=SERVER_INSTRUCTIONS,
+        version=__version__,
+        lifespan=lifespan,
+        token_verifier=token_verifier,
+        auth=auth,
+        extensions=[
+            JacobianCoreExtension(
+                state,
+                load_deployment_identity(),
+            )
+        ],
+    )
+    register_resources(server)
+    return server

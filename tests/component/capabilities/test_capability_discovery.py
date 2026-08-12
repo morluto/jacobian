@@ -11,7 +11,7 @@ from tests.component.capabilities.capability_service_support import (
 )
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.capability_service import CapabilityError
+from jacobian.capability_errors import CapabilityError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiscoveryRequest,

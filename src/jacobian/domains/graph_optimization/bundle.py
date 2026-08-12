@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_SEARCH_EXACT_REPLAY_CHECKERS,
 )
@@ -22,7 +23,6 @@ from jacobian.domains.graph_optimization.minimum_spanning_tree import (
     MINIMUM_SPANNING_TREE_CAPABILITY,
 )
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
 )

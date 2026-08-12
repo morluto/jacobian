@@ -10,6 +10,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from jacobian.canonical import canonicalize_json
+from jacobian.checker_identity import (
+    CheckerManifestError,
+    build_checker_manifest,
+    checker_implementation_digest,
+)
 from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
@@ -19,7 +24,6 @@ from jacobian.contracts.checkers import (
     CheckerRegistration,
     EvidenceKind,
 )
-from jacobian.implementation import ImplementationError, checker_source_digest
 from jacobian.persistence import (
     PersistenceCorruptionError,
     PersistenceLock,
@@ -62,19 +66,70 @@ class _PolicyLockState(threading.local):
         self.depth = 0
 
 
-def compute_entrypoint_digest(entrypoint: str) -> str:
+def _checker_registration(
+    *,
+    name: str,
+    entrypoint: str,
+    evidence_kind: EvidenceKind,
+    format_id: str,
+    format_version: str,
+    claim_schema_uris: tuple[str, ...],
+    semantics_uris: tuple[str, ...],
+    candidate_schema_uris: tuple[str, ...],
+    target_schema_uris: tuple[str, ...],
+    target_semantics_uris: tuple[str, ...],
+    provider_runtime: CapabilityProviderRuntime | None,
+) -> CheckerRegistration:
+    """Build one complete registration from the checker-owned identity inputs."""
+
+    ordered_claim_schemas = tuple(sorted(claim_schema_uris))
+    ordered_semantics = tuple(sorted(semantics_uris))
+    ordered_candidate_schemas = tuple(sorted(candidate_schema_uris))
+    ordered_target_schemas = tuple(sorted(target_schema_uris))
+    ordered_target_semantics = tuple(sorted(target_semantics_uris))
+    passive_contract_uris = tuple(
+        sorted(
+            {
+                *ordered_claim_schemas,
+                *ordered_semantics,
+                *ordered_candidate_schemas,
+                *ordered_target_schemas,
+                *ordered_target_semantics,
+            }
+        )
+    )
     try:
-        return checker_source_digest(entrypoint)
-    except ImplementationError as exc:
+        implementation = build_checker_manifest(
+            entrypoint,
+            provider_runtime=provider_runtime,
+            passive_contract_uris=passive_contract_uris,
+        )
+    except CheckerManifestError as exc:
         _LOGGER.warning(
-            "could not read checker implementation %s",
+            "could not measure checker implementation %s",
             entrypoint,
             exc_info=exc,
         )
         raise CheckerRegistryError(
-            "The checker entrypoint could not be loaded. Check that the "
-            "module:function entrypoint is installed, then retry."
+            "The checker entrypoint could not be measured. Check that its source "
+            "and the checker worker are installed, then retry."
         ) from exc
+    implementation_digest = checker_implementation_digest(implementation)
+    return CheckerRegistration(
+        checker_id="checker://sha256/" + "0" * 64,
+        name=name,
+        implementation=implementation,
+        implementation_digest=implementation_digest,
+        evidence_kind=evidence_kind,
+        format_id=format_id,
+        format_version=format_version,
+        claim_schema_uris=ordered_claim_schemas,
+        semantics_uris=ordered_semantics,
+        candidate_schema_uris=ordered_candidate_schemas,
+        target_schema_uris=ordered_target_schemas,
+        target_semantics_uris=ordered_target_semantics,
+        authorized=True,
+    )
 
 
 def _require_runtime_unchanged(runtime: CapabilityProviderRuntime | None) -> None:
@@ -137,13 +192,13 @@ class CheckerRegistry:
         self,
         checker_id: str,
         *,
-        expected_digest: str,
+        expected_implementation_digest: str,
     ) -> Iterator[CheckerRegistration]:
         """Prevent revocation while a verified record is committed."""
 
         with self._policy_write_lock():
             registration = self.require_active(checker_id)
-            if registration.executable_digest != expected_digest:
+            if registration.implementation_digest != expected_implementation_digest:
                 raise CheckerExecutableChangedError(
                     "The checker changed before verification was saved. Authorize the "
                     "current checker version, then run verification again."
@@ -185,22 +240,18 @@ class CheckerRegistry:
         if scope_error is not None:
             raise CheckerRegistryError(scope_error)
         _require_runtime_unchanged(provider_runtime)
-        executable_digest = compute_entrypoint_digest(entrypoint)
-        unbound_registration = CheckerRegistration(
-            checker_id="checker://sha256/" + "0" * 64,
+        unbound_registration = _checker_registration(
             name=name,
             entrypoint=entrypoint,
-            executable_digest=executable_digest,
-            provider_runtime=provider_runtime,
             evidence_kind=selected_kind,
             format_id=format_id,
             format_version=format_version,
-            claim_schema_uris=tuple(sorted(claim_schema_uris)),
-            semantics_uris=tuple(sorted(semantics_uris)),
-            candidate_schema_uris=tuple(sorted(candidate_schema_uris)),
-            target_schema_uris=tuple(sorted(target_schema_uris)),
-            target_semantics_uris=tuple(sorted(target_semantics_uris)),
-            authorized=True,
+            claim_schema_uris=claim_schema_uris,
+            semantics_uris=semantics_uris,
+            candidate_schema_uris=candidate_schema_uris,
+            target_schema_uris=target_schema_uris,
+            target_semantics_uris=target_semantics_uris,
+            provider_runtime=provider_runtime,
         )
         registration = unbound_registration.model_copy(
             update={"checker_id": _checker_identifier(unbound_registration)}
@@ -212,7 +263,7 @@ class CheckerRegistry:
         with self._policy_write_lock(), self._connection() as connection:
             existing = connection.execute(
                 """
-                SELECT registration_json, authorized, executable_digest
+                SELECT registration_json, authorized, implementation_digest
                 FROM checkers
                 WHERE checker_id = ?
                 """,
@@ -225,13 +276,13 @@ class CheckerRegistry:
                         checker_id,
                         registration_json,
                         authorized,
-                        executable_digest
+                        implementation_digest
                     ) VALUES (?, ?, 1, ?)
                     """,
                     (
                         registration.checker_id,
                         encoded,
-                        executable_digest,
+                        registration.implementation_digest,
                     ),
                 )
                 connection.execute(
@@ -243,7 +294,8 @@ class CheckerRegistry:
                 )
             elif (
                 bytes(existing["registration_json"]) != encoded
-                or existing["executable_digest"] != executable_digest
+                or existing["implementation_digest"]
+                != registration.implementation_digest
             ):
                 raise CheckerRegistryError(
                     "This checker conflicts with an existing registration. Register "
@@ -301,22 +353,18 @@ class CheckerRegistry:
             _require_runtime_unchanged(provider_runtime)
         except CheckerExecutableChangedError:
             return None
-        executable_digest = compute_entrypoint_digest(entrypoint)
-        unbound_registration = CheckerRegistration(
-            checker_id="checker://sha256/" + "0" * 64,
+        unbound_registration = _checker_registration(
             name=name,
             entrypoint=entrypoint,
-            executable_digest=executable_digest,
-            provider_runtime=provider_runtime,
             evidence_kind=selected_kind,
             format_id=format_id,
             format_version=format_version,
-            claim_schema_uris=tuple(sorted(claim_schema_uris)),
-            semantics_uris=tuple(sorted(semantics_uris)),
-            candidate_schema_uris=tuple(sorted(candidate_schema_uris)),
-            target_schema_uris=tuple(sorted(target_schema_uris)),
-            target_semantics_uris=tuple(sorted(target_semantics_uris)),
-            authorized=True,
+            claim_schema_uris=claim_schema_uris,
+            semantics_uris=semantics_uris,
+            candidate_schema_uris=candidate_schema_uris,
+            target_schema_uris=target_schema_uris,
+            target_semantics_uris=target_semantics_uris,
+            provider_runtime=provider_runtime,
         )
         checker_id = _checker_identifier(unbound_registration)
         try:
@@ -333,7 +381,7 @@ class CheckerRegistry:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT registration_json, authorized, executable_digest
+                SELECT registration_json, authorized, implementation_digest
                 FROM checkers
                 WHERE checker_id = ?
                 """,
@@ -360,7 +408,7 @@ class CheckerRegistry:
         if (
             registration.checker_id != checker_id
             or _checker_identifier(registration) != checker_id
-            or registration.executable_digest != row["executable_digest"]
+            or registration.implementation_digest != row["implementation_digest"]
         ):
             raise CheckerRegistryError(
                 "Checker registry data is inconsistent. Restore the Jacobian state "
@@ -377,13 +425,7 @@ class CheckerRegistry:
                 "This checker is revoked. Select an active checker from the reference "
                 "contract, then retry."
             )
-        installed_digest = compute_entrypoint_digest(registration.entrypoint)
-        if installed_digest != registration.executable_digest:
-            raise CheckerExecutableChangedError(
-                "The checker changed after authorization. Authorize the current "
-                "checker version, then retry."
-            )
-        _require_runtime_unchanged(registration.provider_runtime)
+        # Executable bytes are measured at authorization and in the bounded worker.
         return registration
 
     def require_compatible(
@@ -562,7 +604,7 @@ def _checker_identifier(registration: CheckerRegistration) -> str:
     del identity_payload["checker_id"]
     del identity_payload["authorized"]
     identifier = hashlib.sha256(
-        b"jacobian.checker.v1\x00" + canonicalize_json(identity_payload)
+        b"jacobian.checker.v2\x00" + canonicalize_json(identity_payload)
     ).hexdigest()
     return f"checker://sha256/{identifier}"
 

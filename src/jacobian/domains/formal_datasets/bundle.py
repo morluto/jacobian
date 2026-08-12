@@ -9,11 +9,11 @@ from jacobian.contracts.formal_datasets import (
     FormalDatasetArtifact,
     FormalDatasetMaterializeRequest,
 )
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains._examples import example
 from jacobian.formal_datasets import _materialize_operation
 from jacobian.operation_bindings import durable_operation
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
     OperationSpec,

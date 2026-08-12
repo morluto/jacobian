@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS,
 )
 from jacobian.domains.graph_optimization.invariants import (
     EXACT_GRAPH_INVARIANT_CAPABILITIES,
 )
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import (
     NETWORKX_VERSION,
     SYMPY_VERSION,

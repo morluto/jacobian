@@ -31,7 +31,7 @@ from jacobian.sat_smt.sat_capabilities import (
     SatAssignmentCheckerInstallation,
     install_sat_assignment_checker,
 )
-from jacobian.verification import CheckerExecutionError
+from jacobian.verification.errors import CheckerExecutionError
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,8 +269,8 @@ def test_misbound_assignment_artifact_fails_before_checker_dispatch(
         raise AssertionError("checker must not receive malformed source bindings")
 
     monkeypatch.setattr(
-        sat_assignment_services.application.verification,
-        "_run_checker",
+        sat_assignment_services.application.verification._checker_executor,
+        "execute",
         unexpected_checker,
     )
     result = _verify(sat_assignment_services, forged.artifact_uri)
@@ -292,7 +292,9 @@ def test_checker_timeout_cannot_create_a_sat_conclusion(
         raise TimeoutError("checker execution timed out")
 
     monkeypatch.setattr(
-        sat_assignment_services.application.verification, "_run_checker", timeout
+        sat_assignment_services.application.verification._checker_executor,
+        "execute",
+        timeout,
     )
     result = _verify(sat_assignment_services, assignment_uri)
 
@@ -314,7 +316,9 @@ def test_checker_error_cannot_create_a_sat_conclusion(
         raise CheckerExecutionError("deliberate checker failure")
 
     monkeypatch.setattr(
-        sat_assignment_services.application.verification, "_run_checker", fail
+        sat_assignment_services.application.verification._checker_executor,
+        "execute",
+        fail,
     )
     result = _verify(sat_assignment_services, assignment_uri)
 

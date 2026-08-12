@@ -1,13 +1,8 @@
-"""Independent verification service."""
+"""Independent verification components; import concrete owners directly."""
 
-from jacobian.verification.service import (
+from jacobian.verification.errors import (
     CheckerExecutionCancelledError,
     CheckerExecutionError,
-    VerificationService,
 )
 
-__all__ = [
-    "CheckerExecutionCancelledError",
-    "CheckerExecutionError",
-    "VerificationService",
-]
+__all__ = ["CheckerExecutionCancelledError", "CheckerExecutionError"]

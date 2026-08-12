@@ -11,7 +11,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
@@ -31,14 +30,13 @@ from jacobian.contracts.polynomials import (
     PolynomialKellerConditionVerifyRequest,
     RationalPolynomialPoint,
 )
-from jacobian.contracts.results import (
-    Conclusion,
-    Execution,
-    ExecutionStatus,
-)
+from jacobian.contracts.results import Conclusion
 from jacobian.domains._examples import example
+from jacobian.operation_projection import OperationProjection
+from jacobian.operations import Completed
 from jacobian.polynomials._support import (
     PolynomialOperationResult,
+    _completed_projection,
     _computed_result,
     _evaluate,
     _materialize_evaluation,
@@ -103,7 +101,7 @@ class PolynomialMapEvaluationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialEvaluationRequest,
             request.input,
@@ -131,7 +129,7 @@ class PolynomialMapEvaluationAdapter:
         return _computed_result(
             descriptor=self.descriptor,
             started=started,
-            output=output.model_dump(mode="json"),
+            output=output,
             artifact_uris=(map_uri, evaluation_uri),
         )
 
@@ -189,19 +187,19 @@ class PolynomialJacobianAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialJacobianRequest,
             request.input,
             code="INVALID_POLYNOMIAL_JACOBIAN_REQUEST",
             operation="Jacobian computation",
         )
-        return self.compute(validated).project(self.descriptor)
+        return self.compute(validated)
 
     def compute(
         self,
         validated: PolynomialJacobianRequest,
-    ) -> PolynomialOperationResult[PolynomialJacobianOutput]:
+    ) -> OperationProjection:
         """Compute from one validated request without re-entering the adapter."""
 
         started = time.monotonic()
@@ -299,12 +297,10 @@ class PolynomialJacobianAdapter:
             determinant=jacobian.determinant,
             backend_version=SYMPY_VERSION,
         )
-        return PolynomialOperationResult(
-            value=output,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-            ),
+        return _completed_projection(
+            descriptor=self.descriptor,
+            output=output,
+            runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             artifact_uris=(
                 map_uri,
                 jacobian_artifact.artifact_uri,
@@ -374,7 +370,7 @@ class PolynomialKellerConditionVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialKellerConditionVerifyRequest,
             request.input,
@@ -388,10 +384,16 @@ class PolynomialKellerConditionVerifyAdapter:
                 "keller_condition_verification",
                 "No authorized polynomial Keller-condition checker is installed.",
             )
-        jacobian_result = PolynomialJacobianAdapter(self.resources).compute(
+        jacobian_projection = PolynomialJacobianAdapter(self.resources).compute(
             PolynomialJacobianRequest(map=validated.map)
         )
-        jacobian = jacobian_result.value
+        assert isinstance(jacobian_projection.terminal, Completed)
+        assert jacobian_projection.publication is not None
+        jacobian = cast(
+            PolynomialJacobianOutput,
+            jacobian_projection.terminal.value,
+        )
+        jacobian_artifact_uris = jacobian_projection.publication.artifact_uris
         map_uri = jacobian.map_uri
         jacobian_uri = jacobian.jacobian_uri
         claim = self.resources.artifacts.put(
@@ -463,7 +465,7 @@ class PolynomialKellerConditionVerifyAdapter:
         artifact_uris = list(
             dict.fromkeys(
                 (
-                    *jacobian_result.artifact_uris,
+                    *jacobian_artifact_uris,
                     claim.artifact_uri,
                     certificate_artifact.artifact_uri,
                 )
@@ -471,11 +473,9 @@ class PolynomialKellerConditionVerifyAdapter:
         )
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
+            value=output,
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
-        )
+        ).project(self.descriptor)

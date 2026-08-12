@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from jacobian.operations import DomainBundle
+    from jacobian.domain_bundles import DomainBundle
 
 
 def build_rational_linear_bundle() -> DomainBundle:

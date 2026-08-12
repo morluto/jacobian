@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol
 
+from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
 class RuntimeClosedError(RuntimeError):
     """An operation requires a live Jacobian runtime."""
-
-
-class _PortfolioLifecycle(Protocol):
-    def close(self) -> None: ...
 
 
 class JacobianRuntime:
@@ -23,7 +19,7 @@ class JacobianRuntime:
         self,
         core: CoreServices,
         services: RuntimeServices,
-        portfolio: _PortfolioLifecycle,
+        portfolio_resources: PortfolioResources,
         start_lean_warmup: Callable[[], None],
     ) -> None:
         if services.core is not core:
@@ -31,7 +27,7 @@ class JacobianRuntime:
         self._closed = False
         self.core = core
         self.services = services
-        self.portfolio = portfolio
+        self.portfolio_resources = portfolio_resources
         self._start_lean_warmup = start_lean_warmup
 
     def start_lean_warmup(self) -> None:
@@ -47,7 +43,7 @@ class JacobianRuntime:
         failures: list[BaseException] = []
         for close in (
             self.services.close,
-            self.portfolio.close,
+            self.portfolio_resources.close,
             self.core.close,
         ):
             try:

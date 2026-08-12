@@ -23,11 +23,6 @@ from jacobian.capability_discovery import (
     normalize_domain as _normalize_domain,
 )
 from jacobian.capability_dispatch import CapabilityDispatchMixin
-from jacobian.capability_errors import (
-    CapabilityDiscoveryCursorError,
-    CapabilityError,
-    CapabilityInvocationError,
-)
 from jacobian.capability_registry import CapabilityRegistryMixin
 from jacobian.capability_verification import CapabilityVerificationMixin
 from jacobian.contracts.capabilities import CapabilityDescriptor
@@ -152,10 +147,6 @@ class CapabilityService(
 
 
 __all__ = [
-    "CapabilityAdapter",
-    "CapabilityDiscoveryCursorError",
-    "CapabilityError",
-    "CapabilityInvocationError",
     "CapabilityPolicy",
     "CapabilityService",
 ]

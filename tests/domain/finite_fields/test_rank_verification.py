@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
 
-from jacobian.capability_service import CapabilityError
+from jacobian.capability_errors import CapabilityError
 from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityRequest,
@@ -178,6 +178,9 @@ def test_operator_authorized_sympy_replay_accepts_rank_and_rejects_forgery(
     [
         ("operation_id", "matrix.rank.compute"),
         ("checker_id", "checker://sha256/" + "0" * 64),
+        ("claim_digest", "sha256:" + "1" * 64),
+        ("semantics_digest", "sha256:" + "2" * 64),
+        ("candidate_digest", "sha256:" + "3" * 64),
     ],
 )
 def test_inline_verification_record_rejects_unrelated_projected_identity(
@@ -208,7 +211,8 @@ def test_inline_verification_record_rejects_unrelated_projected_identity(
             update={"output": {**verified.output, field: unrelated}}
         )
 
-        with pytest.raises(CapabilityError, match=f"different {field[:-3]}"):
+        expected = field[:-3] if field.endswith("_id") else field
+        with pytest.raises(CapabilityError, match=f"different {expected}"):
             services.core.capabilities._validate_verified_result(forged)
 
 

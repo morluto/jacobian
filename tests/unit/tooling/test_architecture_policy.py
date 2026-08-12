@@ -6,7 +6,6 @@ from pathlib import Path
 from tools.check_test_architecture import (
     ArchitecturePolicyError,
     check_test_architecture,
-    load_topology_manifest,
 )
 
 
@@ -55,7 +54,7 @@ def test_runtime_is_allowed_only_at_explicit_lifecycle_boundaries(
     )
     _test_file(
         tmp_path,
-        "tests/boundary/runtime/startup/test_runtime.py",
+        "tests/boundary/storage/startup/test_runtime.py",
         "from jacobian.runtime import create_runtime\n",
     )
     _test_file(
@@ -145,30 +144,15 @@ def test_support_modules_cannot_hide_complete_runtime_construction(
     assert report.violations[0].path == "tests/support/runtime_helper.py"
 
 
-def test_topology_manifest_requires_exactly_one_lane(tmp_path: Path) -> None:
+def test_unowned_test_files_fail_directory_lane_ownership(tmp_path: Path) -> None:
     _test_file(tmp_path, "tests/unit/test_owned.py", "def test_owned(): pass\n")
     _test_file(tmp_path, "tests/misc/test_unowned.py", "def test_unowned(): pass\n")
-    (tmp_path / "tests" / "topology.toml").write_text(
-        """
-[[lanes]]
-name = "unit"
-owned_paths = ["tests/unit/**"]
-[[lanes]]
-name = "component"
-paths = ["tests/unit/**", "tests/component/**"]
-""",
-        encoding="utf-8",
-    )
 
     report = check_test_architecture(tmp_path)
 
     assert [(item.code, item.path) for item in report.violations] == [
         ("lane-ownership", "tests/misc/test_unowned.py"),
-        ("lane-ownership", "tests/unit/test_owned.py"),
     ]
-    manifest = load_topology_manifest(tmp_path / "tests/topology.toml")
-    assert manifest is not None
-    assert manifest.owners("tests/unit/test_owned.py") == ("unit", "component")
 
 
 def test_ratchet_mode_fails_only_for_new_violations(tmp_path: Path) -> None:

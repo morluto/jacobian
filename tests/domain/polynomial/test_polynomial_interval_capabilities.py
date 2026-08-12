@@ -6,11 +6,12 @@ from typing import Any
 
 import pytest
 
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_projection import project_operation_result
 from jacobian.polynomial_interval_capabilities import (
     PolynomialIntervalEnclosureVerifyAdapter,
     install_polynomial_interval_capabilities,
@@ -63,13 +64,15 @@ def test_enclose_capability_computes_a_valid_bernstein_enclosure(
     adapters, _installed, _store = installation
     enclose, _verify = adapters
 
-    result = enclose.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.enclose",
-            input={
-                "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
-                "interval": _interval("0", "1"),
-            },
+    result = project_operation_result(
+        enclose.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.enclose",
+                input={
+                    "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
+                    "interval": _interval("0", "1"),
+                },
+            )
         )
     )
 
@@ -83,6 +86,8 @@ def test_enclose_capability_computes_a_valid_bernstein_enclosure(
     ]
     assert result.output["lo"] == {"num": "1", "den": "1"}
     assert result.output["hi"] == {"num": "3", "den": "1"}
+    assert result.output["polynomial_uri"] in result.artifact_uris
+    assert result.output["enclosure_uri"] in result.artifact_uris
 
 
 def test_enclose_capability_handles_a_quadratic_on_a_shifted_interval(
@@ -92,13 +97,15 @@ def test_enclose_capability_handles_a_quadratic_on_a_shifted_interval(
     enclose, _verify = adapters
 
     # p(x) = x^2 on [-1, 1]; Bernstein bound is [-1, 1] (valid, not exact range).
-    result = enclose.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.enclose",
-            input={
-                "polynomial": _polynomial("x", [_term(1, 2)]),
-                "interval": _interval("-1", "1"),
-            },
+    result = project_operation_result(
+        enclose.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.enclose",
+                input={
+                    "polynomial": _polynomial("x", [_term(1, 2)]),
+                    "interval": _interval("-1", "1"),
+                },
+            )
         )
     )
 
@@ -120,27 +127,31 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     assert verify is not None
 
     # First compute the enclosure, then verify the claimed values.
-    enclose_result = enclose.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.enclose",
-            input={
-                "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
-                "interval": _interval("0", "1"),
-            },
+    enclose_result = project_operation_result(
+        enclose.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.enclose",
+                input={
+                    "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
+                    "interval": _interval("0", "1"),
+                },
+            )
         )
     )
     claimed = enclose_result.output
 
-    result = verify.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.enclosure.verify",
-            input={
-                "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
-                "interval": _interval("0", "1"),
-                "claimed_bernstein_coefficients": claimed["bernstein_coefficients"],
-                "claimed_lo": claimed["lo"],
-                "claimed_hi": claimed["hi"],
-            },
+    result = project_operation_result(
+        verify.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.enclosure.verify",
+                input={
+                    "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
+                    "interval": _interval("0", "1"),
+                    "claimed_bernstein_coefficients": claimed["bernstein_coefficients"],
+                    "claimed_lo": claimed["lo"],
+                    "claimed_hi": claimed["hi"],
+                },
+            )
         )
     )
 
@@ -157,19 +168,21 @@ def test_verify_capability_rejects_a_false_enclosure(installation) -> None:
 
     # Claim Bernstein coefficients [0, 3] for p(x) = 2x + 1 on [0, 1]; the
     # independent replay computes [1, 3], so the checker must return FALSE.
-    result = verify.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.enclosure.verify",
-            input={
-                "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
-                "interval": _interval("0", "1"),
-                "claimed_bernstein_coefficients": [
-                    {"num": "0", "den": "1"},
-                    {"num": "3", "den": "1"},
-                ],
-                "claimed_lo": {"num": "0", "den": "1"},
-                "claimed_hi": {"num": "3", "den": "1"},
-            },
+    result = project_operation_result(
+        verify.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.enclosure.verify",
+                input={
+                    "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
+                    "interval": _interval("0", "1"),
+                    "claimed_bernstein_coefficients": [
+                        {"num": "0", "den": "1"},
+                        {"num": "3", "den": "1"},
+                    ],
+                    "claimed_lo": {"num": "0", "den": "1"},
+                    "claimed_hi": {"num": "3", "den": "1"},
+                },
+            )
         )
     )
 

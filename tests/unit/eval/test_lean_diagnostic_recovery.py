@@ -47,6 +47,42 @@ def _classify(
     return classify_recovery(case, retained)
 
 
+def test_recovery_run_uses_supplied_isolated_codex_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    def run_operator_command(*_args: object, **kwargs: object) -> object:
+        observed["environment"] = kwargs["environment"]
+        return command_runner_module.ToolCommandResult(
+            status=command_runner_module.ToolCommandStatus.EXITED,
+            exit_code=0,
+            stdout=b"",
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(recovery_module, "run_operator_command", run_operator_command)
+    environment = {"HOME": "/isolated/home", "CODEX_HOME": "/isolated/codex"}
+    output = tmp_path / "output"
+    output.mkdir()
+
+    recovery_module._run_case(
+        case=load_suite(SUITE).cases[0],
+        repetition=1,
+        workspace=tmp_path,
+        output=output,
+        model="gpt-test",
+        reasoning_effort="high",
+        mcp_url="http://127.0.0.1:8000/mcp",
+        timeout_seconds=30,
+        tool_mode=recovery_module.ToolMode.DIRECT,
+        environment=environment,
+    )
+
+    assert observed["environment"] is environment
+
+
 def _surface(seed: str, deployed_revision: str) -> dict[str, object]:
     observed_revision = deployed_revision.ljust(40, "0")
     snapshot = {

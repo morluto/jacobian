@@ -137,6 +137,8 @@ RECURRENCE_CAPABILITIES = (
         evaluate_polynomial_coefficient_recurrence,
         "combinatorics",
         "recurrence",
+        "sequence",
+        "polynomial",
         "p-recursive",
         "polynomial-coefficients",
         "exact-rational",

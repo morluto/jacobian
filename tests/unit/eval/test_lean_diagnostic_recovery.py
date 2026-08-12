@@ -306,6 +306,22 @@ def _comparison_report(
         "repetitions": 1,
         "timeout_seconds": 300.0,
         "codex_version": "codex-test",
+        "evaluator": {
+            "isolation": {
+                "schema_version": "1",
+                "home_isolated": True,
+                "codex_home_isolated": True,
+                "user_config_loaded": False,
+                "user_rules_loaded": False,
+                "authentication_seeded": True,
+            },
+            "skill_surface": {
+                "skill_count": 0,
+                "skills": [],
+                "external_file_sources": [],
+                "model_visible_instructions_sha256": "sha256:" + "d" * 64,
+            },
+        },
         "selected_case_ids": ["core-check-type-mismatch"],
         "surface": _surface(
             surface_seed or ("b" if control else "c"),
@@ -1165,6 +1181,29 @@ def test_recovery_comparison_rejects_model_drift(tmp_path: Path) -> None:
     treatment = _comparison_report("enriched-diagnostics")
     with pytest.raises(ValueError, match="model"):
         _compare(tmp_path, control, {**treatment, "model": "second"})
+
+
+def test_recovery_comparison_rejects_missing_evaluator_identity(
+    tmp_path: Path,
+) -> None:
+    control = _comparison_report("control")
+    treatment = _comparison_report("enriched-diagnostics")
+    treatment.pop("evaluator")
+
+    with pytest.raises(ValueError, match="evaluator identity"):
+        _compare(tmp_path, control, treatment)
+
+
+def test_recovery_comparison_rejects_skill_surface_drift(tmp_path: Path) -> None:
+    control = _comparison_report("control")
+    treatment = _comparison_report("enriched-diagnostics")
+    changed = deepcopy(treatment)
+    changed["evaluator"]["skill_surface"]["model_visible_instructions_sha256"] = (
+        "sha256:" + "e" * 64
+    )
+
+    with pytest.raises(ValueError, match="evaluator"):
+        _compare(tmp_path, control, changed)
 
 
 @pytest.mark.parametrize(

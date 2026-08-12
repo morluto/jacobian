@@ -61,6 +61,7 @@ _SHARED_REPORT_FIELDS = (
     "repetitions",
     "timeout_seconds",
     "codex_version",
+    "evaluator",
     "selected_case_ids",
 )
 _DELTA_METRICS = (
@@ -894,6 +895,8 @@ def _validate_shared_report_invariants(
         raise ValueError("control report must use the control condition")
     if treatment.get("condition") != "enriched-diagnostics":
         raise ValueError("treatment report must use the enriched-diagnostics condition")
+    _validate_evaluator_identity(control)
+    _validate_evaluator_identity(treatment)
     for field in _SHARED_REPORT_FIELDS:
         if control.get(field) != treatment.get(field):
             raise ValueError(f"recovery comparison invariant differs: {field}")
@@ -901,6 +904,28 @@ def _validate_shared_report_invariants(
         raise ValueError("recovery comparison requires report schema version 1")
     if control.get("causal_claim_authorized") is not False:
         raise ValueError("recovery reports cannot authorize causal claims")
+
+
+def _validate_evaluator_identity(report: Mapping[str, Any]) -> None:
+    evaluator = report.get("evaluator")
+    if not isinstance(evaluator, Mapping):
+        raise ValueError("recovery reports require evaluator identity")
+    isolation = evaluator.get("isolation")
+    skill_surface = evaluator.get("skill_surface")
+    if not isinstance(isolation, Mapping) or not isinstance(skill_surface, Mapping):
+        raise ValueError(
+            "recovery reports require evaluator isolation and skill surface"
+        )
+    if (
+        isolation.get("home_isolated") is not True
+        or isolation.get("codex_home_isolated") is not True
+    ):
+        raise ValueError("recovery reports require isolated evaluator homes")
+    if skill_surface.get("external_file_sources") != []:
+        raise ValueError("recovery evaluator skill surface is not isolated")
+    digest = skill_surface.get("model_visible_instructions_sha256")
+    if not isinstance(digest, str) or _DIGEST.fullmatch(digest) is None:
+        raise ValueError("recovery evaluator skill surface digest is invalid")
 
 
 def _validate_selected_case_ids(report: Mapping[str, Any]) -> None:

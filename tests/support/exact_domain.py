@@ -61,6 +61,7 @@ def install_verified_domain_bundles(
             services.core.store,
             services.core.schemas,
             services.core.artifacts,
+            services.core.values,
             services.application.verification,
             services.core.checkers,
             bundles=installed_bundles,

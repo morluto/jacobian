@@ -13,6 +13,7 @@ from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.value_references import ValueReferenceStore
 from jacobian.verification import VerificationService
 
 if TYPE_CHECKING:
@@ -27,6 +28,7 @@ class InstallationContext:
     store: ArtifactRepository
     schemas: SchemaRegistry
     artifacts: ArtifactService
+    values: ValueReferenceStore
     capabilities: CapabilityService
     checkers: CheckerRegistry
     verification: VerificationService
@@ -72,6 +74,7 @@ def create_installation_context(
         store=core.store,
         schemas=core.schemas,
         artifacts=core.artifacts,
+        values=core.values,
         capabilities=core.capabilities,
         checkers=core.checkers,
         verification=services.verification,

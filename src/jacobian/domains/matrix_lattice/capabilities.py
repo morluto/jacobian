@@ -1,6 +1,7 @@
 """Exact matrix capability declarations."""
 
 from collections.abc import Callable
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -45,6 +46,7 @@ from jacobian.domains.matrix_lattice.operations import (
     compute_trace,
 )
 from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_ports import OutputPort
 from jacobian.operations import (
     OperationAbortError,
     OperationRefusalError,
@@ -64,6 +66,7 @@ def matrix_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+    output_ports: tuple[OutputPort[Any], ...] = (),
     version: str = "1",
 ) -> InstalledOperation[RequestT, ResultT]:
     def implementation(request: RequestT) -> ResultT:
@@ -106,7 +109,8 @@ def matrix_operation[
             execute=implementation,
             tags=tags,
             invocation_examples=invocation_examples,
-        )
+        ),
+        output_ports=output_ports,
     )
 
 
@@ -434,5 +438,7 @@ MATRIX_CAPABILITIES = (
                 {"matrix": {"entries": [["2", "4"], ["6", "8"]]}},
             ),
         ),
+        output_ports=(OutputPort(name="smith_form", value_type=SmithNormalFormResult),),
+        version="2",
     ),
 )

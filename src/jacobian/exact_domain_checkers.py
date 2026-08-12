@@ -25,6 +25,7 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
     CapabilityRequest,
     CapabilityResult,
+    CapabilityValuePort,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope
@@ -43,6 +44,7 @@ from jacobian.contracts.results import (
 )
 from jacobian.operation_bindings import DurablePublication
 from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.operation_ports import InputPort
 from jacobian.operations import (
     DomainBundle,
 )
@@ -68,6 +70,7 @@ from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 from jacobian.verification import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
@@ -323,6 +326,7 @@ def install_exact_domain_verification(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
+    values: ValueReferenceStore,
     verification: VerificationService,
     checkers: CheckerRegistry,
     *,
@@ -371,6 +375,16 @@ def install_exact_domain_verification(
         for operation in bundle.capabilities
         if isinstance(operation.publication, DurablePublication)
     }
+    referenceable_results = {
+        operation.spec.operation_id: operation.spec.result_type
+        for bundle, _installed_bundle in bundles.values()
+        for operation in bundle.capabilities
+        if operation.output_ports
+        and any(
+            port.value_type is operation.spec.result_type
+            for port in operation.output_ports
+        )
+    }
     for installed_bundle, declaration in _available_declaration_bundles(bundles):
         if declaration.capability_id not in installed_bundle.result_schema_uris:
             continue
@@ -388,12 +402,16 @@ def install_exact_domain_verification(
                 store=store,
                 schemas=schemas,
                 artifacts=artifacts,
+                values=values,
                 verification=verification,
                 witness_schema_uri=witness_schema_uri,
                 provider_runtime=installation.provider_runtimes[
                     _provider_runtime_key(declaration)
                 ],
                 stored_result_input=declaration.capability_id in stored_producers,
+                candidate_value_type=referenceable_results.get(
+                    declaration.capability_id
+                ),
             )
         )
     return tuple(adapters), installation
@@ -483,14 +501,17 @@ class ExactComputedVerificationAdapter:
         store: ArtifactRepository,
         schemas: SchemaRegistry,
         artifacts: ArtifactService,
+        values: ValueReferenceStore,
         verification: VerificationService,
         witness_schema_uri: str,
         provider_runtime: CapabilityProviderRuntime,
         stored_result_input: bool,
+        candidate_value_type: type[ContractModel] | None,
     ) -> None:
         self.store = store
         self.schemas = schemas
         self.artifacts = artifacts
+        self.values = values
         self.verification = verification
         self.declaration = declaration
         self.witness_schema_uri = witness_schema_uri
@@ -500,6 +521,15 @@ class ExactComputedVerificationAdapter:
             declaration.declaration.request_model,
             declaration.result_model,
         ]
+        self.candidate_port = (
+            InputPort(
+                name="candidate",
+                value_type=candidate_value_type,
+                request_field="candidate",
+            )
+            if candidate_value_type is not None and not stored_result_input
+            else None
+        )
         verification_capability_id = declaration.declaration.verification_capability_id
         verification_title = declaration.declaration.verification_title
         verification_description = declaration.declaration.verification_description
@@ -513,7 +543,7 @@ class ExactComputedVerificationAdapter:
             )
         self._descriptor = CapabilityDescriptor(
             capability_id=verification_capability_id,
-            version="1",
+            version="2" if self.candidate_port is not None else "1",
             title=verification_title,
             description=verification_description,
             provider=provider_runtime.provider,
@@ -533,7 +563,19 @@ class ExactComputedVerificationAdapter:
             accepted_artifact_types=(
                 (declaration.result_schema_uri,) if stored_result_input else ()
             ),
+            input_ports=(
+                (
+                    CapabilityValuePort(
+                        name=self.candidate_port.name,
+                        value_type=self.candidate_port.value_type.__name__,
+                    ),
+                )
+                if self.candidate_port is not None
+                else ()
+            ),
         )
+
+    typed_input: Literal[True] = True
 
     @property
     def descriptor(self) -> CapabilityDescriptor:
@@ -766,7 +808,21 @@ class ExactComputedVerificationAdapter:
     ) -> tuple[dict[str, object], dict[str, object]]:
         declaration = self.declaration
         try:
-            validated = self.input_model.model_validate(request.input)
+            payload = request.input
+            if request.inputs:
+                if self.candidate_port is None:
+                    raise ValueError("this exact checker declares no value inputs")
+                unknown = sorted(set(request.inputs) - {self.candidate_port.name})
+                if unknown:
+                    raise ValueError(
+                        "unknown exact-checker input port: " + ", ".join(unknown)
+                    )
+                candidate = self.values.resolve(
+                    request.inputs[self.candidate_port.name],
+                    self.candidate_port.value_type,
+                )
+                payload = self.candidate_port.bind_to_request(payload, candidate)
+            validated = self.input_model.model_validate(payload)
             normalized_input = self.schemas.validate(
                 declaration.input_schema_uri,
                 validated.input.model_dump(mode="json"),
@@ -775,7 +831,12 @@ class ExactComputedVerificationAdapter:
                 declaration.result_schema_uri,
                 validated.candidate.model_dump(mode="json"),
             )
-        except (SchemaRegistryError, ValidationError, ValueError) as exc:
+        except (
+            SchemaRegistryError,
+            ValidationError,
+            ValueError,
+            ValueReferenceError,
+        ) as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_INPUT",

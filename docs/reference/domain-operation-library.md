@@ -192,6 +192,12 @@ identity, and runtime identity. Rejection is a checker verdict; interruption,
 timeout, provider failure, malformed output, or missing evidence is a
 non-conclusion and cannot create a record.
 
+An inline producer may expose its whole typed result through an output port and
+an exact checker may accept that value through a candidate input port. This
+changes only the runtime-local carrier: the checker still parses the assembled
+typed request once, independently replays the relation, and alone owns any
+verification record. A candidate reference never transfers producer authority.
+
 ## Values and publication
 
 Small bounded values remain inline. Use a request-local reference or durable

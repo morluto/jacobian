@@ -8,6 +8,7 @@ from tests.support.services import DomainTestServices
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
+from jacobian.contracts.matrix_operations import SmithNormalFormResult
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 
 
@@ -20,6 +21,129 @@ def _matrix() -> dict[str, object]:
         "domain": "QQ",
         "entries": [[rational(1), rational(2)], [rational(2), rational(4)]],
     }
+
+
+def _integer_matrix() -> dict[str, object]:
+    return {"entries": [["2", "4"], ["6", "8"]]}
+
+
+def _wrong_smith_result() -> SmithNormalFormResult:
+    return SmithNormalFormResult.model_validate(
+        {
+            "normal_form": {"entries": [["1", "0"], ["0", "8"]]},
+            "rank": 2,
+            "invariant_factors": ["1", "8"],
+        }
+    )
+
+
+def test_smith_checker_consumes_the_producers_typed_candidate_reference(
+    matrix_services: DomainTestServices,
+) -> None:
+    runtime = matrix_services
+    computed = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.normal_form.smith.compute",
+            input={"matrix": _integer_matrix()},
+        )
+    )
+
+    value_ref = computed.output["value_refs"]["smith_form"]
+    descriptors = {
+        item.capability_id: item
+        for item in runtime.core.capabilities.catalog().capabilities
+    }
+    assert [
+        port.model_dump(mode="json")
+        for port in descriptors["matrix.normal_form.smith.compute"].output_ports
+    ] == [{"name": "smith_form", "value_type": "SmithNormalFormResult"}]
+    assert [
+        port.model_dump(mode="json")
+        for port in descriptors["matrix.normal_form.smith.verify"].input_ports
+    ] == [{"name": "candidate", "value_type": "SmithNormalFormResult"}]
+
+    verified = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.normal_form.smith.verify",
+            input={"input": {"matrix": _integer_matrix()}},
+            inputs={"candidate": value_ref},
+        )
+    )
+
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.output["conclusion"] == "TRUE"
+    assert verified.verification_record_uri is not None
+
+
+def test_candidate_reference_does_not_transfer_producer_authority(
+    matrix_services: DomainTestServices,
+) -> None:
+    runtime = matrix_services
+    value_ref = runtime.core.values.put(
+        _wrong_smith_result(),
+        operation_id="untrusted.example.compute",
+        operation_version="1",
+        output_port="candidate",
+    )
+
+    rejected = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.normal_form.smith.verify",
+            input={"input": {"matrix": _integer_matrix()}},
+            inputs={"candidate": value_ref},
+        )
+    )
+
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.verification_record_uri is None
+
+
+@pytest.mark.parametrize(
+    ("input_payload", "inputs"),
+    (
+        (
+            {
+                "input": {"matrix": _integer_matrix()},
+                "candidate": _wrong_smith_result().model_dump(mode="json"),
+            },
+            {"candidate": "value://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
+        ),
+        (
+            {"input": {"matrix": _integer_matrix()}},
+            {"unknown": "value://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
+        ),
+        (
+            {"input": {"matrix": _integer_matrix()}},
+            {"candidate": "value://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
+        ),
+    ),
+)
+def test_smith_candidate_reference_binding_fails_closed(
+    matrix_services: DomainTestServices,
+    input_payload: dict[str, object],
+    inputs: dict[str, str],
+) -> None:
+    if "candidate" in input_payload and "candidate" in inputs:
+        inputs = {
+            "candidate": matrix_services.core.values.put(
+                _wrong_smith_result(),
+                operation_id="untrusted.example.compute",
+                operation_version="1",
+                output_port="candidate",
+            )
+        }
+    failed = matrix_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.normal_form.smith.verify",
+            input=input_payload,
+            inputs=inputs,
+        )
+    )
+
+    assert failed.execution.status == "ERROR"
+    assert failed.diagnostics[0].code == "INVALID_EXACT_DOMAIN_INPUT"
+    assert failed.verification_record_uri is None
 
 
 def test_inline_exact_replay_persists_only_its_bound_record(

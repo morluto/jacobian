@@ -257,13 +257,7 @@ def _distribution_diagnostic(
         status=status,
         expected=expected or "installed distribution",
         found=found,
-        recovery=(
-            "Run `make setup`"
-            if profile_name == "core"
-            else "Run `make setup-lean`"
-            if profile_name == "lean"
-            else "Run `make doctor-external`"
-        ),
+        recovery="Run `make setup`",
         documentation=(
             NATIVE_PROVIDER_DOCUMENTATION
             if profile_name != "core"
@@ -307,9 +301,7 @@ def _lean_diagnostics(repo: Path) -> list[Diagnostic]:
     )
     if output is not None:
         toolchains = [
-            line.split(maxsplit=1)[0]
-            for line in output.splitlines()
-            if line.strip()
+            line.split(maxsplit=1)[0] for line in output.splitlines() if line.strip()
         ]
         installed = expected in toolchains
         found = expected if installed else ", ".join(toolchains) or None

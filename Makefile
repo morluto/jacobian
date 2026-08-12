@@ -9,8 +9,9 @@ ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
-# Ordinary pytest used by `make check` and the CI python job.
-ORDINARY_PYTEST_FLAGS := -n 4 --dist worksteal --timeout=180
+# Fixed semantic lanes covering the Lean-free ordinary testpaths. CI runs these
+# independently; `make check` runs the same lanes locally in this order.
+ORDINARY_TEST_LANES := unit component domain composition e2e provider
 PUBLIC_COMMANDS := setup quick check check-external fix
 
 include make/development.mk
@@ -81,9 +82,10 @@ test-e2e: ## Complete caller-visible journeys (serial, 180s).
 		$(if $(TESTS),$(TESTS),tests/e2e) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-ordinary: ## Lean-free ordinary pytest (same flags as CI python).
-	$(UV_RUN) pytest $(ORDINARY_PYTEST_FLAGS) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+test-ordinary: ## Lean-free ordinary suite in the fixed CI group order.
+	@for lane in $(ORDINARY_TEST_LANES); do \
+		$(MAKE) test-$$lane || exit $$?; \
+	done
 
 test-compatibility: ## Supported-version import/API compatibility smoke.
 	$(UV_RUN) pytest -n 0 --timeout=30 --timeout-method=thread \

@@ -36,8 +36,13 @@ from jacobian.lean_frontend.declarations import (
     _parse_persistent_response,
     _parse_session_response,
     _ReusableLeanQuerySession,
+    _seal_declaration_index,
 )
 from jacobian.process_policy import ProcessResult, ProcessTermination
+from jacobian.providers.lean_runtime import (
+    lean_portable_semantic_runtime_digest,
+    lean_semantic_runtime_digest,
+)
 
 _RUNTIME = CapabilityProviderRuntime(
     provider="jacobian.lean4",
@@ -203,6 +208,30 @@ def test_environment_identity_fails_closed_if_the_lean_executable_changes(
     with pytest.raises(LeanDeclarationBackendError) as raised:
         backend.environment_digest(LeanEnvironment.CORE)
     assert raised.value.code == "LEAN_ENVIRONMENT_CHANGED"
+
+
+def test_portable_semantic_digest_excludes_only_the_deployment_root() -> None:
+    first: dict[str, Any] = {
+        "contract": "jacobian.lean.semantic-runtime/v1",
+        "executable": {"digest": "sha256:" + "a" * 64},
+        "mathlib_project": {
+            "root": "/opt/jacobian/release-a/lean",
+            "lake_digest": "sha256:" + "b" * 64,
+            "loaded_modules": [{"path": "Mathlib.olean", "digest": "content"}],
+        },
+    }
+    second: dict[str, Any] = {
+        **first,
+        "mathlib_project": {
+            **first["mathlib_project"],
+            "root": "/srv/jacobian/release-b/lean",
+        },
+    }
+
+    assert lean_semantic_runtime_digest(first) != lean_semantic_runtime_digest(second)
+    assert lean_portable_semantic_runtime_digest(
+        first
+    ) == lean_portable_semantic_runtime_digest(second)
 
 
 def test_mathlib_declaration_environment_authorizes_manifest_checkouts(
@@ -524,6 +553,44 @@ def test_clean_session_ignores_corrupt_portable_catalog(tmp_path: Path) -> None:
         "sha256:" + "c" * 64 + "\nmalformed-row\n",
         encoding="utf-8",
     )
+
+    session = _clean_session(tmp_path, index_cache_path=cache_path)
+
+    assert session._index_digest is None
+    assert not session._index_path.exists()
+    session.close()
+
+
+def test_clean_session_ignores_row_boundary_truncated_catalog(tmp_path: Path) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    cache_path.parent.mkdir()
+    cache_path.write_text(
+        "sha256:" + "c" * 64 + "\nNat.add\tInit.Prelude\tDEFINITION\n",
+        encoding="utf-8",
+    )
+
+    session = _clean_session(tmp_path, index_cache_path=cache_path)
+
+    assert session._index_digest is None
+    assert not session._index_path.exists()
+    session.close()
+
+
+def test_clean_session_ignores_catalog_with_mismatched_content_digest(
+    tmp_path: Path,
+) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    cache_path.parent.mkdir()
+    environment_digest = "sha256:" + "c" * 64
+    cache_path.write_text(
+        environment_digest + "\nNat.add\tInit.Prelude\tDEFINITION\n",
+        encoding="utf-8",
+    )
+    _seal_declaration_index(
+        cache_path,
+        environment_digest=environment_digest,
+    )
+    cache_path.write_bytes(cache_path.read_bytes().replace(b"Nat.add", b"Nat.mul"))
 
     session = _clean_session(tmp_path, index_cache_path=cache_path)
 

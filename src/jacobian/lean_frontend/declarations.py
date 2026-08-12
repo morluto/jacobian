@@ -14,7 +14,7 @@ import weakref
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Any, BinaryIO, Literal, Protocol
 
 from pydantic import ValidationError
 
@@ -62,6 +62,7 @@ from jacobian.process_policy import (
 from jacobian.providers.lean_runtime import (
     LeanRuntimeIdentityError,
     lean_mathlib_git_config,
+    lean_portable_semantic_runtime_digest,
     lean_semantic_runtime_digest,
     require_lean_semantic_runtime_identity,
 )
@@ -82,7 +83,8 @@ _PERSISTENT_MAX_AGE_SECONDS = 600.0
 _QUERY_SOURCE = Path(__file__).with_name("_lean_declaration_query.lean")
 _IMPORT_TOKEN = "{{JACOBIAN_IMPORT}}"
 _ENTRYPOINT_MARKER = "-- JACOBIAN_DECLARATION_ENTRYPOINT"
-_INDEX_FORMAT = "jacobian.lean.declaration-index/v1"
+_INDEX_FORMAT = "jacobian.lean.declaration-index/v2"
+_INDEX_FOOTER_PREFIX = "# jacobian-declaration-index"
 
 
 class LeanDeclarationBackend(Protocol):
@@ -302,6 +304,11 @@ class _ReusableLeanQuerySession:
         if not isinstance(query, LeanDeclarationSearchQuery):
             return
         try:
+            if self._index_digest is None:
+                _seal_declaration_index(
+                    self._index_path,
+                    environment_digest=self._environment_digest,
+                )
             current_digest = _sha256_file(self._index_path)
             _validate_declaration_index(
                 self._index_path,
@@ -483,6 +490,11 @@ class _PersistentLeanQuerySession:
         if not isinstance(query, LeanDeclarationSearchQuery):
             return
         try:
+            if self._index_digest is None:
+                _seal_declaration_index(
+                    self._index_path,
+                    environment_digest=self._environment_digest,
+                )
             _validate_declaration_index(
                 self._index_path,
                 environment_digest=self._environment_digest,
@@ -825,6 +837,7 @@ class LeanSubprocessDeclarationBackend:
             environment,
             temporary_root,
         )
+        index_environment_digest = self._compute_index_environment_digest(environment)
         return _ReusableLeanQuerySession(
             command=command,
             cwd=cwd,
@@ -832,10 +845,10 @@ class LeanSubprocessDeclarationBackend:
             source=source,
             memory_mb=memory_mb,
             isolated_home=environment is LeanEnvironment.CORE,
-            environment_digest=environment_digest,
+            environment_digest=index_environment_digest,
             index_cache_path=self._index_cache_path(
                 environment,
-                environment_digest,
+                index_environment_digest,
             ),
             cache_results=self.cache_results,
         )
@@ -958,6 +971,20 @@ class LeanSubprocessDeclarationBackend:
         )
 
     def _compute_environment_digest(self, environment: LeanEnvironment) -> str:
+        return self._digest_environment_identity(environment, portable=False)
+
+    def _compute_index_environment_digest(
+        self,
+        environment: LeanEnvironment,
+    ) -> str:
+        return self._digest_environment_identity(environment, portable=True)
+
+    def _digest_environment_identity(
+        self,
+        environment: LeanEnvironment,
+        *,
+        portable: bool,
+    ) -> str:
         identity: dict[str, Any] = {
             "contract": "jacobian.lean.environment-manifest/v2",
             "environment": environment.value,
@@ -970,7 +997,12 @@ class LeanSubprocessDeclarationBackend:
         }
         semantic_runtime = self.provider_runtime.configuration.get("semantic_runtime")
         if isinstance(semantic_runtime, dict):
-            identity["semantic_runtime_digest"] = lean_semantic_runtime_digest(
+            digest_semantic_runtime = (
+                lean_portable_semantic_runtime_digest
+                if portable
+                else lean_semantic_runtime_digest
+            )
+            identity["semantic_runtime_digest"] = digest_semantic_runtime(
                 semantic_runtime
             )
         if environment is LeanEnvironment.MATHLIB:
@@ -1304,6 +1336,8 @@ def _catalog_query_from_index(
             if next(stream).rstrip("\n") != environment_digest:
                 raise ValueError("declaration index environment mismatch")
             for line in stream:
+                if line.startswith(f"{_INDEX_FOOTER_PREFIX}\t"):
+                    break
                 name, module, kind = line.rstrip("\n").split("\t")
                 if not _prefix_matches(module, query.target_module_prefixes):
                     continue
@@ -1340,15 +1374,112 @@ def _validate_declaration_index(
     *,
     environment_digest: str,
 ) -> None:
-    if path.stat().st_size > _MAX_INDEX_BYTES:
+    _scan_declaration_index(
+        path,
+        environment_digest=environment_digest,
+        require_footer=True,
+    )
+
+
+def _seal_declaration_index(
+    path: Path,
+    *,
+    environment_digest: str,
+) -> None:
+    row_count, content_digest = _scan_declaration_index(
+        path,
+        environment_digest=environment_digest,
+        require_footer=False,
+    )
+    footer = f"{_INDEX_FOOTER_PREFIX}\t{row_count}\t{content_digest}\n".encode()
+    if path.stat().st_size + len(footer) > _MAX_INDEX_BYTES:
         raise ValueError("declaration index exceeds its size bound")
-    with path.open(encoding="utf-8") as stream:
-        if stream.readline().rstrip("\n") != environment_digest:
-            raise ValueError("declaration index environment mismatch")
-        for line in stream:
-            fields = line.rstrip("\n").split("\t")
-            if len(fields) != 3 or any(not field for field in fields):
-                raise ValueError("declaration index row is malformed")
+    with path.open("ab") as stream:
+        stream.write(footer)
+        stream.flush()
+        os.fsync(stream.fileno())
+    _validate_declaration_index(path, environment_digest=environment_digest)
+
+
+def _scan_declaration_index(
+    path: Path,
+    *,
+    environment_digest: str,
+    require_footer: bool,
+) -> tuple[int, str]:
+    size = path.stat().st_size
+    if size == 0 or size > _MAX_INDEX_BYTES:
+        raise ValueError("declaration index exceeds its size bound")
+    content_hasher = hashlib.sha256()
+    row_count = 0
+    footer: tuple[str, str] | None = None
+    with path.open("rb") as stream:
+        header = _read_index_header(stream, environment_digest)
+        content_hasher.update(header)
+        for raw_line in stream:
+            line = _decode_index_line(raw_line, label="row")
+            footer = _parse_index_footer(line)
+            if footer is not None:
+                _require_index_eof(stream)
+                break
+            _validate_index_row(line)
+            content_hasher.update(raw_line)
+            row_count += 1
+    content_digest = "sha256:" + content_hasher.hexdigest()
+    if not require_footer:
+        if footer is not None:
+            raise ValueError("declaration index is already sealed")
+        return row_count, content_digest
+    _validate_index_footer(footer, row_count, content_digest)
+    return row_count, content_digest
+
+
+def _read_index_header(stream: BinaryIO, environment_digest: str) -> bytes:
+    header = stream.readline()
+    decoded_header = _decode_index_line(header, label="header")
+    if decoded_header != environment_digest:
+        raise ValueError("declaration index environment mismatch")
+    return header
+
+
+def _decode_index_line(raw_line: bytes, *, label: str) -> str:
+    if not raw_line.endswith(b"\n"):
+        raise ValueError(f"declaration index {label} is truncated")
+    try:
+        return raw_line[:-1].decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("declaration index is not UTF-8") from exc
+
+
+def _parse_index_footer(line: str) -> tuple[str, str] | None:
+    if not line.startswith(f"{_INDEX_FOOTER_PREFIX}\t"):
+        return None
+    fields = line.split("\t")
+    if len(fields) != 3:
+        raise ValueError("declaration index footer is malformed")
+    return fields[1], fields[2]
+
+
+def _require_index_eof(stream: BinaryIO) -> None:
+    if stream.read(1):
+        raise ValueError("declaration index footer is not final")
+
+
+def _validate_index_row(line: str) -> None:
+    fields = line.split("\t")
+    if len(fields) != 3 or any(not field for field in fields):
+        raise ValueError("declaration index row is malformed")
+
+
+def _validate_index_footer(
+    footer: tuple[str, str] | None,
+    row_count: int,
+    content_digest: str,
+) -> None:
+    if footer is None:
+        raise ValueError("declaration index footer is missing")
+    if footer != (str(row_count), content_digest):
+        raise ValueError("declaration index footer does not match its rows")
 
 
 def _prefix_matches(value: str, prefixes: tuple[str, ...]) -> bool:

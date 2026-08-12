@@ -341,3 +341,48 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
         )
 
     assert raised.value.diagnostic.code == "STALE_LEAN_PROOF_STATE"
+
+
+def test_apply_tactic_preserves_cross_field_validation_evidence(tmp_path: Path) -> None:
+    adapter = _adapter(tmp_path)
+    continuation = adapter.descriptor.invocation_examples[1].input
+    assert set(continuation) == {
+        "environment",
+        "state_uri",
+        "tactic",
+        "max_goals",
+        "max_local_declarations",
+        "max_rendered_bytes",
+    }
+    assert "statement" not in continuation
+    assert "proof_prefix" not in continuation
+
+    with pytest.raises(CapabilityInvocationError) as raised:
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "state_uri": "artifact://sha256/" + "a" * 64,
+                    "statement": "True",
+                    "proof_prefix": ["skip"],
+                    "tactic": "trivial",
+                },
+            )
+        )
+
+    diagnostic = raised.value.diagnostic
+    assert diagnostic.code == "INVALID_LEAN_TRANSITION_REQUEST"
+    assert diagnostic.stage == "request_validation"
+    assert diagnostic.path == "$"
+    assert (
+        "state_uri cannot be combined with statement or proof_prefix"
+        in diagnostic.message
+    )
+    assert diagnostic.details["validation_errors"] == [
+        {
+            "path": "$",
+            "reason": "state_uri cannot be combined with statement or proof_prefix",
+            "type": "value_error",
+        }
+    ]

@@ -473,6 +473,9 @@ class LeanSubprocessDeclarationBackend:
     ) -> LeanDeclarationBackendResult:
         with self._session_locks[environment]:
             environment_digest = self.environment_digest(environment)
+            lean_version, lean_commit, mathlib_commit = self._runtime_identity(
+                environment
+            )
             entry = self._resolve_session(environment, environment_digest)
             output = self._execute_session_request(
                 environment,
@@ -483,8 +486,40 @@ class LeanSubprocessDeclarationBackend:
             self._validate_session_unchanged(environment, environment_digest)
             return LeanDeclarationBackendResult(
                 environment_digest=environment_digest,
+                lean_version=lean_version,
+                lean_commit=lean_commit,
+                mathlib_commit=mathlib_commit,
                 payload=output,
             )
+
+    def _runtime_identity(
+        self,
+        environment: LeanEnvironment,
+    ) -> tuple[str, str, str | None]:
+        profiles = self.provider_runtime.configuration.get("profiles")
+        profile = (
+            profiles.get(environment.value) if isinstance(profiles, dict) else None
+        )
+        lean_version = self.provider_runtime.version
+        lean_commit = profile.get("lean_commit") if isinstance(profile, dict) else None
+        mathlib_commit = (
+            profile.get("mathlib_commit") if isinstance(profile, dict) else None
+        )
+        if not isinstance(lean_version, str) or not isinstance(lean_commit, str):
+            raise LeanDeclarationBackendError(
+                "LEAN_ENVIRONMENT_UNAVAILABLE",
+                "The pinned Lean runtime identity is incomplete.",
+            )
+        if environment is LeanEnvironment.MATHLIB and not isinstance(
+            mathlib_commit, str
+        ):
+            raise LeanDeclarationBackendError(
+                "LEAN_ENVIRONMENT_UNAVAILABLE",
+                "The pinned Mathlib runtime identity is incomplete.",
+            )
+        if environment is LeanEnvironment.CORE:
+            mathlib_commit = None
+        return lean_version, lean_commit, mathlib_commit
 
     def close(self) -> None:
         """Terminate all active query sessions."""
@@ -665,6 +700,9 @@ class LeanDeclarationService:
             return LeanDeclarationSearchOutput(
                 environment=query.environment,
                 environment_digest=result.environment_digest,
+                lean_version=result.lean_version,
+                lean_commit=result.lean_commit,
+                mathlib_commit=result.mathlib_commit,
                 query=query,
                 declarations=payload.declarations,
                 scanned_declarations=payload.scanned_declarations,
@@ -693,6 +731,9 @@ class LeanDeclarationService:
             return LeanDeclarationInspectOutput(
                 environment=query.environment,
                 environment_digest=result.environment_digest,
+                lean_version=result.lean_version,
+                lean_commit=result.lean_commit,
+                mathlib_commit=result.mathlib_commit,
                 query=query,
                 declaration=payload.declaration,
             )

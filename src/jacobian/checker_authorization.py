@@ -202,6 +202,8 @@ def install_lean_checkers(
         )
         profiles[environment.value] = {
             "semantics_uri": semantics_uri,
+            "lean_version": lean_version,
+            "lean_commit": lean_commit,
             "import_name": import_name,
             "mathlib_commit": pinned_mathlib,
             "allowed_axioms": list(allowed_axioms),

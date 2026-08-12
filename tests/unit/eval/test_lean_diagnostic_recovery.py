@@ -327,7 +327,7 @@ def test_recovery_suite_freezes_control_treatment_and_injected_cases() -> None:
         "control",
         "enriched-diagnostics",
     }
-    assert len(suite.cases) == 3
+    assert len(suite.cases) == 5
     assert any("MATHLIB" in case.prompt for case in suite.cases)
     assert suite.cases[0].terminal_immutable_input_fields == (
         "statement",
@@ -338,7 +338,344 @@ def test_recovery_suite_freezes_control_treatment_and_injected_cases() -> None:
         "statement",
         "original_proof",
     )
+    premise_probe = suite.cases[3].diagnostic_probe
+    assert premise_probe is not None
+    assert premise_probe.capability_id == "lean.retrieve.premises"
+    assert premise_probe.expected_diagnostic_evidence.path == "proof_prefix.0"
+    assert suite.cases[4].expected_diagnostic_evidence is not None
+    assert suite.cases[4].expected_diagnostic_evidence.path == "$"
+    assert suite.cases[4].expected_diagnostic_evidence.validation_error_paths == ("$",)
     assert suite.causal_claim_authorized is False
+
+
+def test_recovery_classifies_failed_request_diagnostic_before_verified_repair() -> None:
+    case = load_suite(SUITE).cases[3]
+    probe = case.diagnostic_probe
+    assert probe is not None
+    terminal_input = {
+        "environment": case.injected_payload["environment"],
+        "statement": case.injected_payload["statement"],
+        "proof": "by\n  intro x\n  exact sq_nonneg x",
+    }
+    result = classify_recovery(
+        case,
+        {
+            "capability_attempts": [
+                {
+                    "capability_id": probe.capability_id,
+                    "input": probe.payload,
+                    "successful": False,
+                    "diagnostic_codes": ["INVALID_LEAN_RETRIEVAL_REQUEST"],
+                    "diagnostics": [
+                        {
+                            "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                            "path": "proof_prefix.0",
+                            "details": {
+                                "validation_errors": [
+                                    {
+                                        "path": "proof_prefix.0",
+                                        "reason": "must not include by",
+                                        "type": "value_error",
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                },
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "successful": True,
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "successful": True,
+                },
+            ],
+            "capability_invocations": [
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "output": {
+                        "conclusion": "UNKNOWN",
+                        "diagnostics": [
+                            {
+                                "code": "LEAN_UNKNOWN_IDENTIFIER",
+                                "phase": "KERNEL_CHECK",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "output": {"conclusion": "TRUE"},
+                    "verification_record_uri": ("artifact://sha256/" + "a" * 64),
+                },
+            ],
+            "mcp_calls": ["math.run", "math.run", "math.run"],
+        },
+    )
+
+    assert result["injection_rejected"] is True
+    assert result["observed_diagnostic_codes"] == ["LEAN_UNKNOWN_IDENTIFIER"]
+    assert result["enriched_diagnostic_observed"] is True
+    assert result["repair_success"] is True
+
+
+def test_premise_probe_does_not_bias_control_repair_classification() -> None:
+    case = load_suite(SUITE).cases[3]
+    probe = case.diagnostic_probe
+    assert probe is not None
+    terminal_input = {
+        "environment": case.injected_payload["environment"],
+        "statement": case.injected_payload["statement"],
+        "proof": "by\n  intro x\n  exact sq_nonneg x",
+    }
+    result = classify_recovery(
+        case,
+        {
+            "capability_attempts": [
+                {
+                    "capability_id": probe.capability_id,
+                    "input": probe.payload,
+                    "successful": False,
+                    "diagnostic_codes": ["LEAN_RETRIEVAL_FAILED"],
+                },
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "successful": True,
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "successful": True,
+                },
+            ],
+            "capability_invocations": [
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "output": {
+                        "conclusion": "UNKNOWN",
+                        "diagnostics": ["Lean rejected the proof: unknown identifier"],
+                    },
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "output": {"conclusion": "TRUE"},
+                    "verification_record_uri": "artifact://sha256/" + "b" * 64,
+                },
+            ],
+        },
+    )
+
+    assert result["injection_rejected"] is True
+    assert result["enriched_diagnostic_observed"] is False
+    assert result["repair_success"] is True
+
+
+@pytest.mark.parametrize(
+    "generic_code",
+    ("UNKNOWN_CAPABILITY", "INVALID_REQUEST", "ADAPTER_EXECUTION_FAILED"),
+)
+def test_recovery_does_not_credit_generic_failed_injection(
+    generic_code: str,
+) -> None:
+    case = load_suite(SUITE).cases[0]
+    terminal_input = {
+        "environment": case.injected_payload["environment"],
+        "statement": case.injected_payload["statement"],
+        "proof": "by\n  intro x\n  exact sq_nonneg x",
+    }
+    result = classify_recovery(
+        case,
+        {
+            "capability_attempts": [
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "successful": False,
+                    "diagnostic_codes": [generic_code],
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "successful": True,
+                },
+            ],
+            "capability_invocations": [
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "output": {"conclusion": "TRUE"},
+                    "verification_record_uri": "artifact://sha256/" + "a" * 64,
+                }
+            ],
+        },
+    )
+
+    assert result["injection_rejected"] is False
+    assert result["repair_success"] is False
+    assert result["observed_diagnostic_codes"] == []
+
+
+def test_recovery_uses_later_exact_retry_after_operational_failure() -> None:
+    case = load_suite(SUITE).cases[0]
+    repaired_input = {
+        "statement": case.injected_payload["statement"],
+        "proof": "by\n  trivial",
+        "environment": case.injected_payload["environment"],
+    }
+    rejected = {
+        "capability_id": case.injected_capability_id,
+        "input": case.injected_payload,
+        "output": {
+            "conclusion": "UNKNOWN",
+            "diagnostics": [{"code": "LEAN_TYPE_MISMATCH", "phase": "KERNEL_CHECK"}],
+        },
+    }
+    repaired = {
+        "capability_id": case.terminal_capability_id,
+        "input": repaired_input,
+        "output": {"conclusion": "TRUE", "diagnostics": []},
+        "verification_record_uri": "artifact://sha256/" + "b" * 64,
+    }
+    result = classify_recovery(
+        case,
+        {
+            "capability_attempts": [
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "successful": False,
+                    "diagnostic_codes": ["LEAN_CHECKER_TIMEOUT"],
+                },
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "successful": True,
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": repaired_input,
+                    "successful": True,
+                },
+            ],
+            "capability_invocations": [rejected, repaired],
+        },
+    )
+
+    assert result["injection_first_attempt"] is True
+    assert result["injection_rejected"] is True
+    assert result["observed_diagnostic_codes"] == ["LEAN_TYPE_MISMATCH"]
+    assert result["repair_success"] is True
+
+
+def test_recovery_does_not_shift_invocations_after_malformed_success() -> None:
+    case = load_suite(SUITE).cases[0]
+    unrelated_input = {
+        "statement": "False",
+        "proof": "by\n  trivial",
+        "environment": case.injected_payload["environment"],
+    }
+    repaired_input = {
+        "statement": case.injected_payload["statement"],
+        "proof": "by\n  trivial",
+        "environment": case.injected_payload["environment"],
+    }
+    unrelated_rejection = {
+        "capability_id": case.injected_capability_id,
+        "input": unrelated_input,
+        "output": {
+            "conclusion": "UNKNOWN",
+            "diagnostics": [{"code": "LEAN_TYPE_MISMATCH", "phase": "KERNEL_CHECK"}],
+        },
+    }
+    repaired = {
+        "capability_id": case.terminal_capability_id,
+        "input": repaired_input,
+        "output": {"conclusion": "TRUE", "diagnostics": []},
+        "verification_record_uri": "artifact://sha256/" + "d" * 64,
+    }
+    result = classify_recovery(
+        case,
+        {
+            "capability_attempts": [
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "successful": True,
+                },
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": unrelated_input,
+                    "successful": True,
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": repaired_input,
+                    "successful": True,
+                },
+            ],
+            # The first response was malformed, so telemetry retained no
+            # completed invocation for it. Later invocations must not shift.
+            "capability_invocations": [unrelated_rejection, repaired],
+        },
+    )
+
+    assert result["injection_payload_exact"] is True
+    assert result["injection_rejected"] is False
+    assert result["repair_success"] is False
+    assert result["observed_diagnostic_codes"] == []
+
+
+def test_enrichment_requires_expected_field_level_evidence() -> None:
+    case = load_suite(SUITE).cases[4]
+    terminal_input = {
+        "environment": case.injected_payload["environment"],
+        "statement": case.injected_payload["statement"],
+        "proof": "by\n  trivial",
+    }
+    result = classify_recovery(
+        case,
+        {
+            "capability_attempts": [
+                {
+                    "capability_id": case.injected_capability_id,
+                    "input": case.injected_payload,
+                    "successful": False,
+                    "diagnostic_codes": ["INVALID_LEAN_TRANSITION_REQUEST"],
+                    "diagnostics": [
+                        {
+                            "code": "INVALID_LEAN_TRANSITION_REQUEST",
+                            "path": None,
+                        }
+                    ],
+                },
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "successful": True,
+                },
+            ],
+            "capability_invocations": [
+                {
+                    "capability_id": case.terminal_capability_id,
+                    "input": terminal_input,
+                    "output": {"conclusion": "TRUE"},
+                    "verification_record_uri": "artifact://sha256/" + "c" * 64,
+                }
+            ],
+        },
+    )
+
+    assert result["injection_rejected"] is True
+    assert result["repair_success"] is True
+    assert result["enriched_diagnostic_observed"] is False
 
 
 def test_recovery_suite_bytes_have_a_stable_evaluation_identity() -> None:

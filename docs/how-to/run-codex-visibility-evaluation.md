@@ -40,9 +40,32 @@ tool calls or resource reads. Observations report discovery, exact inspection,
 invocation, completion, abstention, unexpected operations, and independently
 bound verification evidence.
 
+Case contracts gate only required outcome operations and verification evidence.
+Optional `diagnostic_capability_ids` record whether an operation was discovered,
+attempted, or completed without requiring one fixed tool sequence for success.
+`acceptable_output_outcomes` can instead require substantive fields from any one
+of several completed atomic operations; this scores structured mathematical
+output rather than requiring a redundant operation or grading answer prose.
+
 Duration and token counts are observational. MCP calls, model-visible bytes,
 wire bytes, shell calls, errors, cached input, and uncached input remain
 separate diagnostics rather than proxies for mathematical correctness.
+
+To run the fixed Lean usability observation suite, select it explicitly:
+
+```sh
+make codex-visibility VISIBILITY_EXECUTE=1 \
+  VISIBILITY_CASES=benchmarks/config/lean-usability-v1.json \
+  VISIBILITY_MCP_URL=http://127.0.0.1:8000/mcp \
+  VISIBILITY_MODEL=gpt-5.6-sol \
+  VISIBILITY_OUTPUT=benchmarks/results/lean-usability
+```
+
+That suite observes premise retrieval, fresh and continuation proof-state use,
+term application, independent checking, Mathlib declaration discovery,
+runtime-identity reporting, and one conceptual abstention. Formal-intermediate
+operations are diagnostic observations rather than required proof strategies.
+It is a public usability regression, not held-out or causal evidence.
 
 For Harbor ATIF trajectories, measure the projection directly:
 

@@ -49,6 +49,20 @@ _RUNTIME = CapabilityProviderRuntime(
     install_tier=CapabilityInstallTier.T3,
     license_id="Apache-2.0",
     features=("CORE", "MATHLIB"),
+    configuration={
+        "profiles": {
+            "CORE": {
+                "lean_version": "4.31.0",
+                "lean_commit": "lean-commit",
+                "mathlib_commit": None,
+            },
+            "MATHLIB": {
+                "lean_version": "4.31.0",
+                "lean_commit": "lean-commit",
+                "mathlib_commit": "mathlib-commit",
+            },
+        }
+    },
 )
 
 
@@ -71,6 +85,11 @@ class FakeBackend(LeanDeclarationBackend):
         ).payload
         return LeanDeclarationBackendResult(
             environment_digest=_DIGEST,
+            lean_version="4.31.0",
+            lean_commit="lean-commit",
+            mathlib_commit=(
+                "mathlib-commit" if environment is LeanEnvironment.MATHLIB else None
+            ),
             payload=payload,
         )
 
@@ -114,6 +133,10 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
         }
     )
     adapter = LeanDeclarationSearchAdapter(LeanDeclarationService(backend), _RUNTIME)
+    assert adapter.descriptor.invocation_examples[0].input["name_contains"] == (
+        "irrational_sqrt"
+    )
+    assert "shell-searching" in adapter.descriptor.description
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.search",
@@ -125,6 +148,9 @@ def test_search_adapter_exposes_bounded_computed_retrieval() -> None:
         )
     )
     assert result.output["environment_digest"] == _DIGEST
+    assert result.output["lean_version"] == "4.31.0"
+    assert result.output["lean_commit"] == "lean-commit"
+    assert result.output["mathlib_commit"] == "mathlib-commit"
     assert result.output["declarations"][0]["name"] == "irrational_sqrt_two"
     assert backend.calls[0][1] == LeanDeclarationSearchQuery(
         name_contains="irrational_sqrt_two",
@@ -152,6 +178,9 @@ def test_inspect_adapter_returns_docs_without_promoting_the_theorem() -> None:
         }
     )
     adapter = LeanDeclarationInspectAdapter(LeanDeclarationService(backend), _RUNTIME)
+    assert adapter.descriptor.invocation_examples[0].input["declaration_name"] == (
+        "irrational_sqrt_two"
+    )
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
@@ -160,6 +189,9 @@ def test_inspect_adapter_returns_docs_without_promoting_the_theorem() -> None:
     )
     assert result.output["declaration"]["docstring"].startswith("Addition")
     assert result.output["environment_digest"] == _DIGEST
+    assert result.output["lean_version"] == "4.31.0"
+    assert result.output["lean_commit"] == "lean-commit"
+    assert result.output["mathlib_commit"] is None
 
 
 def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> None:

@@ -136,6 +136,9 @@ class LeanDeclarationErrorEnvelope(ContractModel):
 
 class LeanDeclarationBackendResult(ContractModel):
     environment_digest: Sha256Digest
+    lean_version: StrictStr = Field(min_length=1, max_length=64)
+    lean_commit: StrictStr = Field(min_length=7, max_length=64)
+    mathlib_commit: StrictStr | None = Field(default=None, min_length=7, max_length=64)
     payload: LeanDeclarationDiscriminatedPayload
 
 

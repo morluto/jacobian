@@ -9,13 +9,18 @@ SERVER_DESCRIPTION = (
 
 SERVER_INSTRUCTIONS = (
     "Use Jacobian whenever a task may benefit from a specialized exact mathematical "
-    "operation, including matrix or polynomial computation, symbolic transformation, "
-    "structural analysis, examples or counterexamples, bounded search, formal-environment "
-    "inspection, or requested independent verification. This applies even when the "
+    "operation, including matrix or polynomial computation. This applies even when the "
     "user does not name Jacobian and shell code could also calculate the result. Unless "
     "an exact installed capability ID and its typed contract are already available, call "
     "math.find with a plain-language desired local mathematical outcome; no capability "
     "ID is required. math.run may execute a known contract directly. "
+    "For declaration queries explicitly targeting Jacobian's pinned CORE or MATHLIB "
+    "environment, use the pinned mathematical operation because repository search or "
+    "a local Lean process may not match that server environment. Project-local Lean "
+    "declarations are outside the server catalog and may require project-local tools. "
+    "Other uses include symbolic transformation, structural analysis, examples or "
+    "counterexamples, bounded search, Lean/Mathlib declaration search or formal-"
+    "environment inspection, and requested independent verification. "
     "Do not report that no specialized mathematical operation is available without "
     "checking math.find. When independent checking is requested, multiple calculations "
     "or programs authored by the same model are not independent checker evidence. "
@@ -47,6 +52,7 @@ Checker tools are separate IDs (often `*.verify`), not a switch on producers.
 Examples:
 - `{"request":{"op":"search","query":"exact matrix determinant","domain":"matrix","limit":3}}`
 - `{"request":{"op":"search","query":"counterexample to associativity"}}`
+- `{"request":{"op":"search","query":"find a theorem declaration in pinned Mathlib","domain":"lean"}}`
 - `{"request":{"op":"inspect","capability_id":"polynomial.compute.gcd"}}`
 """
 

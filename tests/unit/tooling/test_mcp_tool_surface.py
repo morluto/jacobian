@@ -52,6 +52,14 @@ def test_server_instructions_allow_known_contracts_to_run_directly() -> None:
     assert "math.run may execute a known contract directly" in SERVER_INSTRUCTIONS
 
 
+def test_server_instructions_route_pinned_lean_declaration_queries() -> None:
+    assert (
+        "explicitly targeting Jacobian's pinned CORE or MATHLIB" in SERVER_INSTRUCTIONS
+    )
+    assert "Project-local Lean declarations are outside" in SERVER_INSTRUCTIONS
+    assert "may require project-local tools" in SERVER_INSTRUCTIONS
+
+
 def test_guidance_rejects_verification_transfer_to_derived_claims() -> None:
     combined = "\n".join((SERVER_INSTRUCTIONS, MATH_RUN_DESCRIPTION))
     assert "does not verify a model-derived conclusion" in combined

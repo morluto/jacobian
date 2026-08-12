@@ -36,6 +36,7 @@ from jacobian.lean_frontend.artifacts import (
 )
 from jacobian.lean_frontend.exploration import (
     _normalized_response_goals,
+    _request_validation_diagnostic,
     _Resources,
     _runtime_ms,
     _tactic_diagnostics,
@@ -56,10 +57,13 @@ class LeanProofStateAdapter:
             version="3",
             title="Apply one Lean tactic and inspect resulting goals",
             description=(
-                "Reconstruct and validate an immutable proof state in a clean "
-                "Lean process, apply exactly one tactic, and return typed goals plus "
-                "a durable successor state. Tactic failures return stable repair "
-                "diagnostics, a goal index, and payload-relative source spans."
+                "Apply exactly one tactic in either fresh mode "
+                "(statement plus optional proof_prefix) or continuation mode "
+                "(state_uri plus tactic). Continuation requests must omit statement "
+                "and proof_prefix. A clean Lean process reconstructs the immutable "
+                "state and returns typed goals plus a durable successor state. "
+                "Tactic failures return stable repair diagnostics, a goal index, "
+                "and payload-relative source spans."
             ),
             provider="jacobian.lean4",
             provider_runtime=resources.provider_runtime,
@@ -91,6 +95,23 @@ class LeanProofStateAdapter:
                         }
                     ).model_dump(mode="json"),
                 ),
+                CapabilityInvocationExample(
+                    name="continue_returned_state",
+                    description=(
+                        "Continue an immutable successor state using only its URI, "
+                        "the matching environment, and one tactic."
+                    ),
+                    input=LeanProofStateRequest.model_validate(
+                        {
+                            "environment": "CORE",
+                            "state_uri": "artifact://sha256/" + "a" * 64,
+                            "tactic": "rfl",
+                        }
+                    ).model_dump(
+                        mode="json",
+                        exclude={"statement", "proof_prefix"},
+                    ),
+                ),
             ),
         )
 
@@ -111,13 +132,14 @@ class LeanProofStateAdapter:
                 _validate_source_parts("True", (validated.tactic,))
         except (ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+                _request_validation_diagnostic(
+                    exc,
                     code="INVALID_LEAN_TRANSITION_REQUEST",
-                    stage="request_validation",
-                    message="The Lean statement or tactic sequence is invalid.",
+                    subject="The Lean proof-state transition request is invalid",
                     hint=(
-                        "Use one proposition and bounded tactic bodies without "
-                        "commands, imports, declarations, sorry, or run_tac."
+                        "For a fresh state use environment, statement, optional "
+                        "proof_prefix, and tactic. For a continuation use only the "
+                        "returned state_uri, matching environment, and tactic."
                     ),
                 )
             ) from exc

@@ -8,13 +8,12 @@ import time
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import (
@@ -23,7 +22,6 @@ from jacobian.contracts.lean_exploration import (
     LeanPremiseRetrievalOutput,
     LeanPremiseRetrievalRequest,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend.artifacts import _proof_state_command
 from jacobian.lean_frontend.exploration import (
     _DECLARATION,
@@ -37,6 +35,9 @@ from jacobian.lean_frontend.exploration import (
 )
 from jacobian.lean_frontend.repl import _response_errors
 from jacobian.lean_frontend.repl_protocol import LeanReplProofStepResponse
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 
 
 class LeanPremiseRetrievalAdapter:
@@ -81,7 +82,7 @@ class LeanPremiseRetrievalAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = LeanPremiseRetrievalRequest.model_validate(request.input)
             _validate_source_parts(validated.statement, validated.proof_prefix)
@@ -197,15 +198,14 @@ class LeanPremiseRetrievalAdapter:
             **artifact_payload.model_dump(mode="python"),
             retrieval_uri=artifact.artifact_uri,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=_runtime_ms(started),
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=output, runtime_ms=_runtime_ms(started)),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(artifact.artifact_uri,),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(artifact.artifact_uri,),
         )
 
 

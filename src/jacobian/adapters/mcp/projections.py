@@ -11,7 +11,7 @@ from jacobian.adapters.mcp.constants import (
     CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
 )
 from jacobian.bounded_process import bounded_process_cancellation
-from jacobian.capability_service import CapabilityDiscoveryCursorError
+from jacobian.capability_errors import CapabilityDiscoveryCursorError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiscoveryRequest,

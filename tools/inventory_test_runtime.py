@@ -16,12 +16,12 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import tomllib
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from tools.test_plan.authority_signals import has_verify_authority_signal
+from tools.test_architecture.authority_signals import has_verify_authority_signal
+from tools.test_architecture.lanes import owner_for
 
 _COMPLETE_RUNTIME_FIXTURES = frozenset(
     {
@@ -59,27 +59,6 @@ _FIXTURE_SETUP_WEIGHT = {
 }
 
 
-def _load_topology(root: Path) -> Mapping[str, tuple[str, ...]]:
-    path = root / "tests" / "topology.toml"
-    payload = tomllib.loads(path.read_text(encoding="utf-8"))
-    return {
-        str(lane["name"]): tuple(str(item) for item in lane.get("paths", ()))
-        for lane in payload.get("lanes", ())
-    }
-
-
-def _owner_for(relative: str, lanes: Mapping[str, tuple[str, ...]]) -> str | None:
-    owners = [
-        name
-        for name, patterns in lanes.items()
-        if any(
-            relative == pattern or relative.startswith(pattern.rstrip("/") + "/")
-            for pattern in patterns
-        )
-    ]
-    return owners[0] if len(owners) == 1 else None
-
-
 def _collect_resource_imports(node: ast.AST, resources: set[str]) -> None:
     if isinstance(node, ast.Import):
         for alias in node.names:
@@ -112,7 +91,6 @@ def _source_signals(tree: ast.AST, source: str) -> tuple[set[str], bool, set[str
 
 
 def inventory_modules(root: Path) -> tuple[ModuleInventory, ...]:
-    lanes = _load_topology(root)
     rows: list[ModuleInventory] = []
     tests_root = root / "tests"
     for path in sorted(tests_root.rglob("test_*.py")):
@@ -129,7 +107,7 @@ def inventory_modules(root: Path) -> tuple[ModuleInventory, ...]:
         rows.append(
             ModuleInventory(
                 path=relative,
-                semantic_owner=_owner_for(relative, lanes),
+                semantic_owner=owner_for(relative),
                 complete_runtime_fixtures=ordered,
                 has_verify_signal=has_verify,
                 resource_imports=tuple(sorted(resources)),

@@ -74,14 +74,24 @@ def test_transition_smoke_requires_exactly_one_bound_successor_on_acceptance() -
 def test_mathlib_declaration_smoke_requires_the_exact_declaration() -> None:
     result = {
         "execution": {"status": "COMPLETED"},
-        "output": {"declarations": [{"name": "irrational_sqrt_two"}]},
+        "output": {
+            "result": {"declarations": [{"name": "irrational_sqrt_two"}]},
+            "backend_version": "Lean 4.31.0 + Mathlib",
+        },
     }
     _require_mathlib_declaration(result)
 
     for mutation in (
         {**result, "execution": {"status": "ERROR"}},
-        {**result, "output": {"declarations": []}},
-        {**result, "output": {"declarations": [{"name": "Nat.add"}]}},
+        {**result, "output": {"result": {"declarations": []}}},
+        {
+            **result,
+            "output": {"result": {"declarations": [{"name": "Nat.add"}]}},
+        },
+        {
+            **result,
+            "output": {"declarations": [{"name": "irrational_sqrt_two"}]},
+        },
     ):
         with pytest.raises(RuntimeError):
             _require_mathlib_declaration(mutation)

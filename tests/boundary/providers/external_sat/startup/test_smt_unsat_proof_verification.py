@@ -24,7 +24,7 @@ from jacobian.contracts.verification import VerificationRecord
 from jacobian.providers.external_solver_runtime import carcara_provider_runtime
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.verification import CheckerExecutionError
+from jacobian.verification.errors import CheckerExecutionError
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _PROBLEM = (_FIXTURES / "qf_uf_equality_unsat.smt2").read_text(encoding="ascii")
@@ -240,11 +240,11 @@ def test_unsat_proof_is_verified_by_authorized_strict_carcara(
     assert record_uri is not None
     record_artifact = runtime.core.store.get(record_uri)
     record = VerificationRecord.model_validate(record_artifact.payload)
-    assert record.checker_id == runtime.portfolio.smt_unsat_proof_checker.checker_id
     assert record.evidence_uri == certificate_uri
     checker = runtime.core.checkers.require_active(record.checker_id)
-    assert checker.provider_runtime == runtime.portfolio.carcara_runtime
-    assert record.checker_digest == checker.executable_digest
+    assert checker.implementation.provider_runtime is not None
+    assert checker.implementation.provider_runtime.provider == "carcara"
+    assert record.implementation_digest == checker.implementation_digest
     assert record.environment_digest.startswith("sha256:")
     assert len(record.environment_digest) == len("sha256:") + 64
     assert set(record_artifact.manifest.parents) == {
@@ -304,8 +304,6 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
         )
     )
 
-    assert without_references.portfolio.smt_unsat_proof_checker.checker_id is None
-    assert without_runtime.portfolio.smt_unsat_proof_checker.checker_id is None
     for runtime in (without_references, without_runtime):
         assert "smt.unsat_proof.verify" not in {
             descriptor.capability_id
@@ -348,7 +346,9 @@ def test_checker_operational_failure_never_creates_a_conclusion(
     def fail(**_kwargs: Any):
         raise exception
 
-    monkeypatch.setattr(runtime.services.verification, "_run_checker", fail)
+    monkeypatch.setattr(
+        runtime.services.verification._checker_executor, "execute", fail
+    )
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is expected_status

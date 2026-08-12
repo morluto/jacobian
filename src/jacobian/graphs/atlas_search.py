@@ -6,18 +6,23 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from jacobian.capability_service import CapabilityInvocationError
+from pydantic import ValidationError
+
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.contracts.graph_invariants import (
+    GraphAtlasCandidate,
+    GraphAtlasConstraints,
+    GraphAtlasProperties,
+    GraphAtlasSearchOutput,
+    GraphAtlasSearchRequest,
+)
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import (
-    ARTIFACT_URI_PATTERN,
-    GRAPH_PAYLOAD_SCHEMA,
     GraphArtifactResources,
     nx,
     runtime_ms,
@@ -26,27 +31,16 @@ from jacobian.graphs.artifacts import (
     graph_payload as canonical_graph_payload,
 )
 from jacobian.graphs.atlas import graph_atlas_order
+from jacobian.graphs.conversions import graph_contract_from_value
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.provider_runtime import known_provider_runtime
+from jacobian.schema_registry import model_schema
 
 if TYPE_CHECKING:
     import networkx as nx_type
-
-
-_CONSTRAINT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "connected": {"type": "boolean"},
-        "bipartite": {"type": "boolean"},
-        "tree": {"type": "boolean"},
-        "triangle_free": {"type": "boolean"},
-        "minimum_edges": {"type": "integer", "minimum": 0},
-        "maximum_edges": {"type": "integer", "minimum": 0},
-        "minimum_degree": {"type": "integer", "minimum": 0},
-        "maximum_degree": {"type": "integer", "minimum": 0},
-        "independence_number": {"type": "integer", "minimum": 0},
-    },
-    "additionalProperties": False,
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +51,8 @@ class GraphAtlasSearchResources:
 
 class GraphAtlasSearchAdapter:
     """Search NetworkX's bounded Graph Atlas using exact computed properties."""
+
+    typed_input = True
 
     def __init__(self, resources: GraphAtlasSearchResources) -> None:
         self.resources = resources
@@ -73,56 +69,8 @@ class GraphAtlasSearchAdapter:
                 "jacobian.networkx",
                 features=("graph-atlas", "simple-undirected-graphs"),
             ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "order": {"type": "integer", "minimum": 0, "maximum": 7},
-                    "constraints": _CONSTRAINT_SCHEMA,
-                    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
-                },
-                "required": ["order", "constraints"],
-                "additionalProperties": False,
-            },
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "candidates": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "graph_uri": {
-                                    "type": "string",
-                                    "pattern": ARTIFACT_URI_PATTERN,
-                                },
-                                "graph": GRAPH_PAYLOAD_SCHEMA,
-                                "properties": {"type": "object"},
-                            },
-                            "required": ["graph_uri", "graph", "properties"],
-                            "additionalProperties": False,
-                        },
-                    },
-                    "match_count": {"type": "integer", "minimum": 0},
-                    "returned_count": {"type": "integer", "minimum": 0},
-                    "truncated": {"type": "boolean"},
-                    "scope_uri": {
-                        "type": "string",
-                        "pattern": ARTIFACT_URI_PATTERN,
-                    },
-                    "backend": {"const": "networkx.graph_atlas_g"},
-                    "backend_version": {"type": "string"},
-                },
-                "required": [
-                    "candidates",
-                    "match_count",
-                    "returned_count",
-                    "truncated",
-                    "scope_uri",
-                    "backend",
-                    "backend_version",
-                ],
-                "additionalProperties": False,
-            },
+            input_schema=model_schema(GraphAtlasSearchRequest),
+            output_schema=model_schema(GraphAtlasSearchOutput),
             tags=("graph", "construction", "bounded-search"),
             invocation_examples=(
                 example(
@@ -137,12 +85,49 @@ class GraphAtlasSearchAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         started = time.monotonic()
-        order = int(request.input["order"])
-        constraints = dict(request.input["constraints"])
-        _validate_constraint_ranges(constraints)
-        limit = int(request.input.get("limit", 10))
+        try:
+            validated = GraphAtlasSearchRequest.model_validate(request.input)
+        except ValidationError as exc:
+            error = exc.errors()[0]
+            error_message = str(error.get("msg", ""))
+            invalid_range = "cannot exceed maximum_" in error_message
+            range_path = (
+                "constraints/minimum_degree"
+                if "minimum_degree" in error_message
+                else "constraints/minimum_edges"
+            )
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code=(
+                        "INVALID_CONSTRAINT_RANGE"
+                        if invalid_range
+                        else "INVALID_GRAPH_ATLAS_SEARCH_REQUEST"
+                    ),
+                    stage=(
+                        "constraint_validation"
+                        if invalid_range
+                        else "request_validation"
+                    ),
+                    message=(
+                        "The complete Graph Atlas search request is invalid: "
+                        f"{error.get('msg', 'validation failed')}"
+                    ),
+                    path=range_path if invalid_range else None,
+                    hint=(
+                        "Swap the bounds or remove one of them, then retry."
+                        if invalid_range
+                        else (
+                            "Supply an order from 0 to 7 and consistent exact "
+                            "constraints."
+                        )
+                    ),
+                )
+            ) from exc
+        order = validated.order
+        constraints = validated.constraints
+        limit = validated.limit
         atlas_graphs = graph_atlas_order(order)
         scope = self.resources.graph.artifacts.put(
             schema_uri=self.resources.scope_schema_uri,
@@ -156,12 +141,12 @@ class GraphAtlasSearchAdapter:
             },
             summary=f"Graph Atlas representatives of order {order}",
         )
-        matches: list[tuple[nx_type.Graph[Any], dict[str, Any]]] = []
+        matches: list[tuple[nx_type.Graph[Any], GraphAtlasProperties]] = []
         for graph in atlas_graphs:
             properties = _compute_all_properties(graph)
             if _matches_constraints(properties, constraints):
                 matches.append((graph, properties))
-        candidates: list[dict[str, Any]] = []
+        candidates: list[GraphAtlasCandidate] = []
         graph_uris: list[str] = []
         for graph, properties in matches[:limit]:
             graph_payload = canonical_graph_payload(graph)
@@ -174,55 +159,35 @@ class GraphAtlasSearchAdapter:
             )
             graph_uris.append(graph_artifact.artifact_uri)
             candidates.append(
-                {
-                    "graph_uri": graph_artifact.artifact_uri,
-                    "graph": graph_payload,
-                    "properties": properties,
-                }
+                GraphAtlasCandidate(
+                    graph_uri=graph_artifact.artifact_uri,
+                    graph=graph_contract_from_value(
+                        SimpleUndirectedGraph.model_validate(graph_payload)
+                    ),
+                    properties=properties,
+                )
             )
         artifact_uris = (scope.artifact_uri, *graph_uris)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        output = GraphAtlasSearchOutput(
+            candidates=tuple(candidates),
+            match_count=len(matches),
+            returned_count=len(candidates),
+            truncated=len(matches) > len(candidates),
+            scope_uri=scope.artifact_uri,
+            backend_version=nx().__version__,
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=runtime_ms(started),
             ),
-            output={
-                "candidates": candidates,
-                "match_count": len(matches),
-                "returned_count": len(candidates),
-                "truncated": len(matches) > len(candidates),
-                "scope_uri": scope.artifact_uri,
-                "backend": "networkx.graph_atlas_g",
-                "backend_version": nx().__version__,
-            },
-            artifact_uris=artifact_uris,
+            publication=PublishedOperation(output=output, artifact_uris=artifact_uris),
         )
 
 
-def _validate_constraint_ranges(constraints: dict[str, Any]) -> None:
-    for lower, upper in (
-        ("minimum_edges", "maximum_edges"),
-        ("minimum_degree", "maximum_degree"),
-    ):
-        if (
-            lower in constraints
-            and upper in constraints
-            and int(constraints[lower]) > int(constraints[upper])
-        ):
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="INVALID_CONSTRAINT_RANGE",
-                    stage="constraint_validation",
-                    message=f"{lower} cannot exceed {upper}.",
-                    path=f"constraints/{lower}",
-                    hint="Swap the bounds or remove one of them, then retry.",
-                )
-            )
-
-
-def _compute_all_properties(graph: nx_type.Graph[Any]) -> dict[str, Any]:
+def _compute_all_properties(graph: nx_type.Graph[Any]) -> GraphAtlasProperties:
     order = graph.number_of_nodes()
     degrees = sorted((degree for _, degree in graph.degree), reverse=True)
     if order:
@@ -244,63 +209,61 @@ def _compute_all_properties(graph: nx_type.Graph[Any]) -> dict[str, Any]:
             )
     else:
         independence_number = 0
-    return {
-        "order": order,
-        "size": graph.number_of_edges(),
-        "connected": nx().is_connected(graph) if order else False,
-        "bipartite": nx().is_bipartite(graph),
-        "tree": nx().is_tree(graph) if order else False,
-        "degree_sequence": degrees,
-        "minimum_degree": min(degrees) if degrees else None,
-        "maximum_degree": max(degrees) if degrees else None,
-        "triangle_count": (
-            sum(cast(dict[Any, int], nx().triangles(graph)).values()) // 3
-        ),
-        "independence_number": independence_number,
-    }
+    return GraphAtlasProperties(
+        order=order,
+        size=graph.number_of_edges(),
+        connected=nx().is_connected(graph) if order else False,
+        bipartite=nx().is_bipartite(graph),
+        tree=nx().is_tree(graph) if order else False,
+        degree_sequence=tuple(degrees),
+        minimum_degree=min(degrees) if degrees else None,
+        maximum_degree=max(degrees) if degrees else None,
+        triangle_count=(sum(cast(dict[Any, int], nx().triangles(graph)).values()) // 3),
+        independence_number=independence_number,
+    )
 
 
 def _matches_constraints(
-    properties: dict[str, Any],
-    constraints: dict[str, Any],
+    properties: GraphAtlasProperties,
+    constraints: GraphAtlasConstraints,
 ) -> bool:
     if (
-        "connected" in constraints
-        and properties["connected"] is not constraints["connected"]
+        constraints.connected is not None
+        and properties.connected != constraints.connected
     ):
         return False
     if (
-        "bipartite" in constraints
-        and properties["bipartite"] is not constraints["bipartite"]
+        constraints.bipartite is not None
+        and properties.bipartite != constraints.bipartite
     ):
         return False
-    if "tree" in constraints and properties["tree"] is not constraints["tree"]:
+    if constraints.tree is not None and properties.tree != constraints.tree:
         return False
-    if "triangle_free" in constraints and (
-        (properties["triangle_count"] == 0) is not constraints["triangle_free"]
-    ):
-        return False
-    if (
-        "minimum_edges" in constraints
-        and properties["size"] < constraints["minimum_edges"]
+    if constraints.triangle_free is not None and (
+        (properties.triangle_count == 0) != constraints.triangle_free
     ):
         return False
     if (
-        "maximum_edges" in constraints
-        and properties["size"] > constraints["maximum_edges"]
+        constraints.minimum_edges is not None
+        and properties.size < constraints.minimum_edges
     ):
         return False
-    if "minimum_degree" in constraints and (
-        properties["minimum_degree"] is None
-        or properties["minimum_degree"] < constraints["minimum_degree"]
+    if (
+        constraints.maximum_edges is not None
+        and properties.size > constraints.maximum_edges
     ):
         return False
-    if "maximum_degree" in constraints and (
-        properties["maximum_degree"] is None
-        or properties["maximum_degree"] > constraints["maximum_degree"]
+    if constraints.minimum_degree is not None and (
+        properties.minimum_degree is None
+        or properties.minimum_degree < constraints.minimum_degree
+    ):
+        return False
+    if constraints.maximum_degree is not None and (
+        properties.maximum_degree is None
+        or properties.maximum_degree > constraints.maximum_degree
     ):
         return False
     return not (
-        "independence_number" in constraints
-        and properties["independence_number"] != constraints["independence_number"]
+        constraints.independence_number is not None
+        and properties.independence_number != constraints.independence_number
     )

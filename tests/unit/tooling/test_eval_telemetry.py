@@ -209,11 +209,51 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
     telemetry = parse_agent_transcript(transcript)
 
     assert telemetry["capability_attempts"] == [
-        {"capability_id": None, "input": {"malformed": True}, "successful": False},
+        {
+            "capability_id": None,
+            "input": {"malformed": True},
+            "successful": False,
+            "terminal_status": "failed",
+            "error_digest": "sha256:"
+            + hashlib.sha256(
+                canonicalize_json(
+                    {
+                        "item_error": "invalid request",
+                        "response_error": None,
+                        "output_error": None,
+                        "diagnostics": None,
+                    }
+                )
+            ).hexdigest(),
+            "request_validation_failure": False,
+        },
         {
             "capability_id": "lean.retrieve.premises",
             "input": {"statement": "True", "proof_prefix": ["by"]},
             "successful": False,
+            "terminal_status": "ERROR",
+            "error_digest": "sha256:"
+            + hashlib.sha256(
+                canonicalize_json(
+                    {
+                        "item_error": None,
+                        "response_error": None,
+                        "output_error": {
+                            "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                            "stage": "request_validation",
+                            "message": "proof_prefix must not include by",
+                        },
+                        "diagnostics": [
+                            {
+                                "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                                "stage": "request_validation",
+                                "message": "proof_prefix must not include by",
+                            }
+                        ],
+                    }
+                )
+            ).hexdigest(),
+            "request_validation_failure": True,
             "diagnostic_codes": ["INVALID_LEAN_RETRIEVAL_REQUEST"],
             "diagnostics": [
                 {
@@ -233,6 +273,110 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
         "lean.check",
     ]
     assert telemetry["capability_ids"] == ["lean.check"]
+
+
+def test_agent_telemetry_records_empty_payload_and_exact_repeated_errors(
+    tmp_path: Path,
+) -> None:
+    invalid = {
+        "capability_id": "lean.check",
+        "execution": {"status": "ERROR"},
+        "output": {
+            "error": {
+                "code": "INVALID_REQUEST",
+                "stage": "request_validation",
+                "path": "$",
+            }
+        },
+    }
+    events = [
+        _tool_event(
+            "math.run", {"capability_id": "lean.check", "payload": {}}, invalid
+        ),
+        _tool_event(
+            "math.run", {"capability_id": "lean.check", "payload": {}}, invalid
+        ),
+        _tool_event(
+            "math.run",
+            {
+                "capability_id": "lean.retrieve.premises",
+                "payload": {"statement": "True", "proof_prefix": ["by"]},
+            },
+            {
+                "capability_id": "lean.retrieve.premises",
+                "execution": {"status": "ERROR"},
+                "output": {
+                    "error": {
+                        "code": "INVALID_LEAN_RETRIEVAL_REQUEST",
+                        "stage": "request_validation",
+                    }
+                },
+            },
+        ),
+    ]
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        "\n".join(json.dumps(event) for event in events) + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["empty_payload_probe_count"] == 2
+    assert telemetry["failed_operation_attempt_count"] == 3
+    assert telemetry["repeated_error_count"] == 1
+
+
+def test_agent_telemetry_does_not_count_successful_empty_payload_as_probe(
+    tmp_path: Path,
+) -> None:
+    event = _tool_event(
+        "math.run",
+        {"capability_id": "example.all_defaults", "payload": {}},
+        {
+            "capability_id": "example.all_defaults",
+            "execution": {"status": "COMPLETED"},
+            "output": {"value": 1},
+        },
+    )
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["empty_payload_probe_count"] == 0
+
+
+def test_agent_telemetry_distinguishes_terminal_failure_identity(
+    tmp_path: Path,
+) -> None:
+    events = []
+    for status, message in (
+        ("TIMEOUT", "deadline exceeded"),
+        ("CANCELLED", "request cancelled"),
+        ("TIMEOUT", "deadline exceeded"),
+    ):
+        events.append(
+            _tool_event(
+                "math.run",
+                {"capability_id": "lean.check", "payload": {"statement": "True"}},
+                {
+                    "capability_id": "lean.check",
+                    "execution": {"status": status},
+                    "output": {"error": {"code": status, "message": message}},
+                },
+            )
+        )
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        "\n".join(json.dumps(event) for event in events) + "\n",
+        encoding="utf-8",
+    )
+
+    telemetry = parse_agent_transcript(transcript)
+
+    assert telemetry["failed_operation_attempt_count"] == 3
+    assert telemetry["repeated_error_count"] == 1
 
 
 def test_agent_telemetry_counts_response_bytes_and_repeated_calls(

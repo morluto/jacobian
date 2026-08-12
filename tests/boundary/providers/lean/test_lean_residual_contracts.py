@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
@@ -33,6 +33,7 @@ from jacobian.lean_frontend.helper_protocol import (
     LeanMetavariableFieldsHelperPayload,
 )
 from jacobian.lean_frontend.metavariable_fields import LeanMetavariableFieldsAdapter
+from jacobian.lean_frontend.premise_retrieval import LeanPremiseRetrievalAdapter
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
 from jacobian.lean_frontend.proof_state_inspect import LeanProofStateInspectAdapter
 from jacobian.lean_frontend.repl_protocol import (
@@ -41,6 +42,7 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplValidatedExecution,
 )
 from jacobian.lean_frontend.term_apply import LeanTermApplyAdapter
+from jacobian.operation_projection import project_operation_result
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -231,14 +233,16 @@ def _stored_input_state_uri(
         proof_state,
         lambda: _responses(before=["⊢ True"], after=["⊢ True"]),
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": environment.value,
-                "statement": "True",
-                "tactic": "skip",
-            },
+    opened = project_operation_result(
+        proof_state.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": environment.value,
+                    "statement": "True",
+                    "tactic": "skip",
+                },
+            )
         )
     )
     return str(opened.output["input_state_uri"])
@@ -296,15 +300,17 @@ def test_term_apply_elaborates_exact_term_and_returns_successor(
     )
     _stub_apply_runtime(monkeypatch, proof_state, lambda: next(calls))
 
-    result = term_apply.invoke(
-        CapabilityRequest(
-            capability_id="lean.term.apply",
-            input={
-                "environment": "CORE",
-                "statement": "P → P",
-                "proof_prefix": ["intro P"],
-                "term": "P",
-            },
+    result = project_operation_result(
+        term_apply.invoke(
+            CapabilityRequest(
+                capability_id="lean.term.apply",
+                input={
+                    "environment": "CORE",
+                    "statement": "P → P",
+                    "proof_prefix": ["intro P"],
+                    "term": "P",
+                },
+            )
         )
     )
 
@@ -351,15 +357,17 @@ def test_term_apply_fails_closed_on_rejected_term(
             error="type mismatch: trivial has type True",
         ),
     )
-    result = term_apply.invoke(
-        CapabilityRequest(
-            capability_id="lean.term.apply",
-            input={
-                "environment": "CORE",
-                "statement": "n = 0",
-                "proof_prefix": ["intro n"],
-                "term": "trivial",
-            },
+    result = project_operation_result(
+        term_apply.invoke(
+            CapabilityRequest(
+                capability_id="lean.term.apply",
+                input={
+                    "environment": "CORE",
+                    "statement": "n = 0",
+                    "proof_prefix": ["intro n"],
+                    "term": "trivial",
+                },
+            )
         )
     )
     assert result.output["accepted"] is False
@@ -401,26 +409,30 @@ def test_inspect_returns_recorded_goals_without_replay(
             after=["P Q : Prop\n⊢ P", "P Q : Prop\n⊢ Q"],
         ),
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "(P Q : Prop) → P ∧ Q",
-                "proof_prefix": ["intro P Q"],
-                "tactic": "constructor",
-            },
+    opened = project_operation_result(
+        proof_state.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "(P Q : Prop) → P ∧ Q",
+                    "proof_prefix": ["intro P Q"],
+                    "tactic": "constructor",
+                },
+            )
         )
     )
     successor_uri = opened.output["successor_states"][0]["state_uri"]
 
-    result = inspect.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.inspect",
-            input={
-                "environment": "CORE",
-                "state_uri": successor_uri,
-            },
+    result = project_operation_result(
+        inspect.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.inspect",
+                input={
+                    "environment": "CORE",
+                    "state_uri": successor_uri,
+                },
+            )
         )
     )
 
@@ -446,10 +458,12 @@ def test_inspect_rejects_stale_state(
         proof_state,
         lambda: _responses(before=["⊢ True"], after=["⊢ True"]),
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={"environment": "CORE", "statement": "True", "tactic": "skip"},
+    opened = project_operation_result(
+        proof_state.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={"environment": "CORE", "statement": "True", "tactic": "skip"},
+            )
         )
     )
     state = resources.store.get(opened.output["input_state_uri"])
@@ -525,15 +539,17 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
         proof_state,
         lambda: _responses(before=["P : Prop\n⊢ P"], after=["P : Prop\n⊢ P"]),
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "P → P",
-                "proof_prefix": ["intro P"],
-                "tactic": "skip",
-            },
+    opened = project_operation_result(
+        proof_state.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "P → P",
+                    "proof_prefix": ["intro P"],
+                    "tactic": "skip",
+                },
+            )
         )
     )
     state_uri = opened.output["successor_states"][0]["state_uri"]
@@ -546,10 +562,12 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
         before=["P : Prop\n⊢ P"],
     )
 
-    result = metavariable.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.metavariable_fields",
-            input={"environment": "CORE", "state_uri": state_uri},
+    result = project_operation_result(
+        metavariable.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.metavariable_fields",
+                input={"environment": "CORE", "state_uri": state_uri},
+            )
         )
     )
 
@@ -568,6 +586,55 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     assert state_uri in result.artifact_uris
 
 
+def test_premise_retrieval_projects_completed_value_at_dispatch_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, _, _, _, resources = _adapters(tmp_path)
+
+    def retrieve(
+        _resources: _Resources,
+        **_kwargs: object,
+    ) -> tuple[
+        LeanReplCommandResponse,
+        LeanReplProofStepResponse,
+    ]:
+        return (
+            LeanReplCommandResponse.model_validate({"env": 0}),
+            LeanReplProofStepResponse.model_validate(
+                {
+                    "proofState": 1,
+                    "proofStatus": "Completed",
+                    "goals": [],
+                    "messages": [
+                        {
+                            "pos": {"line": 0, "column": 0},
+                            "severity": "info",
+                            "data": "Try this:\n[apply] exact True.intro",
+                        }
+                    ],
+                }
+            ),
+        )
+
+    monkeypatch.setattr(
+        "jacobian.lean_frontend.premise_retrieval._run_repl",
+        retrieve,
+    )
+    result = project_operation_result(
+        LeanPremiseRetrievalAdapter(resources).invoke(
+            CapabilityRequest(
+                capability_id="lean.retrieve.premises",
+                input={"statement": "True", "limit": 1},
+            )
+        )
+    )
+
+    assert result.execution.status.value == "COMPLETED"
+    assert result.output["candidates"][0]["tactic"] == "exact True.intro"
+    assert result.output["retrieval_uri"] in result.artifact_uris
+
+
 def test_metavariable_fields_reject_completed_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -578,10 +645,12 @@ def test_metavariable_fields_reject_completed_state(
         proof_state,
         lambda: _responses(before=["⊢ True"], after=[], completed=True),
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={"environment": "CORE", "statement": "True", "tactic": "trivial"},
+    opened = project_operation_result(
+        proof_state.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={"environment": "CORE", "statement": "True", "tactic": "trivial"},
+            )
         )
     )
     state_uri = opened.output["successor_states"][0]["state_uri"]
@@ -605,15 +674,17 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
         proof_state,
         lambda: _responses(before=["P : Prop\n⊢ P"], after=["P : Prop\n⊢ P"]),
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "P → P",
-                "proof_prefix": ["intro P"],
-                "tactic": "skip",
-            },
+    opened = project_operation_result(
+        proof_state.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "P → P",
+                    "proof_prefix": ["intro P"],
+                    "tactic": "skip",
+                },
+            )
         )
     )
     state_uri = opened.output["successor_states"][0]["state_uri"]
@@ -896,13 +967,15 @@ def test_inspect_adapter_available_without_lean_runtime(
         ).model_dump(mode="json"),
         summary="stored CORE proof state",
     )
-    result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.inspect",
-            input={
-                "environment": "CORE",
-                "state_uri": state.artifact_uri,
-            },
+    result = project_operation_result(
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.inspect",
+                input={
+                    "environment": "CORE",
+                    "state_uri": state.artifact_uri,
+                },
+            )
         )
     )
 
@@ -1116,15 +1189,17 @@ def test_term_apply_output_is_validated_through_typed_model(
             completed=True,
         ),
     )
-    result = term_apply.invoke(
-        CapabilityRequest(
-            capability_id="lean.term.apply",
-            input={
-                "environment": "CORE",
-                "statement": "P → P",
-                "proof_prefix": ["intro P"],
-                "term": "P",
-            },
+    result = project_operation_result(
+        term_apply.invoke(
+            CapabilityRequest(
+                capability_id="lean.term.apply",
+                input={
+                    "environment": "CORE",
+                    "statement": "P → P",
+                    "proof_prefix": ["intro P"],
+                    "term": "P",
+                },
+            )
         )
     )
     from jacobian.contracts.lean_term_apply import LeanTermApplyOutput
@@ -1152,15 +1227,17 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
             after=["P Q : Prop\n⊢ P", "P Q : Prop\n⊢ Q"],
         ),
     )
-    opened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "(P Q : Prop) → P ∧ Q",
-                "proof_prefix": ["intro P Q"],
-                "tactic": "constructor",
-            },
+    opened = project_operation_result(
+        proof_state.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "(P Q : Prop) → P ∧ Q",
+                    "proof_prefix": ["intro P Q"],
+                    "tactic": "constructor",
+                },
+            )
         )
     )
     state_uri = opened.output["successor_states"][0]["state_uri"]

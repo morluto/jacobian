@@ -7,8 +7,8 @@ from typing import Literal, Protocol, runtime_checkable
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityRequest,
-    CapabilityResult,
 )
+from jacobian.operation_projection import OperationProjection
 
 
 class CapabilityAdapter(Protocol):
@@ -17,7 +17,7 @@ class CapabilityAdapter(Protocol):
     @property
     def descriptor(self) -> CapabilityDescriptor: ...
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult: ...
+    def invoke(self, request: CapabilityRequest) -> OperationProjection: ...
 
 
 @runtime_checkable

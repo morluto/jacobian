@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from jacobian.portfolio.builtin import BUILTIN_PORTFOLIO_COMPONENT_FACTORIES
+from jacobian.portfolio.builtin import BUILTIN_DOMAIN_BUNDLE_FACTORIES
 
 ROOT = Path(__file__).parents[3]
 SOURCE = ROOT / "src" / "jacobian"
@@ -23,12 +23,11 @@ def _imports(path: Path) -> tuple[str, ...]:
 
 
 def test_only_explicit_builtin_composition_imports_every_domain_factory() -> None:
-    factories = BUILTIN_PORTFOLIO_COMPONENT_FACTORIES
+    factories = BUILTIN_DOMAIN_BUNDLE_FACTORIES
     assert factories, "expected explicit builtin domain factories"
     assert len(factories) == len(set(factories)), "duplicate domain factories"
     central_installers = (
         SOURCE / "portfolio" / "assembler.py",
-        SOURCE / "portfolio" / "core_installation.py",
         SOURCE / "portfolio" / "domain_installation.py",
         SOURCE / "portfolio" / "foundation_installation.py",
     )
@@ -36,3 +35,10 @@ def test_only_explicit_builtin_composition_imports_every_domain_factory() -> Non
         not any(module.startswith("jacobian.domains.") for module in _imports(path))
         for path in central_installers
     )
+    core_imports = _imports(SOURCE / "portfolio" / "core_installation.py")
+    assert {
+        module for module in core_imports if module.startswith("jacobian.domains.")
+    } == {
+        "jacobian.domains.polynomial_nullstellensatz.core",
+        "jacobian.domains.polynomial_nullstellensatz.singular",
+    }

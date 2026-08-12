@@ -22,7 +22,7 @@ from jacobian.polynomial_system_capabilities import (
     install_polynomial_system_capabilities,
 )
 from jacobian.runtime import CheckerAuthorityMode
-from jacobian.verification import CheckerExecutionError
+from jacobian.verification.errors import CheckerExecutionError
 
 
 @contextmanager
@@ -149,7 +149,9 @@ def test_solution_capability_keeps_checker_failure_unknown(
         raise CheckerExecutionError("deliberate checker failure")
 
     monkeypatch.setattr(
-        polynomial_system_services.application.verification, "_run_checker", fail
+        polynomial_system_services.application.verification._checker_executor,
+        "execute",
+        fail,
     )
     result = polynomial_system_services.core.capabilities.invoke(
         CapabilityRequest(

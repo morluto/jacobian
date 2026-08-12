@@ -6,10 +6,15 @@ from pathlib import Path
 
 import pytest
 
-import jacobian.implementation as implementation
+import jacobian.checker_identity as checker_identity
+from jacobian.checker_identity import (
+    CheckerManifestError,
+    build_checker_manifest,
+    checker_implementation_digest,
+    require_manifest_unchanged,
+)
 from jacobian.implementation import (
     ImplementationError,
-    checker_source_digest,
     package_source_digest,
 )
 
@@ -59,7 +64,7 @@ def test_digest_binds_package_data(
     assert before != after
 
 
-def test_checker_digest_binds_execution_dependencies(
+def test_checker_manifest_binds_declared_execution_dependencies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     package = tmp_path / "checker_fixture"
@@ -68,25 +73,197 @@ def test_checker_digest_binds_execution_dependencies(
     (package / "checker.py").write_text(
         "def run(_request):\n    return {}\n", encoding="utf-8"
     )
-    runtime = tmp_path / "checker_runtime_fixture"
-    runtime.mkdir()
-    (runtime / "__init__.py").write_text("", encoding="utf-8")
-    dependency = runtime / "worker.py"
-    dependency.write_text("def main():\n    return 1\n", encoding="utf-8")
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setattr(
-        implementation,
-        "_CHECKER_RUNTIME_ENTRYPOINT",
-        "checker_runtime_fixture.worker:main",
+    helper = package / "helper.py"
+    helper.write_text("VALUE = 1\n", encoding="utf-8")
+    (package / "checker.py").write_text(
+        "from .helper import VALUE\n\ndef run(_request):\n    return VALUE\n",
+        encoding="utf-8",
     )
+    monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
 
-    before = checker_source_digest("checker_fixture.checker:run")
-    dependency.write_text("VALUE = 2\n", encoding="utf-8")
+    before = checker_implementation_digest(
+        build_checker_manifest(
+            "checker_fixture.checker:run",
+            provider_runtime=None,
+            passive_contract_uris=(),
+        )
+    )
+    helper.write_text("VALUE = 2\n", encoding="utf-8")
     importlib.invalidate_caches()
-    after = checker_source_digest("checker_fixture.checker:run")
+    after = checker_implementation_digest(
+        build_checker_manifest(
+            "checker_fixture.checker:run",
+            provider_runtime=None,
+            passive_contract_uris=(),
+        )
+    )
 
     assert before != after
+
+
+def test_checker_manifest_separates_source_closures_and_worker_distributions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "checker_closure_fixture"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "checker.py").write_text(
+        "from .helper import VALUE\n\ndef run(_request):\n    return VALUE\n",
+        encoding="utf-8",
+    )
+    (package / "helper.py").write_text("VALUE = {}\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    manifest = build_checker_manifest(
+        "checker_closure_fixture.checker:run",
+        provider_runtime=None,
+        passive_contract_uris=(),
+    )
+
+    assert {item.module for item in manifest.checker_source_modules} >= {
+        "checker_closure_fixture.checker",
+        "checker_closure_fixture.helper",
+    }
+    assert "jacobian.checker_worker" in {
+        item.module for item in manifest.worker_source_modules
+    }
+    distributions = {
+        item.distribution.lower().replace("_", "-")
+        for item in manifest.python_distributions
+    }
+    assert {"pydantic", "pydantic-core", "rfc8785"} <= distributions
+
+
+def test_checker_manifest_rejects_tampered_python_distribution_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "distribution_identity_fixture"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "checker.py").write_text(
+        "def run(_request):\n    return {}\n", encoding="utf-8"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    manifest = build_checker_manifest(
+        "distribution_identity_fixture.checker:run",
+        provider_runtime=None,
+        passive_contract_uris=(),
+    )
+    original = manifest.python_distributions[0]
+    tampered_distribution = original.model_copy(update={"version": "tampered-version"})
+    tampered = manifest.model_copy(
+        update={
+            "python_distributions": (
+                tampered_distribution,
+                *manifest.python_distributions[1:],
+            )
+        }
+    )
+
+    with pytest.raises(CheckerManifestError, match="changed after authorization"):
+        require_manifest_unchanged(tampered)
+
+
+def test_python_distribution_identity_binds_installed_file_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "bound_dependency"
+    package.mkdir()
+    module = package / "__init__.py"
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+    metadata_root = tmp_path / "bound_dependency-1.0.dist-info"
+    metadata_root.mkdir()
+    (metadata_root / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: bound-dependency\nVersion: 1.0\n",
+        encoding="utf-8",
+    )
+    (metadata_root / "RECORD").write_text(
+        "bound_dependency/__init__.py,,\n"
+        "bound_dependency-1.0.dist-info/METADATA,,\n"
+        "bound_dependency-1.0.dist-info/RECORD,,\n",
+        encoding="utf-8",
+    )
+    distribution = checker_identity.metadata.PathDistribution(metadata_root)
+    monkeypatch.setattr(
+        checker_identity.metadata,
+        "distribution",
+        lambda _name: distribution,
+    )
+
+    before = checker_identity._measure_python_distribution("bound-dependency")
+    module.write_text("VALUE = 2\n", encoding="utf-8")
+    after = checker_identity._measure_python_distribution("bound-dependency")
+
+    assert before != after
+
+
+def test_checker_manifest_ignores_unrelated_checker_modules(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "isolated_checker_fixture"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "checker.py").write_text(
+        "def run(_request):\n    return {}\n", encoding="utf-8"
+    )
+    unrelated = package / "unrelated.py"
+    unrelated.write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    before = checker_implementation_digest(
+        build_checker_manifest(
+            "isolated_checker_fixture.checker:run",
+            provider_runtime=None,
+            passive_contract_uris=(),
+        )
+    )
+    unrelated.write_text("VALUE = 2\n", encoding="utf-8")
+    importlib.invalidate_caches()
+    after = checker_implementation_digest(
+        build_checker_manifest(
+            "isolated_checker_fixture.checker:run",
+            provider_runtime=None,
+            passive_contract_uris=(),
+        )
+    )
+
+    assert before == after
+
+
+def test_checker_manifest_rejects_a_changed_declared_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "changed_checker_fixture"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "checker.py").write_text(
+        "from .helper import VALUE\n\ndef run(_request):\n    return VALUE\n",
+        encoding="utf-8",
+    )
+    helper = package / "helper.py"
+    helper.write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    manifest = build_checker_manifest(
+        "changed_checker_fixture.checker:run",
+        provider_runtime=None,
+        passive_contract_uris=(),
+    )
+
+    helper.write_text("VALUE = 2\n", encoding="utf-8")
+    importlib.invalidate_caches()
+
+    with pytest.raises(CheckerManifestError, match="changed after authorization"):
+        require_manifest_unchanged(manifest)
 
 
 def test_digest_resolution_does_not_execute_package_initializers(

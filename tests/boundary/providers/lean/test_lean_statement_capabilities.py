@@ -12,7 +12,7 @@ from tests.support.provider_lean import (
 
 import jacobian.lean_frontend.statement as lean_statements
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
@@ -23,6 +23,7 @@ from jacobian.lean_frontend.statement import (
     LeanStatementProposalAdapter,
     install_lean_statement_capabilities,
 )
+from jacobian.operation_projection import project_operation_result
 from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermination
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -62,14 +63,16 @@ def _build_adapters(
 def test_propose_elaborates_valid_statement(tmp_path: Path) -> None:
     propose, _ = _build_adapters(tmp_path)
 
-    result = propose.invoke(
-        CapabilityRequest(
-            capability_id="lean.statement.propose",
-            input={
-                "environment": "CORE",
-                "informal_claim": "one plus one equals two",
-                "proposed_statement": "1 + 1 = 2",
-            },
+    result = project_operation_result(
+        propose.invoke(
+            CapabilityRequest(
+                capability_id="lean.statement.propose",
+                input={
+                    "environment": "CORE",
+                    "informal_claim": "one plus one equals two",
+                    "proposed_statement": "1 + 1 = 2",
+                },
+            )
         )
     )
 
@@ -86,14 +89,16 @@ def test_propose_elaborates_valid_statement(tmp_path: Path) -> None:
 def test_propose_reports_elaboration_failure(tmp_path: Path) -> None:
     propose, _ = _build_adapters(tmp_path)
 
-    result = propose.invoke(
-        CapabilityRequest(
-            capability_id="lean.statement.propose",
-            input={
-                "environment": "CORE",
-                "informal_claim": "bogus claim",
-                "proposed_statement": "1 + + 1 = 2",
-            },
+    result = project_operation_result(
+        propose.invoke(
+            CapabilityRequest(
+                capability_id="lean.statement.propose",
+                input={
+                    "environment": "CORE",
+                    "informal_claim": "bogus claim",
+                    "proposed_statement": "1 + + 1 = 2",
+                },
+            )
         )
     )
 
@@ -204,14 +209,16 @@ def test_propose_directly_elaborates_environment_bound_proposition(
     )
     propose, _ = _build_adapters(tmp_path)
 
-    result = propose.invoke(
-        CapabilityRequest(
-            capability_id="lean.statement.propose",
-            input={
-                "operation": "ELABORATE_PROPOSITION",
-                "environment": "CORE",
-                "proposed_statement": "1 = 1",
-            },
+    result = project_operation_result(
+        propose.invoke(
+            CapabilityRequest(
+                capability_id="lean.statement.propose",
+                input={
+                    "operation": "ELABORATE_PROPOSITION",
+                    "environment": "CORE",
+                    "proposed_statement": "1 = 1",
+                },
+            )
         )
     )
 
@@ -303,16 +310,18 @@ def test_direct_elaboration_parser_preserves_coded_lean_error() -> None:
 def test_compare_identical_statements(tmp_path: Path) -> None:
     _, compare = _build_adapters(tmp_path)
 
-    result = compare.invoke(
-        CapabilityRequest(
-            capability_id="lean.statement.compare",
-            input={
-                "environment": "CORE",
-                "statement_a": "1 + 1 = 2",
-                "statement_b": "1 + 1 = 2",
-                "axiom_set_a": [],
-                "axiom_set_b": [],
-            },
+    result = project_operation_result(
+        compare.invoke(
+            CapabilityRequest(
+                capability_id="lean.statement.compare",
+                input={
+                    "environment": "CORE",
+                    "statement_a": "1 + 1 = 2",
+                    "statement_b": "1 + 1 = 2",
+                    "axiom_set_a": [],
+                    "axiom_set_b": [],
+                },
+            )
         )
     )
 
@@ -331,16 +340,18 @@ def test_compare_identical_statements(tmp_path: Path) -> None:
 def test_compare_different_statements(tmp_path: Path) -> None:
     _, compare = _build_adapters(tmp_path)
 
-    result = compare.invoke(
-        CapabilityRequest(
-            capability_id="lean.statement.compare",
-            input={
-                "environment": "CORE",
-                "statement_a": "1 + 1 = 2",
-                "statement_b": "1 + 1 = 3",
-                "axiom_set_a": ["Classical.choice"],
-                "axiom_set_b": [],
-            },
+    result = project_operation_result(
+        compare.invoke(
+            CapabilityRequest(
+                capability_id="lean.statement.compare",
+                input={
+                    "environment": "CORE",
+                    "statement_a": "1 + 1 = 2",
+                    "statement_b": "1 + 1 = 3",
+                    "axiom_set_a": ["Classical.choice"],
+                    "axiom_set_b": [],
+                },
+            )
         )
     )
 
@@ -362,14 +373,16 @@ def test_compare_works_without_lean_for_syntactic_comparison(
     )
     _, compare = _build_adapters(tmp_path)
 
-    result = compare.invoke(
-        CapabilityRequest(
-            capability_id="lean.statement.compare",
-            input={
-                "environment": "CORE",
-                "statement_a": "1 + 1 = 2",
-                "statement_b": "1 + 1 = 2",
-            },
+    result = project_operation_result(
+        compare.invoke(
+            CapabilityRequest(
+                capability_id="lean.statement.compare",
+                input={
+                    "environment": "CORE",
+                    "statement_a": "1 + 1 = 2",
+                    "statement_b": "1 + 1 = 2",
+                },
+            )
         )
     )
 
@@ -472,14 +485,16 @@ def test_replaced_pinned_executable_is_rejected_before_execution(
 def test_compare_normalizes_whitespace(tmp_path: Path) -> None:
     _, compare = _build_adapters(tmp_path)
 
-    result = compare.invoke(
-        CapabilityRequest(
-            capability_id="lean.statement.compare",
-            input={
-                "environment": "CORE",
-                "statement_a": "1 + 1  =  2",
-                "statement_b": "1 + 1 = 2",
-            },
+    result = project_operation_result(
+        compare.invoke(
+            CapabilityRequest(
+                capability_id="lean.statement.compare",
+                input={
+                    "environment": "CORE",
+                    "statement_a": "1 + 1  =  2",
+                    "statement_b": "1 + 1 = 2",
+                },
+            )
         )
     )
 

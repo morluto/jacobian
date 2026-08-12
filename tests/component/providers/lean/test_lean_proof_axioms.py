@@ -16,6 +16,7 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.lean_frontend import proof_axioms
 from jacobian.lean_frontend.proof_axioms import install_lean_proof_axioms_capability
+from jacobian.operation_projection import project_operation_result
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -64,14 +65,16 @@ def test_proof_hole_inspection_ignores_strings_and_identifiers(
             {LeanEnvironment.CORE: SimpleNamespace(lean_commit="lean-test")},
             runtime,
         )
-        result = adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof.axioms.inspect",
-                input={
-                    "environment": "CORE",
-                    "statement": "True",
-                    "proof": proof,
-                },
+        result = project_operation_result(
+            adapter.invoke(
+                CapabilityRequest(
+                    capability_id="lean.proof.axioms.inspect",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "proof": proof,
+                    },
+                )
             )
         )
 

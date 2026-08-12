@@ -1,15 +1,11 @@
 """SQLite artifact metadata, identities, and descriptor lookups."""
 
-# The concrete owner is ArtifactRepository; see storage.repository for the
-# composed owner and its authoritative attribute initialization.
-# mypy: ignore_errors = True
-
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from jacobian.canonical import canonicalize_json, loads_strict_json
+from jacobian.canonical import CanonicalLimits, canonicalize_json, loads_strict_json
 from jacobian.contracts.artifacts import ArtifactManifest, ArtifactPutResult
 from jacobian.persistence import PersistenceCorruptionError, decode_persisted_model
 from jacobian.storage.errors import (
@@ -31,6 +27,11 @@ from jacobian.storage.identity import (
 )
 from jacobian.storage.models import StoredArtifact
 
+if TYPE_CHECKING:
+    from jacobian.storage.blobs import FilesystemBlobStore
+    from jacobian.storage.models import StorageLimits
+    from jacobian.storage.transactions import ArtifactTransactions
+
 
 @dataclass(frozen=True, slots=True)
 class _PreparedArtifact:
@@ -38,11 +39,24 @@ class _PreparedArtifact:
     identity: _ArtifactIdentity
 
 
-class ArtifactMetadata:
+class ArtifactMetadataStore:
     """Register, identify, persist, and validate immutable artifact metadata."""
 
+    def __init__(
+        self,
+        *,
+        limits: StorageLimits,
+        canonical_limits: CanonicalLimits,
+        transactions: ArtifactTransactions,
+        blobs: FilesystemBlobStore,
+    ) -> None:
+        self._limits = limits
+        self._canonical_limits = canonical_limits
+        self._transactions = transactions
+        self._blobs = blobs
+
     def _artifact_exists(self, artifact_uri: str) -> bool:
-        with self.connection() as connection:
+        with self._transactions.connection() as connection:
             row = connection.execute(
                 "SELECT 1 FROM artifacts WHERE artifact_uri = ?",
                 (artifact_uri,),
@@ -135,7 +149,7 @@ class ArtifactMetadata:
                 "version": version,
                 "definition": definition,
             },
-            limits=self.canonical_limits,
+            limits=self._canonical_limits,
         )
 
     def get_descriptor(
@@ -198,7 +212,7 @@ class ArtifactMetadata:
             summary=summary,
             allow_bootstrap_references=allow_bootstrap_references,
         )
-        canonical_bytes = canonicalize_json(payload, limits=self.canonical_limits)
+        canonical_bytes = canonicalize_json(payload, limits=self._canonical_limits)
         self._validate_artifact_size(canonical_bytes)
         prepared = self._prepare_identity(
             schema_uri=schema_uri,
@@ -218,9 +232,9 @@ class ArtifactMetadata:
         summary: str,
         allow_bootstrap_references: bool,
     ) -> None:
-        if len(summary) > self.limits.max_summary_chars:
+        if len(summary) > self._limits.max_summary_chars:
             raise StorageLimitError("artifact summary exceeds the configured limit")
-        if len(parents) > self.limits.max_parents:
+        if len(parents) > self._limits.max_parents:
             raise StorageLimitError(
                 "artifact parent count exceeds the configured limit"
             )
@@ -235,7 +249,7 @@ class ArtifactMetadata:
                     )
 
     def _validate_artifact_size(self, canonical_bytes: bytes) -> None:
-        if len(canonical_bytes) > self.limits.max_artifact_bytes:
+        if len(canonical_bytes) > self._limits.max_artifact_bytes:
             raise StorageLimitError("artifact exceeds the configured size limit")
 
     def _prepare_identity(
@@ -252,7 +266,7 @@ class ArtifactMetadata:
         return _PreparedArtifact(
             canonical_bytes=canonical_bytes,
             identity=_prepare_artifact_identity(
-                canonical_limits=self.canonical_limits,
+                canonical_limits=self._canonical_limits,
                 schema_uri=schema_uri,
                 semantics_uri=semantics_uri,
                 canonical_bytes=canonical_bytes,
@@ -281,10 +295,10 @@ class ArtifactMetadata:
                 canonicalizer_digest=CANONICALIZER_DIGEST,
             )
 
-        self._write_blob(canonical_bytes)
-        self._write_blob(identity.manifest_bytes)
+        self._blobs.write(canonical_bytes)
+        self._blobs.write(identity.manifest_bytes)
 
-        with self.connection() as connection:
+        with self._transactions.connection() as connection:
             connection.execute(
                 """
                 INSERT OR IGNORE INTO artifacts (
@@ -331,7 +345,7 @@ class ArtifactMetadata:
 
         manifest_digest = digest_from_uri(artifact_uri)
         committed_references: set[str] = set()
-        with self.connection() as connection:
+        with self._transactions.connection() as connection:
             row = connection.execute(
                 "SELECT * FROM artifacts WHERE artifact_uri = ?",
                 (artifact_uri,),
@@ -364,7 +378,7 @@ class ArtifactMetadata:
         if row is None:
             raise ArtifactNotFoundError(f"artifact is not committed: {artifact_uri}")
 
-        manifest_bytes = self._read_blob(manifest_digest)
+        manifest_bytes = self._blobs.read(manifest_digest)
         try:
             manifest = decode_persisted_model(
                 ArtifactManifest,
@@ -401,7 +415,7 @@ class ArtifactMetadata:
                 "manifest schema or semantics is not committed"
             )
 
-        canonical_bytes = self._read_blob(manifest.payload_digest)
+        canonical_bytes = self._blobs.read(manifest.payload_digest)
         recomputed_object_digest = framed_digest(
             OBJECT_FORMAT_VERSION,
             (
@@ -413,7 +427,7 @@ class ArtifactMetadata:
         )
         if recomputed_object_digest != manifest.object_digest:
             raise ArtifactIntegrityError("mathematical object digest mismatch")
-        payload = loads_strict_json(canonical_bytes, limits=self.canonical_limits)
+        payload = loads_strict_json(canonical_bytes, limits=self._canonical_limits)
         return StoredArtifact(
             artifact_uri=artifact_uri,
             manifest=manifest,
@@ -424,7 +438,7 @@ class ArtifactMetadata:
     def find_by_object_digest(self, object_digest: str) -> tuple[str, ...]:
         """Return every artifact URI carrying a mathematical object digest."""
 
-        with self.connection() as connection:
+        with self._transactions.connection() as connection:
             rows = connection.execute(
                 """
                 SELECT artifact_uri

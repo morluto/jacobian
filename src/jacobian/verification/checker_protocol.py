@@ -14,6 +14,7 @@ type CheckerWorkerErrorCode = Literal[
     "EXECUTION_FAILED",
     "INVALID_REQUEST",
     "SOURCE_CHANGED",
+    "UNDECLARED_IMPORT",
     "MALFORMED_RUNTIME",
     "RESPONSE_INVALID",
 ]
@@ -21,7 +22,7 @@ type CheckerWorkerErrorCode = Literal[
 
 class CheckerWorkerSuccess(ContractModel):
     decision: CheckerDecision
-    measured_checker_digest: Sha256Digest
+    measured_implementation_digest: Sha256Digest
     measured_runtime_digest: Sha256Digest | None
 
 

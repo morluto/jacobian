@@ -1,8 +1,9 @@
 """Rational optimization domain bundle."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.optimization.operations import RATIONAL_LINEAR_CAPABILITIES
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 

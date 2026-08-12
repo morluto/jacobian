@@ -153,3 +153,33 @@ class GraphEnumerationScopeArtifact(ContractModel):
     order: int = Field(ge=0, le=7)
     enumerated_count: int = Field(ge=0)
     backend_boundary: str = Field(min_length=1, max_length=512)
+
+
+class GraphEnumerationCandidate(ContractModel):
+    """One graph in a bounded Atlas enumeration window."""
+
+    graph_uri: ArtifactUri
+    graph: SimpleUndirectedGraph
+    order: int = Field(ge=0, le=7)
+    size: int = Field(ge=0)
+
+
+class GraphEnumerationOutput(ContractModel):
+    """Complete typed projection of one bounded Atlas window."""
+
+    graphs: tuple[GraphEnumerationCandidate, ...] = Field(max_length=1000)
+    total_count: int = Field(ge=0)
+    returned_count: int = Field(ge=0)
+    truncated: bool
+    scope_uri: ArtifactUri
+    backend: Literal["networkx.graph_atlas_g"] = "networkx.graph_atlas_g"
+    backend_version: str = Field(min_length=1, max_length=64)
+    backend_boundary: str = Field(min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def require_consistent_window(self) -> Self:
+        if self.returned_count != len(self.graphs):
+            raise ValueError("returned graph count must match the graph window")
+        if self.returned_count > self.total_count:
+            raise ValueError("returned graph count cannot exceed total count")
+        return self

@@ -24,7 +24,7 @@ from jacobian.contracts.verification import VerificationRecord
 from jacobian.providers.external_solver_runtime import drat_trim_provider_runtime
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.verification import CheckerExecutionError
+from jacobian.verification.errors import CheckerExecutionError
 
 
 def _fake_drat_trim(tmp_path: Path, body: str) -> Path:
@@ -207,11 +207,11 @@ def test_unsat_proof_is_verified_by_authorized_external_runtime(
     assert record_uri is not None
     record_artifact = runtime.core.store.get(record_uri)
     record = VerificationRecord.model_validate(record_artifact.payload)
-    assert record.checker_id == runtime.portfolio.sat_unsat_proof_checker.checker_id
     assert record.evidence_uri == certificate_uri
     checker = runtime.core.checkers.require_active(record.checker_id)
-    assert checker.provider_runtime == runtime.portfolio.drat_trim_runtime
-    assert record.checker_digest == checker.executable_digest
+    assert checker.implementation.provider_runtime is not None
+    assert checker.implementation.provider_runtime.provider == "drat-trim"
+    assert record.implementation_digest == checker.implementation_digest
     assert record.environment_digest.startswith("sha256:")
     assert len(record.environment_digest) == len("sha256:") + 64
     assert set(record_artifact.manifest.parents) == {
@@ -271,8 +271,6 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
         )
     )
 
-    assert without_references.portfolio.sat_unsat_proof_checker.checker_id is None
-    assert without_runtime.portfolio.sat_unsat_proof_checker.checker_id is None
     for runtime in (without_references, without_runtime):
         assert "sat.unsat_proof.verify" not in {
             descriptor.capability_id
@@ -315,7 +313,9 @@ def test_checker_operational_failure_never_creates_a_conclusion(
     def fail(**_kwargs: Any):
         raise exception
 
-    monkeypatch.setattr(runtime.services.verification, "_run_checker", fail)
+    monkeypatch.setattr(
+        runtime.services.verification._checker_executor, "execute", fail
+    )
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is expected_status

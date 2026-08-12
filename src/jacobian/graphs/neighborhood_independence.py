@@ -11,13 +11,12 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.exact import CanonicalRational
@@ -29,8 +28,10 @@ from jacobian.contracts.graph_invariants import (
     GraphNeighborhoodIndependenceReplayPayload,
     GraphNeighborhoodIndependenceRequest,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.graphs.artifacts import GraphArtifactResources, load_graph, nx, runtime_ms
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 
@@ -87,7 +88,7 @@ class GraphNeighborhoodIndependenceAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = GraphNeighborhoodIndependenceRequest.model_validate(
                 request.input
@@ -214,18 +215,17 @@ class GraphNeighborhoodIndependenceAdapter:
             total=total,
             average=average_wire,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=runtime_ms(started),
-            ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(
-                validated.graph_uri,
-                invariant_artifact.artifact_uri,
-                claim_artifact.artifact_uri,
-                certificate_artifact.artifact_uri,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=output, runtime_ms=runtime_ms(started)),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(
+                    validated.graph_uri,
+                    invariant_artifact.artifact_uri,
+                    claim_artifact.artifact_uri,
+                    certificate_artifact.artifact_uri,
+                ),
             ),
         )

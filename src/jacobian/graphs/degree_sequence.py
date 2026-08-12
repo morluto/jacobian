@@ -10,12 +10,11 @@ from typing import Any, Literal, cast
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.graph_degree_sequence import (
@@ -26,7 +25,6 @@ from jacobian.contracts.graph_degree_sequence import (
     GraphDegreeSequenceRequest,
     GraphDegreeSequenceResultArtifact,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import (
     GraphArtifactResources,
@@ -36,6 +34,9 @@ from jacobian.graphs.artifacts import (
 from jacobian.graphs.artifacts import (
     graph_payload as canonical_graph_payload,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.provider_runtime import known_provider_runtime
 
 
@@ -92,7 +93,7 @@ class GraphDegreeSequenceAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = GraphDegreeSequenceRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -222,15 +223,14 @@ class GraphDegreeSequenceAdapter:
         ]
         if graph_artifact is not None:
             artifact_uris.insert(0, graph_artifact.artifact_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=runtime_ms(started),
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=output, runtime_ms=runtime_ms(started)),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=tuple(artifact_uris),
             ),
-            output=output.model_dump(mode="json", exclude_none=True),
-            artifact_uris=tuple(artifact_uris),
         )
 
 

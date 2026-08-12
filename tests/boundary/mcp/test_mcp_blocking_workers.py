@@ -15,7 +15,7 @@ from jacobian.adapters.mcp.context import (
     _runtime,
     _runtime_scope,
 )
-from jacobian.adapters.mcp.server import _runtime_lifespan
+from jacobian.adapters.mcp.lifecycle import runtime_lifespan
 from jacobian.adapters.mcp.tooling import (
     MCPBlockingWorkerRegistry,
     MCPBlockingWorkerShutdownError,
@@ -341,7 +341,7 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
                 acquire_runtime=lambda: RuntimeLease(Runtime()),  # type: ignore[arg-type]
                 worker_registry=registry,
             )
-            async with _runtime_lifespan(
+            async with runtime_lifespan(
                 None,
                 state=state,
                 close_owner=close_owners,

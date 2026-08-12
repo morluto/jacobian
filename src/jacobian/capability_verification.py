@@ -85,6 +85,11 @@ def _validate_inline_exact_record(
         )
     if result.output.get("checker_id") != record.checker_id:
         raise CapabilityError("verified capability output projects a different checker")
+    for field in ("claim_digest", "semantics_digest", "candidate_digest"):
+        if result.output.get(field) != getattr(record.bindings, field):
+            raise CapabilityError(
+                f"verified capability output projects a different {field}"
+            )
     projected_record = result.output.get("verification_record_uri")
     if projected_record is not None and projected_record != record_uri:
         raise CapabilityError(

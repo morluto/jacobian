@@ -34,6 +34,12 @@ effort, evaluator and telemetry-parser digests, MCP server metadata, tool
 schemas and descriptions, and catalog digest. Raw JSONL and stderr are retained
 with SHA-256 digests.
 
+Each Codex process receives a temporary isolated `HOME` and `CODEX_HOME` seeded
+with authentication only; user config, plugins, rules, memories, and ambient
+skills are not copied. Before model execution, the runner renders Codex's actual
+model-visible prompt, records the normalized skill names, sources, and digest,
+and fails if any file-backed skill escapes the isolated homes or workspace.
+
 The suite covers matrix, integer, polynomial, and independent-checker outcomes.
 It also includes negative cases whose `ABSTAIN` expectation permits no Jacobian
 tool calls or resource reads. Observations report discovery, exact inspection,
@@ -50,6 +56,9 @@ output rather than requiring a redundant operation or grading answer prose.
 Duration and token counts are observational. MCP calls, model-visible bytes,
 wire bytes, shell calls, errors, cached input, and uncached input remain
 separate diagnostics rather than proxies for mathematical correctness.
+The report also records empty-payload probes, failed operation attempts, exact
+repeated errors, and per-case rates across repetitions. These recovery metrics
+remain observational and never change a mathematical or verification verdict.
 
 To run the fixed Lean usability observation suite, select it explicitly:
 

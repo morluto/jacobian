@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.projective_geometry.arrangements import (
     PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY,
 )
 from jacobian.domains.projective_geometry.checkers import (
     PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
 )
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 

@@ -17,9 +17,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-CONFIG = ROOT / ".github" / "ci-config.json"
-CI_SHARDED_SUITES = ("domain", "composition")
-TIMING_SUITES = (*CI_SHARDED_SUITES, "benchmark")
+TIMING_SUITES = ("benchmark",)
 MAX_BYTES = 5 * 1024 * 1024
 MAX_ENTRIES = 10_000
 MAX_CANDIDATES = 5
@@ -61,9 +59,7 @@ class CrossOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
 def shard_count(suite: str) -> int:
     if suite not in TIMING_SUITES:
         raise ValueError(f"unsupported timing suite: {suite}")
-    if suite == "benchmark":
-        return 4
-    return int(ci_config()[f"{suite}_shard_count"])
+    return 4
 
 
 def artifact_name(suite: str) -> str:
@@ -72,29 +68,6 @@ def artifact_name(suite: str) -> str:
 
 def artifact_file(suite: str) -> str:
     return f"{suite}-test-durations.json"
-
-
-def ci_config() -> dict[str, Any]:
-    payload = json.loads(CONFIG.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError("ci-config.json must contain a JSON object")
-    for suite in CI_SHARDED_SUITES:
-        count = payload.get(f"{suite}_shard_count")
-        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
-            raise ValueError(f"{suite}_shard_count must be a positive integer")
-    for key in ("node_version_jscpd", "node_version_npm"):
-        value = payload.get(key)
-        if not isinstance(value, str) or not value:
-            raise ValueError(f"{key} must be a non-empty string")
-    seed = payload.get("pytest_randomly_shard_seed")
-    if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
-        raise ValueError("pytest_randomly_shard_seed must be a nonnegative integer")
-    return payload
-
-
-def node_version(role: str) -> str:
-    key = f"node_version_{role}"
-    return str(ci_config()[key])
 
 
 def pytest_split_version() -> str:
@@ -108,20 +81,6 @@ def pytest_split_version() -> str:
             if version:
                 return version
     raise ValueError("pytest-split pin not found in pyproject.toml")
-
-
-def emit_plan_outputs() -> None:
-    """Print GitHub Actions outputs for shard, Node, and pytest-split pins."""
-
-    config = ci_config()
-    for suite in CI_SHARDED_SUITES:
-        count = int(config[f"{suite}_shard_count"])
-        print(f"{suite}-shard-count={count}")
-        print(f"{suite}-shards={json.dumps(list(range(1, count + 1)))}")
-    print(f"node-version-jscpd={config['node_version_jscpd']}")
-    print(f"node-version-npm={config['node_version_npm']}")
-    print(f"pytest-randomly-shard-seed={config['pytest_randomly_shard_seed']}")
-    print(f"pytest-split-version={pytest_split_version()}")
 
 
 def warning(message: str) -> None:
@@ -345,17 +304,9 @@ def main() -> None:
         help="defaults to the pytest-split pin in pyproject.toml",
     )
 
-    subparsers.add_parser("emit-plan-outputs")
-    node_parser = subparsers.add_parser("node-version")
-    node_parser.add_argument("role", choices=("jscpd", "npm"))
-
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.output, args.suite)
-    elif args.command == "emit-plan-outputs":
-        emit_plan_outputs()
-    elif args.command == "node-version":
-        print(node_version(args.role))
     else:
         split_version = args.pytest_split_version or pytest_split_version()
         merge(

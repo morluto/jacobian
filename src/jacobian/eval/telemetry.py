@@ -258,6 +258,42 @@ def _mcp_call_signature(tool: str, arguments: object) -> tuple[str, str]:
     return tool, f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
+def _operation_recovery_metrics(
+    attempts: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Count neutral recovery signals without interpreting mathematical outcomes."""
+
+    failed_signatures: Counter[tuple[str, str]] = Counter()
+    empty_payload_probe_count = 0
+    failed_operation_attempt_count = 0
+    for attempt in attempts:
+        if attempt.get("successful") is not False:
+            continue
+        failed_operation_attempt_count += 1
+        if attempt.get("input") == {} and attempt.get("request_validation_failure"):
+            empty_payload_probe_count += 1
+        failed_signatures[
+            _mcp_call_signature(
+                "math.run.error",
+                {
+                    "capability_id": attempt.get("capability_id"),
+                    "input": attempt.get("input"),
+                    "terminal_status": attempt.get("terminal_status"),
+                    "error_digest": attempt.get("error_digest"),
+                    "diagnostic_codes": attempt.get("diagnostic_codes", []),
+                    "diagnostics": attempt.get("diagnostics", []),
+                },
+            )
+        ] += 1
+    return {
+        "empty_payload_probe_count": empty_payload_probe_count,
+        "failed_operation_attempt_count": failed_operation_attempt_count,
+        "repeated_error_count": sum(
+            count - 1 for count in failed_signatures.values() if count > 1
+        ),
+    }
+
+
 @dataclass
 class _AgentTranscriptTelemetry:
     mcp_calls: list[str] = field(default_factory=list)
@@ -337,6 +373,7 @@ def _record_describe_and_attempt(
     arguments: object,
     *,
     successful: bool,
+    item: Mapping[str, Any],
     response: Mapping[str, Any] | None,
 ) -> None:
     if tool == "math.find":
@@ -356,6 +393,8 @@ def _record_describe_and_attempt(
         "input": payload,
         "successful": successful,
     }
+    if not successful:
+        attempt.update(_mcp_failure_metadata(item, response))
     diagnostic_codes = _capability_diagnostic_codes(response)
     if diagnostic_codes:
         attempt["diagnostic_codes"] = diagnostic_codes
@@ -365,6 +404,52 @@ def _record_describe_and_attempt(
     telemetry.capability_attempts.append(attempt)
     if isinstance(capability_id, str):
         telemetry.capability_attempt_ids.append(capability_id)
+
+
+def _mcp_failure_metadata(
+    item: Mapping[str, Any],
+    response: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Return bounded failure identity for exact recovery aggregation."""
+
+    execution = response.get("execution") if isinstance(response, Mapping) else None
+    execution_status = (
+        execution.get("status") if isinstance(execution, Mapping) else None
+    )
+    item_status = item.get("status")
+    terminal_status = (
+        execution_status
+        if isinstance(execution_status, str)
+        else item_status
+        if isinstance(item_status, str)
+        else None
+    )
+    output = response.get("output") if isinstance(response, Mapping) else None
+    error_identity = {
+        "item_error": item.get("error"),
+        "response_error": response.get("error")
+        if isinstance(response, Mapping)
+        else None,
+        "output_error": output.get("error") if isinstance(output, Mapping) else None,
+        "diagnostics": (
+            response.get("diagnostics") if isinstance(response, Mapping) else None
+        ),
+    }
+    _, error_digest = _mcp_call_signature("math.run.error", error_identity)
+    request_validation_failure = _contains_value(
+        item,
+        field="code",
+        accepted=set(_PARAMETER_ERROR_CODES),
+    ) or _contains_value(
+        response,
+        field="stage",
+        accepted={"request_validation"},
+    )
+    return {
+        "terminal_status": terminal_status,
+        "error_digest": error_digest,
+        "request_validation_failure": request_validation_failure,
+    }
 
 
 def _capability_diagnostic_codes(
@@ -580,6 +665,7 @@ def _process_mcp_tool_call(
         tool,
         arguments,
         successful=not failed,
+        item=item,
         response=response,
     )
     if failed:
@@ -653,6 +739,7 @@ def _transcript_payload(telemetry: _AgentTranscriptTelemetry) -> dict[str, Any]:
         ],
         "capability_describe_index_calls": telemetry.capability_describe_index_calls,
         "capability_describe_exact_calls": telemetry.capability_describe_exact_calls,
+        **_operation_recovery_metrics(telemetry.capability_attempts),
     }
 
 

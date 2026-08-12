@@ -107,7 +107,7 @@ def test_normalization_checker_timeout_is_operational(
         {"expression": _expression(_variable("x"), variables=["x"])},
     )
     monkeypatch.setattr(
-        "jacobian.verification.service.execute_process",
+        "jacobian.verification.executor.execute_process",
         lambda *_args, **_kwargs: ProcessResult(
             termination=ProcessTermination.TIMED_OUT,
             returncode=None,

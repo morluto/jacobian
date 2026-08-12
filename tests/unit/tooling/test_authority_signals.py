@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.test_plan.authority_signals import has_verify_authority_signal
+from tools.test_architecture.authority_signals import has_verify_authority_signal
 
 
 def test_verified_token_does_not_match_unverified() -> None:

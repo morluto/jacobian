@@ -78,6 +78,9 @@ class ExactComputedVerificationOutput(ContractModel):
     result_uri: ArtifactUri | None = None
     witness_uri: ArtifactUri | None = None
     checker_id: CheckerUri
+    claim_digest: Sha256Digest | None = None
+    semantics_digest: Sha256Digest | None = None
+    candidate_digest: Sha256Digest | None = None
     verification_record_uri: ArtifactUri | None = None
     detail: str
 
@@ -88,6 +91,13 @@ class ExactComputedVerificationOutput(ContractModel):
             raise ValueError("only VERIFIED output may carry a true conclusion")
         if verified != (self.verification_record_uri is not None):
             raise ValueError("only VERIFIED output may carry a verification record")
+        digests = (
+            self.claim_digest,
+            self.semantics_digest,
+            self.candidate_digest,
+        )
+        if verified != all(digest is not None for digest in digests):
+            raise ValueError("only VERIFIED output must carry every checked digest")
         return self
 
 
@@ -105,13 +115,13 @@ class InlineExactVerificationRecord(ContractModel):
     being promoted into artifacts merely to support verification.
     """
 
-    record_schema_version: Literal["1"] = "1"
+    record_schema_version: Literal["3"] = "3"
     evidence_kind: Literal[EvidenceKind.WITNESS] = EvidenceKind.WITNESS
     witness_format: str
     operation_id: CapabilityId
     format_version: Literal["1"] = "1"
     checker_id: CheckerUri
-    checker_digest: Sha256Digest
+    implementation_digest: Sha256Digest
     runtime_digest: Sha256Digest | None = None
     environment_digest: Sha256Digest
     input_schema_uri: ArtifactUri

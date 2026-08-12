@@ -10,7 +10,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
@@ -29,6 +28,7 @@ from jacobian.contracts.polynomials import (
 from jacobian.contracts.results import (
     Conclusion,
 )
+from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
     PolynomialOperationResult,
     _polynomial_error,
@@ -98,7 +98,7 @@ class PolynomialIdentityAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialIdentityRequest,
             request.input,

@@ -6,13 +6,12 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.graph_composition import (
     GraphExplicitConstructionOutput,
@@ -25,11 +24,12 @@ from jacobian.graphs.artifacts import (
 from jacobian.graphs.conversions import graph_contract_from_value
 from jacobian.math.graphs import SimpleUndirectedGraph, explicit_graph
 from jacobian.operation_execution import execute_operation
-from jacobian.operation_projection import project_operation_result
+from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, OperationSpec
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
+from jacobian.validation_diagnostics import project_validation_errors
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,13 +88,12 @@ class GraphExplicitConstructionAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = GraphExplicitConstructionRequest.model_validate(request.input)
         except ValidationError as exc:
-            raw_errors = exc.errors(include_url=False, include_context=False)
-            errors = [dict(item) for item in raw_errors]
-            path_parts = raw_errors[0]["loc"] if raw_errors else ()
+            errors, validation_error_count = project_validation_errors(exc)
+            path_parts = errors[0]["loc"] if errors else ()
             path = ".".join(str(item) for item in path_parts) or None
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -114,13 +113,20 @@ class GraphExplicitConstructionAdapter:
                         "Correct the reported vertices or edges; validation completes "
                         "before any graph artifact is written."
                     ),
-                    details={"validation_errors": errors},
+                    details={
+                        "validation_error_count": validation_error_count,
+                        "validation_errors": errors,
+                        "validation_errors_omitted": max(
+                            0,
+                            validation_error_count - len(errors),
+                        ),
+                    },
                 )
             ) from exc
 
         terminal = execute_operation(self.spec, validated)
         if not isinstance(terminal, Completed):
-            return project_operation_result(
+            return OperationProjection(
                 operation_id=self.spec.operation_id,
                 version=self.spec.version,
                 terminal=terminal,
@@ -143,7 +149,7 @@ class GraphExplicitConstructionAdapter:
             order=len(graph.vertices),
             size=len(graph.edges),
         )
-        return project_operation_result(
+        return OperationProjection(
             operation_id=self.spec.operation_id,
             version=self.spec.version,
             terminal=terminal,

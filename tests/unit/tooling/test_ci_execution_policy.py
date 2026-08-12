@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import runpy
 import sys
 from collections.abc import Sequence
@@ -24,54 +23,15 @@ def test_pr_base_edits_trigger_ci() -> None:
     assert "edited" in pull_request_trigger
 
 
-def test_python_313_uses_the_narrow_compatibility_smoke() -> None:
+def test_wheel_job_covers_supported_pythons_and_313_compatibility_smoke() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    compatibility = workflow.split("  compatibility-test:", 1)[1].split(
-        "  python-test:", 1
-    )[0]
+    wheel = workflow.split("  wheel:", 1)[1].split("  lean:", 1)[0]
 
-    assert 'python-version: "3.13"' in compatibility
-    assert "make test-compatibility" in compatibility
-    assert "make test\n" not in compatibility
-
-
-def test_built_wheel_is_started_on_each_supported_python() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    validation = workflow.split("  validate-built-package:", 1)[1].split(
-        "  unit-test:", 1
-    )[0]
-
-    assert 'python-version: ["3.12", "3.13"]' in validation
-    assert "--only-binary :all:" in validation
-    assert '"$environment/bin/jacobian" --state-dir "$state_dir" init' in validation
-
-
-@pytest.mark.parametrize(
-    ("rule_name", "expected_suites", "excluded_suites"),
-    (
-        ("makefile", {"static", "build"}, {"lean", "npm", "provider"}),
-        (
-            "domain-mathematical-sources",
-            {"unit", "component", "domain", "static", "build"},
-            {"storage", "process", "mcp", "e2e", "lean", "npm"},
-        ),
-        (
-            "benchmark-ci-automation",
-            {"unit", "process", "static", "build"},
-            {"domain", "composition", "storage", "mcp", "e2e"},
-        ),
-    ),
-)
-def test_ci_impact_rules_keep_their_declared_lane_boundaries(
-    rule_name: str,
-    expected_suites: set[str],
-    excluded_suites: set[str],
-) -> None:
-    manifest = json.loads((ROOT / ".github/ci-impact.json").read_text(encoding="utf-8"))
-    rule = next(rule for rule in manifest["rules"] if rule["name"] == rule_name)
-
-    assert set(rule["suites"]) == expected_suites
-    assert not excluded_suites.intersection(rule["suites"])
+    assert 'python-version: ["3.12", "3.13"]' in wheel
+    assert "--only-binary :all:" in wheel
+    assert '"$environment/bin/jacobian" --state-dir "$state_dir" init' in wheel
+    assert "make test-compatibility" in wheel
+    assert "make test\n" not in wheel
 
 
 def test_global_timeout_is_not_a_pytest_deadline() -> None:
@@ -136,19 +96,29 @@ def test_local_hook_commands_have_parseable_entrypoints_and_arguments(
 def test_process_lane_is_invoked_by_ci() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "process-test:" in workflow
-    assert "run: make test-process" in workflow
+    assert "lane: [storage, process, mcp]" in workflow
+    assert "run: make test-${{ matrix.lane }}" in workflow
 
 
 def test_provider_opt_in_and_deployment_have_explicit_workflow_gates() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert "ci:provider" in workflow
-    assert "--include-provider" in workflow
-    assert "run-deploy: ${{ steps.classify.outputs.run-deploy }}" in workflow
-    assert "deployment-check:" in workflow
+    assert "ci:lean" in workflow
+    assert "ci:full" in workflow
     assert "run: make deploy-check" in workflow
-    assert "deployment-test:" in workflow
+    assert "name: Deployment Tests" in workflow
+    assert "name: required" in workflow
+
+
+def test_python_job_matches_ordinary_make_check_pytest() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "run: make test-ordinary" in workflow
+    assert "ORDINARY_PYTEST_FLAGS := -n 4 --dist worksteal --timeout=180" in makefile
+    assert "check: lint typecheck test-ordinary" in makefile
+    assert "quick: lint typecheck test-unit" in makefile
 
 
 def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> None:
@@ -207,38 +177,64 @@ def test_benchmark_stable_gate_validates_provenance_receipts_in_python() -> None
     assert "check_lane()" not in validation
 
 
-def test_product_ci_publishes_a_provenance_bound_plan_receipt() -> None:
+def test_product_ci_does_not_emit_a_plan_receipt() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    script = (ROOT / ".github/scripts/emit-plan-receipt").read_text(encoding="utf-8")
+
+    assert "python .github/scripts/emit-plan-receipt" not in workflow
+    assert "ci-plan-receipt" not in workflow
+    assert "classify-ci-paths" not in workflow
+    assert "kind must be 'benchmark'" in script
+    assert "CI or benchmark plan" not in script
+
+
+def test_paths_file_stays_on_harbor_planning() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "python .github/scripts/emit-plan-receipt" in workflow
-    assert "ci-plan-receipt" in workflow
-    assert "plan-receipt-digest" in workflow
+    assert "PATHS_FILE" not in makefile
+    assert "PATHS_FILE" in harbor
+    assert "PATHS_FILE" not in workflow
 
 
-def test_documentation_job_installs_uv_before_make_docs_linkcheck() -> None:
+def test_static_job_runs_docs_linkcheck() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    docs = workflow.split("  docs:", 1)[1].split("  security-audit:", 1)[0]
+    static = workflow.split("  static:", 1)[1].split("  python:", 1)[0]
+    action = (ROOT / ".github/actions/setup-python-tests/action.yml").read_text(
+        encoding="utf-8"
+    )
 
-    assert "astral-sh/setup-uv@" in docs
-    assert 'version: "0.11.28"' in docs
-    assert "run: make docs-linkcheck" in docs
+    assert "astral-sh/setup-uv@" in action
+    assert 'version: "0.11.28"' in action
+    assert "run: make docs-linkcheck" in static
+    assert "run: make npm-test" in static
+    assert 'node-version: "24"' in static
 
 
 def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
-    for workflow_name in ("ci.yml", "benchmarks.yml"):
-        workflow = (ROOT / ".github/workflows" / workflow_name).read_text(
-            encoding="utf-8"
-        )
+    workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 
-        assert "Plan receipt: \\`$(python" in workflow
-        assert "Plan receipt: \\\\`$(python" not in workflow
+    assert "Plan receipt: \\`$(python" in workflow
+    assert "Plan receipt: \\\\`$(python" not in workflow
 
 
-def test_required_ci_gates_fail_when_the_plan_is_cancelled() -> None:
+def test_required_ci_gates_fail_when_a_needed_job_is_cancelled() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    required = workflow.split("  required:", 1)[1].split("  python-test:", 1)[0]
 
     assert "treating gate as non-failure" not in workflow
-    assert workflow.count("if: ${{ always() }}") >= 8
+    assert "if: ${{ always() }}" in workflow
+    assert "name: required" in workflow
+    assert "name: Python Tests" in workflow
+    assert "name: Lean Tests" in workflow
+    assert "name: Deployment Tests" in workflow
+    assert (
+        "needs: [static, python, boundaries, wheel, coverage, lean, optional-providers]"
+    ) in required
+    assert "success|skipped" in required
+    assert "needs.optional-providers.result" in required
+    assert "needs.lean.result" in required
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:
@@ -260,30 +256,12 @@ def test_local_oracle_attempts_are_serialized_on_a_shared_docker_host() -> None:
     assert "export DOCKER_BUILDKIT=0 COMPOSE_BAKE=false" in harbor
 
 
-def test_composition_lane_uses_timing_shards() -> None:
+def test_product_ci_does_not_use_timing_shards() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "composition-shard-count:" in workflow
-    assert "composition-test:" in workflow
-    assert "--splits ${{ needs.plan.outputs.composition-shard-count }}" in workflow
-    assert "composition-test-durations-input" in workflow
-
-
-def test_timing_shard_configuration_matches_topology() -> None:
-    import tomllib
-
-    topology = tomllib.loads((ROOT / "tests/topology.toml").read_text(encoding="utf-8"))
-    config = json.loads((ROOT / ".github/ci-config.json").read_text(encoding="utf-8"))
-    timed_lanes = {
-        lane["name"] for lane in topology["lanes"] if lane["timing_sharding"]
-    }
-
-    assert timed_lanes == {"domain", "composition"}
-    assert {
-        key.removesuffix("_shard_count")
-        for key in config
-        if key.endswith("_shard_count")
-    } == timed_lanes
+    assert "composition-shard-count:" not in workflow
+    assert "--splits" not in workflow
+    assert "pytest-split" not in workflow
 
 
 def test_stress_lane_selects_only_property_tests_and_repeats_them() -> None:
@@ -294,7 +272,7 @@ def test_stress_lane_selects_only_property_tests_and_repeats_them() -> None:
     assert "--count=$(STRESS_COUNT)" in stress
 
 
-def test_ordering_lane_dispatches_through_the_semantic_runner() -> None:
+def test_ordering_lane_dispatches_through_named_make_targets() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     ordering = makefile.split("test-ordering:", 1)[1].split("duplicate-code:", 1)[0]
     workflow = (ROOT / ".github/workflows/scheduled-validation.yml").read_text(
@@ -309,6 +287,8 @@ def test_ordering_lane_dispatches_through_the_semantic_runner() -> None:
         in workflow
     )
     assert "ORDERING_LANE: ${{ matrix.lane }}" in workflow
+    assert "run: make security-audit" in workflow
+    assert "run: make duplicate-code" in workflow
 
 
 def test_static_validation_enforces_test_architecture() -> None:
@@ -320,14 +300,15 @@ def test_static_validation_enforces_test_architecture() -> None:
 
 
 def test_process_and_provider_lanes_have_explicit_resource_policies() -> None:
-    import tomllib
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    process = makefile.split("test-process:", 1)[1].split("test-mcp:", 1)[0]
+    provider = makefile.split("test-provider:", 1)[1].split("test-lean:", 1)[0]
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    manifest = tomllib.loads((ROOT / "tests/topology.toml").read_text(encoding="utf-8"))
-    lanes = {lane["name"]: lane for lane in manifest["lanes"]}
-
-    assert lanes["process"]["workers"] == 2
-    assert lanes["process"]["timeout_seconds"] == 120
-    assert lanes["process"]["required_environment"] == ["process-group"]
-    assert lanes["provider"]["workers"] == 1
-    assert lanes["provider"]["required_provider"] == "optional"
-    assert lanes["provider"]["ci"]["pull_request"] is False
+    assert "-n 2" in process
+    assert "--timeout=120" in process
+    assert "PYTEST_RUNNER" in process or "pytest_lifecycle.py" in process
+    assert "-n 1" in provider
+    assert "--timeout=180" in provider
+    assert "github.event_name != 'pull_request'" in workflow
+    assert "ci:provider" in workflow

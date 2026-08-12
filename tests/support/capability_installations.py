@@ -11,7 +11,7 @@ from jacobian.artifacts import ArtifactService
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 @contextmanager

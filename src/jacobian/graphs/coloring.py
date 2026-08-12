@@ -10,14 +10,14 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -29,15 +29,17 @@ from jacobian.contracts.graph_coloring import (
     GraphColoringEncodingRequest,
     GraphColoringEncodingScope,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.graphs.coloring_semantics import canonical_graph, coloring_cnf
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactService
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 from jacobian.verification_capabilities import certificate_verification_adapter
 
 _SEMANTICS_NAME = "jacobian.simple-undirected-graph-coloring"
@@ -197,7 +199,7 @@ class GraphColoringEncodingAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = GraphColoringEncodingRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -287,19 +289,21 @@ class GraphColoringEncodingAdapter:
             variable_count=len(resolved.cnf.variables),
             clause_count=len(resolved.cnf.clauses),
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(
-                cnf_artifact.artifact_uri,
-                claim.artifact_uri,
-                scope.artifact_uri,
-                candidate.artifact_uri,
-                certificate.artifact_uri,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(
+                    cnf_artifact.artifact_uri,
+                    claim.artifact_uri,
+                    scope.artifact_uri,
+                    candidate.artifact_uri,
+                    certificate.artifact_uri,
+                ),
             ),
         )

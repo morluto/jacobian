@@ -397,7 +397,7 @@ is first used. This warms Lean and filesystem caches without delaying MCP
 startup.
 
 Lean results are cached only for an exact content-addressed certificate and
-the currently active checker digest. The bounded in-memory cache holds 128
+the currently active checker implementation digest. The bounded in-memory cache holds 128
 entries; a changed proof, statement, environment, checker, or authorization
 state cannot reuse an entry. `math.find` for `lean.check` reports the
 cache policy and the MATHLIB warm-up state (`RUNNING`, `HEALTHY`, or
@@ -405,6 +405,19 @@ cache policy and the MATHLIB warm-up state (`RUNNING`, `HEALTHY`, or
 deployed smoke check with `statement: "True"`, `proof: "by trivial"`, and
 `environment: "MATHLIB"`. An unhealthy deployment must not recommend the
 MATHLIB profile.
+
+Lean declaration discovery keeps its rebuildable catalog indexes below
+`<state-root>/cache/lean-declarations`; the installer derives that location from
+the configured artifact-store root, so no checkout, release, home-directory, or
+VPS-specific path is embedded in the runtime. Index filenames bind the cache
+format, Lean environment, and measured pinned content identity while excluding
+the Mathlib checkout's absolute deployment root. Each index carries a complete
+row count and content digest; a truncated or modified copy is ignored and
+rebuilt. Exact typed search and inspect payloads also use a 128-entry, 32 MiB
+in-memory LRU and are discarded with the runtime. Copy the state root during a
+VPS migration. The declaration cache directory may instead be omitted or
+removed while the service is stopped; Jacobian rebuilds it from the pinned
+Lean/Mathlib environment.
 
 ## Container deployment
 

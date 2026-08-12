@@ -24,9 +24,9 @@ from jacobian.contracts.results import (
 
 
 class VerificationRecord(ContractModel):
-    record_schema_version: Literal["1"] = "1"
+    record_schema_version: Literal["3"] = "3"
     checker_id: CheckerUri
-    checker_digest: Sha256Digest
+    implementation_digest: Sha256Digest
     evidence_kind: EvidenceKind
     evidence_uri: ArtifactUri
     bindings: EvidenceBindings

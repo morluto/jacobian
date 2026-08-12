@@ -7,7 +7,7 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.lean import LeanEnvironment

@@ -7,8 +7,11 @@ import asyncio
 import hashlib
 import json
 import os
+import re
+import shutil
 import tempfile
 import time
+from collections import defaultdict
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
@@ -49,6 +52,12 @@ _CODEX_ENVIRONMENT = (
     "no_proxy",
 )
 _MCP_TOOL_APPROVAL_MODE = "approve"
+_SKILLS_BLOCK = re.compile(r"<skills_instructions>.*?</skills_instructions>", re.DOTALL)
+_SKILL_ENTRY = re.compile(
+    r"^- (?P<name>[^:\n]+): .* \((?P<kind>file|environment resource|"
+    r"orchestrator resource|custom resource): (?P<source>[^)\n]+)\)$",
+    re.MULTILINE,
+)
 
 
 class CueLevel(StrEnum):
@@ -357,6 +366,11 @@ def classify_visibility(
         "mcp_wire_bytes": telemetry.get("mcp_wire_bytes", 0),
         "mcp_model_visible_bytes": telemetry.get("mcp_model_visible_bytes", 0),
         "mcp_logical_payload_bytes": telemetry.get("mcp_logical_payload_bytes", 0),
+        "empty_payload_probe_count": telemetry.get("empty_payload_probe_count", 0),
+        "failed_operation_attempt_count": telemetry.get(
+            "failed_operation_attempt_count", 0
+        ),
+        "repeated_error_count": telemetry.get("repeated_error_count", 0),
     }
 
 
@@ -455,6 +469,7 @@ def _codex_arguments(
         "--ephemeral",
         "--skip-git-repo-check",
         "--ignore-user-config",
+        "--ignore-rules",
         "-C",
         str(workspace),
         "-s",
@@ -484,13 +499,146 @@ def _codex_arguments(
     return (*arguments, prompt)
 
 
-def _command_version(workspace: Path) -> str:
+def _prepare_isolated_codex_environment(
+    root: Path,
+    *,
+    source_environment: Mapping[str, str] | None = None,
+) -> tuple[Mapping[str, str], dict[str, Any]]:
+    """Build a clean Codex HOME/CODEX_HOME and copy authentication only."""
+
+    source = os.environ if source_environment is None else source_environment
+    isolated_home = root / "home"
+    isolated_codex_home = root / "codex-home"
+    isolated_home.mkdir(parents=True)
+    isolated_codex_home.mkdir()
+    source_home = Path(source.get("HOME", str(Path.home())))
+    source_codex_home = Path(source.get("CODEX_HOME", source_home / ".codex"))
+    source_auth = source_codex_home / "auth.json"
+    auth_seeded = source_auth.is_file()
+    if auth_seeded:
+        target_auth = isolated_codex_home / "auth.json"
+        shutil.copyfile(source_auth, target_auth)
+        target_auth.chmod(0o600)
+    environment = dict(
+        operator_environment(
+            source=source,
+            include=_CODEX_ENVIRONMENT,
+            declared={
+                "HOME": str(isolated_home),
+                "CODEX_HOME": str(isolated_codex_home),
+            },
+        )
+    )
+    return environment, {
+        "schema_version": "1",
+        "home_isolated": True,
+        "codex_home_isolated": True,
+        "user_config_loaded": False,
+        "user_rules_loaded": False,
+        "authentication_seeded": auth_seeded,
+    }
+
+
+def _normalized_skill_source(
+    source: str,
+    *,
+    workspace: Path,
+    environment: Mapping[str, str],
+) -> tuple[str, bool]:
+    roots = (
+        ("$CODEX_HOME", Path(environment["CODEX_HOME"])),
+        ("$HOME", Path(environment["HOME"])),
+        ("$WORKSPACE", workspace),
+    )
+    candidate = Path(source)
+    if not candidate.is_absolute():
+        return source, False
+    for label, root in roots:
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            continue
+        return str(Path(label) / relative), False
+    return source, True
+
+
+def _inspect_codex_skill_surface(
+    workspace: Path,
+    environment: Mapping[str, str],
+) -> dict[str, Any]:
+    """Render and record the skills actually visible to the evaluated Codex."""
+
+    result = run_operator_command(
+        "codex",
+        ("debug", "prompt-input", "evaluation skill-surface snapshot"),
+        cwd=workspace,
+        timeout_seconds=30,
+        stdout_limit_bytes=4 * 1024 * 1024,
+        stderr_limit_bytes=1024 * 1024,
+        environment=environment,
+    )
+    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
+        raise RuntimeError("codex skill-surface inspection failed")
+    try:
+        messages = json.loads(result.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "codex skill-surface inspection returned invalid JSON"
+        ) from error
+    blocks = [
+        match.group(0)
+        for message in messages
+        if isinstance(message, Mapping)
+        for content in message.get("content", [])
+        if isinstance(content, Mapping) and isinstance(content.get("text"), str)
+        for match in _SKILLS_BLOCK.finditer(content["text"])
+    ]
+    if len(blocks) != 1:
+        raise RuntimeError("codex prompt must expose exactly one skill surface")
+    records = []
+    external_file_sources = []
+    for match in _SKILL_ENTRY.finditer(blocks[0]):
+        source, external = _normalized_skill_source(
+            match.group("source"),
+            workspace=workspace,
+            environment=environment,
+        )
+        record = {
+            "name": match.group("name"),
+            "source_kind": match.group("kind"),
+            "source": source,
+        }
+        records.append(record)
+        if external and match.group("kind") == "file":
+            external_file_sources.append(source)
+    candidate_entries = [
+        line for line in blocks[0].splitlines() if line.startswith("- ")
+    ]
+    if len(records) != len(candidate_entries):
+        raise RuntimeError("codex skill-surface entries use an unknown format")
+    normalized_block = blocks[0]
+    for variable in ("CODEX_HOME", "HOME"):
+        normalized_block = normalized_block.replace(
+            environment[variable], f"${variable}"
+        )
+    normalized_block = normalized_block.replace(str(workspace), "$WORKSPACE")
+    return {
+        "skill_count": len(records),
+        "skills": records,
+        "external_file_sources": sorted(external_file_sources),
+        "model_visible_instructions_sha256": _sha256_bytes(
+            normalized_block.encode("utf-8")
+        ),
+    }
+
+
+def _command_version(workspace: Path, environment: Mapping[str, str]) -> str:
     result = run_operator_command(
         "codex",
         ("--version",),
         cwd=workspace,
         timeout_seconds=30,
-        environment=operator_environment(include=_CODEX_ENVIRONMENT),
+        environment=environment,
     )
     if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
         raise RuntimeError("codex --version failed")
@@ -508,11 +656,11 @@ def _run_case(
     mcp_url: str,
     timeout_seconds: float,
     tool_mode: ToolMode,
+    environment: Mapping[str, str],
 ) -> dict[str, Any]:
     stem = f"{case.case_id}-r{repetition:02d}"
     transcript_path = output / f"{stem}.jsonl"
     stderr_path = output / f"{stem}.stderr"
-    environment = operator_environment(include=_CODEX_ENVIRONMENT)
     command_start = time.monotonic()
     result = run_operator_command(
         "codex",
@@ -619,6 +767,52 @@ def _validate_mcp_url(value: str) -> None:
 def _build_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate per-run observations into the report summary block."""
 
+    runs_by_case: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    for run in runs:
+        runs_by_case[run["case_id"]].append(run)
+
+    def rate(numerator: int, denominator: int) -> float | None:
+        return round(numerator / denominator, 6) if denominator else None
+
+    case_repetition_metrics = []
+    for case_id, case_runs in sorted(runs_by_case.items()):
+        run_count = len(case_runs)
+        satisfied = sum(
+            run["classification"]["contract_satisfied"] for run in case_runs
+        )
+        command_failures = sum(
+            run["command"]["status"] != ToolCommandStatus.EXITED
+            or run["command"]["exit_code"] != 0
+            for run in case_runs
+        )
+        failed_attempts = sum(
+            run["classification"]["failed_operation_attempt_count"] for run in case_runs
+        )
+        repeated_errors = sum(
+            run["classification"]["repeated_error_count"] for run in case_runs
+        )
+        runs_with_empty_probe = sum(
+            run["classification"]["empty_payload_probe_count"] > 0 for run in case_runs
+        )
+        case_repetition_metrics.append(
+            {
+                "case_id": case_id,
+                "run_count": run_count,
+                "command_failure_count": command_failures,
+                "contract_satisfied_count": satisfied,
+                "contract_satisfaction_rate": rate(satisfied, run_count),
+                "empty_payload_probe_count": sum(
+                    run["classification"]["empty_payload_probe_count"]
+                    for run in case_runs
+                ),
+                "runs_with_empty_payload_probe": runs_with_empty_probe,
+                "empty_payload_probe_run_rate": rate(runs_with_empty_probe, run_count),
+                "failed_operation_attempt_count": failed_attempts,
+                "repeated_error_count": repeated_errors,
+                "repeated_error_rate": rate(repeated_errors, failed_attempts),
+            }
+        )
+
     return {
         "run_count": len(runs),
         "command_failure_count": sum(
@@ -671,6 +865,18 @@ def _build_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 sum(run["command"]["elapsed_seconds"] for run in runs), 6
             ),
         },
+        "recovery_totals": {
+            "empty_payload_probe_count": sum(
+                run["classification"]["empty_payload_probe_count"] for run in runs
+            ),
+            "failed_operation_attempt_count": sum(
+                run["classification"]["failed_operation_attempt_count"] for run in runs
+            ),
+            "repeated_error_count": sum(
+                run["classification"]["repeated_error_count"] for run in runs
+            ),
+        },
+        "case_repetition_metrics": case_repetition_metrics,
     }
 
 
@@ -696,9 +902,18 @@ def main() -> None:
         raise SystemExit(f"output directory already exists: {output}")
     surface = asyncio.run(inspect_surface(args.mcp_url, args.timeout_seconds))
     output.mkdir(parents=True)
-    with tempfile.TemporaryDirectory(prefix="jacobian-codex-visibility-") as raw:
+    with (
+        tempfile.TemporaryDirectory(prefix="jacobian-codex-visibility-") as raw,
+        tempfile.TemporaryDirectory(prefix="jacobian-codex-isolation-") as isolated,
+    ):
         workspace = Path(raw)
-        codex_version = _command_version(workspace)
+        environment, isolation = _prepare_isolated_codex_environment(Path(isolated))
+        skill_surface = _inspect_codex_skill_surface(workspace, environment)
+        if skill_surface["external_file_sources"]:
+            raise RuntimeError(
+                "isolated Codex prompt exposed external file-backed skills"
+            )
+        codex_version = _command_version(workspace, environment)
         runs = [
             _run_case(
                 case=case,
@@ -710,6 +925,7 @@ def main() -> None:
                 mcp_url=args.mcp_url,
                 timeout_seconds=args.timeout_seconds,
                 tool_mode=args.tool_mode,
+                environment=environment,
             )
             for case in selected_cases
             for repetition in range(1, args.repetitions + 1)
@@ -732,6 +948,8 @@ def main() -> None:
                 "telemetry_parser_sha256": _sha256_bytes(
                     (_ROOT / "src/jacobian/eval/telemetry.py").read_bytes()
                 ),
+                "isolation": isolation,
+                "skill_surface": skill_surface,
             },
             "codex_version": codex_version,
             "model": args.model,

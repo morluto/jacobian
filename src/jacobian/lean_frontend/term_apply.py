@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
@@ -22,7 +22,6 @@ from jacobian.contracts.capabilities import (
     CapabilityInvocationExample,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean import LeanDiagnosticPhase, LeanDiagnosticSource
 from jacobian.contracts.lean_exploration import LeanProofStateRequest
@@ -32,6 +31,9 @@ from jacobian.contracts.lean_term_apply import (
 )
 from jacobian.lean_frontend.exploration import _FORBIDDEN
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 
 _EXACT_PREFIX = "exact "
 
@@ -99,7 +101,7 @@ class LeanTermApplyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = LeanTermApplyRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -161,12 +163,18 @@ class LeanTermApplyAdapter:
                     hint="Retry the term application or report this transition.",
                 )
             ) from exc
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=delegated.execution,
-            output=output.model_dump(mode="json"),
-            artifact_uris=delegated.artifact_uris,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
+                runtime_ms=delegated.execution.runtime_ms,
+                detail=delegated.execution.detail,
+            ),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=delegated.artifact_uris,
+            ),
         )
 
 

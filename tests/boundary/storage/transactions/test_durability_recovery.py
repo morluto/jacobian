@@ -10,7 +10,7 @@ import pytest
 
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.storage.transactions import transaction_active_for
+from jacobian.storage.transactions import ArtifactTransactions, transaction_active_for
 
 
 def test_metadata_connections_use_full_synchronous_durability(tmp_path: Path) -> None:
@@ -37,7 +37,7 @@ def test_transaction_batches_blob_directory_syncs(
         payloads for payloads in payloads_by_prefix.values() if len(payloads) == 2
     )
     synced: list[Path] = []
-    real_sync_directory = store._sync_directory
+    real_sync_directory = store._transactions.sync_directory
 
     def record_sync(directory: Path) -> None:
         if directory == store.root:
@@ -46,14 +46,14 @@ def test_transaction_batches_blob_directory_syncs(
         synced.append(directory)
         real_sync_directory(directory)
 
-    monkeypatch.setattr(store, "_sync_directory", record_sync)
+    monkeypatch.setattr(store._transactions, "sync_directory", record_sync)
     with store.transaction():
-        first_digest = store._write_blob(payloads[0])
-        store._write_blob(payloads[1])
+        first_digest = store._blobs.write(payloads[0])
+        store._blobs.write(payloads[1])
         assert synced == []
         assert store.transaction_recovery_path.exists()
 
-    assert synced == [store._blob_path(first_digest).parent, store.blob_root]
+    assert synced == [store._blobs.blob_path(first_digest).parent, store.blob_root]
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows has no directory fsync")
@@ -61,7 +61,7 @@ def test_transaction_body_failure_flushes_before_reconciliation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = ArtifactRepository(tmp_path)
-    real_sync_directory = store._sync_directory
+    real_sync_directory = store._transactions.sync_directory
     synced: list[Path] = []
 
     def record_sync(directory: Path) -> None:
@@ -69,7 +69,7 @@ def test_transaction_body_failure_flushes_before_reconciliation(
             synced.append(directory)
         real_sync_directory(directory)
 
-    monkeypatch.setattr(store, "_sync_directory", record_sync)
+    monkeypatch.setattr(store._transactions, "sync_directory", record_sync)
     descriptor_uri = ""
     with (
         pytest.raises(RuntimeError, match="abort transaction"),
@@ -95,14 +95,14 @@ def test_persistent_directory_sync_failure_poisoned_until_reopen(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = ArtifactRepository(tmp_path)
-    real_sync_directory = store._sync_directory
+    real_sync_directory = store._transactions.sync_directory
 
     def fail_blob_prefix_sync(directory: Path) -> None:
         if directory.parent == store.blob_root:
             raise OSError("persistent directory sync failure")
         real_sync_directory(directory)
 
-    monkeypatch.setattr(store, "_sync_directory", fail_blob_prefix_sync)
+    monkeypatch.setattr(store._transactions, "sync_directory", fail_blob_prefix_sync)
     with (
         pytest.raises(StorageError, match="reopen the store to recover"),
         store.transaction(),
@@ -133,14 +133,14 @@ def test_recovery_sync_failure_leaves_marker_for_later_reopen(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = ArtifactRepository(tmp_path)
-    real_sync_directory = ArtifactRepository._sync_directory
+    real_sync_directory = ArtifactTransactions.sync_directory
 
-    def fail_blob_prefix_sync(self: ArtifactRepository, directory: Path) -> None:
+    def fail_blob_prefix_sync(self: ArtifactTransactions, directory: Path) -> None:
         if directory.parent == self.blob_root:
             raise OSError("persistent recovery sync failure")
         real_sync_directory(self, directory)
 
-    monkeypatch.setattr(ArtifactRepository, "_sync_directory", fail_blob_prefix_sync)
+    monkeypatch.setattr(ArtifactTransactions, "sync_directory", fail_blob_prefix_sync)
     with (
         pytest.raises(StorageError, match="reopen the store to recover"),
         store.transaction(),
@@ -155,7 +155,7 @@ def test_recovery_sync_failure_leaves_marker_for_later_reopen(
     with pytest.raises(OSError, match="persistent recovery sync failure"):
         ArtifactRepository(tmp_path)
     assert store.transaction_recovery_path.exists()
-    monkeypatch.setattr(ArtifactRepository, "_sync_directory", real_sync_directory)
+    monkeypatch.setattr(ArtifactTransactions, "sync_directory", real_sync_directory)
     assert not ArtifactRepository(tmp_path).transaction_recovery_path.exists()
 
 
@@ -165,14 +165,16 @@ def test_preopened_store_recovers_existing_marker_before_new_transaction(
 ) -> None:
     failed_store = ArtifactRepository(tmp_path)
     preopened_store = ArtifactRepository(tmp_path)
-    real_failed_sync = failed_store._sync_directory
+    real_failed_sync = failed_store._transactions.sync_directory
 
     def fail_blob_prefix_sync(directory: Path) -> None:
         if directory.parent == failed_store.blob_root:
             raise OSError("publication sync failure")
         real_failed_sync(directory)
 
-    monkeypatch.setattr(failed_store, "_sync_directory", fail_blob_prefix_sync)
+    monkeypatch.setattr(
+        failed_store._transactions, "sync_directory", fail_blob_prefix_sync
+    )
     with (
         pytest.raises(StorageError, match="reopen the store to recover"),
         failed_store.transaction(),
@@ -185,7 +187,7 @@ def test_preopened_store_recovers_existing_marker_before_new_transaction(
         )
     assert failed_store.transaction_recovery_path.exists()
 
-    real_write_marker = preopened_store._write_transaction_recovery_marker
+    real_write_marker = preopened_store._transactions.write_recovery_marker
     recovered_before_new_marker = False
 
     def assert_recovered_before_new_marker() -> None:
@@ -196,8 +198,8 @@ def test_preopened_store_recovers_existing_marker_before_new_transaction(
         real_write_marker()
 
     monkeypatch.setattr(
-        preopened_store,
-        "_write_transaction_recovery_marker",
+        preopened_store._transactions,
+        "write_recovery_marker",
         assert_recovered_before_new_marker,
     )
     with preopened_store.transaction():
@@ -220,14 +222,16 @@ def test_preopened_store_recovers_before_direct_repeated_descriptor_write(
 ) -> None:
     failed_store = ArtifactRepository(tmp_path)
     preopened_store = ArtifactRepository(tmp_path)
-    real_failed_sync = failed_store._sync_directory
+    real_failed_sync = failed_store._transactions.sync_directory
 
     def fail_blob_prefix_sync(directory: Path) -> None:
         if directory.parent == failed_store.blob_root:
             raise OSError("publication sync failure")
         real_failed_sync(directory)
 
-    monkeypatch.setattr(failed_store, "_sync_directory", fail_blob_prefix_sync)
+    monkeypatch.setattr(
+        failed_store._transactions, "sync_directory", fail_blob_prefix_sync
+    )
     failed_uri = ""
     with (
         pytest.raises(StorageError, match="reopen the store to recover"),
@@ -242,8 +246,8 @@ def test_preopened_store_recovers_before_direct_repeated_descriptor_write(
     assert failed_store.transaction_recovery_path.exists()
 
     recovery_sync_seen = False
-    real_preopened_sync = preopened_store._sync_directory
-    real_remove_marker = preopened_store._remove_transaction_recovery_marker
+    real_preopened_sync = preopened_store._transactions.sync_directory
+    real_remove_marker = preopened_store._transactions.remove_recovery_marker
 
     def observe_recovery_sync(directory: Path) -> None:
         nonlocal recovery_sync_seen
@@ -255,10 +259,12 @@ def test_preopened_store_recovers_before_direct_repeated_descriptor_write(
         assert recovery_sync_seen
         real_remove_marker()
 
-    monkeypatch.setattr(preopened_store, "_sync_directory", observe_recovery_sync)
     monkeypatch.setattr(
-        preopened_store,
-        "_remove_transaction_recovery_marker",
+        preopened_store._transactions, "sync_directory", observe_recovery_sync
+    )
+    monkeypatch.setattr(
+        preopened_store._transactions,
+        "remove_recovery_marker",
         assert_synced_before_marker_removal,
     )
     repeated_uri = preopened_store.register_descriptor(
@@ -323,14 +329,14 @@ def test_markerless_direct_sync_failure_is_synced_before_quota_clearance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = ArtifactRepository(tmp_path)
-    real_store_sync = store._sync_directory
+    real_store_sync = store._transactions.sync_directory
 
     def fail_blob_prefix_sync(directory: Path) -> None:
         if directory.parent == store.blob_root:
             raise OSError("direct publication sync failure")
         real_store_sync(directory)
 
-    monkeypatch.setattr(store, "_sync_directory", fail_blob_prefix_sync)
+    monkeypatch.setattr(store._transactions, "sync_directory", fail_blob_prefix_sync)
     with pytest.raises(StorageError, match="could not write artifact data"):
         store.register_descriptor(
             kind="schema",
@@ -345,11 +351,11 @@ def test_markerless_direct_sync_failure_is_synced_before_quota_clearance(
         ).fetchone()
     assert required_before_reopen == (1,)
 
-    real_sync_directory = ArtifactRepository._sync_directory
+    real_sync_directory = ArtifactTransactions.sync_directory
     observed_prefix_sync = False
 
     def assert_quota_still_requires_recovery(
-        self: ArtifactRepository, directory: Path
+        self: ArtifactTransactions, directory: Path
     ) -> None:
         nonlocal observed_prefix_sync
         if directory.parent == self.blob_root:
@@ -362,11 +368,11 @@ def test_markerless_direct_sync_failure_is_synced_before_quota_clearance(
         real_sync_directory(self, directory)
 
     monkeypatch.setattr(
-        ArtifactRepository, "_sync_directory", assert_quota_still_requires_recovery
+        ArtifactTransactions, "sync_directory", assert_quota_still_requires_recovery
     )
     recovered = ArtifactRepository(tmp_path)
     assert observed_prefix_sync
-    assert recovered._blob_bytes_committed() > 0
+    assert recovered._blobs.blob_bytes_committed() > 0
     with recovered.connection() as connection:
         required_after_reopen = connection.execute(
             "SELECT reconciliation_required FROM blob_quota WHERE id = 0"

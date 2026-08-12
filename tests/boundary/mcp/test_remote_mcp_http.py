@@ -30,7 +30,7 @@ def test_authenticated_streamable_http_isolates_tenant_memory(
 ) -> None:
     revision = "a" * 40
     monkeypatch.setattr(
-        "jacobian.adapters.mcp.server.load_deployment_identity",
+        "jacobian.adapters.mcp.remote.load_deployment_identity",
         lambda: DeploymentIdentity(
             revision=revision,
             package_version=version("jacobian"),

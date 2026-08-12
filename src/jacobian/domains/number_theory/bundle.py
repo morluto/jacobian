@@ -5,13 +5,13 @@ from __future__ import annotations
 import platform
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.number_theory.checkers import NUMBER_THEORY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.number_theory.derived import DERIVED_NUMBER_THEORY_CAPABILITIES
 from jacobian.domains.number_theory.divisibility import DIVISIBILITY_CAPABILITIES
 from jacobian.domains.number_theory.modular import MODULAR_CAPABILITIES
 from jacobian.domains.number_theory.primes import PRIME_CAPABILITIES
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
 )

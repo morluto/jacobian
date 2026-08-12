@@ -13,7 +13,7 @@ _DIGEST = "sha256:" + "c" * 64
 def _record(**updates: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "checker_id": _CHECKER_URI,
-        "checker_digest": _DIGEST,
+        "implementation_digest": _DIGEST,
         "evidence_kind": "WITNESS",
         "evidence_uri": _ARTIFACT_URI,
         "bindings": {

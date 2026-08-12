@@ -156,11 +156,22 @@ def test_doctor_distinguishes_available_unavailable_and_incompatible_imports(
         expected="==1.3.4",
         profile_name="core",
     )
+    unavailable_from_external_doctor = profiles._distribution_diagnostic(
+        requirement="cvc5",
+        distribution="cvc5",
+        expected="==1.3.4",
+        profile_name="external-proof",
+    )
 
     assert [available.status, incompatible.status, unavailable.status] == [
         "available",
         "incompatible",
         "unavailable",
     ]
-    assert unavailable.recovery == "Run `make setup PROFILE=core`"
+    assert unavailable.recovery == "Run `make setup`"
     assert unavailable.documentation == profiles.PROFILE_DOCUMENTATION
+    assert unavailable_from_external_doctor.recovery == "Run `make setup`"
+    assert (
+        unavailable_from_external_doctor.documentation
+        == profiles.NATIVE_PROVIDER_DOCUMENTATION
+    )

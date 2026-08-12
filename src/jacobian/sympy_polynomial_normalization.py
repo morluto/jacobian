@@ -11,7 +11,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
@@ -19,9 +20,9 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.polynomial_expressions import (
+    POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES,
     SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION,
     PolynomialExpansionTermBudgetError,
     PolynomialExpressionNormalizeOutput,
@@ -29,7 +30,12 @@ from jacobian.contracts.polynomial_expressions import (
 )
 from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.operation_projection import OperationProjection
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
+from jacobian.polynomials._support import (
+    PolynomialOperationResult,
+    _completed_projection,
+)
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessResult,
@@ -44,6 +50,10 @@ from jacobian.schema_registry import model_schema
 from jacobian.sympy_polynomial_protocol import (
     make_sympy_polynomial_worker_request,
     parse_sympy_polynomial_worker_response,
+)
+from jacobian.validation_diagnostics import (
+    project_validation_errors,
+    validation_error_message,
 )
 from jacobian.worker_environment import worker_environment
 
@@ -161,6 +171,8 @@ class _SympyPolynomialNormalizationBackend:
 class SympyPolynomialExpressionNormalizeAdapter:
     """Normalize one safe typed expression to canonical sparse coefficients."""
 
+    typed_input = True
+
     def __init__(
         self,
         *,
@@ -220,7 +232,10 @@ class SympyPolynomialExpressionNormalizeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(
+        self,
+        request: CapabilityRequest,
+    ) -> OperationProjection:
         try:
             validated = PolynomialExpressionNormalizeRequest.model_validate(
                 request.input
@@ -277,12 +292,21 @@ class SympyPolynomialExpressionNormalizeAdapter:
                         },
                     )
                 ) from exc
-            validation_errors = _validation_errors(exc)
+            validation_errors, validation_error_count = _validation_errors(exc)
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_TYPED_POLYNOMIAL_EXPRESSION",
                     stage="input_validation",
-                    message=str(exc),
+                    message=(
+                        validation_error_message(
+                            exc,
+                            safe_messages=(
+                                POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES
+                            ),
+                        )
+                        if isinstance(exc, ValidationError)
+                        else str(exc)
+                    ),
                     path="expression",
                     schema_uri=self.expressions.installation.expression_schema_uri,
                     expected=(
@@ -294,7 +318,14 @@ class SympyPolynomialExpressionNormalizeAdapter:
                         "Declare every variable and use typed nodes; do not pass "
                         "formula strings or expression denominators."
                     ),
-                    details={"validation_errors": validation_errors},
+                    details={
+                        "validation_error_count": validation_error_count,
+                        "validation_errors": validation_errors,
+                        "validation_errors_omitted": max(
+                            0,
+                            validation_error_count - len(validation_errors),
+                        ),
+                    },
                 )
             ) from exc
 
@@ -329,21 +360,27 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 )
             ),
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        artifact_uris = (
+            (expression_uri, normalization_uri)
+            if normalization_uri is not None
+            else (expression_uri,)
+        )
+        if run.execution_status is ExecutionStatus.COMPLETED:
+            return _completed_projection(
+                descriptor=self.descriptor,
+                output=output,
+                runtime_ms=run.runtime_ms,
+                artifact_uris=artifact_uris,
+            )
+        return PolynomialOperationResult(
+            value=output,
             execution=Execution(
                 status=run.execution_status,
                 runtime_ms=run.runtime_ms,
                 detail=run.detail,
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(
-                (expression_uri, normalization_uri)
-                if normalization_uri is not None
-                else (expression_uri,)
-            ),
-        )
+            artifact_uris=artifact_uris,
+        ).project(self.descriptor)
 
 
 def _parse_worker_output(
@@ -410,19 +447,24 @@ def _expansion_budget_error(
     return None
 
 
-def _validation_errors(error: ValidationError | ValueError) -> list[dict[str, Any]]:
+def _validation_errors(
+    error: ValidationError | ValueError,
+) -> tuple[list[dict[str, Any]], int]:
     if isinstance(error, ValidationError):
-        return [
-            dict(item)
-            for item in error.errors(include_url=False, include_context=False)
-        ]
-    return [
-        {
-            "type": type(error).__name__,
-            "loc": ["expression"],
-            "msg": str(error),
-        }
-    ]
+        return project_validation_errors(
+            error,
+            safe_messages=POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES,
+        )
+    return (
+        [
+            {
+                "type": type(error).__name__,
+                "loc": ["expression"],
+                "msg": str(error),
+            }
+        ],
+        1,
+    )
 
 
 def _runtime_ms(started: float) -> int:

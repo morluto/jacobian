@@ -95,6 +95,16 @@ def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
     assert all(v.code != "subprocess-confined" for v in report.violations)
 
 
+def test_subprocess_in_select_affinity_shard_is_allowed(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tools/select_affinity_shard.py",
+        "import subprocess\n\nsubprocess.run(['pytest', '--collect-only'])\n",
+    )
+    report = check_architecture(tmp_path)
+    assert all(v.code != "subprocess-confined" for v in report.violations)
+
+
 def test_subprocess_in_deleted_e2e_fixture_is_rejected(tmp_path: Path) -> None:
     _write(
         tmp_path,

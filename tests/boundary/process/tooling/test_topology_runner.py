@@ -345,12 +345,15 @@ def test_lane_environment_forwards_only_allowlisted_lean_variables(
     assert lean["ELAN_HOME"] == fake_elan
     assert "JACOBIAN_TOPOLOGY_LEAK" not in lean
 
+    # Provider is ordinary (unsupervised): host env is inherited, including
+    # Lean toolchain variables when present.
     provider = lane_environment(topology.lane("provider"))
     assert provider["JACOBIAN_TEST_LANE"] == "provider"
     assert provider["PATH"] == os.environ["PATH"]
     assert provider["HOME"] == fake_home
     assert provider["ELAN_HOME"] == fake_elan
-    assert "JACOBIAN_TOPOLOGY_LEAK" not in provider
+    assert provider["JACOBIAN_TOPOLOGY_LEAK"] == "secret"
+    assert provider["JACOBIAN_PROCESS_SUPERVISION"] == "0"
 
     unit = lane_environment(topology.lane("unit"))
     assert unit["JACOBIAN_TEST_LANE"] == "unit"
@@ -358,6 +361,7 @@ def test_lane_environment_forwards_only_allowlisted_lean_variables(
     assert unit["JACOBIAN_PROCESS_SUPERVISION"] == "0"
     # Ordinary lanes inherit the host environment.
     assert unit["HOME"] == fake_home
+    assert unit["JACOBIAN_TOPOLOGY_LEAK"] == "secret"
 
 
 def test_supervised_lane_environment_never_forwards_unauthorized_host_variables(

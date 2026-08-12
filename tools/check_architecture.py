@@ -92,6 +92,10 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # process-supervised topology lanes still route through command_runner.
         PurePosixPath("tools/test_topology.py"),
         PurePosixPath("tools/development_profiles.py"),
+        # Affinity shard selection collects via a plain pytest child.
+        PurePosixPath("tools/select_affinity_shard.py"),
+        # Harbor planner helpers spawn bounded validation children.
+        PurePosixPath("benchmarks/validation/_planner_helpers.py"),
         # This clean-room verifier must independently replay the pinned Lean
         # protocol inside its isolated verifier image.  It cannot import the
         # repository command runner without widening the verifier build

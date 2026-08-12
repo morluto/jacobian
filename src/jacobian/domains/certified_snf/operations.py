@@ -36,7 +36,8 @@ CERTIFIED_SNF_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
             title="Compute a transformation-certified Smith normal form",
             description=(
                 "Compute the canonical Smith diagonal D and explicit unimodular "
-                "matrices U and V satisfying D = U A V for one bounded integer matrix."
+                "matrices U and V satisfying D = U A V for one integer matrix of "
+                "at most 16 by 16."
             ),
             request_type=CertifiedSmithNormalFormRequest,
             result_type=CertifiedSmithNormalFormResult,

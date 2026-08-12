@@ -18,3 +18,20 @@ def test_graph_input_errors_are_stable() -> None:
         graphs.diameter(nx.Graph([(0, 1), (2, 3)]))
     with pytest.raises(ValueError, match="undirected and simple"):
         graphs.triangle_count(nx.DiGraph([(0, 1)]))  # type: ignore[arg-type]
+
+
+def test_graph_construction_functions_use_immutable_graph_values() -> None:
+    explicit = graphs.explicit_graph(
+        ("c", "a", "b"),
+        (("b", "a"), ("c", "b")),
+    )
+
+    assert explicit.vertices == ("a", "b", "c")
+    assert explicit.edges == (("a", "b"), ("b", "c"))
+
+    complement = graphs.compose_graphs(
+        graphs.GraphCompositionInput(operation="COMPLEMENT", left=explicit)
+    )
+
+    assert complement.vertices == ("v0", "v1", "v2")
+    assert complement.edges == (("v0", "v2"),)

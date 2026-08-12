@@ -39,7 +39,9 @@ The supported modules and symbols are:
   `sum_rationals`, and `quotient`;
 - `jacobian.math.matrices`: `determinant`, `rank`, `rref`, `inverse`, and
   `trace`;
-- `jacobian.math.graphs`: `triangle_count`, `diameter`, and `is_eulerian`;
+- `jacobian.math.graphs`: `SimpleUndirectedGraph`, `GraphCompositionInput`,
+  `explicit_graph`, `compose_graphs`, `triangle_count`, `diameter`, and
+  `is_eulerian`;
 - `jacobian.math.polynomials`: `derivative`, `discriminant`, `divide`,
   `evaluate`, `factorization`, `gcdex`, `groebner_basis`, `integral`,
   `partial_fractions`, `resultant`, and `square_free_decomposition`;

@@ -58,7 +58,15 @@ PUBLIC_API = {
         "sign",
         "sum_rationals",
     ),
-    "jacobian.math.graphs": ("diameter", "is_eulerian", "triangle_count"),
+    "jacobian.math.graphs": (
+        "GraphCompositionInput",
+        "SimpleUndirectedGraph",
+        "compose_graphs",
+        "diameter",
+        "explicit_graph",
+        "is_eulerian",
+        "triangle_count",
+    ),
     "jacobian.math.matrices": (
         "adjugate",
         "characteristic_polynomial",

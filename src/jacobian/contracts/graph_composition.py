@@ -116,6 +116,17 @@ class GraphCompositionResultArtifact(ContractModel):
     backend_version: str = Field(min_length=1, max_length=64)
 
 
+class GraphCompositionOutput(ContractModel):
+    """Public v1 projection of one materialized graph composition."""
+
+    operation: CompositionOperation
+    result_graph_uri: ArtifactUri
+    result_graph: SimpleUndirectedGraph
+    composition_artifact_uri: ArtifactUri
+    backend: str = Field(min_length=1, max_length=128)
+    backend_version: str = Field(min_length=1, max_length=64)
+
+
 class GraphEnumerationRequest(ContractModel):
     """Request model for ``graph.enumerate.nonisomorphic``.
 

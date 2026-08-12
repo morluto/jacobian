@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_service import CapabilityInvocationError
+from jacobian.contracts.artifacts import ArtifactPutResult
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.graphs.atlas import networkx_loader
@@ -59,8 +60,29 @@ def graph_payload(graph: nx_type.Graph[Any]) -> dict[str, Any]:
     }
 
 
-def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Graph[str]:
-    """Load and validate one graph artifact against the installed graph contract."""
+def publish_graph(
+    resources: GraphArtifactResources,
+    graph: SimpleUndirectedGraph,
+    *,
+    parents: tuple[str, ...] = (),
+    summary: str,
+) -> ArtifactPutResult:
+    """Publish one graph value without changing its mathematical identity."""
+
+    return resources.artifacts.put(
+        schema_uri=resources.graph_schema_uri,
+        semantics_uri=resources.semantics_uri,
+        payload=graph.model_dump(mode="json"),
+        parents=parents,
+        summary=summary,
+    )
+
+
+def load_graph_value(
+    resources: GraphArtifactResources,
+    graph_uri: str,
+) -> SimpleUndirectedGraph:
+    """Load and validate one graph artifact as its immutable semantic value."""
 
     try:
         artifact = resources.store.get(graph_uri)
@@ -96,7 +118,7 @@ def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Gra
             )
         )
     try:
-        payload = SimpleUndirectedGraph.model_validate(artifact.payload)
+        return SimpleUndirectedGraph.model_validate(artifact.payload)
     except ValidationError as exc:
         raise CapabilityInvocationError(
             CapabilityDiagnostic(
@@ -108,6 +130,11 @@ def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Gra
                 hint="Recreate the graph through its owning capability.",
             )
         ) from exc
+
+
+def load_graph(resources: GraphArtifactResources, graph_uri: str) -> nx_type.Graph[str]:
+    """Load and validate one graph artifact against the installed graph contract."""
+    payload = load_graph_value(resources, graph_uri)
     graph: nx_type.Graph[str] = nx().Graph()
     graph.add_nodes_from(payload.vertices)
     graph.add_edges_from(payload.edges)
@@ -124,6 +151,8 @@ __all__ = [
     "GraphArtifactResources",
     "graph_payload",
     "load_graph",
+    "load_graph_value",
     "nx",
+    "publish_graph",
     "runtime_ms",
 ]

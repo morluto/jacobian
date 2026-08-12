@@ -45,7 +45,7 @@ jobs:
           fi
           echo "current=$current" >> "$GITHUB_OUTPUT"
       - if: steps.validated-head.outputs.current == 'true'
-        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
       - if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

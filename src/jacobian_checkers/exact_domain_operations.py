@@ -29,6 +29,8 @@ _MAX_RESIDUE_MODULUS = 1_000_000
 _MAX_MATRIX_DIMENSION = 32
 _MAX_MATRIX_INPUT_DIGITS = 256
 _MAX_MATRIX_OUTPUT_DIGITS = 32_768
+_MAX_NUMBER_THEORY_INPUT_DIGITS = 256
+_MAX_LCM_RESULT_DIGITS = 512
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -333,6 +335,47 @@ def check_integer_prime_factorization(
         operation_id="integer.compute.prime_factorization",
         witness_format="integer.prime-factorization.flint-replay",
         replay=_prime_factorization,
+    )
+
+
+def _euclidean_gcd(left: fmpz, right: fmpz) -> fmpz:
+    left = abs(left)
+    right = abs(right)
+    while right:
+        left, right = right, left % right
+    return left
+
+
+def _integer_lcm(source: dict[str, Any], result: dict[str, Any]) -> bool:
+    if set(source) != {"left", "right"} or set(result) != {"value"}:
+        return False
+    raw_left = source["left"]
+    raw_right = source["right"]
+    raw_result = result["value"]
+    if (
+        not isinstance(raw_left, str)
+        or not isinstance(raw_right, str)
+        or not isinstance(raw_result, str)
+        or len(raw_left.lstrip("-")) > _MAX_NUMBER_THEORY_INPUT_DIGITS
+        or len(raw_right.lstrip("-")) > _MAX_NUMBER_THEORY_INPUT_DIGITS
+        or len(raw_result) > _MAX_LCM_RESULT_DIGITS
+        or _INTEGER.fullmatch(raw_result) is None
+        or raw_result.startswith("-")
+    ):
+        raise ValueError("LCM source or result is outside checker scope")
+    left = _integer(raw_left)
+    right = _integer(raw_right)
+    divisor = _euclidean_gcd(left, right)
+    expected = fmpz(0) if divisor == 0 else abs((left // divisor) * right)
+    return bool(_integer(raw_result) == expected)
+
+
+def check_integer_lcm(request: dict[str, Any]) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="integer.compute.lcm",
+        witness_format="integer.lcm.flint-euclidean-replay",
+        replay=_integer_lcm,
     )
 
 
@@ -1125,6 +1168,7 @@ def check_matrix_smith_normal_form(request: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "check_integer_lcm",
     "check_integer_powerful_number",
     "check_integer_prime_factorization",
     "check_matrix_characteristic_polynomial",

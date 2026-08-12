@@ -9,7 +9,9 @@ import jacobian.lean_frontend.declarations as declarations
 _ENVIRONMENT_DIGEST = "sha256:" + "c" * 64
 
 
-def _session(tmp_path: Path, cache_path: Path) -> declarations._ReusableLeanQuerySession:
+def _session(
+    tmp_path: Path, cache_path: Path
+) -> declarations._ReusableLeanQuerySession:
     return declarations._ReusableLeanQuerySession(
         command=[str(tmp_path / "lean")],
         cwd=tmp_path,

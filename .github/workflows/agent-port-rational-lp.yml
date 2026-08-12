@@ -1,0 +1,69 @@
+name: agent-port-rational-lp
+
+on:
+  push:
+    branches:
+      - agent/verify-rational-lp-certificates
+
+permissions:
+  contents: write
+
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/verify-rational-lp-certificates
+          fetch-depth: 0
+      - name: Port rational LP checker
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one match in {path}: {old!r}, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "src/jacobian/domains/optimization/bundle.py",
+              "from jacobian.contracts.capabilities import CapabilityDiagnostic\n",
+              "from jacobian.contracts.capabilities import CapabilityDiagnostic\nfrom jacobian.domains.optimization.checkers import (\n    RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS,\n)\n",
+          )
+          replace_once(
+              "src/jacobian/domains/optimization/bundle.py",
+              "        capabilities=RATIONAL_LINEAR_CAPABILITIES,\n",
+              "        capabilities=RATIONAL_LINEAR_CAPABILITIES,\n        checker_declarations=RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS,\n",
+          )
+
+          Path("src/jacobian/domains/optimization/checkers.py").write_text('''"""Independent checker declarations owned by rational optimization."""\n\nfrom jacobian.checker_operations import ExactReplayCheckerDeclaration\nfrom jacobian.contracts.validated_analysis import RationalLinearProgramRequest\n\nRATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (\n    ExactReplayCheckerDeclaration(\n        "optimization.linear.rational_optimum.compute",\n        RationalLinearProgramRequest,\n        "check_rational_linear_optimum",\n        "optimization.linear.rational-optimum.fraction-replay",\n        replay_method="Python-FLINT exact rational primal/dual replay",\n        reason=(\n            "operator-authorized Python-FLINT checker independently replays "\n            "primal feasibility, dual feasibility, and strong-duality equality "\n            "without importing the SymPy producer"\n        ),\n    ),\n)\n\n__all__ = ["RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS"]\n''')
+
+          replace_once(
+              "src/jacobian_checkers/exact_domain_operations.py",
+              "def _factorization_value(source: dict[str, Any], *, positive: bool) -> Any:\n",
+              '''def _dot(left: list[fmpq], right: list[fmpq]) -> fmpq:\n    if len(left) != len(right):\n        raise ValueError("rational vectors have different dimensions")\n    return sum((a * b for a, b in zip(left, right, strict=True)), fmpq(0))\n\n\ndef _rational_linear_optimum(source: dict[str, Any], result: dict[str, Any]) -> bool:\n    if set(source) != {"program", "wall_seconds"}:\n        return False\n    if type(source["wall_seconds"]) is not int or not 1 <= source["wall_seconds"] <= 60:\n        raise ValueError("LP wall-clock budget is malformed")\n    program = source["program"]\n    if not isinstance(program, dict) or set(program) != {\n        "variables", "objective", "coefficients", "rhs"\n    }:\n        return False\n    if set(result) != {\n        "status",\n        "primal_candidate",\n        "dual_candidate",\n        "primal_objective",\n        "dual_objective",\n        "primal_residuals",\n        "dual_slacks",\n        "detail",\n    } or result["status"] != "CERTIFICATE_PRODUCED":\n        return False\n\n    variables = program["variables"]\n    coefficients_wire = program["coefficients"]\n    if (\n        not isinstance(variables, list)\n        or not variables\n        or len(variables) > 32\n        or len(set(variables)) != len(variables)\n        or not isinstance(coefficients_wire, list)\n        or not coefficients_wire\n        or len(coefficients_wire) > 64\n    ):\n        raise ValueError("LP dimensions are malformed")\n    objective = [_q(value) for value in program["objective"]]\n    rhs = [_q(value) for value in program["rhs"]]\n    coefficients = [[_q(value) for value in row] for row in coefficients_wire]\n    width = len(variables)\n    if (\n        len(objective) != width\n        or len(coefficients) != len(rhs)\n        or any(len(row) != width for row in coefficients)\n    ):\n        raise ValueError("LP dimensions are inconsistent")\n\n    if any(result[field] is None for field in (\n        "primal_candidate",\n        "dual_candidate",\n        "primal_objective",\n        "dual_objective",\n        "primal_residuals",\n        "dual_slacks",\n    )):\n        return False\n    primal = [_q(value) for value in result["primal_candidate"]]\n    dual = [_q(value) for value in result["dual_candidate"]]\n    if len(primal) != width or len(dual) != len(rhs):\n        raise ValueError("LP candidate dimensions are inconsistent")\n    primal_residuals = [\n        _dot(row, primal) - bound\n        for row, bound in zip(coefficients, rhs, strict=True)\n    ]\n    dual_slacks = [\n        objective[column]\n        - sum(\n            (coefficients[row][column] * dual[row] for row in range(len(rhs))),\n            fmpq(0),\n        )\n        for column in range(width)\n    ]\n    primal_objective = _dot(objective, primal)\n    dual_objective = _dot(rhs, dual)\n    return (\n        all(value >= 0 for value in primal)\n        and all(value == 0 for value in primal_residuals)\n        and all(value >= 0 for value in dual_slacks)\n        and primal_objective == dual_objective\n        and [_q(value) for value in result["primal_residuals"]] == primal_residuals\n        and [_q(value) for value in result["dual_slacks"]] == dual_slacks\n        and _q(result["primal_objective"]) == primal_objective\n        and _q(result["dual_objective"]) == dual_objective\n    )\n\n\ndef check_rational_linear_optimum(request: dict[str, Any]) -> dict[str, Any]:\n    return _run(\n        request,\n        operation_id="optimization.linear.rational_optimum.compute",\n        witness_format="optimization.linear.rational-optimum.fraction-replay",\n        replay=_rational_linear_optimum,\n    )\n\n\ndef _factorization_value(source: dict[str, Any], *, positive: bool) -> Any:\n''',
+          )
+          replace_once(
+              "src/jacobian_checkers/exact_domain_operations.py",
+              "__all__ = [\n",
+              "__all__ = [\n    \"check_rational_linear_optimum\",\n",
+          )
+
+          Path("tests/domain/optimization/test_rational_optimization_verification.py").write_text('''from __future__ import annotations\n\nfrom collections.abc import Iterator\nfrom copy import deepcopy\nfrom pathlib import Path\n\nimport pytest\nfrom tests.support.exact_domain import open_exact_domain_services\nfrom tests.support.services import DomainTestServices\n\nfrom jacobian.contracts.capabilities import CapabilityRequest\nfrom jacobian.contracts.results import ExecutionStatus\nfrom jacobian.domains.optimization import build_rational_optimization_bundle\n\n\ndef _q(num: int, den: int = 1) -> dict[str, str]:\n    return {"num": str(num), "den": str(den)}\n\n\ndef _program() -> dict[str, object]:\n    return {\n        "variables": ["x", "y"],\n        "objective": [_q(1), _q(2)],\n        "coefficients": [[_q(1), _q(1)]],\n        "rhs": [_q(1)],\n    }\n\n\n@pytest.fixture\ndef optimization_services(tmp_path: Path) -> Iterator[DomainTestServices]:\n    with open_exact_domain_services(\n        tmp_path / "state", build_rational_optimization_bundle()\n    ) as services:\n        yield services\n\n\ndef test_rational_lp_result_uses_independent_exact_replay(\n    optimization_services: DomainTestServices,\n) -> None:\n    payload = {"program": _program(), "wall_seconds": 10}\n    computed = optimization_services.core.capabilities.invoke(\n        CapabilityRequest(\n            capability_id="optimization.linear.rational_optimum.compute", input=payload\n        )\n    )\n    verified = optimization_services.core.capabilities.invoke(\n        CapabilityRequest(\n            capability_id="optimization.linear.rational_optimum.verify",\n            input={"input": payload, "candidate": computed.output["result"]},\n        )\n    )\n    assert computed.execution.status is ExecutionStatus.COMPLETED\n    assert verified.execution.status is ExecutionStatus.COMPLETED\n    assert verified.output["status"] == "VERIFIED"\n    assert verified.output["operation_id"] == "optimization.linear.rational_optimum.compute"\n    assert verified.verification_record_uri is not None\n    assert verified.output["verification_record_uri"] in verified.artifact_uris\n\n\ndef test_rational_lp_verifier_rejects_objective_inequality(\n    optimization_services: DomainTestServices,\n) -> None:\n    payload = {"program": _program(), "wall_seconds": 10}\n    computed = optimization_services.core.capabilities.invoke(\n        CapabilityRequest(\n            capability_id="optimization.linear.rational_optimum.compute", input=payload\n        )\n    )\n    candidate = deepcopy(computed.output["result"])\n    candidate["dual_candidate"] = [_q(0)]\n    candidate["dual_objective"] = _q(0)\n    candidate["dual_slacks"] = [_q(1), _q(2)]\n    rejected = optimization_services.core.capabilities.invoke(\n        CapabilityRequest(\n            capability_id="optimization.linear.rational_optimum.verify",\n            input={"input": payload, "candidate": candidate},\n        )\n    )\n    assert rejected.execution.status is ExecutionStatus.COMPLETED\n    assert rejected.output["status"] == "REJECTED"\n    assert rejected.output["conclusion"] == "UNKNOWN"\n    assert rejected.verification_record_uri is None\n''')
+          Path(".github/workflows/agent-port-rational-lp.yml").unlink()
+          PY
+      - name: Validate focused port
+        run: python -m compileall -q src/jacobian/domains/optimization src/jacobian_checkers/exact_domain_operations.py tests/domain/optimization/test_rational_optimization_verification.py
+      - name: Commit port
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat(checkers): verify rational LP optimum certificates"
+          git push origin HEAD:agent/verify-rational-lp-certificates

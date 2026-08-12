@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
+    IntegerPairRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
@@ -10,6 +11,19 @@ from jacobian.contracts.number_theory import (
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
 
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "integer.compute.lcm",
+        IntegerPairRequest,
+        "check_integer_lcm",
+        "integer.lcm.euclidean-replay",
+        entrypoint_module="jacobian_checkers.integer_lcm",
+        replay_method="standard-library Euclidean recurrence replay",
+        reason=(
+            "operator-authorized standard-library checker independently evaluates "
+            "the bounded least common multiple by a Euclidean recurrence without "
+            "calling math.lcm or importing producer code"
+        ),
+    ),
     ExactReplayCheckerDeclaration(
         "integer.compute.prime_factorization",
         FactorizationRequest,

@@ -69,8 +69,8 @@ The `lean` profile likewise uses the repository's pinned toolchain and manifest
 instead of a floating Lean installation.
 
 These profiles configure an agent client against a source checkout. For
-ordinary contributor work that only needs to run the test suite, the
-`make setup PROFILE=core` quick path installs the same complete Python backend
+ordinary contributor work that only needs to run the test suite, `make setup`
+installs the same complete Python backend
 stack without writing client configuration; see
 [CONTRIBUTING.md](../../CONTRIBUTING.md). Optional native backend installation is described in
 [Install native and formal providers](install-native-and-formal-providers.md).

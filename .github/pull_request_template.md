@@ -10,14 +10,14 @@
 Contributor quick path:
 
 ```sh
-make setup PROFILE=core
-make check-changed BASE=origin/main
+make setup
+make check
 ```
 
 If this change crosses a named boundary, add the explicitly relevant specialist
 lane(s) and list them below. Specialist lanes are troubleshooting/boundary
-work, not a routine gate; CI owns the full Lean/provider, coverage,
-compatibility, packaging, security, and exhaustive-matrix surface. See
+work, not a routine gate; CI owns Lean/provider (merge/main or label),
+coverage, compatibility, packaging, and the ordinary Python surface. See
 [CONTRIBUTING.md](../CONTRIBUTING.md) and the
 [testing strategy](../docs/reference/testing-strategy.md) for lane ownership.
 
@@ -31,7 +31,7 @@ compatibility, packaging, security, and exhaustive-matrix surface. See
 <!-- If this introduces a shared abstraction, name the two surviving production paths whose duplication it replaces in this PR. -->
 
 ## Checklist
-- [ ] `make check-changed BASE=origin/main` passes
+- [ ] `make check` passes
 - [ ] Explicitly relevant specialist validation is listed above (boundary, Lean, provider, Harbor/Oracle)
 - [ ] Harbor task or verifier changes ran `make harbor-prepare-task` then `make harbor-validate-task` (if applicable)
 - [ ] New ordinary operations fit the documented operation budget (if applicable)

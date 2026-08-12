@@ -1,7 +1,0 @@
-{
-  "domain_shard_count": 4,
-  "composition_shard_count": 2,
-  "node_version_jscpd": "20",
-  "node_version_npm": "24",
-  "pytest_randomly_shard_seed": 0
-}

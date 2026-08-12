@@ -61,14 +61,10 @@ jobs:
         with:
           version: "0.11.28"
           enable-cache: false
-      - id: node
-        name: Load npm Node version
-        if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
-        run: echo "node-version=$(.github/scripts/manage-test-timings node-version npm)" >> "$GITHUB_OUTPUT"
       - if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ steps.node.outputs.node-version }}
+          node-version: "24"
           package-manager-cache: false
       - if: steps.validated-head.outputs.current == 'true' && steps.release.outputs.prs_created == 'true'
         name: Synchronize release lockfiles

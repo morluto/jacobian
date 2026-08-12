@@ -1,6 +1,6 @@
 # Contributing to Jacobian
 
-Jacobian is a pre-stable 0.6.0 **math toolbox for agents**: atomic tools behind
+Jacobian is a pre-stable **math toolbox for agents**: atomic tools behind
 `math.find` / `math.run`, math-first results, agent-owned composition, and
 optional checker tools as **separate catalog IDs** (not dual-mode producers).
 Contributions should preserve that product model—see
@@ -16,26 +16,28 @@ Use the installed catalog and current references for present tool membership.
 
 ## Contributor quick path
 
-Most changes need only a light environment and the changed-path gate:
+Most changes need only the locked environment and the ordinary check:
 
 ```sh
-make setup PROFILE=core
-make check-changed BASE=origin/main
+make setup
+make check
 ```
 
-Then open a pull request. `make setup PROFILE=core` installs the locked
-development environment with the complete maintained Python backend stack.
-`make check-changed BASE=origin/main`
-runs format, type-checking, and the exact tests selected from your changed
-paths against that base ref. Open the PR once it is green, and add any
-explicitly relevant specialist validation called out below.
+Then open a pull request. `make setup` installs the locked development
+environment with the complete maintained Python backend stack. `make check`
+runs Ruff, mypy, and the same Lean-free ordinary pytest invocation CI uses.
+Open the PR once it is green, and add any explicitly relevant specialist
+validation called out below.
 
-CI owns the expensive correctness surface so the local loop stays fast. The
-hosted pipeline owns the supported Python and OS matrices, the full Lean and
-optional-provider environments, coverage enforcement, the compatibility smoke
-suite, packaging, the security audit, duplicate-code detection, and the
-exhaustive semantic-lane matrix. You do not need to reproduce those locally for
-a routine change.
+`make quick` is the cheaper loop: lint, types, and `tests/unit` only. The
+pre-push hook stays `make lint typecheck`. Focused debugging uses
+`uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
+Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
+
+CI always runs that ordinary Python surface plus storage/process/MCP
+boundaries and the wheel smoke. Lean and optional native/formal providers run
+on merge/main or with the `ci:lean` / `ci:provider` / `ci:full` labels. You do
+not need to reproduce those locally for a routine change.
 
 Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
 `make test-process`, `make test-mcp`, `make test-e2e`, `make test-domain`, and
@@ -43,16 +45,18 @@ Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
 confidence gate. Run one only when your change crosses that boundary or you are
 reproducing an environment-specific failure. The
 [testing strategy](docs/reference/testing-strategy.md) is the authoritative
-source for the change matrix, lane ownership, planning entry points, CI
-classification, and the escalation rules.
+source for the change matrix, directory ownership, and the escalation rules.
 
 ### When the quick path is not enough
 
 - **Documentation only:** `make docs-linkcheck` is the dedicated lane; CI runs
-  it too. See [Documentation](#documentation).
+  it too. See [Documentation](#documentation). Ordinary Python tests still run
+  on documentation PRs.
 - **Broad or unknown impact** (CI, dependencies, shared infrastructure): run
   `make check-static` plus the affected tests, and let CI own the fail-closed
   functional lanes.
+- **Lean or optional providers:** `make check-external` when those trees
+  change. CI owns the full Lean and optional-provider environments.
 - **Exhaustive local reproduction:** `make test-all-ci` is an explicit exception
   path, not a routine gate. Before it, verify that no other pytest or
   delegated-agent validation is running on the host, and never assign it to a
@@ -60,30 +64,20 @@ classification, and the escalation rules.
   Lean Debug workflows reproduce one pytest file or node in a prepared remote
   environment when the relevant local runtime is impractical.
 
-Preview the exact local test selectors with `make test-plan BASE=origin/main`
-and the hosted CI lane decision with `make ci-plan BASE=origin/main`. The two
-reports answer different questions: the local plan may run exact importing
-tests, while the hosted plan owns required semantic lanes and fail-closed
-infrastructure coverage and emits a provenance-bound plan receipt. The full
-command inventory, narrowing examples, diagnostic-duration overrides, and CI
-classification detail live in the
-[testing strategy](docs/reference/testing-strategy.md).
-
 ## Development environment
 
 Jacobian uses Python 3.12 and the uv release pinned in [`.uv-version`](.uv-version).
 
 ```sh
-make setup PROFILE=core          # locked dev environment and Python backends
+make setup          # locked dev environment and Python backends
 ```
 
-`make check` runs Ruff, mypy, and the unit lane; it is a useful local handoff.
-The pre-push hook intentionally runs only `make lint typecheck` so it stays
-below the interactive feedback budget. `make check-changed` combines the static
-edit-loop checks with exact changed-path test selection; `make check-static`
-adds dependency/dead-code checks and a package build when a focused change needs
-them. Run `make help` for the common command index and `make help-all` for
-lifecycle and diagnostic plumbing.
+`make check` is the PR-equivalent ordinary Python validation. `make quick` is
+lint, types, and unit tests. The pre-push hook intentionally runs only
+`make lint typecheck` so it stays below the interactive feedback budget.
+`make check-static` adds dependency/dead-code checks and a package build when a
+focused change needs them. Run `make help` for the common command index and
+`make help-all` for lifecycle and diagnostic plumbing.
 
 Run `make hooks` once to install commit-time formatting, syntax, secret,
 large-file, dead-code, and actionlint hooks plus the static
@@ -100,9 +94,8 @@ Every `make test-*` target accepts `TESTS=<file-or-node>` and extra pytest
 options through `PYTEST_ARGS`, and prints its ten slowest tests by default
 (override with `PYTEST_DIAGNOSTIC_ARGS=--durations=0`). Use
 `uv run --locked pytest --lf` after a failure and `uv run --locked pytest -n 0`
-while debugging. Do not use unfiltered `uv run pytest` as the complete-suite
-command: it mixes Lean into the general xdist pool, and pytest rejects that
-unsafe combination with the corresponding `make` targets in its error message.
+while debugging. Default `uv run pytest` is Lean-free; use `make test-storage`,
+`make test-process`, `make test-mcp`, or `make test-lean` for those trees.
 See the [testing strategy](docs/reference/testing-strategy.md) for the canonical
 lane commands and narrowing examples.
 
@@ -114,12 +107,12 @@ while another agent is working. Integrate their edits first, then run the
 planned checks on the final tree. Use isolated worktrees only when the workflow
 explicitly assigns them.
 
-Before final validation, use `make test-plan BASE=<revision>` to preview the
-changed-path selection and run the selected checks on the final tree. If the
-tree changes during validation, rerun checks whose evidence was invalidated by
+Before final validation, run `make check` on the final tree. If the tree
+changes during validation, rerun checks whose evidence was invalidated by
 that change; do not describe results from an earlier tree as final-tree
-validation. `make check-changed` is the normal local handoff; CI owns the
-exhaustive evidence described above.
+validation. `make check` is the normal local handoff; CI owns the exhaustive
+evidence described above. Use `make check-external` when Lean or optional
+providers change.
 
 ## Harbor and Oracle validation
 
@@ -238,11 +231,9 @@ matching `make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_provider(name)`, `performance`,
 `property`, and `destructive_process`. They do not replace directory ownership.
 
-Lane execution and CI path-impact rules are authored in
-[`tests/plan_manifest.toml`](tests/plan_manifest.toml) and compiled to
-[`tests/topology.toml`](tests/topology.toml) and
-[`.github/ci-impact.json`](.github/ci-impact.json) via `make compile-test-plan`.
-Do not hand-edit the generated projections. Prefer the hydration ladder in the
+Lane execution follows the test directory layout. Storage, process, MCP, and
+Lean stay on named Make targets because they need serial SQLite or kill-safe
+process supervision. Prefer the hydration ladder in the
 [testing strategy](docs/reference/testing-strategy.md): domain services before
 `attached_complete_runtime` before `authorized_complete_runtime` before
 `fresh_complete_runtime`. Inventory complete-runtime usage with
@@ -254,9 +245,5 @@ directory or module that needs them, and keep support modules to ordinary data
 builders or one stable test concept rather than hidden setup.
 
 The [testing strategy](docs/reference/testing-strategy.md) is the authoritative
-source for the change matrix, the canonical lane commands, planning entry
-points, CI classification, shard scheduling, marker policy, and the
-specialist-lane escalation rules. Compiled impact matching rules are additive,
-so a path may require several suites. Integration timing history is a
-scheduling hint produced by successful `main` runs; it is not committed state,
-and missing or invalid history falls back to equal-weight sharding.
+source for the change matrix, the canonical lane commands, directory ownership,
+and the specialist-lane escalation rules.

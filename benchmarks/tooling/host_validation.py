@@ -25,7 +25,7 @@ from benchmarks.tooling.validation_plan import (
 
 ROOT = Path(__file__).resolve().parents[2]
 TIMING_PATH = ROOT / ".ci" / "benchmark-test-durations.json"
-_CI_CONFIG = ROOT / ".github" / "ci-config.json"
+_PYTEST_RANDOMLY_SHARD_SEED = 0
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _SHA = re.compile(r"[0-9a-f]{40,64}\Z")
 _HOST_NAME = re.compile(r"[A-Za-z0-9_.-]+\Z")
@@ -35,13 +35,9 @@ _MAX_TIMING_ENTRIES = 10_000
 
 
 def _shard_seed() -> int:
-    """Return the pinned pytest-randomly seed from ci-config.json."""
+    """Return the pinned pytest-randomly seed shared by every host shard."""
 
-    payload = json.loads(_CI_CONFIG.read_text(encoding="utf-8"))
-    seed = payload.get("pytest_randomly_shard_seed")
-    if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
-        raise ValueError("pytest_randomly_shard_seed must be a nonnegative integer")
-    return seed
+    return _PYTEST_RANDOMLY_SHARD_SEED
 
 
 @dataclass(frozen=True, slots=True)

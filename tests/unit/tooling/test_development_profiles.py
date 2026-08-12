@@ -162,5 +162,5 @@ def test_doctor_distinguishes_available_unavailable_and_incompatible_imports(
         "incompatible",
         "unavailable",
     ]
-    assert unavailable.recovery == "Run `make setup PROFILE=core`"
+    assert unavailable.recovery == "Run `make setup`"
     assert unavailable.documentation == profiles.PROFILE_DOCUMENTATION

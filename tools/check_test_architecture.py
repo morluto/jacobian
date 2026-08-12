@@ -13,16 +13,15 @@ import argparse
 import ast
 import fnmatch
 import json
-import tomllib
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from tools.test_plan.runtime_owners import allows_create_runtime
+from tools.test_architecture.lanes import DIRECTORY_LANES, owners, tier_for
+from tools.test_architecture.runtime_owners import allows_create_runtime
 
 _TEST_FILE = "test_*.py"
-_TOPOLOGY_CANDIDATES = (Path("tests/topology.toml"), Path("topology.toml"))
 
 # These are deliberately narrow names.  Importing a typed domain model from
 # ``jacobian.portfolio`` is fine; importing the explicit built-in plan or its
@@ -132,11 +131,16 @@ class TopologyManifest:
     lane_tiers: Mapping[str, str] = field(default_factory=dict)
 
     def owners(self, relative_path: str) -> tuple[str, ...]:
-        return tuple(
-            lane
+        matches = [
+            (lane, pattern)
             for lane, patterns in self.lanes.items()
-            if any(_matches_path(relative_path, pattern) for pattern in patterns)
-        )
+            for pattern in patterns
+            if _matches_path(relative_path, pattern)
+        ]
+        if not matches:
+            return ()
+        lane, _pattern = max(matches, key=lambda item: len(item[1]))
+        return (lane,)
 
     def tier_for(self, relative_path: str) -> str | None:
         owners = self.owners(relative_path)
@@ -201,71 +205,16 @@ class ArchitecturePolicyError(RuntimeError):
         super().__init__(report.render())
 
 
-def _collect_lane_entries(raw_lanes: list[Any]) -> list[tuple[str, Any]]:
-    """Collect ``(name, value)`` lane entries from the compiled ``[[lanes]]`` array."""
-    entries: list[tuple[str, Any]] = []
-    for value in raw_lanes:
-        if not isinstance(value, dict) or not isinstance(value.get("name"), str):
-            continue
-        entries.append((value["name"], value))
-    return entries
+def directory_ownership_manifest() -> TopologyManifest:
+    """Return lane ownership derived from test directory prefixes."""
 
-
-def _lanes_from_entries(
-    entries: list[tuple[str, Any]],
-) -> tuple[dict[str, tuple[str, ...]], dict[str, str]]:
-    lanes: dict[str, tuple[str, ...]] = {}
-    lane_tiers: dict[str, str] = {}
-    for name, value in entries:
-        patterns = _patterns_from_lane(value)
-        if patterns:
-            lanes[name] = patterns
-            tier = _tier_from_lane(value)
-            if tier:
-                lane_tiers[name] = tier
-    return lanes, lane_tiers
-
-
-def load_topology_manifest(path: Path) -> TopologyManifest | None:
-    """Read a topology manifest using the compiled ``[[lanes]]`` array shape."""
-
-    if not path.is_file():
-        return None
-    try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise ValueError(f"cannot read topology manifest {path}: {exc}") from exc
-
-    raw_lanes = raw.get("lanes", [])
-    if not isinstance(raw_lanes, list):
-        raise ValueError(f"topology manifest {path} lanes must be an array")
-    entries = _collect_lane_entries(raw_lanes)
-    lanes, lane_tiers = _lanes_from_entries(entries)
-    return TopologyManifest(lanes=lanes, path=path, lane_tiers=lane_tiers)
-
-
-def _patterns_from_lane(value: Any) -> tuple[str, ...]:
-    if isinstance(value, str):
-        return (value,)
-    if not isinstance(value, (dict, list, tuple)):
-        return ()
-    if isinstance(value, dict):
-        candidates = value.get("owned_paths", value.get("paths", value.get("path", ())))
-    else:
-        candidates = value
-    if isinstance(candidates, str):
-        candidates = (candidates,)
-    if not isinstance(candidates, (list, tuple)):
-        return ()
-    return tuple(
-        str(pattern) for pattern in candidates if isinstance(pattern, str) and pattern
+    lanes = {name: (prefix,) for name, _tier, prefix in DIRECTORY_LANES}
+    lane_tiers = {name: tier for name, tier, _prefix in DIRECTORY_LANES}
+    return TopologyManifest(
+        lanes=lanes,
+        path=Path("<directory-layout>"),
+        lane_tiers=lane_tiers,
     )
-
-
-def _tier_from_lane(value: Any) -> str | None:
-    if isinstance(value, dict) and isinstance(value.get("tier"), str):
-        return str(value["tier"])
-    return None
 
 
 def _matches_path(relative_path: str, pattern: str) -> bool:
@@ -762,22 +711,22 @@ def _composition_admission_violations(tree: ast.AST, relative: str) -> list[Viol
 def _file_violations(
     file_path: Path,
     project_root: Path,
-    manifest: TopologyManifest | None,
 ) -> list[Violation]:
     relative = file_path.relative_to(project_root).as_posix()
     path = PurePosixPath(relative)
     tier = _tier(path)
-    if tier is None and manifest is not None:
-        tier = manifest.tier_for(relative)
+    if tier is None:
+        tier = tier_for(relative)
     violations: list[Violation] = []
-    if manifest is not None:
-        owners = manifest.owners(relative)
-        if path.name.startswith("test_") and len(owners) != 1:
+    if path.name.startswith("test_"):
+        claimed = owners(relative)
+        if len(claimed) != 1:
             detail = (
-                "no topology lane claims this test file"
-                if not owners
+                "no directory lane claims this test file"
+                if not claimed
                 else (
-                    "test file belongs to multiple topology lanes: " + ", ".join(owners)
+                    "test file belongs to multiple directory lanes: "
+                    + ", ".join(claimed)
                 )
             )
             violations.append(Violation(relative, "lane-ownership", detail))
@@ -816,34 +765,18 @@ def check_test_architecture(
     *,
     mode: str = "strict",
     baseline: Path | Iterable[str] | Mapping[str, Any] | None = None,
-    topology: Path | None = None,
 ) -> ArchitectureReport:
     """Check test imports and ownership boundaries below ``root``.
 
     ``mode="strict"`` reports every violation.  ``mode="ratchet"`` still
     reports all observations but fails only for observations absent from the
-    supplied baseline.  The default topology path is ``tests/topology.toml``;
-    no lane check is invented when that manifest is not present yet.
+    supplied baseline.  Lane ownership is the test directory layout.
     """
 
     project_root = Path(root).resolve()
     if mode not in {"strict", "ratchet"}:
         raise ValueError("mode must be 'strict' or 'ratchet'")
-    topology_path = (
-        topology.resolve()
-        if topology is not None
-        else next(
-            (
-                project_root / candidate
-                for candidate in _TOPOLOGY_CANDIDATES
-                if (project_root / candidate).is_file()
-            ),
-            None,
-        )
-    )
-    manifest = (
-        load_topology_manifest(topology_path) if topology_path is not None else None
-    )
+    manifest = directory_ownership_manifest()
 
     violations: list[Violation] = []
     test_root = project_root / "tests"
@@ -853,7 +786,7 @@ def check_test_architecture(
         else []
     )
     for file_path in files:
-        violations.extend(_file_violations(file_path, project_root, manifest))
+        violations.extend(_file_violations(file_path, project_root))
 
     all_violations = tuple(
         sorted(violations, key=lambda item: (item.path, item.line or 0, item.code))
@@ -876,10 +809,9 @@ def assert_test_architecture(
     *,
     mode: str = "strict",
     baseline: Path | Iterable[str] | Mapping[str, Any] | None = None,
-    topology: Path | None = None,
 ) -> ArchitectureReport:
     report = check_test_architecture(
-        root, mode=mode, baseline=baseline, topology=topology
+        root, mode=mode, baseline=baseline
     )
     if report.failed:
         raise ArchitecturePolicyError(report)
@@ -891,10 +823,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("root", nargs="?", type=Path, default=Path.cwd())
     parser.add_argument("--mode", choices=("strict", "ratchet"), default="strict")
     parser.add_argument("--baseline", type=Path)
-    parser.add_argument("--topology", type=Path)
     args = parser.parse_args(argv)
     report = check_test_architecture(
-        args.root, mode=args.mode, baseline=args.baseline, topology=args.topology
+        args.root, mode=args.mode, baseline=args.baseline
     )
     print(report.render())
     return 1 if report.failed else 0

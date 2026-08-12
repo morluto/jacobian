@@ -11,7 +11,7 @@ encode a required research sequence.
 | Change | First local check | Escalate when |
 | --- | --- | --- |
 | Documentation | `make docs-linkcheck` | Checked examples also run when their supported contract changes |
-| Python behavior | `make test-plan BASE=<revision>` and selected lane | Finish with `make check-changed BASE=<revision>` |
+| Python behavior | `make quick`, then `make check` | Add a named specialist lane when the change crosses that boundary |
 | Mathematical domain | Owning domain/component tests | Add composition only for real cross-domain handoff |
 | MCP projection | Focused MCP boundary tests | Add stdio/HTTP parity when transport behavior changes |
 | Checker protocol or authority | Focused checker and authority tests | Require an independent exact-diff review |
@@ -19,23 +19,23 @@ encode a required research sequence.
 | Harbor task input or verifier | `make harbor-validate-task DATASET=... TASKS=...` | Run exact Oracle after executable task/verifier changes |
 | Deployment entrypoint | `make deploy-check` | Include affected process checks for code changes |
 
-Before final validation, always preview the exact selection:
+Before final validation, run the ordinary check on the frozen tree:
 
 ```sh
-make test-plan BASE=origin/main
-make check-changed BASE=origin/main
+make setup
+make check
 ```
 
-Do not run the unfiltered pytest suite. Use the Make targets that own provider,
-Lean, storage, process, and composition isolation.
+Default `uv run pytest` collects the Lean-free ordinary `testpaths`. Use the
+Make targets that own storage, process, MCP, and Lean isolation. `make
+check-external` covers Lean and maintained-provider probes when those trees
+change.
 
 ## Test ownership
 
-[`tests/plan_manifest.toml`](../../tests/plan_manifest.toml) owns lanes, gates,
-and path-impact rules. `make compile-test-plan` projects it to
-[`tests/topology.toml`](../../tests/topology.toml) and
-[`ci-impact.json`](../../.github/ci-impact.json); do not hand-edit generated
-projections.
+The filesystem is the metadata. A test under `tests/domain/` is a domain test;
+Lean lives under `tests/boundary/providers/lean/`. Directory prefixes are
+exclusive (longest prefix wins).
 
 | Directory/lane | Evidence owner |
 | --- | --- |
@@ -47,7 +47,12 @@ projections.
 | `tests/boundary/process` | Worker identity, cancellation, resource enforcement |
 | `tests/boundary/mcp` | SDK schema, structured output, resources, stdio/HTTP behavior |
 | `tests/boundary/providers` | Optional provider readiness and identity |
+| `tests/boundary/providers/lean` | Pinned Lean/Mathlib boundary |
 | `tests/e2e` | Complete caller-visible journeys |
+
+Ordinary lanes invoke pytest directly. Three lanes wrap pytest in
+`tools/pytest_lifecycle.py` because child process trees can wedge: process,
+MCP, and Lean.
 
 Use the narrowest production graph that proves the assertion. Complete-runtime
 fixtures are reserved for complete inventory, cross-domain wiring, checker
@@ -67,8 +72,9 @@ make test-mcp
 make test-provider
 make test-lean
 make test-e2e
+make quick
 make check
-make check-changed BASE=origin/main
+make check-external
 make check-static
 ```
 
@@ -257,11 +263,11 @@ skill and exact task validation path when those files change.
 
 After implementation freezes the behavioral tree:
 
-1. run `make test-plan BASE=<revision>`;
-2. run the selected focused lanes;
+1. run `make check`;
+2. run any named specialist lane the change actually crossed;
 3. complete any required independent exact-diff review;
 4. resolve its consolidated findings;
-5. run `make check-changed BASE=<revision>` on the final tree; and
+5. rerun `make check` on the final tree; and
 6. report only evidence that actually ran, including material proof gaps.
 
 After any edit, rerun only checks whose evidence the edit invalidated. Do not

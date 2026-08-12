@@ -8,19 +8,6 @@ import pytest
 from tools.inventory_test_runtime import inventory_modules, main
 
 
-def _write_topology(root: Path) -> None:
-    tests = root / "tests"
-    tests.mkdir()
-    (tests / "topology.toml").write_text(
-        """
-[[lanes]]
-name = "composition"
-paths = ["tests/composition"]
-""".lstrip(),
-        encoding="utf-8",
-    )
-
-
 def _write_test(root: Path, relative: str, source: str) -> None:
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -31,7 +18,6 @@ def test_inventory_reports_owner_resources_fixtures_and_setup_weight(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _write_topology(tmp_path)
     _write_test(
         tmp_path,
         "tests/composition/test_runtime.py",
@@ -62,7 +48,6 @@ def test_runtime(attached_complete_runtime):
 def test_authorized_runtime_with_verification_behavior_is_justified(
     tmp_path: Path,
 ) -> None:
-    _write_topology(tmp_path)
     _write_test(
         tmp_path,
         "tests/composition/test_verified.py",
@@ -82,7 +67,6 @@ def test_verified(authorized_complete_runtime):
 def test_authorized_runtime_without_verification_behavior_is_flagged(
     tmp_path: Path,
 ) -> None:
-    _write_topology(tmp_path)
     _write_test(
         tmp_path,
         "tests/composition/test_catalog.py",

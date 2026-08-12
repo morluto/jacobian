@@ -1,0 +1,107 @@
+name: agent-port-determinant-64
+
+on:
+  push:
+    branches:
+      - agent/port-determinant-order-64
+
+permissions:
+  contents: write
+
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/port-determinant-order-64
+          fetch-depth: 0
+      - name: Port determinant-owned order bound
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one match in {path}: {old!r}, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "src/jacobian/contracts/matrix_operations.py",
+              "MAX_INPUT_SCALAR_DIGITS = 256\n",
+              "MAX_INPUT_SCALAR_DIGITS = 256\nMAX_DETERMINANT_MATRIX_DIMENSION = 64\n",
+          )
+          replace_once(
+              "src/jacobian/contracts/matrix_operations.py",
+              '''class MatrixDeterminantRequest(ContractModel):\n    """One bounded square matrix whose exact determinant is requested."""\n\n    matrix: RationalMatrix\n\n    @model_validator(mode="after")\n    def require_square(self) -> Self:\n        if len(self.matrix.entries) != len(self.matrix.entries[0]):\n            raise ValueError("determinant computation requires a square matrix")\n        require_matrix_scalar_digits(\n            self.matrix.entries,\n            maximum=MAX_INPUT_SCALAR_DIGITS,\n            label="determinant input",\n        )\n        return self\n''',
+              '''class DeterminantRationalMatrix(ContractModel):\n    """One determinant-owned exact rational matrix bounded independently."""\n\n    matrix_schema_version: Literal["1"] = "1"\n    domain: Literal["QQ"] = "QQ"\n    entries: tuple[tuple[CanonicalRational, ...], ...] = Field(\n        min_length=1, max_length=MAX_DETERMINANT_MATRIX_DIMENSION\n    )\n\n    @model_validator(mode="after")\n    def require_rectangular_nonempty_rows(self) -> Self:\n        column_count = len(self.entries[0])\n        if not 1 <= column_count <= MAX_DETERMINANT_MATRIX_DIMENSION:\n            raise ValueError("determinant matrix rows must contain between 1 and 64 entries")\n        if any(len(row) != column_count for row in self.entries):\n            raise ValueError("determinant matrix rows must all have the same length")\n        return self\n\n\nclass MatrixDeterminantRequest(ContractModel):\n    """One square matrix of order at most 64 whose determinant is requested."""\n\n    matrix: DeterminantRationalMatrix\n\n    @model_validator(mode="after")\n    def require_square(self) -> Self:\n        if len(self.matrix.entries) != len(self.matrix.entries[0]):\n            raise ValueError("determinant computation requires a square matrix")\n        require_matrix_scalar_digits(\n            self.matrix.entries,\n            maximum=MAX_INPUT_SCALAR_DIGITS,\n            label="determinant input",\n        )\n        return self\n''',
+          )
+          replace_once(
+              "src/jacobian/domains/matrix_lattice/capabilities.py",
+              '        "Compute the determinant of one square matrix over QQ with SymPy\'s exact Bareiss algorithm.",\n',
+              '        "Compute the determinant of one square matrix over QQ through order 64 with SymPy\'s exact Bareiss algorithm.",\n',
+          )
+          replace_once(
+              "src/jacobian/domains/matrix_lattice/capabilities.py",
+              '        version="2",\n    ),\n    matrix_operation(\n        "matrix.rank.compute",\n',
+              '        version="3",\n    ),\n    matrix_operation(\n        "matrix.rank.compute",\n',
+          )
+          replace_once(
+              "src/jacobian/domains/matrix_lattice/conversions.py",
+              "from jacobian.contracts.matrices import IntegerMatrix, RationalMatrix\n",
+              "from jacobian.contracts.matrices import IntegerMatrix, RationalMatrix\nfrom jacobian.contracts.matrix_operations import DeterminantRationalMatrix\n",
+          )
+          replace_once(
+              "src/jacobian/domains/matrix_lattice/conversions.py",
+              "def rational_matrix_to_sympy(matrix: RationalMatrix) -> Any:\n",
+              "def rational_matrix_to_sympy(\n    matrix: RationalMatrix | DeterminantRationalMatrix,\n) -> Any:\n",
+          )
+          replace_once(
+              "src/jacobian/domains/matrix_lattice/kernels.py",
+              '''def _exact_matrix(value: MatrixBase) -> MatrixBase:\n    if not isinstance(value, MatrixBase):\n        raise TypeError("matrix must be a SymPy MatrixBase")\n    if not 1 <= value.rows <= 32 or not 1 <= value.cols <= 32:\n        raise ValueError("matrix dimensions must be between 1 and 32")\n''',
+              '''_DEFAULT_MAX_MATRIX_DIMENSION = 32\n_DETERMINANT_MAX_MATRIX_DIMENSION = 64\n\n\ndef _exact_matrix(\n    value: MatrixBase, *, maximum_dimension: int = _DEFAULT_MAX_MATRIX_DIMENSION\n) -> MatrixBase:\n    if not isinstance(value, MatrixBase):\n        raise TypeError("matrix must be a SymPy MatrixBase")\n    if not 1 <= value.rows <= maximum_dimension or not 1 <= value.cols <= maximum_dimension:\n        raise ValueError(f"matrix dimensions must be between 1 and {maximum_dimension}")\n''',
+          )
+          replace_once(
+              "src/jacobian/domains/matrix_lattice/kernels.py",
+              "def determinant(matrix: MatrixBase) -> Any:\n    source = _exact_matrix(matrix)\n",
+              "def determinant(matrix: MatrixBase) -> Any:\n    source = _exact_matrix(matrix, maximum_dimension=_DETERMINANT_MAX_MATRIX_DIMENSION)\n",
+          )
+
+          replace_once(
+              "src/jacobian_checkers/exact_domain_operations.py",
+              "_MAX_MATRIX_DIMENSION = 32\n",
+              "_MAX_MATRIX_DIMENSION = 32\n_MAX_DETERMINANT_MATRIX_DIMENSION = 64\n",
+          )
+          replace_once(
+              "src/jacobian_checkers/exact_domain_operations.py",
+              '''def _bounded_rational_matrix(value: object, *, maximum_digits: int) -> fmpq_mat:\n''',
+              '''def _bounded_q(value: object, *, maximum_digits: int) -> fmpq:\n    if not isinstance(value, dict) or set(value) != {"num", "den"}:\n        raise ValueError("rational is malformed")\n    for component in (value["num"], value["den"]):\n        if not isinstance(component, str) or len(component.lstrip("-")) > maximum_digits:\n            raise ValueError("rational scalar exceeds the checker bound")\n    return _q(value)\n\n\ndef _bounded_rational_matrix(\n    value: object, *, maximum_digits: int, maximum_dimension: int = _MAX_MATRIX_DIMENSION\n) -> fmpq_mat:\n''',
+          )
+          replace_once(
+              "src/jacobian_checkers/exact_domain_operations.py",
+              "        or not 1 <= len(entries) <= _MAX_MATRIX_DIMENSION\n        or not isinstance(entries[0], list)\n        or not 1 <= len(entries[0]) <= _MAX_MATRIX_DIMENSION\n",
+              "        or not 1 <= len(entries) <= maximum_dimension\n        or not isinstance(entries[0], list)\n        or not 1 <= len(entries[0]) <= maximum_dimension\n",
+          )
+          replace_once(
+              "src/jacobian_checkers/exact_domain_operations.py",
+              '''    matrix = _matrix_source(source)\n    if matrix.nrows() != matrix.ncols():\n        return False\n    return bool(_q(result["determinant"]) == matrix.det())\n''',
+              '''    if set(source) != {"matrix"}:\n        return False\n    matrix = _bounded_rational_matrix(\n        source["matrix"],\n        maximum_digits=_MAX_MATRIX_INPUT_DIGITS,\n        maximum_dimension=_MAX_DETERMINANT_MATRIX_DIMENSION,\n    )\n    if matrix.nrows() != matrix.ncols():\n        return False\n    declared = _bounded_q(result["determinant"], maximum_digits=_MAX_MATRIX_OUTPUT_DIGITS)\n    return bool(declared == matrix.det())\n''',
+          )
+
+          Path("tests/domain/matrix/test_determinant_order_64.py").write_text('''from __future__ import annotations\n\nfrom collections.abc import Iterator\nfrom pathlib import Path\n\nimport pytest\nfrom tests.support.exact_domain import open_exact_domain_services\nfrom tests.support.services import DomainTestServices\n\nfrom jacobian.contracts.capabilities import CapabilityRequest\nfrom jacobian.contracts.results import ExecutionStatus\nfrom jacobian.domains.matrix_lattice import build_matrix_bundle\n\n\ndef _q(value: int) -> dict[str, str]:\n    return {"num": str(value), "den": "1"}\n\n\ndef _matrix(entries: list[list[int]]) -> dict[str, object]:\n    return {"entries": [[_q(value) for value in row] for row in entries]}\n\n\ndef _truncated_legendre_matrix(prime: int) -> dict[str, object]:\n    order = (prime - 5) // 2\n    def entry(row: int, column: int) -> int:\n        residue = (row - column) % prime\n        character = 0 if residue == 0 else (1 if pow(residue, (prime - 1) // 2, prime) == 1 else -1)\n        return 1 + character\n    return _matrix([[entry(row, column) for column in range(order)] for row in range(order)])\n\n\n@pytest.fixture\ndef matrix_services(tmp_path: Path) -> Iterator[DomainTestServices]:\n    with open_exact_domain_services(tmp_path / "state", build_matrix_bundle()) as services:\n        yield services\n\n\ndef test_order_33_determinant_computes_and_verifies(\n    matrix_services: DomainTestServices,\n) -> None:\n    matrix = _truncated_legendre_matrix(71)\n    payload = {"matrix": matrix}\n    computed = matrix_services.core.capabilities.invoke(\n        CapabilityRequest(capability_id="matrix.determinant.compute", input=payload)\n    )\n    verified = matrix_services.core.capabilities.invoke(\n        CapabilityRequest(\n            capability_id="matrix.determinant.verify",\n            input={"input": payload, "candidate": computed.output["result"]},\n        )\n    )\n    assert computed.execution.status is ExecutionStatus.COMPLETED\n    assert computed.output["result"]["determinant"] == _q(529)\n    assert verified.execution.status is ExecutionStatus.COMPLETED\n    assert verified.output["status"] == "VERIFIED"\n    assert verified.verification_record_uri is not None\n\n\ndef test_determinant_rejects_order_above_64(\n    matrix_services: DomainTestServices,\n) -> None:\n    matrix = _matrix([[1 if row == column else 0 for column in range(65)] for row in range(65)])\n    result = matrix_services.core.capabilities.invoke(\n        CapabilityRequest(capability_id="matrix.determinant.compute", input={"matrix": matrix})\n    )\n    assert result.execution.status is ExecutionStatus.ERROR\n''')
+          Path(".github/workflows/agent-port-determinant-64.yml").unlink()
+          PY
+      - name: Validate focused port
+        run: python -m compileall -q src/jacobian/contracts/matrix_operations.py src/jacobian/domains/matrix_lattice src/jacobian_checkers/exact_domain_operations.py tests/domain/matrix/test_determinant_order_64.py
+      - name: Commit port
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat(matrix): extend exact determinant to order 64"
+          git push origin HEAD:agent/port-determinant-order-64

@@ -173,6 +173,9 @@ and is parsed independently.
 Preflight distinguishes supported, unsupported, provider unavailable, and
 resource-limit-exceeded outcomes. Where practical it estimates work, output
 size, publication, checker replay, and aggregate allocation before work begins.
+Only `Completed[T]` may publish `T`. Non-conclusions and failures may retain
+diagnostics and artifact lineage, but cannot carry a mathematical value or
+checker verdict.
 
 A postcondition runs before publication. Failure exposes no value reference,
 artifact, or verification record. Terminal execution state remains separate from the

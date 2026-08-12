@@ -342,5 +342,5 @@ def test_checker_timeout_never_verifies(
         )
 
         assert result.execution.status is ExecutionStatus.TIMEOUT
-        assert result.output["conclusion"] == "UNKNOWN"
-        assert result.output["verification_record_uri"] is None
+        assert result.output == {}
+        assert result.verification_record_uri is None

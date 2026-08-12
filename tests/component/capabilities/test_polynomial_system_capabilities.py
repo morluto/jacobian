@@ -161,9 +161,8 @@ def test_solution_capability_keeps_checker_failure_unknown(
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["satisfies"] is None
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["verification_record_uri"] is None
+    assert result.output == {}
+    assert result.verification_record_uri is None
 
 
 def test_solution_capability_rejects_dimension_mismatch_before_artifact_writes(

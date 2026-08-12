@@ -343,6 +343,5 @@ def test_runtime_replacement_after_authorization_fails_closed(
     result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["status"] == "ERROR"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["verification_record_uri"] is None
+    assert result.output == {}
+    assert result.verification_record_uri is None

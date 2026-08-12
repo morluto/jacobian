@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import assert_never
 
 from jacobian.contracts.capabilities import CapabilityResult
 from jacobian.contracts.results import ContractModel, Execution, ExecutionStatus
@@ -25,6 +26,12 @@ class OperationProjection:
             self.publication is None or self.publication.output is None
         ):
             raise ValueError("completed operations require a public output")
+        if (
+            not isinstance(self.terminal, Completed)
+            and self.publication is not None
+            and self.publication.output is not None
+        ):
+            raise ValueError("non-completed operations cannot publish an output")
         if self.verification_record_uri is not None and (
             not isinstance(self.terminal, Completed)
             or self.publication is None
@@ -61,20 +68,16 @@ def project_operation_result(projection: OperationProjection) -> CapabilityResul
             artifact_uris=publication.artifact_uris,
         )
 
-    if isinstance(terminal, Failed):
+    if isinstance(terminal, (Failed, NonConclusion)):
         status = terminal.status
         diagnostic = terminal.diagnostic
         runtime_ms = terminal.runtime_ms
     else:
-        status = terminal.status
-        diagnostic = terminal.diagnostic
-        runtime_ms = terminal.runtime_ms
+        assert_never(terminal)
     if publication is None:
         output = {"error": diagnostic.model_dump(mode="json", exclude_none=True)}
-    elif publication.output is None:
-        output = {}
     else:
-        output = publication.output.model_dump(mode="json")
+        output = {}
     return CapabilityResult(
         capability_id=operation_id,
         capability_version=version,

@@ -34,11 +34,7 @@ from jacobian.contracts.polynomials import (
     RationalPolynomialMap,
     SparseRationalPolynomial,
 )
-from jacobian.contracts.results import (
-    Conclusion,
-    Execution,
-    ExecutionStatus,
-)
+from jacobian.contracts.results import Conclusion, Execution, ExecutionStatus
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
     PolynomialOperationResult,

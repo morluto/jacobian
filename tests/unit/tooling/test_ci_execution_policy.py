@@ -230,8 +230,7 @@ def test_required_ci_gates_fail_when_a_needed_job_is_cancelled() -> None:
     assert "name: Lean Tests" in workflow
     assert "name: Deployment Tests" in workflow
     assert (
-        "needs: [static, python, boundaries, wheel, coverage, lean, "
-        "optional-providers]"
+        "needs: [static, python, boundaries, wheel, coverage, lean, optional-providers]"
     ) in required
     assert "success|skipped" in required
     assert "needs.optional-providers.result" in required

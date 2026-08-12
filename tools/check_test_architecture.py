@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import argparse
 import ast
-import fnmatch
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from tools.test_architecture.lanes import DIRECTORY_LANES, owners, tier_for
+from tools.test_architecture.lanes import owners
 from tools.test_architecture.runtime_owners import allows_create_runtime
 
 _TEST_FILE = "test_*.py"
@@ -123,33 +122,6 @@ class Violation:
 
 
 @dataclass(frozen=True)
-class TopologyManifest:
-    """The path globs owned by each semantic test lane."""
-
-    lanes: Mapping[str, tuple[str, ...]]
-    path: Path
-    lane_tiers: Mapping[str, str] = field(default_factory=dict)
-
-    def owners(self, relative_path: str) -> tuple[str, ...]:
-        matches = [
-            (lane, pattern)
-            for lane, patterns in self.lanes.items()
-            for pattern in patterns
-            if _matches_path(relative_path, pattern)
-        ]
-        if not matches:
-            return ()
-        lane, _pattern = max(matches, key=lambda item: len(item[1]))
-        return (lane,)
-
-    def tier_for(self, relative_path: str) -> str | None:
-        owners = self.owners(relative_path)
-        if len(owners) != 1:
-            return None
-        return self.lane_tiers.get(owners[0])
-
-
-@dataclass(frozen=True)
 class ArchitectureReport:
     """Result of checking a test tree.
 
@@ -161,7 +133,6 @@ class ArchitectureReport:
     root: Path
     violations: tuple[Violation, ...]
     files_scanned: int
-    topology: TopologyManifest | None = None
     new_violations: tuple[Violation, ...] | None = None
     mode: str = "strict"
 
@@ -205,38 +176,13 @@ class ArchitecturePolicyError(RuntimeError):
         super().__init__(report.render())
 
 
-def directory_ownership_manifest() -> TopologyManifest:
-    """Return lane ownership derived from test directory prefixes."""
-
-    lanes = {name: (prefix,) for name, _tier, prefix in DIRECTORY_LANES}
-    lane_tiers = {name: tier for name, tier, _prefix in DIRECTORY_LANES}
-    return TopologyManifest(
-        lanes=lanes,
-        path=Path("<directory-layout>"),
-        lane_tiers=lane_tiers,
-    )
-
-
-def _matches_path(relative_path: str, pattern: str) -> bool:
-    path = relative_path.replace("\\", "/")
-    normalized = pattern.replace("\\", "/")
-    if fnmatch.fnmatchcase(path, normalized):
-        return True
-    if not any(char in normalized for char in "*?["):
-        return path == normalized or path.startswith(normalized.rstrip("/") + "/")
-    # ``fnmatch`` treats ``**`` as ordinary stars.  Match the useful directory
-    # ownership spelling explicitly as well.
-    if normalized.endswith("/**"):
-        prefix = normalized[:-3].rstrip("/")
-        return path == prefix or path.startswith(prefix + "/")
-    return PurePosixPath(path).match(normalized)
-
-
 def _is_under(path: PurePosixPath, prefix: PurePosixPath) -> bool:
     return path == prefix or prefix in path.parents
 
 
 def _tier(path: PurePosixPath) -> str | None:
+    """Return the coarse pytest directory, not named-lane ownership."""
+
     if _is_under(path, _UNIT_PREFIX):
         return "unit"
     if _is_under(path, _COMPONENT_PREFIX):
@@ -715,8 +661,6 @@ def _file_violations(
     relative = file_path.relative_to(project_root).as_posix()
     path = PurePosixPath(relative)
     tier = _tier(path)
-    if tier is None:
-        tier = tier_for(relative)
     violations: list[Violation] = []
     if path.name.startswith("test_"):
         claimed = owners(relative)
@@ -776,7 +720,6 @@ def check_test_architecture(
     project_root = Path(root).resolve()
     if mode not in {"strict", "ratchet"}:
         raise ValueError("mode must be 'strict' or 'ratchet'")
-    manifest = directory_ownership_manifest()
 
     violations: list[Violation] = []
     test_root = project_root / "tests"
@@ -800,7 +743,7 @@ def check_test_architecture(
             if _violation_key(item) not in known and str(item) not in known
         )
     return ArchitectureReport(
-        project_root, all_violations, len(files), manifest, new_violations, mode
+        project_root, all_violations, len(files), new_violations, mode
     )
 
 

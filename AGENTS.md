@@ -265,8 +265,8 @@ Non-obvious caveats:
 - Only the coordinating agent may start an exhaustive test lane. Never delegate
   one to a parallel agent sharing the host. Before an exceptional broad run,
   inspect active processes for pytest jobs from this checkout and stop or wait
-  for them; concurrent runtime/store/subprocess suites turn the 60-second test
-  timeout into a host-contention detector rather than useful failure evidence.
+  for them; concurrent runtime/store/subprocess suites turn per-test timeouts
+  into a host-contention detector rather than useful failure evidence.
 - SQLite is one visible contention point, but not the sole cause: full-runtime
   construction also performs durable filesystem publication, subprocess
   startup, schema registration, and CPU-heavy capability setup. A timeout

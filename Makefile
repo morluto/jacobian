@@ -13,11 +13,6 @@ PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
 ORDINARY_PYTEST_FLAGS := -n 4 --dist worksteal --timeout=180
 PUBLIC_COMMANDS := setup quick check check-external fix
 
-ifneq ($(strip $(PATHS)),)
-PATHS_FILE := $(shell mktemp)
-$(file >$(PATHS_FILE),$(PATHS))
-endif
-
 include make/development.mk
 include make/harbor.mk
 include make/evaluations.mk

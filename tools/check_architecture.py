@@ -109,7 +109,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # Tooling boundary tests invoke CI scripts and installers as subprocesses.
         PurePosixPath("tests/boundary/process/tooling/ci.py"),
         PurePosixPath("tests/boundary/process/tooling/test_deploy_installer.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_topology_runner.py"),
+        PurePosixPath("tests/boundary/process/tooling/test_supervised_make_lanes.py"),
         PurePosixPath("tests/boundary/process/tooling/test_cli_import_surface.py"),
         PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
         PurePosixPath("tests/boundary/process/tooling/test_make_help.py"),

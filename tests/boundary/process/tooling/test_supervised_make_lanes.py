@@ -65,13 +65,14 @@ def test_lean_lane_dry_run_is_serial_and_supervised() -> None:
 
 
 def test_supervised_lane_forwards_pytest_arguments() -> None:
+    relative = Path(__file__).relative_to(ROOT).as_posix()
     output = _make_dry_run(
         "test-process",
-        "TESTS=tests/boundary/process/tooling/test_topology_runner.py",
+        f"TESTS={relative}",
         "PYTEST_ARGS=-k target_test --junitxml=pytest.xml",
     )
 
-    assert "tests/boundary/process/tooling/test_topology_runner.py" in output
+    assert relative in output
     assert "-k target_test" in output
     assert "--junitxml=pytest.xml" in output
 

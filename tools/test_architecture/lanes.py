@@ -46,9 +46,3 @@ def tier_for(relative: str) -> str | None:
         if path == prefix or path.startswith(prefix.rstrip("/") + "/"):
             return tier
     return None
-
-
-def lane_prefixes() -> dict[str, tuple[str, ...]]:
-    """Return lane name to owned directory prefixes."""
-
-    return {name: (prefix,) for name, _tier, prefix in DIRECTORY_LANES}

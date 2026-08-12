@@ -179,10 +179,23 @@ def test_benchmark_stable_gate_validates_provenance_receipts_in_python() -> None
 
 def test_product_ci_does_not_emit_a_plan_receipt() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    script = (ROOT / ".github/scripts/emit-plan-receipt").read_text(encoding="utf-8")
 
     assert "python .github/scripts/emit-plan-receipt" not in workflow
     assert "ci-plan-receipt" not in workflow
     assert "classify-ci-paths" not in workflow
+    assert "kind must be 'benchmark'" in script
+    assert "CI or benchmark plan" not in script
+
+
+def test_paths_file_stays_on_harbor_planning() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "PATHS_FILE" not in makefile
+    assert "PATHS_FILE" in harbor
+    assert "PATHS_FILE" not in workflow
 
 
 def test_static_job_runs_docs_linkcheck() -> None:

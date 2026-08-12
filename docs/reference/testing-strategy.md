@@ -80,8 +80,8 @@ make check-static
 
 `make test-all-ci` is an explicit exhaustive reproduction, not a routine gate.
 Before starting it, confirm that no other pytest job from this checkout is
-running. Concurrent runtime/store/subprocess suites can turn the 60-second
-timeout into host-contention noise.
+running. Concurrent runtime/store/subprocess suites can turn per-test
+timeouts into host-contention noise.
 
 ## Test principles
 

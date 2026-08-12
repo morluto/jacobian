@@ -17,6 +17,14 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.test_plan.affinity import (  # noqa: E402
+    affinity_index_from_inventory,
+    balance_affinity_shards,
+)
+
 CONFIG = ROOT / ".github" / "ci-config.json"
 CI_SHARDED_SUITES = ("domain", "composition")
 TIMING_SUITES = (*CI_SHARDED_SUITES, "benchmark")
@@ -189,6 +197,49 @@ def write_durations(path: Path, durations: dict[str, float]) -> None:
     )
 
 
+def balance_affinity(
+    inventory_path: Path,
+    durations_path: Path,
+    shard_count: int,
+    output: Path,
+) -> None:
+    inventory = load_json_bytes(inventory_path.read_bytes(), str(inventory_path))
+    if not isinstance(inventory, list) or not all(
+        isinstance(row, dict) for row in inventory
+    ):
+        raise ValueError(f"{inventory_path} must contain a JSON list of objects")
+
+    duration_payload = load_json_bytes(
+        durations_path.read_bytes(), str(durations_path)
+    )
+    if not isinstance(duration_payload, dict):
+        raise ValueError(f"{durations_path} must contain a JSON object")
+    raw_durations = duration_payload.get("durations", duration_payload)
+    if not isinstance(raw_durations, dict):
+        raise ValueError(f"{durations_path} durations must be a JSON object")
+
+    durations: dict[str, float] = {}
+    for nodeid, duration in raw_durations.items():
+        if not isinstance(nodeid, str):
+            raise ValueError(f"{durations_path} contains a non-string node id")
+        if isinstance(duration, bool) or not isinstance(duration, (int, float)):
+            raise ValueError(f"{durations_path} contains a non-numeric duration")
+        seconds = float(duration)
+        if not math.isfinite(seconds) or seconds < 0:
+            raise ValueError(f"{durations_path} contains an invalid duration")
+        durations[nodeid] = seconds
+
+    nodes = affinity_index_from_inventory(inventory, durations)
+    shards = balance_affinity_shards(nodes, shard_count=shard_count)
+    payload = {
+        "version": 1,
+        "shard_count": shard_count,
+        "shards": [list(shard) for shard in shards],
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def artifact_durations(
     artifact: dict[str, Any],
     *,
@@ -333,6 +384,12 @@ def main() -> None:
     prepare_parser.add_argument("--output", type=Path, required=True)
     prepare_parser.add_argument("--suite", choices=TIMING_SUITES, required=True)
 
+    balance_parser = subparsers.add_parser("balance-affinity")
+    balance_parser.add_argument("--inventory", type=Path, required=True)
+    balance_parser.add_argument("--durations", type=Path, required=True)
+    balance_parser.add_argument("--shard-count", type=int, required=True)
+    balance_parser.add_argument("--output", type=Path, required=True)
+
     merge_parser = subparsers.add_parser("merge")
     merge_parser.add_argument("--input", action="append", type=Path, required=True)
     merge_parser.add_argument("--output", type=Path, required=True)
@@ -352,6 +409,13 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.output, args.suite)
+    elif args.command == "balance-affinity":
+        balance_affinity(
+            args.inventory,
+            args.durations,
+            args.shard_count,
+            args.output,
+        )
     elif args.command == "emit-plan-outputs":
         emit_plan_outputs()
     elif args.command == "node-version":

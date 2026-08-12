@@ -7,10 +7,12 @@ load task-local ``verifier_support`` opt into isolation via
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
 import pytest
+import tools.benchmark_plan.compiler as planner
 
 ROOT = Path(__file__).parents[2]
 if str(ROOT) not in sys.path:
@@ -20,6 +22,31 @@ _ISOLATE_PREFIXES = (
     "benchmarks/validation/mathematical_benchmarks_v1/",
     "benchmarks/validation/symbolic_coordination_v1/",
 )
+
+_PLANNER_TEST_MARKERS = (
+    "test_benchmark_planner_classify.py",
+    "test_benchmark_planner_digests.py",
+    "test_benchmark_planner_host.py",
+    "test_benchmark_planner_oracle.py",
+)
+
+
+@pytest.fixture(autouse=True)
+def stable_planner_digests(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep planner tests independent of Harbor's optional runtime package."""
+
+    path = Path(str(request.node.path)).name
+    if path not in _PLANNER_TEST_MARKERS:
+        return
+    monkeypatch.setattr(
+        planner,
+        "_digest",
+        lambda digest_path: (
+            f"sha256:{hashlib.sha256(digest_path.name.encode()).hexdigest()}"
+        ),
+    )
 
 
 @pytest.fixture

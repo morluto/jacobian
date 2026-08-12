@@ -6,6 +6,11 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.domains.graph_optimization.bundle import (
@@ -14,6 +19,12 @@ from jacobian.domains.graph_optimization.bundle import (
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="graph-optimization-v1",
+    setup_affinity="sqlite",
+)
 def graph_optimization_services(
     tmp_path: Path,
 ) -> Iterator[DomainTestServices]:

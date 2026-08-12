@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import tools.benchmark_plan.compiler as benchmark_planner
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -104,7 +105,6 @@ def test_benchmark_path_input_is_forwarded_without_running_git(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    planner = _load_script("plan-benchmarks")
     calls: dict[str, object] = {}
 
     def fake_plan(paths: list[str], **kwargs: object) -> dict[str, str]:
@@ -112,7 +112,7 @@ def test_benchmark_path_input_is_forwarded_without_running_git(
         calls.update(kwargs)
         return {"paths": json.dumps(paths)}
 
-    monkeypatch.setattr(planner, "plan", fake_plan)
+    monkeypatch.setattr(benchmark_planner, "plan", fake_plan)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -125,7 +125,7 @@ def test_benchmark_path_input_is_forwarded_without_running_git(
         ],
     )
 
-    assert planner.main() == 0
+    assert benchmark_planner.main() == 0
     assert calls["paths"] == ["benchmarks/README.md"]
     assert "benchmarks/README.md" in capsys.readouterr().out
 
@@ -133,10 +133,9 @@ def test_benchmark_path_input_is_forwarded_without_running_git(
 def test_benchmark_documentation_does_not_select_oracle_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    planner = _load_script("plan-benchmarks")
-    monkeypatch.setattr(planner, "_topology_digest", lambda _suites: "digest")
+    monkeypatch.setattr(benchmark_planner, "_topology_digest", lambda _suites: "digest")
 
-    plan = planner.plan(
+    plan = benchmark_planner.plan(
         ["benchmarks/README.md", "benchmarks/validation/README.md"],
         event="pull_request",
     )
@@ -308,7 +307,7 @@ def _write_validator_tree(tmp_path: Path) -> None:
     )
     fragments = tmp_path / "make"
     fragments.mkdir()
-    for name in ("development.mk", "harbor.mk", "evaluations.mk"):
+    for name in ("development.mk", "harbor.mk", "evaluations.mk", "test-lanes.mk"):
         (fragments / name).write_text(
             (ROOT / "make" / name).read_text("utf-8"), encoding="utf-8"
         )

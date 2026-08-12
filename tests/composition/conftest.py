@@ -16,6 +16,11 @@ from tests.support.complete_runtime_fixtures import (
     complete_portfolio_template,
     fresh_complete_runtime,
 )
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 from tests.support.services import DomainTestServices, open_domain_services
 
 # Directory-scoped fixture registration (not pytest_plugins).
@@ -32,6 +37,12 @@ __all__ = (
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="capability-core-services-v1",
+    setup_affinity="sqlite",
+)
 def capability_core_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Open production core/application seams for service-level composition tests."""
 

@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
@@ -65,6 +70,12 @@ def _invoke(runtime: DomainTestServices, text: str, *, logic: str = "QF_UF"):
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.PROVIDER},
+    isolation=IsolationClass.READ_ONLY,
+    profile_key="cvc5-provider-v1",
+    setup_affinity="provider",
+)
 def cvc5_provider() -> CapabilityProviderRuntime:
     provider = cvc5_provider_runtime()
     if provider.availability is not CapabilityProviderAvailability.AVAILABLE:
@@ -73,6 +84,12 @@ def cvc5_provider() -> CapabilityProviderRuntime:
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.PROVIDER, ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="cvc5-services-v1",
+    setup_affinity="provider",
+)
 def cvc5_services(
     tmp_path: Path,
     cvc5_provider: CapabilityProviderRuntime,

@@ -68,10 +68,10 @@ import-contracts: ## Enforce declared package dependency direction.
 test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
 	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified
 
-compile-test-plan: ## Regenerate topology.toml and ci-impact.json from plan_manifest.toml.
+compile-test-plan: ## Regenerate topology, CI impact, and Make lanes from plan_manifest.toml.
 	$(UV_RUN) python -m tools.test_plan.compile --write
 
-compile-test-plan-check: ## Fail when topology or impact projections are stale.
+compile-test-plan-check: ## Fail when topology, CI impact, or Make lane projections are stale.
 	$(UV_RUN) python -m tools.test_plan.compile --check
 
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).

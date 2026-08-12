@@ -32,6 +32,13 @@ from tests.support.runtime_templates import (
 
 
 @pytest.fixture(scope="session")
+@resource_fixture(
+    resources={ResourceKind.COMPLETE_RUNTIME, ResourceKind.SQLITE},
+    isolation=IsolationClass.READ_ONLY,
+    share_scope="session",
+    profile_key="complete-portfolio-template-v1",
+    setup_affinity="complete-runtime",
+)
 def complete_portfolio_template(
     tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,
@@ -42,6 +49,17 @@ def complete_portfolio_template(
 
 
 @pytest.fixture(scope="session")
+@resource_fixture(
+    resources={
+        ResourceKind.COMPLETE_RUNTIME,
+        ResourceKind.AUTHORIZED_CHECKERS,
+        ResourceKind.SQLITE,
+    },
+    isolation=IsolationClass.READ_ONLY,
+    share_scope="session",
+    profile_key="authorized-portfolio-template-v1",
+    setup_affinity="complete-runtime",
+)
 def authorized_portfolio_template(
     tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,

@@ -102,35 +102,7 @@ define run_topology_lane
 		$(if $(TESTS),$(TESTS))
 endef
 
-test-unit: ## Run pure contracts and models (10s lane, sequential).
-	$(call run_topology_lane,unit)
-
-test-component: ## Run one-service component tests (30s lane, four workers).
-	$(call run_topology_lane,component)
-
-test-domain: ## Run explicitly bundled mathematical domains (120s lane).
-	$(call run_topology_lane,domain)
-
-test-composition: ## Run complete-runtime composition tests (120s, two workers).
-	$(call run_topology_lane,composition)
-
-test-storage: ## Run SQLite durability and recovery boundaries (serial).
-	$(call run_topology_lane,storage)
-
-test-process: ## Run killable child-process boundaries (two workers).
-	$(call run_topology_lane,process)
-
-test-mcp: ## Run MCP transport boundaries (two workers).
-	$(call run_topology_lane,mcp)
-
-test-provider: ## Run prepared optional-provider boundaries (one worker).
-	$(call run_topology_lane,provider)
-
-test-lean: ## Run the pinned Lean/Mathlib boundary serially.
-	$(call run_topology_lane,lean)
-
-test-e2e: ## Run complete user-visible CLI/workflow scenarios serially.
-	$(call run_topology_lane,e2e)
+include make/test-lanes.mk
 
 test-compatibility: ## Run the small supported-version import/API compatibility smoke suite.
 	$(PYTEST_RUNNER) --name compatibility -- -n 0 --timeout=30 --timeout-method=thread tests/unit/tooling/test_ci_compatibility.py $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)

@@ -34,8 +34,9 @@ Lean, storage, process, and composition isolation.
 [`tests/plan_manifest.toml`](../../tests/plan_manifest.toml) owns lanes, gates,
 and path-impact rules. `make compile-test-plan` projects it to
 [`tests/topology.toml`](../../tests/topology.toml) and
-[`ci-impact.json`](../../.github/ci-impact.json); do not hand-edit generated
-projections.
+[`ci-impact.json`](../../.github/ci-impact.json). It also generates
+[`make/test-lanes.mk`](../../make/test-lanes.mk), which defines the topology
+lane Make targets. Do not hand-edit generated projections.
 
 | Directory/lane | Evidence owner |
 | --- | --- |

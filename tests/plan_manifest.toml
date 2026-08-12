@@ -2,7 +2,8 @@ version = 1
 
 # Authoritative test/CI plan manifest.
 # Compile with: make compile-test-plan
-# Projections: tests/topology.toml and .github/ci-impact.json (generated).
+# Projections: tests/topology.toml, .github/ci-impact.json, and
+# make/test-lanes.mk (generated).
 #
 # [local_planning] feeds `.github/scripts/plan-local-tests`: infrastructure
 # prefixes, high-impact paths, and exact pytest selector overrides for non-test

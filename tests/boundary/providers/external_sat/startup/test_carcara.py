@@ -4,6 +4,11 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.resource_contracts import (
+    IsolationClass,
+    ResourceKind,
+    resource_fixture,
+)
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
@@ -24,6 +29,12 @@ _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 @pytest.fixture
+@resource_fixture(
+    resources={ResourceKind.PROVIDER, ResourceKind.SQLITE},
+    isolation=IsolationClass.LIFECYCLE_OWNER,
+    profile_key="carcara-services-v1",
+    setup_affinity="provider",
+)
 def carcara_services(
     tmp_path: Path,
 ) -> Iterator[DomainTestServices]:

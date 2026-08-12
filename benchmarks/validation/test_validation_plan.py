@@ -70,10 +70,13 @@ def test_workflow_change_selects_each_owned_contract_without_full_fallback(
     plan = host_validation_plan(tmp_path, [".github/workflows/benchmarks.yml"], {})
 
     assert {entry.selector for entry in plan.entries} == {
-        "benchmarks/validation/test_benchmark_planner.py",
+        "benchmarks/validation/test_benchmark_planner_classify.py",
+        "benchmarks/validation/test_benchmark_planner_digests.py",
+        "benchmarks/validation/test_benchmark_planner_host.py",
+        "benchmarks/validation/test_benchmark_planner_oracle.py",
         "benchmarks/validation/test_benchmark_validation.py",
     }
-    assert len(plan.entries) == 2
+    assert len(plan.entries) == 5
 
 
 def test_non_host_control_utility_has_an_explicit_empty_host_selection(
@@ -83,6 +86,14 @@ def test_non_host_control_utility_has_an_explicit_empty_host_selection(
 
     assert plan.entries == ()
     assert plan.reasons == ()
+
+
+def test_affinity_control_path_selects_its_unit_contract(tmp_path: Path) -> None:
+    plan = host_validation_plan(tmp_path, ["tools/test_plan/affinity.py"], {})
+
+    assert [entry.selector for entry in plan.entries] == [
+        "tests/unit/tooling/test_affinity_shards.py"
+    ]
 
 
 def test_shared_path_policy_remains_conservative(tmp_path: Path) -> None:

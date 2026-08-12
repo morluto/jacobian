@@ -85,6 +85,57 @@ def pinned_pytest_split_version() -> str:
     return plan_outputs()["pytest-split-version"]
 
 
+@pytest.mark.parametrize("enveloped", [False, True])
+def test_balance_affinity_writes_versioned_shards(
+    tmp_path: Path, enveloped: bool
+) -> None:
+    inventory = tmp_path / "inventory.json"
+    inventory.write_text(
+        json.dumps(
+            [
+                {"nodeid": "tests/a.py::test_one", "setup_affinity": ["sqlite"]},
+                {"nodeid": "tests/a.py::test_two", "setup_affinity": ["sqlite"]},
+                {"nodeid": "tests/b.py::test_three", "setup_affinity": ["lean"]},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    raw_durations = {
+        "tests/a.py::test_one": 5.0,
+        "tests/a.py::test_two": 4.0,
+        "tests/b.py::test_three": 3.0,
+    }
+    durations = tmp_path / "durations.json"
+    durations.write_text(
+        json.dumps({"durations": raw_durations} if enveloped else raw_durations),
+        encoding="utf-8",
+    )
+    output = tmp_path / "shards.json"
+
+    result = run_ci_script(
+        "manage-test-timings",
+        "balance-affinity",
+        "--inventory",
+        str(inventory),
+        "--durations",
+        str(durations),
+        "--shard-count",
+        "2",
+        "--output",
+        str(output),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(output.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "shard_count": 2,
+        "shards": [
+            ["tests/a.py::test_one", "tests/a.py::test_two"],
+            ["tests/b.py::test_three"],
+        ],
+    }
+
+
 def test_prepare_falls_back_to_equal_weighting_without_github_context(
     tmp_path: Path,
 ) -> None:

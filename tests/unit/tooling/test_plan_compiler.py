@@ -36,6 +36,19 @@ def test_compile_topology_matches_checked_in_projection() -> None:
     assert "process_supervision =" in result.topology
 
 
+def test_compile_make_lanes_matches_checked_in_projection() -> None:
+    root = Path(__file__).resolve().parents[3]
+    result = compile_manifest(root / "tests" / "plan_manifest.toml")
+    assert (root / "make" / "test-lanes.mk").read_text(
+        encoding="utf-8"
+    ) == result.make_lanes
+    assert "test-unit: ## Pytest lane unit (10s, sequential)." in result.make_lanes
+    assert (
+        "test-component: ## Pytest lane component (30s, 4 workers)."
+        in result.make_lanes
+    )
+
+
 def test_compile_impact_matches_checked_in_projection() -> None:
     root = Path(__file__).resolve().parents[3]
     result = compile_manifest(root / "tests" / "plan_manifest.toml")

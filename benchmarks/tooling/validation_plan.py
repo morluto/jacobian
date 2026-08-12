@@ -35,18 +35,25 @@ def _discover_conjecture_host_tests() -> tuple[str, ...]:
     )
 
 
+_PLANNER_VALIDATION_TESTS = (
+    "benchmarks/validation/test_benchmark_planner_classify.py",
+    "benchmarks/validation/test_benchmark_planner_digests.py",
+    "benchmarks/validation/test_benchmark_planner_host.py",
+    "benchmarks/validation/test_benchmark_planner_oracle.py",
+)
+
 CONTROL_PLANE_HOST_TESTS = {
     ".github/scripts/emit-plan-receipt": (),
     ".github/scripts/manage-test-timings": (),
     ".github/scripts/plan-benchmarks": (
-        "benchmarks/validation/test_benchmark_planner.py",
+        *_PLANNER_VALIDATION_TESTS,
         "benchmarks/validation/test_benchmark_plan_validation.py",
     ),
     ".github/scripts/validate-benchmark-plan": (
         "benchmarks/validation/test_benchmark_plan_validation.py",
     ),
     ".github/workflows/benchmarks.yml": (
-        "benchmarks/validation/test_benchmark_planner.py",
+        *_PLANNER_VALIDATION_TESTS,
         "benchmarks/validation/test_benchmark_validation.py",
     ),
     ".github/workflows/heldout-benchmarks.yml": (
@@ -64,8 +71,13 @@ CONTROL_PLANE_HOST_TESTS = {
     ),
     "benchmarks/tooling/validation_plan.py": (
         "benchmarks/validation/test_validation_plan.py",
-        "benchmarks/validation/test_benchmark_planner.py",
+        *_PLANNER_VALIDATION_TESTS,
     ),
+    "tools/benchmark_plan/compiler.py": _PLANNER_VALIDATION_TESTS,
+    "tools/benchmark_plan/control_paths.py": _PLANNER_VALIDATION_TESTS,
+    "tools/benchmark_plan/__init__.py": _PLANNER_VALIDATION_TESTS,
+    "tools/benchmark_plan/affinity.py": ("tests/unit/tooling/test_affinity_shards.py",),
+    "tools/test_plan/affinity.py": ("tests/unit/tooling/test_affinity_shards.py",),
     "tools/benchmark_pr_status.py": (
         "benchmarks/validation/test_benchmark_pr_status.py",
     ),

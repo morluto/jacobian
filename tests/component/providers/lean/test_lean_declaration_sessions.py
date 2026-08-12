@@ -625,6 +625,22 @@ def test_clean_session_ignores_catalog_with_mismatched_content_digest(
     session.close()
 
 
+def test_clean_session_bounds_corrupt_cache_before_restore(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    cache_path.parent.mkdir()
+    cache_path.write_bytes(b"x" * 65)
+    monkeypatch.setattr("jacobian.lean_frontend.declarations._MAX_INDEX_BYTES", 64)
+
+    session = _clean_session(tmp_path, index_cache_path=cache_path)
+
+    assert session._index_digest is None
+    assert not session._index_path.exists()
+    session.close()
+
+
 def test_persistent_response_requires_one_typed_marker() -> None:
     response = {
         "env": 1,

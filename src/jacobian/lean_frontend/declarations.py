@@ -323,10 +323,14 @@ class _ReusableLeanQuerySession:
 
     def _restore_index_cache(self) -> None:
         cache_path = self._index_cache_path
-        if cache_path is None or not cache_path.is_file():
+        if cache_path is None or cache_path.is_symlink() or not cache_path.is_file():
             return
         try:
-            shutil.copyfile(cache_path, self._index_path)
+            _copy_bounded_file(
+                cache_path,
+                self._index_path,
+                max_bytes=_MAX_INDEX_BYTES,
+            )
             _validate_declaration_index(
                 self._index_path,
                 environment_digest=self._environment_digest,
@@ -1492,3 +1496,13 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return "sha256:" + digest.hexdigest()
+
+
+def _copy_bounded_file(source: Path, destination: Path, *, max_bytes: int) -> None:
+    copied = 0
+    with source.open("rb") as input_stream, destination.open("xb") as output_stream:
+        while chunk := input_stream.read(min(1024 * 1024, max_bytes - copied + 1)):
+            copied += len(chunk)
+            if copied > max_bytes:
+                raise ValueError("declaration index exceeds its size bound")
+            output_stream.write(chunk)

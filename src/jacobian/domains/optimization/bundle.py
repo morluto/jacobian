@@ -2,6 +2,9 @@
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.domain_bundles import DomainBundle
+from jacobian.domains.optimization.checkers import (
+    RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
+)
 from jacobian.domains.optimization.operations import RATIONAL_LINEAR_CAPABILITIES
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
@@ -30,6 +33,7 @@ def build_rational_optimization_bundle() -> DomainBundle:
         ),
         backend_version=f"sympy-{SYMPY_VERSION}",
         capabilities=RATIONAL_LINEAR_CAPABILITIES,
+        checker_declarations=RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
                 code="INVALID_RATIONAL_OPTIMIZATION_REQUEST",

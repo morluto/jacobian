@@ -22,6 +22,28 @@ def topology_services(tmp_path: Path) -> Iterator[DomainTestServices]:
         yield services
 
 
+def test_every_topology_operation_advertises_an_executable_example(
+    topology_services: DomainTestServices,
+) -> None:
+    bundle = build_topology_bundle()
+
+    for operation in bundle.capabilities:
+        spec = operation.spec
+        assert spec.invocation_examples, spec.operation_id
+        example = spec.invocation_examples[0]
+        result = topology_services.core.capabilities.invoke(
+            CapabilityRequest(
+                capability_id=spec.operation_id,
+                input=example.input,
+            )
+        )
+
+        assert result.execution.status is ExecutionStatus.COMPLETED, (
+            spec.operation_id,
+            result.diagnostics,
+        )
+
+
 _CIRCLE = {
     "vertices": ["a", "b", "c"],
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],

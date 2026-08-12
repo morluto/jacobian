@@ -19,6 +19,7 @@ from jacobian.contracts.matrices import (
 from jacobian.contracts.results import ContractModel
 
 MAX_INPUT_SCALAR_DIGITS = 256
+MAX_DETERMINANT_MATRIX_DIMENSION = 64
 
 
 def _check_integer_digits(
@@ -74,20 +75,41 @@ class SquareRationalMatrixRequest(ContractModel):
         return self
 
 
-class MatrixDeterminantRequest(ContractModel):
-    """One bounded square matrix whose exact determinant is requested."""
+class DeterminantRationalMatrix(ContractModel):
+    """One determinant-owned rational matrix bounded independently to order 64."""
 
-    matrix: RationalMatrix
+    matrix_schema_version: Literal["1"] = "1"
+    domain: Literal["QQ"] = "QQ"
+    entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=1, max_length=MAX_DETERMINANT_MATRIX_DIMENSION
+    )
+
+    @model_validator(mode="after")
+    def require_rectangular_nonempty_rows(self) -> Self:
+        column_count = len(self.entries[0])
+        if not 1 <= column_count <= MAX_DETERMINANT_MATRIX_DIMENSION:
+            raise ValueError(
+                "determinant matrix rows must contain between 1 and 64 entries"
+            )
+        if any(len(row) != column_count for row in self.entries):
+            raise ValueError("determinant matrix rows must all have the same length")
+        require_matrix_scalar_digits(
+            self.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label="determinant input",
+        )
+        return self
+
+
+class MatrixDeterminantRequest(ContractModel):
+    """One square rational matrix of order at most 64."""
+
+    matrix: DeterminantRationalMatrix
 
     @model_validator(mode="after")
     def require_square(self) -> Self:
         if len(self.matrix.entries) != len(self.matrix.entries[0]):
             raise ValueError("determinant computation requires a square matrix")
-        require_matrix_scalar_digits(
-            self.matrix.entries,
-            maximum=MAX_INPUT_SCALAR_DIGITS,
-            label="determinant input",
-        )
         return self
 
 

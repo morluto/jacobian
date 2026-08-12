@@ -47,7 +47,7 @@ def test_request_canonicalizes_unordered_duplicates_and_zero_terms() -> None:
     ) == ((4, 0), (3, 0))
 
 
-def test_request_schema_advertises_raw_polynomial_input() -> None:
+def test_request_schema_advertises_raw_and_canonical_polynomial_inputs() -> None:
     schema = CanonicalGaussianPolynomialMomentRequest.model_json_schema(
         mode="validation"
     )
@@ -57,6 +57,10 @@ def test_request_schema_advertises_raw_polynomial_input() -> None:
     references = {item.get("$ref") for item in polynomial["anyOf"]}
     assert any(
         reference and "RawGaussianPolynomial" in reference for reference in references
+    )
+    assert any(
+        reference and reference.endswith("/GaussianPolynomial")
+        for reference in references
     )
 
 
@@ -101,6 +105,11 @@ def test_canonicalization_preserves_valid_bounded_coefficient_sums() -> None:
     (term,) = request.polynomial.terms
     assert len(term.coefficient.real.num) == 129
     assert term.coefficient.real.num == str(component * 2)
+
+    replayed = CanonicalGaussianPolynomialMomentRequest.model_validate(
+        request.model_dump(mode="json")
+    )
+    assert replayed == request
 
 
 def test_direct_gaussian_polynomial_value_remains_strict() -> None:

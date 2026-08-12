@@ -139,8 +139,11 @@ Representative groups include:
 - checker plan construction and bounded replay;
 - request-local and durable value transport;
 - MCP stdio and HTTP round trips; and
-- SQLite BLOB storage at 1 KiB, 100 KiB, 1 MiB, and 10 MiB with concurrency
-  1, 4, and 16, including crash/restart and backup/restore.
+- retained filesystem-CAS storage at representative payload sizes and
+  concurrency, including crash/restart, bounded reads, and backup/restore.
+
+The disposable SQLite BLOB comparison is retained only as reproducible decision
+evidence. It is not a production backend or a routine benchmark dimension.
 
 For Lean proof-state backend comparisons, run
 `benchmarks.tooling.lean_repl_backend_benchmark` as a pyperf cell for each
@@ -151,6 +154,18 @@ retain corpus digests and correctness checks with latency, and pass
 `--inherit-environ JACOBIAN_LEAN_BENCH_ENVIRONMENT,JACOBIAN_LEAN_BENCH_BACKEND,JACOBIAN_LEAN_BENCH_PREFIX_LENGTH`
 so pyperf workers receive the selected cell identity. This is operational
 evidence only and does not relax the final `lean.check` boundary.
+
+For Lean declaration lookup comparisons, run
+`benchmarks.tooling.lean_declaration_backend_benchmark` for each relevant
+`CORE`/`MATHLIB`, `search`/`inspect`, and `cold`/`indexed`/`warm`/`persistent`
+cell. `cold` reconstructs the clean backend without a portable index;
+`indexed` restores an environment-bound catalog but still starts a clean Lean
+process; `warm` measures the bounded typed-result LRU; and `persistent` retains
+one imported environment while disabling the result LRU. Every sample validates
+the same typed declaration payload. The persistent cell remains an
+evaluation-only backend candidate, not an agent-facing tool or a production
+default. Preserve the pyperf JSON, pinned commits, source revision, corpus
+digest, and same-host cold/warm ordering when reporting a comparison.
 
 Performance never relaxes validation, evidence binding, resource admission, or
 checker independence. A fast checker that accepts forged evidence is broken.

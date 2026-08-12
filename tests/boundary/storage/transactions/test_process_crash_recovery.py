@@ -20,14 +20,14 @@ import sys
 from jacobian.storage.repository import ArtifactRepository
 
 store = ArtifactRepository(sys.argv[1])
-adjust = store._adjust_blob_bytes_committed
+adjust = store._blobs.adjust_blob_bytes_committed
 
 def reserve_then_exit(delta, *, reconciliation_required):
     adjust(delta, reconciliation_required=reconciliation_required)
     os._exit(0)
 
-store._adjust_blob_bytes_committed = reserve_then_exit
-store._write_blob(b"reserved-but-unpublished")
+store._blobs.adjust_blob_bytes_committed = reserve_then_exit
+store._blobs.write(b"reserved-but-unpublished")
 """
     completed = subprocess.run(
         [sys.executable, "-c", script, str(tmp_path)],
@@ -40,7 +40,7 @@ store._write_blob(b"reserved-but-unpublished")
 
     reopened = ArtifactRepository(tmp_path)
 
-    assert reopened._blob_bytes_committed() == 0
+    assert reopened._blobs.blob_bytes_committed() == 0
     assert not tuple((tmp_path / "blobs" / "sha256").glob("*/*"))
 
 
@@ -54,8 +54,8 @@ import sys
 from jacobian.storage.repository import ArtifactRepository
 
 store = ArtifactRepository(sys.argv[1])
-store._mark_blob_quota_reconciled = lambda: os._exit(0)
-store._write_blob(sys.argv[2].encode("ascii"))
+store._blobs.mark_blob_quota_reconciled = lambda: os._exit(0)
+store._blobs.write(sys.argv[2].encode("ascii"))
 """
     completed = subprocess.run(
         [sys.executable, "-c", script, str(tmp_path), data.decode("ascii")],
@@ -69,8 +69,8 @@ store._write_blob(sys.argv[2].encode("ascii"))
     reopened = ArtifactRepository(tmp_path)
     digest = f"sha256:{sha256(data).hexdigest()}"
 
-    assert reopened._blob_bytes_committed() == len(data)
-    assert reopened._read_blob(digest) == data
+    assert reopened._blobs.blob_bytes_committed() == len(data)
+    assert reopened._blobs.read(digest) == data
 
 
 def test_store_open_recovers_process_death_during_store_transaction(
@@ -111,7 +111,7 @@ with store.transaction():
         if blob.is_file()
     )
 
-    assert reopened._blob_bytes_committed() == stored_blob_bytes
+    assert reopened._blobs.blob_bytes_committed() == stored_blob_bytes
     assert not reopened.transaction_recovery_path.exists()
 
 
@@ -125,7 +125,7 @@ def test_clean_store_open_does_not_scan_the_blob_tree(
 ) -> None:
     store = ArtifactRepository(tmp_path)
     data = b"validated once per unchanged blob"
-    digest = store._write_blob(data)
+    digest = store._blobs.write(data)
 
     def unexpected_scan(_path: Path) -> None:
         raise AssertionError("clean store startup must trust durable quota metadata")
@@ -134,5 +134,5 @@ def test_clean_store_open_does_not_scan_the_blob_tree(
 
     reopened = ArtifactRepository(tmp_path)
 
-    assert reopened._blob_bytes_committed() == len(data)
-    assert reopened._blob_path(digest).is_file()
+    assert reopened._blobs.blob_bytes_committed() == len(data)
+    assert reopened._blobs.blob_path(digest).is_file()

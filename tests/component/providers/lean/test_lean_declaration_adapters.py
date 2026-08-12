@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
@@ -32,6 +32,7 @@ from jacobian.lean_frontend.declarations import (
     LeanDeclarationService,
 )
 from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -61,6 +62,15 @@ _RUNTIME = CapabilityProviderRuntime(
         }
     },
 )
+
+
+def _invoke_public(
+    adapter: CapabilityAdapter,
+    request: CapabilityRequest,
+):
+    projection = adapter.invoke(request)
+    assert isinstance(projection, OperationProjection)
+    return project_operation_result(projection)
 
 
 @dataclass
@@ -156,7 +166,8 @@ def test_search_adapter_exposes_bounded_computed_retrieval(tmp_path: Path) -> No
     )
     assert adapter.descriptor.invocation_examples[0].input["result_limit"] == 1
     assert "shell-searching" in adapter.descriptor.description
-    result = adapter.invoke(
+    result = _invoke_public(
+        adapter,
         CapabilityRequest(
             capability_id="lean.declaration.search",
             input={
@@ -164,7 +175,7 @@ def test_search_adapter_exposes_bounded_computed_retrieval(tmp_path: Path) -> No
                 "name_contains": "irrational_sqrt_two",
                 "result_limit": 1,
             },
-        )
+        ),
     )
     assert result.output["result"]["environment_digest"] == _DIGEST
     assert result.output["result"]["lean_version"] == "4.31.0"
@@ -202,11 +213,12 @@ def test_inspect_adapter_returns_docs_without_promoting_the_theorem(
     assert adapter.descriptor.invocation_examples[0].input["declaration_name"] == (
         "irrational_sqrt_two"
     )
-    result = adapter.invoke(
+    result = _invoke_public(
+        adapter,
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
             input={"environment": "CORE", "declaration_name": "Nat.add"},
-        )
+        ),
     )
     assert result.output["result"]["declaration"]["docstring"].startswith("Addition")
     assert result.output["result"]["environment_digest"] == _DIGEST
@@ -236,7 +248,8 @@ def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> No
         }
     )
     adapter = _query_adapter(tmp_path, backend, "lean.declaration.dependencies")
-    result = adapter.invoke(
+    result = _invoke_public(
+        adapter,
         CapabilityRequest(
             capability_id="lean.declaration.dependencies",
             input={
@@ -245,7 +258,7 @@ def test_dependency_adapter_exposes_partial_typed_subgraph(tmp_path: Path) -> No
                 "max_depth": 1,
                 "max_nodes": 20,
             },
-        )
+        ),
     )
     assert result.output["preview"]["edges"][0]["kinds"] == ["TYPE", "VALUE"]
     assert result.output["preview"]["closure_complete"] is False
@@ -262,11 +275,12 @@ def test_missing_declaration_is_an_explicit_failed_operation(tmp_path: Path) -> 
         MissingDeclarationBackend(),
         "lean.declaration.inspect",
     )
-    result = adapter.invoke(
+    result = _invoke_public(
+        adapter,
         CapabilityRequest(
             capability_id="lean.declaration.inspect",
             input={"environment": "CORE", "declaration_name": "Missing.name"},
-        )
+        ),
     )
     assert result.execution.status.value == "ERROR"
     assert result.diagnostics[0].code == "LEAN_DECLARATION_NOT_FOUND"

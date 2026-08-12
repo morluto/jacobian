@@ -9,7 +9,7 @@ from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.registry import CheckerRegistry
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 def _certificate_case(
@@ -213,7 +213,7 @@ def test_corrupt_certificate_payload_is_an_operational_failure(
 ) -> None:
     store, service, certificate_uri = _certificate_case(tmp_path)
     certificate = store.get(certificate_uri)
-    store._blob_path(certificate.manifest.payload_digest).write_bytes(b"corrupt")
+    store._blobs.blob_path(certificate.manifest.payload_digest).write_bytes(b"corrupt")
 
     result = service.verify_certificate(certificate_uri=certificate_uri)
 

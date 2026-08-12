@@ -1,29 +1,43 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
+    CapabilityResult,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.formal_datasets import build_formal_dataset_bundle
 from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
 
 
-def _adapter(tmp_path: Path):
+class _PublicAdapter:
+    def __init__(self, adapter: Any) -> None:
+        self._adapter = adapter
+        self.resources = adapter.resources
+
+    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+        projection = self._adapter.invoke(request)
+        assert isinstance(projection, OperationProjection)
+        return project_operation_result(projection)
+
+
+def _adapter(tmp_path: Path) -> _PublicAdapter:
     store = ArtifactRepository(tmp_path)
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
     installation = OperationInstaller(store, schemas, artifacts).install(
         build_formal_dataset_bundle()
     )
-    return installation.adapters[0]
+    return _PublicAdapter(installation.adapters[0])
 
 
 def _output(adapter, result) -> dict[str, object]:
@@ -319,7 +333,7 @@ def test_model_backed_artifact_rejects_digest_tampering(tmp_path: Path) -> None:
     installation = OperationInstaller(store, schemas, artifacts).install(
         build_formal_dataset_bundle()
     )
-    adapter = installation.adapters[0]
+    adapter = _PublicAdapter(installation.adapters[0])
     result = adapter.invoke(
         CapabilityRequest(
             capability_id="dataset.formal.materialize",

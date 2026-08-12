@@ -11,7 +11,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
@@ -19,7 +20,6 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.polynomial_expressions import (
     SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION,
@@ -29,7 +29,12 @@ from jacobian.contracts.polynomial_expressions import (
 )
 from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.operation_projection import OperationProjection
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
+from jacobian.polynomials._support import (
+    PolynomialOperationResult,
+    _completed_projection,
+)
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessResult,
@@ -161,6 +166,8 @@ class _SympyPolynomialNormalizationBackend:
 class SympyPolynomialExpressionNormalizeAdapter:
     """Normalize one safe typed expression to canonical sparse coefficients."""
 
+    typed_input = True
+
     def __init__(
         self,
         *,
@@ -220,7 +227,10 @@ class SympyPolynomialExpressionNormalizeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(
+        self,
+        request: CapabilityRequest,
+    ) -> OperationProjection:
         try:
             validated = PolynomialExpressionNormalizeRequest.model_validate(
                 request.input
@@ -329,21 +339,27 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 )
             ),
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        artifact_uris = (
+            (expression_uri, normalization_uri)
+            if normalization_uri is not None
+            else (expression_uri,)
+        )
+        if run.execution_status is ExecutionStatus.COMPLETED:
+            return _completed_projection(
+                descriptor=self.descriptor,
+                output=output,
+                runtime_ms=run.runtime_ms,
+                artifact_uris=artifact_uris,
+            )
+        return PolynomialOperationResult(
+            value=output,
             execution=Execution(
                 status=run.execution_status,
                 runtime_ms=run.runtime_ms,
                 detail=run.detail,
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(
-                (expression_uri, normalization_uri)
-                if normalization_uri is not None
-                else (expression_uri,)
-            ),
-        )
+            artifact_uris=artifact_uris,
+        ).project(self.descriptor)
 
 
 def _parse_worker_output(

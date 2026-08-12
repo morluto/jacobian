@@ -1,6 +1,7 @@
 """Installed finite-field operations over the authoritative native values."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.finite_fields.checkers import (
     FINITE_FIELD_EXACT_REPLAY_CHECKERS,
 )
@@ -48,7 +49,6 @@ from jacobian.operation_bindings import inline_operation
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
     SUPPORTED,
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
     OperationRefusalError,

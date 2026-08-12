@@ -12,12 +12,11 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import ValidationError
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.graph_invariants import (
     GraphInvariantBatchArtifact,
@@ -27,13 +26,15 @@ from jacobian.contracts.graph_invariants import (
     GraphInvariantResult,
     GraphInvariantResultArtifact,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.graphs.artifacts import (
     GraphArtifactResources,
     load_graph,
     nx,
     runtime_ms,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 
@@ -102,7 +103,7 @@ class GraphPropertyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         started = time.monotonic()
         try:
             validated = GraphInvariantBatchRequest.model_validate(request.input)
@@ -171,18 +172,17 @@ class GraphPropertyAdapter:
             **batch.model_dump(mode="python"),
             property_artifact_uri=property_artifact.artifact_uri,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=runtime_ms(started),
-            ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(
-                graph_uri,
-                property_artifact.artifact_uri,
-                *(binding.artifact_uri for binding in bindings),
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=output, runtime_ms=runtime_ms(started)),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(
+                    graph_uri,
+                    property_artifact.artifact_uri,
+                    *(binding.artifact_uri for binding in bindings),
+                ),
             ),
         )
 

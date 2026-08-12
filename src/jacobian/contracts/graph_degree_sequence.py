@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.results import ContractModel
@@ -29,6 +29,12 @@ class GraphDegreeSequenceObstruction(ContractModel):
     degree: int | None = Field(default=None, ge=0)
     order: int | None = Field(default=None, ge=1, le=512)
     degree_sum: int | None = Field(default=None, ge=0)
+
+    @model_serializer(mode="wrap")
+    def omit_unrelated_kind_fields(self, handler: Any) -> dict[str, Any]:
+        """Serialize only the fields meaningful for this obstruction kind."""
+
+        return {key: value for key, value in handler(self).items() if value is not None}
 
     @model_validator(mode="after")
     def require_kind_fields(self) -> Self:

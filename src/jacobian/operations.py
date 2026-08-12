@@ -5,16 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from jacobian.checker_operations import ExactReplayCheckerDeclaration
-    from jacobian.operation_bindings import InstalledOperation
+from typing import Any
 
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInvocationExample,
-    CapabilityProviderRuntime,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 
@@ -24,6 +19,12 @@ class NonConclusion:
     """Expected refusal or interruption carrying no mathematical conclusion."""
 
     diagnostic: CapabilityDiagnostic
+    status: ExecutionStatus = ExecutionStatus.ERROR
+    runtime_ms: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.status is ExecutionStatus.COMPLETED:
+            raise ValueError("non-conclusion cannot use completed execution status")
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +33,7 @@ class Failed:
 
     status: ExecutionStatus
     diagnostic: CapabilityDiagnostic
+    runtime_ms: int | None = None
 
     def __post_init__(self) -> None:
         if self.status not in {
@@ -47,7 +49,8 @@ class Completed[ResultT: ContractModel]:
     """Contract-valid mathematical result ready for publication."""
 
     value: ResultT
-    runtime_ms: int
+    runtime_ms: int | None = None
+    detail: str | None = None
 
 
 class Effect(StrEnum):
@@ -166,23 +169,3 @@ class DomainDiagnostics:
     """Domain wording for request-boundary failures."""
 
     invalid_request: CapabilityDiagnostic
-
-
-@dataclass(frozen=True, slots=True)
-class DomainBundle:
-    """Explicit installation unit owned by one mathematical domain."""
-
-    domain_id: str
-    schema_namespace: str
-    semantics: DomainSemantics
-    provider_runtime: CapabilityProviderRuntime
-    backend_version: str
-    capabilities: tuple[InstalledOperation[Any, Any], ...]
-    diagnostics: DomainDiagnostics
-    checker_declarations: tuple[ExactReplayCheckerDeclaration, ...] = ()
-
-    @property
-    def capability_ids(self) -> tuple[str, ...]:
-        """Return the capability IDs declared by exactly one installation mode."""
-
-        return tuple(operation.spec.operation_id for operation in self.capabilities)

@@ -1,6 +1,7 @@
 """Installation bundle for exact rational polynomial operations."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
 from jacobian.domains.polynomial.elementary import (
     INTEGER_POLYNOMIAL_CAPABILITIES,
@@ -14,7 +15,7 @@ from jacobian.domains.polynomial.jacobian_syzygy import (
     GRADED_JACOBIAN_SYZYGY_CAPABILITY,
     JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY,
 )
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 

@@ -6,19 +6,17 @@ from pathlib import Path
 ROOT = Path(__file__).parents[4]
 PRIMARY_COMMANDS = {
     "setup",
-    "doctor",
-    "fix",
-    "check-changed",
+    "quick",
     "check",
-    "ci-plan",
+    "check-external",
+    "fix",
 }
 PRIMARY_COMMAND_ORDER = [
     "setup",
-    "doctor",
-    "fix",
-    "check-changed",
+    "quick",
     "check",
-    "ci-plan",
+    "check-external",
+    "fix",
 ]
 
 
@@ -46,8 +44,6 @@ def test_help_all_retains_specialist_and_compatibility_commands() -> None:
 
     assert commands >= PRIMARY_COMMANDS
     assert commands >= {
-        "test-plan",
-        "test-changed",
         "test-unit",
         "test-component",
         "test-domain",

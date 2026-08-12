@@ -75,16 +75,26 @@ def test_subprocess_in_checkers_is_flagged(tmp_path: Path) -> None:
     assert sub[0].path == "src/jacobian_checkers/sat.py"
 
 
-def test_subprocess_in_test_topology_is_flagged(tmp_path: Path) -> None:
+def test_subprocess_in_unlisted_tool_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "tools/test_topology.py",
+        "tools/unlisted_runner.py",
         "import subprocess\n\nsubprocess.run(['echo'])\n",
     )
     report = check_architecture(tmp_path)
     sub = [v for v in report.violations if v.code == "subprocess-confined"]
     assert len(sub) == 1
-    assert sub[0].path == "tools/test_topology.py"
+    assert sub[0].path == "tools/unlisted_runner.py"
+
+
+def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tools/development_profiles.py",
+        "import subprocess\n\nsubprocess.run(['uv', 'sync'])\n",
+    )
+    report = check_architecture(tmp_path)
+    assert all(v.code != "subprocess-confined" for v in report.violations)
 
 
 def test_subprocess_in_deleted_e2e_fixture_is_rejected(tmp_path: Path) -> None:
@@ -135,10 +145,10 @@ def test_os_execvpe_in_product_is_flagged(tmp_path: Path) -> None:
     assert "execvpe" in sub[0].message
 
 
-def test_os_execvpe_in_test_topology_is_flagged(tmp_path: Path) -> None:
+def test_os_execvpe_in_unlisted_tool_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "tools/test_topology.py",
+        "tools/unlisted_runner.py",
         "import os\n\nos.execvpe('python', ['python'], {})\n",
     )
     report = check_architecture(tmp_path)

@@ -14,14 +14,13 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_proof_axioms import (
@@ -30,7 +29,9 @@ from jacobian.contracts.lean_proof_axioms import (
     LeanProofAxiomsInspectRequest,
 )
 from jacobian.contracts.lean_statement import LeanElaborationDiagnostic
-from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.providers.lean_runtime import (
     LeanRuntimeIdentityError,
     lean_semantic_runtime_digest,
@@ -161,7 +162,7 @@ class LeanProofAxiomsAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = LeanProofAxiomsInspectRequest.model_validate(request.input)
             _validate_source(validated.statement, validated.proof)
@@ -256,16 +257,18 @@ class LeanProofAxiomsAdapter:
             **artifact_payload.model_dump(mode="python"),
             proof_axioms_uri=artifact.artifact_uri,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=int((time.monotonic() - started) * 1000),
                 detail=inspection["detail"],
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(artifact.artifact_uri,),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(artifact.artifact_uri,),
+            ),
         )
 
 

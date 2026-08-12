@@ -18,21 +18,19 @@ from pathlib import Path
 from pydantic import ValidationError
 
 import jacobian.lean_frontend.exploration as _exploration_support
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean_metavariable_fields import (
     LeanMetavariableFieldsArtifact,
     LeanMetavariableFieldsOutput,
     LeanMetavariableFieldsRequest,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend._state_validation import _load_validated_proof_state
 from jacobian.lean_frontend.artifacts import (
     _environment_digest,
@@ -45,6 +43,9 @@ from jacobian.lean_frontend.exploration import (
     _validate_source_parts,
 )
 from jacobian.lean_frontend.repl import _response_errors
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 
 
 class LeanMetavariableFieldsAdapter:
@@ -82,7 +83,7 @@ class LeanMetavariableFieldsAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = LeanMetavariableFieldsRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -251,16 +252,14 @@ class LeanMetavariableFieldsAdapter:
             **artifact_payload.model_dump(mode="python"),
             metavariable_fields_uri=artifact.artifact_uri,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
-                runtime_ms=_runtime_ms(started),
-                detail=None,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=output, runtime_ms=_runtime_ms(started)),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(validated.state_uri, artifact.artifact_uri),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(validated.state_uri, artifact.artifact_uri),
         )
 
 

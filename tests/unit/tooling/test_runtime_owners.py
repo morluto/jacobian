@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.test_plan.runtime_owners import (
+from tools.test_architecture.runtime_owners import (
     allows_complete_runtime_fixture,
     allows_create_runtime,
 )

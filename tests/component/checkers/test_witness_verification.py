@@ -19,7 +19,8 @@ from jacobian.contracts.results import (
 from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.registry import CheckerRegistry
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.executor import BoundedCheckerExecutor
+from jacobian.verification.service import VerificationService
 
 
 def _graph_case(
@@ -27,6 +28,7 @@ def _graph_case(
     *,
     candidate_schema_definition: dict[str, object] | None = None,
     checker_entrypoint: str = "jacobian_checkers.graph_paths:check_omitted_path",
+    checker_executor: BoundedCheckerExecutor | None = None,
 ) -> tuple[
     ArtifactRepository,
     VerificationService,
@@ -120,7 +122,7 @@ def _graph_case(
     )
     return (
         store,
-        VerificationService(store, registry),
+        VerificationService(store, registry, checker_executor=checker_executor),
         checker.checker_id,
         claim.artifact_uri,
         candidate.artifact_uri,
@@ -162,7 +164,7 @@ def test_checker_timeout_and_cancellation_are_non_conclusions(
     )
     for stopped, expected_status in cases:
         monkeypatch.setattr(
-            "jacobian.verification.service.execute_process",
+            "jacobian.verification.executor.execute_process",
             lambda *_args, _stopped=stopped, **_kwargs: _stopped,
         )
 
@@ -242,10 +244,15 @@ def test_invalid_checker_responses_explain_recovery(
 
 
 def test_checker_output_limit_explains_recovery(tmp_path: Path) -> None:
-    _, service, checker_id, claim_uri, candidate_uri, witness_uri, _ = _graph_case(
-        tmp_path
+    executor = BoundedCheckerExecutor(
+        checker_timeout_seconds=30,
+        max_checker_output_bytes=32,
+        max_checker_diagnostic_bytes=1024 * 1024,
     )
-    service.max_checker_output_bytes = 32
+    _, service, checker_id, claim_uri, candidate_uri, witness_uri, _ = _graph_case(
+        tmp_path,
+        checker_executor=executor,
+    )
 
     result = service.verify_witness(
         claim_uri=claim_uri,
@@ -262,11 +269,16 @@ def test_checker_output_limit_explains_recovery(tmp_path: Path) -> None:
 
 
 def test_checker_diagnostic_limit_explains_recovery(tmp_path: Path) -> None:
+    executor = BoundedCheckerExecutor(
+        checker_timeout_seconds=30,
+        max_checker_output_bytes=1024 * 1024,
+        max_checker_diagnostic_bytes=32,
+    )
     _, service, checker_id, claim_uri, candidate_uri, witness_uri, _ = _graph_case(
         tmp_path,
         checker_entrypoint="tests.component.checkers._fixture_checkers:emit_large_diagnostic",
+        checker_executor=executor,
     )
-    service.max_checker_diagnostic_bytes = 32
 
     result = service.verify_witness(
         claim_uri=claim_uri,
@@ -314,7 +326,7 @@ def test_corrupt_verification_artifact_is_an_operational_failure(
     )
     claim = store.get(claim_uri)
     claim_digest = claim.manifest.object_digest
-    store._blob_path(claim.manifest.payload_digest).write_bytes(b"corrupt")
+    store._blobs.blob_path(claim.manifest.payload_digest).write_bytes(b"corrupt")
 
     result = service.verify_witness(
         claim_uri=claim_uri,
@@ -355,8 +367,14 @@ def test_witness_checker_cannot_certify_artifacts_outside_its_request(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    executor = BoundedCheckerExecutor(
+        checker_timeout_seconds=30,
+        max_checker_output_bytes=1024 * 1024,
+        max_checker_diagnostic_bytes=1024 * 1024,
+    )
     _, service, checker_id, claim_uri, candidate_uri, witness_uri, _ = _graph_case(
-        tmp_path
+        tmp_path,
+        checker_executor=executor,
     )
     foreign_uri = "artifact://sha256/" + "f" * 64
     decisions = (
@@ -382,8 +400,8 @@ def test_witness_checker_cannot_certify_artifacts_outside_its_request(
 
     for decision in decisions:
         monkeypatch.setattr(
-            service,
-            "_run_checker",
+            executor,
+            "execute",
             lambda decision=decision, **_kwargs: decision,
         )
 
@@ -508,6 +526,21 @@ def test_revocation_during_checker_execution_prevents_commit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    executor = BoundedCheckerExecutor(
+        checker_timeout_seconds=30,
+        max_checker_output_bytes=1024 * 1024,
+        max_checker_diagnostic_bytes=1024 * 1024,
+    )
+    entered = threading.Event()
+    release = threading.Event()
+    original = executor.execute
+
+    def delayed_checker(**kwargs: Any) -> Any:
+        entered.set()
+        assert release.wait(timeout=5)
+        return original(**kwargs)
+
+    monkeypatch.setattr(executor, "execute", delayed_checker)
     (
         store,
         service,
@@ -516,17 +549,7 @@ def test_revocation_during_checker_execution_prevents_commit(
         candidate_uri,
         witness_uri,
         _,
-    ) = _graph_case(tmp_path)
-    entered = threading.Event()
-    release = threading.Event()
-    original = service._run_checker
-
-    def delayed_checker(**kwargs: Any) -> Any:
-        entered.set()
-        assert release.wait(timeout=5)
-        return original(**kwargs)
-
-    monkeypatch.setattr(service, "_run_checker", delayed_checker)
+    ) = _graph_case(tmp_path, checker_executor=executor)
     result_holder: list[Any] = []
     worker = threading.Thread(
         target=lambda: result_holder.append(

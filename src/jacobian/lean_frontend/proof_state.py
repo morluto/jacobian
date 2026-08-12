@@ -10,13 +10,12 @@ from pathlib import Path
 from pydantic import ValidationError
 
 import jacobian.lean_frontend.exploration as _exploration_support
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean import LeanDiagnosticPhase, LeanDiagnosticSource
 from jacobian.contracts.lean_exploration import (
@@ -48,6 +47,9 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplProofStepResponse,
     LeanReplValidatedExecution,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,14 +272,20 @@ class LeanProofStateAdapter:
                     ) from exc
         return responses, typed_goals, accepted
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         applied = self.apply(self._validate_request(request))
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=applied.execution,
-            output=applied.output.model_dump(mode="json"),
-            artifact_uris=applied.artifact_uris,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=applied.output,
+                runtime_ms=applied.execution.runtime_ms,
+                detail=applied.execution.detail,
+            ),
+            publication=PublishedOperation(
+                output=applied.output,
+                artifact_uris=applied.artifact_uris,
+            ),
         )
 
     def apply(

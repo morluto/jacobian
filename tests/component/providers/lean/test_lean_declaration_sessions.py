@@ -20,7 +20,7 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
 )
-from jacobian.contracts.lean import LeanEnvironment
+from jacobian.contracts.lean import LeanDeclarationSearchStopReason, LeanEnvironment
 from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationBackendResult,
     LeanDeclarationInspectPayload,
@@ -33,7 +33,15 @@ from jacobian.lean_frontend.declaration_protocol import (
 from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
     LeanSubprocessDeclarationBackend,
+    _parse_persistent_response,
     _parse_session_response,
+    _ReusableLeanQuerySession,
+    _seal_declaration_index,
+)
+from jacobian.process_policy import ProcessResult, ProcessTermination
+from jacobian.providers.lean_runtime import (
+    lean_portable_semantic_runtime_digest,
+    lean_semantic_runtime_digest,
 )
 
 _RUNTIME = CapabilityProviderRuntime(
@@ -86,7 +94,7 @@ def _search_payload() -> LeanDeclarationSearchPayload:
         operation="search",
         declarations=(),
         scanned_declarations=0,
-        stop_reason="EXHAUSTED",
+        stop_reason=LeanDeclarationSearchStopReason.EXHAUSTED,
     )
 
 
@@ -200,6 +208,56 @@ def test_environment_identity_fails_closed_if_the_lean_executable_changes(
     with pytest.raises(LeanDeclarationBackendError) as raised:
         backend.environment_digest(LeanEnvironment.CORE)
     assert raised.value.code == "LEAN_ENVIRONMENT_CHANGED"
+
+
+def test_portable_semantic_digest_excludes_only_the_deployment_root() -> None:
+    first: dict[str, Any] = {
+        "contract": "jacobian.lean.semantic-runtime/v1",
+        "executable": {"digest": "sha256:" + "a" * 64},
+        "mathlib_project": {
+            "root": "/opt/jacobian/release-a/lean",
+            "lake_digest": "sha256:" + "b" * 64,
+            "loaded_modules": [{"path": "Mathlib.olean", "digest": "content"}],
+        },
+    }
+    second: dict[str, Any] = {
+        **first,
+        "mathlib_project": {
+            **first["mathlib_project"],
+            "root": "/srv/jacobian/release-b/lean",
+        },
+    }
+
+    assert lean_semantic_runtime_digest(first) != lean_semantic_runtime_digest(second)
+    assert lean_portable_semantic_runtime_digest(
+        first
+    ) == lean_portable_semantic_runtime_digest(second)
+
+
+def test_persistent_declaration_backend_uses_pinned_adjacent_lake(
+    tmp_path: Path,
+) -> None:
+    toolchain_bin = tmp_path / "toolchain" / "bin"
+    toolchain_bin.mkdir(parents=True)
+    lean = toolchain_bin / "lean"
+    lake = toolchain_bin / "lake"
+    lean.write_bytes(b"lean")
+    lake.write_bytes(b"lake")
+    runtime = tmp_path / "mathlib-runtime"
+    repl = runtime / ".lake/packages/repl/.lake/build/bin/repl"
+    repl.parent.mkdir(parents=True)
+    repl.write_bytes(b"repl")
+    backend = LeanSubprocessDeclarationBackend(
+        lean_executable=lean,
+        mathlib_runtime=runtime,
+        provider_runtime=_RUNTIME,
+        session_backend="persistent",
+    )
+
+    command, cwd = backend._persistent_command()
+
+    assert command == [str(lake.resolve()), "env", str(repl.resolve())]
+    assert cwd == runtime
 
 
 def test_mathlib_declaration_environment_authorizes_manifest_checkouts(
@@ -375,3 +433,234 @@ def test_session_protocol_preserves_exact_missing_declaration_failure() -> None:
         _parse_session_response(line, expected_request_id="current")
     assert raised.value.code == "LEAN_DECLARATION_NOT_FOUND"
     assert raised.value.message == "Lean did not find the exact requested declaration."
+
+
+def _clean_session(
+    tmp_path: Path,
+    *,
+    cache_results: bool = True,
+    index_cache_path: Path | None = None,
+) -> _ReusableLeanQuerySession:
+    return _ReusableLeanQuerySession(
+        command=[str(tmp_path / "lean")],
+        cwd=tmp_path,
+        process_environment={},
+        source="import Init.Prelude",
+        memory_mb="1024",
+        isolated_home=True,
+        environment_digest="sha256:" + "c" * 64,
+        index_cache_path=index_cache_path,
+        cache_results=cache_results,
+    )
+
+
+def _inspect_process_result(request_id: str) -> ProcessResult:
+    payload = {
+        "request_id": request_id,
+        "payload": _inspect_payload().model_dump(mode="json"),
+    }
+    return ProcessResult(
+        termination=ProcessTermination.EXITED,
+        returncode=0,
+        stdout=(
+            "JACOBIAN_DECLARATION_RESULT "
+            + json.dumps(payload, separators=(",", ":"))
+            + "\n"
+        ).encode(),
+        stderr=b"",
+        stdout_exceeded=False,
+        stderr_exceeded=False,
+    )
+
+
+def test_clean_session_reuses_exact_typed_metadata_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def execute(request: Any) -> ProcessResult:
+        nonlocal calls
+        calls += 1
+        query = json.loads(
+            Path(request.environment["JACOBIAN_LEAN_QUERY_FILE"]).read_text()
+        )
+        return _inspect_process_result(query["request_id"])
+
+    monkeypatch.setattr("jacobian.lean_frontend.declarations.execute_process", execute)
+    session = _clean_session(tmp_path)
+
+    first = session.request(_inspect_query(), timeout_seconds=1)
+    second = session.request(_inspect_query(), timeout_seconds=1)
+
+    assert first is second
+    assert calls == 1
+    session.close()
+
+
+def test_clean_session_can_disable_result_cache_for_backend_comparison(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def execute(request: Any) -> ProcessResult:
+        nonlocal calls
+        calls += 1
+        query = json.loads(
+            Path(request.environment["JACOBIAN_LEAN_QUERY_FILE"]).read_text()
+        )
+        return _inspect_process_result(query["request_id"])
+
+    monkeypatch.setattr("jacobian.lean_frontend.declarations.execute_process", execute)
+    session = _clean_session(tmp_path, cache_results=False)
+
+    session.request(_inspect_query(), timeout_seconds=1)
+    session.request(_inspect_query(), timeout_seconds=1)
+
+    assert calls == 2
+    session.close()
+
+
+def test_clean_session_restores_portable_environment_bound_catalog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    seen_queries: list[dict[str, Any]] = []
+
+    def execute(request: Any) -> ProcessResult:
+        query_path = Path(request.environment["JACOBIAN_LEAN_QUERY_FILE"])
+        query = json.loads(query_path.read_text())
+        seen_queries.append(query)
+        index_path = Path(request.environment["JACOBIAN_LEAN_INDEX_FILE"])
+        if not index_path.exists():
+            index_path.write_text(
+                "sha256:" + "c" * 64 + "\nNat.add\tInit.Prelude\tDEFINITION\n",
+                encoding="utf-8",
+            )
+        payload = {
+            "request_id": query["request_id"],
+            "payload": _search_payload().model_dump(mode="json"),
+        }
+        return ProcessResult(
+            termination=ProcessTermination.EXITED,
+            returncode=0,
+            stdout=(
+                "JACOBIAN_DECLARATION_RESULT "
+                + json.dumps(payload, separators=(",", ":"))
+                + "\n"
+            ).encode(),
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+        )
+
+    monkeypatch.setattr("jacobian.lean_frontend.declarations.execute_process", execute)
+    first = _clean_session(tmp_path, index_cache_path=cache_path)
+    first.request(_search_query(), timeout_seconds=1)
+    first.close()
+    assert cache_path.is_file()
+
+    second = _clean_session(tmp_path, index_cache_path=cache_path)
+    second.request(_search_query(), timeout_seconds=1)
+    second.close()
+
+    assert seen_queries[0]["scanned_declarations_total"] is None
+    assert seen_queries[1]["candidate_names"] == ["Nat.add"]
+    assert seen_queries[1]["candidate_scan_positions"] == [1]
+    assert seen_queries[1]["scanned_declarations_total"] == 1
+
+
+def test_clean_session_ignores_corrupt_portable_catalog(tmp_path: Path) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    cache_path.parent.mkdir()
+    cache_path.write_text(
+        "sha256:" + "c" * 64 + "\nmalformed-row\n",
+        encoding="utf-8",
+    )
+
+    session = _clean_session(tmp_path, index_cache_path=cache_path)
+
+    assert session._index_digest is None
+    assert not session._index_path.exists()
+    session.close()
+
+
+def test_clean_session_ignores_row_boundary_truncated_catalog(tmp_path: Path) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    cache_path.parent.mkdir()
+    cache_path.write_text(
+        "sha256:" + "c" * 64 + "\nNat.add\tInit.Prelude\tDEFINITION\n",
+        encoding="utf-8",
+    )
+
+    session = _clean_session(tmp_path, index_cache_path=cache_path)
+
+    assert session._index_digest is None
+    assert not session._index_path.exists()
+    session.close()
+
+
+def test_clean_session_ignores_catalog_with_mismatched_content_digest(
+    tmp_path: Path,
+) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    cache_path.parent.mkdir()
+    environment_digest = "sha256:" + "c" * 64
+    cache_path.write_text(
+        environment_digest + "\nNat.add\tInit.Prelude\tDEFINITION\n",
+        encoding="utf-8",
+    )
+    _seal_declaration_index(
+        cache_path,
+        environment_digest=environment_digest,
+    )
+    cache_path.write_bytes(cache_path.read_bytes().replace(b"Nat.add", b"Nat.mul"))
+
+    session = _clean_session(tmp_path, index_cache_path=cache_path)
+
+    assert session._index_digest is None
+    assert not session._index_path.exists()
+    session.close()
+
+
+def test_clean_session_bounds_corrupt_cache_before_restore(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_path = tmp_path / "state" / "core.index"
+    cache_path.parent.mkdir()
+    cache_path.write_bytes(b"x" * 65)
+    monkeypatch.setattr("jacobian.lean_frontend.declarations._MAX_INDEX_BYTES", 64)
+
+    session = _clean_session(tmp_path, index_cache_path=cache_path)
+
+    assert session._index_digest is None
+    assert not session._index_path.exists()
+    session.close()
+
+
+def test_persistent_response_requires_one_typed_marker() -> None:
+    response = {
+        "env": 1,
+        "messages": [
+            {
+                "pos": {"line": 1, "column": 0},
+                "severity": "info",
+                "data": (
+                    "JACOBIAN_DECLARATION_RESULT "
+                    + json.dumps(
+                        {
+                            "request_id": "current",
+                            "payload": _inspect_payload().model_dump(mode="json"),
+                        }
+                    )
+                ),
+            }
+        ],
+    }
+
+    payload = _parse_persistent_response(response, expected_request_id="current")
+
+    assert payload == _inspect_payload()

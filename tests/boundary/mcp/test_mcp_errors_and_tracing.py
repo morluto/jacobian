@@ -38,7 +38,7 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    caplog.set_level(logging.INFO, logger="jacobian.adapters.mcp.server")
+    caplog.set_level(logging.INFO, logger="jacobian.adapters.mcp.core")
     caplog.set_level(logging.INFO, logger="jacobian.adapters.mcp.tooling")
 
     async def scenario() -> None:

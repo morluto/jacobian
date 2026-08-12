@@ -88,6 +88,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/bounded_process.py"),
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
+        PurePosixPath("tools/development_profiles.py"),
         # This clean-room verifier must independently replay the pinned Lean
         # protocol inside its isolated verifier image.  It cannot import the
         # repository command runner without widening the verifier build
@@ -107,9 +108,8 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/public_api/test_import_isolation.py"),
         # Tooling boundary tests invoke CI scripts and installers as subprocesses.
         PurePosixPath("tests/boundary/process/tooling/ci.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_ci_ownership_manifest.py"),
         PurePosixPath("tests/boundary/process/tooling/test_deploy_installer.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_topology_runner.py"),
+        PurePosixPath("tests/boundary/process/tooling/test_supervised_make_lanes.py"),
         PurePosixPath("tests/boundary/process/tooling/test_cli_import_surface.py"),
         PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
         PurePosixPath("tests/boundary/process/tooling/test_make_help.py"),
@@ -235,10 +235,10 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/lean_frontend/exploration.py"),
         PurePosixPath("src/jacobian_checkers/lean4.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
+        PurePosixPath("tools/development_profiles.py"),
         PurePosixPath("tools/source_agent_doctor.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_ci_ownership_manifest.py"),
         PurePosixPath("tests/boundary/process/tooling/test_deploy_installer.py"),
         PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
     }

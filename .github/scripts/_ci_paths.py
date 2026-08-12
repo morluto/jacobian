@@ -1,10 +1,8 @@
-"""Shared path-decoding policy for the CI planner scripts.
+"""Shared path-decoding policy for Harbor ``PATHS`` inputs.
 
-These helpers are the single source of truth for turning a ``PATHS`` input
-(JSON array, newline list, or shell-quoted tokens) into repository-relative
-paths.  Every planner (``classify-ci-paths``, ``plan-local-tests``, and
-``plan-benchmarks``) imports them so that normalization policy cannot drift
-between the control planes.
+These helpers turn a ``PATHS`` input (JSON array, newline list, or
+shell-quoted tokens) into repository-relative paths. Harbor planning is the
+only remaining consumer.
 """
 
 from __future__ import annotations

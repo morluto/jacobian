@@ -7,9 +7,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from jacobian.domain_bundles import DomainBundle
 from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.operation_installation import InstalledDomainBundle
-from jacobian.operations import DomainBundle
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.config import CheckerAuthorityMode

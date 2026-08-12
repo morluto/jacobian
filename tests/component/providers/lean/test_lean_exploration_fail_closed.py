@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,

@@ -8,8 +8,8 @@ from typing import Any
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.results import ContractModel
+from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import InstalledOperation
-from jacobian.operations import DomainBundle
 from jacobian.value_references import ValueReferenceStore
 
 type DomainOperation = InstalledOperation[Any, Any]

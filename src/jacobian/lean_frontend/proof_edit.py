@@ -10,13 +10,12 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean_proof_edit import (
     LeanProofEditArtifact,
@@ -29,6 +28,9 @@ from jacobian.contracts.results import (
     VerificationResult,
 )
 from jacobian.lean_frontend.service import LeanService
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -123,7 +125,7 @@ class LeanProofEditAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = LeanProofEditRequest.model_validate(request.input)
             if _FORBIDDEN_PROOF_HOLE.search(
@@ -200,33 +202,57 @@ class LeanProofEditAdapter:
             **payload.model_dump(mode="python"),
             proof_edit_uri=artifact.artifact_uri,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=checked.result.execution.model_copy(
-                update={"runtime_ms": int((time.monotonic() - started) * 1000)}
+        execution = checked.result.execution.model_copy(
+            update={"runtime_ms": int((time.monotonic() - started) * 1000)}
+        )
+        terminal = (
+            Completed(
+                value=output,
+                runtime_ms=execution.runtime_ms,
+                detail=execution.detail,
+            )
+            if execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=execution.status,
+                runtime_ms=execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="LEAN_PROOF_EDIT_CHECKER_NOT_COMPLETED",
+                    stage="checker_replay",
+                    message=(
+                        execution.detail
+                        or "The authorized Lean checker did not complete."
+                    ),
+                ),
+            )
+        )
+        artifact_uris = (
+            checked.claim_uri,
+            baseline.candidate_uri,
+            baseline.certificate_uri,
+            *(
+                (baseline.result.verification_record_uri,)
+                if baseline.result.verification_record_uri is not None
+                else ()
             ),
-            output=output.model_dump(mode="json"),
+            checked.candidate_uri,
+            checked.certificate_uri,
+            *(
+                (checked.result.verification_record_uri,)
+                if checked.result.verification_record_uri is not None
+                else ()
+            ),
+            artifact.artifact_uri,
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=artifact_uris,
+            ),
             verification_record_uri=(
                 checked.result.verification_record_uri if verified else None
-            ),
-            artifact_uris=(
-                checked.claim_uri,
-                baseline.candidate_uri,
-                baseline.certificate_uri,
-                *(
-                    (baseline.result.verification_record_uri,)
-                    if baseline.result.verification_record_uri is not None
-                    else ()
-                ),
-                checked.candidate_uri,
-                checked.certificate_uri,
-                *(
-                    (checked.result.verification_record_uri,)
-                    if checked.result.verification_record_uri is not None
-                    else ()
-                ),
-                artifact.artifact_uri,
             ),
         )
 

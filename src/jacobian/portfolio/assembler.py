@@ -9,14 +9,14 @@ from jacobian.portfolio.core_installation import CoreApplicationInstaller
 from jacobian.portfolio.foundation_installation import FoundationInstaller
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
 from jacobian.portfolio.resource_installation import ResourceCapabilityInstaller
-from jacobian.portfolio.result import PortfolioInstallation
+from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import RuntimeServices
 
 
 def install_portfolio(
     context: InstallationContext,
     services: RuntimeServices,
-) -> PortfolioInstallation:
+) -> PortfolioResources:
     """Install the complete portfolio in its declared phase order.
 
     This function is the single composition boundary for the built-in
@@ -31,7 +31,7 @@ def install_portfolio(
     if context.store is not core.store:
         raise ValueError("installation context must belong to runtime core")
 
-    result = PortfolioInstallation()
+    resources = PortfolioResources()
     resolver = ProviderAvailabilityResolver()
     try:
         with (
@@ -42,22 +42,20 @@ def install_portfolio(
             runtimes = resolver.resolve()
             FoundationInstaller(context).install(
                 core,
-                result,
                 runtimes,
             )
-            CoreApplicationInstaller(context).install(
+            graph = CoreApplicationInstaller(context).install(
                 services,
-                result,
             )
-            ResourceCapabilityInstaller(context).install(result)
+            ResourceCapabilityInstaller(context).install(graph)
             CheckerPortfolioInstaller(context, resolver).install(
                 services,
-                result,
+                resources,
             )
     except BaseException as exc:
         try:
-            result.close()
+            resources.close()
         except BaseException as cleanup_exc:
             exc.add_note(f"partial portfolio cleanup also failed: {cleanup_exc}")
         raise
-    return result
+    return resources

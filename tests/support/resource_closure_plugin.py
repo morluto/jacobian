@@ -9,8 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tools.test_plan.authority_signals import has_verify_authority_signal
-from tools.test_plan.runtime_owners import allows_complete_runtime_fixture
+from tools.test_architecture.authority_signals import has_verify_authority_signal
+from tools.test_architecture.runtime_owners import allows_complete_runtime_fixture
 
 from tests.support.resource_contracts import ResourceKind, resource_contract
 

@@ -87,7 +87,7 @@ def test_release_candidate_dispatches_full_ci_after_lockfile_sync() -> None:
 
     ci_triggers = ci.split("on:", 1)[1].split("concurrency:", 1)[0]
     assert "workflow_dispatch:" in ci_triggers
-    assert "plan_output=$(.github/scripts/classify-ci-paths --force-exhaustive)" in ci
+    assert "name: required" in ci
 
     lockfile_sync = release_please.index("name: Synchronize release lockfile")
     candidate_dispatch = release_please.index("name: Dispatch release candidate CI")

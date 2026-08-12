@@ -10,10 +10,8 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import (
-    CapabilityAdapter,
-    CapabilityInvocationError,
-)
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
@@ -21,7 +19,6 @@ from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInvocationExample,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -39,11 +36,14 @@ from jacobian.contracts.finite_coverage import (
     FiniteCoverageVerifyRequest,
 )
 from jacobian.contracts.results import Conclusion, ExecutionStatus
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,7 +255,7 @@ class FiniteCoverageVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = FiniteCoverageVerifyRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -495,13 +495,32 @@ class FiniteCoverageVerifyAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=checked.execution,
-            output=output.model_dump(mode="json"),
+        terminal = (
+            Completed(
+                value=output,
+                runtime_ms=checked.execution.runtime_ms,
+                detail=checked.execution.detail,
+            )
+            if checked.execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=checked.execution.status,
+                runtime_ms=checked.execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="FINITE_COVERAGE_VERIFICATION_FAILED",
+                    stage="finite_coverage_verification",
+                    message=checked.execution.detail or detail,
+                ),
+            )
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=tuple(artifact_uris),
+            ),
             verification_record_uri=record_uri,
-            artifact_uris=tuple(artifact_uris),
         )
 
 

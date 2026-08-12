@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.matrix_lattice.capabilities import MATRIX_CAPABILITIES
 from jacobian.domains.matrix_lattice.checkers import MATRIX_EXACT_REPLAY_CHECKERS
 from jacobian.domains.matrix_lattice.hnf import HERMITE_NORMAL_FORM_CAPABILITY
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 

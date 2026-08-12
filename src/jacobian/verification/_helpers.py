@@ -60,7 +60,7 @@ def _digest_bytes(data: bytes) -> str:
 
 
 def _environment_digest(
-    checker_digest: str,
+    implementation_digest: str,
     provider_runtime: CapabilityProviderRuntime | None = None,
 ) -> str:
     identity: dict[str, Any] = {
@@ -68,7 +68,7 @@ def _environment_digest(
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "platform": platform.platform(),
-        "checker_digest": checker_digest,
+        "implementation_digest": implementation_digest,
     }
     if provider_runtime is not None:
         identity["provider_runtime"] = provider_runtime.model_dump(mode="json")
@@ -81,7 +81,12 @@ def _checker_failure_detail(response: CheckerWorkerFailure) -> str:
             return _CHECKER_CHANGED
         case "RESPONSE_INVALID":
             return _CHECKER_INVALID_DECISION
-        case "EXECUTION_FAILED" | "INVALID_REQUEST" | "MALFORMED_RUNTIME":
+        case (
+            "EXECUTION_FAILED"
+            | "INVALID_REQUEST"
+            | "MALFORMED_RUNTIME"
+            | "UNDECLARED_IMPORT"
+        ):
             return _CHECKER_STOPPED
 
 

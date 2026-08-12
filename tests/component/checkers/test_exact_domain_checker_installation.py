@@ -221,7 +221,7 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
                 )
             )
         )
-        assert registration.entrypoint.startswith(expected_module)
+        assert registration.implementation.entrypoint.startswith(expected_module)
     graph_runtime = installation.provider_runtimes["finite-graph"]
     assert graph_runtime.provider == "jacobian.graph-exact-checkers"
     assert {

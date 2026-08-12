@@ -6,16 +6,15 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import (
     CapabilityInvocationError,
     enriched_invalid_request,
 )
-from jacobian.capability_service import CapabilityAdapter
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.common import ArtifactUri, CheckerUri
 from jacobian.contracts.results import (
@@ -23,9 +22,12 @@ from jacobian.contracts.results import (
     ExecutionStatus,
     VerificationResult,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 __all__ = [
     "CertificateReplayRequest",
@@ -87,7 +89,7 @@ class _VerificationProjection:
     def result(
         self,
         result: VerificationResult,
-    ) -> CapabilityResult:
+    ) -> OperationProjection:
         verified = (
             result.execution.status is ExecutionStatus.COMPLETED
             and result.verification_record_uri is not None
@@ -99,15 +101,37 @@ class _VerificationProjection:
             references.add(result.verification_record_uri)
             record = self.verification.store.get(result.verification_record_uri)
             references.update(record.manifest.parents)
-        return CapabilityResult(
-            capability_id=self.capability_id,
-            capability_version="1",
-            execution=result.execution,
-            output=result.model_dump(mode="json"),
-            verification_record_uri=(
-                result.verification_record_uri if verified else None
+        record_uri = result.verification_record_uri if verified else None
+        terminal = (
+            Completed(
+                value=result,
+                runtime_ms=result.execution.runtime_ms,
+                detail=result.execution.detail,
+            )
+            if result.execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=result.execution.status,
+                runtime_ms=result.execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="CHECKER_REPLAY_EXECUTION_FAILED",
+                    stage="checker_replay",
+                    message=(
+                        result.execution.detail
+                        or (result.input.errors[0] if result.input.errors else None)
+                        or "The authorized checker did not complete the replay."
+                    ),
+                ),
+            )
+        )
+        return OperationProjection(
+            operation_id=self.capability_id,
+            version="1",
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=result,
+                artifact_uris=tuple(sorted(references)),
             ),
-            artifact_uris=tuple(sorted(references)),
+            verification_record_uri=record_uri,
         )
 
 
@@ -124,7 +148,7 @@ class CertificateVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = CertificateReplayRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -151,7 +175,7 @@ class WitnessVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = WitnessReplayRequest.model_validate(request.input)
         except ValidationError as exc:

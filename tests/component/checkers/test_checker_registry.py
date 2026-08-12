@@ -127,7 +127,7 @@ def test_checker_policy_lock_must_precede_store_transaction(tmp_path: Path) -> N
         ),
         registry.verification_guard(
             checker.checker_id,
-            expected_digest=checker.executable_digest,
+            expected_implementation_digest=checker.implementation_digest,
         ),
     ):
         pass
@@ -221,7 +221,7 @@ def test_checker_registry_rejects_identity_metadata_corruption(
             connection.execute(
                 """
                 UPDATE checkers
-                SET executable_digest = ?
+                    SET implementation_digest = ?
                 WHERE checker_id = ?
                 """,
                 ("sha256:" + "0" * 64, checker.checker_id),
@@ -294,7 +294,10 @@ def test_checker_registry_binds_external_runtime_identity(tmp_path: Path) -> Non
         provider_runtime=runtime,
     )
 
-    assert registry.require_active(checker.checker_id).provider_runtime == runtime
+    assert (
+        registry.require_active(checker.checker_id).implementation.provider_runtime
+        == runtime
+    )
 
     executable.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     executable.chmod(0o755)
@@ -333,4 +336,7 @@ def test_checker_registry_authorizes_python_distribution_runtime(
         provider_runtime=runtime,
     )
 
-    assert registry.require_active(checker.checker_id).provider_runtime == runtime
+    assert (
+        registry.require_active(checker.checker_id).implementation.provider_runtime
+        == runtime
+    )

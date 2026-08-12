@@ -2,19 +2,19 @@
 .PHONY: test-unit test-component test-domain test-composition test-storage test-process test-mcp test-provider test-lean test-e2e
 
 test-unit: ## Pytest lane unit (10s, sequential).
-	$(call run_topology_lane,unit)
+	$(call run_direct_pytest_lane,tests/unit,,10)
 
 test-component: ## Pytest lane component (30s, 4 workers).
-	$(call run_topology_lane,component)
+	$(call run_direct_pytest_lane,tests/component,-n 4 --dist worksteal,30)
 
 test-domain: ## Pytest lane domain (120s, 4 workers).
-	$(call run_topology_lane,domain)
+	$(call run_direct_pytest_lane,tests/domain,-n 4 --dist worksteal,120)
 
 test-composition: ## Pytest lane composition (120s, 2 workers).
-	$(call run_topology_lane,composition)
+	$(call run_direct_pytest_lane,tests/composition,-n 2 --dist worksteal,120)
 
 test-storage: ## Pytest lane storage (120s, sequential).
-	$(call run_topology_lane,storage)
+	$(call run_direct_pytest_lane,tests/boundary/storage,,120)
 
 test-process: ## Pytest lane process (120s, 2 workers).
 	$(call run_topology_lane,process)
@@ -23,10 +23,10 @@ test-mcp: ## Pytest lane mcp (120s, 2 workers).
 	$(call run_topology_lane,mcp)
 
 test-provider: ## Pytest lane provider (180s, 1 workers).
-	$(call run_topology_lane,provider)
+	$(call run_direct_pytest_lane,tests/boundary/providers/cvc5 tests/boundary/providers/external_sat tests/boundary/providers/flint,-n 1 --dist load,180)
 
 test-lean: ## Pytest lane lean (300s, sequential).
 	$(call run_topology_lane,lean)
 
 test-e2e: ## Pytest lane e2e (180s, sequential).
-	$(call run_topology_lane,e2e)
+	$(call run_direct_pytest_lane,tests/e2e,,180)

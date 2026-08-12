@@ -307,6 +307,12 @@ def suppression_map(manifest: TestPlanManifest) -> dict[str, tuple[str, ...]]:
     }
 
 
+def _direct_lane_worker_args(lane: LaneSpec) -> str:
+    if lane.workers <= 0 or lane.distribution == "none":
+        return ""
+    return f"-n {lane.workers} --dist {lane.distribution}"
+
+
 def render_make_lanes(manifest: TestPlanManifest) -> str:
     lanes = tuple(lane for lane in manifest.pytest_lanes if lane.topology_lane)
     targets = tuple(f"test-{lane.name}" for lane in lanes)
@@ -315,6 +321,13 @@ def render_make_lanes(manifest: TestPlanManifest) -> str:
         f".PHONY: {' '.join(targets)}",
     ]
     for lane, target in zip(lanes, targets, strict=True):
+        profile = profile_for_lane(
+            name=lane.name,
+            required_environment=lane.required_environment,
+            workers=lane.workers,
+            distribution=lane.distribution,
+            timeout_seconds=lane.timeout_seconds,
+        )
         worker_desc = (
             "sequential"
             if lane.workers == 0 or lane.distribution == "none"
@@ -325,9 +338,17 @@ def render_make_lanes(manifest: TestPlanManifest) -> str:
                 "",
                 f"{target}: ## Pytest lane {lane.name} "
                 f"({lane.timeout_seconds}s, {worker_desc}).",
-                f"\t$(call run_topology_lane,{lane.name})",
             ]
         )
+        if profile.process_supervision:
+            lines.append(f"\t$(call run_topology_lane,{lane.name})")
+        else:
+            paths = " ".join(lane.paths)
+            workers = _direct_lane_worker_args(lane)
+            lines.append(
+                f"\t$(call run_direct_pytest_lane,{paths},{workers},"
+                f"{lane.timeout_seconds})"
+            )
     return "\n".join(lines) + "\n"
 
 

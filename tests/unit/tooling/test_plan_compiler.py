@@ -47,6 +47,15 @@ def test_compile_make_lanes_matches_checked_in_projection() -> None:
         "test-component: ## Pytest lane component (30s, 4 workers)."
         in result.make_lanes
     )
+    assert "run_direct_pytest_lane,tests/unit" in result.make_lanes
+    assert "run_direct_pytest_lane,tests/component,-n 4 --dist worksteal,30" in (
+        result.make_lanes
+    )
+    assert "$(call run_topology_lane,process)" in result.make_lanes
+    assert "$(call run_topology_lane,mcp)" in result.make_lanes
+    assert "$(call run_topology_lane,lean)" in result.make_lanes
+    assert "$(call run_topology_lane,unit)" not in result.make_lanes
+    assert "$(call run_topology_lane,domain)" not in result.make_lanes
 
 
 def test_compile_impact_matches_checked_in_projection() -> None:

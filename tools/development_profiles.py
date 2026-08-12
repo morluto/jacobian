@@ -6,8 +6,9 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
-import os
 import re
+import shutil
+import subprocess
 import sys
 import tomllib
 from collections.abc import Callable, Sequence
@@ -115,31 +116,16 @@ def sync_arguments(name: str, *, development: bool = True) -> tuple[str, ...]:
 
 
 def _run(arguments: Sequence[str], cwd: Path) -> int:
-    from benchmarks.tooling.command_runner import (
-        ToolCommandStatus,
-        run_operator_command,
-    )
-
-    result = run_operator_command(
-        arguments[0],
-        arguments[1:],
+    completed = subprocess.run(
+        list(arguments),
         cwd=cwd,
-        timeout_seconds=3600.0,
-        stdout_limit_bytes=8 * 1024 * 1024,
-        stderr_limit_bytes=8 * 1024 * 1024,
-        environment=dict(os.environ),
+        check=False,
     )
-    if result.stdout:
-        sys.stdout.buffer.write(result.stdout)
-    if result.stderr:
-        sys.stderr.buffer.write(result.stderr)
-    return result.exit_code if result.status is ToolCommandStatus.EXITED else 2
+    return int(completed.returncode)
 
 
 def _tool_path(name: str) -> str | None:
-    from benchmarks.tooling.command_runner import ToolResolver
-
-    return ToolResolver(search_path=os.environ.get("PATH")).resolve(name)
+    return shutil.which(name)
 
 
 def _run_required(arguments: Sequence[str], *, cwd: Path, run: CommandRunner) -> None:
@@ -278,23 +264,20 @@ def _distribution_diagnostic(
 
 
 def _uv_diagnostic(repo: Path) -> Diagnostic:
-    from benchmarks.tooling.command_runner import (
-        ToolCommandStatus,
-        run_operator_command,
-    )
-
     expected = (repo / ".uv-version").read_text(encoding="utf-8").strip()
     found: str | None = None
     executable = _tool_path("uv")
     if executable is not None:
-        completed = run_operator_command(
-            "uv",
-            ("--version",),
+        completed = subprocess.run(
+            [executable, "--version"],
             cwd=repo,
-            timeout_seconds=30.0,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
-        if completed.status is ToolCommandStatus.EXITED and completed.exit_code == 0:
-            parts = completed.stdout.decode(errors="replace").strip().split()
+        if completed.returncode == 0:
+            parts = completed.stdout.strip().split()
             found = parts[1] if len(parts) >= 2 else None
     status = (
         "available"
@@ -314,27 +297,24 @@ def _uv_diagnostic(repo: Path) -> Diagnostic:
 
 
 def _lean_diagnostics(repo: Path) -> list[Diagnostic]:
-    from benchmarks.tooling.command_runner import (
-        ToolCommandStatus,
-        run_operator_command,
-    )
-
     expected = (repo / "lean" / "lean-toolchain").read_text(encoding="utf-8").strip()
     elan = _tool_path("elan")
     lake = _tool_path("lake")
     installed = False
     found: str | None = None
     if elan is not None:
-        completed = run_operator_command(
-            "elan",
-            ("toolchain", "list"),
+        completed = subprocess.run(
+            [elan, "toolchain", "list"],
             cwd=repo,
-            timeout_seconds=30.0,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
-        if completed.status is ToolCommandStatus.EXITED and completed.exit_code == 0:
+        if completed.returncode == 0:
             toolchains = [
                 line.split(maxsplit=1)[0]
-                for line in completed.stdout.decode(errors="replace").splitlines()
+                for line in completed.stdout.splitlines()
                 if line.strip()
             ]
             installed = expected in toolchains

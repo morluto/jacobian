@@ -9,7 +9,9 @@ remain pytest concerns.
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
+import subprocess
 import sys
 import tomllib
 from collections.abc import Mapping
@@ -421,20 +423,8 @@ def _has_timeout_method_args(extra_args: list[str] | None) -> bool:
     return False
 
 
-def lane_environment(lane: Lane) -> Mapping[str, str]:
-    """Build the bounded pytest environment for one lane.
-
-    Only the operator allowlist, ``PATH``, and the explicitly allowlisted
-    Lean/provider variables for the lane's declared ``required_environment``
-    are forwarded from the host.  No arbitrary host environment leaks
-    through: a variable not named by ``PATH`` or
-    :data:`_LANE_ENVIRONMENT_ALLOWLIST` is never forwarded, and the lane
-    tag is declared rather than inherited.
-    """
-    include: set[str] = {"PATH"}
-    for requirement in lane.required_environment:
-        include.update(_LANE_ENVIRONMENT_ALLOWLIST.get(requirement, ()))
-    declared = {
+def _lane_declared_environment(lane: Lane) -> dict[str, str]:
+    return {
         "JACOBIAN_TEST_LANE": lane.name,
         "JACOBIAN_EXECUTION_PROFILE": lane.execution_profile or lane.name,
         "JACOBIAN_SETUP_AFFINITY": lane.setup_affinity or "",
@@ -442,10 +432,43 @@ def lane_environment(lane: Lane) -> Mapping[str, str]:
             "1" if lane.process_supervision else "0"
         ),
     }
+
+
+def lane_environment(lane: Lane) -> Mapping[str, str]:
+    """Build the pytest environment for one lane.
+
+    Ordinary (unsupervised) lanes inherit the host environment and only overlay
+    lane tags. Process-supervised lanes keep the bounded operator allowlist:
+    only ``PATH``, the explicitly allowlisted Lean/provider variables for the
+    lane's declared ``required_environment``, and the lane tags are forwarded.
+    """
+    declared = _lane_declared_environment(lane)
+    if not lane.process_supervision:
+        return {**os.environ, **declared}
+    include: set[str] = {"PATH"}
+    for requirement in lane.required_environment:
+        include.update(_LANE_ENVIRONMENT_ALLOWLIST.get(requirement, ()))
     return operator_environment(
         include=include,
         declared=declared,
     )
+
+
+def _run_pytest_direct(
+    command: list[str],
+    *,
+    root: Path,
+    environment: Mapping[str, str],
+) -> int:
+    """Run pytest as an ordinary child without lifecycle or output caps."""
+
+    completed = subprocess.run(
+        command,
+        cwd=root,
+        env=dict(environment),
+        check=False,
+    )
+    return int(completed.returncode)
 
 
 def run_lane(
@@ -454,26 +477,25 @@ def run_lane(
     selectors: list[str] | None = None,
     extra_args: list[str] | None = None,
 ) -> int:
-    """Execute pytest via the bounded tooling command runner.
+    """Execute one topology lane.
 
-    Captured stdout/stderr from the bounded child are forwarded to the
-    parent streams so failures are not silent.  On non-EXITED terminal
-    states (timeout, overflow, start failure) a diagnostic line is emitted
-    to stderr before returning a non-zero exit code.
-
-    Process-supervised lanes use a kill-safe outer deadline derived from the
-    lane timeout rather than an unbounded hour-long wrapper.
+    Ordinary lanes run pytest directly. Process-supervised lanes keep the
+    lifecycle + command_runner path so hung child process trees can be killed
+    and non-EXITED terminal states surface diagnostics.
     """
     lane = topology.lane(lane_name)
     command = pytest_command(topology, lane_name, selectors, extra_args)
-    arguments = command[3:]
     environment = lane_environment(lane)
+    if not lane.process_supervision:
+        return _run_pytest_direct(
+            command,
+            root=topology.root,
+            environment=environment,
+        )
+    arguments = command[3:]
     # Supervised lanes: outer watchdog bounds the whole pytest process group.
     # Keep headroom above per-test timeouts for collection/setup.
-    if lane.process_supervision:
-        timeout_seconds = float(max(lane.timeout_seconds * 40, 600))
-    else:
-        timeout_seconds = 3600.0
+    timeout_seconds = float(max(lane.timeout_seconds * 40, 600))
     result = run_pytest(
         arguments,
         root=topology.root,

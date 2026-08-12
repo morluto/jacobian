@@ -75,16 +75,24 @@ def test_subprocess_in_checkers_is_flagged(tmp_path: Path) -> None:
     assert sub[0].path == "src/jacobian_checkers/sat.py"
 
 
-def test_subprocess_in_test_topology_is_flagged(tmp_path: Path) -> None:
+def test_subprocess_in_test_topology_is_allowed(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tools/test_topology.py",
         "import subprocess\n\nsubprocess.run(['echo'])\n",
     )
     report = check_architecture(tmp_path)
-    sub = [v for v in report.violations if v.code == "subprocess-confined"]
-    assert len(sub) == 1
-    assert sub[0].path == "tools/test_topology.py"
+    assert all(v.code != "subprocess-confined" for v in report.violations)
+
+
+def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tools/development_profiles.py",
+        "import subprocess\n\nsubprocess.run(['uv', 'sync'])\n",
+    )
+    report = check_architecture(tmp_path)
+    assert all(v.code != "subprocess-confined" for v in report.violations)
 
 
 def test_subprocess_in_deleted_e2e_fixture_is_rejected(tmp_path: Path) -> None:
@@ -135,15 +143,15 @@ def test_os_execvpe_in_product_is_flagged(tmp_path: Path) -> None:
     assert "execvpe" in sub[0].message
 
 
-def test_os_execvpe_in_test_topology_is_flagged(tmp_path: Path) -> None:
+def test_os_execvpe_in_test_topology_is_allowed(tmp_path: Path) -> None:
+    # The ordinary local tooling allowlist covers this file entirely.
     _write(
         tmp_path,
         "tools/test_topology.py",
         "import os\n\nos.execvpe('python', ['python'], {})\n",
     )
     report = check_architecture(tmp_path)
-    sub = [v for v in report.violations if v.code == "subprocess-confined"]
-    assert len(sub) == 1
+    assert all(v.code != "subprocess-confined" for v in report.violations)
 
 
 def test_subprocess_import_from_is_flagged(tmp_path: Path) -> None:
@@ -283,6 +291,16 @@ def test_shutil_which_in_command_runner_is_allowed(tmp_path: Path) -> None:
         tmp_path,
         "benchmarks/tooling/command_runner.py",
         "import shutil\n\nshutil.which('git')\n",
+    )
+    report = check_architecture(tmp_path)
+    assert all(v.code != "shutil-which-resolver" for v in report.violations)
+
+
+def test_shutil_which_in_development_profiles_is_allowed(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tools/development_profiles.py",
+        "import shutil\n\nshutil.which('uv')\n",
     )
     report = check_architecture(tmp_path)
     assert all(v.code != "shutil-which-resolver" for v in report.violations)

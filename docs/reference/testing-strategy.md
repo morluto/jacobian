@@ -38,6 +38,12 @@ and path-impact rules. `make compile-test-plan` projects it to
 [`make/test-lanes.mk`](../../make/test-lanes.mk), which defines the topology
 lane Make targets. Do not hand-edit generated projections.
 
+Ordinary lanes (`unit`, `component`, `domain`, `composition`, `storage`,
+`provider`, `e2e`) invoke `uv run pytest` directly from Make. Only
+process-supervised lanes (`process`, `mcp`, `lean`) route through
+`tools/test_topology.py` → `tools/pytest_lifecycle.py` → the bounded command
+runner, so hung child process trees can still be killed.
+
 | Directory/lane | Evidence owner |
 | --- | --- |
 | `tests/unit` | Pure values, contracts, parsers, and small policies |

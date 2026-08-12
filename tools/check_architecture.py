@@ -88,6 +88,10 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/bounded_process.py"),
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
+        # Ordinary local lanes and setup invoke subprocess directly; only
+        # process-supervised topology lanes still route through command_runner.
+        PurePosixPath("tools/test_topology.py"),
+        PurePosixPath("tools/development_profiles.py"),
         # This clean-room verifier must independently replay the pinned Lean
         # protocol inside its isolated verifier image.  It cannot import the
         # repository command runner without widening the verifier build
@@ -236,6 +240,7 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian_checkers/lean4.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/source_agent_doctor.py"),
+        PurePosixPath("tools/development_profiles.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
         PurePosixPath("tests/boundary/process/tooling/test_ci_ownership_manifest.py"),
@@ -499,7 +504,9 @@ def _subprocess_violations(
                         str(relative),
                         "subprocess-confined",
                         "direct subprocess is only allowed in bounded_process.py, "
-                        "command_runner.py, and explicit test fixtures",
+                        "command_runner.py, ordinary local tooling "
+                        "(test_topology.py, development_profiles.py), "
+                        "and explicit test fixtures",
                         node.lineno,
                     )
                 )

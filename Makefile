@@ -10,6 +10,7 @@ ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
+# Specialist wrapper for Harbor validation and other supervised pytest receipts.
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
 PUBLIC_COMMANDS := setup doctor fix check-changed check ci-plan
 
@@ -97,6 +98,16 @@ test-changed: ## Run changed-path tests, defaulting BASE to origin/main.
 check-changed: ## Plan and run the affected local handoff (BASE=origin/main).
 	$(MAKE) test-changed BASE="$(or $(BASE),origin/main)"
 
+# Ordinary lanes invoke pytest directly. Process/MCP/Lean keep topology →
+# lifecycle → command_runner so hung child trees can still be killed.
+define run_direct_pytest_lane
+	$(UV_RUN) pytest \
+		$(if $(TESTS),$(TESTS),$(1)) \
+		$(if $(TESTS),,$(2)) \
+		--timeout=$(3) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+endef
+
 define run_topology_lane
 	$(TOPOLOGY_RUNNER) $(1) \
 		$(if $(TESTS),$(TESTS)) \
@@ -106,7 +117,9 @@ endef
 include make/test-lanes.mk
 
 test-compatibility: ## Run the small supported-version import/API compatibility smoke suite.
-	$(PYTEST_RUNNER) --name compatibility -- -n 0 --timeout=30 --timeout-method=thread tests/unit/tooling/test_ci_compatibility.py $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+	$(UV_RUN) pytest -n 0 --timeout=30 --timeout-method=thread \
+		tests/unit/tooling/test_ci_compatibility.py \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-affected: test-changed ## Compatibility alias for the changed-path planner.
 
@@ -123,8 +136,9 @@ test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
 	$(MAKE) test-e2e
 
 test-stress: ## Repeat explicitly marked property tests on the scheduled lane.
-	$(PYTEST_RUNNER) --name stress -- -n 0 --timeout=120 --timeout-method=thread -m property --count=$(STRESS_COUNT) \
-		$(if $(TESTS),$(TESTS),tests) $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+	$(UV_RUN) pytest -n 0 --timeout=120 --timeout-method=thread -m property \
+		--count=$(STRESS_COUNT) $(if $(TESTS),$(TESTS),tests) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-ordering: ## Reproduce scheduled ordering (default seed 17; override with PYTEST_ARGS).
 	@test -n "$(ORDERING_LANE)" || { echo "ORDERING_LANE is required" >&2; exit 2; }

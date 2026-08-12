@@ -98,11 +98,13 @@ troubleshooting a source-build failure from `uv sync --dev`.
 
 Every `make test-*` target accepts `TESTS=<file-or-node>` and extra pytest
 options through `PYTEST_ARGS`, and prints its ten slowest tests by default
-(override with `PYTEST_DIAGNOSTIC_ARGS=--durations=0`). Use
-`uv run --locked pytest --lf` after a failure and `uv run --locked pytest -n 0`
-while debugging. Do not use unfiltered `uv run pytest` as the complete-suite
-command: it mixes Lean into the general xdist pool, and pytest rejects that
-unsafe combination with the corresponding `make` targets in its error message.
+(override with `PYTEST_DIAGNOSTIC_ARGS=--durations=0`). Ordinary lanes call
+pytest directly; process, MCP, and Lean lanes keep the supervised topology
+runner. Use `uv run --locked pytest --lf` after a failure and
+`uv run --locked pytest -n 0` while debugging. Do not use unfiltered
+`uv run pytest` as the complete-suite command: it mixes Lean into the general
+xdist pool, and pytest rejects that unsafe combination with the corresponding
+`make` targets in its error message.
 See the [testing strategy](docs/reference/testing-strategy.md) for the canonical
 lane commands and narrowing examples.
 

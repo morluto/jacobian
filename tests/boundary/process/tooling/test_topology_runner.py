@@ -48,7 +48,30 @@ def test_harbor_execution_check_stays_out_of_the_full_verifier_corpus() -> None:
     assert "harbor-oracle" not in result.stdout
 
 
-def test_make_semantic_lane_forwards_pytest_arguments() -> None:
+def test_make_ordinary_lane_invokes_pytest_directly() -> None:
+    result = subprocess.run(
+        [
+            "make",
+            "--dry-run",
+            "test-unit",
+            "TESTS=tests/unit/tooling/test_fixture_architecture.py",
+            "PYTEST_ARGS=-k target_test --junitxml=pytest.xml",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "tools/test_topology.py" not in result.stdout
+    assert "tools/pytest_lifecycle.py" not in result.stdout
+    assert "pytest" in result.stdout
+    assert "tests/unit/tooling/test_fixture_architecture.py" in result.stdout
+    assert "-k target_test" in result.stdout
+    assert "--junitxml=pytest.xml" in result.stdout
+
+
+def test_make_supervised_lane_forwards_pytest_arguments() -> None:
     result = subprocess.run(
         [
             "make",
@@ -63,6 +86,7 @@ def test_make_semantic_lane_forwards_pytest_arguments() -> None:
         check=True,
     )
 
+    assert "tools/test_topology.py" in result.stdout
     assert '--pytest-args "--durations=10 -k target_test --junitxml=pytest.xml"' in (
         result.stdout
     )
@@ -71,19 +95,17 @@ def test_make_semantic_lane_forwards_pytest_arguments() -> None:
     ) < result.stdout.index("--pytest-args")
 
 
-def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None:
+def test_ordinary_lane_runs_pytest_directly(monkeypatch) -> None:
     topology = test_topology.load_topology()
     observed: dict[str, object] = {}
 
-    def fake_run_pytest(arguments: object, **kwargs: object) -> object:
-        observed.update(arguments=arguments, **kwargs)
-        return SimpleNamespace(exit_code=0)
+    def fake_direct(
+        command: object, *, root: object, environment: object
+    ) -> int:
+        observed.update(command=command, root=root, environment=environment)
+        return 0
 
-    monkeypatch.setattr(
-        test_topology,
-        "run_pytest",
-        fake_run_pytest,
-    )
+    monkeypatch.setattr(test_topology, "_run_pytest_direct", fake_direct)
 
     rc = test_topology.run_lane(
         topology,
@@ -93,16 +115,50 @@ def test_topology_runner_executes_pytest_via_command_runner(monkeypatch) -> None
     )
 
     assert rc == 0
+    command = observed["command"]
+    assert isinstance(command, list)
+    assert command[:2] == [sys.executable, "-m"]
+    assert command[2] == "pytest"
+    assert "tests/unit/tooling/test_fixture_architecture.py" in command
+    assert "-q" in command
+    assert command[command.index("--timeout") + 1] == "10"
+    environment = observed["environment"]
+    assert isinstance(environment, dict)
+    assert environment["JACOBIAN_TEST_LANE"] == "unit"
+    assert environment["JACOBIAN_PROCESS_SUPERVISION"] == "0"
+
+
+def test_supervised_lane_runs_pytest_via_lifecycle(monkeypatch) -> None:
+    topology = test_topology.load_topology()
+    observed: dict[str, object] = {}
+
+    def fake_run_pytest(arguments: object, **kwargs: object) -> object:
+        observed.update(arguments=arguments, **kwargs)
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(test_topology, "run_pytest", fake_run_pytest)
+
+    rc = test_topology.run_lane(
+        topology,
+        "process",
+        ["tests/boundary/process/tooling/test_topology_runner.py"],
+        ["-q"],
+    )
+
+    assert rc == 0
     assert observed["arguments"] == [
-        "tests/unit/tooling/test_fixture_architecture.py",
+        "tests/boundary/process/tooling/test_topology_runner.py",
         "-q",
         "--timeout",
-        "10",
+        "120",
+        "--timeout-method",
+        "signal",
     ]
     environment = observed["environment"]
     assert environment is not None
-    assert environment["JACOBIAN_TEST_LANE"] == "unit"
-    assert observed["timeout_seconds"] == 3600.0
+    assert environment["JACOBIAN_TEST_LANE"] == "process"
+    assert environment["JACOBIAN_PROCESS_SUPERVISION"] == "1"
+    assert observed["timeout_seconds"] == 4800.0
 
 
 def test_topology_runner_returns_pytest_failure(monkeypatch) -> None:
@@ -110,8 +166,8 @@ def test_topology_runner_returns_pytest_failure(monkeypatch) -> None:
 
     monkeypatch.setattr(
         test_topology,
-        "run_pytest",
-        lambda *args, **kwargs: SimpleNamespace(exit_code=1),
+        "_run_pytest_direct",
+        lambda *args, **kwargs: 1,
     )
 
     rc = test_topology.run_lane(topology, "unit", ["tests/unit/test_bad.py"], [])
@@ -299,12 +355,12 @@ def test_lane_environment_forwards_only_allowlisted_lean_variables(
     unit = lane_environment(topology.lane("unit"))
     assert unit["JACOBIAN_TEST_LANE"] == "unit"
     assert unit["PATH"] == os.environ["PATH"]
-    assert "HOME" not in unit
-    assert "ELAN_HOME" not in unit
-    assert "JACOBIAN_TOPOLOGY_LEAK" not in unit
+    assert unit["JACOBIAN_PROCESS_SUPERVISION"] == "0"
+    # Ordinary lanes inherit the host environment.
+    assert unit["HOME"] == fake_home
 
 
-def test_lane_environment_never_forwards_unauthorized_host_variables(
+def test_supervised_lane_environment_never_forwards_unauthorized_host_variables(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -312,7 +368,12 @@ def test_lane_environment_never_forwards_unauthorized_host_variables(
     monkeypatch.setenv("JACOBIAN_TOPOLOGY_LEAK", "secret")
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
 
-    for lane_name in ("lean", "provider", "unit", "process", "storage"):
+    for lane_name in ("lean", "process", "mcp"):
         environment = lane_environment(topology.lane(lane_name))
         assert "JACOBIAN_TOPOLOGY_LEAK" not in environment, lane_name
         assert environment["JACOBIAN_TEST_LANE"] == lane_name
+        assert environment["JACOBIAN_PROCESS_SUPERVISION"] == "1"
+
+    ordinary = lane_environment(topology.lane("unit"))
+    assert ordinary["JACOBIAN_TOPOLOGY_LEAK"] == "secret"
+    assert ordinary["JACOBIAN_PROCESS_SUPERVISION"] == "0"

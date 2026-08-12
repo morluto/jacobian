@@ -31,7 +31,7 @@ eval-image-bind: ## Bind image identity into RUNTIME_SNAPSHOT (JACOBIAN_IMAGE=..
 
 deploy-check: ## Validate the clone-to-systemd deployment entrypoint.
 	bash -n deploy/install.sh
-	$(PYTEST_RUNNER) --name deploy-check -- -n 0 tests/boundary/process/tooling/test_deploy_installer.py
+	$(UV_RUN) pytest -n 0 tests/boundary/process/tooling/test_deploy_installer.py
 
 hooks: setup ## Install pre-commit hooks.
 	$(UV_RUN) pre-commit install --install-hooks

@@ -48,8 +48,15 @@ class CertifiedIntegerMatrix(ContractModel):
         return self
 
 
+class CertifiedSmithInputMatrix(CertifiedIntegerMatrix):
+    """An integer matrix within the certified Smith producer's input budget."""
+
+    row_count: StrictInt = Field(ge=1, le=MAX_CERTIFIED_SNF_INPUT_DIMENSION)
+    column_count: StrictInt = Field(ge=1, le=MAX_CERTIFIED_SNF_INPUT_DIMENSION)
+
+
 class CertifiedSmithNormalFormRequest(ContractModel):
-    matrix: CertifiedIntegerMatrix
+    matrix: CertifiedSmithInputMatrix
 
     @model_validator(mode="after")
     def require_nonempty_bounded_input(self) -> Self:
@@ -160,6 +167,7 @@ __all__ = [
     "MAX_CERTIFIED_SNF_INPUT_DIMENSION",
     "MAX_CERTIFIED_SNF_OUTPUT_DIGITS",
     "CertifiedIntegerMatrix",
+    "CertifiedSmithInputMatrix",
     "CertifiedSmithNormalFormRequest",
     "CertifiedSmithNormalFormResult",
     "SmithNormalFormCertificate",

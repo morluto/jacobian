@@ -21,8 +21,11 @@ def test_math_tool_surface_is_consistent_across_discovery(tmp_path: Path) -> Non
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
             assert set(tools) == {"math.find", "math.run"}
-            assert tools["math.find"].title == "Find an exact mathematical operation"
-            assert tools["math.run"].title == "Run a mathematical operation"
+            assert tools["math.find"].title == "Search installed Jacobian math tools"
+            assert tools["math.run"].title == "Run one installed Jacobian math tool"
+            assert "authoritative runtime inventory" in (
+                tools["math.find"].description or ""
+            )
             assert "math.find" in (tools["math.run"].description or "")
 
             described = await client.call_tool(

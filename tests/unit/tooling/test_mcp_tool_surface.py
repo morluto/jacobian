@@ -42,18 +42,24 @@ def test_model_visible_guidance_exposes_affordances_without_research_order() -> 
     assert "partition larger searches" not in combined
 
 
-def test_server_instructions_front_load_implicit_activation_signal() -> None:
+def test_server_instructions_front_load_local_inventory_signal() -> None:
     prefix = SERVER_INSTRUCTIONS[:512].lower()
 
-    assert "specialized exact mathematical operation" in prefix
-    assert "matrix or polynomial" in prefix
-    assert "even when the user does not name jacobian" in prefix
     assert "math.find" in prefix
+    assert "locally installed jacobian toolbox" in prefix
+    assert "internet search cannot" in prefix
+    assert "even when the user does not name jacobian" in prefix
 
 
 def test_server_instructions_allow_known_contracts_to_run_directly() -> None:
-    assert "exact installed capability ID" in SERVER_INSTRUCTIONS
-    assert "math.run may execute a known contract directly" in SERVER_INSTRUCTIONS
+    assert "exact installed ID and typed contract" in SERVER_INSTRUCTIONS
+    assert "known contract may run directly" in SERVER_INSTRUCTIONS
+    assert "math.find is operation lookup, not confirmation" in SERVER_INSTRUCTIONS
+
+
+def test_server_instructions_preserve_evidence_sensitive_abstention() -> None:
+    assert "restating an accepted value without new evidence" in SERVER_INSTRUCTIONS
+    assert "not a mathematical-tool use case" in SERVER_INSTRUCTIONS
 
 
 def test_server_instructions_route_pinned_lean_declaration_queries() -> None:
@@ -66,5 +72,9 @@ def test_server_instructions_route_pinned_lean_declaration_queries() -> None:
 
 def test_guidance_rejects_verification_transfer_to_derived_claims() -> None:
     combined = "\n".join((SERVER_INSTRUCTIONS, MATH_RUN_DESCRIPTION))
-    assert "does not verify a model-derived conclusion" in combined
     assert "record must be bound to the exact final claim" in combined
+    assert "model-authored duplicate calculations are not independent" in combined
+
+
+def test_math_run_checks_execution_before_evidence() -> None:
+    assert "Check execution status before treating `output`" in MATH_RUN_DESCRIPTION

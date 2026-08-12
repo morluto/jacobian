@@ -1,8 +1,8 @@
 """Keep benchmark validation imports rooted at the repository checkout.
 
-Global autouse import scrubbing is intentionally avoided (#1170). Modules that
-load task-local ``verifier_support`` opt into isolation via
-``usefixtures("isolate_verifier_imports")`` or the collection rule below.
+Task-local ``verifier_support`` modules are isolated only for validation tests
+that dynamically load benchmark verifiers. Other tests retain normal import
+caching and do not pay for global module scrubbing.
 """
 
 from __future__ import annotations
@@ -49,9 +49,19 @@ def stable_planner_digests(
     )
 
 
-@pytest.fixture
-def isolate_verifier_imports():
+@pytest.fixture(autouse=True)
+def isolate_verifier_imports(request: pytest.FixtureRequest):
     """Prevent one task's top-level verifier_support import leaking to another."""
+
+    relative = Path(str(request.node.path)).as_posix()
+    needs_isolation = (
+        any(prefix in relative for prefix in _ISOLATE_PREFIXES)
+        or "verifier_child" in relative
+        or "test_verifier_" in Path(relative).name
+    )
+    if not needs_isolation:
+        yield
+        return
 
     original_path = list(sys.path)
     sys.modules.pop("verifier_support", None)
@@ -60,18 +70,3 @@ def isolate_verifier_imports():
     finally:
         sys.modules.pop("verifier_support", None)
         sys.path[:] = original_path
-
-
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
-    del config
-    marker = pytest.mark.usefixtures("isolate_verifier_imports")
-    for item in items:
-        relative = Path(str(item.path)).as_posix()
-        if (
-            any(prefix in relative for prefix in _ISOLATE_PREFIXES)
-            or "verifier_child" in relative
-            or "test_verifier_" in Path(relative).name
-        ):
-            item.add_marker(marker)

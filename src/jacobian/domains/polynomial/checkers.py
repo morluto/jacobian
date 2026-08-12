@@ -38,6 +38,34 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         ),
     ),
     ExactReplayCheckerDeclaration(
+        "polynomial.jacobian_syzygy.coefficients.materialize",
+        GradedJacobianSyzygyRequest,
+        "check_materialized_graded_jacobian_syzygy",
+        "polynomial.jacobian-syzygy.graded-fraction-replay",
+        entrypoint_module="jacobian_checkers.jacobian_syzygy",
+        replay_method="standard-library exact rational graded-map replay",
+        reason=(
+            "operator-authorized exact rational checker independently reconstructs "
+            "the stored homogeneous coefficient ledger without importing the "
+            "SymPy producer"
+        ),
+        verification_capability_id=("polynomial.jacobian_syzygy.coefficients.verify"),
+        verification_title="Verify a materialized Jacobian syzygy coefficient ledger",
+        verification_description=(
+            "Independently reconstruct every bounded homogeneous coefficient map, "
+            "sparse entry, rank ledger, nonzero minor, and first kernel from the "
+            "materialized producer result."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "polynomial",
+            "jacobian",
+            "syzygy",
+            "coefficient-ledger",
+        ),
+    ),
+    ExactReplayCheckerDeclaration(
         "polynomial.compute.gcd",
         PolynomialGcdRequest,
         "check_polynomial_gcd",

@@ -211,8 +211,9 @@ checker authorization out of plugins and search code.
   mathematical conclusion.
 - Include every first-class artifact reference, including verification records,
   in the result's `artifact_uris`.
-- An unavailable optional provider must remove only the affected capabilities;
-  unrelated kernel startup and catalog entries remain available.
+- An unavailable optional native or formal provider must remove only the
+  affected capabilities. A missing or mismatched maintained Python backend is
+  a broken installation and must fail runtime construction clearly.
 - Keep `deep_review.md` local; it is ignored and is not design source material.
 - Keep worked cases in reference scenarios and benchmarks.
 

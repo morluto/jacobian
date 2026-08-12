@@ -60,8 +60,7 @@ def solve_independence_number(
     optimizer = z3.Optimize()
     optimizer.set(timeout=max(1, remaining_ms))
     selected = {
-        vertex: z3.Bool(f"selected_{index}")
-        for index, vertex in enumerate(vertices)
+        vertex: z3.Bool(f"selected_{index}") for index, vertex in enumerate(vertices)
     }
     for left, right in request.graph.edges:
         optimizer.add(z3.Or(z3.Not(selected[left]), z3.Not(selected[right])))

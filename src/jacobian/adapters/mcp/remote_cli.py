@@ -111,7 +111,9 @@ def main() -> None:
         public_base_url = str(
             args.public_base_url or f"http://{args.host}:{args.port}"
         ).rstrip("/")
-        token_verifier = StaticTokenVerifier(load_static_token_file(args.auth_tokens_file))
+        token_verifier = StaticTokenVerifier(
+            load_static_token_file(args.auth_tokens_file)
+        )
         auth = AuthSettings(
             issuer_url=AnyHttpUrl(public_base_url),
             resource_server_url=AnyHttpUrl(f"{public_base_url}{path}"),

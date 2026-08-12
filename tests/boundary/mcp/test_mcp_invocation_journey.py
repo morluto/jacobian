@@ -238,9 +238,9 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(tmp_path: Path) ->
                 },
             )
             assert isinstance(directions_call.structured_content, dict)
-            directions_ref = directions_call.structured_content["output"][
-                "value_refs"
-            ]["directions"]
+            directions_ref = directions_call.structured_content["output"]["value_refs"][
+                "directions"
+            ]
 
             incomplete_call = await client.call_tool(
                 "math.run",

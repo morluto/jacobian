@@ -36,8 +36,7 @@ def test_sqlite_blob_spike_proves_correctness_before_performance() -> None:
         "rollback": True,
     }
     assert {
-        (sample["backend"], sample["operation"])
-        for sample in report["samples"]
+        (sample["backend"], sample["operation"]) for sample in report["samples"]
     } == {
         (backend, operation)
         for backend in ("filesystem_cas", "sqlite_blob")

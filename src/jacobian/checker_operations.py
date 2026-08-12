@@ -90,6 +90,11 @@ class ExactReplayCheckerDeclaration:
     tags are used as written. If the domain omits the metadata, all four fields
     are strictly constructed from the producer capability ID so that no
     verifier metadata is absent at installation.
+
+    A declaration may own its complete clean-process provider runtime directly.
+    Existing built-in families may continue to use the legacy central runtime
+    registry while they are migrated. Direct runtimes must not carry checker
+    IDs before operator authorization.
     """
 
     capability_id: str
@@ -102,6 +107,7 @@ class ExactReplayCheckerDeclaration:
         "operator-authorized Python-FLINT exact replay independent of the "
         "SymPy producer"
     )
+    provider_runtime: CapabilityProviderRuntime | None = None
     verification_capability_id: str | None = None
     verification_title: str | None = None
     verification_description: str | None = None
@@ -120,6 +126,10 @@ class ExactReplayCheckerDeclaration:
                 raise ValueError(
                     f"exact replay checker declaration {field} must not be empty"
                 )
+        if self.provider_runtime is not None and self.provider_runtime.checker_ids:
+            raise ValueError(
+                "declaration-owned provider runtime must not pre-authorize checker IDs"
+            )
         derived_id = derive_verification_capability_id(self.capability_id)
         explicit_text = (
             self.verification_title,

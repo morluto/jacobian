@@ -357,55 +357,11 @@ class _ReusableLeanQuerySession:
         self,
         query: LeanDeclarationQuery,
     ) -> LeanDeclarationQuery:
-        if (
-            not isinstance(query, LeanDeclarationSearchQuery)
-            or self._index_digest is None
-            or query.name_contains is None
-        ):
-            return query
-        target_modules = query.target_module_prefixes
-        namespaces = query.namespace_prefixes
-        kinds = set(query.kinds)
-        name_contains = query.name_contains
-        type_constants = query.type_constants
-        limit = query.limit
-        candidates: list[str] = []
-        positions: list[int] = []
-        candidate_bytes = 0
-        scanned = 0
-        try:
-            with self._index_path.open(encoding="utf-8") as stream:
-                if next(stream).rstrip("\n") != self._environment_digest:
-                    raise ValueError("declaration index environment mismatch")
-                for line in stream:
-                    name, module, kind = line.rstrip("\n").split("\t")
-                    if not _prefix_matches(module, target_modules):
-                        continue
-                    scanned += 1
-                    if (
-                        not _prefix_matches(name, namespaces)
-                        or (kinds and kind not in kinds)
-                        or name_contains not in name
-                    ):
-                        continue
-                    if type_constants or len(candidates) < limit:
-                        candidates.append(name)
-                        positions.append(scanned)
-                        candidate_bytes += len(name.encode("utf-8"))
-                        if (
-                            len(candidates) > _MAX_CATALOG_CANDIDATES
-                            or candidate_bytes > _MAX_CATALOG_NAME_BYTES
-                        ):
-                            return query
-        except (OSError, StopIteration, ValueError) as exc:
-            raise _index_changed() from exc
-        return LeanDeclarationSearchQuery.model_validate(
-            {
-                **query.model_dump(mode="json"),
-                "candidate_names": candidates,
-                "candidate_scan_positions": positions,
-                "scanned_declarations_total": scanned,
-            }
+        return _catalog_query_from_index(
+            query,
+            index_path=self._index_path,
+            environment_digest=self._environment_digest,
+            index_ready=self._index_digest is not None,
         )
 
 
@@ -430,6 +386,8 @@ class _PersistentLeanQuerySession:
         temporary_root = Path(self._temporary_directory.name)
         self._request_path = temporary_root / "query.json"
         self._index_path = temporary_root / "declarations.index"
+        self._index_digest: str | None = None
+        self._environment_digest = environment_digest
         self._command = command
         self._cwd = cwd
         self._base_command = base_command
@@ -459,13 +417,20 @@ class _PersistentLeanQuerySession:
         cached = self._payload_cache.get(query)
         if cached is not None:
             return cached
+        self._check_index_identity()
         self._ensure_process(timeout_seconds)
         process = self._process
         if process is None:
             raise _query_failed()
         request_id = uuid.uuid4().hex
+        wire_query = _catalog_query_from_index(
+            query,
+            index_path=self._index_path,
+            environment_digest=self._environment_digest,
+            index_ready=self._index_digest is not None,
+        )
         wire_payload = {
-            **query.model_dump(mode="json"),
+            **wire_query.model_dump(mode="json"),
             "request_id": request_id,
         }
         self._request_path.write_bytes(canonicalize_json(wire_payload))
@@ -498,9 +463,36 @@ class _PersistentLeanQuerySession:
             decoded,
             expected_request_id=request_id,
         )
+        self._record_or_check_index(query)
         self._requests += 1
         self._payload_cache.put(query, output)
         return output
+
+    def _check_index_identity(self) -> None:
+        if self._index_digest is None:
+            return
+        try:
+            current_digest = _sha256_file(self._index_path)
+        except OSError as exc:
+            raise _index_changed() from exc
+        if current_digest != self._index_digest:
+            raise _index_changed()
+
+    def _record_or_check_index(self, query: LeanDeclarationQuery) -> None:
+        if not isinstance(query, LeanDeclarationSearchQuery):
+            return
+        try:
+            _validate_declaration_index(
+                self._index_path,
+                environment_digest=self._environment_digest,
+            )
+            current_digest = _sha256_file(self._index_path)
+        except (OSError, ValueError) as exc:
+            raise _protocol_error() from exc
+        if self._index_digest is None:
+            self._index_digest = current_digest
+        elif current_digest != self._index_digest:
+            raise _index_changed()
 
     def close(self) -> None:
         if self._closed:
@@ -1287,6 +1279,59 @@ def _cacheable_query(query: LeanDeclarationQuery) -> bool:
 def _query_cache_key(query: LeanDeclarationQuery) -> str:
     serialized = canonicalize_json(query.model_dump(mode="json"))
     return "sha256:" + hashlib.sha256(serialized).hexdigest()
+
+
+def _catalog_query_from_index(
+    query: LeanDeclarationQuery,
+    *,
+    index_path: Path,
+    environment_digest: str,
+    index_ready: bool,
+) -> LeanDeclarationQuery:
+    if (
+        not isinstance(query, LeanDeclarationSearchQuery)
+        or not index_ready
+        or query.name_contains is None
+    ):
+        return query
+    candidates: list[str] = []
+    positions: list[int] = []
+    candidate_bytes = 0
+    scanned = 0
+    try:
+        with index_path.open(encoding="utf-8") as stream:
+            if next(stream).rstrip("\n") != environment_digest:
+                raise ValueError("declaration index environment mismatch")
+            for line in stream:
+                name, module, kind = line.rstrip("\n").split("\t")
+                if not _prefix_matches(module, query.target_module_prefixes):
+                    continue
+                scanned += 1
+                if (
+                    not _prefix_matches(name, query.namespace_prefixes)
+                    or (query.kinds and kind not in query.kinds)
+                    or query.name_contains not in name
+                ):
+                    continue
+                if query.type_constants or len(candidates) < query.limit:
+                    candidates.append(name)
+                    positions.append(scanned)
+                    candidate_bytes += len(name.encode("utf-8"))
+                    if (
+                        len(candidates) > _MAX_CATALOG_CANDIDATES
+                        or candidate_bytes > _MAX_CATALOG_NAME_BYTES
+                    ):
+                        return query
+    except (OSError, StopIteration, ValueError) as exc:
+        raise _index_changed() from exc
+    return LeanDeclarationSearchQuery.model_validate(
+        {
+            **query.model_dump(mode="json"),
+            "candidate_names": candidates,
+            "candidate_scan_positions": positions,
+            "scanned_declarations_total": scanned,
+        }
+    )
 
 
 def _validate_declaration_index(

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from jacobian.artifacts import ArtifactService
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,12 +15,13 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.results import (
-    Execution,
-    ExecutionStatus,
+    ContractModel,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 
 TEST_RUNTIME = CapabilityProviderRuntime(
     provider="tests",
@@ -66,6 +67,14 @@ class InvalidEvidenceValue:
         }
 
 
+class _Value(ContractModel):
+    value: int
+
+
+class _InvalidValue(ContractModel):
+    value: str
+
+
 @dataclass(frozen=True)
 class ComputedAdapter:
     descriptor = CapabilityDescriptor(
@@ -90,12 +99,13 @@ class ComputedAdapter:
         tags=("test",),
     )
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(status=ExecutionStatus.COMPLETED),
-            output={"value": int(request.input["value"]) * 2},
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+        value = _Value(value=int(request.input["value"]) * 2)
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=value),
+            publication=PublishedOperation(output=value),
         )
 
 
@@ -109,12 +119,14 @@ class InvalidOutputAdapter:
         }
     )
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(status=ExecutionStatus.COMPLETED),
-            output={"value": "not-an-integer"},
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+        del request
+        value = _InvalidValue(value="not-an-integer")
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=value),
+            publication=PublishedOperation(output=value),
         )
 
 
@@ -131,7 +143,7 @@ class NotReadyProviderAdapter:
         output_schema={"type": "object"},
     )
 
-    def invoke(self, _request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, _request: CapabilityRequest) -> OperationProjection:
         raise AssertionError("provider must be rejected before adapter invocation")
 
 
@@ -139,12 +151,13 @@ class NotReadyProviderAdapter:
 class DiscoveryAdapter:
     descriptor: CapabilityDescriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(status=ExecutionStatus.COMPLETED),
-            output={"value": request.input["value"]},
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+        value = _Value(value=int(request.input["value"]))
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=value),
+            publication=PublishedOperation(output=value),
         )
 
 
@@ -161,7 +174,7 @@ class CrashingAdapter:
         output_schema={"type": "object"},
     )
 
-    def invoke(self, _request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, _request: CapabilityRequest) -> OperationProjection:
         raise RuntimeError("provider=fixture internal-adapter-id=secret")
 
 
@@ -178,12 +191,17 @@ class ForgedVerifiedAdapter:
         output_schema={"type": "object"},
     )
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+        del request
         record_uri = "artifact://sha256/" + "f" * 64
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(status=ExecutionStatus.COMPLETED),
+        value = _Value(value=0)
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=value),
+            publication=PublishedOperation(
+                output=value,
+                artifact_uris=(record_uri,),
+            ),
             verification_record_uri=record_uri,
-            artifact_uris=(record_uri,),
         )

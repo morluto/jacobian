@@ -6,14 +6,14 @@ from dataclasses import dataclass
 from typing import Literal
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import (
@@ -26,16 +26,18 @@ from jacobian.contracts.polynomial_expressions import (
     PolynomialExpressionNormalizationVerificationRequest,
 )
 from jacobian.contracts.results import Conclusion, ExecutionStatus
+from jacobian.operation_projection import OperationProjection
 from jacobian.polynomial_expressions import (
     PolynomialExpressionArtifactError,
     PolynomialExpressionArtifactService,
 )
+from jacobian.polynomials._support import PolynomialOperationResult
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +107,8 @@ def install_polynomial_expression_checker(
 class PolynomialExpressionNormalizationVerificationAdapter:
     """Verify canonical coefficients against every node of one bound AST."""
 
+    typed_input = True
+
     def __init__(
         self,
         *,
@@ -162,7 +166,7 @@ class PolynomialExpressionNormalizationVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = PolynomialExpressionNormalizationVerificationRequest.model_validate(
             request.input
         )
@@ -285,11 +289,9 @@ class PolynomialExpressionNormalizationVerificationAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
+        return PolynomialOperationResult(
             execution=checked.execution,
-            output=output.model_dump(mode="json"),
+            value=output,
             verification_record_uri=(record_uri if verified else None),
             artifact_uris=tuple(artifact_uris),
-        )
+        ).project(self.descriptor)

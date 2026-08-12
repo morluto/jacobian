@@ -1,11 +1,12 @@
 """Installation bundle for bounded lattice reduction."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.matrix_lattice.lattice import (
     LATTICE_CAPABILITIES,
     LATTICE_RUNTIME,
 )
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import (
     PYTHON_FLINT_HNF_FLINT_VERSION,
     PYTHON_FLINT_VERSION,

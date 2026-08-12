@@ -15,13 +15,13 @@ from jacobian.contracts.lean import (
     LeanDependencyGraphArtifact,
     LeanDependencyGraphRequest,
 )
+from jacobian.domain_bundles import DomainBundle
 from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
     LeanDeclarationService,
 )
 from jacobian.operation_bindings import durable_operation, inline_operation
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
     OperationRefusalError,

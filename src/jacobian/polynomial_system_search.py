@@ -9,12 +9,11 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import format_canonical_integer
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.exact import CanonicalRational, bounded_rational_scalars
 from jacobian.contracts.polynomial_systems import (
@@ -23,8 +22,10 @@ from jacobian.contracts.polynomial_systems import (
     PolynomialSystemSolutionRequest,
     RationalPolynomialAssignment,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.polynomial_system_capabilities import (
     PolynomialSystemInstallation,
     _evaluate_request,
@@ -79,7 +80,7 @@ class PolynomialSystemRationalSearchAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = PolynomialSystemRationalSearchRequest.model_validate(
                 request.input
@@ -144,13 +145,12 @@ class PolynomialSystemRationalSearchAdapter:
         uris = (system.artifact_uri,) + (
             (assignment_uri,) if assignment_uri is not None else ()
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=uris,
+            publication=PublishedOperation(output=output, artifact_uris=uris),
         )

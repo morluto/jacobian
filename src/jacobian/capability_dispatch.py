@@ -23,6 +23,7 @@ from jacobian.contracts.capabilities import (
     CapabilityResult,
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.operation_projection import project_operation_result
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
     require_provider_runtime_ready,
@@ -363,7 +364,8 @@ def invoke_ready_adapter(
                 details={"provider_failure_code": exc.code.value},
             ),
         )
-    return CapabilityResult.model_validate(adapter.invoke(request))
+    outcome = adapter.invoke(request)
+    return project_operation_result(outcome)
 
 
 def resolution_failure(

@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.services import DomainTestServices, open_domain_services
+from tests.support.services import (
+    DomainTestServices,
+    atomic_installation,
+    open_domain_services,
+)
 
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
@@ -14,18 +18,16 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.domains.polynomial_nullstellensatz.core import MATERIALIZE_CAPABILITY_ID
+from jacobian.domains.polynomial_nullstellensatz.core import (
+    MATERIALIZE_CAPABILITY_ID,
+    install_nullstellensatz_core,
+)
 from jacobian.domains.polynomial_nullstellensatz.singular import (
     PRODUCE_CAPABILITY_ID,
     install_singular_producer,
 )
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
-from jacobian.portfolio.model import PortfolioPlan
-from jacobian.portfolio.nullstellensatz_installation import (
-    CORE_DOMAIN_ID,
-    build_nullstellensatz_core_component,
-)
 from jacobian.process_policy import ProcessResult, ProcessTermination
+from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
 
 
@@ -45,16 +47,21 @@ def _runtime() -> CapabilityProviderRuntime:
 
 
 def _install(services: DomainTestServices) -> None:
-    result = DomainBundleInstaller(services.installation).install(
-        PortfolioPlan(components=(build_nullstellensatz_core_component(),))
+    core_runtime = known_provider_runtime(
+        "jacobian.nullstellensatz-core",
+        features=(
+            "normalized-jacobian-degree-slice",
+            "rabinowitsch-chart-cover",
+            "independent-exact-replay",
+        ),
     )
-    installed = install_singular_producer(
-        services.installation,
-        result.installed[CORE_DOMAIN_ID],
-        _runtime(),
-    )
-    for adapter in installed.adapters:
-        services.installation.register_capability(adapter)
+    with atomic_installation(services.core):
+        core = install_nullstellensatz_core(services.installation, core_runtime)
+        for adapter in core.adapters:
+            services.installation.register_capability(adapter)
+        singular = install_singular_producer(services.installation, core, _runtime())
+        for adapter in singular.adapters:
+            services.installation.register_capability(adapter)
 
 
 def _invoke(

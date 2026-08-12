@@ -29,25 +29,23 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.graph_composition import (
     GraphCompositionOutput,
     GraphCompositionRequest,
     GraphCompositionResultArtifact,
+    GraphEnumerationCandidate,
+    GraphEnumerationOutput,
     GraphEnumerationRequest,
     GraphEnumerationScopeArtifact,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import (
-    ARTIFACT_URI_PATTERN,
-    GRAPH_PAYLOAD_SCHEMA,
     GraphArtifactResources,
     graph_payload,
     load_graph_value,
@@ -61,7 +59,7 @@ from jacobian.math.graphs import (
     compose_graphs,
 )
 from jacobian.operation_execution import execute_operation
-from jacobian.operation_projection import project_operation_result
+from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, OperationSpec
 from jacobian.provider_runtime import known_provider_runtime
@@ -203,7 +201,7 @@ class GraphComposeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = GraphCompositionRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -234,7 +232,7 @@ class GraphComposeAdapter:
             ),
         )
         if not isinstance(terminal, Completed):
-            return project_operation_result(
+            return OperationProjection(
                 operation_id=self.spec.operation_id,
                 version=self.spec.version,
                 terminal=terminal,
@@ -269,7 +267,7 @@ class GraphComposeAdapter:
             backend=backend,
             backend_version=backend_module.__version__,
         )
-        return project_operation_result(
+        return OperationProjection(
             operation_id=self.spec.operation_id,
             version=self.spec.version,
             terminal=terminal,
@@ -313,54 +311,7 @@ class GraphEnumerateNonisomorphicAdapter:
                 ),
             ),
             input_schema=GraphEnumerationRequest.model_json_schema(),
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "graphs": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "graph_uri": {
-                                    "type": "string",
-                                    "pattern": ARTIFACT_URI_PATTERN,
-                                },
-                                "graph": GRAPH_PAYLOAD_SCHEMA,
-                                "order": {"type": "integer", "minimum": 0},
-                                "size": {"type": "integer", "minimum": 0},
-                            },
-                            "required": [
-                                "graph_uri",
-                                "graph",
-                                "order",
-                                "size",
-                            ],
-                            "additionalProperties": False,
-                        },
-                    },
-                    "total_count": {"type": "integer", "minimum": 0},
-                    "returned_count": {"type": "integer", "minimum": 0},
-                    "truncated": {"type": "boolean"},
-                    "scope_uri": {
-                        "type": "string",
-                        "pattern": ARTIFACT_URI_PATTERN,
-                    },
-                    "backend": {"const": "networkx.graph_atlas_g"},
-                    "backend_version": {"type": "string"},
-                    "backend_boundary": {"type": "string"},
-                },
-                "required": [
-                    "graphs",
-                    "total_count",
-                    "returned_count",
-                    "truncated",
-                    "scope_uri",
-                    "backend",
-                    "backend_version",
-                    "backend_boundary",
-                ],
-                "additionalProperties": False,
-            },
+            output_schema=model_schema(GraphEnumerationOutput),
             tags=(
                 "graph",
                 "enumeration",
@@ -380,7 +331,7 @@ class GraphEnumerateNonisomorphicAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         backend_module = networkx_loader.get()
         started = time.monotonic()
         try:
@@ -417,7 +368,7 @@ class GraphEnumerateNonisomorphicAdapter:
             summary=f"Nonisomorphic enumeration scope: order {order}",
         )
 
-        graphs: list[dict[str, Any]] = []
+        graphs: list[GraphEnumerationCandidate] = []
         graph_uris: list[str] = []
         for graph in window:
             payload = graph_payload(graph)
@@ -430,32 +381,36 @@ class GraphEnumerateNonisomorphicAdapter:
             )
             graph_uris.append(graph_artifact.artifact_uri)
             graphs.append(
-                {
-                    "graph_uri": graph_artifact.artifact_uri,
-                    "graph": payload,
-                    "order": graph.number_of_nodes(),
-                    "size": graph.number_of_edges(),
-                }
+                GraphEnumerationCandidate(
+                    graph_uri=graph_artifact.artifact_uri,
+                    graph=graph_contract_from_value(
+                        SimpleUndirectedGraph.model_validate(payload)
+                    ),
+                    order=graph.number_of_nodes(),
+                    size=graph.number_of_edges(),
+                )
             )
 
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        output = GraphEnumerationOutput(
+            graphs=tuple(graphs),
+            total_count=total_count,
+            returned_count=len(graphs),
+            truncated=truncated,
+            scope_uri=scope_artifact.artifact_uri,
+            backend_version=backend_module.__version__,
+            backend_boundary=_ENUMERATION_BACKEND_BOUNDARY,
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=_runtime_ms(started),
             ),
-            output={
-                "graphs": graphs,
-                "total_count": total_count,
-                "returned_count": len(graphs),
-                "truncated": truncated,
-                "scope_uri": scope_artifact.artifact_uri,
-                "backend": "networkx.graph_atlas_g",
-                "backend_version": backend_module.__version__,
-                "backend_boundary": _ENUMERATION_BACKEND_BOUNDARY,
-            },
-            artifact_uris=(scope_artifact.artifact_uri, *graph_uris),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(scope_artifact.artifact_uri, *graph_uris),
+            ),
         )
 
 

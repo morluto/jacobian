@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from jacobian.operations import DomainBundle
+    from jacobian.domain_bundles import DomainBundle
 
 __all__ = ["build_lattice_bundle", "build_matrix_bundle"]
 

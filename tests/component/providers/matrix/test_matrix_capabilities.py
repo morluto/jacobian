@@ -21,7 +21,7 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.runtime.services import CoreServices
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 _LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
 
@@ -201,8 +201,8 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
         )
     )
     monkeypatch.setattr(
-        runtime.verification,
-        "_run_checker",
+        runtime.verification._checker_executor,
+        "execute",
         lambda **_kwargs: (_ for _ in ()).throw(
             TimeoutError("checker execution timed out")
         ),

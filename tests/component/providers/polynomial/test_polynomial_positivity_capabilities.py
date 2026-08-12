@@ -13,6 +13,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_projection import project_operation_result
 from jacobian.polynomial_positivity_capabilities import (
     PolynomialIntervalPositivityVerifyAdapter,
     install_polynomial_positivity_capabilities,
@@ -286,13 +287,15 @@ def test_decide_capability_finds_positive_linear(installation) -> None:
     adapters, _installed, _store = installation
     decide, _verify = adapters
 
-    result = decide.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.positivity.decide",
-            input={
-                "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
-                "interval": _interval("0", "1"),
-            },
+    result = project_operation_result(
+        decide.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.positivity.decide",
+                input={
+                    "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
+                    "interval": _interval("0", "1"),
+                },
+            )
         )
     )
 
@@ -300,6 +303,8 @@ def test_decide_capability_finds_positive_linear(installation) -> None:
     assert result.output["positive"] is True
     assert result.output["roots_in_open_interval"] == 0
     assert result.output["endpoint_root"] is False
+    assert result.output["polynomial_uri"] in result.artifact_uris
+    assert result.output["decision_uri"] in result.artifact_uris
 
 
 def test_decide_capability_detects_root_in_interval(installation) -> None:
@@ -307,13 +312,15 @@ def test_decide_capability_detects_root_in_interval(installation) -> None:
     decide, _verify = adapters
 
     # p(x) = x - 1 on [0, 2] — root at x=1, not strictly positive.
-    result = decide.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.positivity.decide",
-            input={
-                "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
-                "interval": _interval("0", "2"),
-            },
+    result = project_operation_result(
+        decide.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.positivity.decide",
+                input={
+                    "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
+                    "interval": _interval("0", "2"),
+                },
+            )
         )
     )
 
@@ -329,13 +336,15 @@ def test_decide_capability_detects_endpoint_root(installation) -> None:
     decide, _verify = adapters
 
     # p(x) = x on [0, 1] — root at x=0 (the left endpoint), not strictly positive.
-    result = decide.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.positivity.decide",
-            input={
-                "polynomial": _polynomial("x", [_term(1, 1)]),
-                "interval": _interval("0", "1"),
-            },
+    result = project_operation_result(
+        decide.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.positivity.decide",
+                input={
+                    "polynomial": _polynomial("x", [_term(1, 1)]),
+                    "interval": _interval("0", "1"),
+                },
+            )
         )
     )
 
@@ -349,29 +358,33 @@ def test_verify_capability_confirms_positive_decision(installation) -> None:
     decide, verify = adapters
     assert verify is not None
 
-    decide_result = decide.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.positivity.decide",
-            input={
-                "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
-                "interval": _interval("0", "1"),
-            },
+    decide_result = project_operation_result(
+        decide.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.positivity.decide",
+                input={
+                    "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
+                    "interval": _interval("0", "1"),
+                },
+            )
         )
     )
     claimed = decide_result.output
 
-    result = verify.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.positivity.verify",
-            input={
-                "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
-                "interval": _interval("0", "1"),
-                "claimed_positive": claimed["positive"],
-                "claimed_sign_changes_at_lo": claimed["sign_changes_at_lo"],
-                "claimed_sign_changes_at_hi": claimed["sign_changes_at_hi"],
-                "claimed_roots_in_open_interval": claimed["roots_in_open_interval"],
-                "claimed_endpoint_root": claimed["endpoint_root"],
-            },
+    result = project_operation_result(
+        verify.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.positivity.verify",
+                input={
+                    "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
+                    "interval": _interval("0", "1"),
+                    "claimed_positive": claimed["positive"],
+                    "claimed_sign_changes_at_lo": claimed["sign_changes_at_lo"],
+                    "claimed_sign_changes_at_hi": claimed["sign_changes_at_hi"],
+                    "claimed_roots_in_open_interval": claimed["roots_in_open_interval"],
+                    "claimed_endpoint_root": claimed["endpoint_root"],
+                },
+            )
         )
     )
 
@@ -389,18 +402,20 @@ def test_verify_capability_refutes_false_positive_claim(installation) -> None:
     # p(x) = x - 1 on [0, 2] has a root at x=1. Claim positive=True with
     # inconsistent sign-change counts — the checker independently finds the
     # root and returns FALSE.
-    result = verify.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.interval.positivity.verify",
-            input={
-                "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
-                "interval": _interval("0", "2"),
-                "claimed_positive": True,
-                "claimed_sign_changes_at_lo": 0,
-                "claimed_sign_changes_at_hi": 0,
-                "claimed_roots_in_open_interval": 0,
-                "claimed_endpoint_root": False,
-            },
+    result = project_operation_result(
+        verify.invoke(
+            CapabilityRequest(
+                capability_id="polynomial.interval.positivity.verify",
+                input={
+                    "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
+                    "interval": _interval("0", "2"),
+                    "claimed_positive": True,
+                    "claimed_sign_changes_at_lo": 0,
+                    "claimed_sign_changes_at_hi": 0,
+                    "claimed_roots_in_open_interval": 0,
+                    "claimed_endpoint_root": False,
+                },
+            )
         )
     )
 

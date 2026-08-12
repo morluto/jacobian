@@ -5,13 +5,13 @@ from __future__ import annotations
 import platform
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.sequences.aggregates import SEQUENCE_AGGREGATE_CAPABILITIES
 from jacobian.domains.sequences.predicates import SEQUENCE_PREDICATE_CAPABILITIES
 from jacobian.domains.sequences.search import SEQUENCE_SEARCH_CAPABILITIES
 from jacobian.domains.sequences.statistics import SEQUENCE_STATISTIC_CAPABILITIES
 from jacobian.domains.sequences.transforms import SEQUENCE_TRANSFORM_CAPABILITIES
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
 )

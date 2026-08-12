@@ -12,6 +12,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
+from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import (
     durable_operation,
     inline_operation,
@@ -19,7 +20,6 @@ from jacobian.operation_bindings import (
 from jacobian.operation_installation import OperationInstaller
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
     Effect,

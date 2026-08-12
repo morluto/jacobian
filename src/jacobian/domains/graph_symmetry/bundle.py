@@ -1,11 +1,12 @@
 """Explicit bundle for exact declared graph-symmetry actions."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_symmetry.checkers import (
     GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS,
 )
 from jacobian.domains.graph_symmetry.operations import GRAPH_SYMMETRY_CAPABILITIES
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import NETWORKX_VERSION, known_provider_runtime
 
 

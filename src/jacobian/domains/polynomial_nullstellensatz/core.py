@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
@@ -18,7 +18,6 @@ from jacobian.contracts.capabilities import (
     CapabilityInputKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -36,11 +35,15 @@ from jacobian.domains.polynomial_nullstellensatz.system import (
 )
 from jacobian.installation.context import InstallationContext
 from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.schema_registry import model_schema
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 
 MATERIALIZE_CAPABILITY_ID = "polynomial.jacobian_degree_slice.system.materialize"
 VERIFY_CAPABILITY_ID = "polynomial.nullstellensatz.infeasibility_certificate.verify"
+DOMAIN_ID = "polynomial_nullstellensatz"
 CERTIFICATE_FORMAT = "polynomial.nullstellensatz.chart-cover"
 _MAX_DIAGNOSTIC_REASON_CHARS = 512
 
@@ -128,7 +131,7 @@ class JacobianDegreeSliceMaterializeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             JacobianDegreeSliceMaterializeRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -153,15 +156,17 @@ class JacobianDegreeSliceMaterializeAdapter:
             system_uri=stored.artifact_uri,
             system_digest=stored.object_digest,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(stored.artifact_uri,),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(stored.artifact_uri,),
+            ),
         )
 
 
@@ -204,7 +209,7 @@ class NullstellensatzVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         actual_artifact_type: str | None = None
         try:
             validated = NullstellensatzVerificationRequest.model_validate(request.input)
@@ -342,20 +347,43 @@ class NullstellensatzVerificationAdapter:
         ]
         if record_uri is not None:
             artifact_uris.append(record_uri)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=(
-                checked.execution
-                if checked is not None
-                else Execution(
-                    status=ExecutionStatus.COMPLETED,
-                    detail="no operator-authorized compatible checker is installed",
-                )
+        execution = (
+            checked.execution
+            if checked is not None
+            else Execution(
+                status=ExecutionStatus.COMPLETED,
+                detail="no operator-authorized compatible checker is installed",
+            )
+        )
+        terminal = (
+            Completed(
+                value=output,
+                runtime_ms=execution.runtime_ms,
+                detail=execution.detail,
+            )
+            if execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=execution.status,
+                runtime_ms=execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="NULLSTELLENSATZ_CHECKER_NOT_COMPLETED",
+                    stage="checker_replay",
+                    message=(
+                        execution.detail
+                        or "The authorized Nullstellensatz checker did not complete."
+                    ),
+                ),
+            )
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=tuple(artifact_uris),
             ),
-            output=output.model_dump(mode="json"),
-            verification_record_uri=(record_uri if verified else None),
-            artifact_uris=tuple(artifact_uris),
+            verification_record_uri=record_uri if verified else None,
         )
 
 
@@ -439,6 +467,7 @@ def install_nullstellensatz_core(
 
 __all__ = [
     "CERTIFICATE_FORMAT",
+    "DOMAIN_ID",
     "MATERIALIZE_CAPABILITY_ID",
     "VERIFY_CAPABILITY_ID",
     "NullstellensatzCoreInstallation",

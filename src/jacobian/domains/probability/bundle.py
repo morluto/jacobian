@@ -1,9 +1,10 @@
 """Finite-probability domain bundle."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.probability.checkers import PROBABILITY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.probability.operations import FINITE_PROBABILITY_CAPABILITIES
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION
 from jacobian.providers.flint_runtime import python_flint_probability_provider_runtime
 

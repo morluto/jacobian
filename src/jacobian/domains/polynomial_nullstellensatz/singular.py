@@ -11,14 +11,13 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.nullstellensatz import (
@@ -33,13 +32,16 @@ from jacobian.contracts.nullstellensatz import (
     NullstellensatzMultiplier,
     NullstellensatzResourceBudget,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial_nullstellensatz.core import MATERIALIZE_CAPABILITY_ID
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
 from jacobian.installation.context import InstallationContext
 from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessResourceLimits,
@@ -53,6 +55,7 @@ from jacobian.storage.models import StoredArtifact
 from jacobian.worker_environment import worker_environment
 
 PRODUCE_CAPABILITY_ID = "polynomial.nullstellensatz.infeasibility_certificate.compute"
+DOMAIN_ID = "polynomial_nullstellensatz_singular"
 _INTEGER_OR_RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$")
 _STDERR_LIMIT = 64_000
 
@@ -362,21 +365,18 @@ class SingularNullstellensatzCertificateAdapter:
 
     def _failure(
         self,
-        request: CapabilityRequest,
         status: ExecutionStatus,
         diagnostic: CapabilityDiagnostic,
         started: float,
-    ) -> CapabilityResult:
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
+    ) -> OperationProjection:
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Failed(
                 status=status,
+                diagnostic=diagnostic,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
-                detail=diagnostic.message,
             ),
-            output={"error": diagnostic.model_dump(mode="json", exclude_none=True)},
-            diagnostics=(diagnostic,),
         )
 
     def _resolve_request(
@@ -441,13 +441,12 @@ class SingularNullstellensatzCertificateAdapter:
             )
         )
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated, system_artifact, system = self._resolve_request(request)
         started = time.monotonic()
         executable = self.provider_runtime.configuration.get("executable")
         if not isinstance(executable, str):
             return self._failure(
-                request,
                 ExecutionStatus.ERROR,
                 _diagnostic(
                     "SINGULAR_RUNTIME_INVALID",
@@ -459,7 +458,7 @@ class SingularNullstellensatzCertificateAdapter:
         failure = _process_failure(completed)
         if failure is not None:
             status, diagnostic = failure
-            return self._failure(request, status, diagnostic, started)
+            return self._failure(status, diagnostic, started)
         try:
             charts = _parse_output(completed.stdout, system)
             payload = _certificate_payload(
@@ -470,7 +469,6 @@ class SingularNullstellensatzCertificateAdapter:
             )
         except (UnicodeDecodeError, ValidationError, ValueError):
             return self._failure(
-                request,
                 ExecutionStatus.ERROR,
                 _diagnostic(
                     "SINGULAR_PROTOCOL_INVALID",
@@ -491,15 +489,17 @@ class SingularNullstellensatzCertificateAdapter:
             certificate_bundle_uri=stored.artifact_uri,
             producer_version=self.provider_runtime.version or "unknown",
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(system_artifact.artifact_uri, stored.artifact_uri),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(system_artifact.artifact_uri, stored.artifact_uri),
+            ),
         )
 
 
@@ -525,6 +525,7 @@ def install_singular_producer(
 
 
 __all__ = [
+    "DOMAIN_ID",
     "PRODUCE_CAPABILITY_ID",
     "SingularNullstellensatzCertificateAdapter",
     "install_singular_producer",

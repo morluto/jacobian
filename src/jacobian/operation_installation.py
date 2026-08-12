@@ -9,26 +9,26 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import CanonicalizationError, canonicalize_json
+from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import (
     CapabilityInvocationError,
     enriched_invalid_request,
 )
-from jacobian.capability_service import CapabilityAdapter
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityProviderAvailability,
     CapabilityRequest,
-    CapabilityResult,
     CapabilityValuePort,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
+from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import (
     InlinePublication,
     InstalledOperation,
 )
 from jacobian.operation_execution import execute_operation
-from jacobian.operation_projection import project_operation_result
+from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import (
     PublicationContext,
     PublicationLimitError,
@@ -39,7 +39,7 @@ from jacobian.operation_runtime import (
     OperationResources,
     operation_runtime,
 )
-from jacobian.operations import Completed, DomainBundle, Effect, Failed, OperationSpec
+from jacobian.operations import Completed, Effect, Failed, OperationSpec
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceError, ValueReferenceStore
@@ -240,7 +240,7 @@ class InstalledOperationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         maximum_bytes = self.resources.artifacts.store.limits.max_artifact_bytes
         try:
             assembled_input = self._bind_inputs(request)
@@ -328,7 +328,7 @@ class InstalledOperationAdapter:
                         hint="Use an operation with durable publication for this result.",
                     ),
                 )
-        return project_operation_result(
+        return OperationProjection(
             operation_id=self.spec.operation_id,
             version=self.spec.version,
             terminal=terminal,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
@@ -45,7 +45,7 @@ from jacobian.graphs.neighborhood_independence import (
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 from jacobian.verification_capabilities import certificate_verification_adapter
 
 

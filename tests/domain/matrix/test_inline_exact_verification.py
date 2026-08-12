@@ -79,8 +79,8 @@ def test_inline_exact_rejects_bounded_accepted_checker_decisions(
         )
 
     monkeypatch.setattr(
-        runtime.application.verification,
-        "_run_checker",
+        runtime.application.verification._checker_executor,
+        "execute",
         accept_with_bounded_coverage,
     )
 

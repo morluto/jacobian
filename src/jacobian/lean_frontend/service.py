@@ -29,7 +29,7 @@ from jacobian.lean_frontend.diagnostics import checker_diagnostics
 from jacobian.registry import CheckerRegistryError
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
 _RESULT_CACHE_SIZE = 128
@@ -164,7 +164,7 @@ class LeanService:
                     else:
                         with self._cache_lock:
                             self._cache[certificate.artifact_uri] = (
-                                registration.executable_digest,
+                                registration.implementation_digest,
                                 result,
                             )
                             self._cache.move_to_end(certificate.artifact_uri)
@@ -247,12 +247,12 @@ class LeanService:
                 self._cache.move_to_end(certificate_uri)
         if cached is None:
             return None
-        checker_digest, result = cached
+        implementation_digest, result = cached
         try:
             registration = self.verification.checker_registry.require_active(
                 installation.checker_id
             )
-            if registration.executable_digest != checker_digest:
+            if registration.implementation_digest != implementation_digest:
                 return None
             certificate_artifact = self.store.get(certificate_uri)
             certificate = CertificateEnvelope.model_validate(
@@ -264,7 +264,7 @@ class LeanService:
                 )
                 if (
                     record.checker_id != installation.checker_id
-                    or record.checker_digest != checker_digest
+                    or record.implementation_digest != implementation_digest
                     or record.evidence_uri != certificate_uri
                     or record.bindings != certificate.bindings
                 ):

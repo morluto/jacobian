@@ -1,9 +1,10 @@
 """Explicit bundle for bounded exact finite posets."""
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.posets.checkers import FINITE_POSET_EXACT_REPLAY_CHECKERS
 from jacobian.domains.posets.operations import FINITE_POSET_CAPABILITIES
-from jacobian.operations import DomainBundle, DomainDiagnostics, DomainSemantics
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import NETWORKX_VERSION, known_provider_runtime
 
 

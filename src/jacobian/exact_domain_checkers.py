@@ -11,8 +11,8 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_errors import CapabilityError
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityError, CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation, ExactReplayCheckerDeclaration
@@ -24,7 +24,6 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope
@@ -38,14 +37,14 @@ from jacobian.contracts.exact_domain_verification import (
 from jacobian.contracts.results import (
     Conclusion,
     ContractModel,
-    Execution,
     ExecutionStatus,
 )
+from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import DurablePublication
 from jacobian.operation_installation import InstalledDomainBundle
-from jacobian.operations import (
-    DomainBundle,
-)
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.provider_runtime import (
     composite_provider_runtime,
     known_provider_runtime,
@@ -68,7 +67,7 @@ from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.verification import VerificationService
+from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
 _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS = frozenset({"python-flint"})
@@ -539,7 +538,7 @@ class ExactComputedVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         declaration = self.declaration
         source_artifacts: tuple[StoredArtifact, StoredArtifact, StoredArtifact] | None
         normalized_candidate: dict[str, object] | None
@@ -577,15 +576,20 @@ class ExactComputedVerificationAdapter:
                     "scope; no mathematical conclusion follows."
                 ),
             )
-            return CapabilityResult(
-                capability_id=self.descriptor.capability_id,
-                capability_version=self.descriptor.version,
-                execution=Execution(status=ExecutionStatus.COMPLETED),
-                output=output.model_dump(mode="json"),
-                artifact_uris=(
-                    (source_artifacts[0].artifact_uri, source_artifacts[1].artifact_uri)
-                    if source_artifacts is not None
-                    else ()
+            return OperationProjection(
+                operation_id=self.descriptor.capability_id,
+                version=self.descriptor.version,
+                terminal=Completed(value=output),
+                publication=PublishedOperation(
+                    output=output,
+                    artifact_uris=(
+                        (
+                            source_artifacts[0].artifact_uri,
+                            source_artifacts[1].artifact_uri,
+                        )
+                        if source_artifacts is not None
+                        else ()
+                    ),
                 ),
             )
         if source_artifacts is None:
@@ -619,7 +623,7 @@ class ExactComputedVerificationAdapter:
         self,
         normalized_input: dict[str, object],
         normalized_candidate: dict[str, object],
-    ) -> CapabilityResult:
+    ) -> OperationProjection:
         """Replay ordinary values through the checker without storing them."""
 
         declaration = self.declaration
@@ -676,20 +680,42 @@ class ExactComputedVerificationAdapter:
             conclusion="TRUE" if verified else "UNKNOWN",
             operation_id=declaration.declaration.capability_id,
             checker_id=declaration.checker_id,
+            claim_digest=bindings.claim_digest if verified else None,
+            semantics_digest=bindings.semantics_digest if verified else None,
+            candidate_digest=bindings.candidate_digest if verified else None,
             verification_record_uri=record_uri,
             detail=detail,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=checked.execution,
-            output=output.model_dump(mode="json"),
-            verification_record_uri=record_uri,
-            artifact_uris=(
-                (record_uri, declaration.semantics_uri)
-                if record_uri is not None
-                else ()
+        terminal = (
+            Completed(
+                value=output,
+                runtime_ms=checked.execution.runtime_ms,
+                detail=checked.execution.detail,
+            )
+            if checked.execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=checked.execution.status,
+                runtime_ms=checked.execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="EXACT_REPLAY_EXECUTION_FAILED",
+                    stage="exact_replay",
+                    message=checked.execution.detail or detail,
+                ),
+            )
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(
+                    (record_uri, declaration.semantics_uri)
+                    if record_uri is not None
+                    else ()
+                ),
             ),
+            verification_record_uri=record_uri,
         )
 
     def _verify_materialized_relation(
@@ -697,7 +723,7 @@ class ExactComputedVerificationAdapter:
         input_artifact: StoredArtifact,
         result_artifact: StoredArtifact,
         witness: StoredArtifact,
-    ) -> CapabilityResult:
+    ) -> OperationProjection:
         checked = self.verification.verify_witness(
             claim_uri=input_artifact.artifact_uri,
             candidate_uri=result_artifact.artifact_uri,
@@ -736,16 +762,38 @@ class ExactComputedVerificationAdapter:
             result_uri=result_artifact.artifact_uri,
             witness_uri=witness.artifact_uri,
             checker_id=self.declaration.checker_id,
+            claim_digest=checked.claim_digest if verified else None,
+            semantics_digest=checked.semantics_digest if verified else None,
+            candidate_digest=checked.candidate_digest if verified else None,
             verification_record_uri=record_uri,
             detail=detail,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=checked.execution,
-            output=output.model_dump(mode="json"),
+        terminal = (
+            Completed(
+                value=output,
+                runtime_ms=checked.execution.runtime_ms,
+                detail=checked.execution.detail,
+            )
+            if checked.execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=checked.execution.status,
+                runtime_ms=checked.execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="EXACT_REPLAY_EXECUTION_FAILED",
+                    stage="exact_replay",
+                    message=checked.execution.detail or detail,
+                ),
+            )
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=artifact_uris,
+            ),
             verification_record_uri=record_uri,
-            artifact_uris=artifact_uris,
         )
 
     @staticmethod

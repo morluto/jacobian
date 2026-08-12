@@ -35,9 +35,9 @@ class PublicationContext:
 
 @dataclass(frozen=True, slots=True)
 class PublishedOperation:
-    """One public projection and every durable carrier it created."""
+    """One optional public projection and every durable carrier it retained."""
 
-    output: ContractModel
+    output: ContractModel | None = None
     artifact_uris: tuple[str, ...] = ()
 
 

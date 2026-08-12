@@ -88,7 +88,7 @@ def test_authorized_runtime_without_verification_behavior_is_flagged(
         "tests/composition/test_catalog.py",
         """
 def test_catalog(authorized_complete_runtime):
-    assert authorized_complete_runtime.portfolio is not None
+    assert authorized_complete_runtime.core.capabilities.catalog().capabilities
 """.lstrip(),
     )
 

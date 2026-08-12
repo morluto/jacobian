@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
+    CapabilityDiagnostic,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.polytope import PolytopeSeparateRequest, PolytopeSeparateResult
+from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.polytope import PolytopeService
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
@@ -41,15 +45,37 @@ class PolytopeSeparationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         parsed = PolytopeSeparateRequest.model_validate(request.input)
         value = self._service.separate(parsed)
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=value.execution,
-            output=value.model_dump(mode="json"),
-            artifact_uris=_artifact_references(value),
+        terminal = (
+            Completed(
+                value=value,
+                runtime_ms=value.execution.runtime_ms,
+                detail=value.execution.detail,
+            )
+            if value.execution.status is ExecutionStatus.COMPLETED
+            else Failed(
+                status=value.execution.status,
+                runtime_ms=value.execution.runtime_ms,
+                diagnostic=CapabilityDiagnostic(
+                    code="POLYTOPE_SEPARATION_NOT_COMPLETED",
+                    stage="solver_execution",
+                    message=(
+                        value.execution.detail
+                        or "The exact polytope operation did not complete."
+                    ),
+                ),
+            )
+        )
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=terminal,
+            publication=PublishedOperation(
+                output=value,
+                artifact_uris=_artifact_references(value),
+            ),
         )
 
 

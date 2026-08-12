@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -25,19 +25,20 @@ from jacobian.contracts.capabilities import (
     CapabilityInputKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_proof_state_inspect import (
     LeanProofStateInspectOutput,
     LeanProofStateInspectRequest,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend._state_validation import (
     _load_validated_proof_state,
     _StoredProofStateResources,
 )
 from jacobian.lean_frontend.artifacts import _environment_digest
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -84,7 +85,7 @@ class LeanProofStateInspectAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = LeanProofStateInspectRequest.model_validate(request.input)
         except ValidationError as exc:
@@ -129,16 +130,18 @@ class LeanProofStateInspectAdapter:
             lean_commit=state.lean_commit,
             mathlib_commit=state.mathlib_commit,
         )
-        return CapabilityResult(
-            capability_id=self.descriptor.capability_id,
-            capability_version=self.descriptor.version,
-            execution=Execution(
-                status=ExecutionStatus.COMPLETED,
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(
+                value=output,
                 runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
                 detail="read-only inspection; no Lean process was started",
             ),
-            output=output.model_dump(mode="json"),
-            artifact_uris=(validated.state_uri,),
+            publication=PublishedOperation(
+                output=output,
+                artifact_uris=(validated.state_uri,),
+            ),
         )
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityInvocationError
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.lean import LeanEnvironment
@@ -23,6 +23,7 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplProofStepResponse,
     LeanReplValidatedExecution,
 )
+from jacobian.operation_projection import project_operation_result
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -170,26 +171,30 @@ def test_apply_tactic_materializes_and_reuses_replayable_state(
     )
     _stub_lean_runtime(monkeypatch, adapter, lambda: next(calls))
 
-    first = adapter.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "(P Q : Prop) → P ∧ Q",
-                "proof_prefix": ["intro P Q"],
-                "tactic": "constructor",
-            },
+    first = project_operation_result(
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "(P Q : Prop) → P ∧ Q",
+                    "proof_prefix": ["intro P Q"],
+                    "tactic": "constructor",
+                },
+            )
         )
     )
     successor_uri = first.output["successor_states"][0]["state_uri"]
-    second = adapter.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "state_uri": successor_uri,
-                "tactic": "all_goals assumption",
-            },
+    second = project_operation_result(
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "state_uri": successor_uri,
+                    "tactic": "all_goals assumption",
+                },
+            )
         )
     )
 
@@ -224,15 +229,17 @@ def test_apply_tactic_returns_rejection_without_successor(
         ),
     )
 
-    result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "(P Q : Prop) → P → Q",
-                "proof_prefix": ["intro P Q hP"],
-                "tactic": "exact hP",
-            },
+    result = project_operation_result(
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "(P Q : Prop) → P → Q",
+                    "proof_prefix": ["intro P Q hP"],
+                    "tactic": "exact hP",
+                },
+            )
         )
     )
 
@@ -279,14 +286,16 @@ def test_rejected_transition_persists_all_protocol_diagnostics(
         ),
     )
 
-    result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "True",
-                "tactic": "skip",
-            },
+    result = project_operation_result(
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "True",
+                    "tactic": "skip",
+                },
+            )
         )
     )
 
@@ -308,14 +317,16 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
         adapter,
         lambda: _responses(before=["⊢ True"], after=[], completed=True),
     )
-    opened = adapter.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "True",
-                "tactic": "trivial",
-            },
+    opened = project_operation_result(
+        adapter.invoke(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "True",
+                    "tactic": "trivial",
+                },
+            )
         )
     )
     state = adapter.resources.store.get(opened.output["input_state_uri"])

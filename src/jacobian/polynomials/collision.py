@@ -10,7 +10,6 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityRequest,
-    CapabilityResult,
 )
 from jacobian.contracts.evidence import (
     EvidenceBindings,
@@ -39,6 +38,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
     PolynomialOperationResult,
     _computed_result,
@@ -120,7 +120,7 @@ class PolynomialCollisionAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialCollisionRequest,
             request.input,
@@ -232,7 +232,7 @@ class PolynomialCollisionAdapter:
         return _computed_result(
             descriptor=self.descriptor,
             started=started,
-            output=output.model_dump(mode="json"),
+            output=output,
             artifact_uris=tuple(artifact_uris),
         )
 
@@ -280,7 +280,10 @@ class PolynomialCollisionSearchAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(
+        self,
+        request: CapabilityRequest,
+    ) -> OperationProjection:
         validated = _validate_request(
             PolynomialCollisionSearchRequest,
             request.input,
@@ -465,7 +468,7 @@ class PolynomialCollisionSearchAdapter:
         return _computed_result(
             descriptor=self.descriptor,
             started=started,
-            output=output.model_dump(mode="json"),
+            output=output,
             artifact_uris=artifact_uris,
         )
 
@@ -501,7 +504,7 @@ class PolynomialCollisionVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialCollisionVerifyRequest,
             request.input,
@@ -614,7 +617,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         validated = _validate_request(
             PolynomialMapInverseCollisionVerifyRequest,
             request.input,

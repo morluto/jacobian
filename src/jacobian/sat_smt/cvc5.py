@@ -15,7 +15,8 @@ from pydantic import ValidationError
 
 from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.canonical import loads_strict_json
-from jacobian.capability_service import CapabilityAdapter, CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
@@ -24,13 +25,15 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
-    CapabilityResult,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.smt import (
     SmtUnsatProofFindOutput,
     SmtUnsatProofFindRequest,
 )
+from jacobian.operation_projection import OperationProjection
+from jacobian.operation_publication import PublishedOperation
+from jacobian.operations import Completed, Failed
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessResult,
@@ -247,7 +250,7 @@ class Cvc5UnsatProofFindAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: CapabilityRequest) -> OperationProjection:
         try:
             validated = SmtUnsatProofFindRequest.model_validate(request.input)
             problem_uri = self.smt.put_problem(
@@ -334,7 +337,7 @@ class Cvc5UnsatProofFindAdapter:
         return _completed_result(
             self.descriptor,
             run,
-            output.model_dump(mode="json"),
+            output,
             tuple(artifacts),
         )
 
@@ -342,18 +345,19 @@ class Cvc5UnsatProofFindAdapter:
 def _completed_result(
     descriptor: CapabilityDescriptor,
     run: _Cvc5Run,
-    output: dict[str, object],
+    output: SmtUnsatProofFindOutput,
     artifact_uris: tuple[str, ...],
-) -> CapabilityResult:
-    return CapabilityResult(
-        capability_id=descriptor.capability_id,
-        capability_version=descriptor.version,
-        execution=Execution(
-            status=ExecutionStatus.COMPLETED,
-            runtime_ms=run.runtime_ms,
+) -> OperationProjection:
+    """Keep raw proof production typed until the public dispatch boundary."""
+
+    return OperationProjection(
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
+        terminal=Completed(value=output, runtime_ms=run.runtime_ms),
+        publication=PublishedOperation(
+            output=output,
+            artifact_uris=artifact_uris,
         ),
-        output=output,
-        artifact_uris=artifact_uris,
     )
 
 
@@ -361,19 +365,20 @@ def _failed_result(
     descriptor: CapabilityDescriptor,
     resolved: ResolvedSmtProblem,
     run: _Cvc5Run,
-) -> CapabilityResult:
+) -> OperationProjection:
     if run.diagnostic is None:
         raise RuntimeError("run diagnostic is unexpectedly None")
-    return CapabilityResult(
-        capability_id=descriptor.capability_id,
-        capability_version=descriptor.version,
-        execution=Execution(
+    return OperationProjection(
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
+        terminal=Failed(
             status=run.execution_status,
+            diagnostic=run.diagnostic,
             runtime_ms=run.runtime_ms,
-            detail=run.diagnostic.message,
         ),
-        diagnostics=(run.diagnostic,),
-        artifact_uris=(resolved.artifact.artifact_uri,),
+        publication=PublishedOperation(
+            artifact_uris=(resolved.artifact.artifact_uri,),
+        ),
     )
 
 

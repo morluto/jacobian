@@ -12,10 +12,10 @@ from __future__ import annotations
 import platform
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.arithmetic.integers import INTEGER_CAPABILITIES
 from jacobian.domains.arithmetic.rationals import RATIONAL_CAPABILITIES
 from jacobian.operations import (
-    DomainBundle,
     DomainDiagnostics,
     DomainSemantics,
 )

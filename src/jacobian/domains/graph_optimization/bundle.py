@@ -16,8 +16,11 @@ from jacobian.domains.graph_optimization.finite_optimization import (
 from jacobian.domains.graph_optimization.hamiltonian_path import (
     HAMILTONIAN_PATH_CAPABILITY,
 )
+from jacobian.domains.graph_optimization.independence import (
+    INDEPENDENCE_NUMBER_CAPABILITY,
+)
 from jacobian.domains.graph_optimization.invariants import (
-    BOUNDED_GRAPH_INVARIANT_CAPABILITIES,
+    CLIQUE_NUMBER_CAPABILITY,
 )
 from jacobian.domains.graph_optimization.minimum_spanning_tree import (
     MINIMUM_SPANNING_TREE_CAPABILITY,
@@ -49,11 +52,12 @@ def build_graph_optimization_bundle() -> DomainBundle:
                     "undirected graphs with explicit wall-clock budgets"
                 ),
                 "graph_class": "finite simple undirected",
-                "max_order": 32,
-                "max_edges": 496,
+                "default_max_order": 32,
+                "independence_number_max_order": 128,
+                "default_max_edges": 496,
                 "budget": "explicit wall_seconds per request",
                 "search_budget": (
-                    "finite optimizers also bind max_order and max_solver_calls"
+                    "finite optimizers bind their own operation-specific size limits"
                 ),
                 "conventions": {
                     "minimum_spanning_tree": (
@@ -74,7 +78,7 @@ def build_graph_optimization_bundle() -> DomainBundle:
                     "independence_number": "maximum edge-free vertex subset",
                 },
                 "timeout_or_cancellation": (
-                    "UNKNOWN partial result with preserved bounds and tested obligations"
+                    "UNKNOWN result with a feasible incumbent and explicit bounds"
                 ),
                 "minimum_spanning_tree_certificate": (
                     "every non-tree edge is no lighter than the maximum-weight "
@@ -122,7 +126,8 @@ def build_graph_optimization_bundle() -> DomainBundle:
             *FINITE_GRAPH_OPTIMIZATION_CAPABILITIES,
             HAMILTONIAN_PATH_CAPABILITY,
             MINIMUM_SPANNING_TREE_CAPABILITY,
-            *BOUNDED_GRAPH_INVARIANT_CAPABILITIES,
+            CLIQUE_NUMBER_CAPABILITY,
+            INDEPENDENCE_NUMBER_CAPABILITY,
         ),
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(

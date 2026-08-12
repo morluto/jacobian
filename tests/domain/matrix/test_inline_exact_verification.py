@@ -8,7 +8,7 @@ from tests.support.services import DomainTestServices
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
-from jacobian.contracts.matrix_operations import SmithNormalFormResult
+from jacobian.contracts.matrix_operations import MatrixRankResult, SmithNormalFormResult
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 
 
@@ -97,6 +97,30 @@ def test_candidate_reference_does_not_transfer_producer_authority(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.verification_record_uri is None
+
+
+def test_smith_checker_rejects_a_reference_with_the_wrong_value_type(
+    matrix_services: DomainTestServices,
+) -> None:
+    runtime = matrix_services
+    value_ref = runtime.core.values.put(
+        MatrixRankResult(rank=2, pivot_columns=(0, 1)),
+        operation_id="matrix.compute.rank",
+        operation_version="1",
+        output_port="rank",
+    )
+
+    failed = runtime.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.normal_form.smith.verify",
+            input={"input": {"matrix": _integer_matrix()}},
+            inputs={"candidate": value_ref},
+        )
+    )
+
+    assert failed.execution.status == "ERROR"
+    assert failed.diagnostics[0].code == "INVALID_EXACT_DOMAIN_INPUT"
+    assert failed.verification_record_uri is None
 
 
 @pytest.mark.parametrize(

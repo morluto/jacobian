@@ -106,6 +106,30 @@ def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
     assert absent.matches == ()
 
 
+def test_discovery_finds_resultant_producer_from_plain_language(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    capabilities = attached_complete_runtime_read_only.core.capabilities
+
+    for query in (
+        "compute the exact resultant of two univariate rational polynomials",
+        "compute and independently verify the exact resultant of two univariate rational polynomials",
+    ):
+        discovered = capabilities.discover(
+            CapabilityDiscoveryRequest(query=query, limit=8)
+        )
+
+        ids = [match.capability_id for match in discovered.matches]
+        assert "polynomial.compute.resultant" in ids
+        assert ids.index("polynomial.compute.resultant") <= 1
+        resultant = next(
+            match
+            for match in discovered.matches
+            if match.capability_id == "polynomial.compute.resultant"
+        )
+        assert resultant.relevance_score > 0
+
+
 def test_domain_intents_discover_poset_and_topology_operations(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:

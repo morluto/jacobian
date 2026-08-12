@@ -85,7 +85,13 @@ def _require_transition(
 def _require_mathlib_declaration(result: dict[str, Any]) -> None:
     if result.get("execution", {}).get("status") != "COMPLETED":
         raise RuntimeError("MATHLIB declaration search did not complete")
-    declarations = result.get("output", {}).get("declarations")
+    output = result.get("output", {})
+    native_result = output.get("result") if isinstance(output, dict) else None
+    declarations = (
+        native_result.get("declarations")
+        if isinstance(native_result, dict)
+        else None
+    )
     if not isinstance(declarations, list) or not declarations:
         raise RuntimeError("MATHLIB declaration search returned no exact match")
     if declarations[0].get("name") != "irrational_sqrt_two":

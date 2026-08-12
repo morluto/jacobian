@@ -15,8 +15,9 @@ SERVER_INSTRUCTIONS = (
     "math.find with a plain-language desired local mathematical outcome; no capability "
     "ID is required. math.run may execute a known contract directly. "
     "For declaration queries explicitly targeting Jacobian's pinned CORE or MATHLIB "
-    "environment, use the pinned mathematical operation because repository search or "
-    "a local Lean process may not match that server environment. Project-local Lean "
+    "environment, use the pinned mathematical operation; do not substitute repository "
+    "search, cached Mathlib files, or a local Lean process because they may not match "
+    "that server environment. Project-local Lean "
     "declarations are outside the server catalog and may require project-local tools. "
     "Other uses include symbolic transformation, structural analysis, examples or "
     "counterexamples, bounded search, Lean/Mathlib declaration search or formal-"
@@ -59,7 +60,9 @@ Examples:
 MATH_RUN_DESCRIPTION = """\
 Run one installed math tool by ID with its typed `payload`. Read the mathematical
 value in `output` first, then execution status. If the payload shape is unknown,
-inspect the exact operation with math.find.
+inspect the exact operation with math.find, then copy and adapt one of its
+`invocation_examples`. Do not call math.run with an empty `payload` merely to
+discover required fields; the inspect result is the authoritative contract.
 
 Ordinary tools return calculations. Independent checking uses a separate checker
 tool ID (for example `polynomial.identity.verify`), not a switch on the producer.

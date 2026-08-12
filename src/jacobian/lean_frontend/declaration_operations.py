@@ -119,15 +119,15 @@ def build_lean_declaration_query_bundle(
                         CapabilityInvocationExample(
                             name="find_sqrt_two_irrationality",
                             description=(
-                                "Search pinned Mathlib for declarations whose name "
-                                "mentions irrational square root."
+                                "Find the exact square-root-of-two irrationality "
+                                "declaration in pinned Mathlib."
                             ),
                             input=LeanDeclarationSearchRequest.model_validate(
                                 {
                                     "environment": "MATHLIB",
-                                    "name_contains": "irrational_sqrt",
+                                    "name_contains": "irrational_sqrt_two",
                                     "kinds": ["THEOREM"],
-                                    "result_limit": 10,
+                                    "result_limit": 1,
                                 }
                             ).model_dump(mode="json"),
                         ),

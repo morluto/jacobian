@@ -8,7 +8,14 @@ ROOT = Path(__file__).resolve().parents[4]
 
 def _make_dry_run(*args: str) -> str:
     completed = subprocess.run(
-        ["make", "--dry-run", "--no-print-directory", *args],
+        [
+            "make",
+            "--dry-run",
+            "--no-print-directory",
+            "TESTS=",
+            "PYTEST_ARGS=",
+            *args,
+        ],
         cwd=ROOT,
         check=True,
         capture_output=True,

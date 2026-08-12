@@ -69,8 +69,8 @@ from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
-from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 from jacobian.validation_diagnostics import bounded_validation_exception_message
+from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -26,17 +27,21 @@ from typing import Any, Literal, cast
 
 import pyperf  # type: ignore[import-untyped]
 
-from benchmarks.tooling.command_runner import (
+_ROOT = Path(__file__).resolve().parents[2]
+if __package__ in {None, ""} and str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from benchmarks.tooling.command_runner import (  # noqa: E402
     git_head_sha,
     git_tracked_worktree_is_clean,
 )
-from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
+from jacobian.canonical import canonicalize_json  # noqa: E402
+from jacobian.contracts.capabilities import (  # noqa: E402
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
 )
-from jacobian.contracts.lean import LeanEnvironment
-from jacobian.lean_frontend.declaration_protocol import (
+from jacobian.contracts.lean import LeanEnvironment  # noqa: E402
+from jacobian.lean_frontend.declaration_protocol import (  # noqa: E402
     LeanDeclarationInspectPayload,
     LeanDeclarationInspectQuery,
     LeanDeclarationPayload,
@@ -44,11 +49,12 @@ from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationSearchPayload,
     LeanDeclarationSearchQuery,
 )
-from jacobian.lean_frontend.declarations import LeanSubprocessDeclarationBackend
-from jacobian.providers.lean_runtime import lean_provider_runtime
-from jacobian_checkers import lean4
+from jacobian.lean_frontend.declarations import (  # noqa: E402
+    LeanSubprocessDeclarationBackend,
+)
+from jacobian.providers.lean_runtime import lean_provider_runtime  # noqa: E402
+from jacobian_checkers import lean4  # noqa: E402
 
-_ROOT = Path(__file__).resolve().parents[2]
 _BACKENDS = ("cold", "indexed", "warm", "persistent")
 _OPERATIONS = ("search", "inspect")
 type BackendName = Literal["cold", "indexed", "warm", "persistent"]

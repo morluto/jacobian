@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Annotated, Self
 
-from pydantic import BeforeValidator, Field, StrictInt, model_validator
+from pydantic import BeforeValidator, Field, StrictInt, ValidationError, model_validator
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
@@ -79,10 +79,20 @@ def _rational(value: Fraction) -> CanonicalRational:
 
 
 def canonical_gaussian_polynomial(value: object) -> GaussianPolynomial:
-    """Parse bounded loose wire terms into one strict canonical domain value."""
+    """Parse a strict canonical value or canonicalize bounded loose wire terms."""
 
     if isinstance(value, GaussianPolynomial):
         return value
+
+    # A canonical request is itself a valid public boundary form. Parsing it first
+    # makes the canonical JSON projection replayable after duplicate raw terms have
+    # legitimately accumulated beyond the per-raw-term 128-digit bound. The strict
+    # value still enforces the 16-term and 4,096-digit component bounds.
+    try:
+        return GaussianPolynomial.model_validate(value)
+    except ValidationError:
+        pass
+
     raw = RawGaussianPolynomial.model_validate(value)
     combined: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {}
     for term in raw.terms:
@@ -113,7 +123,7 @@ def canonical_gaussian_polynomial(value: object) -> GaussianPolynomial:
 
 
 class CanonicalGaussianPolynomialMomentRequest(GaussianPolynomialMomentRequest):
-    """Request that parses loose wire terms once into ``GaussianPolynomial``."""
+    """Request accepting strict canonical values or bounded loose wire terms."""
 
     polynomial: Annotated[
         GaussianPolynomial,

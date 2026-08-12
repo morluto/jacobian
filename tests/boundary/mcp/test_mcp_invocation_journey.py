@@ -63,6 +63,23 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert "provider" not in result.structured_content
             assert "provider_digest" not in result.structured_content
 
+            invalid = await client.call_tool(
+                "math.run",
+                {
+                    "capability_id": "integer.compute.gcd",
+                    "payload": {"left": "84", "unexpected": "30"},
+                },
+            )
+            assert isinstance(invalid.structured_content, dict)
+            invalid_result = invalid.structured_content
+            assert invalid_result["execution"]["status"] == "ERROR"
+            assert (
+                invalid_result["output"]["error"]["code"]
+                == "INVALID_NUMBER_THEORY_REQUEST"
+            )
+            assert invalid_result["artifact_uris"] == []
+            assert invalid_result["verification_record_uri"] is None
+
             matching_description = await client.call_tool(
                 "math.find",
                 {

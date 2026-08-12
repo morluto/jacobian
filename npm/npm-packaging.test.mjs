@@ -492,7 +492,10 @@ process.stdin.on("data", (chunk) => {
     const message = JSON.parse(line);
     if (message.id === 1) {
       console.log(JSON.stringify({ jsonrpc: "2.0", id: 1, result: {
-        serverInfo: { name: "jacobian", version: ${JSON.stringify(packageMetadata.version)} },
+        serverInfo: {
+          name: "jacobian",
+          version: process.env.FAKE_SERVER_VERSION || ${JSON.stringify(packageMetadata.version)}
+        },
         instructions: "ready"
       }}));
     } else if (message.id === 2) {
@@ -542,6 +545,21 @@ process.stdin.on("data", (chunk) => {
         report.integration.checkedClients[0].status,
         "configured_managed",
       );
+
+      const mismatched = spawnSync(
+        process.execPath,
+        [cli, "doctor", "--client", "claude", "--json"],
+        {
+          encoding: "utf8",
+          env: { ...env, FAKE_SERVER_VERSION: "0.0.0" },
+          timeout: 10_000,
+        },
+      );
+      assert.equal(mismatched.status, 1);
+      const mismatchReport = JSON.parse(mismatched.stdout);
+      assert.match(mismatchReport.error, /reports version 0\.0\.0/);
+      assert.match(mismatchReport.error, new RegExp(`requires ${packageMetadata.version}`));
+      assert.equal(mismatchReport.integration.catalogStatus, "not_attempted");
     } finally {
       await rm(base, { recursive: true, force: true });
     }

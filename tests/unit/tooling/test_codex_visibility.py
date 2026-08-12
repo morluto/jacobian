@@ -350,7 +350,7 @@ def test_visibility_classification_records_adoption_without_grading_shell(
     assert result["mcp_call_count"] == 3
     assert result["math_find_call_count"] == 2
     assert result["math_run_call_count"] == 1
-    assert result["empty_payload_probe_count"] == 1
+    assert result["empty_payload_probe_count"] == 0
 
 
 def test_visibility_classification_records_discovery_free_invocation(

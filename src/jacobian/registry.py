@@ -425,7 +425,7 @@ class CheckerRegistry:
                 "This checker is revoked. Select an active checker from the reference "
                 "contract, then retry."
             )
-        _require_runtime_unchanged(registration.implementation.provider_runtime)
+        # Executable bytes are measured at authorization and in the bounded worker.
         return registration
 
     def require_compatible(

@@ -34,6 +34,25 @@ def test_certified_smith_request_rejects_large_input_scalars() -> None:
         )
 
 
+def test_certified_smith_request_schema_publishes_the_enforced_dimension_cap() -> None:
+    schema = CertifiedSmithNormalFormRequest.model_json_schema()
+    matrix_ref = schema["properties"]["matrix"]["$ref"]
+    matrix_schema = schema["$defs"][matrix_ref.rsplit("/", maxsplit=1)[-1]]
+
+    assert matrix_schema["properties"]["row_count"] == {
+        "maximum": 16,
+        "minimum": 1,
+        "title": "Row Count",
+        "type": "integer",
+    }
+    assert matrix_schema["properties"]["column_count"] == {
+        "maximum": 16,
+        "minimum": 1,
+        "title": "Column Count",
+        "type": "integer",
+    }
+
+
 def test_certificate_contract_requires_a_canonical_divisibility_diagonal() -> None:
     source = CertifiedIntegerMatrix.model_validate(_matrix([[2, 0], [0, 6]]))
     identity = CertifiedIntegerMatrix.model_validate(_matrix([[1, 0], [0, 1]]))

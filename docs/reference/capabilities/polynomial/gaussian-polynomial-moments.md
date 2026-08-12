@@ -27,17 +27,20 @@ The request bounds are:
 | Field | Bound |
 | --- | --- |
 | Gaussian variables | 1–8 |
-| Nonzero sparse terms | 1–16 |
+| Raw sparse terms | 1–16 before canonicalization |
 | Total degree of each input term | at most 8 |
 | Fixed moment order \(m\) | 0–16 |
 | Raw ordered expansion paths | `term_count ** m <= 65536` |
 | Input rational numerator/denominator | at most 128 decimal digits |
 
-Terms use exponent vectors of length `variable_count`, in strictly increasing
-lexicographic order. A coefficient has separate canonical rational `real` and
-`imaginary` components. Duplicate monomials, zero coefficients, negative
-exponents, inconsistent dimensions, and requests beyond the complete-expansion
-bound fail validation before computation or artifact writes.
+Wire terms use exponent vectors of length `variable_count`. They may arrive in
+any order, repeat an exponent vector, or carry an exact zero coefficient. The
+request boundary combines duplicates over \(\mathbb Q(i)\), removes exact zero
+terms, and orders the surviving terms lexicographically before constructing the
+strict `GaussianPolynomial` value used by the producer and checker. A request
+whose terms cancel completely is rejected, as are negative exponents,
+inconsistent dimensions, more than 16 raw terms, and requests beyond the
+complete-expansion bound.
 
 The producer exactly expands \(P^m\) via pinned Python-FLINT `fmpq_mpoly`
 binary exponentiation over a typed real/imaginary coefficient pair,

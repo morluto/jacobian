@@ -256,7 +256,6 @@ class VerificationService:
         candidate_payload: dict[str, object],
         checker_id: str,
         witness_format: str,
-        request: dict[str, Any],
         timeout_seconds: float | None = None,
     ) -> VerificationResult:
         """Verify exact inline values without materializing them as artifacts.
@@ -283,16 +282,31 @@ class VerificationService:
                 semantics_uri=semantics_uri,
                 payload=candidate_payload,
             )
-            expected_bindings = request.get("expected_bindings")
-            if not isinstance(expected_bindings, dict) or expected_bindings != {
-                "claim_digest": claim_digest,
-                "semantics_digest": semantics_digest,
-                "candidate_digest": candidate_digest,
-                "scope_digest": None,
-                "encoding_digest": None,
-            }:
-                raise ValueError("inline exact replay bindings do not match values")
-            bindings = EvidenceBindings.model_validate(expected_bindings)
+            bindings = EvidenceBindings(
+                claim_digest=claim_digest,
+                semantics_digest=semantics_digest,
+                candidate_digest=candidate_digest,
+            )
+            request = {
+                "request_version": "2",
+                "operation_id": operation_id,
+                "claim": {
+                    "schema_uri": claim_schema_uri,
+                    "semantics_uri": semantics_uri,
+                    "payload": claim_payload,
+                },
+                "candidate": {
+                    "schema_uri": candidate_schema_uri,
+                    "semantics_uri": semantics_uri,
+                    "payload": candidate_payload,
+                },
+                "semantics": self._checker_artifact(
+                    semantics,
+                    include_storage_metadata=True,
+                ),
+                "scope": None,
+                "expected_bindings": bindings.model_dump(mode="json"),
+            }
             checker = self.checker_registry.require_compatible(
                 checker_id,
                 evidence_kind=EvidenceKind.WITNESS,

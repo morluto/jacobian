@@ -22,6 +22,15 @@ class IndependenceNumberBudget(ContractModel):
     """Explicit public limits for one bounded independence-number search."""
 
     wall_seconds: StrictInt = Field(default=5, ge=1, le=120)
+    max_solver_calls: StrictInt = Field(
+        default=1,
+        ge=1,
+        le=33,
+        description=(
+            "Compatibility budget retained from the threshold-search contract; "
+            "the version-2 optimizer uses one solver call."
+        ),
+    )
     max_order: StrictInt = Field(default=128, ge=0, le=128)
 
 

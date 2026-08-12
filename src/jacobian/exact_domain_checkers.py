@@ -74,6 +74,7 @@ _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS = frozenset({"python-flint"})
 _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
     "jacobian_checkers.exact_domain_operations": "python-flint",
     "jacobian_checkers.graph_exact_operations": "finite-graph",
+    "jacobian_checkers.graph6": "graph6",
     "jacobian_checkers.exact_probability_operations": "finite-probability",
     "jacobian_checkers.recurrence_series": "combinatorics",
     "jacobian_checkers.additive_combinatorics": "combinatorics",
@@ -187,6 +188,15 @@ def install_exact_domain_checkers(
         "python-flint": exact_domain_checker_provider_runtime,
         "certified-snf": certified_snf_checker_provider_runtime,
         "finite-graph": graph_exact_checker_provider_runtime,
+        "graph6": partial(
+            source_provider_runtime,
+            "jacobian.graph6-checker",
+            version="1",
+            entrypoint="jacobian_checkers.graph6:check_graph6_decode",
+            install_tier=CapabilityInstallTier.T1,
+            license_id="MIT",
+            features=("standard-library-bitstream-replay", "clean-process-checker"),
+        ),
         "finite-probability": probability_exact_checker_provider_runtime,
         "combinatorics": combinatorics_exact_checker_provider_runtime,
         "poset": poset_exact_checker_provider_runtime,

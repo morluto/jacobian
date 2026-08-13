@@ -6,7 +6,9 @@ import sqlite3
 from pathlib import Path
 
 from tests.support.exact_domain import open_exact_domain_services
+from tests.support.services import atomic_installation, open_domain_services
 
+from jacobian.checker_authorization import install_polytope_checkers
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
@@ -60,3 +62,56 @@ def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> Non
     ) as services:
         assert _audit_count(tmp_path) == 0
         assert "matrix.determinant.verify" not in _verify_ids(services.core)
+
+
+def test_hydrate_authorized_polytope_checkers_without_complete_portfolio(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "state"
+    with open_domain_services(
+        root,
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as services:
+        polytope = services.application.polytope
+        with atomic_installation(services.core):
+            installed = install_polytope_checkers(
+                services.core.checkers,
+                claim_schema_uri=polytope.claim_schema_uri,
+                semantics_uri=polytope.semantics_uri,
+                point_schema_uri=polytope.point_schema_uri,
+            )
+        assert installed.witness_checker_id is not None
+        assert installed.certificate_checker_id is not None
+        baseline_audit = _audit_count(root)
+
+    with open_domain_services(
+        root,
+        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
+    ) as hydrated:
+        polytope = hydrated.application.polytope
+        with atomic_installation(hydrated.core):
+            rebound = install_polytope_checkers(
+                hydrated.core.checkers,
+                claim_schema_uri=polytope.claim_schema_uri,
+                semantics_uri=polytope.semantics_uri,
+                point_schema_uri=polytope.point_schema_uri,
+            )
+        assert rebound.witness_checker_id == installed.witness_checker_id
+        assert rebound.certificate_checker_id == installed.certificate_checker_id
+        assert hydrated.core.checkers.select_compatible(
+            evidence_kind="WITNESS",
+            format_id="polytope.convex_combination",
+            format_version="1",
+            claim_schema_uri=polytope.claim_schema_uri,
+            semantics_uri=polytope.semantics_uri,
+            candidate_schema_uri=polytope.point_schema_uri,
+        )
+        assert hydrated.core.checkers.select_compatible(
+            evidence_kind="CERTIFICATE",
+            format_id="polytope.linear_separator",
+            format_version="1",
+            claim_schema_uri=polytope.claim_schema_uri,
+            semantics_uri=polytope.semantics_uri,
+            candidate_schema_uri=polytope.point_schema_uri,
+        )
+        assert _audit_count(root) == baseline_audit

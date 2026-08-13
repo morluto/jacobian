@@ -199,7 +199,10 @@ obligation records around an already-typed result.
 A checker is a separate installed operation governed by a typed
 `VerificationProtocol[SubjectT, CandidateT, EvidenceT, DecisionT]`. Operator
 configuration authorizes checker identities; producer declarations and search
-code cannot authorize themselves.
+code cannot authorize themselves. Exact replay declarations bind their own
+provider-runtime factory. Installation groups those factories by the provider
+identity they probe; it does not keep a central entrypoint map or support
+matrix.
 
 The runtime keeps four narrow responsibilities:
 

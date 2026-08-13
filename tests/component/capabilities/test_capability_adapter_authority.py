@@ -19,6 +19,7 @@ from tests.component.capabilities.capability_service_support import (
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.capability_errors import CapabilityError
+from jacobian.capability_service import CapabilityPolicy
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
@@ -88,7 +89,35 @@ def test_unknown_capability_returns_an_actionable_result(
         "Capability 'missing.capability' is not installed."
     )
     assert "math.find" in (result.diagnostics[0].hint or "")
-    assert result.output["available_capability_ids"]
+    assert result.output == {
+        "error": result.diagnostics[0].model_dump(mode="json", exclude_none=True)
+    }
+
+
+def test_policy_denial_does_not_embed_the_policy_document(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(ComputedAdapter())
+    core.capabilities.policy = CapabilityPolicy(
+        denied_capability_ids=frozenset({"example.double"})
+    )
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(capability_id="example.double", input={"value": 21})
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "CAPABILITY_POLICY_DENIED"
+    assert result.diagnostics[0].details == {
+        "policy_profile": "DEFAULT",
+        "policy_digest": core.capabilities.policy.digest,
+        "reasons": ["capability_id_denied"],
+        "checker_authorization_affected": False,
+    }
+    assert result.output == {
+        "error": result.diagnostics[0].model_dump(mode="json", exclude_none=True)
+    }
 
 
 def test_tool_id_owns_role(

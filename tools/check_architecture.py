@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces fifteen PR10 invariants:
+runtime.  It enforces sixteen focused invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -57,6 +57,9 @@ runtime.  It enforces fifteen PR10 invariants:
 
 15. **internal-capability-request**: only CLI and MCP boundaries may construct
     the generic capability request envelope; in-process composition stays typed.
+
+16. **capability-result-projection**: only the final operation projection may
+    construct the generic public result envelope.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
@@ -252,6 +255,10 @@ _CAPABILITY_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/cli.py"),
         PurePosixPath("src/jacobian/adapters/mcp/tooling.py"),
     }
+)
+
+_CAPABILITY_RESULT_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
+    {PurePosixPath("src/jacobian/operation_projection.py")}
 )
 
 # Public-contract checks apply to datasets with agent-visible contract projections.
@@ -455,6 +462,17 @@ def _imported_names(node: ast.Import | ast.ImportFrom) -> list[str]:
     return [alias.name for alias in node.names]
 
 
+def _attribute_path(node: ast.AST) -> str | None:
+    """Return one dotted name path without evaluating the expression."""
+
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _attribute_path(node.value)
+        return f"{parent}.{node.attr}" if parent is not None else None
+    return None
+
+
 def _internal_capability_request_violations(
     relative: PurePosixPath,
     tree: ast.AST,
@@ -475,6 +493,79 @@ def _internal_capability_request_violations(
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id == "CapabilityRequest"
+    )
+
+
+def _capability_result_bindings(tree: ast.AST) -> tuple[set[str], set[str]]:
+    constructor_names: set[str] = set()
+    module_names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (
+            node.level == 0 and node.module == "jacobian.contracts.capabilities"
+        ):
+            constructor_names.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name == "CapabilityResult"
+            )
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                bound = alias.asname or alias.name
+                if alias.name == "jacobian.contracts.capabilities":
+                    module_names.add(bound)
+                elif alias.name == "jacobian.contracts":
+                    module_names.add(f"{bound}.capabilities")
+                elif alias.name == "jacobian":
+                    module_names.add(f"{bound}.contracts.capabilities")
+        elif isinstance(node, ast.ImportFrom) and (
+            node.level == 0 and node.module == "jacobian.contracts"
+        ):
+            module_names.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name == "capabilities"
+            )
+        elif isinstance(node, ast.ImportFrom) and (
+            node.level == 0 and node.module == "jacobian"
+        ):
+            module_names.update(
+                f"{alias.asname or alias.name}.capabilities"
+                for alias in node.names
+                if alias.name == "contracts"
+            )
+    return constructor_names, module_names
+
+
+def _capability_result_projection_violations(
+    relative: PurePosixPath,
+    tree: ast.AST,
+) -> tuple[Violation, ...]:
+    if not str(relative).startswith("src/jacobian/"):
+        return ()
+    if relative in _CAPABILITY_RESULT_ALLOWED_EXACT:
+        return ()
+    constructor_names, module_names = _capability_result_bindings(tree)
+
+    def is_result_constructor(call: ast.Call) -> bool:
+        if isinstance(call.func, ast.Name):
+            return call.func.id in constructor_names
+        if not isinstance(call.func, ast.Attribute):
+            return False
+        path = _attribute_path(call.func)
+        return path is not None and any(
+            path == f"{module}.CapabilityResult" for module in module_names
+        )
+
+    return tuple(
+        Violation(
+            str(relative),
+            "capability-result-projection",
+            "only operation_projection.py may construct the public "
+            "CapabilityResult envelope",
+            node.lineno,
+        )
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and is_result_constructor(node)
     )
 
 
@@ -1392,6 +1483,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
 
     violations: list[Violation] = []
     violations.extend(_internal_capability_request_violations(relative, tree))
+    violations.extend(_capability_result_projection_violations(relative, tree))
     violations.extend(_subprocess_violations(relative, tree))
     violations.extend(_run_bounded_process_violations(relative, tree))
     violations.extend(_shutil_which_violations(relative, tree))

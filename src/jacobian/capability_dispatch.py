@@ -22,8 +22,9 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
     CapabilityResult,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
-from jacobian.operation_projection import project_operation_result
+from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_projection import OperationProjection, project_operation_result
+from jacobian.operations import Failed
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
     require_provider_runtime_ready,
@@ -40,11 +41,11 @@ class CapabilityDispatchMixin:
         try:
             adapter: CapabilityAdapter = self._adapters[request.capability_id]
         except KeyError:
-            result = _unknown_capability_failure(self, request)
+            result = _unknown_capability_failure(request)
             log_invocation(result, started)
             return result
         descriptor = self._descriptors[request.capability_id]
-        resolution = _capability_resolution_failure(self, request, descriptor)
+        resolution = _capability_resolution_failure(self, descriptor)
         if resolution is not None:
             log_invocation(resolution, started)
             return resolution
@@ -62,14 +63,14 @@ class CapabilityDispatchMixin:
             )
         except CapabilityInvocationError as exc:
             result = failed_result(
-                descriptor=descriptor,
-                request=request,
+                operation_id=descriptor.capability_id,
+                version=descriptor.version,
                 diagnostic=exc.diagnostic,
             )
         except CapabilityError as exc:
             result = failed_result(
-                descriptor=descriptor,
-                request=request,
+                operation_id=descriptor.capability_id,
+                version=descriptor.version,
                 diagnostic=CapabilityDiagnostic(
                     code="ADAPTER_CONFIGURATION_FAILED",
                     stage="adapter_execution",
@@ -84,7 +85,6 @@ class CapabilityDispatchMixin:
             result = _adapter_execution_failure(descriptor, request, exc)
         invalid = _adapter_result_identity_failure(
             descriptor=descriptor,
-            request=request,
             result=result,
         )
         if invalid is not None:
@@ -95,7 +95,6 @@ class CapabilityDispatchMixin:
         ):
             result = _normalize_completed_adapter_output(
                 descriptor=descriptor,
-                request=request,
                 result=result,
                 started=started,
             )
@@ -127,12 +126,10 @@ def _normalize_request(
     return request.model_copy(update={"input": normalized_input})
 
 
-def _unknown_capability_failure(
-    dispatch: Any, request: CapabilityRequest
-) -> CapabilityResult:
-    return resolution_failure(
-        request=request,
-        capability_version="not-installed",
+def _unknown_capability_failure(request: CapabilityRequest) -> CapabilityResult:
+    return failed_result(
+        operation_id=request.capability_id,
+        version="not-installed",
         diagnostic=CapabilityDiagnostic(
             code="UNKNOWN_CAPABILITY",
             stage="capability_resolution",
@@ -142,32 +139,25 @@ def _unknown_capability_failure(
                 "installed capabilities, then retry with one of those IDs."
             ),
         ),
-        context={
-            "available_capability_ids": [
-                descriptor.capability_id
-                for descriptor in dispatch.catalog().capabilities
-            ],
-        },
     )
 
 
 def _capability_resolution_failure(
     dispatch: Any,
-    request: CapabilityRequest,
     descriptor: Any,
 ) -> CapabilityResult | None:
     policy_reasons = dispatch.policy.denial_reasons(
         descriptor,
     )
     if policy_reasons:
-        result = resolution_failure(
-            request=request,
-            capability_version=descriptor.version,
+        result = failed_result(
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
             diagnostic=CapabilityDiagnostic(
                 code="CAPABILITY_POLICY_DENIED",
                 stage="capability_policy",
                 message=(
-                    f"Capability {request.capability_id!r} is denied by the "
+                    f"Capability {descriptor.capability_id!r} is denied by the "
                     "operator-controlled capability policy."
                 ),
                 hint=(
@@ -181,7 +171,6 @@ def _capability_resolution_failure(
                     "checker_authorization_affected": False,
                 },
             ),
-            context={"capability_policy": dispatch.policy.definition},
         )
         return result
     return None
@@ -194,8 +183,8 @@ def _adapter_execution_failure(
 ) -> CapabilityResult:
     if isinstance(exc, ValidationError):
         return failed_result(
-            descriptor=descriptor,
-            request=request,
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
             diagnostic=enriched_invalid_request(
                 CapabilityDiagnostic(
                     code="INVALID_REQUEST",
@@ -211,8 +200,8 @@ def _adapter_execution_failure(
         exc_info=exc,
     )
     return failed_result(
-        descriptor=descriptor,
-        request=request,
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
         diagnostic=CapabilityDiagnostic(
             code="ADAPTER_EXECUTION_FAILED",
             stage="adapter_execution",
@@ -232,8 +221,8 @@ def _input_validation_failure(
 ) -> CapabilityResult:
     path = exc.path if isinstance(exc, PayloadValidationError) else error_path(exc)
     return failed_result(
-        descriptor=descriptor,
-        request=request,
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
         diagnostic=CapabilityDiagnostic(
             code="INVALID_REQUEST",
             stage="capability_input_validation",
@@ -272,7 +261,6 @@ def _input_validation_failure(
 def _adapter_result_identity_failure(
     *,
     descriptor: Any,
-    request: CapabilityRequest,
     result: CapabilityResult,
 ) -> CapabilityResult | None:
     if (
@@ -280,8 +268,8 @@ def _adapter_result_identity_failure(
         or result.capability_version != descriptor.version
     ):
         return failed_result(
-            descriptor=descriptor,
-            request=request,
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
             diagnostic=CapabilityDiagnostic(
                 code="ADAPTER_RESULT_INVALID",
                 stage="adapter_execution",
@@ -295,7 +283,6 @@ def _adapter_result_identity_failure(
 def _normalize_completed_adapter_output(
     *,
     descriptor: Any,
-    request: CapabilityRequest,
     result: CapabilityResult,
     started: float,
 ) -> CapabilityResult:
@@ -303,8 +290,8 @@ def _normalize_completed_adapter_output(
         normalized_output = validate_payload(descriptor.output_schema, result.output)
     except PayloadValidationError as exc:
         invalid = failed_result(
-            descriptor=descriptor,
-            request=request,
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
             diagnostic=CapabilityDiagnostic(
                 code="ADAPTER_RESULT_INVALID",
                 stage="adapter_execution",
@@ -328,14 +315,20 @@ def _normalize_completed_adapter_output(
 
 
 def failed_result(
-    *, descriptor: Any, request: CapabilityRequest, diagnostic: CapabilityDiagnostic
+    *,
+    operation_id: str,
+    version: str,
+    diagnostic: CapabilityDiagnostic,
 ) -> CapabilityResult:
-    return CapabilityResult(
-        capability_id=descriptor.capability_id,
-        capability_version=descriptor.version,
-        execution=Execution(status=ExecutionStatus.ERROR, detail=diagnostic.message),
-        output={"error": diagnostic.model_dump(mode="json", exclude_none=True)},
-        diagnostics=(diagnostic,),
+    return project_operation_result(
+        OperationProjection(
+            operation_id=operation_id,
+            version=version,
+            terminal=Failed(
+                status=ExecutionStatus.ERROR,
+                diagnostic=diagnostic,
+            ),
+        )
     )
 
 
@@ -351,8 +344,8 @@ def invoke_ready_adapter(
         require_provider_runtime_ready(runtime)
     except ProviderRuntimeError as exc:
         return failed_result(
-            descriptor=descriptor,
-            request=request,
+            operation_id=descriptor.capability_id,
+            version=descriptor.version,
             diagnostic=CapabilityDiagnostic(
                 code="PROVIDER_READINESS_FAILED",
                 stage="provider_readiness",
@@ -366,25 +359,6 @@ def invoke_ready_adapter(
         )
     outcome = adapter.invoke(request)
     return project_operation_result(outcome)
-
-
-def resolution_failure(
-    *,
-    request: CapabilityRequest,
-    capability_version: str,
-    diagnostic: CapabilityDiagnostic,
-    context: dict[str, object],
-) -> CapabilityResult:
-    return CapabilityResult(
-        capability_id=request.capability_id,
-        capability_version=capability_version,
-        execution=Execution(status=ExecutionStatus.ERROR, detail=diagnostic.message),
-        output={
-            "error": diagnostic.model_dump(mode="json", exclude_none=True),
-            **context,
-        },
-        diagnostics=(diagnostic,),
-    )
 
 
 def error_path(exc: Exception) -> str | None:

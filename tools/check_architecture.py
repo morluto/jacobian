@@ -61,6 +61,9 @@ runtime.  It enforces sixteen focused invariants:
 16. **capability-result-projection**: only the final operation projection may
     construct the generic public result envelope.
 
+17. **legacy-adapter-mode**: built-in adapters may not restore marker-selected
+    schema execution paths; every adapter owns its typed parse.
+
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
 genuinely historical record.
@@ -260,6 +263,8 @@ _CAPABILITY_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
 _CAPABILITY_RESULT_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
     {PurePosixPath("src/jacobian/operation_projection.py")}
 )
+
+_LEGACY_ADAPTER_MODE_NAMES = frozenset({"TypedInputAdapter", "typed_input"})
 
 # Public-contract checks apply to datasets with agent-visible contract projections.
 _PUBLIC_CONTRACT_DATASET_PREFIXES = (
@@ -566,6 +571,32 @@ def _capability_result_projection_violations(
         )
         for node in ast.walk(tree)
         if isinstance(node, ast.Call) and is_result_constructor(node)
+    )
+
+
+def _legacy_adapter_mode_violations(
+    relative: PurePosixPath,
+    tree: ast.AST,
+) -> tuple[Violation, ...]:
+    if not str(relative).startswith("src/jacobian/"):
+        return ()
+    return tuple(
+        Violation(
+            str(relative),
+            "legacy-adapter-mode",
+            "adapters own one typed parse; marker-selected schema execution "
+            "modes are not supported",
+            node.lineno,
+        )
+        for node in ast.walk(tree)
+        if (
+            isinstance(node, ast.Name) and node.id in _LEGACY_ADAPTER_MODE_NAMES
+        ) or (
+            isinstance(node, ast.ImportFrom)
+            and any(
+                alias.name in _LEGACY_ADAPTER_MODE_NAMES for alias in node.names
+            )
+        )
     )
 
 
@@ -1484,6 +1515,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations: list[Violation] = []
     violations.extend(_internal_capability_request_violations(relative, tree))
     violations.extend(_capability_result_projection_violations(relative, tree))
+    violations.extend(_legacy_adapter_mode_violations(relative, tree))
     violations.extend(_subprocess_violations(relative, tree))
     violations.extend(_run_bounded_process_violations(relative, tree))
     violations.extend(_shutil_which_violations(relative, tree))

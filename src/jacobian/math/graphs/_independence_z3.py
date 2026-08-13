@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import time
+from typing import Literal
 
 import networkx as nx
-import z3
+import z3  # type: ignore[import-untyped]
 
 from jacobian.math.graphs import _networkx
 from jacobian.math.graphs.independence import (
@@ -99,7 +100,7 @@ def solve_independence_number(
     else:
         upper_bound = order
 
-    termination = (
+    termination: Literal["WALL_TIME", "SOLVER_UNKNOWN"] = (
         "WALL_TIME"
         if time.monotonic() - started >= request.resource_budget.wall_seconds
         else "SOLVER_UNKNOWN"

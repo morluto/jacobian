@@ -6,9 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
-from jacobian.contracts.common import ArtifactUri, Sha256Digest
 from jacobian.contracts.results import ContractModel
-from jacobian.contracts.sat import CanonicalCnf
 
 GraphVertex = Annotated[
     str,
@@ -39,71 +37,6 @@ class ChromaticGraph(ContractModel):
         if len(normalized_edges) != len(self.edges):
             raise ValueError("graph edges must be unique ignoring orientation")
         return self
-
-
-class GraphColoringEncodingRequest(ContractModel):
-    """Materialize the exact CNF semantics of k-colorability."""
-
-    graph: ChromaticGraph
-    colors: StrictInt = Field(ge=1, le=32)
-
-
-class GraphColoringEncodingClaim(ContractModel):
-    """Claim that one graph/color-count pair has a canonical encoding."""
-
-    claim_schema_version: Literal["1"] = "1"
-    predicate: Literal["GRAPH_K_COLORABILITY_ENCODING"] = (
-        "GRAPH_K_COLORABILITY_ENCODING"
-    )
-    graph: ChromaticGraph
-    colors: StrictInt = Field(ge=1, le=32)
-
-
-class GraphColoringEncodingScope(ContractModel):
-    """Graph-owned scope binding the encoding to the SAT CNF artifact."""
-
-    scope_schema_version: Literal["1"] = "1"
-    graph: ChromaticGraph
-    colors: StrictInt = Field(ge=1, le=32)
-    cnf_uri: ArtifactUri
-    cnf_object_digest: Sha256Digest
-    cnf: CanonicalCnf
-
-
-class GraphColoringEncodingCandidate(ContractModel):
-    """Pointer candidate checked against the graph-owned encoding scope."""
-
-    candidate_schema_version: Literal["1"] = "1"
-    cnf_uri: ArtifactUri
-    scope_uri: ArtifactUri
-
-
-class GraphColoringEncodingReplay(ContractModel):
-    """Certificate payload for independent graph-to-CNF replay."""
-
-    method: Literal["INDEPENDENT_GRAPH_COLORING_CNF_REPLAY"] = (
-        "INDEPENDENT_GRAPH_COLORING_CNF_REPLAY"
-    )
-    claim_uri: ArtifactUri
-    candidate_uri: ArtifactUri
-    scope_uri: ArtifactUri
-
-
-class GraphColoringEncodingOutput(ContractModel):
-    """Materialized encoding and its replay certificate."""
-
-    graph: ChromaticGraph
-    colors: StrictInt = Field(ge=1, le=32)
-    cnf_uri: ArtifactUri
-    scope_uri: ArtifactUri
-    claim_uri: ArtifactUri
-    candidate_uri: ArtifactUri
-    certificate_uri: ArtifactUri
-    variable_count: StrictInt = Field(ge=0, le=1_000_000)
-    clause_count: StrictInt = Field(ge=0, le=1_000_000)
-    encoding_version: Literal["exactly-one-and-edge-separation/v1"] = (
-        "exactly-one-and-edge-separation/v1"
-    )
 
 
 class ChromaticNumberBudget(ContractModel):

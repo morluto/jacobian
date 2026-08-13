@@ -463,8 +463,7 @@ def _codex_arguments(
     tool_mode: ToolMode,
 ) -> tuple[str, ...]:
     arguments = [
-        "-a",
-        "never",
+        "--approve-for-me",
         "exec",
         "--ephemeral",
         "--skip-git-repo-check",

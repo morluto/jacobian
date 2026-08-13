@@ -61,6 +61,25 @@ def test_inline_exact_replay_persists_only_its_bound_record(
     assert parsed.decision.accepted is True
 
 
+def test_inline_exact_validation_does_not_echo_a_rejected_candidate(
+    matrix_services: DomainTestServices,
+) -> None:
+    marker = "private_inline_candidate_marker"
+    checked = matrix_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.rank.verify",
+            input={
+                "input": {"matrix": _matrix()},
+                "candidate": {"rank": marker, "pivot_columns": []},
+            },
+        )
+    )
+
+    assert checked.execution.status == "ERROR"
+    assert checked.diagnostics[0].code == "INVALID_REQUEST"
+    assert marker not in checked.model_dump_json()
+
+
 def test_inline_exact_rejects_bounded_accepted_checker_decisions(
     matrix_services: DomainTestServices,
     monkeypatch: pytest.MonkeyPatch,

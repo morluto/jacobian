@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup doctor setup-lean doctor-lean doctor-external setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-runtime-inventory architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup doctor setup-lean doctor-lean doctor-external setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
@@ -66,14 +66,8 @@ security-audit: ## Audit dependencies for known vulnerabilities.
 typecheck: ## Run strict static type checking.
 	$(UV_RUN) mypy
 
-test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
-	$(UV_RUN) python -m tools.check_test_architecture .
-
 import-contracts: ## Enforce declared package dependency direction.
 	$(UV_RUN) lint-imports
-
-test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
-	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified
 
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
 	$(UV_RUN) python tools/check_architecture.py

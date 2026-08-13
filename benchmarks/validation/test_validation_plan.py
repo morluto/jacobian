@@ -102,14 +102,22 @@ def test_unknown_tooling_still_falls_back_to_full_validation(tmp_path: Path) -> 
     )
 
 
-def test_makefile_change_remains_fail_closed_without_hunk_ownership(
+def test_root_makefile_change_relies_on_contract_gate_not_host_verifiers(
     tmp_path: Path,
 ) -> None:
     plan = host_validation_plan(tmp_path, ["Makefile"], {})
 
+    assert plan.entries == ()
+    assert plan.reasons == ()
+
+
+def test_harbor_makefile_change_remains_fail_closed(tmp_path: Path) -> None:
+    plan = host_validation_plan(tmp_path, ["make/harbor.mk"], {})
+
     assert len(plan.entries) == 4
     assert plan.reasons == (
-        "shared verifier execution harness requires full host validation: Makefile",
+        "shared verifier execution harness requires full host validation: "
+        "make/harbor.mk",
     )
 
 

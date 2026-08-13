@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces fifteen PR10 invariants:
+runtime.  It enforces sixteen PR10 invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -57,6 +57,10 @@ runtime.  It enforces fifteen PR10 invariants:
 
 15. **internal-capability-request**: only CLI and MCP boundaries may construct
     the generic capability request envelope; in-process composition stays typed.
+
+16. **test-ownership**: tests are organized by semantic owner rather than
+    historical rollout buckets, and focused suites cannot acquire complete or
+    multi-domain runtime fixtures by convenience.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
@@ -1348,6 +1352,150 @@ def _unsupported_surface_text_violations(
     return tuple(violations)
 
 
+_HISTORICAL_TEST_BUCKET_WORDS = frozenset(
+    {"frontier", "migration", "regression", "release"}
+)
+_COMPOSITION_OWNERS = frozenset(
+    {"authority", "cli", "interoperability", "portfolio", "runtime"}
+)
+
+
+def _call_names(tree: ast.AST) -> frozenset[str]:
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            names.add(node.func.id)
+        elif isinstance(node.func, ast.Attribute):
+            names.add(node.func.attr)
+    return frozenset(names)
+
+
+def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
+    return any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "tests.support.complete_runtime_fixtures"
+        for node in ast.walk(tree)
+    )
+
+
+def _create_runtime_call_names(tree: ast.AST) -> frozenset[str]:
+    names = {"create_runtime"}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.module != "jacobian.runtime":
+            continue
+        names.update(
+            alias.asname or alias.name
+            for alias in node.names
+            if alias.name == "create_runtime"
+        )
+    return frozenset(names)
+
+
+def _test_ownership_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    parts = relative.parts
+    if not parts or parts[0] != "tests":
+        return ()
+
+    violations: list[Violation] = []
+    calls = _call_names(tree)
+    creates_runtime = bool(calls & _create_runtime_call_names(tree))
+    focused_suite = len(parts) >= 2 and parts[1] in {"component", "domain", "unit"}
+    if focused_suite and (creates_runtime or _imports_complete_runtime_fixtures(tree)):
+        violations.append(
+            Violation(
+                str(relative),
+                "test-ownership",
+                "focused tests must use their owning seam instead of the complete runtime",
+            )
+        )
+
+    if (
+        len(parts) >= 2
+        and parts[1] == "domain"
+        and len(_imported_bundle_domains(tree)) > 1
+    ):
+        violations.append(
+            Violation(
+                str(relative),
+                "test-ownership",
+                "domain tests may install bundles from only one domain owner",
+            )
+        )
+
+    if (
+        not focused_suite
+        and relative.name == "conftest.py"
+        and (creates_runtime or _imports_complete_runtime_fixtures(tree))
+    ):
+        owning_complete_runtime = len(parts) >= 2 and parts[1] in {
+            "boundary",
+            "composition",
+            "e2e",
+        }
+        if not owning_complete_runtime:
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "complete-runtime fixtures belong only to their boundary, "
+                    "composition, or e2e subtree",
+                )
+            )
+
+    if len(parts) >= 2 and parts[1] == "composition":
+        lowered = {
+            word.lower()
+            for part in parts[2:]
+            for word in part.replace(".", "_").split("_")
+        }
+        historical = sorted(
+            (lowered & _HISTORICAL_TEST_BUCKET_WORDS)
+            | {word for word in lowered if word.isdecimal()}
+        )
+        if historical:
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "composition tests must be named for semantic ownership, not "
+                    f"historical status ({', '.join(historical)})",
+                )
+            )
+        if relative.name not in {"__init__.py", "conftest.py"} and (
+            len(parts) < 4 or parts[2] not in _COMPOSITION_OWNERS
+        ):
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "composition tests must declare portfolio, runtime, authority, "
+                    "interoperability, or CLI ownership in their directory",
+                )
+            )
+
+    return tuple(violations)
+
+
+def _imported_bundle_domains(tree: ast.AST) -> frozenset[str]:
+    bundle_domains: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        module_parts = node.module.split(".")
+        if module_parts[:2] != ["jacobian", "domains"] or len(module_parts) < 3:
+            continue
+        if any(
+            alias.name.startswith("build_") and alias.name.endswith("_bundle")
+            for alias in node.names
+        ):
+            bundle_domains.add(module_parts[2])
+    return frozenset(bundle_domains)
+
+
 # ---------------------------------------------------------------------------
 # Scan orchestration
 # ---------------------------------------------------------------------------
@@ -1404,6 +1552,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_output_only_contract_violations(relative, tree))
     violations.extend(_materialization_reason_violations(relative, tree))
     violations.extend(_unsupported_surface_ast_violations(relative, tree))
+    violations.extend(_test_ownership_violations(relative, tree))
     return tuple(violations)
 
 

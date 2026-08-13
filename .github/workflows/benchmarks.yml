@@ -14,7 +14,9 @@ on:
 
 concurrency:
   group: benchmarks-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Benchmark Validation is a required PR check; preserve its evidence once
+  # planning has started instead of cancelling it on every synchronize event.
+  cancel-in-progress: false
 
 permissions:
   actions: read
@@ -317,7 +319,7 @@ jobs:
 
   validation:
     name: Benchmark Validation
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
     needs: [plan, static, contracts, host_validation, inventory, oracle]
     runs-on: ubuntu-latest
     timeout-minutes: 5

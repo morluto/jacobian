@@ -307,6 +307,18 @@ def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> Non
     assert "JACOBIAN_LEAN_REQUIRED" in lean_job
 
 
+def test_required_pr_workflows_do_not_cancel_inflight_evidence() -> None:
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    benchmarks = (ROOT / ".github/workflows/benchmarks.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "cancel-in-progress: false" in ci
+    assert "cancel-in-progress: false" in benchmarks
+    validation = benchmarks.split("  validation:", 1)[1].split("  timings:", 1)[0]
+    assert "if: ${{ always() && !cancelled() }}" in validation
+
+
 def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")

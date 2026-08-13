@@ -12,7 +12,10 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Required PR evidence must finish once started. Cancelling a run leaves
+  # branch protection with a non-conclusive required check and cascades into
+  # misleading aggregate failures on rapidly updated PRs.
+  cancel-in-progress: false
 
 permissions:
   contents: read

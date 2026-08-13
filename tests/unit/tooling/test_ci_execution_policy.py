@@ -125,8 +125,9 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
         "ORDINARY_TEST_LANES := unit component domain composition e2e provider"
         in makefile
     )
-    assert "check: lint typecheck test-ordinary" in makefile
-    assert "quick: lint typecheck test-unit" in makefile
+    assert "quick: lint test-unit" in makefile
+    assert "check: lint typecheck test-unit" in makefile
+    assert "check-all: lint typecheck test-ordinary" in makefile
 
 
 def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:

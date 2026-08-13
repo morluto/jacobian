@@ -1368,15 +1368,13 @@ def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
     )
 
 
-def _imports_complete_runtime_constructor(tree: ast.AST) -> bool:
+def _imports_jacobian_runtime(tree: ast.AST) -> bool:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             if any(alias.name == "jacobian.runtime" for alias in node.names):
                 return True
         elif isinstance(node, ast.ImportFrom):
-            if node.module == "jacobian.runtime" and any(
-                alias.name == "create_runtime" for alias in node.names
-            ):
+            if node.module == "jacobian.runtime":
                 return True
             if node.module == "jacobian" and any(
                 alias.name == "runtime" for alias in node.names
@@ -1395,7 +1393,7 @@ def _test_ownership_violations(
     violations: list[Violation] = []
     focused_suite = len(parts) >= 2 and parts[1] in {"component", "domain", "unit"}
     imports_complete_runtime = _imports_complete_runtime_fixtures(tree)
-    imports_runtime = _imports_complete_runtime_constructor(tree)
+    imports_runtime = _imports_jacobian_runtime(tree)
     if focused_suite and (imports_runtime or imports_complete_runtime):
         violations.append(
             Violation(

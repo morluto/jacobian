@@ -34,11 +34,11 @@ def test_historical_composition_bucket_is_rejected(
     assert any("historical status" in message for message in messages)
 
 
-def test_unit_module_cannot_create_a_runtime(tmp_path: Path) -> None:
+def test_unit_module_cannot_import_jacobian_runtime(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/unit/contracts/test_runtime.py",
-        "from jacobian.runtime import create_runtime\ncreate_runtime('state')\n",
+        "from jacobian.runtime import CheckerAuthorityMode\n",
     )
 
     assert _ownership_messages(tmp_path) == [
@@ -46,11 +46,11 @@ def test_unit_module_cannot_create_a_runtime(tmp_path: Path) -> None:
     ]
 
 
-def test_domain_module_cannot_create_a_complete_runtime(tmp_path: Path) -> None:
+def test_domain_module_cannot_import_runtime_constructor(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/domain/polynomial/test_runtime.py",
-        "from jacobian.runtime import create_runtime\ncreate_runtime('state')\n",
+        "from jacobian.runtime import create_runtime\n",
     )
 
     assert _ownership_messages(tmp_path) == [
@@ -58,14 +58,13 @@ def test_domain_module_cannot_create_a_complete_runtime(tmp_path: Path) -> None:
     ]
 
 
-def test_domain_module_cannot_alias_complete_runtime_construction(
+def test_domain_module_cannot_alias_runtime_import(
     tmp_path: Path,
 ) -> None:
     _write(
         tmp_path,
         "tests/domain/polynomial/test_runtime.py",
-        "from jacobian.runtime import create_runtime as open_everything\n"
-        "open_everything('state')\n",
+        "from jacobian.runtime import create_runtime as open_everything\n",
     )
 
     assert _ownership_messages(tmp_path) == [
@@ -77,7 +76,7 @@ def test_domain_module_cannot_import_runtime_as_a_module(tmp_path: Path) -> None
     _write(
         tmp_path,
         "tests/domain/polynomial/test_runtime.py",
-        "import jacobian.runtime as runtime\nruntime.create_runtime('state')\n",
+        "import jacobian.runtime as runtime\n",
     )
 
     assert _ownership_messages(tmp_path) == [
@@ -119,11 +118,11 @@ def test_domain_module_cannot_import_complete_runtime_fixtures(
     ]
 
 
-def test_parent_fixture_cannot_construct_complete_runtime(tmp_path: Path) -> None:
+def test_parent_fixture_cannot_import_jacobian_runtime(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/conftest.py",
-        "from jacobian.runtime import create_runtime\ncreate_runtime('state')\n",
+        "from jacobian.runtime import create_runtime\n",
     )
 
     assert any(

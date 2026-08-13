@@ -103,6 +103,16 @@ def test_incomplete_prime_options_and_false_assurance_fail(tmp_path):
         and result["aggregate_reward"] == 0.0
     )
 
+    app, logs, submission = case(tmp_path / "unhashable-assurance")
+    submission["claimed_assurance"] = []
+    write(app, submission)
+    result = run(app, logs)
+    assert (
+        result["correctness"] == result["mathematics"] == 1.0
+        and result["protocol"] == result["assurance"] == 0.0
+        and result["aggregate_reward"] == 0.0
+    )
+
 
 def test_integral_floats_in_optional_and_required_certificates_fail(tmp_path):
     app, logs, submission = case(tmp_path)

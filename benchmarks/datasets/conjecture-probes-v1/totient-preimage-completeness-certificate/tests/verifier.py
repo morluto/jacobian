@@ -232,6 +232,7 @@ def main() -> None:
     assurance_ok = bool(
         contract
         and isinstance(raw, dict)
+        and type(raw.get("claimed_assurance")) is str
         and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
     )
     values = {

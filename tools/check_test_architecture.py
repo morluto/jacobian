@@ -22,10 +22,9 @@ from tools.test_architecture.runtime_owners import allows_create_runtime
 
 _TEST_FILE = "test_*.py"
 
-# These are deliberately narrow names.  Importing a typed domain model from
-# ``jacobian.portfolio`` is fine; importing the explicit built-in plan or its
-# complete installer is the operation that couples a lower tier to the whole
-# application.
+# These are deliberately narrow names. Typed portfolio models come from their
+# concrete owner modules; importing the built-in plan or assembler is the
+# operation that couples a lower tier to the whole application.
 _BUILTIN_PORTFOLIO_NAMES = frozenset(
     {
         "BUILTIN_PORTFOLIO",

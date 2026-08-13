@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
+from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.runtime import CheckerAuthorityMode
+from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
@@ -16,19 +19,23 @@ def test_mcp_inline_results_do_not_emit_resource_links(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
-            result = await client.call_tool(
-                "math.run",
-                {
-                    "capability_id": "integer.compute.gcd",
-                    "payload": {"left": "84", "right": "30"},
-                },
-            )
-            assert isinstance(result.structured_content, dict)
-            assert result.structured_content["artifact_uris"] == []
-            assert [
-                block for block in result.content if block.type == "resource_link"
-            ] == []
+        with open_focused_mcp_server(
+            tmp_path,
+            build_number_theory_bundle(),
+        ) as server:
+            async with Client(server, raise_exceptions=True) as client:
+                result = await client.call_tool(
+                    "math.run",
+                    {
+                        "capability_id": "integer.compute.gcd",
+                        "payload": {"left": "84", "right": "30"},
+                    },
+                )
+                assert isinstance(result.structured_content, dict)
+                assert result.structured_content["artifact_uris"] == []
+                assert [
+                    block for block in result.content if block.type == "resource_link"
+                ] == []
 
     asyncio.run(scenario())
 
@@ -39,7 +46,10 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        async with Client(
+            create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
+            raise_exceptions=True,
+        ) as client:
             result = await client.call_tool(
                 "math.run",
                 {

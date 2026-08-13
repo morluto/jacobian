@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import tomllib
-from functools import lru_cache
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,32 @@ from benchmarks.tooling.strict_boundaries import (
 
 SCHEMAS = BENCHMARKS / "schemas"
 SNAPSHOTS = BENCHMARKS / "snapshots"
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkContractInventory:
+    """Deterministic repository-owned inputs outside suite membership."""
+
+    schemas: tuple[Path, ...]
+    proxy_jobs: tuple[Path, ...]
+    snapshot_locks: tuple[Path, ...]
+
+
+def benchmark_contract_inventory() -> BenchmarkContractInventory:
+    """Discover the fixed repository contracts used by the aggregate gate."""
+
+    return BenchmarkContractInventory(
+        schemas=tuple(sorted(SCHEMAS.glob("*.schema.json"))),
+        proxy_jobs=(
+            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control-proxy.json",
+            BENCHMARKS
+            / "datasets"
+            / "mathematical-benchmarks-v1"
+            / "jobs"
+            / "jacobian-observation-proxy.json",
+        ),
+        snapshot_locks=tuple(sorted(SNAPSHOTS.rglob("*.lock.json"))),
+    )
 
 
 def _read_json(path: Path) -> Any:
@@ -137,8 +165,14 @@ def _task_selection_failures(
     return failures
 
 
-def _validate_job(path: Path, suite: Suite | None = None) -> list[str]:
-    raw = _read_json(path)
+def validate_job_contract(
+    raw: object,
+    *,
+    path: Path,
+    suite: Suite | None = None,
+) -> list[str]:
+    """Validate one parsed Harbor job through the aggregate gate's contract."""
+
     failures = _validate(raw, "harbor-job.schema.json", path)
     if not isinstance(raw, dict):
         return failures
@@ -168,6 +202,10 @@ def _validate_job(path: Path, suite: Suite | None = None) -> list[str]:
         _task_selection_failures(raw.get("tasks", []), path=path, suite=suite)
     )
     return failures
+
+
+def _validate_job(path: Path, suite: Suite | None = None) -> list[str]:
+    return validate_job_contract(_read_json(path), path=path, suite=suite)
 
 
 def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
@@ -291,9 +329,9 @@ def _suite_contract_failures(suites: tuple[Suite, ...]) -> list[str]:
     return failures
 
 
-def _snapshot_contract_failures() -> list[str]:
+def _snapshot_contract_failures(lock_paths: Iterable[Path]) -> list[str]:
     failures: list[str] = []
-    for lock_path in sorted(SNAPSHOTS.rglob("*.lock.json")):
+    for lock_path in lock_paths:
         try:
             lock = validate_lock(lock_path)
         except HarborSuiteError as exc:
@@ -311,9 +349,18 @@ def _snapshot_contract_failures() -> list[str]:
     return failures
 
 
+def collect_contract_failures(
+    validators: Iterable[Callable[[], list[str]]],
+) -> list[str]:
+    """Run every aggregate contract phase and retain deterministic failure order."""
+
+    return [failure for validate in validators for failure in validate()]
+
+
 def validate_all() -> list[str]:
     """Return every benchmark contract failure without stopping at the first."""
-    for schema_path in sorted(SCHEMAS.glob("*.schema.json")):
+    inventory = benchmark_contract_inventory()
+    for schema_path in inventory.schemas:
         _validator(schema_path.name)
     failures = _validate(
         _read_toml(BENCHMARKS / "registry.toml"),
@@ -328,24 +375,19 @@ def validate_all() -> list[str]:
         )
     )
     failures.extend(
-        _validate_job(
-            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control-proxy.json",
-            suites[0],
-        )
-    )
-    failures.extend(
-        _validate_job(
-            BENCHMARKS
-            / "datasets"
-            / "mathematical-benchmarks-v1"
-            / "jobs"
-            / "jacobian-observation-proxy.json",
-            suites[0],
+        collect_contract_failures(
+            partial(_validate_job, path, suites[0]) for path in inventory.proxy_jobs
         )
     )
     failures.extend(_observation_pair_failures())
-    failures.extend(_snapshot_contract_failures())
+    failures.extend(_snapshot_contract_failures(inventory.snapshot_locks))
     return failures
 
 
-__all__ = ["validate_all"]
+__all__ = [
+    "BenchmarkContractInventory",
+    "benchmark_contract_inventory",
+    "collect_contract_failures",
+    "validate_all",
+    "validate_job_contract",
+]

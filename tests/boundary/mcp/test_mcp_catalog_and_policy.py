@@ -8,6 +8,7 @@ from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
 from jacobian.capability_service import CapabilityPolicy
+from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
@@ -18,7 +19,11 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
 
         policy = CapabilityPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
         async with Client(
-            create_server(tmp_path, capability_policy=policy),
+            create_server(
+                tmp_path,
+                checker_authority=CheckerAuthorityMode.NONE,
+                capability_policy=policy,
+            ),
             raise_exceptions=True,
         ) as client:
             resource = await client.read_resource("capability://catalog")
@@ -39,7 +44,10 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        async with Client(
+            create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
+            raise_exceptions=True,
+        ) as client:
             resource_result = await client.read_resource("capability://catalog")
             full_catalog = json.loads(resource_result.contents[0].text)
             all_ids = {
@@ -203,7 +211,10 @@ def test_mcp_text_projection_preserves_produced_artifact_types(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        async with Client(
+            create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
+            raise_exceptions=True,
+        ) as client:
             listed = await client.call_tool(
                 "math.find",
                 {"request": {"op": "search", "query": "poset", "limit": 20}},

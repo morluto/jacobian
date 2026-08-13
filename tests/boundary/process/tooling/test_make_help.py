@@ -8,6 +8,7 @@ PRIMARY_COMMANDS = {
     "setup",
     "quick",
     "check",
+    "check-all",
     "check-external",
     "fix",
 }
@@ -15,6 +16,7 @@ PRIMARY_COMMAND_ORDER = [
     "setup",
     "quick",
     "check",
+    "check-all",
     "check-external",
     "fix",
 ]

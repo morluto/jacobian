@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from tests.component.providers.polynomial.polynomial_capabilities_support import (
@@ -18,37 +17,56 @@ from tests.component.providers.polynomial.polynomial_normalization_support impor
 from jacobian.runtime.config import CheckerAuthorityMode
 
 
-@pytest.fixture
-def polynomial_services(tmp_path: Path) -> Iterator[PolynomialTestServices]:
-    with open_polynomial_services(tmp_path / "state") as services:
+@pytest.fixture(scope="module")
+def polynomial_services(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[PolynomialTestServices]:
+    with open_polynomial_services(
+        tmp_path_factory.mktemp("polynomial") / "state"
+    ) as services:
         yield services
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def authorized_polynomial_services(
-    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> Iterator[PolynomialTestServices]:
     with open_polynomial_services(
-        tmp_path / "state",
+        tmp_path_factory.mktemp("authorized-polynomial") / "state",
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         yield services
 
 
 @pytest.fixture
-def polynomial_normalization_services(
-    tmp_path: Path,
-) -> Iterator[PolynomialNormalizationTestServices]:
-    with open_polynomial_normalization_services(tmp_path / "state") as services:
+def revocable_polynomial_services(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[PolynomialTestServices]:
+    """Isolate tests that intentionally mutate checker authority."""
+
+    with open_polynomial_services(
+        tmp_path_factory.mktemp("revocable-polynomial") / "state",
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as services:
         yield services
 
 
-@pytest.fixture
-def authorized_polynomial_normalization_services(
-    tmp_path: Path,
+@pytest.fixture(scope="module")
+def polynomial_normalization_services(
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> Iterator[PolynomialNormalizationTestServices]:
     with open_polynomial_normalization_services(
-        tmp_path / "state",
+        tmp_path_factory.mktemp("polynomial-normalization") / "state"
+    ) as services:
+        yield services
+
+
+@pytest.fixture(scope="module")
+def authorized_polynomial_normalization_services(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[PolynomialNormalizationTestServices]:
+    with open_polynomial_normalization_services(
+        tmp_path_factory.mktemp("authorized-polynomial-normalization") / "state",
         with_checker=True,
     ) as services:
         yield services

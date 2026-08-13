@@ -7,6 +7,10 @@ from typing import Any
 
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
+from tests.support.graph_distance_cases import (
+    c7_strong_c7_graph,
+    hoffman_singleton_graph,
+)
 from tests.support.services import DomainTestServices
 
 from jacobian.contracts.capabilities import (
@@ -358,3 +362,132 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
     assert rejected.output["status"] == "REJECTED"
     assert rejected.output["conclusion"] == "UNKNOWN"
     assert rejected.output["verification_record_uri"] is None
+
+
+@pytest.mark.parametrize(
+    "graph_factory",
+    (hoffman_singleton_graph, c7_strong_c7_graph),
+    ids=("hoffman-singleton-order-50", "c7-strong-c7-order-49"),
+)
+def test_distance_matrix_checker_verifies_proof_critical_large_cases(
+    graph_verification_services: DomainTestServices,
+    graph_factory,
+) -> None:
+    producer_input = {"graph": graph_factory()}
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.compute",
+            input=producer_input,
+        )
+    )
+    verified = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.verify",
+            input={"input": producer_input, "candidate": computed.output["result"]},
+        )
+    )
+
+    assert computed.execution.status is ExecutionStatus.COMPLETED
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
+    assert verified.output["conclusion"] == "TRUE"
+    assert verified.output["verification_record_uri"] in verified.artifact_uris
+
+
+def test_distance_matrix_checker_rejects_one_wrong_edge_distance(
+    graph_verification_services: DomainTestServices,
+) -> None:
+    producer_input = {"graph": hoffman_singleton_graph()}
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.compute",
+            input=producer_input,
+        )
+    )
+    candidate = deepcopy(computed.output["result"])
+    left, right = producer_input["graph"]["edges"][0]
+    left_index = candidate["vertices"].index(left)
+    right_index = candidate["vertices"].index(right)
+    candidate["distances"][left_index][right_index] = 2
+    candidate["distances"][right_index][left_index] = 2
+
+    rejected = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.verify",
+            input={"input": producer_input, "candidate": candidate},
+        )
+    )
+
+    assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.output["verification_record_uri"] is None
+
+
+def test_distance_matrix_checker_rejects_candidate_rebound_to_changed_graph(
+    graph_verification_services: DomainTestServices,
+) -> None:
+    original_graph = c7_strong_c7_graph()
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.compute",
+            input={"graph": original_graph},
+        )
+    )
+    changed_graph = deepcopy(original_graph)
+    changed_graph["edges"].pop(0)
+
+    rejected = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.verify",
+            input={
+                "input": {"graph": changed_graph},
+                "candidate": computed.output["result"],
+            },
+        )
+    )
+
+    assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.output["status"] == "REJECTED"
+    assert rejected.output["conclusion"] == "UNKNOWN"
+    assert rejected.output["verification_record_uri"] is None
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda candidate: candidate.pop("vertices"),
+        lambda candidate: candidate.update(
+            vertices=list(reversed(candidate["vertices"]))
+        ),
+    ),
+    ids=("missing-label-binding", "noncanonical-label-binding"),
+)
+def test_distance_matrix_verifier_fails_closed_on_malformed_label_binding(
+    graph_verification_services: DomainTestServices,
+    mutate,
+) -> None:
+    producer_input = {
+        "graph": {
+            "vertices": ["a", "b", "c"],
+            "edges": [["a", "b"], ["b", "c"]],
+        }
+    }
+    computed = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.compute",
+            input=producer_input,
+        )
+    )
+    candidate = deepcopy(computed.output["result"])
+    mutate(candidate)
+
+    rejected = graph_verification_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.verify",
+            input={"input": producer_input, "candidate": candidate},
+        )
+    )
+
+    assert rejected.execution.status is ExecutionStatus.ERROR
+    assert rejected.artifact_uris == ()

@@ -11,6 +11,7 @@ from pydantic import Field, StrictInt, StringConstraints, model_validator
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalInteger,
     CanonicalRational,
     require_bounded_rational,
@@ -22,6 +23,7 @@ from jacobian.math.probability.mutual_information import (
     MAX_FINITE_JOINT_TABLE_COLUMNS,
     MAX_FINITE_JOINT_TABLE_ROWS,
     MAX_INPUT_RATIONAL_DIGITS,
+    MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
     FiniteJointTable,
     MutualInformationResult,
     mutual_information,
@@ -95,6 +97,58 @@ def _bound_raw_probability_matrix(value: Any) -> Any:
         if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
             raise ValueError("joint table exceeds the bounded cell count")
     return value
+
+
+def _bound_raw_rational(
+    value: object,
+    *,
+    max_digits: int,
+    label: str,
+) -> None:
+    if not isinstance(value, Mapping):
+        return
+    for component in ("num", "den"):
+        raw_component = value.get(component)
+        if (
+            isinstance(raw_component, str)
+            and len(raw_component.lstrip("-")) > max_digits
+        ):
+            raise ValueError(f"{label} exceeds the {max_digits}-digit bound")
+
+
+def _bound_raw_result_rationals(value: Mapping[str, object]) -> None:
+    for field_name in ("row_marginals", "column_marginals"):
+        raw_values = value.get(field_name)
+        if isinstance(raw_values, (list, tuple)):
+            for index, raw_value in enumerate(raw_values):
+                _bound_raw_rational(
+                    raw_value,
+                    max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                    label=f"{field_name}[{index}]",
+                )
+    raw_support = value.get("positive_support")
+    if isinstance(raw_support, (list, tuple)):
+        for index, raw_term in enumerate(raw_support):
+            if not isinstance(raw_term, Mapping):
+                continue
+            for field_name in (
+                "probability",
+                "row_marginal",
+                "column_marginal",
+                "likelihood_ratio",
+            ):
+                _bound_raw_rational(
+                    raw_term.get(field_name),
+                    max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                    label=f"positive_support[{index}].{field_name}",
+                )
+    certificate = value.get("log_product_certificate")
+    if isinstance(certificate, Mapping):
+        _bound_raw_rational(
+            certificate.get("product"),
+            max_digits=MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
+            label="mutual-information certificate product",
+        )
 
 
 def _require_native_probability_shape(
@@ -255,6 +309,7 @@ class FiniteJointTableMutualInformationResult(ContractModel):
             raw = value.get(field_name)
             if isinstance(raw, (list, tuple)) and len(raw) > maximum:
                 raise ValueError(f"{field_name} exceeds the bounded result cardinality")
+        _bound_raw_result_rationals(value)
         certificate = value.get("log_product_certificate")
         if isinstance(certificate, Mapping):
             scale = certificate.get("scale")

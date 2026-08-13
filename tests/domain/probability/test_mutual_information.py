@@ -3,11 +3,17 @@ from __future__ import annotations
 from copy import deepcopy
 from fractions import Fraction
 
+import pytest
 from tests.support.rationals import rational_payload as _q
 
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.math.probability import FiniteJointTable, mutual_information
+from jacobian.math.probability.mutual_information import (
+    MutualInformationCertificate,
+    MutualInformationResult,
+    MutualInformationTerm,
+)
 
 _PAYLOAD = {
     "row_labels": ["0", "1"],
@@ -47,6 +53,28 @@ def test_native_mutual_information_composes_with_fractions() -> None:
     assert result.certificate.scale == 2
     assert result.certificate.product == 4
     assert result.exact_value == Fraction(1, 4)
+
+
+def test_native_result_rejects_support_that_does_not_reconstruct_marginals() -> None:
+    with pytest.raises(ValueError, match="does not reconstruct row marginals"):
+        MutualInformationResult(
+            row_marginals=(Fraction(1),),
+            column_marginals=(Fraction(1),),
+            positive_support=(
+                MutualInformationTerm(
+                    row_index=0,
+                    column_index=0,
+                    probability=Fraction(2),
+                    row_marginal=Fraction(1),
+                    column_marginal=Fraction(1),
+                    likelihood_ratio=Fraction(2),
+                ),
+            ),
+            log_base=2,
+            certificate=MutualInformationCertificate(scale=1, product=Fraction(4)),
+            exact_value=Fraction(2),
+            sign="POSITIVE",
+        )
 
 
 def test_finite_joint_mutual_information_is_exact_and_verified(

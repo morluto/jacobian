@@ -13,6 +13,9 @@ MAX_FINITE_JOINT_TABLE_CELLS = 64
 MAX_INPUT_RATIONAL_DIGITS = 256
 MAX_MUTUAL_INFORMATION_SCALE_BITS = 1_024
 MAX_MUTUAL_INFORMATION_POWER_COST_BITS = 32_768
+MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS = (
+    MAX_MUTUAL_INFORMATION_POWER_COST_BITS * 30103 // 100000 + 1
+)
 
 
 def _require_native_labels(
@@ -144,6 +147,8 @@ def _require_native_result_support(
     positions = tuple((term.row_index, term.column_index) for term in positive_support)
     if positions != tuple(sorted(set(positions))):
         raise ValueError("positive support must be unique and row-major ordered")
+    row_support = [Fraction() for _ in row_marginals]
+    column_support = [Fraction() for _ in column_marginals]
     for term in positive_support:
         if term.row_index >= len(row_marginals):
             raise ValueError("positive support row index lies outside the table")
@@ -153,6 +158,12 @@ def _require_native_result_support(
             raise ValueError("positive support row marginal is inconsistent")
         if term.column_marginal != column_marginals[term.column_index]:
             raise ValueError("positive support column marginal is inconsistent")
+        row_support[term.row_index] += term.probability
+        column_support[term.column_index] += term.probability
+    if tuple(row_support) != row_marginals:
+        raise ValueError("positive support does not reconstruct row marginals")
+    if tuple(column_support) != column_marginals:
+        raise ValueError("positive support does not reconstruct column marginals")
 
 
 def _require_native_certificate(

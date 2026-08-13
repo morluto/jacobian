@@ -3,9 +3,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.contracts.exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.domains.probability.mutual_information import (
     FiniteJointTableMutualInformationRequest,
     FiniteJointTableMutualInformationResult,
+)
+from jacobian.math.probability.mutual_information import (
+    MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
 )
 
 _Q1 = {"num": "1", "den": "1"}
@@ -74,6 +78,30 @@ def test_candidate_rejects_oversized_marginals_before_item_parsing() -> None:
     candidate["row_marginals"] = [{} for _ in range(17)]
 
     with pytest.raises(ValidationError, match="row_marginals exceeds"):
+        FiniteJointTableMutualInformationResult.model_validate(candidate)
+
+
+def test_candidate_rejects_oversized_rational_components_before_item_parsing() -> None:
+    candidate = _candidate()
+    candidate["row_marginals"] = [
+        {"num": "1" + "0" * MAX_CANONICAL_RATIONAL_DIGITS, "den": "1"}
+    ]
+
+    with pytest.raises(ValidationError, match=r"row_marginals\[0\]"):
+        FiniteJointTableMutualInformationResult.model_validate(candidate)
+
+
+def test_candidate_uses_a_separate_certificate_product_bound() -> None:
+    candidate = _candidate()
+    candidate["log_product_certificate"] = {
+        **candidate["log_product_certificate"],
+        "product": {
+            "num": "1" + "0" * MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
+            "den": "1",
+        },
+    }
+
+    with pytest.raises(ValidationError, match="certificate product"):
         FiniteJointTableMutualInformationResult.model_validate(candidate)
 
 

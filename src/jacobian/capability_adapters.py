@@ -19,16 +19,6 @@ from jacobian.operation_projection import OperationProjection
 PreparedT = TypeVar("PreparedT")
 
 
-def _contains_typed_value(value: Any) -> bool:
-    if isinstance(value, ContractModel):
-        return True
-    if isinstance(value, list):
-        return any(_contains_typed_value(item) for item in value)
-    if isinstance(value, dict):
-        return any(_contains_typed_value(item) for item in value.values())
-    return False
-
-
 def parse_capability_input[ModelT: BaseModel](
     model: type[ModelT], payload: dict[str, Any]
 ) -> ModelT:
@@ -40,10 +30,21 @@ def parse_capability_input[ModelT: BaseModel](
     separately accounted for their canonical JSON projection before this call.
     """
 
-    if _contains_typed_value(payload):
-        return model.model_validate(payload, strict=True)
     try:
-        encoded = encode_strict_json(payload)
+        typed_values = {
+            key: value
+            for key, value in payload.items()
+            if isinstance(value, ContractModel)
+        }
+        wire_payload = {
+            key: (
+                value.model_dump(mode="json")
+                if isinstance(value, ContractModel)
+                else value
+            )
+            for key, value in payload.items()
+        }
+        encoded = encode_strict_json(wire_payload)
     except CanonicalizationError as exc:
         raise CapabilityInvocationError(
             CapabilityDiagnostic(
@@ -56,7 +57,14 @@ def parse_capability_input[ModelT: BaseModel](
                 ),
             )
         ) from exc
-    return model.model_validate_json(encoded, strict=True)
+    parsed = model.model_validate_json(encoded, strict=True)
+    if typed_values:
+        # Parse all ordinary fields through the strict JSON boundary, then
+        # restore the already-validated port values. This preserves identity
+        # without asking strict Python-mode validation to accept JSON lists as
+        # tuple/dataclass fields.
+        return parsed.model_copy(update=typed_values)
+    return parsed
 
 
 class CapabilityAdapter(Protocol[PreparedT]):

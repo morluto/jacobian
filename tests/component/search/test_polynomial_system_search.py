@@ -10,7 +10,7 @@ from jacobian.polynomial_system_capabilities import (
     install_polynomial_system_capabilities,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.config import CheckerAuthorityMode
 
 
 def _request(constant: int) -> CapabilityRequest:

@@ -286,8 +286,13 @@ def _adapter_output_model_failure(
     output_type = type(output)
     if model_schema(output_type) == descriptor.output_schema:
         try:
-            output_type.model_validate(
-                output.model_dump(mode="python", warnings="error"), strict=True
+            # Validate the serialized contract rather than a Python-mode dump.
+            # Python-mode dumps turn nested dataclasses (for example
+            # PrimeFieldMatrix) into mappings, which strict model validation
+            # quite correctly rejects even though the published output is
+            # already a valid typed model.
+            output_type.model_validate_json(
+                output.model_dump_json(warnings="error"), strict=True
             )
         except (TypeError, ValueError, ValidationError):
             pass

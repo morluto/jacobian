@@ -27,8 +27,8 @@
 * independently verify finite-field restriction ([4aac03a](https://github.com/morluto/jacobian/commit/4aac03af387f859382002549cad958ed43b431c3))
 * **matrix:** extend exact determinant to order 64 ([#1302](https://github.com/morluto/jacobian/issues/1302)) ([83ef960](https://github.com/morluto/jacobian/commit/83ef960577b29287d94f92c31c57a2d7fd3e3f2c))
 * **number-theory:** add modular polynomial identity verification ([#1286](https://github.com/morluto/jacobian/issues/1286)) ([ac740ca](https://github.com/morluto/jacobian/commit/ac740ca07418cc3ec9651144e6cb0498f2fda2bc))
-* **number-theory:** add verified finite abelian factorizations ([#1301](https://github.com/morluto/jacobian/pull/1301)) ([7a2074e](https://github.com/morluto/jacobian/commit/7a2074ed919d1c8e847f8f30ec0be1ddf39f9642))
-* **probability:** add verified finite-table mutual information ([#1300](https://github.com/morluto/jacobian/pull/1300)) ([8809168](https://github.com/morluto/jacobian/commit/8809168b1e52083a6bd292c53eea306c32cd227f))
+* **number-theory:** add verified finite abelian factorizations ([#1301](https://github.com/morluto/jacobian/issues/1301)) ([7a2074e](https://github.com/morluto/jacobian/commit/7a2074ed919d1c8e847f8f30ec0be1ddf39f9642))
+* **probability:** add verified finite-table mutual information ([#1300](https://github.com/morluto/jacobian/issues/1300)) ([8809168](https://github.com/morluto/jacobian/commit/8809168b1e52083a6bd292c53eea306c32cd227f))
 * tighten domain diagnostics and Gaussian inputs ([6c269fe](https://github.com/morluto/jacobian/commit/6c269fee7c2550d07ac5ae7bab5122dac55e58d9))
 
 

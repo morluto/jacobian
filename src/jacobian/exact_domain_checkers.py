@@ -67,6 +67,7 @@ from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.validation_diagnostics import bounded_validation_exception_message
 from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
@@ -838,7 +839,7 @@ class ExactComputedVerificationAdapter:
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_INPUT",
                     stage="request_validation",
-                    message=str(exc),
+                    message=bounded_validation_exception_message(exc),
                     hint=(
                         "input must satisfy the producer request contract and "
                         "candidate must satisfy its result contract."
@@ -880,7 +881,7 @@ class ExactComputedVerificationAdapter:
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_RESULT",
                     stage="artifact_resolution",
-                    message=str(exc),
+                    message=bounded_validation_exception_message(exc),
                     path="result_uri",
                     hint="Pass the result_uri returned by this exact producer.",
                 )

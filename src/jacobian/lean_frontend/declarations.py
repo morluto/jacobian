@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 import shutil
+import stat
 import tempfile
 import threading
 import time
@@ -323,7 +324,13 @@ class _ReusableLeanQuerySession:
 
     def _restore_index_cache(self) -> None:
         cache_path = self._index_cache_path
-        if cache_path is None or cache_path.is_symlink() or not cache_path.is_file():
+        if cache_path is None:
+            return
+        try:
+            source_stat = cache_path.lstat()
+        except OSError:
+            return
+        if not stat.S_ISREG(source_stat.st_mode):
             return
         try:
             _copy_bounded_file(
@@ -338,6 +345,18 @@ class _ReusableLeanQuerySession:
             self._index_digest = _sha256_file(self._index_path)
         except (OSError, ValueError):
             self._index_path.unlink(missing_ok=True)
+            try:
+                current_stat = cache_path.lstat()
+                unchanged = (
+                    current_stat.st_dev == source_stat.st_dev
+                    and current_stat.st_ino == source_stat.st_ino
+                )
+                if unchanged:
+                    cache_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
             self._index_digest = None
 
     def _publish_index_cache(self) -> None:
@@ -950,9 +969,6 @@ class LeanSubprocessDeclarationBackend:
                     "LEAN_ENVIRONMENT_UNAVAILABLE",
                     "The pinned Lean MATHLIB environment is not installed.",
                 )
-            # MATHLIB needs the host PATH (for elan/lake toolchain discovery)
-            # and host HOME (for elan toolchain installs), with the pinned
-            # Lean bin directory prepended to PATH.
             existing_path = os.environ.get("PATH", "")
             mathlib_path = (
                 f"{lean_bin}{os.pathsep}{existing_path}" if existing_path else lean_bin
@@ -964,7 +980,6 @@ class LeanSubprocessDeclarationBackend:
                     **lean_mathlib_git_config(mathlib_runtime),
                 },
             )
-        # CORE uses an isolated HOME and a toolchain-only PATH.
         return worker_environment(
             overrides={
                 "PATH": lean_bin,

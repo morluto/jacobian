@@ -96,6 +96,45 @@ def test_expansion_term_budget_failure_is_specific_and_non_retryable(
     )
 
 
+def test_expression_validation_keeps_the_stable_node_limit_reason(
+    polynomial_normalization_services,
+) -> None:
+    marker = "private_input_marker"
+    groups = [
+        {
+            "kind": "add",
+            "operands": [_variable(marker) for _ in range(16)],
+        }
+        for _ in range(8)
+    ]
+    result = _invoke(
+        polynomial_normalization_services,
+        "polynomial.expression.normalize",
+        {
+            "expression": _expression(
+                {"kind": "add", "operands": groups},
+                variables=[marker],
+            )
+        },
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "INVALID_TYPED_POLYNOMIAL_EXPRESSION"
+    assert diagnostic.message == (
+        "1 validation error; first at expression: polynomial expressions are "
+        "limited to 128 AST nodes"
+    )
+    assert diagnostic.details["validation_errors"] == [
+        {
+            "type": "value_error",
+            "loc": ("expression",),
+            "msg": "polynomial expressions are limited to 128 AST nodes",
+        }
+    ]
+    assert marker not in result.model_dump_json()
+
+
 def test_sympy_normalizes_typed_multivariate_expression(
     polynomial_normalization_services,
 ) -> None:

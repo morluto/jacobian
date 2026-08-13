@@ -29,7 +29,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify a Hamiltonian-path decision",
         verification_description=(
             "Independently verify a spanning path witness or exhaust the bounded "
-            "finite path state space for one stored negative decision."
+            "finite path state space for one submitted negative decision."
         ),
         verification_tags=(
             "verification",
@@ -52,8 +52,8 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         verification_capability_id="graph.induced_tree.maximum.verify",
         verification_title="Verify a maximum induced tree result",
         verification_description=(
-            "Independently exhaust bounded vertex subsets to verify one stored "
-            "exact maximum induced-tree result and its graph binding."
+            "Independently exhaust bounded vertex subsets to verify one submitted "
+            "exact maximum induced-tree result against its exact graph input."
         ),
         verification_tags=("verification", "exact", "graph", "induced-tree"),
     ),
@@ -73,7 +73,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         verification_description=(
             "Independently verify source connectivity, spanning-tree feasibility, "
             "exact total weight, and every fundamental-cycle non-improvement check "
-            "for one stored exact rational weighted-graph result."
+            "for one submitted exact rational weighted-graph result."
         ),
         verification_tags=(
             "verification",
@@ -98,7 +98,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         verification_capability_id="graph.invariant.diameter.verify",
         verification_title="Verify an exact graph diameter",
         verification_description=(
-            "Independently replay all-source shortest paths to verify one stored "
+            "Independently replay all-source shortest paths to verify one submitted "
             "diameter result, including its disconnected-graph convention."
         ),
         verification_tags=(
@@ -123,7 +123,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         verification_capability_id="graph.invariant.radius.verify",
         verification_title="Verify an exact graph radius",
         verification_description=(
-            "Independently replay all-source shortest paths to verify one stored "
+            "Independently replay all-source shortest paths to verify one submitted "
             "radius result, including its disconnected-graph convention."
         ),
         verification_tags=(
@@ -149,7 +149,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify an exact graph distance matrix",
         verification_description=(
             "Independently replay every source shortest-path traversal to verify "
-            "one stored all-pairs distance matrix, including unreachable pairs."
+            "one submitted all-pairs distance matrix, including unreachable pairs."
         ),
         verification_tags=(
             "verification",
@@ -175,7 +175,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify a maximum matching result",
         verification_description=(
             "Independently verify matching feasibility and a Tutte-Berge upper-bound "
-            "certificate for one exact stored finite graph."
+            "certificate submitted with its exact finite graph input."
         ),
         verification_tags=(
             "verification",

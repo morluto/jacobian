@@ -39,13 +39,36 @@ def test_mcp_lane_is_supervised_like_process() -> None:
     assert "--timeout-method=signal" in mcp
 
 
-def test_ordinary_check_matches_direct_pytest_flags() -> None:
+def test_ordinary_check_dispatches_to_fixed_direct_pytest_lanes() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     ordinary = _recipe(makefile, "test-ordinary", "test-compatibility")
 
-    assert "ORDINARY_PYTEST_FLAGS" in ordinary
+    assert "ORDINARY_TEST_LANES" in ordinary
     assert "PYTEST_RUNNER" not in ordinary
-    assert "-n 4 --dist worksteal --timeout=180" in makefile
+
+
+def test_fixed_ordinary_lanes_cover_the_default_testpaths() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    paths = config["tool"]["pytest"]["ini_options"]["testpaths"]
+
+    assert paths == [
+        "tests/unit",
+        "tests/component",
+        "tests/domain",
+        "tests/composition",
+        "tests/boundary/providers/cvc5",
+        "tests/boundary/providers/external_sat",
+        "tests/boundary/providers/flint",
+        "tests/e2e",
+    ]
+    assert "tests/unit" in _recipe(makefile, "test-unit", "test-component")
+    assert "tests/component" in _recipe(makefile, "test-component", "test-domain")
+    assert "tests/domain" in _recipe(makefile, "test-domain", "test-composition")
+    assert "tests/composition" in _recipe(makefile, "test-composition", "test-storage")
+    provider = _recipe(makefile, "test-provider", "test-lean")
+    assert all(path in provider for path in paths[4:7])
+    assert "tests/e2e" in _recipe(makefile, "test-e2e", "test-ordinary")
 
 
 def test_default_testpaths_omit_lean_and_supervised_boundaries() -> None:

@@ -124,6 +124,7 @@ def test_finite_abelian_factorization_reports_and_checks_first_duplicate(
         )
     )
 
-    assert rejected.execution.status is ExecutionStatus.COMPLETED
+    assert rejected.execution.status is ExecutionStatus.ERROR
+    assert rejected.diagnostics[0].code == "INVALID_REQUEST"
     assert rejected.output["status"] == "REJECTED"
     assert rejected.verification_record_uri is None

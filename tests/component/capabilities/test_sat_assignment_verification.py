@@ -209,6 +209,14 @@ def test_sat_assignment_is_verified_by_an_authorized_clean_process(
     record = VerificationRecord.model_validate(record_artifact.payload)
     assert record.checker_id == sat_assignment_services.assignment.checker_id
     assert record.evidence_uri == result.output["witness_uri"]
+    registration = sat_assignment_services.core.checkers.require_active(
+        record.checker_id
+    )
+    assert record.record_schema_version == "4"
+    assert record.checker_manifest == registration.implementation
+    assert (
+        record.implementation_digest == record.checker_manifest.implementation_digest()
+    )
     assert set(record_artifact.manifest.parents) == {
         cnf_uri,
         assignment_uri,

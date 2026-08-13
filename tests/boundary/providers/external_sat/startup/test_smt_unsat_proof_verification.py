@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Iterator
-from contextlib import ExitStack
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Never
 
 import pytest
+from tests.boundary.providers.external_sat.external_sat_support import (
+    open_smt_proof_verifier_services,
+)
 from tests.support.artifacts import sha256_file as _sha256_file
+from tests.support.services import DomainTestServices
 
 import jacobian_checkers.smt
 from jacobian.contracts.capabilities import (
@@ -16,6 +20,7 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderDigestKind,
     CapabilityProviderRuntime,
     CapabilityRequest,
+    CapabilityResult,
 )
 from jacobian.contracts.evidence import CertificateEnvelope
 from jacobian.contracts.results import ExecutionStatus
@@ -23,7 +28,6 @@ from jacobian.contracts.smt import SmtResourceBudget
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.providers.external_solver_runtime import carcara_provider_runtime
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
-from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification.errors import CheckerExecutionError
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -86,32 +90,21 @@ def _producer() -> CapabilityProviderRuntime:
     )
 
 
-def _runtime_with_runtime(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+@contextmanager
+def _services_with_runtime(
+    root: Path,
     executable: Path,
-    resources: ExitStack,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
-) -> JacobianRuntime:
+) -> Iterator[DomainTestServices]:
     runtime = carcara_provider_runtime(executable)
     assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
-    monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.carcara_provider_runtime",
-        lambda *_args, **_kwargs: runtime,
-    )
-    return resources.enter_context(
-        create_runtime(
-            tmp_path / "store",
-            checker_authority=checker_authority,
-        )
-    )
-
-
-@pytest.fixture
-def runtime_resources() -> Iterator[ExitStack]:
-    with ExitStack() as resources:
-        yield resources
+    with open_smt_proof_verifier_services(
+        root,
+        runtime,
+        checker_authority=checker_authority,
+    ) as services:
+        yield services
 
 
 @pytest.mark.parametrize(
@@ -149,7 +142,31 @@ def test_carcara_runtime_requires_exact_operator_provenance(
     assert runtime.diagnostic is not None
 
 
-def _proof(runtime: JacobianRuntime) -> tuple[str, str]:
+def test_complete_portfolio_includes_authorized_smt_proof_verifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _fake_carcara(
+        tmp_path,
+        "print('valid')\nraise SystemExit(0)",
+    )
+    runtime = carcara_provider_runtime(executable)
+    monkeypatch.setattr(
+        "jacobian.portfolio.provider_resolution.carcara_provider_runtime",
+        lambda *_args, **_kwargs: runtime,
+    )
+
+    with create_runtime(
+        tmp_path / "complete-state",
+        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) as complete:
+        assert "smt.unsat_proof.verify" in {
+            descriptor.capability_id
+            for descriptor in complete.core.capabilities.catalog().capabilities
+        }
+
+
+def _proof(runtime: DomainTestServices) -> tuple[str, str]:
     problem = runtime.core.smt.put_problem(logic="QF_UF", smtlib_text=_PROBLEM)
     proof = runtime.core.smt.put_proof(
         problem_uri=problem.artifact_uri,
@@ -160,7 +177,7 @@ def _proof(runtime: JacobianRuntime) -> tuple[str, str]:
     return problem.artifact_uri, proof.artifact_uri
 
 
-def _verify(runtime: JacobianRuntime, proof_uri: str):
+def _verify(runtime: DomainTestServices, proof_uri: str) -> CapabilityResult:
     return runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="smt.unsat_proof.verify",
@@ -171,18 +188,13 @@ def _verify(runtime: JacobianRuntime, proof_uri: str):
 
 def test_invalid_proof_diagnostic_routes_through_public_capabilities(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(
-        tmp_path, monkeypatch, executable, runtime_resources
-    )
-
-    result = _verify(runtime, "artifact://sha256/" + "0" * 64)
+    with _services_with_runtime(tmp_path / "state", executable) as runtime:
+        result = _verify(runtime, "artifact://sha256/" + "0" * 64)
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_SMT_UNSAT_PROOF"
@@ -196,79 +208,71 @@ def test_invalid_proof_diagnostic_routes_through_public_capabilities(
 def test_unsat_proof_is_verified_by_authorized_strict_carcara(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(
-        tmp_path, monkeypatch, executable, runtime_resources
-    )
-    problem_uri, proof_uri = _proof(runtime)
-    monkeypatch.setattr(
-        jacobian_checkers.smt,
-        "check_unsat_proof",
-        lambda _request: {
-            "accepted": False,
-            "conclusion": "UNKNOWN",
-            "arithmetic": "SYMBOLIC",
-            "method": "CHECKED_CERTIFICATE",
-            "coverage": "NOT_APPLICABLE",
-            "detail": "parent-process monkeypatch",
-        },
-    )
+    with _services_with_runtime(tmp_path / "state", executable) as runtime:
+        problem_uri, proof_uri = _proof(runtime)
+        monkeypatch.setattr(
+            jacobian_checkers.smt,
+            "check_unsat_proof",
+            lambda _request: {
+                "accepted": False,
+                "conclusion": "UNKNOWN",
+                "arithmetic": "SYMBOLIC",
+                "method": "CHECKED_CERTIFICATE",
+                "coverage": "NOT_APPLICABLE",
+                "detail": "parent-process monkeypatch",
+            },
+        )
 
-    result = _verify(runtime, proof_uri)
+        result = _verify(runtime, proof_uri)
 
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.verification_record_uri is not None
-    assert result.output["status"] == "VERIFIED_UNSAT"
-    assert result.output["conclusion"] == "TRUE"
-    assert result.output["problem_uri"] == problem_uri
-    assert result.output["proof_uri"] == proof_uri
-    certificate_uri = result.output["certificate_uri"]
-    certificate = CertificateEnvelope.model_validate(
-        runtime.core.store.get(certificate_uri).payload
-    )
-    assert certificate.certificate_type == "smt.unsat-proof"
-    assert certificate.payload == {
-        "problem_uri": problem_uri,
-        "proof_uri": proof_uri,
-    }
-    record_uri = result.output["verification_record_uri"]
-    assert record_uri is not None
-    record_artifact = runtime.core.store.get(record_uri)
-    record = VerificationRecord.model_validate(record_artifact.payload)
-    assert record.evidence_uri == certificate_uri
-    checker = runtime.core.checkers.require_active(record.checker_id)
-    assert checker.implementation.provider_runtime is not None
-    assert checker.implementation.provider_runtime.provider == "carcara"
-    assert record.implementation_digest == checker.implementation_digest
-    assert record.environment_digest.startswith("sha256:")
-    assert len(record.environment_digest) == len("sha256:") + 64
-    assert set(record_artifact.manifest.parents) == {
-        problem_uri,
-        proof_uri,
-        certificate_uri,
-    }
+        assert result.execution.status is ExecutionStatus.COMPLETED
+        assert result.verification_record_uri is not None
+        assert result.output["status"] == "VERIFIED_UNSAT"
+        assert result.output["conclusion"] == "TRUE"
+        assert result.output["problem_uri"] == problem_uri
+        assert result.output["proof_uri"] == proof_uri
+        certificate_uri = result.output["certificate_uri"]
+        certificate = CertificateEnvelope.model_validate(
+            runtime.core.store.get(certificate_uri).payload
+        )
+        assert certificate.certificate_type == "smt.unsat-proof"
+        assert certificate.payload == {
+            "problem_uri": problem_uri,
+            "proof_uri": proof_uri,
+        }
+        record_uri = result.output["verification_record_uri"]
+        assert record_uri is not None
+        record_artifact = runtime.core.store.get(record_uri)
+        record = VerificationRecord.model_validate(record_artifact.payload)
+        assert record.evidence_uri == certificate_uri
+        checker = runtime.core.checkers.require_active(record.checker_id)
+        assert checker.implementation.provider_runtime is not None
+        assert checker.implementation.provider_runtime.provider == "carcara"
+        assert record.implementation_digest == checker.implementation_digest
+        assert record.environment_digest.startswith("sha256:")
+        assert len(record.environment_digest) == len("sha256:") + 64
+        assert set(record_artifact.manifest.parents) == {
+            problem_uri,
+            proof_uri,
+            certificate_uri,
+        }
 
 
 def test_holey_checker_report_never_establishes_sat_or_unsat(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('holey')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(
-        tmp_path, monkeypatch, executable, runtime_resources
-    )
-    _problem_uri, proof_uri = _proof(runtime)
-
-    result = _verify(runtime, proof_uri)
+    with _services_with_runtime(tmp_path / "state", executable) as runtime:
+        _problem_uri, proof_uri = _proof(runtime)
+        result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "REJECTED"
@@ -278,37 +282,30 @@ def test_holey_checker_report_never_establishes_sat_or_unsat(
 
 def test_proof_verify_requires_runtime_and_operator_authorization(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    without_references = _runtime_with_runtime(
-        tmp_path / "without-references",
-        monkeypatch,
-        executable,
-        runtime_resources,
-        checker_authority=CheckerAuthorityMode.NONE,
-    )
+    runtime = carcara_provider_runtime(executable)
     unavailable = carcara_provider_runtime(tmp_path / "missing")
-    monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.carcara_provider_runtime",
-        lambda *_args, **_kwargs: unavailable,
-    )
-    without_runtime = runtime_resources.enter_context(
-        create_runtime(
+    with (
+        open_smt_proof_verifier_services(
+            tmp_path / "without-references",
+            runtime,
+            checker_authority=CheckerAuthorityMode.NONE,
+        ) as without_references,
+        open_smt_proof_verifier_services(
             tmp_path / "without-runtime",
+            unavailable,
             checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-        )
-    )
-
-    for runtime in (without_references, without_runtime):
-        assert "smt.unsat_proof.verify" not in {
-            descriptor.capability_id
-            for descriptor in runtime.core.capabilities.catalog().capabilities
-        }
+        ) as without_runtime,
+    ):
+        for services in (without_references, without_runtime):
+            assert "smt.unsat_proof.verify" not in {
+                descriptor.capability_id
+                for descriptor in services.core.capabilities.catalog().capabilities
+            }
 
 
 @pytest.mark.parametrize(
@@ -329,7 +326,6 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
 def test_checker_operational_failure_never_creates_a_conclusion(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    runtime_resources: ExitStack,
     exception: Exception,
     expected_status: ExecutionStatus,
     expected_output_status: str,
@@ -338,18 +334,16 @@ def test_checker_operational_failure_never_creates_a_conclusion(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(
-        tmp_path, monkeypatch, executable, runtime_resources
-    )
-    _problem_uri, proof_uri = _proof(runtime)
+    with _services_with_runtime(tmp_path / "state", executable) as runtime:
+        _problem_uri, proof_uri = _proof(runtime)
 
-    def fail(**_kwargs: Any):
-        raise exception
+        def fail(**_kwargs: Any) -> Never:
+            raise exception
 
-    monkeypatch.setattr(
-        runtime.services.verification._checker_executor, "execute", fail
-    )
-    result = _verify(runtime, proof_uri)
+        monkeypatch.setattr(
+            runtime.application.verification._checker_executor, "execute", fail
+        )
+        result = _verify(runtime, proof_uri)
 
     assert result.execution.status is expected_status
     assert result.output["status"] == expected_output_status
@@ -359,21 +353,16 @@ def test_checker_operational_failure_never_creates_a_conclusion(
 
 def test_runtime_replacement_after_authorization_fails_closed(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    runtime_resources: ExitStack,
 ) -> None:
     executable = _fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
-    runtime = _runtime_with_runtime(
-        tmp_path, monkeypatch, executable, runtime_resources
-    )
-    _problem_uri, proof_uri = _proof(runtime)
-    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    executable.chmod(0o755)
-
-    result = _verify(runtime, proof_uri)
+    with _services_with_runtime(tmp_path / "state", executable) as runtime:
+        _problem_uri, proof_uri = _proof(runtime)
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o755)
+        result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output["status"] == "ERROR"

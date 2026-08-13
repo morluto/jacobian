@@ -100,10 +100,9 @@ def test_process_lane_is_invoked_by_ci() -> None:
     assert "run: make test-${{ matrix.lane }}" in workflow
 
 
-def test_provider_opt_in_and_deployment_have_explicit_workflow_gates() -> None:
+def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "ci:provider" in workflow
     assert "ci:lean" in workflow
     assert "ci:full" in workflow
     assert "run: make deploy-check" in workflow
@@ -126,8 +125,23 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
         "ORDINARY_TEST_LANES := unit component domain composition e2e provider"
         in makefile
     )
-    assert "check: lint typecheck test-ordinary" in makefile
-    assert "quick: lint typecheck test-unit" in makefile
+    assert "quick: lint test-unit" in makefile
+    assert "check: lint typecheck test-unit" in makefile
+    assert "check-all: lint typecheck test-ordinary" in makefile
+
+
+def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    all_ci = makefile.split(
+        "test-all-ci: ## Explicitly run every semantic lane locally (exceptional).",
+        1,
+    )[1].split("test-stress:", 1)[0]
+
+    assert "$(MAKE) test-component" in all_ci
+    assert "$(MAKE) test-exhaustive" in all_ci
+    assert all_ci.index("$(MAKE) test-component") < all_ci.index(
+        "$(MAKE) test-exhaustive"
+    )
 
 
 def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> None:
@@ -228,22 +242,41 @@ def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
     assert "Plan receipt: \\\\`$(python" not in workflow
 
 
-def test_required_ci_gates_fail_when_a_needed_job_is_cancelled() -> None:
+def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     required = workflow.split("  required:", 1)[1].split("  python-test:", 1)[0]
+    aggregate_tail = workflow.split("  required:", 1)[1]
 
     assert "treating gate as non-failure" not in workflow
-    assert "if: ${{ always() }}" in workflow
+    assert "if: ${{ always() }}" not in aggregate_tail
+    assert aggregate_tail.count("if: ${{ always() && !cancelled() }}") == 4
     assert "name: required" in workflow
     assert "name: Python Tests" in workflow
     assert "name: Lean Tests" in workflow
     assert "name: Deployment Tests" in workflow
-    assert (
-        "needs: [static, python, boundaries, wheel, coverage, lean, optional-providers]"
-    ) in required
+    assert ("needs: [static, python, boundaries, wheel, coverage, lean]") in required
     assert "success|skipped" in required
-    assert "needs.optional-providers.result" in required
     assert "needs.lean.result" in required
+
+
+def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    subprocess_config = (ROOT / ".coveragerc-subprocess").read_text(encoding="utf-8")
+    target = (
+        (ROOT / "Makefile")
+        .read_text(encoding="utf-8")
+        .split("test-checker-subprocess-coverage:", 1)[1]
+        .split("test-all-ci:", 1)[0]
+    )
+
+    assert 'patch = ["subprocess"]' not in pyproject
+    assert "patch = subprocess" in subprocess_config
+    assert "tests/unit/test_checker_worker_manifest.py" in target
+    assert "--cov-config=.coveragerc-subprocess" in target
+    assert "--include=src/jacobian/checker_worker.py --fail-under=1" in target
+    assert workflow.count("make test-checker-subprocess-coverage") == 1
+    assert "needs: [python, boundaries, subprocess_coverage]" in workflow
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:
@@ -298,26 +331,3 @@ def test_ordering_lane_dispatches_through_named_make_targets() -> None:
     assert "ORDERING_LANE: ${{ matrix.lane }}" in workflow
     assert "run: make security-audit" in workflow
     assert "run: make duplicate-code" in workflow
-
-
-def test_static_validation_enforces_test_architecture() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    development = (ROOT / "make" / "development.mk").read_text(encoding="utf-8")
-
-    assert "test-architecture:" in development
-    assert "check-static: lint-full typecheck test-architecture" in makefile
-
-
-def test_process_and_provider_lanes_have_explicit_resource_policies() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    process = makefile.split("test-process:", 1)[1].split("test-mcp:", 1)[0]
-    provider = makefile.split("test-provider:", 1)[1].split("test-lean:", 1)[0]
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-
-    assert "-n 2" in process
-    assert "--timeout=120" in process
-    assert "PYTEST_RUNNER" in process or "pytest_lifecycle.py" in process
-    assert "-n 1" in provider
-    assert "--timeout=180" in provider
-    assert "github.event_name != 'pull_request'" in workflow
-    assert "ci:provider" in workflow

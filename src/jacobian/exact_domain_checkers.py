@@ -14,6 +14,7 @@ from jacobian.artifacts import ArtifactService
 from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import CapabilityError, CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
+from jacobian.checker_identity import batch_checker_manifest_measurement
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation, ExactReplayCheckerDeclaration
 from jacobian.contracts.capabilities import (
@@ -243,63 +244,66 @@ def install_exact_domain_checkers(
         exact_domain_checker_source_provider_runtime().availability
         is CapabilityProviderAvailability.AVAILABLE
     )
-    for installed, declaration in _available_declaration_bundles(bundles):
-        declarations_by_id[declaration.capability_id] = declaration
-        runtime_key = _provider_runtime_key(declaration)
-        provider_runtime = provider_runtimes[runtime_key]
-        operation = CheckerOperation(
-            name=f"{declaration.capability_id} independent {declaration.replay_method}",
-            entrypoint=(f"{declaration.entrypoint_module}:{declaration.function}"),
-            evidence_kind=EvidenceKind.WITNESS,
-            format_id=declaration.format_id,
-            format_version="1",
-            claim_schema_uris=(installed.input_schema_uris[declaration.request_model],),
-            semantics_uris=(installed.semantics_uri,),
-            candidate_schema_uris=(
-                installed.result_schema_uris[declaration.capability_id],
-            ),
-            reason=declaration.reason,
-            provider_runtime=provider_runtime,
-        )
-        if (
-            provider_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
-        ):
-            can_omit = (
-                runtime_key in _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS
-                and exact_checker_source_available
+    with batch_checker_manifest_measurement():
+        for installed, declaration in _available_declaration_bundles(bundles):
+            declarations_by_id[declaration.capability_id] = declaration
+            runtime_key = _provider_runtime_key(declaration)
+            provider_runtime = provider_runtimes[runtime_key]
+            operation = CheckerOperation(
+                name=f"{declaration.capability_id} independent {declaration.replay_method}",
+                entrypoint=(f"{declaration.entrypoint_module}:{declaration.function}"),
+                evidence_kind=EvidenceKind.WITNESS,
+                format_id=declaration.format_id,
+                format_version="1",
+                claim_schema_uris=(
+                    installed.input_schema_uris[declaration.request_model],
+                ),
+                semantics_uris=(installed.semantics_uri,),
+                candidate_schema_uris=(
+                    installed.result_schema_uris[declaration.capability_id],
+                ),
+                reason=declaration.reason,
+                provider_runtime=provider_runtime,
             )
-            if not can_omit:
-                checker_ids[declaration.capability_id] = installer.install(
-                    operation,
-                    authorize=authorize,
-                ).checker_id
+            if (
+                provider_runtime.availability
+                is not CapabilityProviderAvailability.AVAILABLE
+            ):
+                can_omit = (
+                    runtime_key in _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS
+                    and exact_checker_source_available
+                )
+                if not can_omit:
+                    checker_ids[declaration.capability_id] = installer.install(
+                        operation,
+                        authorize=authorize,
+                    ).checker_id
+                    continue
+                diagnostic = CapabilityDiagnostic(
+                    code="EXACT_REPLAY_PROVIDER_UNAVAILABLE",
+                    stage="provider_availability",
+                    message=(
+                        f"Independent replay for {declaration.capability_id!r} is "
+                        "not installed: "
+                        f"{provider_runtime.diagnostic or 'the provider is unavailable.'}"
+                    ),
+                    hint=(
+                        "Install or repair the optional python-flint backend, then retry."
+                    ),
+                    details={
+                        "capability_id": declaration.capability_id,
+                        "provider": provider_runtime.provider,
+                        "checker_authorization_affected": True,
+                    },
+                )
+                diagnostics.append(diagnostic)
+                _LOGGER.warning("%s", diagnostic.message)
+                checker_ids[declaration.capability_id] = None
                 continue
-            diagnostic = CapabilityDiagnostic(
-                code="EXACT_REPLAY_PROVIDER_UNAVAILABLE",
-                stage="provider_availability",
-                message=(
-                    f"Independent replay for {declaration.capability_id!r} is "
-                    "not installed: "
-                    f"{provider_runtime.diagnostic or 'the provider is unavailable.'}"
-                ),
-                hint=(
-                    "Install or repair the optional python-flint backend, then retry."
-                ),
-                details={
-                    "capability_id": declaration.capability_id,
-                    "provider": provider_runtime.provider,
-                    "checker_authorization_affected": True,
-                },
-            )
-            diagnostics.append(diagnostic)
-            _LOGGER.warning("%s", diagnostic.message)
-            checker_ids[declaration.capability_id] = None
-            continue
-        checker_ids[declaration.capability_id] = installer.install(
-            operation,
-            authorize=authorize,
-        ).checker_id
+            checker_ids[declaration.capability_id] = installer.install(
+                operation,
+                authorize=authorize,
+            ).checker_id
     authorized_ids = {
         runtime_key: tuple(
             checker_id

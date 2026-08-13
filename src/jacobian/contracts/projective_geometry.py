@@ -5,7 +5,7 @@ from __future__ import annotations
 from math import comb, gcd, lcm
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StrictBool, StringConstraints, model_validator
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
@@ -136,6 +136,47 @@ class ProjectiveMultiplicityCount(ContractModel):
     flat_count: int = Field(ge=1, le=2016, strict=True)
 
 
+class ProjectiveLineArrangementPreview(ContractModel):
+    """Bounded inline projection of proof-critical higher flats and accounting."""
+
+    preview_schema_version: Literal["1"] = "1"
+    line_count: int = Field(ge=2, le=64, strict=True)
+    non_double_flat_count: int = Field(ge=0, le=2016, strict=True)
+    non_double_flats: tuple[ProjectiveArrangementFlat, ...] = Field(max_length=32)
+    non_double_flats_complete: StrictBool
+    multiplicity_histogram: tuple[ProjectiveMultiplicityCount, ...]
+    pair_count_total: int = Field(ge=1, le=2016, strict=True)
+    artifact_completion: Literal["COMPLETE"] = "COMPLETE"
+    arithmetic: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
+
+    @model_validator(mode="after")
+    def bind_bounded_projection(self) -> Self:
+        if any(flat.multiplicity <= 2 for flat in self.non_double_flats):
+            raise ValueError(
+                "preview non-double flats must have multiplicity above two"
+            )
+        if self.non_double_flat_count < len(self.non_double_flats):
+            raise ValueError(
+                "preview cannot contain more flats than the reported count"
+            )
+        if self.non_double_flats_complete != (
+            self.non_double_flat_count == len(self.non_double_flats)
+        ):
+            raise ValueError(
+                "preview completeness must match its bounded flat projection"
+            )
+        supplied_histogram = tuple(
+            (item.multiplicity, item.flat_count) for item in self.multiplicity_histogram
+        )
+        if supplied_histogram != tuple(sorted(set(supplied_histogram))):
+            raise ValueError("preview multiplicity histogram must be unique and sorted")
+        if self.pair_count_total != comb(self.line_count, 2):
+            raise ValueError(
+                "preview pair_count_total must account for every line pair"
+            )
+        return self
+
+
 class ProjectiveLineArrangementResult(ContractModel):
     """Complete exact flat lattice at rank two for one labelled arrangement."""
 
@@ -197,6 +238,7 @@ __all__ = [
     "NormalizedProjectiveLine",
     "PrimitiveProjectiveTriple",
     "ProjectiveArrangementFlat",
+    "ProjectiveLineArrangementPreview",
     "ProjectiveLineArrangementRequest",
     "ProjectiveLineArrangementResult",
     "ProjectiveMultiplicityCount",

@@ -146,6 +146,16 @@ def test_evidence_tamper_and_malformed_json_fail(tmp_path):
     (app / "submission.json").write_text('{"claimed_assurance":NaN}\n')
     assert run(app, logs)["aggregate_reward"] == 0.0
 
+    app, logs, submission = case(tmp_path / "nan-evidence")
+    evidence = app / "evidence/answer.json"
+    evidence.write_text('{"schema_version":"1","task_id":NaN}')
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+    result = run(app, logs)
+    assert result["mathematics"] == 1.0 and result["evidence"] == 0.0
+
 
 def test_unknown_solution_does_not_collapse_independent_diagnostics(tmp_path):
     app, logs, submission = case(tmp_path)

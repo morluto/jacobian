@@ -14,7 +14,7 @@ from tests.support.services import (
 
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.sat_lrat import install_sat_lrat_verifier
 
 

@@ -26,7 +26,7 @@ from jacobian.contracts.capabilities import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatResourceBudget
 from jacobian.contracts.verification import VerificationRecord
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.sat_capabilities import (
     SatAssignmentCheckerInstallation,
     install_sat_assignment_checker,

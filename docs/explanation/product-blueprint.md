@@ -5,6 +5,10 @@
 - Status: Current product contract
 - Scope: MCP, CLI, and Python access to installed mathematical operations
 
+The accepted next-breaking-release target is described in the
+[operation runtime target](operation-runtime-target.md). This document remains
+the current supported product contract until that implementation lands.
+
 ## Product definition
 
 Jacobian is a toolbox of atomic mathematical operations for agents. The agent

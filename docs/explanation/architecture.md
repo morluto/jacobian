@@ -4,6 +4,10 @@
 
 - Status: Current architecture
 
+The accepted next-breaking-release target is described in the
+[operation runtime target](operation-runtime-target.md). The contracts below
+describe the current release until that implementation lands.
+
 ## Purpose
 
 Jacobian exposes a growing portfolio of atomic mathematical operations through

@@ -91,6 +91,8 @@ installed capability inventory and exact operation schemas.
 - [Product model](explanation/product-blueprint.md) — what the product is
 - [Architecture](explanation/architecture.md) — host shape, search/execute,
   ownership and durable execution
+- [Operation runtime target](explanation/operation-runtime-target.md) — accepted
+  target architecture for the next breaking release
 
 Do not add parallel “direction”, “goals”, or portfolio-planning novels under
 `explanation/`. Product intent lives in those two documents; open work lives

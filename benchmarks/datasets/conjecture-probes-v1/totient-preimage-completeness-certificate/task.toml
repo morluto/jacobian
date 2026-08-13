@@ -6,7 +6,7 @@ version="1.0.0"
 description="Classify the complete preimage of 48 under Euler's totient without a search cutoff."
 keywords=["totient","inverse-image","prime-factorization","completeness"]
 [metadata]
-evaluation_kind="regression"
+evaluation_kind="conjecture-probe"
 domain="mathematical-sciences"
 primary_domain="number-theory"
 field="multiplicative-functions"

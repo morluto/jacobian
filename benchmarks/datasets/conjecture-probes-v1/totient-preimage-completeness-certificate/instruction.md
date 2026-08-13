@@ -2,15 +2,17 @@
 
 Submit a complete, duplicate-free classification of all positive integers
 `n` satisfying `phi(n)=48`. The certificate must not rely on an arbitrary
-search cutoff. Derive the complete candidate-prime set from `p-1 | 48` for
-every prime divisor `p | n`, list every admissible prime-power exponent whose
-totient contribution divides 48, enumerate the full Cartesian product of those
-options, and provide the factorization and exact totient contribution for every
-accepted integer.
+search cutoff. Provide the factorization and exact totient contribution for
+every accepted integer. You may optionally include a candidate-prime set,
+prime-power exponent options, and a branch count as supporting completeness
+evidence, but these fields are not required: any complete classification that
+matches the independently reconstructed inverse image is accepted.
 
 The verifier independently tests primality, reconstructs the candidate primes,
-derives exponent options, enumerates all 288 branches, recomputes every totient,
-and checks exact equality with the submitted classification. This is a closed
+derives exponent options, enumerates the finite search internally, recomputes
+every totient, and checks exact equality with the submitted classification.
+Candidate-prime, exponent-option, factorization, and solution lists are treated
+as mathematical collections, so equivalent orderings are accepted. This is a closed
 finite preimage audit and makes no claim about whether infinitely many totient
 values have a unique preimage.
 

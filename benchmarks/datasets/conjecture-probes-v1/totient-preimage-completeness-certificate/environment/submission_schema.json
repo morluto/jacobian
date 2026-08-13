@@ -100,7 +100,7 @@
     "limitations": {
       "const": [
         "ONE_TARGET_TOTIENT_VALUE_48",
-        "EXACT_PRIME_POWER_BRANCH_ENUMERATION",
+        "EXACT_FINITE_PREIMAGE_CLASSIFICATION",
         "NO_GLOBAL_CARMICHAEL_CONCLUSION"
       ]
     },
@@ -140,9 +140,6 @@
         }
       },
       "required": [
-        "candidate_primes",
-        "prime_power_options",
-        "enumerated_branch_count",
         "solutions",
         "accepted_count"
       ],

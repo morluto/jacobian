@@ -46,13 +46,33 @@ def write(app, submission):
 
 
 def run(app, logs):
-    return run_verifier_in_child(task=TASK, app=app, logs=logs)
+    output = run_verifier_in_child(task=TASK, app=app, logs=logs)
+    if hasattr(output, "details"):
+        return {"reward": output.reward, **output.details}
+    return output
 
 
-def test_oracle_and_reordered_solutions_pass(tmp_path):
+def test_oracle_and_equivalent_representations_pass(tmp_path):
     app, logs, submission = case(tmp_path)
-    assert run(app, logs)["aggregate_reward"] == 1.0
+    oracle = run(app, logs)
+    assert oracle["correctness"] == oracle["mathematics"] == 1.0
+    assert oracle["aggregate_reward"] == 1.0
+    assert json.loads((logs / "reward.json").read_text()) == {"reward": 1.0}
+    assert "correctness" in json.loads((logs / "reward-details.json").read_text())
     submission["result"]["solutions"].reverse()
+    submission["result"]["candidate_primes"].reverse()
+    submission["result"]["prime_power_options"].reverse()
+    submission["result"]["solutions"][0]["factorization"].reverse()
+    write(app, submission)
+    assert run(app, logs)["aggregate_reward"] == 1.0
+
+    app, logs, submission = case(tmp_path / "minimal")
+    for optional in (
+        "candidate_primes",
+        "prime_power_options",
+        "enumerated_branch_count",
+    ):
+        submission["result"].pop(optional)
     write(app, submission)
     assert run(app, logs)["aggregate_reward"] == 1.0
 
@@ -82,6 +102,20 @@ def test_incomplete_prime_options_and_false_assurance_fail(tmp_path):
         and result["assurance"] == 0.0
         and result["aggregate_reward"] == 0.0
     )
+
+
+def test_integral_floats_in_optional_and_required_certificates_fail(tmp_path):
+    app, logs, submission = case(tmp_path)
+    submission["result"]["candidate_primes"][0] = 2.0
+    write(app, submission)
+    result = run(app, logs)
+    assert result["correctness"] == result["mathematics"] == 0.0
+    assert result["aggregate_reward"] == 0.0
+
+    app, logs, submission = case(tmp_path / "factor")
+    submission["result"]["solutions"][0]["factorization"][0][1] = 1.0
+    write(app, submission)
+    assert run(app, logs)["mathematics"] == 0.0
 
 
 def test_evidence_tamper_and_malformed_json_fail(tmp_path):

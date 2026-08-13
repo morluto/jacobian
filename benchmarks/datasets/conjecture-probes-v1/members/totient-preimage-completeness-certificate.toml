@@ -1,7 +1,7 @@
 schema_version="2"
 task_id="totient-preimage-completeness-certificate"
 task_name="jacobian/totient-preimage-completeness-certificate"
-evaluation_kind="regression"
+evaluation_kind="conjecture-probe"
 domain="mathematical-sciences"
 primary_domain="number-theory"
 field="multiplicative-functions"

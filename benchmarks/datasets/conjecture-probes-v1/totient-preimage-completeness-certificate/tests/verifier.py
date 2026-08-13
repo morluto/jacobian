@@ -11,6 +11,7 @@ from verifier_support import (
     evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -20,7 +21,7 @@ TASK_ID = "jacobian/totient-preimage-completeness-certificate"
 SCOPE = "phi-48-complete-preimage-classification-v1"
 LIMITATIONS = [
     "ONE_TARGET_TOTIENT_VALUE_48",
-    "EXACT_PRIME_POWER_BRANCH_ENUMERATION",
+    "EXACT_FINITE_PREIMAGE_CLASSIFICATION",
     "NO_GLOBAL_CARMICHAEL_CONCLUSION",
 ]
 
@@ -63,47 +64,103 @@ def _expected_solutions(
     return result
 
 
-def mathematics(result: Any) -> bool:
-    if not isinstance(result, dict) or set(result) != {
+def _candidate_certificate_valid(
+    result: dict[str, Any], primes: list[int], options: list[list[int]]
+) -> bool:
+    optional = {
         "candidate_primes",
         "prime_power_options",
         "enumerated_branch_count",
-        "solutions",
-        "accepted_count",
-    }:
+    }
+    if "candidate_primes" in result:
+        candidate_primes = result["candidate_primes"]
+        if (
+            not isinstance(candidate_primes, list)
+            or len(candidate_primes) != len(primes)
+            or any(type(prime) is not int for prime in candidate_primes)
+            or set(candidate_primes) != set(primes)
+        ):
+            return False
+    if "prime_power_options" in result:
+        submitted_options = result["prime_power_options"]
+        if not isinstance(submitted_options, list) or len(submitted_options) != len(
+            primes
+        ):
+            return False
+        observed_options: dict[int, list[int]] = {}
+        for option in submitted_options:
+            if (
+                not isinstance(option, dict)
+                or set(option) != {"prime", "exponents"}
+                or type(option["prime"]) is not int
+                or not isinstance(option["exponents"], list)
+                or any(type(exponent) is not int for exponent in option["exponents"])
+                or option["prime"] in observed_options
+            ):
+                return False
+            observed_options[option["prime"]] = option["exponents"]
+        if observed_options != dict(zip(primes, options, strict=True)):
+            return False
+    if "enumerated_branch_count" in result and (
+        type(result["enumerated_branch_count"]) is not int
+        or result["enumerated_branch_count"] != math.prod(map(len, options))
+    ):
         return False
-    primes = _candidate_primes()
-    options = [_options(p) for p in primes]
-    if result["candidate_primes"] != primes:
-        return False
-    expected_options = [
-        {"prime": p, "exponents": values}
-        for p, values in zip(primes, options, strict=True)
-    ]
-    if result["prime_power_options"] != expected_options:
-        return False
-    expected = _expected_solutions(primes, options)
-    rows = result["solutions"]
+    return set(result).issubset({"solutions", "accepted_count"} | optional)
+
+
+def _solutions_valid(
+    rows: Any, expected: dict[int, list[list[int]]]
+) -> dict[int, list[list[int]]] | None:
     if not isinstance(rows, list) or len(rows) != len(expected):
-        return False
+        return None
     observed = {}
     for row in rows:
         if not isinstance(row, dict) or set(row) != {"n", "factorization", "totient"}:
-            return False
+            return None
         n, factors, totient = row["n"], row["factorization"], row["totient"]
         if (
             type(n) is not int
             or type(totient) is not int
             or not isinstance(factors, list)
         ):
-            return False
-        if n in observed or expected.get(n) != factors or totient != 48:
-            return False
-        observed[n] = factors
+            return None
+        normalized_factors: dict[int, int] = {}
+        for factor in factors:
+            if (
+                not isinstance(factor, list)
+                or len(factor) != 2
+                or any(type(value) is not int for value in factor)
+                or factor[0] in normalized_factors
+                or factor[0] < 2
+                or factor[1] < 1
+            ):
+                return None
+            normalized_factors[factor[0]] = factor[1]
+        expected_factors = dict(expected.get(n, []))
+        if (
+            n in observed
+            or normalized_factors != expected_factors
+            or math.prod(p**a for p, a in normalized_factors.items()) != n
+            or totient != 48
+        ):
+            return None
+        observed[n] = expected[n]
+    return observed
+
+
+def mathematics(result: Any) -> bool:
+    required = {"solutions", "accepted_count"}
+    if not isinstance(result, dict) or not required.issubset(result):
+        return False
+    primes = _candidate_primes()
+    options = [_options(p) for p in primes]
+    if not _candidate_certificate_valid(result, primes, options):
+        return False
+    expected = _expected_solutions(primes, options)
+    observed = _solutions_valid(result["solutions"], expected)
     return (
         observed == expected
-        and type(result["enumerated_branch_count"]) is int
-        and result["enumerated_branch_count"] == math.prod(map(len, options))
         and type(result["accepted_count"]) is int
         and result["accepted_count"] == len(expected)
     )
@@ -180,6 +237,7 @@ def main() -> None:
     values = {
         "input_binding": float(bound),
         "protocol": float(bool(contract)),
+        "correctness": float(math_ok),
         "mathematics": float(math_ok),
         "evidence": float(evidence_ok),
         "scope": float(scope_ok),
@@ -192,7 +250,9 @@ def main() -> None:
     )
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
-    (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
+    reward_path = path / "reward.json"
+    reward_path.write_text(json.dumps(values, sort_keys=True))
+    normalize_reward_file(reward_path)
 
 
 if __name__ == "__main__":
@@ -201,11 +261,13 @@ if __name__ == "__main__":
     except BaseException as exc:
         path = Path("/logs/verifier")
         path.mkdir(parents=True, exist_ok=True)
-        (path / "reward.json").write_text(
+        reward_path = path / "reward.json"
+        reward_path.write_text(
             json.dumps(
                 {
                     "protocol": 0.0,
                     "input_binding": 0.0,
+                    "correctness": 0.0,
                     "mathematics": 0.0,
                     "evidence": 0.0,
                     "scope": 0.0,
@@ -218,3 +280,4 @@ if __name__ == "__main__":
                 sort_keys=True,
             )
         )
+        normalize_reward_file(reward_path)

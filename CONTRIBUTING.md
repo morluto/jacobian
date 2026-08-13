@@ -35,10 +35,10 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
 
-CI always runs that ordinary Python surface plus storage/process/MCP
-boundaries and the wheel smoke. Lean and optional native/formal providers run
-on merge/main or with the `ci:lean` / `ci:provider` / `ci:full` labels. You do
-not need to reproduce those locally for a routine change.
+CI always runs that ordinary Python surface plus storage/process/MCP,
+maintained Python provider boundaries, and the wheel smoke. Lean runs on
+merge/main or with the `ci:lean` / `ci:full` labels. You do not need to
+reproduce those locally for a routine change.
 
 Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
 `make test-process`, `make test-mcp`, `make test-e2e`, `make test-domain`, and
@@ -230,15 +230,16 @@ Test directories define semantic ownership: `tests/unit`, `tests/component`,
 `tests/domain`, `tests/composition`, `tests/boundary`, and `tests/e2e`. Use the
 matching `make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_provider(name)`, `performance`,
-`property`, and `destructive_process`. They do not replace directory ownership.
+`property`, `exhaustive`, and `destructive_process`. They do not replace
+directory ownership. Scheduled validation owns `make test-exhaustive`; keep a
+representative behavioral case in the ordinary owning lane.
 
 Lane execution follows the test directory layout. Storage, process, MCP, and
 Lean stay on named Make targets because they need serial SQLite or kill-safe
 process supervision. Prefer the hydration ladder in the
 [testing strategy](docs/reference/testing-strategy.md): domain services before
 `attached_complete_runtime` before `authorized_complete_runtime` before
-`fresh_complete_runtime`. Inventory complete-runtime usage with
-`make test-runtime-inventory`.
+`fresh_complete_runtime`.
 
 Tests may reuse concept-specific helpers under `tests/support`, but must not
 import helpers from a sibling semantic lane. Keep fixtures in the narrowest

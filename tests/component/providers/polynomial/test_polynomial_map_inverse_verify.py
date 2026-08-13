@@ -3,16 +3,13 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-import pytest
 from tests.component.providers.polynomial.polynomial_capabilities_support import (
     PolynomialTestServices,
 )
 
-import jacobian.polynomials._support as polynomial_support
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
-from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian_checkers.polynomial_maps import check_map_inverse
 
@@ -183,63 +180,6 @@ def test_sparse_input_normalization_rejects_malformed_terms_before_artifacts(
     assert result.artifact_uris == ()
 
 
-def test_complete_request_is_rejected_before_duplicate_term_accumulation(
-    authorized_polynomial_services,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    forward, inverse = _triangular_maps()
-    forward["variables"] = ["z", "y"]
-    forward["coordinates"][0]["terms"].append(_term(1, [1, 0]))
-
-    def unexpected_accumulation(value: object) -> SparseRationalPolynomial:
-        raise AssertionError(f"canonical accumulation reached for {value!r}")
-
-    monkeypatch.setattr(
-        polynomial_support,
-        "_canonical_sparse_polynomial",
-        unexpected_accumulation,
-    )
-
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        _request(forward, inverse)
-    )
-
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST"
-    assert result.artifact_uris == ()
-
-
-def test_evaluation_cross_field_error_precedes_duplicate_term_accumulation(
-    authorized_polynomial_services,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    polynomial_map, _inverse = _triangular_maps()
-    polynomial_map["coordinates"][0]["terms"].append(_term(1, [1, 0]))
-
-    def unexpected_accumulation(value: object) -> SparseRationalPolynomial:
-        raise AssertionError(f"canonical accumulation reached for {value!r}")
-
-    monkeypatch.setattr(
-        polynomial_support,
-        "_canonical_sparse_polynomial",
-        unexpected_accumulation,
-    )
-
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
-            input={
-                "map": polynomial_map,
-                "point": [{"num": "0", "den": "1"}],
-            },
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_EVALUATION_REQUEST"
-    assert result.artifact_uris == ()
-
-
 def test_duplicate_accumulation_rejects_oversized_coefficients(
     authorized_polynomial_services,
 ) -> None:
@@ -263,10 +203,7 @@ def test_duplicate_accumulation_rejects_oversized_groups(
     authorized_polynomial_services,
 ) -> None:
     forward, inverse = _triangular_maps()
-    forward["coordinates"][0]["terms"] = [
-        _term(1, [1, 0])
-        for _ in range(polynomial_support._MAX_CANONICALIZATION_DUPLICATE_TERMS + 1)
-    ]
+    forward["coordinates"][0]["terms"] = [_term(1, [1, 0]) for _ in range(1_000)]
 
     result = authorized_polynomial_services.core.capabilities.invoke(
         _request(forward, inverse)

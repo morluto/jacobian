@@ -1,6 +1,10 @@
 """Typed real-quadratic order operation and checker declaration."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.capabilities import (
+    CapabilityInstallTier,
+    CapabilityProviderRuntime,
+)
 from jacobian.domains._examples import example
 from jacobian.domains.arithmetic._support import arithmetic_operation
 from jacobian.math.real_quadratic import (
@@ -8,6 +12,21 @@ from jacobian.math.real_quadratic import (
     RealQuadraticOrderValue,
     real_quadratic_order,
 )
+from jacobian.provider_runtime import source_provider_runtime
+
+
+def _real_quadratic_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
+    return source_provider_runtime(
+        "jacobian.real-quadratic-checker",
+        version="1",
+        entrypoint="jacobian_checkers.real_quadratic:check_real_quadratic_order",
+        install_tier=CapabilityInstallTier.T1,
+        license_id="MIT",
+        features=("standard-library-rational-replay", "clean-process-checker"),
+        checker_ids=checker_ids,
+    )
 
 REAL_QUADRATIC_CAPABILITIES = (
     arithmetic_operation(
@@ -52,6 +71,7 @@ REAL_QUADRATIC_CHECKERS = (
         "check_real_quadratic_order",
         "arithmetic.real-quadratic.fraction-square-replay",
         entrypoint_module="jacobian_checkers.real_quadratic",
+        provider_runtime_factory=_real_quadratic_runtime,
         replay_method="standard-library Fraction squared-magnitude replay",
         reason=(
             "operator-authorized standard-library checker independently compares "

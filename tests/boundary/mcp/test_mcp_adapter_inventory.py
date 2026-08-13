@@ -10,6 +10,8 @@ from mcp.shared.exceptions import MCPError
 
 from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.server import create_server
+from jacobian.runtime import CheckerAuthorityMode
+from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
@@ -27,7 +29,6 @@ def test_managed_server_advertises_immutable_deployment_identity(
         "jacobian.adapters.mcp.server.load_deployment_identity",
         lambda: identity,
     )
-    server = create_server(tmp_path)
 
     async def scenario() -> None:
         from mcp import Client
@@ -45,13 +46,14 @@ def test_managed_server_advertises_immutable_deployment_identity(
                 mode="json"
             )
 
-    asyncio.run(scenario())
+    with open_focused_mcp_server(tmp_path) as server:
+        asyncio.run(scenario())
 
 
 def test_mcp_exposes_only_math_tools_with_read_only_resources(
     tmp_path: Path,
 ) -> None:
-    server = create_server(tmp_path)
+    server = create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE)
     assert server.instructions is not None
     assert "local verification record URI" in server.instructions
 

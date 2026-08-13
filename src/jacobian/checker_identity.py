@@ -9,17 +9,19 @@ import importlib
 import importlib.abc
 import importlib.machinery
 import importlib.util
+import os
 import re
+import stat
 import sys
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
 from types import FrameType, ModuleType
 from typing import Any, cast
 
-from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import (
     CheckerManifest,
@@ -50,6 +52,38 @@ class _ResolvedModule:
     name: str
     path: Path
     is_package: bool
+
+
+@dataclass(slots=True)
+class _ManifestMeasurementBatch:
+    source_modules: dict[
+        tuple[tuple[str, ...], frozenset[str]], tuple[CheckerSourceModule, ...]
+    ]
+    distributions: dict[str, CheckerPythonDistribution]
+    package_owners: Mapping[str, list[str]] | None = None
+    python_runtime: CheckerPythonRuntime | None = None
+
+
+_ACTIVE_MEASUREMENT_BATCH: ContextVar[_ManifestMeasurementBatch | None] = ContextVar(
+    "jacobian_checker_manifest_measurement_batch", default=None
+)
+
+
+@contextmanager
+def batch_checker_manifest_measurement() -> Iterator[None]:
+    """Share immutable identity measurements across one installation operation."""
+
+    active = _ACTIVE_MEASUREMENT_BATCH.get()
+    if active is not None:
+        yield
+        return
+    token = _ACTIVE_MEASUREMENT_BATCH.set(
+        _ManifestMeasurementBatch(source_modules={}, distributions={})
+    )
+    try:
+        yield
+    finally:
+        _ACTIVE_MEASUREMENT_BATCH.reset(token)
 
 
 class _DeclaredSourceLoader(importlib.abc.Loader):
@@ -154,11 +188,11 @@ def build_checker_manifest(
     first_party_packages = frozenset(
         {_JACOBIAN_PACKAGE, entrypoint_module.split(".", 1)[0]}
     )
-    checker_source_modules = _collect_source_modules(
+    checker_source_modules = _batched_source_modules(
         (entrypoint_module,),
         first_party_packages=first_party_packages,
     )
-    worker_source_modules = _collect_source_modules(
+    worker_source_modules = _batched_source_modules(
         (_CHECKER_WORKER_MODULE, *extra_modules),
         first_party_packages=first_party_packages,
     )
@@ -166,7 +200,7 @@ def build_checker_manifest(
         entrypoint=entrypoint,
         checker_source_modules=checker_source_modules,
         worker_source_modules=worker_source_modules,
-        python_runtime=_python_runtime(),
+        python_runtime=_batched_python_runtime(),
         python_distributions=_collect_python_distributions(
             (*checker_source_modules, *worker_source_modules),
             first_party_packages=first_party_packages,
@@ -180,13 +214,7 @@ def build_checker_manifest(
 def checker_implementation_digest(manifest: CheckerManifest) -> str:
     """Return the identity digest of one versioned checker execution manifest."""
 
-    return (
-        "sha256:"
-        + hashlib.sha256(
-            b"jacobian.checker-implementation.v2\x00"
-            + canonicalize_json(manifest.model_dump(mode="json", exclude_none=True))
-        ).hexdigest()
-    )
+    return manifest.implementation_digest()
 
 
 def require_manifest_unchanged(manifest: CheckerManifest) -> str:
@@ -204,6 +232,31 @@ def require_manifest_unchanged(manifest: CheckerManifest) -> str:
             "checker version"
         )
     return checker_implementation_digest(measured)
+
+
+def require_manifest_material_unchanged(manifest: CheckerManifest) -> str:
+    """Reject changes to every execution artifact already bound by a manifest.
+
+    The worker performs full dependency discovery before loading the checker.  Its
+    post-execution check only needs to remeasure that closed set: the import guard
+    prevents undeclared code from entering the process, while direct remeasurement
+    avoids rebuilding and reparsing the complete import graph a second time.
+    """
+
+    for expected in _manifest_source_modules(manifest):
+        resolved = _resolve_module(expected.module)
+        measured = _source_digest(resolved.path.read_bytes())
+        if measured != expected.source_digest:
+            raise CheckerManifestError(f"checker source changed: {expected.module}")
+    if _python_runtime() != manifest.python_runtime:
+        raise CheckerManifestError("checker Python runtime changed")
+    measured_distributions = tuple(
+        _measure_python_distribution(item.distribution)
+        for item in manifest.python_distributions
+    )
+    if measured_distributions != manifest.python_distributions:
+        raise CheckerManifestError("checker Python distribution changed")
+    return checker_implementation_digest(manifest)
 
 
 def install_manifest_import_guard(manifest: CheckerManifest) -> None:
@@ -273,6 +326,24 @@ def _collect_source_modules(
     )
 
 
+def _batched_source_modules(
+    roots: tuple[str, ...],
+    *,
+    first_party_packages: frozenset[str],
+) -> tuple[CheckerSourceModule, ...]:
+    batch = _ACTIVE_MEASUREMENT_BATCH.get()
+    if batch is None:
+        return _collect_source_modules(roots, first_party_packages=first_party_packages)
+    key = (roots, first_party_packages)
+    measured = batch.source_modules.get(key)
+    if measured is None:
+        measured = _collect_source_modules(
+            roots, first_party_packages=first_party_packages
+        )
+        batch.source_modules[key] = measured
+    return measured
+
+
 def _manifest_source_modules(
     manifest: CheckerManifest,
 ) -> tuple[CheckerSourceModule, ...]:
@@ -302,7 +373,13 @@ def _collect_python_distributions(
     for bound_source in source_modules:
         source = _resolve_module(bound_source.module)
         import_roots.update(_third_party_import_roots(source, first_party_packages))
-    package_owners = metadata.packages_distributions()
+    batch = _ACTIVE_MEASUREMENT_BATCH.get()
+    if batch is not None and batch.package_owners is not None:
+        package_owners = batch.package_owners
+    else:
+        package_owners = metadata.packages_distributions()
+        if batch is not None:
+            batch.package_owners = package_owners
     distributions = set(_WORKER_DISTRIBUTIONS)
     for root in import_roots:
         owners = package_owners.get(root)
@@ -317,7 +394,7 @@ def _collect_python_distributions(
         distributions.add(owners[0])
     measured: dict[str, CheckerPythonDistribution] = {}
     for distribution in sorted(distributions, key=_distribution_key):
-        identity = _measure_python_distribution(distribution)
+        identity = _batched_python_distribution(distribution)
         key = _distribution_key(identity.distribution)
         existing = measured.setdefault(key, identity)
         if existing != identity:
@@ -475,6 +552,29 @@ def _measure_python_distribution(distribution: str) -> CheckerPythonDistribution
     )
 
 
+def _batched_python_distribution(
+    distribution: str,
+) -> CheckerPythonDistribution:
+    batch = _ACTIVE_MEASUREMENT_BATCH.get()
+    if batch is None:
+        return _measure_python_distribution(distribution)
+    key = _distribution_key(distribution)
+    measured = batch.distributions.get(key)
+    if measured is None:
+        measured = _measure_python_distribution(distribution)
+        batch.distributions[key] = measured
+    return measured
+
+
+def _batched_python_runtime() -> CheckerPythonRuntime:
+    batch = _ACTIVE_MEASUREMENT_BATCH.get()
+    if batch is None:
+        return _python_runtime()
+    if batch.python_runtime is None:
+        batch.python_runtime = _python_runtime()
+    return batch.python_runtime
+
+
 def _distribution_file_closure(
     installed: metadata.Distribution,
 ) -> tuple[int, str]:
@@ -497,15 +597,7 @@ def _distribution_file_closure(
                 + relative
             )
         try:
-            stat = unresolved.stat()
-            content_digest = _installed_file_digest(
-                str(unresolved),
-                stat.st_dev,
-                stat.st_ino,
-                stat.st_size,
-                stat.st_mtime_ns,
-                stat.st_ctime_ns,
-            )
+            content_digest = _hash_installed_regular_file(unresolved)
         except OSError as exc:
             raise CheckerManifestError(
                 "cannot read checker Python distribution file: " + relative
@@ -517,19 +609,38 @@ def _distribution_file_closure(
     return len(paths), "sha256:" + closure.hexdigest()
 
 
-@lru_cache(maxsize=16_384)
-def _installed_file_digest(
-    path: str,
-    device: int,
-    inode: int,
-    size: int,
-    modified_ns: int,
-    changed_ns: int,
-) -> str:
-    """Hash an installed file once for each observable filesystem identity."""
+def _hash_installed_regular_file(path: Path) -> str:
+    """Hash one declared regular file through a single opened descriptor."""
 
-    del device, inode, size, modified_ns, changed_ns
-    return _source_digest(Path(path).read_bytes())
+    flags = os.O_RDONLY
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if nofollow:
+        flags |= nofollow
+    fd = os.open(path, flags)
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
+            raise CheckerManifestError(
+                "checker Python distribution contains a missing or non-regular file"
+            )
+        hasher = hashlib.sha256()
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            hasher.update(chunk)
+        after = os.fstat(fd)
+        if (
+            before.st_dev != after.st_dev
+            or before.st_ino != after.st_ino
+            or before.st_size != after.st_size
+        ):
+            raise CheckerManifestError(
+                "checker Python distribution file changed during measurement"
+            )
+        return "sha256:" + hasher.hexdigest()
+    finally:
+        os.close(fd)
 
 
 def _distribution_key(name: str) -> str:
@@ -693,9 +804,11 @@ def _source_digest(source: bytes) -> str:
 __all__ = [
     "CheckerManifestError",
     "UndeclaredCheckerImportError",
+    "batch_checker_manifest_measurement",
     "build_checker_manifest",
     "checker_implementation_digest",
     "default_checker_sandbox_policy",
     "install_manifest_import_guard",
+    "require_manifest_material_unchanged",
     "require_manifest_unchanged",
 ]

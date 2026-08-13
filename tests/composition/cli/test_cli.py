@@ -9,8 +9,8 @@ from tests.support.selected_runtime import selected_runtime_opener
 from typer.testing import CliRunner
 
 from jacobian.cli import CliState, JacobianGroup, app, create_cli_app
-from jacobian.domains.arithmetic import build_arithmetic_bundle
 from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.number_theory import build_number_theory_bundle
 from jacobian.runtime import CheckerAuthorityMode
 
 
@@ -112,7 +112,7 @@ def test_cli_run_reads_strict_json_file(tmp_path: Path) -> None:
     payload = tmp_path / "payload.json"
     payload.write_text('{"left":"12","right":"18"}', encoding="utf-8")
     selected = create_cli_app(
-        runtime_opener=selected_runtime_opener(build_arithmetic_bundle())
+        runtime_opener=selected_runtime_opener(build_number_theory_bundle())
     )
 
     result = CliRunner().invoke(

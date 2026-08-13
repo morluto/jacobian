@@ -11,11 +11,12 @@ SERVER_INSTRUCTIONS = (
     "Search and run the locally installed Jacobian toolbox whenever a task may benefit "
     "from exact computation, symbolic transformation, finite search, formal inspection, "
     "or independent checking, even when the user does not name Jacobian or shell code "
-    "could also calculate the result. math.find is the authoritative local inventory; "
-    "internet search cannot show which operations are available in this runtime. Unless "
-    "an exact installed capability ID and its typed contract are already available, call "
-    "math.find with a plain-language desired local mathematical outcome. math.run may "
-    "execute a known contract directly. "
+    "could also calculate the result. math.find is the authoritative local search and "
+    "exact-inspection interface; internet search cannot show which operations are "
+    "available in this runtime. Read capability://catalog when the complete installed "
+    "inventory is required. Unless an exact installed capability ID and its typed "
+    "contract are already available, call math.find with a plain-language desired local "
+    "mathematical outcome. math.run may execute a known contract directly. "
     "For declaration queries explicitly targeting Jacobian's pinned CORE or MATHLIB "
     "environment, use the pinned mathematical operation; do not substitute repository "
     "search, cached Mathlib files, or a local Lean process because they may not match "
@@ -35,9 +36,10 @@ SERVER_INSTRUCTIONS = (
 
 MATH_FIND_DESCRIPTION = """\
 Search or inspect locally installed Jacobian math tools by desired outcome or exact ID.
-This is the authoritative runtime inventory; internet search is not. Use when a task
-may benefit from exact computation, search, structural analysis, or a separate checker
-tool—even if shell code could also calculate the answer.
+This is authoritative for local search and exact operation inspection; internet search
+is not. Read `capability://catalog` when the complete installed inventory is needed. Use
+math.find when a task may benefit from exact computation, search, structural analysis,
+or a separate checker tool—even if shell code could also calculate the answer.
 
 Forms:
 - `request.op="search"`: plain-language mathematical outcome (compact cards).
@@ -60,9 +62,9 @@ Run one installed math tool by ID with its typed `payload`. Check execution stat
 before treating `output` as mathematical evidence. For a completed run, interpret the
 operation-owned result fields and any `verification_record_uri` to determine exactly
 what the run established. If the payload shape is unknown, inspect the exact operation
-with math.find and copy its `invocation_examples`. Do not call math.run with an empty
-`payload` merely to discover required fields; the inspect result is the authoritative
-contract.
+with math.find, select one item from `invocation_examples`, and copy and adapt that
+item's `input` object as the `payload`. Do not call math.run with an empty `payload`
+merely to discover required fields; the inspect result is the authoritative contract.
 
 Ordinary tools return calculations. Independent checking uses a separate checker
 tool ID (for example `polynomial.identity.verify`), not a switch on the producer.

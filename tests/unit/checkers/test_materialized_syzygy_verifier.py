@@ -3,7 +3,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
+from jacobian.domains.polynomial.checkers import (
+    POLYNOMIAL_EXACT_REPLAY_CHECKERS,
+    _materialized_syzygy_supports,
+)
 from jacobian_checkers.jacobian_syzygy import (
     _matrix_digest,
     _rational,
@@ -49,3 +52,20 @@ def test_syzygy_matrix_digest_formats_coefficients_above_decimal_limit() -> None
     )
 
     assert digest.startswith("sha256:")
+
+
+def test_materialized_syzygy_budget_accounts_for_coefficient_digits() -> None:
+    terms = [
+        {
+            "coefficient": {"num": "1" * 32_768, "den": "1"},
+            "exponents": [16 - index, index, 0],
+        }
+        for index in range(7)
+    ]
+
+    assert not _materialized_syzygy_supports(
+        {
+            "polynomial": {"polynomial": {"terms": terms}},
+            "max_degree": 8,
+        }
+    )

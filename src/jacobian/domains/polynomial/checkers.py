@@ -14,6 +14,23 @@ from jacobian.contracts.polynomial_operations import (
 )
 from jacobian.providers import flint_runtime
 
+_MAX_SYZYGY_REPLAY_WORK = 10_000_000
+
+
+def _rational_decimal_digits(value: object) -> int | None:
+    if not isinstance(value, dict):
+        return None
+    numerator = value.get("num")
+    denominator = value.get("den")
+    if (
+        not isinstance(numerator, str)
+        or not isinstance(denominator, str)
+        or not numerator
+        or not denominator
+    ):
+        return None
+    return len(numerator.lstrip("-")) + len(denominator)
+
 
 def _flint_exact_replay_runtime(
     *, checker_ids: tuple[str, ...] = (), refresh: bool = False
@@ -42,7 +59,7 @@ def _univariate_polynomial(*fields: str) -> Callable[[object], bool]:
     return supports
 
 
-def _materialized_syzygy_supports(payload: object) -> bool:
+def _materialized_syzygy_supports(payload: object) -> bool:  # noqa: C901
     """Bound aggregate checker work while retaining cheap degree-zero cases."""
 
     if not isinstance(payload, dict) or type(payload.get("max_degree")) is not int:
@@ -55,6 +72,14 @@ def _materialized_syzygy_supports(payload: object) -> bool:
         terms = body.get("terms") if isinstance(body, dict) else None
         if not isinstance(terms, list):
             return False
+        coefficient_digits = 0
+        for term in terms:
+            if not isinstance(term, dict):
+                return False
+            digits = _rational_decimal_digits(term.get("coefficient"))
+            if digits is None:
+                return False
+            coefficient_digits += digits
         homogeneous_degree = max(
             (
                 sum(term.get("exponents", ()))
@@ -66,18 +91,23 @@ def _materialized_syzygy_supports(payload: object) -> bool:
             default=0,
         )
         term_count = len(terms)
-        if terms and all(
-            isinstance(term, dict)
-            and isinstance(term.get("exponents"), list)
-            and len(term["exponents"]) == 3
-            for term in terms
-        ) and any(
-            all(term["exponents"][variable] == 0 for term in terms)
-            for variable in range(3)
+        if (
+            terms
+            and all(
+                isinstance(term, dict)
+                and isinstance(term.get("exponents"), list)
+                and len(term["exponents"]) == 3
+                for term in terms
+            )
+            and any(
+                all(term["exponents"][variable] == 0 for term in terms)
+                for variable in range(3)
+            )
         ):
             maximum_degree = 0
     elif isinstance(factors, list):
         homogeneous_degree = len(factors)
+        coefficient_digits = 0
         support: set[tuple[int, ...]] = {(0, 0, 0)}
         for factor in factors:
             coefficients = (
@@ -85,6 +115,11 @@ def _materialized_syzygy_supports(payload: object) -> bool:
             )
             if not isinstance(coefficients, list) or len(coefficients) != 3:
                 return False
+            for coefficient in coefficients:
+                digits = _rational_decimal_digits(coefficient)
+                if digits is None:
+                    return False
+                coefficient_digits += digits
             active_variables = tuple(
                 index
                 for index, coefficient in enumerate(coefficients)
@@ -110,7 +145,10 @@ def _materialized_syzygy_supports(payload: object) -> bool:
         * ((homogeneous_degree + degree + 1) * (homogeneous_degree + degree) // 2)
         for degree in range(maximum_degree + 1)
     )
-    return term_count * replay_cells <= 1_000_000
+    return (
+        term_count * replay_cells <= 1_000_000
+        and coefficient_digits * replay_cells <= _MAX_SYZYGY_REPLAY_WORK
+    )
 
 
 POLYNOMIAL_EXACT_REPLAY_CHECKERS = (

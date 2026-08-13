@@ -247,17 +247,15 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
 
 
 @pytest.mark.parametrize(
-    ("exception", "expected_status", "expected_output_status"),
+    ("exception", "expected_status"),
     [
         (
             TimeoutError("checker execution timed out"),
             ExecutionStatus.TIMEOUT,
-            "TIMEOUT",
         ),
         (
             CheckerExecutionError("deliberate checker crash"),
             ExecutionStatus.ERROR,
-            "ERROR",
         ),
     ],
 )
@@ -266,7 +264,6 @@ def test_checker_operational_failure_never_creates_a_conclusion(
     monkeypatch: pytest.MonkeyPatch,
     exception: Exception,
     expected_status: ExecutionStatus,
-    expected_output_status: str,
 ) -> None:
     executable = fake_carcara(
         tmp_path,
@@ -284,9 +281,8 @@ def test_checker_operational_failure_never_creates_a_conclusion(
         result = _verify(runtime, proof_uri)
 
     assert result.execution.status is expected_status
-    assert result.output["status"] == expected_output_status
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["verification_record_uri"] is None
+    assert result.output == {}
+    assert result.verification_record_uri is None
 
 
 def test_runtime_replacement_after_authorization_fails_closed(
@@ -303,6 +299,5 @@ def test_runtime_replacement_after_authorization_fails_closed(
         result = _verify(runtime, proof_uri)
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["status"] == "ERROR"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["verification_record_uri"] is None
+    assert result.output == {}
+    assert result.verification_record_uri is None

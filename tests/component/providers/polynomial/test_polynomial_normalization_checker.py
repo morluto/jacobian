@@ -123,6 +123,5 @@ def test_normalization_checker_timeout_is_operational(
         {"normalization_uri": computed.output["normalization_uri"]},
     )
     assert result.execution.status is ExecutionStatus.TIMEOUT
-    assert result.output["status"] == "TIMEOUT"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["verification_record_uri"] is None
+    assert result.output == {}
+    assert result.verification_record_uri is None

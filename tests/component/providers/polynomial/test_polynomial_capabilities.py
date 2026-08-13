@@ -18,6 +18,19 @@ from tests.component.providers.polynomial.polynomial_capabilities_support import
 from jacobian.contracts.capabilities import CapabilityRequest
 
 
+def test_jacobian_descriptor_advertises_operation_budgets(
+    authorized_polynomial_services,
+) -> None:
+    descriptors = {
+        item.capability_id: item
+        for item in authorized_polynomial_services.core.capabilities.catalog().capabilities
+    }
+    descriptor = descriptors["polynomial.map.compute_jacobian"]
+
+    assert "exponent 32 per variable" in descriptor.description
+    assert "1,024 products" in descriptor.description
+
+
 def test_jacobian_canonically_omits_zero_partial_derivatives(
     authorized_polynomial_services,
 ) -> None:

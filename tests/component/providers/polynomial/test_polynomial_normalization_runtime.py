@@ -86,8 +86,7 @@ def test_sympy_normalization_timeout_is_operational(
         {"expression": _expression(_variable("x"), variables=["x"])},
     )
     assert result.execution.status is ExecutionStatus.TIMEOUT
-    assert result.output["status"] == "NO_NORMALIZATION_PRODUCED"
-    assert result.output["normalization_uri"] is None
+    assert result.output == {}
     assert result.verification_record_uri is None
 
 
@@ -179,9 +178,8 @@ def test_normalization_output_is_discarded_if_runtime_identity_changes(
         {"expression": _expression(_variable("x"), variables=["x"])},
     )
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["status"] == "NO_NORMALIZATION_PRODUCED"
-    assert result.output["normalization_uri"] is None
-    assert "changed during execution" in result.output["detail"]
+    assert result.output == {}
+    assert "changed during execution" in result.execution.detail
 
 
 def test_invalid_worker_protocol_retains_no_normalization_evidence(
@@ -204,5 +202,4 @@ def test_invalid_worker_protocol_retains_no_normalization_evidence(
         {"expression": _expression(_variable("x"), variables=["x"])},
     )
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["status"] == "NO_NORMALIZATION_PRODUCED"
-    assert result.output["normalization_uri"] is None
+    assert result.output == {}

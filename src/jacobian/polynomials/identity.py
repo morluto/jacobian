@@ -73,6 +73,8 @@ class PolynomialIdentityAdapter:
                 "equality",
                 "verification",
                 "exact-rational",
+                "coefficient-equality",
+                "sum-of-squares",
                 "coefficient-mismatch",
                 "counter-witness",
             ),

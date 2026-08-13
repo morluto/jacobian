@@ -95,7 +95,7 @@ def _result_item_ok(item, case):
                 reason_text,
             )
             or re.search(
-                r"\b(?:no|not)\b[^.;\n]{0,40}\b(?:division|divisor)\b",
+                r"\b(?:no|not)\b[^.;\n]{0,40}\bdivision\s+by\s+zero\b",
                 reason_text,
             )
         )

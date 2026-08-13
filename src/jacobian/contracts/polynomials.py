@@ -243,7 +243,9 @@ class PolynomialJacobianRequest(ContractModel):
         )
         if estimate > _MAX_JACOBIAN_PRODUCT_TERM_ESTIMATE:
             raise ValueError(
-                "Jacobian determinant expansion exceeds the exact operation budget"
+                "Jacobian determinant expansion term estimate "
+                f"{estimate} exceeds the exact operation budget of "
+                f"{_MAX_JACOBIAN_PRODUCT_TERM_ESTIMATE}"
             )
         return self
 

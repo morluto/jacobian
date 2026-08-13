@@ -307,8 +307,7 @@ def test_checker_timeout_cannot_create_a_sat_conclusion(
     result = _verify(sat_assignment_services, assignment_uri)
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
-    assert result.output["status"] == "TIMEOUT"
-    assert result.output["conclusion"] == "UNKNOWN"
+    assert result.output == {}
     assert result.verification_record_uri is None
 
 
@@ -331,6 +330,5 @@ def test_checker_error_cannot_create_a_sat_conclusion(
     result = _verify(sat_assignment_services, assignment_uri)
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["status"] == "ERROR"
-    assert result.output["conclusion"] == "UNKNOWN"
+    assert result.output == {}
     assert result.verification_record_uri is None

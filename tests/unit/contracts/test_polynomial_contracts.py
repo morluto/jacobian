@@ -202,7 +202,13 @@ def test_jacobian_request_rejects_excessive_symbolic_expansion() -> None:
         "coordinates": [polynomial] * dimension,
     }
 
-    with pytest.raises(ValidationError, match="operation budget"):
+    with pytest.raises(
+        ValidationError,
+        match=(
+            "Jacobian determinant expansion term estimate 3840000 exceeds "
+            "the exact operation budget of 1024"
+        ),
+    ):
         PolynomialJacobianRequest.model_validate({"map": polynomial_map})
 
 

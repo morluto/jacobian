@@ -320,7 +320,9 @@ def test_required_pr_workflows_cancel_stale_evidence() -> None:
     validation = benchmarks.split("  validation:", 1)[1].split("  timings:", 1)[0]
     assert "if: ${{ always() }}" in validation
     assert "if: ${{ always() && !cancelled() }}" not in validation
-    assert '--lane "static:${PLAN_CHECK:-false}:${STATIC_RESULT:-cancelled}"' in validation
+    assert (
+        '--lane "static:${PLAN_CHECK:-false}:${STATIC_RESULT:-cancelled}"' in validation
+    )
     assert (
         '--lane "oracle:${ORACLE_FLAG:-false}:${ORACLE_RESULT:-cancelled}"'
         in validation

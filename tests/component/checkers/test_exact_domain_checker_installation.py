@@ -316,7 +316,7 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
     assert set(installation.checker_ids.values()) == {None}
 
 
-def test_installer_omits_exact_replay_when_its_provider_is_unavailable(
+def test_installer_omits_explicitly_optional_replay_when_provider_is_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -339,37 +339,61 @@ def test_installer_omits_exact_replay_when_its_provider_is_unavailable(
         "jacobian.providers.flint_runtime.exact_domain_checker_provider_runtime",
         lambda **_: unavailable,
     )
-    matrix_ids = (
-        "matrix.normal_form.rref.compute",
-        "matrix.nullspace.compute",
-        "matrix.characteristic_polynomial.compute",
-        "matrix.normal_form.smith.compute",
+    declaration = next(
+        declaration
+        for declaration in build_matrix_bundle().checker_declarations
+        if declaration.capability_id == "matrix.normal_form.rref.compute"
     )
+    declaration = replace(
+        declaration,
+        provider_runtime=unavailable,
+        provider_runtime_factory=None,
+        optional=True,
+    )
+    bundles, capability_id = _single_matrix_declaration_bundle(declaration)
 
-    installation = install_exact_domain_checkers(
+    installation = _install_exact_domain_checkers(
         CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-        matrix=_installed(
-            (
-                RationalMatrixRequest,
-                SquareRationalMatrixRequest,
-                IntegerMatrixRequest,
-            ),
-            matrix_ids,
-            character="f",
-        ),
+        bundles=bundles,
         authorize=True,
     )
 
-    assert set(installation.checker_ids) == set(matrix_ids)
-    assert all(installation.checker_ids[name] is None for name in matrix_ids)
-    assert {
-        diagnostic.details["capability_id"] for diagnostic in installation.diagnostics
-    } == set(matrix_ids)
-    assert all(
-        diagnostic.code == "EXACT_REPLAY_PROVIDER_UNAVAILABLE"
-        for diagnostic in installation.diagnostics
-    )
+    assert installation.checker_ids == {capability_id: None}
+    assert installation.diagnostics[0].code == "EXACT_REPLAY_PROVIDER_UNAVAILABLE"
     _clear_matrix_factory_caches()
+
+
+def test_installer_fails_required_replay_when_provider_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    declaration = next(
+        declaration
+        for declaration in build_matrix_bundle().checker_declarations
+        if declaration.capability_id == "matrix.normal_form.rref.compute"
+    )
+    runtime = declaration.provider_runtime
+    assert runtime is not None
+    unavailable = runtime.model_copy(
+        update={
+            "availability": CapabilityProviderAvailability.UNAVAILABLE,
+            "digest": None,
+            "digest_kind": None,
+            "diagnostic": "required provider is unavailable",
+        }
+    )
+    declaration = replace(
+        declaration,
+        provider_runtime=unavailable,
+        provider_runtime_factory=None,
+    )
+    bundles, _ = _single_matrix_declaration_bundle(declaration)
+
+    with pytest.raises(CheckerExecutableChangedError):
+        _install_exact_domain_checkers(
+            CheckerRegistry(ArtifactRepository(tmp_path / "store")),
+            bundles=bundles,
+            authorize=True,
+        )
 
 
 def test_installer_does_not_omit_replay_when_bundled_source_is_unavailable(
@@ -550,6 +574,7 @@ def test_installer_omits_unavailable_declaration_owned_runtime(
         declaration,
         provider_runtime=None,
         provider_runtime_factory=lambda: unavailable,
+        optional=True,
     )
     bundles, capability_id = _single_matrix_declaration_bundle(declaration)
 

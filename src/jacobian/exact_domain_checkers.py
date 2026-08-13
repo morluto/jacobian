@@ -126,12 +126,13 @@ def _authorize_replay_operation(
     authorize: bool,
     provider_runtime: CapabilityProviderRuntime,
     source_available: bool,
+    optional: bool,
     capability_id: str,
     diagnostics: list[CapabilityDiagnostic],
 ) -> str | None:
     if provider_runtime.availability is CapabilityProviderAvailability.AVAILABLE:
         return installer.install(operation, authorize=authorize).checker_id
-    can_omit = source_available
+    can_omit = optional and source_available
     if not can_omit:
         return installer.install(operation, authorize=authorize).checker_id
     diagnostic = CapabilityDiagnostic(
@@ -241,6 +242,7 @@ def install_exact_domain_checkers(
                     authorize=authorize,
                     provider_runtime=group.probe,
                     source_available=source_available,
+                    optional=declaration.optional,
                     capability_id=declaration.capability_id,
                     diagnostics=diagnostics,
                 )

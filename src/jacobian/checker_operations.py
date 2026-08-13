@@ -120,6 +120,7 @@ class ExactReplayCheckerDeclaration:
         repr=False,
         compare=False,
     )
+    optional: bool = False
     supports_input: Callable[[object], bool] | None = None
 
     def __post_init__(self) -> None:

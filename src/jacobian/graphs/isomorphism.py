@@ -361,7 +361,7 @@ class GraphIsomorphismAdapter:
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=output,
+                output=output if isinstance(terminal, Completed) else None,
                 artifact_uris=tuple(artifact_uris),
             ),
             verification_record_uri=record_uri,

@@ -128,7 +128,7 @@ class _VerificationProjection:
             version="1",
             terminal=terminal,
             publication=PublishedOperation(
-                output=result,
+                output=result if isinstance(terminal, Completed) else None,
                 artifact_uris=tuple(sorted(references)),
             ),
             verification_record_uri=record_uri,

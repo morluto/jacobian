@@ -27,6 +27,7 @@ _MAX_RESIDUE_EXPONENT = 32
 _MAX_RESIDUE_ASSIGNMENTS = 4_096
 _MAX_RESIDUE_MODULUS = 1_000_000
 _MAX_MATRIX_DIMENSION = 32
+_MAX_DETERMINANT_MATRIX_DIMENSION = 64
 _MAX_MATRIX_INPUT_DIGITS = 256
 _MAX_MATRIX_OUTPUT_DIGITS = 32_768
 
@@ -98,6 +99,18 @@ def _fraction(value: object) -> tuple[fmpz, fmpz]:
 def _q(value: object) -> fmpq:
     numerator, denominator = _fraction(value)
     return fmpq(numerator, denominator)
+
+
+def _bounded_q(value: object, *, maximum_digits: int) -> fmpq:
+    if not isinstance(value, dict) or set(value) != {"num", "den"}:
+        raise ValueError("bounded rational is malformed")
+    for component in (value["num"], value["den"]):
+        if (
+            not isinstance(component, str)
+            or len(component.lstrip("-")) > maximum_digits
+        ):
+            raise ValueError("bounded rational exceeds the checker digit limit")
+    return _q(value)
 
 
 def _polynomial(value: object) -> fmpq_poly:
@@ -213,15 +226,20 @@ def _integer_matrix(value: object) -> fmpz_mat:
     return fmpz_mat([[_integer(item) for item in row] for row in entries])
 
 
-def _bounded_rational_matrix(value: object, *, maximum_digits: int) -> fmpq_mat:
+def _bounded_rational_matrix(
+    value: object,
+    *,
+    maximum_digits: int,
+    maximum_dimension: int = _MAX_MATRIX_DIMENSION,
+) -> fmpq_mat:
     if not isinstance(value, dict):
         raise ValueError("rational matrix is malformed")
     entries = value.get("entries")
     if (
         not isinstance(entries, list)
-        or not 1 <= len(entries) <= _MAX_MATRIX_DIMENSION
+        or not 1 <= len(entries) <= maximum_dimension
         or not isinstance(entries[0], list)
-        or not 1 <= len(entries[0]) <= _MAX_MATRIX_DIMENSION
+        or not 1 <= len(entries[0]) <= maximum_dimension
     ):
         raise ValueError("rational matrix exceeds the checker dimension bound")
     for row in entries:
@@ -1008,10 +1026,19 @@ def _matrix_determinant(source: dict[str, Any], result: dict[str, Any]) -> bool:
         "FRACTION_FREE_BAREISS"
     ):
         return False
-    matrix = _matrix_source(source)
+    if set(source) != {"matrix"}:
+        return False
+    matrix = _bounded_rational_matrix(
+        source["matrix"],
+        maximum_digits=_MAX_MATRIX_INPUT_DIGITS,
+        maximum_dimension=_MAX_DETERMINANT_MATRIX_DIMENSION,
+    )
     if matrix.nrows() != matrix.ncols():
         return False
-    return bool(_q(result["determinant"]) == matrix.det())
+    declared = _bounded_q(
+        result["determinant"], maximum_digits=_MAX_MATRIX_OUTPUT_DIGITS
+    )
+    return bool(declared == matrix.det())
 
 
 def check_matrix_determinant(request: dict[str, Any]) -> dict[str, Any]:

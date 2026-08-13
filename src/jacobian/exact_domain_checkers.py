@@ -703,7 +703,7 @@ class ExactComputedVerificationAdapter:
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=output,
+                output=output if isinstance(terminal, Completed) else None,
                 artifact_uris=(
                     (record_uri, declaration.semantics_uri)
                     if record_uri is not None
@@ -785,7 +785,7 @@ class ExactComputedVerificationAdapter:
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=output,
+                output=output if isinstance(terminal, Completed) else None,
                 artifact_uris=artifact_uris,
             ),
             verification_record_uri=record_uri,

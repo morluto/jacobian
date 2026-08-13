@@ -349,7 +349,7 @@ def _verification_projection(
                 message=detail,
             ),
         ),
-        publication=publication,
+        publication=PublishedOperation(artifact_uris=artifact_uris),
     )
 
 

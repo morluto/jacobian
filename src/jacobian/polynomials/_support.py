@@ -92,7 +92,7 @@ class PolynomialOperationResult[ResultT: ContractModel]:
             version=descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=self.value,
+                output=self.value if isinstance(terminal, Completed) else None,
                 artifact_uris=self.artifact_uris,
             ),
             verification_record_uri=self.verification_record_uri,

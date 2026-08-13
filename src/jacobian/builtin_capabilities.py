@@ -144,5 +144,5 @@ class LeanCheckAdapter:
                     ),
                 ),
             ),
-            publication=publication,
+            publication=PublishedOperation(artifact_uris=publication.artifact_uris),
         )

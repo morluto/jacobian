@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from tests.support.state import copy_template
+import pytest
+from tests.support.state import copy_template, publish_template
 
 
 def test_copy_template_copies_blobs_without_sharing_inodes(tmp_path: Path) -> None:
@@ -59,7 +60,21 @@ def test_copy_template_raises_on_existing_destination(tmp_path: Path) -> None:
 
     dest = tmp_path / "destination"
     dest.mkdir()
-    import pytest
-
     with pytest.raises(FileExistsError):
         copy_template(template, dest)
+
+
+def test_failed_template_publication_leaves_no_reusable_partial_state(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "template"
+
+    def fail(staging: Path) -> None:
+        (staging / "partial.sqlite3").write_text("incomplete", encoding="utf-8")
+        raise RuntimeError("simulated construction failure")
+
+    with pytest.raises(RuntimeError, match="construction failure"):
+        publish_template(target, fail)
+
+    assert not target.exists()
+    assert not list(tmp_path.glob(".template.staging-*"))

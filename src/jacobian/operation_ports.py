@@ -8,6 +8,19 @@ from typing import Any
 from jacobian.contracts.base import ContractModel
 
 
+class _BoundTypedValue(dict[str, Any]):
+    """JSON accounting view carrying one already-validated semantic object.
+
+    The mapping is the value's canonical wire projection used only for request
+    resource accounting. ``typed_value`` remains the authoritative in-process
+    value restored by the final request binder.
+    """
+
+    def __init__(self, typed_value: ContractModel) -> None:
+        super().__init__(typed_value.model_dump(mode="json"))
+        self.typed_value = typed_value
+
+
 @dataclass(frozen=True, slots=True)
 class InputPort[
     ValueT: ContractModel,
@@ -36,7 +49,7 @@ class InputPort[
                 f"input port {self.name!r} conflicts with payload field "
                 f"{self.request_field!r}"
             )
-        return {**payload, self.request_field: value}
+        return {**payload, self.request_field: _BoundTypedValue(value)}
 
 
 @dataclass(frozen=True, slots=True)

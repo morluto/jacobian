@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 from tests.support.provider_lean import (
+    PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
-    pinned_mathlib_runtime_available,
+    skip_unless_pinned_lean_core_runtime,
+    skip_unless_pinned_mathlib_runtime,
 )
 
 from jacobian.contracts.capabilities import (
@@ -15,8 +17,8 @@ from jacobian.runtime import CheckerAuthorityMode, create_runtime
 
 pytestmark = [
     pytest.mark.skipif(
-        not pinned_mathlib_runtime_available(),
-        reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
+        skip_unless_pinned_lean_core_runtime(),
+        reason=PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     ),
 ]
 
@@ -86,6 +88,10 @@ def test_apply_tactic_returns_structured_failure_without_conclusion(
     )
 
 
+@pytest.mark.skipif(
+    skip_unless_pinned_mathlib_runtime(),
+    reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
+)
 def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> None:
     runtime = create_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED

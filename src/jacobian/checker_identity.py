@@ -9,13 +9,14 @@ import importlib
 import importlib.abc
 import importlib.machinery
 import importlib.util
+import os
 import re
+import stat
 import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
 from types import FrameType, ModuleType
@@ -596,15 +597,7 @@ def _distribution_file_closure(
                 + relative
             )
         try:
-            stat = unresolved.stat()
-            content_digest = _installed_file_digest(
-                str(unresolved),
-                stat.st_dev,
-                stat.st_ino,
-                stat.st_size,
-                stat.st_mtime_ns,
-                stat.st_ctime_ns,
-            )
+            content_digest = _hash_installed_regular_file(unresolved)
         except OSError as exc:
             raise CheckerManifestError(
                 "cannot read checker Python distribution file: " + relative
@@ -616,19 +609,38 @@ def _distribution_file_closure(
     return len(paths), "sha256:" + closure.hexdigest()
 
 
-@lru_cache(maxsize=16_384)
-def _installed_file_digest(
-    path: str,
-    device: int,
-    inode: int,
-    size: int,
-    modified_ns: int,
-    changed_ns: int,
-) -> str:
-    """Hash an installed file once for each observable filesystem identity."""
+def _hash_installed_regular_file(path: Path) -> str:
+    """Hash one declared regular file through a single opened descriptor."""
 
-    del device, inode, size, modified_ns, changed_ns
-    return _source_digest(Path(path).read_bytes())
+    flags = os.O_RDONLY
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if nofollow:
+        flags |= nofollow
+    fd = os.open(path, flags)
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
+            raise CheckerManifestError(
+                "checker Python distribution contains a missing or non-regular file"
+            )
+        hasher = hashlib.sha256()
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            hasher.update(chunk)
+        after = os.fstat(fd)
+        if (
+            before.st_dev != after.st_dev
+            or before.st_ino != after.st_ino
+            or before.st_size != after.st_size
+        ):
+            raise CheckerManifestError(
+                "checker Python distribution file changed during measurement"
+            )
+        return "sha256:" + hasher.hexdigest()
+    finally:
+        os.close(fd)
 
 
 def _distribution_key(name: str) -> str:

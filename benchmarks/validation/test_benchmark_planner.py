@@ -470,6 +470,23 @@ def test_shared_verifier_harness_states_full_suite_reason() -> None:
     _assert_plan_valid(result)
 
 
+def test_benchmark_contract_tool_selects_its_owned_host_contract() -> None:
+    path = "benchmarks/tooling/benchmark_contracts.py"
+
+    result = planner.plan([path], event="pull_request")
+
+    assert _host_matrix(result) == [
+        {
+            "name": "control-test_benchmark_contracts",
+            "selector": "benchmarks/validation/test_benchmark_contracts.py",
+            "keyword": "",
+            "splits": 0,
+            "group": 0,
+        }
+    ]
+    _assert_plan_valid(result)
+
+
 def test_membership_change_defers_dataset_oracle_until_merge_queue() -> None:
     result = planner.plan(
         ["benchmarks/datasets/mathematical-benchmarks-v1/members/new-task.toml"],

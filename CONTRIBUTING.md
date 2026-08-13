@@ -134,11 +134,11 @@ once, fails fast through static quality and contracts, runs the selected host
 tests serially, then runs each exact Oracle serially. Neither command starts an
 Oracle or model.
 
-`make harbor-execution-check` validates repository-wide Harbor contracts (job
-JSON, MCP config, job-level Compose overlays, execution helpers) and the unit
-tests that own them; it deliberately excludes the task-specific verifier
-regressions under `benchmarks/validation/`, where `make harbor-check` retains
-the full integration role. Task `environment/docker-compose.yaml` files are
+`make harbor-check` validates repository-wide Harbor contracts (job JSON, MCP
+config, job-level Compose overlays, adapters, and execution helpers) and the
+unit tests that own them; it deliberately excludes unrelated task-specific
+verifier regressions. `make harbor-check-all` is the explicit full integration
+reproduction. Task `environment/docker-compose.yaml` files are
 executable benchmark input, not job overlays, and remain gated by
 `make harbor-check-task` and `make harbor-oracle-task`. Use
 `make harbor-plan BASE=origin/main` for benchmark contracts and Oracle scope;

@@ -211,8 +211,7 @@ def main() -> None:
     try:
         evidence_ok = bool(
             isinstance(payload, dict)
-            and set(payload)
-            == {"schema_version", "task_id", "result", "limitations"}
+            and set(payload) == {"schema_version", "task_id", "result", "limitations"}
             and payload.get("schema_version") == "1"
             and payload.get("task_id") == TASK_ID
             and _json_equal(payload.get("result"), raw.get("result"))

@@ -329,7 +329,7 @@ def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
     return projection
 
 
-async def capability_describe(
+async def math_find(
     request: CapabilityFindRequest,
     *,
     ctx: Context[AppState, Any],
@@ -370,7 +370,7 @@ async def capability_describe(
         return _find_result(response)
 
 
-async def capability_invoke(
+async def math_run(
     capability_id: CapabilityId,
     payload: dict[str, Any],
     inputs: dict[str, _ValueReferenceArgument] | None = None,

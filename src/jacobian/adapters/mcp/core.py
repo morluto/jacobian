@@ -22,7 +22,7 @@ from jacobian.adapters.mcp.context import (
 from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
 from jacobian.adapters.mcp.tooling import AgentRecoveryError, _tool_annotations
-from jacobian.adapters.mcp.tools import capability_describe, capability_invoke
+from jacobian.adapters.mcp.tools import math_find, math_run
 from jacobian.contracts.capabilities import CapabilityCatalog
 
 _LOGGER = logging.getLogger(__name__)
@@ -137,7 +137,7 @@ def register_core_projection(
     """Register Jacobian's fixed tools and static resources directly with the SDK."""
 
     server.add_tool(
-        capability_describe,
+        math_find,
         name="math.find",
         title="Search installed Jacobian math tools",
         description=MATH_FIND_DESCRIPTION,
@@ -145,7 +145,7 @@ def register_core_projection(
         structured_output=True,
     )
     server.add_tool(
-        capability_invoke,
+        math_run,
         name="math.run",
         title="Run one installed Jacobian math tool",
         description=MATH_RUN_DESCRIPTION,

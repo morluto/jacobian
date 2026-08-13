@@ -1,11 +1,11 @@
 """Supported native exact finite-probability APIs."""
 
-from jacobian.math.probability.mutual_information import (
+from jacobian.math.probability.mutual_information import mutual_information
+from jacobian.math.probability.values import (
     FiniteJointTable,
     MutualInformationCertificate,
     MutualInformationResult,
     MutualInformationTerm,
-    mutual_information,
 )
 
 __all__ = [

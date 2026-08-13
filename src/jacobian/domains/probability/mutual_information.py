@@ -11,7 +11,6 @@ from pydantic import Field, StrictInt, StringConstraints, model_validator
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.exact import (
-    MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalInteger,
     CanonicalRational,
     require_bounded_rational,
@@ -19,17 +18,22 @@ from jacobian.contracts.exact import (
 from jacobian.contracts.results import ContractModel
 from jacobian.domains._examples import example
 from jacobian.math.probability.mutual_information import (
-    MAX_FINITE_JOINT_TABLE_CELLS,
-    MAX_FINITE_JOINT_TABLE_COLUMNS,
-    MAX_FINITE_JOINT_TABLE_ROWS,
-    MAX_INPUT_RATIONAL_DIGITS,
-    MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
     FiniteJointTable,
     MutualInformationResult,
     mutual_information,
 )
+from jacobian.math.probability.values import (
+    MAX_FINITE_JOINT_TABLE_CELLS,
+    MAX_FINITE_JOINT_TABLE_COLUMNS,
+    MAX_FINITE_JOINT_TABLE_ROWS,
+    MAX_INPUT_RATIONAL_DIGITS,
+    MAX_MUTUAL_INFORMATION_LIKELIHOOD_RATIO_DIGITS,
+    MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS,
+    MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
+)
 from jacobian.operation_bindings import inline_operation
 from jacobian.operations import OperationRefusalError, OperationSpec
+from jacobian.provider_runtime import jacobian_provider_runtime
 
 FiniteJointLabel = Annotated[
     str,
@@ -123,7 +127,7 @@ def _bound_raw_result_rationals(value: Mapping[str, object]) -> None:
             for index, raw_value in enumerate(raw_values):
                 _bound_raw_rational(
                     raw_value,
-                    max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                    max_digits=MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS,
                     label=f"{field_name}[{index}]",
                 )
     raw_support = value.get("positive_support")
@@ -139,7 +143,15 @@ def _bound_raw_result_rationals(value: Mapping[str, object]) -> None:
             ):
                 _bound_raw_rational(
                     raw_term.get(field_name),
-                    max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                    max_digits=(
+                        MAX_INPUT_RATIONAL_DIGITS
+                        if field_name == "probability"
+                        else (
+                            MAX_MUTUAL_INFORMATION_LIKELIHOOD_RATIO_DIGITS
+                            if field_name == "likelihood_ratio"
+                            else MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS
+                        )
+                    ),
                     label=f"positive_support[{index}].{field_name}",
                 )
     certificate = value.get("log_product_certificate")
@@ -149,6 +161,11 @@ def _bound_raw_result_rationals(value: Mapping[str, object]) -> None:
             max_digits=MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
             label="mutual-information certificate product",
         )
+    _bound_raw_rational(
+        value.get("exact_value"),
+        max_digits=MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
+        label="mutual-information exact value",
+    )
 
 
 def _require_native_probability_shape(
@@ -460,7 +477,11 @@ MUTUAL_INFORMATION_CAPABILITY = inline_operation(
                 },
             ),
         ),
-    )
+    ),
+    provider_runtime=jacobian_provider_runtime(
+        "jacobian.probability.mutual-information",
+        features=("standard-library-exact-rational",),
+    ),
 )
 
 __all__ = [

@@ -11,7 +11,7 @@ from jacobian.contracts._verification_rules import (
     validate_decisive_replayable_evidence,
 )
 from jacobian.contracts.capabilities import CapabilityId
-from jacobian.contracts.checkers import EvidenceKind
+from jacobian.contracts.checkers import CheckerManifest, EvidenceKind
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.evidence import EvidenceBindings
 from jacobian.contracts.results import (
@@ -24,9 +24,10 @@ from jacobian.contracts.results import (
 
 
 class VerificationRecord(ContractModel):
-    record_schema_version: Literal["3"] = "3"
+    record_schema_version: Literal["4"] = "4"
     checker_id: CheckerUri
     implementation_digest: Sha256Digest
+    checker_manifest: CheckerManifest
     evidence_kind: EvidenceKind
     evidence_uri: ArtifactUri
     bindings: EvidenceBindings
@@ -43,6 +44,10 @@ class VerificationRecord(ContractModel):
 
     @model_validator(mode="after")
     def require_decisive_replayable_record(self) -> Self:
+        if self.implementation_digest != self.checker_manifest.implementation_digest():
+            raise ValueError(
+                "verification record implementation digest must match its manifest"
+            )
         validate_decisive_replayable_evidence(
             self.conclusion,
             self.arithmetic,

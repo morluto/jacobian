@@ -1,7 +1,10 @@
 """Independent checker declarations owned by the probability domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityInstallTier
+from jacobian.contracts.capabilities import (
+    CapabilityInstallTier,
+    CapabilityProviderRuntime,
+)
 from jacobian.contracts.probability import (
     FiniteConvolutionRequest,
     FiniteEventRequest,
@@ -16,6 +19,7 @@ from jacobian.domains.probability.mutual_information import (
     FiniteJointTableMutualInformationRequest,
 )
 from jacobian.provider_runtime import source_provider_runtime
+from jacobian.providers import flint_runtime
 
 _ENTRYPOINT = "jacobian_checkers.exact_probability_operations"
 _REASON = (
@@ -24,7 +28,9 @@ _REASON = (
 )
 
 
-def _mutual_information_checker_runtime():
+def _mutual_information_checker_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
     """Measure the checker source only when authorization installs it."""
 
     return source_provider_runtime(
@@ -37,6 +43,15 @@ def _mutual_information_checker_runtime():
         install_tier=CapabilityInstallTier.T1,
         license_id="MIT",
         features=("standard-library-fraction-replay", "clean-process-checker"),
+        checker_ids=checker_ids,
+    )
+
+
+def _probability_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
+    return flint_runtime.probability_exact_checker_provider_runtime(
+        checker_ids=checker_ids
     )
 
 
@@ -74,6 +89,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         "check_finite_raw_moment",
         "probability.finite-raw-moment.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
@@ -83,6 +99,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         "check_finite_event_probability",
         "probability.finite-event.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
@@ -92,6 +109,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         "check_finite_condition",
         "probability.finite-condition.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
@@ -101,6 +119,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         "check_finite_pushforward",
         "probability.finite-pushforward.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
@@ -110,6 +129,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         "check_finite_convolution",
         "probability.finite-convolution.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
@@ -119,6 +139,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         "check_gaussian_polynomial_moment",
         "probability.gaussian-polynomial-moment.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_probability_runtime,
         replay_method="independent standard-library coefficient contraction",
         reason=_REASON,
     ),
@@ -128,6 +149,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         "check_graph_connection_probability",
         "probability.graph-reliability-connection.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_probability_runtime,
         replay_method="independent exhaustive edge-subset replay",
         reason=_REASON,
         verification_capability_id=(

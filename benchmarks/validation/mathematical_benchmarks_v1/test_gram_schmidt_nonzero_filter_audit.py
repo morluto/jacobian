@@ -49,6 +49,24 @@ def test_oracle_and_orthogonally_transformed_system(tmp_path):
     assert verify(tmp_path / "alt", alt).reward == 1.0
 
 
+def test_reordered_zero_residual_indices_are_accepted(tmp_path):
+    reordered = oracle()
+    reordered["result"]["zero_residual_indices"].reverse()
+
+    accepted = verify(tmp_path, reordered)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == 1.0
+
+
+def test_duplicate_zero_residual_index_is_rejected(tmp_path):
+    duplicate = oracle()
+    duplicate["result"]["zero_residual_indices"] = [4, 4]
+
+    rejected = verify(tmp_path, duplicate)
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
+
+
 def test_residual_rank_and_assurance_attacks_fail(tmp_path):
     bad = oracle()
     bad["result"]["residuals"][3][0] = {"numerator": 0, "denominator": 1}

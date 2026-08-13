@@ -207,6 +207,29 @@ def test_non_host_control_utilities_do_not_select_full_verifier_corpus(
     _assert_plan_valid(result)
 
 
+def test_root_makefile_runs_contracts_without_host_verifier_replay() -> None:
+    result = planner.plan(["Makefile"], event="pull_request")
+
+    assert result["run-benchmark-check"] == "true"
+    assert result["run-benchmark-record-schema"] == "true"
+    assert result["run-benchmark-host-validation"] == "false"
+    assert _host_matrix(result) == []
+    _assert_plan_valid(result)
+
+
+def test_harbor_makefile_change_keeps_full_host_verifier_coverage() -> None:
+    result = planner.plan(["make/harbor.mk"], event="pull_request")
+
+    assert result["run-benchmark-host-validation"] == "true"
+    assert len(_host_matrix(result)) == 4
+    assert any(
+        "shared verifier execution harness requires full host validation: "
+        "make/harbor.mk" in reason
+        for reason in json.loads(result["benchmark-plan-reasons"])
+    )
+    _assert_plan_valid(result)
+
+
 def test_execution_configuration_change_defers_oracle_to_merge_queue() -> None:
     path = "benchmarks/config/jacobian.mcp.json"
 

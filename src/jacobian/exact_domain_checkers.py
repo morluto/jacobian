@@ -10,7 +10,7 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityError, CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_identity import batch_checker_manifest_measurement

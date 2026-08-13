@@ -1,6 +1,10 @@
 """Typed formal modular-polynomial identity operation."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.capabilities import (
+    CapabilityInstallTier,
+    CapabilityProviderRuntime,
+)
 from jacobian.domains._examples import example
 from jacobian.domains.number_theory._support import number_theory_operation
 from jacobian.math.modular_polynomials import (
@@ -8,6 +12,21 @@ from jacobian.math.modular_polynomials import (
     ModularPolynomialIdentityValue,
     modular_polynomial_identity,
 )
+from jacobian.provider_runtime import source_provider_runtime
+
+
+def _modular_identity_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
+    return source_provider_runtime(
+        "jacobian.modular-polynomial-identity-checker",
+        version="1",
+        entrypoint="jacobian_checkers.modular_polynomial_identity:check_modular_polynomial_identity",
+        install_tier=CapabilityInstallTier.T1,
+        license_id="MIT",
+        features=("standard-library-integer-replay", "clean-process-checker"),
+        checker_ids=checker_ids,
+    )
 
 MODULAR_IDENTITY_CAPABILITIES = (
     number_theory_operation(
@@ -48,6 +67,7 @@ MODULAR_IDENTITY_CHECKERS = (
         "check_modular_polynomial_identity",
         "modular.polynomial-identity.stdlib-replay",
         entrypoint_module="jacobian_checkers.modular_polynomial_identity",
+        provider_runtime_factory=_modular_identity_runtime,
         replay_method="standard-library coefficientwise modular replay",
         reason=(
             "operator-authorized standard-library checker independently "

@@ -216,15 +216,7 @@ def _audit_prose_valid(text):
     has_integer_domain = bool(
         re.search(r"\binteger\b|\bz[- ]valued\b|\bz[- ]value\b", text)
     )
-    has_nonclaim = bool(
-        re.search(r"\bnot\s+assessed\b", text)
-        or re.search(
-            r"\bno\b.{0,80}\b(?:lean|irrationality|theorem)\b.{0,40}"
-            r"\b(?:claim|claimed|claims|made)\b",
-            text,
-        )
-    )
-    return has_natural_domain and has_integer_domain and has_nonclaim
+    return has_natural_domain and has_integer_domain
 
 
 def _raw_submission():

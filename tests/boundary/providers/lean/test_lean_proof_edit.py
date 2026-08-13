@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 from tests.support.provider_lean import (
-    PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
-    pinned_mathlib_runtime_available,
+    PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
+    skip_unless_pinned_lean_core_runtime,
 )
 
 from jacobian.contracts.capabilities import (
@@ -12,8 +12,8 @@ from jacobian.contracts.capabilities import (
 
 pytestmark = [
     pytest.mark.skipif(
-        not pinned_mathlib_runtime_available(),
-        reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
+        skip_unless_pinned_lean_core_runtime(),
+        reason=PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     ),
 ]
 

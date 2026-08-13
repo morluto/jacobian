@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.results import ContractModel
 
-ProviderRuntimeFactory = Callable[..., CapabilityProviderRuntime]
+ProviderRuntimeFactory = Callable[[], CapabilityProviderRuntime]
 
 # Producer operation verb segments stripped when deriving a verifier capability
 # ID. Each producer capability ID contains exactly one of these segments; the
@@ -192,7 +193,7 @@ class ExactReplayCheckerDeclaration:
                 derive_verification_tags(self.capability_id),
             )
 
-    def __getattribute__(self, name: str) -> object:
+    def __getattribute__(self, name: str) -> Any:
         if name != "provider_runtime":
             return object.__getattribute__(self, name)
         runtime = object.__getattribute__(self, "provider_runtime")
@@ -204,7 +205,8 @@ class ExactReplayCheckerDeclaration:
         realized = factory()
         if not isinstance(realized, CapabilityProviderRuntime):
             raise TypeError(
-                "provider runtime factory must return CapabilityProviderRuntime"
+                "declaration-owned provider runtime factory must return "
+                "CapabilityProviderRuntime"
             )
         if realized.checker_ids:
             raise ValueError(

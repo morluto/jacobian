@@ -255,7 +255,9 @@ class PolynomialIntervalPositivityDecideAdapter:
                 "strictly positive (p(x) > 0) on one closed rational interval "
                 "using Sturm's theorem. The decision is EXACT and "
                 "DETERMINISTIC. The separate independent Sturm-sequence checker "
-                "is the verification boundary."
+                "is the verification boundary. The input difference polynomial can "
+                "represent a strict inequality such as one expression exceeding a "
+                "bound."
             ),
             provider="jacobian.sympy",
             provider_runtime=known_provider_runtime(
@@ -276,6 +278,9 @@ class PolynomialIntervalPositivityDecideAdapter:
                 "positivity",
                 "sturm",
                 "exact-decision",
+                "inequality",
+                "exceeds-bound",
+                "rational-derivative-bound",
             ),
             invocation_examples=(
                 example(
@@ -403,7 +408,9 @@ class PolynomialIntervalPositivityVerifyAdapter:
                 "Independently recompute the Sturm sequence of one univariate "
                 "rational polynomial on one closed rational interval and confirm "
                 "the claimed strict positivity decision. The checker uses pure "
-                "rational arithmetic and does not import SymPy."
+                "rational arithmetic and does not import SymPy. The input difference "
+                "polynomial can represent a strict inequality such as one expression "
+                "exceeding a bound."
             ),
             provider="jacobian.exact-polynomial-positivity-checker",
             provider_runtime=known_provider_runtime(
@@ -424,6 +431,10 @@ class PolynomialIntervalPositivityVerifyAdapter:
                 "positivity",
                 "sturm",
                 "verification",
+                "verify",
+                "inequality",
+                "exceeds-bound",
+                "rational-derivative-bound",
             ),
         )
 

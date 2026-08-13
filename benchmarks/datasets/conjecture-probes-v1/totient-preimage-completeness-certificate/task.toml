@@ -1,0 +1,39 @@
+schema_version="1.4"
+artifacts=["/app/submission.json","/app/evidence"]
+[task]
+name="jacobian/totient-preimage-completeness-certificate"
+version="1.0.0"
+description="Classify the complete preimage of 48 under Euler's totient without a search cutoff."
+keywords=["totient","inverse-image","prime-factorization","completeness"]
+[metadata]
+evaluation_kind="conjecture-probe"
+domain="mathematical-sciences"
+primary_domain="number-theory"
+field="multiplicative-functions"
+assurance_ceiling="CHECKED"
+answer_visibility="public"
+provenance_class="authored-conjecture-probe"
+fixture_digest="sha256:4ac36dc738ce4050d312f9b301be0ed7adcf3b03db56c380c37812e11ed4e555"
+required_provider="core"
+author_name="Jacobian contributors"
+difficulty="hard"
+category="mathematics"
+tags=["difficulty-provisional","totient","complete-enumeration","exact-verification","offline"]
+case_version="conjecture-probes-v1"
+contamination_class="authored-finite-conjecture-probe"
+derivation="Derived from retained spreadsheet row C-027 as a closed exact preimage-completeness slice."
+[agent]
+timeout_sec=600.0
+[verifier]
+timeout_sec=120.0
+environment_mode="separate"
+[environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096
+[verifier.environment]
+network_mode="no-network"
+cpus=1
+memory_mb=1024
+storage_mb=4096

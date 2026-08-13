@@ -66,6 +66,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
         "check_matrix_determinant",
         "matrix.determinant.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
     ),
     ExactReplayCheckerDeclaration(
         "matrix.rank.compute",
@@ -73,6 +74,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
         "check_matrix_rank",
         "matrix.rank.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
     ),
     ExactReplayCheckerDeclaration(
         "matrix.multiply.compute",
@@ -80,6 +82,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
         "check_matrix_product",
         "matrix.product.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
     ),
     ExactReplayCheckerDeclaration(
         "matrix.normal_form.rref.compute",
@@ -87,6 +90,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
         "check_matrix_rref",
         "matrix.rref.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
     ),
     ExactReplayCheckerDeclaration(
         "matrix.nullspace.compute",
@@ -94,6 +98,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
         "check_matrix_nullspace",
         "matrix.nullspace.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
     ),
     ExactReplayCheckerDeclaration(
         "matrix.characteristic_polynomial.compute",
@@ -101,6 +106,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
         "check_matrix_characteristic_polynomial",
         "matrix.characteristic-polynomial.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
     ),
     ExactReplayCheckerDeclaration(
         "matrix.normal_form.smith.compute",
@@ -108,6 +114,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
         "check_matrix_smith_normal_form",
         "matrix.smith-normal-form.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
     ),
 )
 

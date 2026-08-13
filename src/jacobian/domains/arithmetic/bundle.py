@@ -15,6 +15,10 @@ from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.arithmetic.integers import INTEGER_CAPABILITIES
 from jacobian.domains.arithmetic.rationals import RATIONAL_CAPABILITIES
+from jacobian.domains.arithmetic.real_quadratic import (
+    REAL_QUADRATIC_CAPABILITIES,
+    REAL_QUADRATIC_CHECKERS,
+)
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
@@ -50,7 +54,9 @@ def build_arithmetic_bundle() -> DomainBundle:
         capabilities=(
             *INTEGER_CAPABILITIES,
             *RATIONAL_CAPABILITIES,
+            *REAL_QUADRATIC_CAPABILITIES,
         ),
+        checker_declarations=REAL_QUADRATIC_CHECKERS,
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
                 code="INVALID_ARITHMETIC_REQUEST",

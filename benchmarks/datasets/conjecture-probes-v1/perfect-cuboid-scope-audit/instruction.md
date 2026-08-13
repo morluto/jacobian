@@ -18,9 +18,9 @@ be reported in any common order; the verifier compares the three aligned
 radicand/root pairs as an unordered set.
 
 `evidence/answer.txt` must be a JSON object with exactly `schema_version`,
-`task_id`, `result`, and `limitations`. Use schema version `1`, the task ID and
-limitations from the submission contract, and the same `result` object as in
-`submission.json`. The file must be no larger than 2 MiB.
+`task_id`, `result`, and `limitations`. Use schema version `1` (the JSON string
+`"1"`), the task ID and limitations from the submission contract, and the same
+`result` object as in `submission.json`. The file must be no larger than 2 MiB.
 
 This is a finite semantic-scope audit. An Euler brick is not a perfect cuboid,
 and finding no perfect cuboid in these twelve cases is not evidence of global

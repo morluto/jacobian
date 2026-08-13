@@ -13,6 +13,10 @@ from jacobian.domains.number_theory.finite_abelian_groups import (
     FINITE_ABELIAN_GROUP_FACTORIZATION_CAPABILITY,
 )
 from jacobian.domains.number_theory.modular import MODULAR_CAPABILITIES
+from jacobian.domains.number_theory.modular_identity import (
+    MODULAR_IDENTITY_CAPABILITIES,
+    MODULAR_IDENTITY_CHECKERS,
+)
 from jacobian.domains.number_theory.primes import PRIME_CAPABILITIES
 from jacobian.operations import (
     DomainDiagnostics,
@@ -47,6 +51,7 @@ def build_number_theory_bundle() -> DomainBundle:
             *DIVISIBILITY_CAPABILITIES,
             *PRIME_CAPABILITIES,
             *MODULAR_CAPABILITIES,
+            *MODULAR_IDENTITY_CAPABILITIES,
             *DERIVED_NUMBER_THEORY_CAPABILITIES,
             FINITE_ABELIAN_GROUP_FACTORIZATION_CAPABILITY,
         ),
@@ -61,5 +66,8 @@ def build_number_theory_bundle() -> DomainBundle:
                 ),
             )
         ),
-        checker_declarations=NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
+        checker_declarations=(
+            *NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
+            *MODULAR_IDENTITY_CHECKERS,
+        ),
     )

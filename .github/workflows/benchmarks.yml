@@ -14,6 +14,8 @@ on:
 
 concurrency:
   group: benchmarks-${{ github.workflow }}-${{ github.ref }}
+  # A newer PR commit supersedes stale evidence; Benchmark Validation still
+  # runs after dependency cancellation and rejects missing evidence.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -317,6 +319,9 @@ jobs:
 
   validation:
     name: Benchmark Validation
+    # This required aggregate must run after cancellation so the validator can
+    # turn cancelled dependencies into a failing check instead of a skipped,
+    # branch-protection-passing job.
     if: ${{ always() }}
     needs: [plan, static, contracts, host_validation, inventory, oracle]
     runs-on: ubuntu-latest
@@ -370,11 +375,11 @@ jobs:
             --execution-sha "${{ github.sha }}" \
             --receipt-root "${{ runner.temp }}/benchmark-validation/host" \
             --timings "${{ runner.temp }}/benchmark-validation/timing/benchmark-test-durations.json" \
-            --lane "static:$PLAN_CHECK:$STATIC_RESULT" \
-            --lane "contracts:$RECORD_SCHEMA_FLAG:$CONTRACTS_RESULT" \
-            --lane "host-validation:$HOST_VALIDATION_FLAG:$HOST_VALIDATION_RESULT" \
-            --lane "inventory:$INVENTORY_FLAG:$INVENTORY_RESULT" \
-            --lane "oracle:$ORACLE_FLAG:$ORACLE_RESULT"
+            --lane "static:${PLAN_CHECK:-false}:${STATIC_RESULT:-cancelled}" \
+            --lane "contracts:${RECORD_SCHEMA_FLAG:-false}:${CONTRACTS_RESULT:-cancelled}" \
+            --lane "host-validation:${HOST_VALIDATION_FLAG:-false}:${HOST_VALIDATION_RESULT:-cancelled}" \
+            --lane "inventory:${INVENTORY_FLAG:-false}:${INVENTORY_RESULT:-cancelled}" \
+            --lane "oracle:${ORACLE_FLAG:-false}:${ORACLE_RESULT:-cancelled}"
 
   timings:
     name: Publish Benchmark Timings

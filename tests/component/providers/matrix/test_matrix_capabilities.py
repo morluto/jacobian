@@ -172,9 +172,8 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
     )
 
     assert timed_out.execution.status is ExecutionStatus.TIMEOUT
-    assert timed_out.output["status"] == "TIMEOUT"
-    assert timed_out.output["conclusion"] == "UNKNOWN"
-    assert timed_out.output["verification_record_uri"] is None
+    assert timed_out.output == {}
+    assert timed_out.verification_record_uri is None
 
 
 def test_matrix_rank_compute_returns_rectangular_pivot_evidence(

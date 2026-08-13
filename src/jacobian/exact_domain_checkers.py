@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -24,6 +23,7 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
+    CapabilityValuePort,
 )
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope
@@ -42,6 +42,7 @@ from jacobian.contracts.results import (
 from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import DurablePublication
 from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.operation_ports import InputPort
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -54,6 +55,7 @@ from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.validation_diagnostics import bounded_validation_exception_message
+from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,9 +85,7 @@ class _InstalledDeclaration:
 @dataclass(frozen=True, slots=True)
 class _DeclaredRuntimeGroup:
     probe: CapabilityProviderRuntime
-    factory: Callable[..., CapabilityProviderRuntime] | None
     members: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...]
-    factories: tuple[Callable[..., CapabilityProviderRuntime], ...]
 
 
 def _declared_runtime_groups(
@@ -95,40 +95,35 @@ def _declared_runtime_groups(
         str,
         tuple[
             CapabilityProviderRuntime,
-            list[Callable[..., CapabilityProviderRuntime]],
             list[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration]],
         ],
     ] = {}
     for installed, declaration in pairs:
         factory = object.__getattribute__(declaration, "provider_runtime_factory")
-        probe = declaration.provider_runtime
+        probe = factory() if factory is not None else declaration.provider_runtime
         if probe is None:
             continue
+        if not isinstance(probe, CapabilityProviderRuntime):
+            raise TypeError(
+                "provider runtime factory must return CapabilityProviderRuntime"
+            )
         current = grouped.get(probe.provider)
         if current is None:
-            grouped[probe.provider] = (
-                probe,
-                [] if factory is None else [factory],
-                [(installed, declaration)],
-            )
+            grouped[probe.provider] = (probe, [(installed, declaration)])
             continue
-        existing_probe, factories, members = current
+        existing_probe, members = current
         if existing_probe.model_dump(mode="json") != probe.model_dump(mode="json"):
             raise ValueError(
                 "exact replay grouped distinct probes under one provider "
                 f"identity: {probe.provider}"
             )
-        if factory is not None and factory not in factories:
-            factories.append(factory)
         members.append((installed, declaration))
     return tuple(
         _DeclaredRuntimeGroup(
             probe=probe,
-            factory=factories[0] if factories else None,
             members=tuple(members),
-            factories=tuple(factories),
         )
-        for probe, factories, members in grouped.values()
+        for probe, members in grouped.values()
     )
 
 
@@ -171,23 +166,6 @@ def _authorized_provider_runtimes(
     groups: tuple[_DeclaredRuntimeGroup, ...],
     checker_ids: Mapping[str, str | None],
 ) -> dict[str, CapabilityProviderRuntime]:
-    def realize(
-        factory: Callable[..., CapabilityProviderRuntime],
-        checker_ids: tuple[str, ...],
-    ) -> CapabilityProviderRuntime:
-        parameters = inspect.signature(factory).parameters.values()
-        accepts_checker_ids = any(
-            parameter.name == "checker_ids"
-            or parameter.kind is inspect.Parameter.VAR_KEYWORD
-            for parameter in parameters
-        )
-        runtime = factory(checker_ids=checker_ids) if accepts_checker_ids else factory()
-        if not isinstance(runtime, CapabilityProviderRuntime):
-            raise TypeError(
-                "provider runtime factory must return CapabilityProviderRuntime"
-            )
-        return runtime
-
     provider_runtimes: dict[str, CapabilityProviderRuntime] = {}
     for group in groups:
         authorized = tuple(
@@ -195,19 +173,7 @@ def _authorized_provider_runtimes(
             for _installed, declaration in group.members
             if (checker_id := checker_ids[declaration.capability_id]) is not None
         )
-        if group.factory is None:
-            runtime = group.probe.model_copy(update={"checker_ids": authorized})
-        else:
-            runtime = realize(group.factory, authorized)
-        for factory in group.factories:
-            if factory is group.factory:
-                continue
-            other = realize(factory, authorized)
-            if other != runtime:
-                raise ValueError(
-                    "exact replay grouped distinct runtimes under one provider "
-                    f"identity: {group.probe.provider}"
-                )
+        runtime = group.probe.model_copy(update={"checker_ids": authorized})
         existing = provider_runtimes.get(runtime.provider)
         if existing is not None and existing.model_dump(
             mode="json"
@@ -300,6 +266,7 @@ def install_exact_domain_verification(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
+    values: ValueReferenceStore,
     verification: VerificationService,
     checkers: CheckerRegistry,
     *,
@@ -349,6 +316,16 @@ def install_exact_domain_verification(
         for operation in bundle.capabilities
         if isinstance(operation.publication, DurablePublication)
     }
+    referenceable_results = {
+        operation.spec.operation_id: operation.spec.result_type
+        for bundle, _installed_bundle in bundles.values()
+        for operation in bundle.capabilities
+        if operation.output_ports
+        and any(
+            port.value_type is operation.spec.result_type
+            for port in operation.output_ports
+        )
+    }
     for installed_bundle, declaration in _available_declaration_bundles(bundles):
         if declaration.capability_id not in installed_bundle.result_schema_uris:
             continue
@@ -366,12 +343,16 @@ def install_exact_domain_verification(
                 store=store,
                 schemas=schemas,
                 artifacts=artifacts,
+                values=values,
                 verification=verification,
                 witness_schema_uri=witness_schema_uri,
                 provider_runtime=installation.provider_runtimes[
                     installation.declaration_providers[declaration.capability_id]
                 ],
                 stored_result_input=declaration.capability_id in stored_producers,
+                candidate_value_type=referenceable_results.get(
+                    declaration.capability_id
+                ),
             )
         )
     return tuple(adapters), installation
@@ -461,14 +442,17 @@ class ExactComputedVerificationAdapter:
         store: ArtifactRepository,
         schemas: SchemaRegistry,
         artifacts: ArtifactService,
+        values: ValueReferenceStore,
         verification: VerificationService,
         witness_schema_uri: str,
         provider_runtime: CapabilityProviderRuntime,
         stored_result_input: bool,
+        candidate_value_type: type[ContractModel] | None,
     ) -> None:
         self.store = store
         self.schemas = schemas
         self.artifacts = artifacts
+        self.values = values
         self.verification = verification
         self.declaration = declaration
         self.witness_schema_uri = witness_schema_uri
@@ -478,6 +462,15 @@ class ExactComputedVerificationAdapter:
             declaration.declaration.request_model,
             declaration.result_model,
         ]
+        self.candidate_port = (
+            InputPort(
+                name="candidate",
+                value_type=candidate_value_type,
+                request_field="candidate",
+            )
+            if candidate_value_type is not None and not stored_result_input
+            else None
+        )
         verification_capability_id = declaration.declaration.verification_capability_id
         verification_title = declaration.declaration.verification_title
         verification_description = declaration.declaration.verification_description
@@ -491,7 +484,7 @@ class ExactComputedVerificationAdapter:
             )
         self._descriptor = CapabilityDescriptor(
             capability_id=verification_capability_id,
-            version="1",
+            version="2" if self.candidate_port is not None else "1",
             title=verification_title,
             description=verification_description,
             provider=provider_runtime.provider,
@@ -511,7 +504,19 @@ class ExactComputedVerificationAdapter:
             accepted_artifact_types=(
                 (declaration.result_schema_uri,) if stored_result_input else ()
             ),
+            input_ports=(
+                (
+                    CapabilityValuePort(
+                        name=self.candidate_port.name,
+                        value_type=self.candidate_port.value_type.__name__,
+                    ),
+                )
+                if self.candidate_port is not None
+                else ()
+            ),
         )
+
+    typed_input: Literal[True] = True
 
     @property
     def descriptor(self) -> CapabilityDescriptor:
@@ -685,7 +690,7 @@ class ExactComputedVerificationAdapter:
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=output,
+                output=output if isinstance(terminal, Completed) else None,
                 artifact_uris=(
                     (record_uri, declaration.semantics_uri)
                     if record_uri is not None
@@ -767,7 +772,7 @@ class ExactComputedVerificationAdapter:
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=output,
+                output=output if isinstance(terminal, Completed) else None,
                 artifact_uris=artifact_uris,
             ),
             verification_record_uri=record_uri,
@@ -791,7 +796,21 @@ class ExactComputedVerificationAdapter:
     ) -> tuple[dict[str, object], dict[str, object]]:
         declaration = self.declaration
         try:
-            validated = self.input_model.model_validate(request.input)
+            payload = request.input
+            if request.inputs:
+                if self.candidate_port is None:
+                    raise ValueError("this exact checker declares no value inputs")
+                unknown = sorted(set(request.inputs) - {self.candidate_port.name})
+                if unknown:
+                    raise ValueError(
+                        "unknown exact-checker input port: " + ", ".join(unknown)
+                    )
+                candidate = self.values.resolve(
+                    request.inputs[self.candidate_port.name],
+                    self.candidate_port.value_type,
+                )
+                payload = self.candidate_port.bind_to_request(payload, candidate)
+            validated = self.input_model.model_validate(payload)
             normalized_input = self.schemas.validate(
                 declaration.input_schema_uri,
                 validated.input.model_dump(mode="json"),
@@ -800,7 +819,12 @@ class ExactComputedVerificationAdapter:
                 declaration.result_schema_uri,
                 validated.candidate.model_dump(mode="json"),
             )
-        except (SchemaRegistryError, ValidationError, ValueError) as exc:
+        except (
+            SchemaRegistryError,
+            ValidationError,
+            ValueError,
+            ValueReferenceError,
+        ) as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_INPUT",

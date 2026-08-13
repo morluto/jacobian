@@ -7,7 +7,7 @@ from jacobian.contracts.number_theory import IntegerValueResult
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.operation_publication import PublishedOperation
-from jacobian.operations import Completed, Failed
+from jacobian.operations import Completed, Failed, NonConclusion
 
 
 def test_completed_projection_preserves_published_artifact_lineage() -> None:
@@ -32,14 +32,14 @@ def test_completed_projection_preserves_published_artifact_lineage() -> None:
     assert result.artifact_uris == (artifact_uri,)
 
 
-def test_failed_projection_preserves_typed_nonconclusion_output() -> None:
+def test_failed_projection_rejects_typed_output() -> None:
     diagnostic = CapabilityDiagnostic(
         code="EXAMPLE_FAILED",
         stage="execution",
         message="The example operation failed.",
     )
 
-    result = project_operation_result(
+    with pytest.raises(ValueError, match="non-completed operations"):
         OperationProjection(
             operation_id="integer.example.compute",
             version="1",
@@ -48,11 +48,24 @@ def test_failed_projection_preserves_typed_nonconclusion_output() -> None:
                 output=IntegerValueResult(value="7"),
             ),
         )
+
+
+def test_nonconclusion_projection_rejects_typed_output() -> None:
+    diagnostic = CapabilityDiagnostic(
+        code="EXAMPLE_UNSUPPORTED",
+        stage="preflight",
+        message="The example operation is unsupported.",
     )
 
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output == {"value": "7"}
-    assert result.diagnostics == (diagnostic,)
+    with pytest.raises(ValueError, match="non-completed operations"):
+        OperationProjection(
+            operation_id="integer.example.compute",
+            version="1",
+            terminal=NonConclusion(diagnostic),
+            publication=PublishedOperation(
+                output=IntegerValueResult(value="7"),
+            ),
+        )
 
 
 def test_projection_rejects_verification_record_without_completed_lineage() -> None:

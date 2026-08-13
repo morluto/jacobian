@@ -21,12 +21,12 @@ from jacobian.contracts.matrix_operations import (
     RationalMatrixProductRequest,
     RationalMatrixRequest,
     RrefResult,
-    SmithNormalFormResult,
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
 from jacobian.domains.matrix_lattice import conversions
 from jacobian.math import matrices
+from jacobian.math.matrices.values import SmithNormalForm
 
 
 def compute_determinant(
@@ -108,31 +108,11 @@ def compute_characteristic_polynomial(
 
 def compute_smith_normal_form(
     request: IntegerMatrixRequest,
-) -> SmithNormalFormResult:
-    import sympy
-
+) -> SmithNormalForm:
     raw = matrices.smith_normal_form(
         conversions.integer_matrix_to_sympy(request.matrix)
     )
-    diagonal_count = min(raw.rows, raw.cols)
-    diagonal = tuple(int(raw[index, index]) for index in range(diagonal_count))
-    rank = next(
-        (index for index, value in enumerate(diagonal) if value == 0),
-        diagonal_count,
-    )
-    if any(diagonal[index] != 0 for index in range(rank, diagonal_count)):
-        raise RuntimeError("Smith backend returned a nonzero factor after a zero")
-    invariant_factors = tuple(abs(value) for value in diagonal[:rank])
-    canonical = sympy.zeros(raw.rows, raw.cols)
-    for index, value in enumerate(invariant_factors):
-        canonical[index, index] = value
-    return SmithNormalFormResult(
-        normal_form=conversions.integer_matrix_from_sympy(canonical),
-        rank=rank,
-        invariant_factors=tuple(
-            format_canonical_integer(value) for value in invariant_factors
-        ),
-    )
+    return conversions.smith_normal_form_from_sympy(raw)
 
 
 def compute_inverse(request: SquareIntegerMatrixRequest) -> MatrixInverseResult:

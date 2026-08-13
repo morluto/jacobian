@@ -53,6 +53,8 @@ def test_hamiltonian_path_decision_has_independent_replay(
     )
     assert computed.execution.status is ExecutionStatus.COMPLETED
     assert computed.output["result"]["decision"] == decision
+    assert "verification_capability_id" not in computed.output["result"]
+    assert "verification_input_field" not in computed.output["result"]
     assert computed.artifact_uris == ()
 
     verified = graph_services.core.capabilities.invoke(

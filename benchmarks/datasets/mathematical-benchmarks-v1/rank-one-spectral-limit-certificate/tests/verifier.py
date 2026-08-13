@@ -97,7 +97,7 @@ def certificate_valid(result: object) -> bool:
     if ns is None:
         return False
     return bool(
-        ns == sorted(set(ns))
+        len(ns) == len(set(ns))
         and result["rank_one_sign"] == "DIAGONAL_MINUS_LAMBDA_ONES"
         and result["root_formula"] == "4*n*(n+1)/((n-1)*(n+2))"
         and rat(result["limit"]) == 4

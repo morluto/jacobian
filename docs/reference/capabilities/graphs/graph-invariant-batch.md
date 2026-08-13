@@ -76,7 +76,7 @@ budgets, and in some cases use a different backend:
 
 | Standalone invariant | Batch registry relationship |
 | --- | --- |
-| `graph.invariant.independence_number.compute` | Same mathematical value; different input and artifact contract. |
+| `graph.invariant.independence_number.compute` | Same mathematical value; the standalone operation accepts inline graphs through order 128 and returns either an exact optimum or a feasible witness with explicit bounds. |
 | `graph.invariant.girth.compute` | Same invariant; the standalone operation uses `0` for acyclic graphs while the batch uses `null`. |
 | `graph.invariant.diameter.compute` | Same invariant; the standalone operation uses `-1` for disconnected graphs while the batch reports `NOT_APPLICABLE`. |
 | `graph.invariant.clique_number.compute` | Not in registry version `1`. |

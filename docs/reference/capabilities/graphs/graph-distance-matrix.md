@@ -46,7 +46,8 @@ verification of the distance claim.
 ## Independent verification
 
 `graph.distance_matrix.verify` consumes the exact producer input plus one complete
-typed candidate inline and can promote that matrix to `VERIFIED`. The operator-authorized checker uses
+typed candidate inline and can promote that matrix to `VERIFIED`. The
+operator-authorized checker uses
 only Python standard-library adjacency sets, queues, and integer distances. It
 does not import NetworkX or the producer package.
 

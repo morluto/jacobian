@@ -1,0 +1,312 @@
+{
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "conclusion": {
+    "const": "PHI_48_COMPLETE_PREIMAGE_CLASSIFICATION"
+  },
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  },
+  "limitations": {
+    "const": [
+      "ONE_TARGET_TOTIENT_VALUE_48",
+      "EXACT_FINITE_PREIMAGE_CLASSIFICATION",
+      "NO_GLOBAL_CARMICHAEL_CONCLUSION"
+    ]
+  },
+  "public_notes": "Exact preimage classification for phi(n)=48 only; no global Carmichael conclusion.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.",
+  "required_artifact_filenames": [
+    "evidence/answer.json"
+  ],
+  "schema_definitions": {
+    "factor": {
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "type": "array"
+    },
+    "solution": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "factorization": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/factor"
+          },
+          "minItems": 1,
+          "maxItems": 6
+        },
+        "totient": {
+          "const": 48
+        }
+      },
+      "required": [
+        "n",
+        "factorization",
+        "totient"
+      ],
+      "type": "object"
+    },
+    "option": {
+      "additionalProperties": false,
+      "properties": {
+        "prime": {
+          "type": "integer"
+        },
+        "exponents": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 6
+        }
+      },
+      "required": [
+        "prime",
+        "exponents"
+      ],
+      "type": "object"
+    }
+  },
+  "schema_version": "1",
+  "scope": {
+    "const": "phi-48-complete-preimage-classification-v1",
+    "type": "string"
+  },
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "candidate_primes": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "minItems": 6,
+        "maxItems": 6,
+        "uniqueItems": true
+      },
+      "prime_power_options": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/option"
+        },
+        "minItems": 6,
+        "maxItems": 6
+      },
+      "enumerated_branch_count": {
+        "const": 288
+      },
+      "solutions": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/solution"
+        },
+        "minItems": 11,
+        "maxItems": 11
+      },
+      "accepted_count": {
+        "const": 11
+      }
+    },
+    "required": [
+      "solutions",
+      "accepted_count"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$defs": {
+      "factor": {
+        "items": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "type": "array"
+      },
+      "option": {
+        "additionalProperties": false,
+        "properties": {
+          "exponents": {
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          },
+          "prime": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prime",
+          "exponents"
+        ],
+        "type": "object"
+      },
+      "solution": {
+        "additionalProperties": false,
+        "properties": {
+          "factorization": {
+            "items": {
+              "$ref": "#/$defs/factor"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "type": "array"
+          },
+          "n": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "totient": {
+            "const": 48
+          }
+        },
+        "required": [
+          "n",
+          "factorization",
+          "totient"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "conclusion": {
+        "const": "PHI_48_COMPLETE_PREIMAGE_CLASSIFICATION"
+      },
+      "evidence": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      },
+      "limitations": {
+        "const": [
+          "ONE_TARGET_TOTIENT_VALUE_48",
+          "EXACT_FINITE_PREIMAGE_CLASSIFICATION",
+          "NO_GLOBAL_CARMICHAEL_CONCLUSION"
+        ]
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_count": {
+            "const": 11
+          },
+          "candidate_primes": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "enumerated_branch_count": {
+            "const": 288
+          },
+          "prime_power_options": {
+            "items": {
+              "$ref": "#/$defs/option"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array"
+          },
+          "solutions": {
+            "items": {
+              "$ref": "#/$defs/solution"
+            },
+            "maxItems": 11,
+            "minItems": 11,
+            "type": "array"
+          }
+        },
+        "required": [
+          "solutions",
+          "accepted_count"
+        ],
+        "type": "object"
+      },
+      "scope": {
+        "const": "phi-48-complete-preimage-classification-v1",
+        "type": "string"
+      },
+      "task_id": {
+        "const": "jacobian/totient-preimage-completeness-certificate"
+      }
+    },
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/totient-preimage-completeness-certificate",
+  "verification_record": null
+}

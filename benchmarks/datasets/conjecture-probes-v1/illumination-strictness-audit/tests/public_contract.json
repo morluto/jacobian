@@ -1,0 +1,260 @@
+{
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "task_id": "jacobian/illumination-strictness-audit",
+  "conclusion": {
+    "const": "WEAK_ILLUMINATION_IS_UNSOUND_AND_REPAIRED"
+  },
+  "allowed_assurance": [
+    "UNVERIFIED",
+    "COMPUTED",
+    "CHECKED"
+  ],
+  "assurance_ceiling": "CHECKED",
+  "allowed_completeness": [
+    "COMPLETE"
+  ],
+  "scope": {
+    "type": "string",
+    "const": "cube-illumination-strictness-audit-v1"
+  },
+  "limitations": {
+    "const": [
+      "ONE_THREE_DIMENSIONAL_CUBE",
+      "VERTEX_SIGN_CONE_MODEL_ONLY",
+      "GENERAL_ILLUMINATION_CONJECTURE_NOT_ASSESSED"
+    ]
+  },
+  "required_artifact_filenames": [
+    "evidence/answer.json"
+  ],
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "min_items": 1,
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "payload_shape": null
+  },
+  "schema_definitions": {
+    "direction": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "integer",
+        "minimum": -1,
+        "maximum": 1
+      }
+    }
+  },
+  "submission_result": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "flawed_directions",
+      "weak_false_positive_pairs",
+      "repair_directions",
+      "vertex_to_direction"
+    ],
+    "properties": {
+      "flawed_directions": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {
+          "$ref": "#/$defs/direction"
+        }
+      },
+      "weak_false_positive_pairs": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "vertex_index",
+            "direction_index"
+          ],
+          "properties": {
+            "vertex_index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7
+            },
+            "direction_index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          }
+        }
+      },
+      "repair_directions": {
+        "type": "array",
+        "minItems": 8,
+        "maxItems": 8,
+        "items": {
+          "$ref": "#/$defs/direction"
+        }
+      },
+      "vertex_to_direction": {
+        "type": "array",
+        "minItems": 8,
+        "maxItems": 8,
+        "items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        }
+      }
+    }
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "conclusion",
+      "result",
+      "claimed_assurance",
+      "scope",
+      "completeness",
+      "evidence",
+      "limitations"
+    ],
+    "properties": {
+      "task_id": {
+        "const": "jacobian/illumination-strictness-audit"
+      },
+      "conclusion": {
+        "const": "WEAK_ILLUMINATION_IS_UNSOUND_AND_REPAIRED"
+      },
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flawed_directions",
+          "weak_false_positive_pairs",
+          "repair_directions",
+          "vertex_to_direction"
+        ],
+        "properties": {
+          "flawed_directions": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/$defs/direction"
+            }
+          },
+          "weak_false_positive_pairs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "vertex_index",
+                "direction_index"
+              ],
+              "properties": {
+                "vertex_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 7
+                },
+                "direction_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                }
+              }
+            }
+          },
+          "repair_directions": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/$defs/direction"
+            }
+          },
+          "vertex_to_direction": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7
+            }
+          }
+        }
+      },
+      "claimed_assurance": {
+        "enum": [
+          "UNVERIFIED",
+          "COMPUTED",
+          "CHECKED",
+          "VERIFIED"
+        ]
+      },
+      "scope": {
+        "type": "string",
+        "const": "cube-illumination-strictness-audit-v1"
+      },
+      "completeness": {
+        "const": "COMPLETE"
+      },
+      "evidence": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "evidence/answer.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "limitations": {
+        "const": [
+          "ONE_THREE_DIMENSIONAL_CUBE",
+          "VERTEX_SIGN_CONE_MODEL_ONLY",
+          "GENERAL_ILLUMINATION_CONJECTURE_NOT_ASSESSED"
+        ]
+      }
+    },
+    "$defs": {
+      "direction": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 1
+        }
+      }
+    }
+  },
+  "verification_record": null,
+  "public_notes": "Exact weak-versus-strict illumination audit for the three-dimensional cube only.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list."
+}

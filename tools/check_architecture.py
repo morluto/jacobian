@@ -213,6 +213,10 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         ),
         PurePosixPath(
             "benchmarks/validation/conjecture_probes_v1/"
+            "test_totient_preimage_completeness_certificate.py"
+        ),
+        PurePosixPath(
+            "benchmarks/validation/conjecture_probes_v1/"
             "test_yang_mills_gauge_invariance_certificate.py"
         ),
         PurePosixPath(

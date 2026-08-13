@@ -13,6 +13,11 @@ ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/perfect-cuboid-scope-audit"
 
 
+def test_public_instruction_specifies_schema_version_as_json_string() -> None:
+    instruction = (TASK / "instruction.md").read_text()
+    assert 'Use schema version `1` (the JSON string\n`"1"`)' in instruction
+
+
 def _case(tmp_path: Path) -> tuple[Path, Path, dict]:
     app = tmp_path / "app"
     logs = tmp_path / "logs"

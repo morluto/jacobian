@@ -19,10 +19,10 @@ embed `RationalMatrix` or `IntegerMatrix` and apply their own 256-digit
 execution budget via `require_matrix_scalar_digits`. The shared matrix models
 themselves permit up to 32,768 canonical digits; each operation request
 tightens this to 256 decimal digits per scalar component before computation.
-Result models reuse the same shared types directly—`RrefResult.reduced_matrix`
-is a `RationalMatrix`, `SmithNormalFormResult.normal_form` is an
-`IntegerMatrix`, and so on—so producer and consumer share one canonical wire
-and persistence form without per-operation matrix schemas.
+Result models use the provider-independent domain values directly—`RrefResult.reduced_matrix`
+is a `RationalMatrix`, and `SmithNormalForm.normal_form` is an
+`IntegerMatrix`, and so on—so producer and consumer share typed values
+without per-operation matrix schemas.
 
 ## Conversion and kernel layer
 

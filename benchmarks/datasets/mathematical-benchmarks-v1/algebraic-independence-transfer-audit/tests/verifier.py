@@ -67,7 +67,7 @@ _EVIDENCE_FACTS = {
         re.compile(r"\brational\s+(?:numbers?|coefficients?)\b"),
     ),
     "independence_theorem": (
-        re.compile(r"\balgebraic\s+independence\b"),
+        re.compile(r"\balgebraic(?:\s+|-)independence\b"),
         re.compile(r"\bmodular[- ]form\s+independence\b"),
     ),
     "trusted_premise": (

@@ -139,3 +139,58 @@ def test_exact_farkas_slice_rejects_missing_evidence_envelope(tmp_path: Path) ->
     rejected = support._run_verifier(task, app, logs)
     assert rejected.details["evidence_validity"] == 0.0
     assert rejected.reward == 0.0
+
+
+def test_exact_farkas_slice_accepts_large_valid_evidence_padding(
+    tmp_path: Path,
+) -> None:
+    """Legal JSON whitespace must not create a hidden evidence-size limit."""
+    task, app, logs = _prepare_farkas_slice_case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path = app / "evidence" / "farkas-slice-certificate.json"
+    evidence_path.write_text(
+        " \n" * (600 * 1024)
+        + json.dumps(
+            {
+                "schema_version": "1",
+                "task_id": submission["task_id"],
+                "result": submission["result"],
+                "limitations": submission["limitations"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+        + " " * (600 * 1024)
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("prefix,suffix", [("garbage", ""), ("", "garbage")])
+def test_exact_farkas_slice_rejects_evidence_json_garbage(
+    tmp_path: Path,
+    prefix: str,
+    suffix: str,
+) -> None:
+    """Streaming acceptance must still reject content outside the JSON value."""
+    task, app, logs = _prepare_farkas_slice_case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence_path = app / "evidence" / "farkas-slice-certificate.json"
+    payload = {
+        "schema_version": "1",
+        "task_id": submission["task_id"],
+        "result": submission["result"],
+        "limitations": submission["limitations"],
+    }
+    evidence_path.write_text(prefix + json.dumps(payload) + suffix)
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0

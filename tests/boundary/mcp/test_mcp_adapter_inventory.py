@@ -173,7 +173,7 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 {
                     "request": {
                         "op": "search",
-                        "query": "compute exact event probability",
+                        "query": "quuxonium frobnicator",
                         "domain": "arithmetic",
                     }
                 },

@@ -1,0 +1,756 @@
+{
+  "analysis": {
+    "bootstrap_repetitions": 2000,
+    "held_out": true,
+    "mode": "FROZEN_PAIRED_ACTIVE_INTERVENTION_FAMILY_HELD_OUT_KNN",
+    "predictive_association_is_not_behavioral_effect": true,
+    "transductive": false
+  },
+  "analyzer_sha256": "sha256:0e78e5e21252d106aacd5771a7398860d27c28cf243fef5c1c246ec06f4e2e58",
+  "causal_claim_authorized": false,
+  "collector_sha256": "sha256:ada247623e3d533b8383a49d91f868646987bc194520b494331368d293bbad3b",
+  "config_sha256": "sha256:25ae0ecf5b2f918e02e8dc13fab20dc98d4a7f6a2f4ce7418154b139aff7088d",
+  "dataset": {
+    "coverage_checks": {
+      "checker_rejections": false,
+      "checker_use_trajectories": true,
+      "complete_pairs": true,
+      "completed_trials": true,
+      "eligible_diagnostics_per_arm": true,
+      "families": true,
+      "no_tool_trajectories": false,
+      "recovered_trajectories": false,
+      "server_tool_trajectories_per_arm": true,
+      "tool_failure_trajectories": false,
+      "treatment_adherence": false
+    },
+    "eligible": false,
+    "family_count": 4,
+    "pair_count": 16,
+    "task_count": 8,
+    "treatment_adherence_condition_counts": {
+      "all_conditions": 5,
+      "final_note_after_substantive_before_final": 9,
+      "first_note_before_substantive": 10,
+      "minimum_two_successful_notes": 11,
+      "official_skill_loaded": 15
+    },
+    "treatment_adherent_count": 5,
+    "trial_count": 32
+  },
+  "decision": "INCONCLUSIVE_RESEARCH_ONLY",
+  "decision_reasons": [
+    "This active visible-reasoning intervention cannot authorize passive retention or a production observer change.",
+    "At least one frozen coverage gate failed.",
+    "The frozen strong-b-star information rule was not satisfied.",
+    "The frozen policy-equivalence rule was not satisfied."
+  ],
+  "event_coverage": {
+    "checker_state_counts": {
+      "ACCEPTED_ONLY": 13,
+      "NO_CHECKER": 19
+    },
+    "recovery_state_counts": {
+      "NO_RECOVERY_OPPORTUNITY": 31,
+      "RECOVERED": 1
+    },
+    "server_event_candidates": 165,
+    "server_events_recorded": 165,
+    "server_tool_trajectories_by_arm": {
+      "control": 16,
+      "internalcot": 16
+    },
+    "successful_producer_checker_chains": 7,
+    "tool_failure_state_counts_by_arm": {
+      "control": {
+        "CLEAN": 13,
+        "DISCOVERY_ONLY": 3
+      },
+      "internalcot": {
+        "CLEAN": 12,
+        "DISCOVERY_ONLY": 3,
+        "RECOVERED": 1
+      }
+    }
+  },
+  "evidence_class": "PAIRED_ACTIVE_VISIBLE_REASONING_INTERVENTION",
+  "limitations": [
+    "The selected tasks were previously observed in passive #1259 work; blocking controls task identity but this is not an unseen-task capability evaluation.",
+    "The paired contrast identifies the bundled prompt, skill, and CLI intervention, not internalcot notes in isolation.",
+    "Conditional b and b_star gains are held-out predictive associations; paired behavior effects are a separate estimand.",
+    "Thirty-two non-deterministic weak-model trials provide limited uncertainty resolution.",
+    "No hidden reasoning, raw internalcot notes, raw agent messages, prompts, submissions, tool arguments, tool results, or verifier internals are committed."
+  ],
+  "observability": {
+    "b_star_minus_b_mean_macro_f1": 0.008762274399529313,
+    "b_star_minus_b_task_bootstrap_95": {
+      "lower_95": -0.0559730471034921,
+      "upper_95": 0.0727311238896605
+    },
+    "common_eligible_diagnostics": [
+      "checker_state",
+      "next_tool_action_class",
+      "tool_failure_state"
+    ],
+    "conditional_visible_information": {
+      "control": {
+        "mean_macro_f1": 0.0059952211912996005,
+        "per_diagnostic_macro_f1": {
+          "checker_state": 0.0,
+          "next_tool_action_class": -0.036715191126955926,
+          "tool_failure_state": 0.05470085470085473
+        },
+        "task_bootstrap_95": {
+          "lower_95": -0.046260667241301213,
+          "upper_95": 0.06556335410391424
+        },
+        "visible_source": "b"
+      },
+      "internalcot": {
+        "mean_macro_f1": 0.014757495590828914,
+        "per_diagnostic_macro_f1": {
+          "checker_state": 0.0,
+          "next_tool_action_class": 0.04427248677248674,
+          "tool_failure_state": 0.0
+        },
+        "task_bootstrap_95": {
+          "lower_95": 0.000798671546094217,
+          "upper_95": 0.03440837578768615
+        },
+        "visible_source": "b_star"
+      }
+    },
+    "diagnostics_by_arm": {
+      "control": {
+        "checker_state": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.1875,
+              "balanced_accuracy": 0.18253968253968253,
+              "macro_f1": 0.1843137254901961
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.8125,
+              "balanced_accuracy": 0.8333333333333333,
+              "macro_f1": 0.8117647058823529
+            }
+          },
+          "class_counts": {
+            "ACCEPTED_ONLY": 7,
+            "NO_CHECKER": 9
+          },
+          "conditions": {
+            "x+y+b+tau_tools": {
+              "accuracy": 0.6875,
+              "balanced_accuracy": 0.6428571428571428,
+              "macro_f1": 0.6135265700483092,
+              "task_bootstrap_95": {
+                "lower_95": 0.30434782608695654,
+                "upper_95": 0.9307359307359306
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.6875,
+              "balanced_accuracy": 0.6428571428571428,
+              "macro_f1": 0.6135265700483092,
+              "task_bootstrap_95": {
+                "lower_95": 0.28744939271255066,
+                "upper_95": 0.9227053140096619
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        },
+        "mathematical_milestone": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0
+            }
+          },
+          "class_counts": {
+            "REACHED": 16
+          },
+          "conditions": {
+            "x+y+b+tau_tools": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0,
+              "task_bootstrap_95": {
+                "lower_95": 1.0,
+                "upper_95": 1.0
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0,
+              "task_bootstrap_95": {
+                "lower_95": 1.0,
+                "upper_95": 1.0
+              }
+            }
+          },
+          "eligible": false,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        },
+        "next_tool_action_class": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.5375,
+              "balanced_accuracy": 0.25,
+              "macro_f1": 0.17479674796747965
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.5375,
+              "balanced_accuracy": 0.25,
+              "macro_f1": 0.17479674796747965
+            }
+          },
+          "class_counts": {
+            "FIND": 43,
+            "RUN_CHECKER": 8,
+            "RUN_PRODUCER": 13,
+            "TERMINAL": 16
+          },
+          "conditions": {
+            "x+y+b+tau_tools": {
+              "accuracy": 0.6,
+              "balanced_accuracy": 0.4086258944543828,
+              "macro_f1": 0.4044612794612794,
+              "task_bootstrap_95": {
+                "lower_95": 0.30995475113122173,
+                "upper_95": 0.4792560024606922
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.6375,
+              "balanced_accuracy": 0.4394845706618962,
+              "macro_f1": 0.44117647058823534,
+              "task_bootstrap_95": {
+                "lower_95": 0.2875,
+                "upper_95": 0.5696262956901255
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 80,
+          "task_count": 8
+        },
+        "recovery_state": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0
+            }
+          },
+          "class_counts": {
+            "NO_RECOVERY_OPPORTUNITY": 16
+          },
+          "conditions": {
+            "x+y+b+tau_tools": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0,
+              "task_bootstrap_95": {
+                "lower_95": 1.0,
+                "upper_95": 1.0
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 1.0,
+              "balanced_accuracy": 1.0,
+              "macro_f1": 1.0,
+              "task_bootstrap_95": {
+                "lower_95": 1.0,
+                "upper_95": 1.0
+              }
+            }
+          },
+          "eligible": false,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        },
+        "tool_failure_state": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.8125,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4482758620689655
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.8333333333333333,
+              "macro_f1": 0.8814814814814815
+            }
+          },
+          "class_counts": {
+            "CLEAN": 13,
+            "DISCOVERY_ONLY": 3
+          },
+          "conditions": {
+            "x+y+b+tau_tools": {
+              "accuracy": 0.8125,
+              "balanced_accuracy": 0.6282051282051282,
+              "macro_f1": 0.6444444444444445,
+              "task_bootstrap_95": {
+                "lower_95": 0.36000000000000004,
+                "upper_95": 1.0
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.75,
+              "balanced_accuracy": 0.5897435897435898,
+              "macro_f1": 0.5897435897435898,
+              "task_bootstrap_95": {
+                "lower_95": 0.3333333333333333,
+                "upper_95": 1.0
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        }
+      },
+      "internalcot": {
+        "checker_state": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.625,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.38461538461538464
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.875,
+              "balanced_accuracy": 0.9,
+              "macro_f1": 0.873015873015873
+            }
+          },
+          "class_counts": {
+            "ACCEPTED_ONLY": 6,
+            "NO_CHECKER": 10
+          },
+          "conditions": {
+            "x+y+b_star+tau_tools": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.9166666666666667,
+              "macro_f1": 0.9307359307359306,
+              "task_bootstrap_95": {
+                "lower_95": 0.709090909090909,
+                "upper_95": 1.0
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.9166666666666667,
+              "macro_f1": 0.9307359307359306,
+              "task_bootstrap_95": {
+                "lower_95": 0.6444444444444445,
+                "upper_95": 1.0
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        },
+        "mathematical_milestone": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4838709677419355
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.9666666666666667,
+              "macro_f1": 0.8160919540229885
+            }
+          },
+          "class_counts": {
+            "NOT_REACHED": 1,
+            "REACHED": 15
+          },
+          "conditions": {
+            "x+y+b_star+tau_tools": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4838709677419355,
+              "task_bootstrap_95": {
+                "lower_95": 0.4482758620689655,
+                "upper_95": 1.0
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4838709677419355,
+              "task_bootstrap_95": {
+                "lower_95": 0.4482758620689655,
+                "upper_95": 1.0
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        },
+        "next_tool_action_class": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.5263157894736842,
+              "balanced_accuracy": 0.25,
+              "macro_f1": 0.1724137931034483
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.5263157894736842,
+              "balanced_accuracy": 0.25,
+              "macro_f1": 0.1724137931034483
+            }
+          },
+          "class_counts": {
+            "FIND": 40,
+            "RUN_CHECKER": 8,
+            "RUN_PRODUCER": 12,
+            "TERMINAL": 16
+          },
+          "conditions": {
+            "x+y+b_star+tau_tools": {
+              "accuracy": 0.618421052631579,
+              "balanced_accuracy": 0.471875,
+              "macro_f1": 0.4787962962962963,
+              "task_bootstrap_95": {
+                "lower_95": 0.3685897435897436,
+                "upper_95": 0.5692848020434227
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.5789473684210527,
+              "balanced_accuracy": 0.43333333333333335,
+              "macro_f1": 0.43452380952380953,
+              "task_bootstrap_95": {
+                "lower_95": 0.3516502808988764,
+                "upper_95": 0.49504145092380386
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 76,
+          "task_count": 8
+        },
+        "recovery_state": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4838709677419355
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4838709677419355
+            }
+          },
+          "class_counts": {
+            "NO_RECOVERY_OPPORTUNITY": 15,
+            "RECOVERED": 1
+          },
+          "conditions": {
+            "x+y+b_star+tau_tools": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4838709677419355,
+              "task_bootstrap_95": {
+                "lower_95": 0.4482758620689655,
+                "upper_95": 1.0
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.9375,
+              "balanced_accuracy": 0.5,
+              "macro_f1": 0.4838709677419355,
+              "task_bootstrap_95": {
+                "lower_95": 0.4482758620689655,
+                "upper_95": 1.0
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        },
+        "tool_failure_state": {
+          "baselines": {
+            "family_heldout_global_majority": {
+              "accuracy": 0.75,
+              "balanced_accuracy": 0.3333333333333333,
+              "macro_f1": 0.2857142857142857
+            },
+            "task_identity_resubstitution_upper_bound": {
+              "accuracy": 0.75,
+              "balanced_accuracy": 0.3333333333333333,
+              "macro_f1": 0.2857142857142857
+            }
+          },
+          "class_counts": {
+            "CLEAN": 12,
+            "DISCOVERY_ONLY": 3,
+            "RECOVERED": 1
+          },
+          "conditions": {
+            "x+y+b_star+tau_tools": {
+              "accuracy": 0.8125,
+              "balanced_accuracy": 0.4444444444444444,
+              "macro_f1": 0.46296296296296297,
+              "task_bootstrap_95": {
+                "lower_95": 0.2716049382716049,
+                "upper_95": 0.9085714285714286
+              }
+            },
+            "x+y+tau_tools": {
+              "accuracy": 0.8125,
+              "balanced_accuracy": 0.4444444444444444,
+              "macro_f1": 0.46296296296296297,
+              "task_bootstrap_95": {
+                "lower_95": 0.2716049382716049,
+                "upper_95": 0.9085714285714286
+              }
+            }
+          },
+          "eligible": true,
+          "family_count": 4,
+          "row_count": 16,
+          "task_count": 8
+        }
+      }
+    },
+    "eligible_diagnostics_by_arm": {
+      "control": [
+        "next_tool_action_class",
+        "checker_state",
+        "tool_failure_state"
+      ],
+      "internalcot": [
+        "next_tool_action_class",
+        "checker_state",
+        "recovery_state",
+        "mathematical_milestone",
+        "tool_failure_state"
+      ]
+    },
+    "strong_b_star_information": false
+  },
+  "paired_behavior": {
+    "checker_use": {
+      "control_mean": 0.4375,
+      "internalcot_mean": 0.375,
+      "task_bootstrap_95": {
+        "lower_95": -0.3125,
+        "upper_95": 0.25
+      },
+      "treatment_minus_control_mean": -0.0625
+    },
+    "elapsed_seconds": {
+      "control_mean": 141.91162375,
+      "internalcot_mean": 162.498329875,
+      "task_bootstrap_95": {
+        "lower_95": -1.335237625000004,
+        "upper_95": 39.96064468750001
+      },
+      "treatment_minus_control_mean": 20.586706125
+    },
+    "host_command_count": {
+      "control_mean": 8.1875,
+      "internalcot_mean": 10.3125,
+      "task_bootstrap_95": {
+        "lower_95": 0.5,
+        "upper_95": 3.875
+      },
+      "treatment_minus_control_mean": 2.125
+    },
+    "input_tokens": {
+      "control_mean": 239635.0625,
+      "internalcot_mean": 319554.8125,
+      "task_bootstrap_95": {
+        "lower_95": 30790.6875,
+        "upper_95": 129347.25
+      },
+      "treatment_minus_control_mean": 79919.75
+    },
+    "internalcot_command_count": {
+      "control_mean": 0.0,
+      "internalcot_mean": 2.9375,
+      "task_bootstrap_95": {
+        "lower_95": 2.5,
+        "upper_95": 3.4375
+      },
+      "treatment_minus_control_mean": 2.9375
+    },
+    "internalcot_skill_bytes": {
+      "control_mean": 0.0,
+      "internalcot_mean": 4125.0,
+      "task_bootstrap_95": {
+        "lower_95": 3575.0,
+        "upper_95": 4400.0
+      },
+      "treatment_minus_control_mean": 4125.0
+    },
+    "internalcot_visible_bytes": {
+      "control_mean": 0.0,
+      "internalcot_mean": 6118.25,
+      "task_bootstrap_95": {
+        "lower_95": 5438.125,
+        "upper_95": 6799.625
+      },
+      "treatment_minus_control_mean": 6118.25
+    },
+    "jacobian_call_count": {
+      "control_mean": 4.0,
+      "internalcot_mean": 3.75,
+      "task_bootstrap_95": {
+        "lower_95": -1.0,
+        "upper_95": 0.5625
+      },
+      "treatment_minus_control_mean": -0.25
+    },
+    "mathematical_correctness": {
+      "control_mean": 1.0,
+      "internalcot_mean": 0.9375,
+      "task_bootstrap_95": {
+        "lower_95": -0.1875,
+        "upper_95": 0.0
+      },
+      "treatment_minus_control_mean": -0.0625
+    },
+    "ordinary_visible_bytes": {
+      "control_mean": 1532.8125,
+      "internalcot_mean": 2141.0,
+      "task_bootstrap_95": {
+        "lower_95": 233.0625,
+        "upper_95": 956.25
+      },
+      "treatment_minus_control_mean": 608.1875
+    },
+    "output_tokens": {
+      "control_mean": 5388.875,
+      "internalcot_mean": 6319.25,
+      "task_bootstrap_95": {
+        "lower_95": -221.3125,
+        "upper_95": 1998.8125
+      },
+      "treatment_minus_control_mean": 930.375
+    },
+    "reasoning_output_tokens": {
+      "control_mean": 2673.25,
+      "internalcot_mean": 3163.0,
+      "task_bootstrap_95": {
+        "lower_95": 32.375,
+        "upper_95": 1009.375
+      },
+      "treatment_minus_control_mean": 489.75
+    },
+    "retry_count": {
+      "control_mean": 0.0,
+      "internalcot_mean": 0.0,
+      "task_bootstrap_95": {
+        "lower_95": 0.0,
+        "upper_95": 0.0
+      },
+      "treatment_minus_control_mean": 0.0
+    },
+    "terminal_verifier_success": {
+      "control_mean": 0.5,
+      "internalcot_mean": 0.5,
+      "task_bootstrap_95": {
+        "lower_95": 0.0,
+        "upper_95": 0.0
+      },
+      "treatment_minus_control_mean": 0.0
+    },
+    "tool_adoption": {
+      "control_mean": 0.8125,
+      "internalcot_mean": 0.8125,
+      "task_bootstrap_95": {
+        "lower_95": -0.25,
+        "upper_95": 0.3125
+      },
+      "treatment_minus_control_mean": 0.0
+    },
+    "tool_error_count": {
+      "control_mean": 0.1875,
+      "internalcot_mean": 0.0,
+      "task_bootstrap_95": {
+        "lower_95": -0.4375,
+        "upper_95": 0.0
+      },
+      "treatment_minus_control_mean": -0.1875
+    },
+    "total_visible_bytes": {
+      "control_mean": 1532.8125,
+      "internalcot_mean": 8259.25,
+      "task_bootstrap_95": {
+        "lower_95": 5787.875,
+        "upper_95": 7624.5625
+      },
+      "treatment_minus_control_mean": 6726.4375
+    }
+  },
+  "policy_equivalence_supported": false,
+  "policy_intervention_detected": false,
+  "pre_run_failures": [
+    {
+      "accepted_trials": 0,
+      "model_calls": 0,
+      "outcome": "The bounded command wrapper rejected the first absolute-path validation attempt; validation was corrected before collection.",
+      "stage": "pinned_internalcot_validation"
+    },
+    {
+      "accepted_trials": 0,
+      "model_calls": 0,
+      "outcome": "The lightweight environment lacked Harbor; all eight frozen digests were revalidated with Harbor 0.20.0 before collection.",
+      "stage": "pinned_harbor_digest_validation"
+    }
+  ],
+  "production_change_authorized": false,
+  "projection_count": 32,
+  "projection_sha256": "sha256:7108b2051131ed9e8ee6837be152b0128b4ed5f6c9d06236c99aceaf1881e307",
+  "retention": {
+    "committed_evidence": "frozen contract, implementation/tests, aggregate report, counts, held-out metrics, paired behavior effects, limitations, and SHA-256 bindings only",
+    "publish_agent_messages": false,
+    "publish_hidden_reasoning": false,
+    "publish_internalcot_notes": false,
+    "publish_prompts_or_submissions": false,
+    "publish_tool_arguments_or_results": false,
+    "publish_verifier_internals": false,
+    "raw_trials": "host-local, operator-controlled, not committed"
+  },
+  "run_manifest_sha256": "sha256:5887babdf90ef69050a47ae4f1706e5559eb891ec1e46b29df64c1143d13aec6",
+  "schema_version": "1",
+  "source_sha": "c0858a87b79a4f4bc419b234f56d4712e9116514",
+  "study_id": "internalcot-visible-reasoning-intervention-v1"
+}

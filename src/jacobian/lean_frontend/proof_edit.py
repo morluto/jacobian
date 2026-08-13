@@ -248,7 +248,7 @@ class LeanProofEditAdapter:
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=output,
+                output=output if isinstance(terminal, Completed) else None,
                 artifact_uris=artifact_uris,
             ),
             verification_record_uri=(

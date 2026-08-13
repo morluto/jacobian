@@ -14,6 +14,7 @@ def _graphs() -> tuple[SimpleNamespace, SimpleNamespace, list[object]]:
         store=object(),
         schemas=object(),
         artifacts=object(),
+        values=object(),
         operations=object(),
         capabilities=SimpleNamespace(register=registered.append),
         checkers=object(),
@@ -40,6 +41,7 @@ def test_context_wires_application_verification_and_filters_excluded_adapters() 
     context.register_capability(included)
 
     assert context.verification is application.verification
+    assert context.values is core.values
     assert context.checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
     assert registered == [included]
     assert context.authorizes_bundled_checkers

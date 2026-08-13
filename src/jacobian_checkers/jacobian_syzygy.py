@@ -12,6 +12,7 @@ from fractions import Fraction
 from math import gcd
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian_checkers.bound_artifacts import bound_request
 
 
@@ -44,14 +45,21 @@ def _rational(value: object) -> Fraction:
     denominator = value["den"]
     if not isinstance(numerator, str) or not isinstance(denominator, str):
         raise ValueError("malformed rational components")
-    fraction = Fraction(int(numerator), int(denominator))
-    if numerator != str(fraction.numerator) or denominator != str(fraction.denominator):
+    fraction = Fraction(
+        parse_canonical_integer(numerator), parse_canonical_integer(denominator)
+    )
+    if numerator != format_canonical_integer(
+        fraction.numerator
+    ) or denominator != format_canonical_integer(fraction.denominator):
         raise ValueError("noncanonical rational")
     return fraction
 
 
 def _wire_rational(value: Fraction) -> dict[str, str]:
-    return {"num": str(value.numerator), "den": str(value.denominator)}
+    return {
+        "num": format_canonical_integer(value.numerator),
+        "den": format_canonical_integer(value.denominator),
+    }
 
 
 def _parse_polynomial(
@@ -363,7 +371,14 @@ def _matrix_digest(
         "source_monomial_basis": [list(item) for item in source_basis],
         "target_monomial_basis": [list(item) for item in target_basis],
         "entries": [
-            [row, column, f"{value.numerator}/{value.denominator}"]
+            [
+                row,
+                column,
+                (
+                    f"{format_canonical_integer(value.numerator)}/"
+                    f"{format_canonical_integer(value.denominator)}"
+                ),
+            ]
             for row, column, value in entries
         ],
     }
@@ -481,7 +496,9 @@ def _build_kernel_witness(
     }
 
 
-def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
+def _expected_result(source: dict[str, Any], *, operation_id: str) -> dict[str, Any]:
+    if operation_id == "polynomial.jacobian_syzygy.coefficients.materialize":
+        source = {**source, "coefficient_map_detail": "SPARSE_ENTRIES"}
     max_degree, detail = _validate_syzygy_request(source)
     variables, polynomial, source_kind, homogeneous_degree = _parse_syzygy_source(
         source
@@ -549,7 +566,7 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
             )
             break
     searched_through = first_degree if first_degree is not None else max_degree
-    return {
+    result = {
         "result_schema_version": "1",
         "variables": list(variables),
         "source_kind": source_kind,
@@ -566,16 +583,19 @@ def _expected_result(source: dict[str, Any]) -> dict[str, Any]:
         "kernel_witness": kernel_witness,
         "completion": "COMPLETE_THROUGH_BOUND",
     }
+    return result
 
 
-def check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:
+def _check_graded_jacobian_syzygy(
+    request: dict[str, Any], *, operation_id: str
+) -> dict[str, Any]:
     try:
         source, result = bound_request(
             request,
-            operation_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+            operation_id=operation_id,
             witness_format="polynomial.jacobian-syzygy.graded-fraction-replay",
         )
-        expected = _expected_result(source)
+        expected = _expected_result(source, operation_id=operation_id)
         if result != expected:
             return _reject(
                 "stored result does not match independent exact graded-map replay"
@@ -588,4 +608,23 @@ def check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
-__all__ = ["check_graded_jacobian_syzygy"]
+def check_graded_jacobian_syzygy(request: dict[str, Any]) -> dict[str, Any]:
+    return _check_graded_jacobian_syzygy(
+        request,
+        operation_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+    )
+
+
+def check_materialized_graded_jacobian_syzygy(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    return _check_graded_jacobian_syzygy(
+        request,
+        operation_id="polynomial.jacobian_syzygy.coefficients.materialize",
+    )
+
+
+__all__ = [
+    "check_graded_jacobian_syzygy",
+    "check_materialized_graded_jacobian_syzygy",
+]

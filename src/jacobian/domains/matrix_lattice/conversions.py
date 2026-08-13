@@ -7,6 +7,8 @@ from typing import Any
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.matrices import IntegerMatrix, RationalMatrix
+from jacobian.contracts.matrix_operations import DeterminantRationalMatrix
+from jacobian.math.matrices.values import SmithNormalForm
 
 __all__ = [
     "integer_matrix_from_sympy",
@@ -14,6 +16,7 @@ __all__ = [
     "rational_from_sympy",
     "rational_matrix_from_sympy",
     "rational_matrix_to_sympy",
+    "smith_normal_form_from_sympy",
 ]
 
 
@@ -30,7 +33,9 @@ def rational_from_sympy(value: Any) -> CanonicalRational:
     )
 
 
-def rational_matrix_to_sympy(matrix: RationalMatrix) -> Any:
+def rational_matrix_to_sympy(
+    matrix: RationalMatrix | DeterminantRationalMatrix,
+) -> Any:
     import sympy
 
     return sympy.Matrix(
@@ -72,4 +77,32 @@ def integer_matrix_from_sympy(matrix: Any) -> IntegerMatrix:
             )
             for row in range(matrix.rows)
         )
+    )
+
+
+def smith_normal_form_from_sympy(matrix: Any) -> SmithNormalForm:
+    """Convert one SymPy Smith form into the provider-independent value."""
+
+    import sympy
+
+    if not isinstance(matrix, sympy.MatrixBase):
+        raise TypeError("Smith backend returned a non-matrix value")
+    diagonal_count = min(matrix.rows, matrix.cols)
+    diagonal = tuple(int(matrix[index, index]) for index in range(diagonal_count))
+    rank = next(
+        (index for index, value in enumerate(diagonal) if value == 0),
+        diagonal_count,
+    )
+    if any(diagonal[index] != 0 for index in range(rank, diagonal_count)):
+        raise ValueError("Smith backend returned a nonzero factor after a zero")
+    invariant_factors = tuple(abs(value) for value in diagonal[:rank])
+    canonical = sympy.zeros(matrix.rows, matrix.cols)
+    for index, value in enumerate(invariant_factors):
+        canonical[index, index] = value
+    return SmithNormalForm(
+        normal_form=integer_matrix_from_sympy(canonical),
+        rank=rank,
+        invariant_factors=tuple(
+            format_canonical_integer(value) for value in invariant_factors
+        ),
     )

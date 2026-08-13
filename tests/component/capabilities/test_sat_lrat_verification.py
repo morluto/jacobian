@@ -167,11 +167,9 @@ def test_timeout_and_cancellation_are_fail_closed(lrat_services) -> None:
     )
     cancelled = _verify(lrat_services, cnf.artifact_uri, b"3 0 1 2 0\n", cancelled=True)
 
-    assert timed_out.output["status"] == "TIMEOUT"
-    assert timed_out.output["conclusion"] == "UNKNOWN"
+    assert timed_out.output == {}
     assert timed_out.execution.status is ExecutionStatus.TIMEOUT
-    assert cancelled.output["status"] == "CANCELLED"
-    assert cancelled.output["conclusion"] == "UNKNOWN"
+    assert cancelled.output == {}
     assert cancelled.execution.status is ExecutionStatus.CANCELLED
 
 
@@ -192,9 +190,7 @@ def test_lrat_resource_exhaustion_is_an_operational_error(
     result = _verify(lrat_services, cnf.artifact_uri, proof, limits=limits)
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["status"] == "ERROR"
-    assert result.output["conclusion"] == "UNKNOWN"
-    assert result.output["invalid_step"] is None
+    assert result.output == {}
     assert result.verification_record_uri is None
 
 

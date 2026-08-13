@@ -144,6 +144,37 @@ def test_discovery_finds_resultant_producer_from_plain_language(
         assert resultant.relevance_score > 0
 
 
+def test_discovery_maps_exceeds_bound_language_to_interval_positivity(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="verify a rational derivative exceeds a proposed bound",
+            domain="polynomial",
+            limit=10,
+        )
+    )
+
+    matches = {match.capability_id: match for match in discovered.matches}
+    assert "polynomial.interval.positivity.decide" in matches
+    assert matches["polynomial.interval.positivity.decide"].relevance_score > 0
+
+
+def test_sum_of_squares_intent_discovers_the_identity_verifier(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
+        CapabilityDiscoveryRequest(
+            query="independently verify a polynomial sum-of-squares identity",
+            limit=8,
+        )
+    )
+
+    matches = {match.capability_id: match for match in discovered.matches}
+    assert "polynomial.identity.verify" in matches
+    assert matches["polynomial.identity.verify"].relevance_score > 0
+
+
 def test_domain_intents_discover_poset_and_topology_operations(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:

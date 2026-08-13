@@ -71,9 +71,9 @@ def test_rational_function_identity_rejects_zero_denominator(
 
 
 def test_rational_function_identity_preserves_checker_rejection_as_unknown(
-    authorized_polynomial_services,
+    revocable_polynomial_services,
 ) -> None:
-    runtime = authorized_polynomial_services
+    runtime = revocable_polynomial_services
     checker_id = runtime.polynomial.rational_function_identity_checker_id
     assert checker_id is not None
     runtime.core.checkers.revoke(checker_id, reason="exercise fail-closed projection")
@@ -213,9 +213,9 @@ def test_polynomial_identity_canonicalizes_duplicate_terms(
 
 
 def test_polynomial_identity_preserves_checker_rejection_as_unknown(
-    authorized_polynomial_services,
+    revocable_polynomial_services,
 ) -> None:
-    runtime = authorized_polynomial_services
+    runtime = revocable_polynomial_services
     checker_id = runtime.polynomial.identity_checker_id
     assert checker_id is not None
     runtime.core.checkers.revoke(checker_id, reason="exercise fail-closed projection")

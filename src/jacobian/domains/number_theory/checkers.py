@@ -1,15 +1,65 @@
 """Independent checker declarations owned by the number-theory domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.capabilities import CapabilityInstallTier
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
+from jacobian.math.finite_abelian_groups import (
+    FiniteAbelianGroupFactorizationRequest,
+)
+from jacobian.provider_runtime import source_provider_runtime
 
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
 
+
+def _finite_abelian_group_checker_runtime():
+    """Measure the exhaustive group checker only when installation requests it."""
+
+    return source_provider_runtime(
+        "jacobian.finite-abelian-group-checker",
+        version="1",
+        entrypoint=(
+            "jacobian_checkers.finite_abelian_groups:"
+            "check_finite_abelian_group_exact_factorization"
+        ),
+        install_tier=CapabilityInstallTier.T1,
+        license_id="MIT",
+        features=("exhaustive-finite-group-replay", "clean-process-checker"),
+    )
+
+
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "finite_abelian_group.exact_factorization.compute",
+        FiniteAbelianGroupFactorizationRequest,
+        "check_finite_abelian_group_exact_factorization",
+        "finite-abelian-group.exact-factorization.stdlib-replay",
+        entrypoint_module="jacobian_checkers.finite_abelian_groups",
+        replay_method="standard-library exhaustive finite-group replay",
+        reason=(
+            "operator-authorized standard-library checker independently "
+            "normalizes both factors and replays every group sum"
+        ),
+        provider_runtime_factory=_finite_abelian_group_checker_runtime,
+        verification_capability_id="finite_abelian_group.exact_factorization.verify",
+        verification_title="Verify a finite abelian group factorization",
+        verification_description=(
+            "Independently normalize both bounded factors, enumerate every sum "
+            "in the declared product of cyclic groups, and verify the complete "
+            "representation histogram, decision, and first failure witnesses."
+        ),
+        verification_tags=(
+            "verification",
+            "exact",
+            "number-theory",
+            "finite-abelian-group",
+            "factorization",
+            "unique-representation",
+        ),
+    ),
     ExactReplayCheckerDeclaration(
         "integer.compute.prime_factorization",
         FactorizationRequest,

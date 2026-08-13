@@ -48,6 +48,12 @@ reproducing an environment-specific failure. The
 [testing strategy](docs/reference/testing-strategy.md) is the authoritative
 source for the change matrix, directory ownership, and the escalation rules.
 
+Coverage follows the same ownership rule. Ordinary lanes collect parent-process
+branch coverage without instrumenting every checker child. Changes to checker
+worker startup or coverage transport additionally run
+`make test-checker-subprocess-coverage`, the small lane that explicitly enables
+and verifies child-process coverage collection.
+
 ### When the quick path is not enough
 
 - **Documentation only:** `make docs-linkcheck` is the dedicated lane; CI runs

@@ -78,6 +78,7 @@ make test-provider
 make test-lean
 make test-e2e
 make test-exhaustive
+make test-checker-subprocess-coverage
 make quick
 make check
 make check-external
@@ -88,6 +89,16 @@ make check-static
 Before starting it, confirm that no other pytest job from this checkout is
 running. Concurrent runtime/store/subprocess suites can turn per-test
 timeouts into host-contention noise.
+
+Ordinary CI coverage instruments each pytest process but does not automatically
+instrument every child it launches. Independent checker calls therefore retain
+their real fresh-process behavior without each short-lived worker producing a
+coverage database. `make test-checker-subprocess-coverage` is the focused
+coverage-transport contract: it enables coverage.py's subprocess patch in an
+isolated profile, exercises accepted, rejected, malformed, and undeclared-import
+worker outcomes, and fails unless child execution is present in the combined
+data. The required aggregate coverage job includes that focused database and
+retains the repository threshold.
 
 Broad finite reference sweeps that are valuable but disproportionate for pull
 requests use the `exhaustive` marker. The component lane excludes them, and

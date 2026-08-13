@@ -92,6 +92,13 @@ test-compatibility: ## Supported-version import/API compatibility smoke.
 		tests/unit/tooling/test_ci_compatibility.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
+test-checker-subprocess-coverage: ## Prove focused checker-worker child coverage collection.
+	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) pytest -n 0 --timeout=30 \
+		tests/unit/test_checker_worker_manifest.py \
+		--cov --cov-config=.coveragerc-subprocess --cov-report= --cov-fail-under=0
+	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) coverage report \
+		--include=src/jacobian/checker_worker.py --fail-under=1
+
 test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
 	$(MAKE) test-unit
 	$(MAKE) test-component

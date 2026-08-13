@@ -258,6 +258,26 @@ def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> Non
     assert "needs.lean.result" in required
 
 
+def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    subprocess_config = (ROOT / ".coveragerc-subprocess").read_text(encoding="utf-8")
+    target = (
+        (ROOT / "Makefile")
+        .read_text(encoding="utf-8")
+        .split("test-checker-subprocess-coverage:", 1)[1]
+        .split("test-all-ci:", 1)[0]
+    )
+
+    assert 'patch = ["subprocess"]' not in pyproject
+    assert "patch = subprocess" in subprocess_config
+    assert "tests/unit/test_checker_worker_manifest.py" in target
+    assert "--cov-config=.coveragerc-subprocess" in target
+    assert "--include=src/jacobian/checker_worker.py --fail-under=1" in target
+    assert workflow.count("make test-checker-subprocess-coverage") == 1
+    assert "needs: [python, boundaries, subprocess_coverage]" in workflow
+
+
 def test_local_oracle_targets_require_explicit_scope() -> None:
     harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
     oracle = harbor.split("harbor-oracle:", 1)[1].split("harbor-oracle-task:", 1)[0]

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
 

@@ -236,9 +236,9 @@ class CheckerOperation:
             "format_version": self.format_version,
             "reason": self.reason,
         }
-        for field, value in required_text.items():
+        for field_name, value in required_text.items():
             if not value.strip():
-                raise ValueError(f"checker operation {field} must not be empty")
+                raise ValueError(f"checker operation {field_name} must not be empty")
         if not self.claim_schema_uris:
             raise ValueError("checker operation must declare a claim schema")
         if not self.semantics_uris:

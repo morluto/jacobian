@@ -1075,8 +1075,6 @@ def _hamiltonian_path(
         "path",
         "convention",
         "completion",
-        "verification_capability_id",
-        "verification_input_field",
     }:
         return False
     if (
@@ -1084,8 +1082,6 @@ def _hamiltonian_path(
         or result["order"] != len(vertices)
         or result["convention"] != "EMPTY_GRAPH_HAS_EMPTY_HAMILTONIAN_PATH"
         or result["completion"] != "COMPLETE"
-        or result["verification_capability_id"] != "graph.hamiltonian_path.verify"
-        or result["verification_input_field"] != "result_uri"
         or not isinstance(result["path"], list)
         or not all(isinstance(vertex, str) for vertex in result["path"])
     ):

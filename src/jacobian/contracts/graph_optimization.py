@@ -295,10 +295,6 @@ class GraphHamiltonianPathResult(ContractModel):
         "EMPTY_GRAPH_HAS_EMPTY_HAMILTONIAN_PATH"
     )
     completion: Literal["COMPLETE"] = "COMPLETE"
-    verification_capability_id: Literal["graph.hamiltonian_path.verify"] = (
-        "graph.hamiltonian_path.verify"
-    )
-    verification_input_field: Literal["result_uri"] = "result_uri"
 
     @model_validator(mode="after")
     def bind_decision_and_path(self) -> Self:

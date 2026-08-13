@@ -7,12 +7,12 @@ from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS,
 )
+from jacobian.domains.graph_optimization.distance_matrix import (
+    DISTANCE_MATRIX_OPERATION,
+)
 from jacobian.domains.graph_optimization.graph6 import (
     GRAPH6_CAPABILITIES,
     GRAPH6_CHECKER_DECLARATIONS,
-)
-from jacobian.domains.graph_optimization.distance_matrix import (
-    DISTANCE_MATRIX_OPERATION,
 )
 from jacobian.domains.graph_optimization.invariants import (
     EXACT_GRAPH_INVARIANT_CAPABILITIES,

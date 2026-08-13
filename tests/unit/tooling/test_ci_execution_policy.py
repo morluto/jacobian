@@ -111,12 +111,21 @@ def test_provider_opt_in_and_deployment_have_explicit_workflow_gates() -> None:
     assert "name: required" in workflow
 
 
-def test_python_job_matches_ordinary_make_check_pytest() -> None:
+def test_python_jobs_use_fixed_local_semantic_targets() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert "run: make test-ordinary" in workflow
-    assert "ORDINARY_PYTEST_FLAGS := -n 4 --dist worksteal --timeout=180" in makefile
+    assert "name: python (${{ matrix.lane }})" in workflow
+    assert "lane: component" in workflow
+    assert "lane: domain" in workflow
+    assert "lane: composition" in workflow
+    assert "lane: e2e" in workflow
+    assert "lane: provider" in workflow
+    assert "run: make test-${{ matrix.lane }}" in workflow
+    assert (
+        "ORDINARY_TEST_LANES := unit component domain composition e2e provider"
+        in makefile
+    )
     assert "check: lint typecheck test-ordinary" in makefile
     assert "quick: lint typecheck test-unit" in makefile
 

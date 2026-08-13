@@ -283,6 +283,7 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
     assert set(installation.checker_ids.values()) == {None}
 
 
+@pytest.mark.timeout(60)
 def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
     tmp_path: Path,
 ) -> None:

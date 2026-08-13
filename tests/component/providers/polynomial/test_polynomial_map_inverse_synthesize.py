@@ -302,6 +302,7 @@ def test_ring_mismatches_fail_closed(polynomial_services) -> None:
         assert result.artifact_uris == (), mutation
 
 
+@pytest.mark.timeout(60)
 def test_corrupted_found_candidate_does_not_verify(
     authorized_polynomial_services,
 ) -> None:

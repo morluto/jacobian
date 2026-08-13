@@ -208,7 +208,14 @@ def test_proxy_compose_overlay_declares_proxy_environment() -> None:
 def test_observation_compose_overlay_declares_jacobian_service() -> None:
     parsed = yaml.safe_load(OBSERVATION_COMPOSE.read_text(encoding="utf-8"))
 
-    assert "jacobian" in parsed["services"]
+    jacobian = parsed["services"]["jacobian"]
+    command = jacobian["command"]
+
+    assert 'exec uv run --no-sync jacobian-remote-mcp "$@"' in command[0]
+    assert command[1] == "jacobian-remote-mcp"
+    assert "--transport" in command
+    assert "--allow-anonymous" in command
+    assert 'exec uv run --no-sync jacobian-mcp "$@"' not in command[0]
 
 
 def test_paired_jobs_keep_the_same_egress_allowlist() -> None:

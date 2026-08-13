@@ -186,8 +186,9 @@ class SympyPolynomialExpressionNormalizeAdapter:
             version="1",
             title="Normalize a typed rational polynomial expression",
             description=(
-                "Convert one bounded, versioned QQ-polynomial AST to canonical "
-                "sparse coefficients without parsing or evaluating user strings. "
+                "Exactly expand sums, products, and bounded integer powers in one "
+                "versioned QQ-polynomial AST to canonical sparse coefficients, "
+                "without parsing or evaluating user strings. "
                 "This is one concrete-expression outcome: finitely many "
                 "normalizations do not verify an identity parameterized over all "
                 "orders. Verify each full expression relation separately."
@@ -200,6 +201,10 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 "polynomial",
                 "symbolic",
                 "normalization",
+                "expansion",
+                "product",
+                "power",
+                "coefficients",
                 "typed-expression",
                 "exact-rational",
                 "sympy",

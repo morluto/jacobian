@@ -12,9 +12,6 @@ from jacobian.portfolio.builtin import build_builtin_portfolio
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-# Composition-lane admission category for architecture ratchets.
-COMPOSITION_ADMISSION = "WIRING"
-
 
 def test_builtin_portfolio_installs_cleanly(
     fresh_complete_runtime: JacobianRuntime,

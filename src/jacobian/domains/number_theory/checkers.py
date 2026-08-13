@@ -11,8 +11,8 @@ from jacobian.contracts.number_theory import (
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
-from jacobian.providers import flint_runtime
 from jacobian.provider_runtime import source_provider_runtime
+from jacobian.providers import flint_runtime
 
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
 

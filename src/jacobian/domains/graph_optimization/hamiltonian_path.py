@@ -110,7 +110,7 @@ HAMILTONIAN_PATH_CAPABILITY: InstalledOperation[
 ] = inline_operation(
     OperationSpec(
         operation_id="graph.hamiltonian_path.decide",
-        version="4",
+        version="5",
         title="Decide bounded Hamiltonian-path existence",
         description=(
             "Completely decide whether a supplied simple graph of order at most 18 "

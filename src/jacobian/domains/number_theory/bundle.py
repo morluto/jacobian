@@ -10,6 +10,10 @@ from jacobian.domains.number_theory.checkers import NUMBER_THEORY_EXACT_REPLAY_C
 from jacobian.domains.number_theory.derived import DERIVED_NUMBER_THEORY_CAPABILITIES
 from jacobian.domains.number_theory.divisibility import DIVISIBILITY_CAPABILITIES
 from jacobian.domains.number_theory.modular import MODULAR_CAPABILITIES
+from jacobian.domains.number_theory.modular_identity import (
+    MODULAR_IDENTITY_CAPABILITIES,
+    MODULAR_IDENTITY_CHECKERS,
+)
 from jacobian.domains.number_theory.primes import PRIME_CAPABILITIES
 from jacobian.operations import (
     DomainDiagnostics,
@@ -43,6 +47,7 @@ def build_number_theory_bundle() -> DomainBundle:
             *DIVISIBILITY_CAPABILITIES,
             *PRIME_CAPABILITIES,
             *MODULAR_CAPABILITIES,
+            *MODULAR_IDENTITY_CAPABILITIES,
             *DERIVED_NUMBER_THEORY_CAPABILITIES,
         ),
         diagnostics=DomainDiagnostics(
@@ -56,5 +61,8 @@ def build_number_theory_bundle() -> DomainBundle:
                 ),
             )
         ),
-        checker_declarations=NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
+        checker_declarations=(
+            *NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
+            *MODULAR_IDENTITY_CHECKERS,
+        ),
     )

@@ -15,7 +15,6 @@ from verifier_support import (
 W, E = Path("/app"), Path("/tests")
 MAX_INPUT_BYTES = 1_048_576
 MAX_SUBMISSION_BYTES = 1_048_576
-MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen():
@@ -198,12 +197,10 @@ def main():
         and isinstance(submission.get("evidence"), list)
         and len(submission["evidence"]) == 1
     ):
-        evidence_path = W / "evidence" / "farkas-slice-certificate.json"
-        if is_regular_bounded_file(evidence_path, max_bytes=MAX_EVIDENCE_BYTES):
-            evidence = read_evidence_json(
-                submission["evidence"][0],
-                expected_path="evidence/farkas-slice-certificate.json",
-            )
+        evidence = read_evidence_json(
+            submission["evidence"][0],
+            expected_path="evidence/farkas-slice-certificate.json",
+        )
     evidence_valid = bool(
         evidence
         and set(evidence) == {"schema_version", "task_id", "result", "limitations"}

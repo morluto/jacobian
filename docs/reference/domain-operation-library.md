@@ -145,6 +145,8 @@ Pydantic validates the complete request before computation or artifact writes.
 JSON Schema supports discovery and is not an extra built-in execution pass.
 Provider or subprocess output is separately parsed because it crosses another
 untrusted boundary.
+Only `Completed[T]` publishes `T`; non-conclusions retain diagnostics and
+artifact lineage without exposing a mathematical result.
 
 Preflight distinguishes `SUPPORTED`, `UNSUPPORTED(reason)`,
 `PROVIDER_UNAVAILABLE`, and `RESOURCE_LIMIT_EXCEEDED`. It includes bounded work,

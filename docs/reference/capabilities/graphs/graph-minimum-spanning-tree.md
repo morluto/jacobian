@@ -6,8 +6,8 @@
 minimum-total-weight spanning tree of a bounded labelled simple graph with
 exact rational edge weights. The producer remains `COMPUTED`.
 When checker authority is installed,
-`graph.spanning_tree.minimum.verify` can promote one exact stored result to
-`VERIFIED` after independent connectivity, tree, arithmetic, and
+`graph.spanning_tree.minimum.verify` can promote one exact submitted
+`{input, candidate}` claim to `VERIFIED` after independent connectivity, tree, arithmetic, and
 cycle-certificate replay.
 
 ## Input and outcome

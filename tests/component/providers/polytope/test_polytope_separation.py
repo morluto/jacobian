@@ -18,7 +18,11 @@ from tests.support.services import (
 
 from jacobian.canonical import canonicalize_json
 from jacobian.checker_authorization import install_polytope_checkers
+from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.polytope import PolytopeSeparateRequest
+from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_projection import project_operation_result
+from jacobian.polytope_capabilities import PolytopeSeparationAdapter
 from jacobian.runtime.config import CheckerAuthorityMode
 
 
@@ -106,8 +110,22 @@ def test_backend_failure_keeps_provider_detail_local(
             generator_set_uri=generators_uri,
         )
     )
+    projected = project_operation_result(
+        PolytopeSeparationAdapter(polytope_services.application.polytope).invoke(
+            CapabilityRequest(
+                capability_id="polytope.separate",
+                input={
+                    "point_uri": point_uri,
+                    "generator_set_uri": generators_uri,
+                },
+            )
+        )
+    )
 
     assert result.execution.status.value == "ERROR"
+    assert projected.execution.status is ExecutionStatus.ERROR
+    assert projected.output == {}
+    assert projected.artifact_uris == (point_uri, generators_uri)
     assert result.execution.detail == (
         "The exact polytope check failed. Retry with a smaller input; "
         "if it fails again, inspect the local Jacobian log."

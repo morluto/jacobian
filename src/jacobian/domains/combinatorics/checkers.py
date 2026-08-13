@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.combinatorics import (
+    BinomialRequest,
     CyclicDifferenceSetExtensionRequest,
     CyclicPerfectDifferenceSetRequest,
     IntegerSidonRequest,
@@ -28,6 +29,20 @@ def _combinatorics_runtime(
 
 
 COMBINATORICS_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "combinatorics.compute.binomial",
+        BinomialRequest,
+        "check_binomial",
+        "combinatorics.binomial.multiplicative-recurrence-replay",
+        entrypoint_module="jacobian_checkers.additive_combinatorics",
+        replay_method="standard-library multiplicative recurrence replay",
+        reason=(
+            "operator-authorized checker independently evaluates the bounded "
+            "binomial coefficient by an exact multiplicative recurrence without "
+            "calling math.comb or importing producer code"
+        ),
+        provider_runtime_factory=_combinatorics_runtime,
+    ),
     ExactReplayCheckerDeclaration(
         "combinatorics.integer_set.sidon.decide",
         IntegerSidonRequest,

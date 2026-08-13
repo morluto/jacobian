@@ -112,9 +112,11 @@ Completed[T] | NonConclusion | Failed
 ```
 
 Timeout, cancellation, provider failure, resource refusal, and checker
-interruption do not establish a mathematical conclusion. A completed bounded
-operation may still carry `UNKNOWN` or `INCOMPLETE` in its typed result. Exact
-computation alone does not grant independent verification.
+interruption do not establish a mathematical conclusion. Their public result
+contains diagnostics and retained artifact lineage, never a mathematical value
+or checker verdict. A completed bounded operation may still carry `UNKNOWN` or
+`INCOMPLETE` in its typed result. Exact computation alone does not grant
+independent verification.
 
 ## Values and resources
 

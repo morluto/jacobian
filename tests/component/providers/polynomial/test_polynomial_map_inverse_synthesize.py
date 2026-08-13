@@ -159,7 +159,7 @@ def test_zero_timeout_and_unknown_budget_are_explicit(
     )
 
     assert timeout.execution.status is ExecutionStatus.TIMEOUT
-    assert timeout.output["status"] == "TIMEOUT"
+    assert timeout.output == {}
     assert exhausted.output["status"] == "BUDGET_EXHAUSTED"
 
 
@@ -220,9 +220,7 @@ def test_timeout_kills_stubborn_solver_without_unbounded_wait(
     result = polynomial_services.core.capabilities.invoke(_request(degree=2))
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
-    assert result.output["status"] == "TIMEOUT"
-    assert result.output["candidate_inverse_map"] is None
-    assert result.output["noninvertibility_proved"] is False
+    assert result.output == {}
     assert process.events == [
         "start",
         "join",

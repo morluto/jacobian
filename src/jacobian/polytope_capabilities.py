@@ -73,7 +73,7 @@ class PolytopeSeparationAdapter:
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
-                output=value,
+                output=value if isinstance(terminal, Completed) else None,
                 artifact_uris=_artifact_references(value),
             ),
         )

@@ -1,5 +1,122 @@
 # Changelog
 
+## [0.12.0](https://github.com/morluto/jacobian/compare/jacobian-v0.11.0...jacobian-v0.12.0) (2026-08-13)
+
+
+### Features
+
+* add actionable checker diagnostics ([84d2f86](https://github.com/morluto/jacobian/commit/84d2f86fa18cf3d2e6aff626b85b636848669343))
+* add exact finite polynomial map values ([f3d7a7f](https://github.com/morluto/jacobian/commit/f3d7a7f2c407fdba0addebfbdf3a9e4ed27eb872))
+* add exact finite-field semantic values ([df8ad85](https://github.com/morluto/jacobian/commit/df8ad85910cdfc2573f4245e0709561e8fc22559))
+* **arithmetic:** add verified real-quadratic order ([#1287](https://github.com/morluto/jacobian/issues/1287)) ([6ad9f41](https://github.com/morluto/jacobian/commit/6ad9f41dcdeec87868e65e576fdbb8b6d3a48dcd))
+* bind complete projective lines as values ([b6e69d2](https://github.com/morluto/jacobian/commit/b6e69d2804487b7999306abc6376c5b994fa4119))
+* bind finite-field operations with provisional ports ([a980d11](https://github.com/morluto/jacobian/commit/a980d11cd8d9817d808a965ccd25ddcddf2274b9))
+* **checkers:** independently replay bounded LCM ([#1280](https://github.com/morluto/jacobian/issues/1280)) ([bbd8467](https://github.com/morluto/jacobian/commit/bbd8467640bc469af32f3e5e24d0040c0c2311d2))
+* **checkers:** verify rational LP optimum certificates ([#1279](https://github.com/morluto/jacobian/issues/1279)) ([2aca3aa](https://github.com/morluto/jacobian/commit/2aca3aa8e1bb5f77cc31fc0bdb77894d7bbd3ffd))
+* **combinatorics:** verify submitted P-recursive tables ([#1285](https://github.com/morluto/jacobian/issues/1285)) ([edd886e](https://github.com/morluto/jacobian/commit/edd886e58473a252727c0b70bc5b1868e5db9d91))
+* compose finite polynomial map operations ([7b27725](https://github.com/morluto/jacobian/commit/7b27725c0e1a8b9f34028361087f661ab2dd5eef))
+* compose the complete finite-field rank ledger ([403cf4a](https://github.com/morluto/jacobian/commit/403cf4a4f771ee055f610c4f103136d9c9f45b72))
+* compose the finite-field direction-rank slice ([a573cfc](https://github.com/morluto/jacobian/commit/a573cfc1b741d6212e3e9b537e420495cdaca35e))
+* compose typed values by opaque reference ([f1fb03a](https://github.com/morluto/jacobian/commit/f1fb03ae86f85c818a5e88c859852ad522276d8d))
+* **composition:** pass typed results to exact checkers ([#1298](https://github.com/morluto/jacobian/issues/1298)) ([abcd9a8](https://github.com/morluto/jacobian/commit/abcd9a8449beb91b7fe46d43045e54ec7800743c))
+* **geometry:** expose bounded projective flat previews ([#1294](https://github.com/morluto/jacobian/issues/1294)) ([7182818](https://github.com/morluto/jacobian/commit/7182818787b6432e43f47c1b1a4209120d6f1c04))
+* **graphs:** add canonical graph6 decoding and verification ([#1284](https://github.com/morluto/jacobian/issues/1284)) ([d178bd4](https://github.com/morluto/jacobian/commit/d178bd4518975c88d9c462f3de5e083a776ece3a))
+* **graphs:** extend bounded independence number to order 128 ([#1297](https://github.com/morluto/jacobian/issues/1297)) ([cf146a0](https://github.com/morluto/jacobian/commit/cf146a0514b63100e01d8665a677d88261146a61))
+* independently replay finite polynomial maps ([2afc7d7](https://github.com/morluto/jacobian/commit/2afc7d7cf51c2a24e3ec3307e9c26a431d03cb23))
+* independently verify finite-field map rank ([8197270](https://github.com/morluto/jacobian/commit/81972706c104e7ad21f5bc09407d3e93097525d7))
+* independently verify finite-field restriction ([4aac03a](https://github.com/morluto/jacobian/commit/4aac03af387f859382002549cad958ed43b431c3))
+* **matrix:** extend exact determinant to order 64 ([#1302](https://github.com/morluto/jacobian/issues/1302)) ([83ef960](https://github.com/morluto/jacobian/commit/83ef960577b29287d94f92c31c57a2d7fd3e3f2c))
+* **number-theory:** add modular polynomial identity verification ([#1286](https://github.com/morluto/jacobian/issues/1286)) ([ac740ca](https://github.com/morluto/jacobian/commit/ac740ca07418cc3ec9651144e6cb0498f2fda2bc))
+* tighten domain diagnostics and Gaussian inputs ([6c269fe](https://github.com/morluto/jacobian/commit/6c269fee7c2550d07ac5ae7bab5122dac55e58d9))
+
+
+### Bug Fixes
+
+* align operation effects and bounded timeout results ([3982826](https://github.com/morluto/jacobian/commit/3982826ce901a36ffb347c759c4170011eeb8117))
+* authorize immutable Mathlib package checkouts ([85352b3](https://github.com/morluto/jacobian/commit/85352b3db6d13db452afcc3eff3d37d8f867ffdc))
+* **benchmarks:** accept reordered cubic residue coverage ([#1422](https://github.com/morluto/jacobian/issues/1422)) ([4bf70a3](https://github.com/morluto/jacobian/commit/4bf70a3121e5ce27f3fef929dba408833639cc27))
+* **benchmarks:** accept reordered zero residual indices ([#1425](https://github.com/morluto/jacobian/issues/1425)) ([4872ed7](https://github.com/morluto/jacobian/commit/4872ed79c932a2ef3af3b2187a91e140a0bee0c9))
+* **benchmarks:** publish Farkas scalar replay contract ([#1309](https://github.com/morluto/jacobian/issues/1309)) ([bfacfb5](https://github.com/morluto/jacobian/commit/bfacfb5c5d7afb0ef0839381f12c4ec24eee2871))
+* bind diagnostic evidence conditions ([fd337e2](https://github.com/morluto/jacobian/commit/fd337e210bba125599ee1c6027e9fae1dbb42785))
+* bind Lean recovery claims ([309885d](https://github.com/morluto/jacobian/commit/309885df5edd90114a92663267f55235f0a2b49e))
+* bind rank results to the direction field ([2b62f9d](https://github.com/morluto/jacobian/commit/2b62f9dfa3caa04e2de0335a9c7c8817a83e3c63))
+* bind verification records to projected identities ([ea054ed](https://github.com/morluto/jacobian/commit/ea054ed5cebb554fecef98e363b454971b001ba3))
+* bound finite-field validation before computation ([3eb1164](https://github.com/morluto/jacobian/commit/3eb11643870788a31d7382e9ab1e5c54205495a8))
+* build the complete Lean release runtime ([909d341](https://github.com/morluto/jacobian/commit/909d34112b3903957c794f93f5bbbe155097b4f2))
+* **ci:** preserve required PR evidence ([#1426](https://github.com/morluto/jacobian/issues/1426)) ([364b075](https://github.com/morluto/jacobian/commit/364b0752f4422791cd35408e96dff0e6ebdbd130))
+* **ci:** sync packaged backends in container ([5d73334](https://github.com/morluto/jacobian/commit/5d73334bb10c80ff681fc8472b096dad5a86a7b8))
+* classify verification from record identity ([07164ef](https://github.com/morluto/jacobian/commit/07164ef6b85c847dbde742b0b3f330690f7d46a3))
+* confine benchmark process metadata ([b68dbd0](https://github.com/morluto/jacobian/commit/b68dbd0471c849c9546f8bd81cbc37677b2599e0))
+* correct inline verifier lineage guidance ([#1234](https://github.com/morluto/jacobian/issues/1234)) ([16a2da6](https://github.com/morluto/jacobian/commit/16a2da6b64d73c544b2ee60e8cec60ca8d6d24c8))
+* **discovery:** expose P-recursive sequence aliases ([#934](https://github.com/morluto/jacobian/issues/934)) ([3ff985b](https://github.com/morluto/jacobian/commit/3ff985bc1a2d93e76e9e0f9d488841d0b98c9ce7))
+* **discovery:** expose polynomial expansion normalization ([#1273](https://github.com/morluto/jacobian/issues/1273)) ([8e585f0](https://github.com/morluto/jacobian/commit/8e585f09a814a3533d5f1154a452e8907a863849))
+* **discovery:** surface finite expectations ([#1247](https://github.com/morluto/jacobian/issues/1247)) ([2b13f16](https://github.com/morluto/jacobian/commit/2b13f16dd16fa9f561d26faf7906f1e5a2a8f6ca))
+* **discovery:** surface polynomial bound checks ([#1250](https://github.com/morluto/jacobian/issues/1250)) ([2e579f0](https://github.com/morluto/jacobian/commit/2e579f0c6a142feefa2398dfcb3144bfaa019688))
+* **discovery:** surface rational polynomial resultants ([#1244](https://github.com/morluto/jacobian/issues/1244)) ([6e87091](https://github.com/morluto/jacobian/commit/6e87091eea58a5f26d4931f23868a0a384d412cf))
+* distinguish invalid operation results ([d8237b7](https://github.com/morluto/jacobian/commit/d8237b7ccfb1ea6e7d2a03dd2222b292c6a1a398))
+* **eval:** preserve incomplete observation evidence ([#1312](https://github.com/morluto/jacobian/issues/1312)) ([84f95c2](https://github.com/morluto/jacobian/commit/84f95c22f5446ef91f693737fe072a238d1d9715))
+* **evals:** read top-level verification records ([a7a272e](https://github.com/morluto/jacobian/commit/a7a272e0fa8171648045cae383de46e320b7e119))
+* **examples:** align cold-worker budgets and Arb discovery ([#1283](https://github.com/morluto/jacobian/issues/1283)) ([50c3fce](https://github.com/morluto/jacobian/commit/50c3fceb81c1696d2b4f50eb6efa4816d0ae0e50))
+* **finite-fields:** bound producer work before execution ([8f9132f](https://github.com/morluto/jacobian/commit/8f9132f23f7680a5a638a7be65f25baf3adf929c))
+* **finite-fields:** reject cross-field rank requests ([a6f1630](https://github.com/morluto/jacobian/commit/a6f1630b899cf72e27808d8650505463d9225d40))
+* **finite-fields:** replay ledgers before orbit aggregation ([5950271](https://github.com/morluto/jacobian/commit/5950271c41aa5eb8c849dd87be9d4da35e916ce0))
+* **finite-fields:** validate polynomial map tables ([99c2921](https://github.com/morluto/jacobian/commit/99c29212c82cf6ce114596a8cf6d5952e9bbe553))
+* **graph:** raise distance matrix order bound ([#1369](https://github.com/morluto/jacobian/issues/1369)) ([bf8b380](https://github.com/morluto/jacobian/commit/bf8b3805c304c550b58ae0eb3d4b5654c54aea51))
+* handle one-row lattice reduction ([#1203](https://github.com/morluto/jacobian/issues/1203)) ([b5826b6](https://github.com/morluto/jacobian/commit/b5826b689343857143d50e223f6bf43c6a2f2859))
+* **harbor:** launch the remote MCP observation host ([#1296](https://github.com/morluto/jacobian/issues/1296)) ([5ac9a8c](https://github.com/morluto/jacobian/commit/5ac9a8ce56ebf14d09ee79bcef2473b25b09cf3c))
+* hide internal Lean scaffold warnings ([d9c43bf](https://github.com/morluto/jacobian/commit/d9c43bf35bc34480be737608204d0f80850ecd82))
+* keep Lean recovery evidence retryable ([a89c296](https://github.com/morluto/jacobian/commit/a89c2968dec8d8a166be20ab76134aad85d21316))
+* **lean:** remove unchanged corrupt declaration caches ([#1295](https://github.com/morluto/jacobian/issues/1295)) ([da49edc](https://github.com/morluto/jacobian/commit/da49edc2ba6cbd7b8fb1c153b7e3affaf68289cc))
+* make Lean deployments portable and service-readable ([a1f7373](https://github.com/morluto/jacobian/commit/a1f737384e1fc05d00001caa88487b9638bd186a))
+* match the pinned REPL pickle response ([58c5deb](https://github.com/morluto/jacobian/commit/58c5debf65a91176d008e5f875a1e1470282a939))
+* **matrix:** publish the certified Smith input bound ([#1271](https://github.com/morluto/jacobian/issues/1271)) ([236df59](https://github.com/morluto/jacobian/commit/236df591495ad522a00e9243da4f36b78aadcfda))
+* **mcp:** consolidate local routing and status-first guidance ([#1269](https://github.com/morluto/jacobian/issues/1269)) ([9fb1412](https://github.com/morluto/jacobian/commit/9fb1412d4a36f1bac8423710d01cbefb34615e7c))
+* **polynomials:** preserve discriminant domains ([ea5d8f7](https://github.com/morluto/jacobian/commit/ea5d8f75fed0da362cac68f0edcf3931aef21eaa))
+* **polynomials:** preserve monic factor content ([9618959](https://github.com/morluto/jacobian/commit/9618959833a19c73ad5ff2498fafdb28778a3185))
+* **polynomials:** reject non-rational Groebner inputs ([82ac501](https://github.com/morluto/jacobian/commit/82ac501355901c1c62a402494c2de8c96b8eeea6))
+* preserve named Lean checker diagnostics ([28bccf0](https://github.com/morluto/jacobian/commit/28bccf0bcaccc92529b252c82dd1891ebec5d38e))
+* preserve portable Lean runtime paths ([2f39844](https://github.com/morluto/jacobian/commit/2f39844b215af4057e7ce2241c146062b5c8e8c7))
+* probe Lean before Mathlib compilation ([ae27ef1](https://github.com/morluto/jacobian/commit/ae27ef1ee3a1b0433cb663ae7dc747210bfc7f7d))
+* **providers:** validate the complete backend stack ([ece7469](https://github.com/morluto/jacobian/commit/ece746944c7184140ed3f9da9bf82b88a4a96030))
+* reclaim bounded value references by recency ([551899c](https://github.com/morluto/jacobian/commit/551899c69f3f0012a9bff775d3573ff1e5ce2592))
+* **release:** synchronize npm lockfile to 0.11.0 ([bd272f9](https://github.com/morluto/jacobian/commit/bd272f9e12f7e7cfc6c34e48945dee8e3b307c71))
+* reuse the pinned Lean toolchain on redeploy ([d67597c](https://github.com/morluto/jacobian/commit/d67597cd824447cb09092d943db13928f5c6e321))
+* run Lean frontends from immutable releases ([d5a0a26](https://github.com/morluto/jacobian/commit/d5a0a26dd8c150480983bd823e4930277e6d22d0))
+* separate Lean setup diagnostics ([f4866a9](https://github.com/morluto/jacobian/commit/f4866a9672241158686ccd6ff70bb3150f523185))
+* **skills:** align math.run payload envelope ([#1206](https://github.com/morluto/jacobian/issues/1206)) ([5265758](https://github.com/morluto/jacobian/commit/526575833ef9e849aa5366a55ac5d375d65d36fb))
+* **tests:** add __init__.py to directories with duplicate test basenames ([0ecd977](https://github.com/morluto/jacobian/commit/0ecd977b2f78b0e570a86b16351e9916d877591a))
+* update operational clients for simplified discovery ([84f51a6](https://github.com/morluto/jacobian/commit/84f51a627e4f9f57189a9f32010729d30b2da110))
+* validate root-owned Lean package checkouts ([7c02433](https://github.com/morluto/jacobian/commit/7c024339d60bb644c6c7f69b3712175597dc4645))
+* **validation:** bound public rejected-input diagnostics ([#1242](https://github.com/morluto/jacobian/issues/1242)) ([9482a9d](https://github.com/morluto/jacobian/commit/9482a9dd3fc7cc1077b051520d180d1d0627684b))
+* **verification:** bind inline records to exact values ([3f282e9](https://github.com/morluto/jacobian/commit/3f282e9927299aff1cde3c05464d85e04a14405a))
+
+
+### Performance Improvements
+
+* **lean:** cache pinned declaration metadata ([#1272](https://github.com/morluto/jacobian/issues/1272)) ([1360962](https://github.com/morluto/jacobian/commit/1360962d8a35a6d504a1d34b7ccac90477501cc3))
+
+
+### Dependencies
+
+* bump release-please action to 5.0.0 ([#1002](https://github.com/morluto/jacobian/issues/1002)) ([fd089d7](https://github.com/morluto/jacobian/commit/fd089d7962d6881f9c3860b7b6db5e02cb89c5e7))
+* **deps:** bump typer from 0.27.0 to 0.27.1 ([#1003](https://github.com/morluto/jacobian/issues/1003)) ([f55eddd](https://github.com/morluto/jacobian/commit/f55eddd91069e5dcb0abb861e74b086a087b479d))
+
+
+### Documentation
+
+* add architecture budgets to pull requests ([5a62920](https://github.com/morluto/jacobian/commit/5a62920b8adbe8763bfc075fa225a64953e63ee1))
+* clarify mathematical validation diagnostics ([5e45a93](https://github.com/morluto/jacobian/commit/5e45a933b24d128a9d7b4ba70f16141cd5239d17))
+* clarify mathematical value layering ([f491a3f](https://github.com/morluto/jacobian/commit/f491a3f5a1be58c9ebbc523688e7328369d06a0b))
+* define request-local reference lifetime ([14f49da](https://github.com/morluto/jacobian/commit/14f49da5d2291aa1b19cf66f8042ec126af022da))
+* define the atomic mathematics product ([272744d](https://github.com/morluto/jacobian/commit/272744d02600fac94b73b6863d74bfd3a691590a))
+* describe verification by record identity ([c114896](https://github.com/morluto/jacobian/commit/c114896dc75b08773c8500269b50f89e3f33785c))
+* document the finite-field native API ([5f340b8](https://github.com/morluto/jacobian/commit/5f340b861afe526e10c7b43fd1a5b94623c99082))
+* freeze the minimal composition port contract ([9a7bd57](https://github.com/morluto/jacobian/commit/9a7bd570f5c990c12b8a9d9d76f47903bd8b606b))
+* **math:** clarify semantic backend boundaries ([9e93c8a](https://github.com/morluto/jacobian/commit/9e93c8ae096f3518a97735eb9e2f13b8fcc8b546))
+* narrow discovery to implemented applicability ([53d5007](https://github.com/morluto/jacobian/commit/53d5007eda940a12b89f0c830d70278c835507bd))
+* **providers:** define mandatory but lazy backends ([e571737](https://github.com/morluto/jacobian/commit/e571737601e86df7c92b29aba8c10f40f317cfd0))
+* **topology:** add runnable invocation examples ([#1251](https://github.com/morluto/jacobian/issues/1251)) ([2b1c961](https://github.com/morluto/jacobian/commit/2b1c961ff4bbc27cd28401e19fcd7b8fbb8173d6))
+
 ## [0.11.0](https://github.com/morluto/jacobian/compare/jacobian-v0.10.0...jacobian-v0.11.0) (2026-08-10)
 
 

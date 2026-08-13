@@ -14,6 +14,7 @@ from tools.benchmark_plan.validation import validate_plan
 _ISOLATE_PREFIXES = (
     "benchmarks/validation/mathematical_benchmarks_v1/",
     "benchmarks/validation/symbolic_coordination_v1/",
+    "benchmarks/validation/conjecture_probes_v1/",
 )
 
 

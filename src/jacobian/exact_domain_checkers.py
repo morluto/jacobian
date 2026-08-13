@@ -96,9 +96,14 @@ def _declared_runtime_groups(
         ],
     ] = {}
     for installed, declaration in pairs:
-        probe = declaration.provider_runtime
+        factory = object.__getattribute__(declaration, "provider_runtime_factory")
+        probe = factory() if factory is not None else declaration.provider_runtime
         if probe is None:
             continue
+        if not isinstance(probe, CapabilityProviderRuntime):
+            raise TypeError(
+                "provider runtime factory must return CapabilityProviderRuntime"
+            )
         current = grouped.get(probe.provider)
         if current is None:
             grouped[probe.provider] = (probe, [(installed, declaration)])

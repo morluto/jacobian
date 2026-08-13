@@ -385,6 +385,7 @@ def test_installer_fails_required_replay_when_provider_is_unavailable(
         declaration,
         provider_runtime=unavailable,
         provider_runtime_factory=None,
+        optional=False,
     )
     bundles, _ = _single_matrix_declaration_bundle(declaration)
 

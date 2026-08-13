@@ -29,6 +29,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "integer.prime-factorization.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         replay_method="Python-FLINT prime-factorization replay",
         reason=(
             "operator-authorized Python-FLINT checker independent of the "
@@ -55,6 +56,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "integer.powerful.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         replay_method="Python-FLINT powerful-number replay",
         reason=(
             "operator-authorized Python-FLINT checker independent of the "
@@ -82,6 +84,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "modular.polynomial-residue-image.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         replay_method="Python-FLINT exhaustive modular-polynomial replay",
         reason=(
             "operator-authorized Python-FLINT checker independently reconstructs "

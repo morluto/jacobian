@@ -76,6 +76,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         "check_polynomial_gcd",
         "polynomial.gcd.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         supports_input=_univariate_polynomial("left", "right"),
     ),
     ExactReplayCheckerDeclaration(
@@ -84,6 +85,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         "check_polynomial_resultant",
         "polynomial.resultant.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         supports_input=_univariate_polynomial("left", "right"),
     ),
     ExactReplayCheckerDeclaration(
@@ -92,6 +94,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         "check_polynomial_discriminant",
         "polynomial.discriminant.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         supports_input=_univariate_polynomial("polynomial"),
     ),
     ExactReplayCheckerDeclaration(
@@ -100,6 +103,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         "check_polynomial_square_free",
         "polynomial.square-free.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         supports_input=_univariate_polynomial("polynomial"),
     ),
     ExactReplayCheckerDeclaration(
@@ -108,6 +112,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
         "check_polynomial_factorization",
         "polynomial.factorization.flint-replay",
         provider_runtime_factory=_flint_exact_replay_runtime,
+        optional=True,
         supports_input=_univariate_polynomial("polynomial"),
     ),
 )

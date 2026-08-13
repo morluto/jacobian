@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import json
-from functools import lru_cache
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from jsonschema.exceptions import SchemaError
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from jacobian.canonical import (
@@ -16,17 +14,17 @@ from jacobian.canonical import (
     loads_strict_json,
 )
 from jacobian.capability_errors import CapabilityError, PayloadValidationError
-from jacobian.schema_validation import check_draft202012_schema
+from jacobian.schema_compiler import SCHEMA_COMPILER, SchemaCompilationError
 
 
-@lru_cache(maxsize=1024)
 def compiled_validator(canonical_schema: bytes) -> Draft202012Validator:
-    normalized = loads_strict_json(canonical_schema)
     try:
-        check_draft202012_schema(canonical_schema)
-    except SchemaError as exc:
+        normalized = loads_strict_json(canonical_schema)
+        if not isinstance(normalized, dict):
+            raise CapabilityError("capability JSON Schema must be an object")
+        return SCHEMA_COMPILER.compile(normalized).validator
+    except SchemaCompilationError as exc:
         raise CapabilityError("capability JSON Schema is invalid") from exc
-    return Draft202012Validator(normalized)
 
 
 def validator(schema: dict[str, object]) -> Draft202012Validator:

@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Any, cast
 
-from jsonschema import Draft202012Validator, FormatChecker
-from jsonschema.exceptions import SchemaError
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.schema_validation import check_draft202012_schema
+from jacobian.schema_compiler import SCHEMA_COMPILER, SchemaCompilationError
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
 
@@ -45,51 +42,10 @@ class _PendingRegistrations:
     producer_only_schemas: set[str] = field(default_factory=set)
 
 
-@lru_cache(maxsize=1024)
-def _model_schema_bytes(model: type[BaseModel]) -> bytes:
-    """Generate one canonical JSON Schema per Pydantic model and process."""
-
-    return canonicalize_json(model.model_json_schema())
-
-
 def model_schema(model: type[BaseModel]) -> dict[str, Any]:
-    """Return a fresh copy of a cached Pydantic model JSON Schema."""
+    """Return a fresh copy of the process-compiled model JSON Schema."""
 
-    return cast(dict[str, Any], loads_strict_json(_model_schema_bytes(model)))
-
-
-def _reject_external_references(value: Any) -> None:
-    if isinstance(value, dict):
-        for keyword in ("$ref", "$dynamicRef"):
-            reference = value.get(keyword)
-            if isinstance(reference, str) and not reference.startswith("#"):
-                raise SchemaRegistryError(
-                    "registered schemas cannot resolve external or network references"
-                )
-        for nested in value.values():
-            _reject_external_references(nested)
-    elif isinstance(value, list):
-        for nested in value:
-            _reject_external_references(nested)
-
-
-@lru_cache(maxsize=1024)
-def _validated_schema(canonical_schema: bytes) -> Draft202012Validator:
-    """Validate and compile one exact schema definition per process.
-
-    Runtime construction registers the same contract schemas repeatedly across
-    isolated stores, especially in tests. The canonical bytes are the cache
-    key, so a changed schema cannot reuse an older validation result or
-    validator. The returned validator is read-only during validation.
-    """
-
-    normalized = loads_strict_json(canonical_schema)
-    _reject_external_references(normalized)
-    try:
-        check_draft202012_schema(canonical_schema)
-    except SchemaError as exc:
-        raise SchemaRegistryError("invalid Draft 2020-12 JSON Schema") from exc
-    return Draft202012Validator(normalized, format_checker=FormatChecker())
+    return SCHEMA_COMPILER.compile_model(model).definition()
 
 
 class SchemaRegistry:
@@ -144,10 +100,12 @@ class SchemaRegistry:
         # Descriptor identity is content-addressed, but an existing descriptor
         # may have been written through ArtifactRepository.register_descriptor()
         # without ever passing Draft 2020-12 validation.  Keep the validation
-        # boundary here; _validated_schema is content-cached, so repeated
+        # boundary here; SchemaCompiler is content-cached, so repeated
         # registrations still reuse the compiled validator.
-        _reject_external_references(schema)
-        _validated_schema(canonical_schema)
+        try:
+            SCHEMA_COMPILER.compile(schema)
+        except SchemaCompilationError as exc:
+            raise SchemaRegistryError(str(exc)) from exc
         schema_uri = self.store.register_descriptor(
             kind="schema",
             name=name,
@@ -183,8 +141,9 @@ class SchemaRegistry:
         """
 
         self._reconcile_pending()
-        canonical_schema = _model_schema_bytes(model)
-        schema = cast(dict[str, Any], loads_strict_json(canonical_schema))
+        compiled = SCHEMA_COMPILER.compile_model(model)
+        canonical_schema = compiled.canonical_schema
+        schema = compiled.definition()
         self._ensure_model_contract_available(
             self.store.descriptor_uri(
                 kind="schema",
@@ -285,9 +244,11 @@ class SchemaRegistry:
         definition = descriptor.get("definition")
         if not isinstance(definition, dict):
             raise SchemaRegistryError("schema descriptor has no object definition")
-        _reject_external_references(definition)
-        canonical_schema = canonicalize_json(definition)
-        _validated_schema(canonical_schema)
+        try:
+            compiled = SCHEMA_COMPILER.compile(definition)
+        except SchemaCompilationError as exc:
+            raise SchemaRegistryError(str(exc)) from exc
+        canonical_schema = compiled.canonical_schema
         if transaction_identity is None:
             self._schema_bytes[schema_uri] = canonical_schema
         return cast(dict[str, Any], loads_strict_json(canonical_schema))
@@ -317,7 +278,7 @@ class SchemaRegistry:
 
         normalized = loads_strict_json(canonicalize_json(payload))
         schema = self.resolve(schema_uri)
-        validator = _validated_schema(canonicalize_json(schema))
+        validator = SCHEMA_COMPILER.compile(schema).validator
         errors = sorted(
             validator.iter_errors(normalized),
             key=lambda error: tuple(str(part) for part in error.absolute_path),

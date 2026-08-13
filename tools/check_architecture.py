@@ -1426,6 +1426,27 @@ def _imports_jacobian_runtime(tree: ast.AST) -> bool:
     return False
 
 
+def _discarded_runtime_setup_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    violations: list[Violation] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
+            continue
+        discarded = _discarded_expensive_runtime_fixtures(node)
+        if discarded and _calls_create_runtime(node):
+            names = ", ".join(sorted(discarded))
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "expensive runtime fixtures must be the subject under test, "
+                    f"not discarded setup: {names}",
+                )
+            )
+    return tuple(violations)
+
+
 def _test_ownership_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -1445,21 +1466,7 @@ def _test_ownership_violations(
                 "focused tests must use their owning seam instead of the complete runtime",
             )
         )
-
-    for node in tree.body:
-        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
-            continue
-        discarded = _discarded_expensive_runtime_fixtures(node)
-        if discarded and _calls_create_runtime(node):
-            names = ", ".join(sorted(discarded))
-            violations.append(
-                Violation(
-                    str(relative),
-                    "test-ownership",
-                    "expensive runtime fixtures must be the subject under test, "
-                    f"not discarded setup: {names}",
-                )
-            )
+    violations.extend(_discarded_runtime_setup_violations(relative, tree))
 
     if (
         not focused_suite

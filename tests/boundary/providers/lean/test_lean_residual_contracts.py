@@ -235,13 +235,15 @@ def _stored_input_state_uri(
     )
     opened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": environment.value,
-                    "statement": "True",
-                    "tactic": "skip",
-                },
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": environment.value,
+                        "statement": "True",
+                        "tactic": "skip",
+                    },
+                )
             )
         )
     )
@@ -272,9 +274,11 @@ def _invoke_stored_state_consumer(
         adapter = metavariable
         capability_id = "lean.proof_state.metavariable_fields"
     adapter.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
-            input=request_input,
+        adapter.prepare(
+            CapabilityRequest(
+                capability_id=capability_id,
+                input=request_input,
+            )
         )
     )
 
@@ -302,14 +306,16 @@ def test_term_apply_elaborates_exact_term_and_returns_successor(
 
     result = project_operation_result(
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "P → P",
-                    "proof_prefix": ["intro P"],
-                    "term": "P",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "P → P",
+                        "proof_prefix": ["intro P"],
+                        "term": "P",
+                    },
+                )
             )
         )
     )
@@ -331,13 +337,15 @@ def test_term_apply_rejects_multiline_term(
     _, term_apply, _, _, _ = _adapters(tmp_path)
     with pytest.raises(CapabilityInvocationError) as raised:
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "True",
-                    "term": "trivial\nsorry",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "term": "trivial\nsorry",
+                    },
+                )
             )
         )
     assert raised.value.diagnostic.code == "INVALID_LEAN_TERM_APPLY_REQUEST"
@@ -359,14 +367,16 @@ def test_term_apply_fails_closed_on_rejected_term(
     )
     result = project_operation_result(
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "n = 0",
-                    "proof_prefix": ["intro n"],
-                    "term": "trivial",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "n = 0",
+                        "proof_prefix": ["intro n"],
+                        "term": "trivial",
+                    },
+                )
             )
         )
     )
@@ -411,14 +421,16 @@ def test_inspect_returns_recorded_goals_without_replay(
     )
     opened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "(P Q : Prop) → P ∧ Q",
-                    "proof_prefix": ["intro P Q"],
-                    "tactic": "constructor",
-                },
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "(P Q : Prop) → P ∧ Q",
+                        "proof_prefix": ["intro P Q"],
+                        "tactic": "constructor",
+                    },
+                )
             )
         )
     )
@@ -426,12 +438,14 @@ def test_inspect_returns_recorded_goals_without_replay(
 
     result = project_operation_result(
         inspect.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.inspect",
-                input={
-                    "environment": "CORE",
-                    "state_uri": successor_uri,
-                },
+            inspect.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.inspect",
+                    input={
+                        "environment": "CORE",
+                        "state_uri": successor_uri,
+                    },
+                )
             )
         )
     )
@@ -460,9 +474,15 @@ def test_inspect_rejects_stale_state(
     )
     opened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={"environment": "CORE", "statement": "True", "tactic": "skip"},
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "tactic": "skip",
+                    },
+                )
             )
         )
     )
@@ -477,12 +497,14 @@ def test_inspect_rejects_stale_state(
     )
     with pytest.raises(CapabilityInvocationError) as raised:
         inspect.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.inspect",
-                input={
-                    "environment": "CORE",
-                    "state_uri": stale.artifact_uri,
-                },
+            inspect.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.inspect",
+                    input={
+                        "environment": "CORE",
+                        "state_uri": stale.artifact_uri,
+                    },
+                )
             )
         )
     assert raised.value.diagnostic.code == "STALE_LEAN_PROOF_STATE"
@@ -541,14 +563,16 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     )
     opened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "P → P",
-                    "proof_prefix": ["intro P"],
-                    "tactic": "skip",
-                },
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "P → P",
+                        "proof_prefix": ["intro P"],
+                        "tactic": "skip",
+                    },
+                )
             )
         )
     )
@@ -564,9 +588,11 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
 
     result = project_operation_result(
         metavariable.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.metavariable_fields",
-                input={"environment": "CORE", "state_uri": state_uri},
+            metavariable.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.metavariable_fields",
+                    input={"environment": "CORE", "state_uri": state_uri},
+                )
             )
         )
     )
@@ -621,11 +647,14 @@ def test_premise_retrieval_projects_completed_value_at_dispatch_boundary(
         "jacobian.lean_frontend.premise_retrieval._run_repl",
         retrieve,
     )
+    adapter = LeanPremiseRetrievalAdapter(resources)
     result = project_operation_result(
-        LeanPremiseRetrievalAdapter(resources).invoke(
-            CapabilityRequest(
-                capability_id="lean.retrieve.premises",
-                input={"statement": "True", "limit": 1},
+        adapter.invoke(
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.retrieve.premises",
+                    input={"statement": "True", "limit": 1},
+                )
             )
         )
     )
@@ -647,18 +676,26 @@ def test_metavariable_fields_reject_completed_state(
     )
     opened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={"environment": "CORE", "statement": "True", "tactic": "trivial"},
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "tactic": "trivial",
+                    },
+                )
             )
         )
     )
     state_uri = opened.output["successor_states"][0]["state_uri"]
     with pytest.raises(CapabilityInvocationError) as raised:
         metavariable.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.metavariable_fields",
-                input={"environment": "CORE", "state_uri": state_uri},
+            metavariable.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.metavariable_fields",
+                    input={"environment": "CORE", "state_uri": state_uri},
+                )
             )
         )
     assert raised.value.diagnostic.code == "LEAN_PROOF_STATE_COMPLETED"
@@ -676,14 +713,16 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
     )
     opened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "P → P",
-                    "proof_prefix": ["intro P"],
-                    "tactic": "skip",
-                },
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "P → P",
+                        "proof_prefix": ["intro P"],
+                        "tactic": "skip",
+                    },
+                )
             )
         )
     )
@@ -703,9 +742,11 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
     )
     with pytest.raises(CapabilityInvocationError) as raised:
         metavariable.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.metavariable_fields",
-                input={"environment": "CORE", "state_uri": state_uri},
+            metavariable.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.metavariable_fields",
+                    input={"environment": "CORE", "state_uri": state_uri},
+                )
             )
         )
     assert raised.value.diagnostic.code == "LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED"
@@ -791,13 +832,15 @@ def test_term_apply_rejects_sorry_at_own_boundary(
     _, term_apply, _, _, _ = _adapters(tmp_path)
     with pytest.raises(CapabilityInvocationError) as raised:
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "True",
-                    "term": "sorry",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "term": "sorry",
+                    },
+                )
             )
         )
     assert raised.value.diagnostic.code == "INVALID_LEAN_TERM_APPLY_REQUEST"
@@ -811,13 +854,15 @@ def test_term_apply_rejects_admit_at_own_boundary(
     _, term_apply, _, _, _ = _adapters(tmp_path)
     with pytest.raises(CapabilityInvocationError) as raised:
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "True",
-                    "term": "admit",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "term": "admit",
+                    },
+                )
             )
         )
     assert raised.value.diagnostic.code == "INVALID_LEAN_TERM_APPLY_REQUEST"
@@ -830,13 +875,15 @@ def test_term_apply_rejects_forbidden_statement_before_execution(
 
     with pytest.raises(CapabilityInvocationError) as raised:
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "run_tac pure ()",
-                    "term": "True.intro",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "run_tac pure ()",
+                        "term": "True.intro",
+                    },
+                )
             )
         )
 
@@ -969,12 +1016,14 @@ def test_inspect_adapter_available_without_lean_runtime(
     )
     result = project_operation_result(
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.inspect",
-                input={
-                    "environment": "CORE",
-                    "state_uri": state.artifact_uri,
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.inspect",
+                    input={
+                        "environment": "CORE",
+                        "state_uri": state.artifact_uri,
+                    },
+                )
             )
         )
     )
@@ -1102,12 +1151,14 @@ def test_metavariable_fields_rejects_stale_state_before_replay(
     monkeypatch.setattr(resources.repl, "execute_clean", _unexpected_replay)
     with pytest.raises(CapabilityInvocationError) as raised:
         metavariable.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.metavariable_fields",
-                input={
-                    "environment": "CORE",
-                    "state_uri": stale.artifact_uri,
-                },
+            metavariable.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.metavariable_fields",
+                    input={
+                        "environment": "CORE",
+                        "state_uri": stale.artifact_uri,
+                    },
+                )
             )
         )
 
@@ -1159,12 +1210,14 @@ def test_inspect_rejects_forged_environment_metadata(
     )
     with pytest.raises(CapabilityInvocationError) as raised:
         inspect.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.inspect",
-                input={
-                    "environment": environment.value,
-                    "state_uri": forged.artifact_uri,
-                },
+            inspect.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.inspect",
+                    input={
+                        "environment": environment.value,
+                        "state_uri": forged.artifact_uri,
+                    },
+                )
             )
         )
     assert raised.value.diagnostic.code == "STALE_LEAN_PROOF_STATE"
@@ -1191,14 +1244,16 @@ def test_term_apply_output_is_validated_through_typed_model(
     )
     result = project_operation_result(
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "P → P",
-                    "proof_prefix": ["intro P"],
-                    "term": "P",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "P → P",
+                        "proof_prefix": ["intro P"],
+                        "term": "P",
+                    },
+                )
             )
         )
     )
@@ -1229,14 +1284,16 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
     )
     opened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "(P Q : Prop) → P ∧ Q",
-                    "proof_prefix": ["intro P Q"],
-                    "tactic": "constructor",
-                },
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "(P Q : Prop) → P ∧ Q",
+                        "proof_prefix": ["intro P Q"],
+                        "tactic": "constructor",
+                    },
+                )
             )
         )
     )
@@ -1252,9 +1309,11 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
     )
     with pytest.raises(CapabilityInvocationError) as raised:
         metavariable.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.metavariable_fields",
-                input={"environment": "CORE", "state_uri": state_uri},
+            metavariable.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.metavariable_fields",
+                    input={"environment": "CORE", "state_uri": state_uri},
+                )
             )
         )
     assert raised.value.diagnostic.code == "LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED"

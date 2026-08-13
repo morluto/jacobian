@@ -8,7 +8,7 @@ from typing import Literal
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -59,7 +59,10 @@ def install_smt_unsat_proof_checker(
     runtime: CapabilityProviderRuntime,
     *,
     authorize_checker: bool,
-) -> tuple[CapabilityAdapter | None, SmtUnsatProofCheckerInstallation]:
+) -> tuple[
+    CapabilityAdapter[SmtUnsatProofVerificationRequest] | None,
+    SmtUnsatProofCheckerInstallation,
+]:
     """Install the certificate schema and optionally authorize strict replay."""
 
     certificate_schema_uri = schemas.register_model(
@@ -96,7 +99,7 @@ def install_smt_unsat_proof_checker(
         certificate_schema_uri=certificate_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter | None = None
+    adapter: CapabilityAdapter[SmtUnsatProofVerificationRequest] | None = None
     if checker_id is not None:
         adapter = SmtUnsatProofVerificationAdapter(
             store=store,
@@ -111,8 +114,6 @@ def install_smt_unsat_proof_checker(
 
 class SmtUnsatProofVerificationAdapter:
     """Verify one compatible Alethe proof; rejection establishes nothing."""
-
-    typed_input = True
 
     def __init__(
         self,
@@ -165,8 +166,12 @@ class SmtUnsatProofVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = SmtUnsatProofVerificationRequest.model_validate(request.input)
+    def prepare(self, request: CapabilityRequest) -> SmtUnsatProofVerificationRequest:
+        return parse_capability_input(SmtUnsatProofVerificationRequest, request.input)
+
+    def invoke(
+        self, validated: SmtUnsatProofVerificationRequest
+    ) -> OperationProjection:
         try:
             resolved = self.smt.resolve_proof(validated.proof_uri)
             semantics = self.store.get(self.smt.installation.semantics_uri)

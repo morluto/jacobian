@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -652,9 +653,11 @@ class LeanStatementProposalAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanStatementProposalRequest:
         try:
-            validated = LeanStatementProposalRequest.model_validate(request.input)
+            validated = parse_capability_input(
+                LeanStatementProposalRequest, request.input
+            )
             _validate_statement(validated.proposed_statement)
         except (ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
@@ -668,6 +671,9 @@ class LeanStatementProposalAdapter:
                     ),
                 )
             ) from exc
+        return validated
+
+    def invoke(self, validated: LeanStatementProposalRequest) -> OperationProjection:
         try:
             elaboration = (
                 _elaborate_statement(
@@ -795,9 +801,11 @@ class LeanStatementCompareAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanStatementComparisonRequest:
         try:
-            validated = LeanStatementComparisonRequest.model_validate(request.input)
+            validated = parse_capability_input(
+                LeanStatementComparisonRequest, request.input
+            )
             _validate_statement(validated.statement_a)
             _validate_statement(validated.statement_b)
         except (ValidationError, ValueError) as exc:
@@ -812,6 +820,9 @@ class LeanStatementCompareAdapter:
                     ),
                 )
             ) from exc
+        return validated
+
+    def invoke(self, validated: LeanStatementComparisonRequest) -> OperationProjection:
         statements_identical = _normalize_whitespace(
             validated.statement_a
         ) == _normalize_whitespace(validated.statement_b)

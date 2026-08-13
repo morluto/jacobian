@@ -2,32 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 
+from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import CapabilityError
 from jacobian.capability_validation import validator
 from jacobian.contracts.capabilities import (
     CapabilityCatalog,
-    CapabilityDescriptor,
     CapabilityProviderAvailability,
 )
-
-
-class AdapterLike(Protocol):
-    @property
-    def descriptor(self) -> Any: ...
-
-
-class RegistryOwner(Protocol):
-    policy: Any
-    _adapters: dict[str, AdapterLike]
-    _descriptors: dict[str, CapabilityDescriptor]
 
 
 class CapabilityRegistryMixin:
     """Own descriptor admission and deterministic catalog projection."""
 
-    def register(self: Any, adapter: AdapterLike) -> None:
+    def register(self: Any, adapter: CapabilityAdapter[Any]) -> None:
         descriptor = adapter.descriptor
         if descriptor.capability_id in self._adapters:
             raise CapabilityError(

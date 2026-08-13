@@ -10,8 +10,11 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter
-from jacobian.capability_errors import CapabilityInvocationError
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
+from jacobian.capability_errors import (
+    CapabilityInvocationError,
+    enriched_invalid_request,
+)
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.capabilities import (
@@ -81,7 +84,7 @@ def install_finite_coverage(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[CapabilityAdapter | None, FiniteCoverageInstallation]:
+) -> tuple[CapabilityAdapter[Any] | None, FiniteCoverageInstallation]:
     """Register v1 finite-coverage artifacts and optionally authorize replay."""
 
     semantics_uri = store.register_descriptor(
@@ -255,25 +258,22 @@ class FiniteCoverageVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> FiniteCoverageVerifyRequest:
         try:
-            validated = FiniteCoverageVerifyRequest.model_validate(request.input)
+            return parse_capability_input(FiniteCoverageVerifyRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="INVALID_FINITE_COVERAGE_REQUEST",
-                    stage="request_validation",
-                    message=(
-                        "The complete finite-coverage request is invalid: "
-                        f"{exc.errors()[0].get('msg', 'validation failed')}"
+                enriched_invalid_request(
+                    CapabilityDiagnostic(
+                        code="INVALID_FINITE_COVERAGE_REQUEST",
+                        stage="request_validation",
+                        message="The complete finite-coverage request is invalid.",
                     ),
-                    hint=(
-                        "Use one registered v1 canonicalizer, 1 to 4096 typed scope "
-                        "items, and 1 to 64 pages containing at most 4096 items total."
-                    ),
+                    exc,
                 )
             ) from exc
 
+    def invoke(self, validated: FiniteCoverageVerifyRequest) -> OperationProjection:
         canonicalizer_id = validated.canonicalizer_id
         canonicalizer_uri = self.installation.canonicalizer_uris[canonicalizer_id]
         canonicalizer = self.store.get(canonicalizer_uri)

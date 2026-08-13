@@ -92,13 +92,15 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     # 1. lean.term.apply: open a state for `True` and apply the term `True.intro`.
     #    `exact True.intro` closes the goal `⊢ True` via the constructor term.
     opened = term_apply.invoke(
-        CapabilityRequest(
-            capability_id="lean.term.apply",
-            input={
-                "environment": "CORE",
-                "statement": "True",
-                "term": "True.intro",
-            },
+        term_apply.prepare(
+            CapabilityRequest(
+                capability_id="lean.term.apply",
+                input={
+                    "environment": "CORE",
+                    "statement": "True",
+                    "term": "True.intro",
+                },
+            )
         )
     )
     assert opened.output["accepted"] is True
@@ -109,21 +111,25 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     # 2. lean.proof_state.inspect: read the input state without replay.
     #    Reopen a non-completed state for inspection.
     reopened = proof_state.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
-            input={
-                "environment": "CORE",
-                "statement": "P → P",
-                "proof_prefix": ["intro P"],
-                "tactic": "skip",
-            },
+        proof_state.prepare(
+            CapabilityRequest(
+                capability_id="lean.proof_state.apply_tactic",
+                input={
+                    "environment": "CORE",
+                    "statement": "P → P",
+                    "proof_prefix": ["intro P"],
+                    "tactic": "skip",
+                },
+            )
         )
     )
     open_state_uri = reopened.output["successor_states"][0]["state_uri"]
     inspected = inspect.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.inspect",
-            input={"environment": "CORE", "state_uri": open_state_uri},
+        inspect.prepare(
+            CapabilityRequest(
+                capability_id="lean.proof_state.inspect",
+                input={"environment": "CORE", "state_uri": open_state_uri},
+            )
         )
     )
     assert inspected.output["inspection"] == "READ_ONLY_NO_REPLAY"
@@ -132,9 +138,11 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
 
     # 3. lean.proof_state.metavariable_fields: structured fields via the helper.
     fields = metavariable.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.metavariable_fields",
-            input={"environment": "CORE", "state_uri": open_state_uri},
+        metavariable.prepare(
+            CapabilityRequest(
+                capability_id="lean.proof_state.metavariable_fields",
+                input={"environment": "CORE", "state_uri": open_state_uri},
+            )
         )
     )
     assert fields.output["coercion_provenance"] == "UNAVAILABLE"

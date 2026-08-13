@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
 from jacobian.contracts.capabilities import (
@@ -85,9 +86,11 @@ class LeanProofStateInspectAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanProofStateInspectRequest:
         try:
-            validated = LeanProofStateInspectRequest.model_validate(request.input)
+            validated = parse_capability_input(
+                LeanProofStateInspectRequest, request.input
+            )
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -97,6 +100,9 @@ class LeanProofStateInspectAdapter:
                     hint="Supply a state_uri returned by a proof-state capability.",
                 )
             ) from exc
+        return validated
+
+    def invoke(self, validated: LeanProofStateInspectRequest) -> OperationProjection:
         started = time.monotonic()
         installation: LeanCheckerInstallation = self.resources.installations[
             validated.environment

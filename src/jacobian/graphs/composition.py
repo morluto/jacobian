@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -201,9 +202,9 @@ class GraphComposeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> GraphCompositionRequest:
         try:
-            validated = GraphCompositionRequest.model_validate(request.input)
+            return parse_capability_input(GraphCompositionRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -217,6 +218,7 @@ class GraphComposeAdapter:
                 )
             ) from exc
 
+    def invoke(self, validated: GraphCompositionRequest) -> OperationProjection:
         graph_resources = _artifact_resources(self.resources)
         left = load_graph_value(graph_resources, validated.left_graph_uri)
         right = None
@@ -331,11 +333,9 @@ class GraphEnumerateNonisomorphicAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        backend_module = networkx_loader.get()
-        started = time.monotonic()
+    def prepare(self, request: CapabilityRequest) -> GraphEnumerationRequest:
         try:
-            validated = GraphEnumerationRequest.model_validate(request.input)
+            return parse_capability_input(GraphEnumerationRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -346,6 +346,9 @@ class GraphEnumerateNonisomorphicAdapter:
                 )
             ) from exc
 
+    def invoke(self, validated: GraphEnumerationRequest) -> OperationProjection:
+        backend_module = networkx_loader.get()
+        started = time.monotonic()
         order = validated.order
         limit = validated.limit
         offset = validated.offset

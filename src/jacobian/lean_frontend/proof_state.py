@@ -10,6 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 import jacobian.lean_frontend.exploration as _exploration_support
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -131,10 +132,9 @@ class LeanProofStateAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    @staticmethod
-    def _validate_request(request: CapabilityRequest) -> LeanProofStateRequest:
+    def prepare(self, request: CapabilityRequest) -> LeanProofStateRequest:
         try:
-            return LeanProofStateRequest.model_validate(request.input)
+            return parse_capability_input(LeanProofStateRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 _request_validation_diagnostic(
@@ -272,8 +272,8 @@ class LeanProofStateAdapter:
                     ) from exc
         return responses, typed_goals, accepted
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        applied = self.apply(self._validate_request(request))
+    def invoke(self, validated: LeanProofStateRequest) -> OperationProjection:
+        applied = self.apply(validated)
         return OperationProjection(
             operation_id=self.descriptor.capability_id,
             version=self.descriptor.version,

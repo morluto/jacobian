@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -88,10 +89,12 @@ class GraphNeighborhoodIndependenceAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> GraphNeighborhoodIndependenceRequest:
         try:
-            validated = GraphNeighborhoodIndependenceRequest.model_validate(
-                request.input
+            return parse_capability_input(
+                GraphNeighborhoodIndependenceRequest, request.input
             )
         except ValidationError as exc:
             raise CapabilityInvocationError(
@@ -103,6 +106,10 @@ class GraphNeighborhoodIndependenceAdapter:
                     ),
                 )
             ) from exc
+
+    def invoke(
+        self, validated: GraphNeighborhoodIndependenceRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         graph = load_graph(self.resources.graph, validated.graph_uri)
         if graph.number_of_nodes() > 256:

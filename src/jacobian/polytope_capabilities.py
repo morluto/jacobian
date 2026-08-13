@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
@@ -45,8 +46,10 @@ class PolytopeSeparationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        parsed = PolytopeSeparateRequest.model_validate(request.input)
+    def prepare(self, request: CapabilityRequest) -> PolytopeSeparateRequest:
+        return parse_capability_input(PolytopeSeparateRequest, request.input)
+
+    def invoke(self, parsed: PolytopeSeparateRequest) -> OperationProjection:
         value = self._service.separate(parsed)
         terminal = (
             Completed(

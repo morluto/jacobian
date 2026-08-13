@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -162,9 +163,11 @@ class LeanProofAxiomsAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanProofAxiomsInspectRequest:
         try:
-            validated = LeanProofAxiomsInspectRequest.model_validate(request.input)
+            validated = parse_capability_input(
+                LeanProofAxiomsInspectRequest, request.input
+            )
             _validate_source(validated.statement, validated.proof)
         except (ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
@@ -178,6 +181,9 @@ class LeanProofAxiomsAdapter:
                     ),
                 )
             ) from exc
+        return validated
+
+    def invoke(self, validated: LeanProofAxiomsInspectRequest) -> OperationProjection:
         if validated.environment not in self.resources.installations:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(

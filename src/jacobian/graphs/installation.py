@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_adapters import CapabilityAdapter
@@ -73,7 +74,7 @@ def install_graph_capabilities(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[tuple[CapabilityAdapter, ...], GraphInstallation]:
+) -> tuple[tuple[CapabilityAdapter[Any], ...], GraphInstallation]:
     """Register graph artifact contracts and return the bundled adapters."""
 
     semantics_uri = store.register_descriptor(
@@ -238,7 +239,7 @@ def install_graph_capabilities(
         certificate_schema_uri=certificate_schema_uri,
         neighborhood_checker_id=neighborhood_checker_id,
     )
-    adapters: tuple[CapabilityAdapter, ...] = (
+    adapters: tuple[CapabilityAdapter[Any], ...] = (
         GraphExplicitConstructionAdapter(construction_resources),
         GraphAtlasSearchAdapter(atlas_resources),
         GraphPropertyAdapter(invariant_resources),

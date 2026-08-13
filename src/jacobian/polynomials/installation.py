@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.checker_installation import CheckerInstaller
@@ -58,7 +60,7 @@ def install_polynomial_capabilities(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[tuple[CapabilityAdapter, ...], PolynomialInstallation]:
+) -> tuple[tuple[CapabilityAdapter[Any], ...], PolynomialInstallation]:
     """Register exact polynomial-map schemas, adapters, and optional checker."""
 
     semantics_uri = store.register_descriptor(

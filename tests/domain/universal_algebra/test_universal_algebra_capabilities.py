@@ -300,5 +300,7 @@ def test_finite_magma_table_enumeration_rejects_unsupported_order_before_writes(
     )
 
     assert result.execution.status.value == "ERROR"
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert (
+        result.diagnostics[0].code == "INVALID_FINITE_MAGMA_TABLE_ENUMERATION_REQUEST"
+    )
     assert artifact_put_calls == 0

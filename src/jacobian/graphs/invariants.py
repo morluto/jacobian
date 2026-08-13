@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import ValidationError
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -103,10 +104,9 @@ class GraphPropertyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        started = time.monotonic()
+    def prepare(self, request: CapabilityRequest) -> GraphInvariantBatchRequest:
         try:
-            validated = GraphInvariantBatchRequest.model_validate(request.input)
+            return parse_capability_input(GraphInvariantBatchRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -122,6 +122,9 @@ class GraphPropertyAdapter:
                     ),
                 )
             ) from exc
+
+    def invoke(self, validated: GraphInvariantBatchRequest) -> OperationProjection:
+        started = time.monotonic()
         graph_uri = validated.graph_uri
         graph = load_graph(self.resources.graph, graph_uri)
         names = tuple(sorted(validated.properties))

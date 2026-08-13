@@ -7,17 +7,21 @@ verified status, and verification record binding.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Any, cast
 
 import pytest
 from tests.component.capabilities.capability_service_support import (
+    TEST_RUNTIME,
     ComputedAdapter,
     CrashingAdapter,
     ForgedVerifiedAdapter,
-    InvalidOutputAdapter,
+    InvalidOutputValueAdapter,
+    MismatchedOutputAdapter,
     NotReadyProviderAdapter,
 )
 from tests.support.services import DomainTestServices, open_domain_services
 
+from jacobian.builtin_capabilities import LeanCheckAdapter
 from jacobian.capability_errors import CapabilityError
 from jacobian.capability_service import CapabilityPolicy
 from jacobian.contracts.capabilities import (
@@ -67,6 +71,57 @@ def test_provider_required_attributes_are_checked_before_first_use(
     assert result.diagnostics[0].details == {
         "provider_failure_code": "READINESS_FAILED"
     }
+
+
+def test_invalid_request_precedes_provider_readiness(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(NotReadyProviderAdapter())
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="example.not-ready-provider",
+            input={"unexpected": True},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].stage == "capability_input_validation"
+
+
+def test_published_model_must_match_installed_output_contract(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(MismatchedOutputAdapter())
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(capability_id="example.mismatched-output", input={})
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
+    assert result.output == {
+        "error": result.diagnostics[0].model_dump(mode="json", exclude_none=True)
+    }
+
+
+def test_published_model_instance_must_satisfy_its_contract(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(
+        InvalidOutputValueAdapter()
+    )
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(capability_id="example.invalid-output-value", input={})
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
 
 
 def test_unknown_capability_returns_an_actionable_result(
@@ -154,19 +209,73 @@ def test_invalid_capability_input_does_not_echo_payload(
     diagnostic = result.diagnostics[0]
     assert diagnostic.code == "INVALID_REQUEST"
     assert diagnostic.path == "value"
-    assert diagnostic.message == (
-        "The capability input does not match its advertised schema at value."
-    )
-    assert diagnostic.actual_type == "string"
-    assert diagnostic.expected == "JSON type integer"
+    assert diagnostic.message == "The capability request is invalid."
+    assert diagnostic.actual_type is None
+    assert diagnostic.expected is None
     assert "fixture-secret-value" not in diagnostic.message
-    assert diagnostic.details == {
-        "required_fields": ["value"],
-        "missing_fields": [],
-        "validator": "type",
-        "constraint": "integer",
-    }
+    assert diagnostic.hint == (
+        "1 validation error; first at value: "
+        "Request value violates validation rule int_type"
+    )
+    assert diagnostic.details == {}
     assert "fixture-secret-value" not in repr(diagnostic)
+
+
+def test_capability_input_does_not_coerce_numeric_strings(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(ComputedAdapter())
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(capability_id="example.double", input={"value": "21"})
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].path == "value"
+
+
+def test_non_json_capability_input_is_an_invalid_request(
+    capability_core_services: DomainTestServices,
+) -> None:
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(ComputedAdapter())
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(capability_id="example.double", input={"value": object()})
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].stage == "capability_input_validation"
+    assert result.diagnostics[0].path is None
+
+
+def test_lean_check_parses_its_typed_request_before_execution(
+    capability_core_services: DomainTestServices,
+) -> None:
+    class _UnexpectedLean:
+        def verify(self, **_kwargs: object) -> None:
+            raise AssertionError("invalid Lean input must not execute")
+
+    adapter = LeanCheckAdapter(
+        cast(Any, _UnexpectedLean()),
+        TEST_RUNTIME.model_copy(update={"provider": "jacobian.lean4"}),
+    )
+    core = capability_core_services.core
+    capability_core_services.installation.register_capability(adapter)
+
+    result = core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="lean.check",
+            input={"statement": "True"},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].path == "proof"
 
 
 def test_adapter_failure_does_not_expose_internal_exception_text(
@@ -193,27 +302,6 @@ def test_adapter_failure_does_not_expose_internal_exception_text(
     )
     assert "fixture" not in result.execution.detail
     assert "RuntimeError" not in result.execution.detail
-
-
-def test_schema_invalid_adapter_output_returns_a_typed_failure(
-    capability_core_services: DomainTestServices,
-) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(InvalidOutputAdapter())
-
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.invalid-output",
-            input={"value": 21},
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
-    assert result.diagnostics[0].stage == "adapter_execution"
-    assert result.diagnostics[0].path == "value"
-    assert result.diagnostics[0].actual_type == "string"
-    assert result.diagnostics[0].expected == "JSON type integer"
 
 
 def test_adapter_cannot_promote_without_a_local_verification_record(

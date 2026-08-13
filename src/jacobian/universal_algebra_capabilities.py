@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -92,7 +92,7 @@ def install_universal_algebra_capabilities(
     *,
     authorize_checker: bool,
 ) -> tuple[
-    tuple[CapabilityAdapter, ...],
+    tuple[CapabilityAdapter[Any], ...],
     UniversalAlgebraInstallation,
 ]:
     """Install exact bounded finite-magma law evaluation."""
@@ -188,7 +188,7 @@ def install_universal_algebra_capabilities(
         "jacobian.z3",
         features=("finite-magma-countermodel-search",),
     )
-    adapters: tuple[CapabilityAdapter, ...] = (evaluation,)
+    adapters: tuple[CapabilityAdapter[Any], ...] = (evaluation,)
     if search_runtime.availability is CapabilityProviderAvailability.AVAILABLE:
         adapters += (
             UniversalAlgebraSearchCountermodelAdapter(resources, search_runtime),
@@ -271,9 +271,12 @@ class UniversalAlgebraEvaluateLawsAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> UniversalAlgebraEvaluationRequest:
         try:
-            validated = UniversalAlgebraEvaluationRequest.model_validate(request.input)
+            return parse_capability_input(
+                UniversalAlgebraEvaluationRequest,
+                request.input,
+            )
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -282,6 +285,10 @@ class UniversalAlgebraEvaluateLawsAdapter:
                     message="The complete finite-magma law request is invalid.",
                 )
             ) from exc
+
+    def invoke(
+        self, validated: UniversalAlgebraEvaluationRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         problem = validated.problem
         problem_artifact = self.resources.artifacts.put(
@@ -490,10 +497,13 @@ class UniversalAlgebraSearchCountermodelAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> UniversalAlgebraCountermodelSearchRequest:
         try:
-            validated = UniversalAlgebraCountermodelSearchRequest.model_validate(
-                request.input
+            return parse_capability_input(
+                UniversalAlgebraCountermodelSearchRequest,
+                request.input,
             )
         except ValidationError as exc:
             raise CapabilityInvocationError(
@@ -503,6 +513,10 @@ class UniversalAlgebraSearchCountermodelAdapter:
                     message="The complete finite-magma countermodel request is invalid.",
                 )
             ) from exc
+
+    def invoke(
+        self, validated: UniversalAlgebraCountermodelSearchRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         try:
             search = _search_countermodel(validated)
@@ -575,9 +589,12 @@ class FiniteMagmaTableEnumerateAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> FiniteMagmaTableEnumerationRequest:
         try:
-            validated = FiniteMagmaTableEnumerationRequest.model_validate(request.input)
+            return parse_capability_input(
+                FiniteMagmaTableEnumerationRequest,
+                request.input,
+            )
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -589,6 +606,10 @@ class FiniteMagmaTableEnumerateAdapter:
                     ),
                 )
             ) from exc
+
+    def invoke(
+        self, validated: FiniteMagmaTableEnumerationRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         order = validated.order
         table_uris: list[str] = []

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -131,9 +132,14 @@ class JacobianDegreeSliceMaterializeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> JacobianDegreeSliceMaterializeRequest:
         try:
-            JacobianDegreeSliceMaterializeRequest.model_validate(request.input)
+            return parse_capability_input(
+                JacobianDegreeSliceMaterializeRequest,
+                request.input,
+            )
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 _diagnostic(
@@ -143,6 +149,10 @@ class JacobianDegreeSliceMaterializeAdapter:
                     "Use the fixed statement ID and coefficient_domain=QQ.",
                 )
             ) from exc
+
+    def invoke(
+        self, prepared: JacobianDegreeSliceMaterializeRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         system = materialize_degree_23_system()
         stored = self.context.artifacts.put(
@@ -209,10 +219,48 @@ class NullstellensatzVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> NullstellensatzVerificationRequest:
+        try:
+            return parse_capability_input(
+                NullstellensatzVerificationRequest,
+                request.input,
+            )
+        except ValidationError as exc:
+            requested_system_uri = _request_value_summary(
+                request.input.get("system_uri")
+            )
+            requested_bundle_uri = _request_value_summary(
+                request.input.get("certificate_bundle_uri")
+            )
+            raise CapabilityInvocationError(
+                _diagnostic(
+                    "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST",
+                    "artifact_resolution",
+                    "The system and certificate bundle are not a compatible bound pair.",
+                    (
+                        "Use the exact materialized system URI and a certificate bundle "
+                        "created for that system by a compatible installed producer. Do not "
+                        "substitute unrelated artifacts. Without a compatible producer, this "
+                        "verifier cannot establish infeasibility."
+                    ),
+                    expected=(
+                        f"system schema {self.installation.system_schema_uri}; "
+                        "certificate bundle schema "
+                        f"{self.installation.certificate_bundle_schema_uri}"
+                    ),
+                    details={
+                        **_failure_details(exc),
+                        "system_uri": requested_system_uri,
+                        "certificate_bundle_uri": requested_bundle_uri,
+                    },
+                )
+            ) from exc
+
+    def invoke(
+        self, validated: NullstellensatzVerificationRequest
+    ) -> OperationProjection:
         actual_artifact_type: str | None = None
         try:
-            validated = NullstellensatzVerificationRequest.model_validate(request.input)
             system_artifact = self.context.store.get(validated.system_uri)
             bundle_artifact = self.context.store.get(validated.certificate_bundle_uri)
             if (
@@ -256,15 +304,9 @@ class NullstellensatzVerificationAdapter:
             ArtifactNotFoundError,
             StorageError,
         ) as exc:
-            requested_system_uri = (
-                _request_value_summary(validated.system_uri)
-                if "validated" in locals()
-                else _request_value_summary(request.input.get("system_uri"))
-            )
-            requested_bundle_uri = (
-                _request_value_summary(validated.certificate_bundle_uri)
-                if "validated" in locals()
-                else _request_value_summary(request.input.get("certificate_bundle_uri"))
+            requested_system_uri = _request_value_summary(validated.system_uri)
+            requested_bundle_uri = _request_value_summary(
+                validated.certificate_bundle_uri
             )
             raise CapabilityInvocationError(
                 _diagnostic(

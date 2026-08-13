@@ -10,6 +10,7 @@ from typing import Any, Literal, cast
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -93,9 +94,9 @@ class GraphDegreeSequenceAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> GraphDegreeSequenceRequest:
         try:
-            validated = GraphDegreeSequenceRequest.model_validate(request.input)
+            return parse_capability_input(GraphDegreeSequenceRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -105,6 +106,8 @@ class GraphDegreeSequenceAdapter:
                     hint=("Provide between 1 and 512 nonnegative integer degrees."),
                 )
             ) from exc
+
+    def invoke(self, validated: GraphDegreeSequenceRequest) -> OperationProjection:
         started = time.monotonic()
         sequence = tuple(validated.degree_sequence)
         obstruction = _degree_sequence_obstruction(sequence)

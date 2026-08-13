@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import format_canonical_integer
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -80,12 +81,14 @@ class PolynomialSystemRationalSearchAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialSystemRationalSearchRequest:
         try:
-            validated = PolynomialSystemRationalSearchRequest.model_validate(
-                request.input
+            return parse_capability_input(
+                PolynomialSystemRationalSearchRequest, request.input
             )
-        except ValidationError as exc:
+        except (ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_POLYNOMIAL_SYSTEM_SEARCH_REQUEST",
@@ -93,6 +96,10 @@ class PolynomialSystemRationalSearchAdapter:
                     message="The bounded rational solution search request is invalid.",
                 )
             ) from exc
+
+    def invoke(
+        self, validated: PolynomialSystemRationalSearchRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         values = tuple(
             CanonicalRational(

@@ -25,7 +25,8 @@ make check
 
 Then open a pull request. `make setup` installs the locked development
 environment with the complete maintained Python backend stack. `make check`
-runs Ruff, mypy, and the same Lean-free ordinary pytest invocation CI uses.
+runs Ruff, mypy, and the same Lean-free ordinary test suite CI covers in fixed
+semantic groups.
 Open the PR once it is green, and add any explicitly relevant specialist
 validation called out below.
 

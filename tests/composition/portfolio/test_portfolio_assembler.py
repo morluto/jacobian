@@ -34,9 +34,10 @@ from jacobian.operations import (
     DomainSemantics,
     OperationSpec,
 )
-from jacobian.portfolio import PROVIDER_UNAVAILABLE, PortfolioPlan
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.model import PortfolioPlan
 from jacobian.portfolio.result import (
+    PROVIDER_UNAVAILABLE,
     BundleInstallationStatus,
     PortfolioInstallationResult,
 )

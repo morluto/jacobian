@@ -35,6 +35,9 @@ from jacobian.contracts.validated_analysis import (
     FiniteRawMomentResult,
 )
 from jacobian.domains._examples import example
+from jacobian.domains.probability.gaussian_inputs import (
+    CanonicalGaussianPolynomialMomentRequest,
+)
 from jacobian.operation_bindings import inline_operation
 from jacobian.operations import (
     OperationRefusalError,
@@ -598,7 +601,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
                 "preserving the complete coefficient-contraction ledger. This does not "
                 "establish an identity for every order."
             ),
-            request_type=GaussianPolynomialMomentRequest,
+            request_type=CanonicalGaussianPolynomialMomentRequest,
             result_type=GaussianPolynomialMomentResult,
             execute=_gaussian_polynomial_moment,
             tags=(

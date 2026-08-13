@@ -8,7 +8,7 @@ from jacobian.domains.polynomial_nullstellensatz.core import (
 from jacobian.domains.polynomial_nullstellensatz.singular import (
     PRODUCE_CAPABILITY_ID,
 )
-from jacobian.portfolio import build_builtin_portfolio
+from jacobian.portfolio.builtin import build_builtin_portfolio
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.model import JacobianRuntime
 

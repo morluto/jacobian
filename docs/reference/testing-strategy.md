@@ -28,8 +28,7 @@ make check
 
 Default `uv run pytest` collects the Lean-free ordinary `testpaths`. Use the
 Make targets that own storage, process, MCP, and Lean isolation. `make
-check-external` covers Lean and maintained-provider probes when those trees
-change.
+check-external` covers the pinned Lean specialist lane when that tree changes.
 
 `make check` is the bounded local handoff: lint, typecheck, and unit tests.
 Hosted CI runs the complete ordinary suite as six fixed semantic lanes: `unit`,
@@ -106,7 +105,20 @@ make check-static
 `make test-all-ci` is an explicit exhaustive reproduction, not a routine gate.
 Before starting it, confirm that no other pytest job from this checkout is
 running. Concurrent runtime/store/subprocess suites can turn per-test
-timeouts into host-contention noise.
+timeouts into host-contention noise. Exhaustive local targets
+(`test-all-ci`, `test-exhaustive`, `harbor-check-all`,
+`harbor-host-validation`, `harbor-oracle-all`) take an OS-locked lease in
+this worktree; focused `make test-unit` stays free. `make validation-status`
+reports whether the lease is held.
+
+GitHub Actions identity is the YAML under `.github/workflows` on the default
+branch. Registrations whose files are gone, including historical
+`agent-port-*` and `agent-rebase-*` leftovers, are historical: disable them in
+the GitHub UI and retain their run history.
+`python tools/inventory_github_workflows.py` compares files to registrations
+and never disables workflows. `python tools/restack_feature_branch.py` reports
+unique feature commits and duplicate subjects against a declared parent; it
+never force-pushes.
 
 Ordinary CI coverage instruments each pytest process but does not automatically
 instrument every child it launches. Independent checker calls therefore retain

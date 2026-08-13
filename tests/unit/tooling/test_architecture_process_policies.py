@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from tools.check_architecture import check_architecture
 
 
@@ -93,6 +94,24 @@ def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
         "tools/development_profiles.py",
         "import subprocess\n\nsubprocess.run(['uv', 'sync'])\n",
     )
+    report = check_architecture(tmp_path)
+    assert all(v.code != "subprocess-confined" for v in report.violations)
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "tools/inventory_github_workflows.py",
+        "tools/restack_feature_branch.py",
+        "tools/worktree_admission.py",
+        "tests/unit/tooling/test_restack_feature_branch.py",
+        "tests/unit/tooling/test_worktree_admission.py",
+    ],
+)
+def test_subprocess_in_listed_developer_tooling_is_allowed(
+    tmp_path: Path, relative: str
+) -> None:
+    _write(tmp_path, relative, "import subprocess\n\nsubprocess.run(['true'])\n")
     report = check_architecture(tmp_path)
     assert all(v.code != "subprocess-confined" for v in report.violations)
 

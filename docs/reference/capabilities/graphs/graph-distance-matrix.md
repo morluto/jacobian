@@ -4,8 +4,10 @@
 
 `graph.distance_matrix.compute` returns one complete matrix of exact
 unweighted shortest-path distances for a bounded finite simple undirected
-graph. The producer uses the existing `GraphInvariantRequest` graph contract,
-so inputs retain the established limit of 32 vertices and 496 edges.
+graph. The producer has a distance-matrix-owned polynomial-time contract with
+a limit of 64 vertices and 2,016 edges. This dedicated boundary does not widen
+the shared 32-vertex graph contract used by NP-hard coloring and optimization
+operations or the 18-vertex Hamiltonian-path search boundary.
 
 ## Result semantics
 

@@ -176,9 +176,14 @@ serially and reports timings, digests, and evidence paths.
 
 Both commands require an explicit task selection. The lower-level
 `harbor-sync`, `harbor-check-task`, and `harbor-oracle-task` targets remain
-available for a narrow edit loop. Use the full `make harbor-check` and explicitly
-scoped `make harbor-oracle` paths for shared tooling, schemas, registry, suite
-policy, or other control-plane changes. A full dataset Oracle requires `FULL=1`;
+available for a narrow edit loop. Use `make harbor-check` for shared static
+contracts, execution configuration, adapters, schemas, registry, suite policy,
+or other control-plane changes. Run `make harbor-plan BASE=...` to identify the
+focused executable host regressions owned by the changed paths. Reserve
+`make harbor-check-all` for changes to the shared verifier execution harness or
+an explicitly requested local portfolio-wide reproduction; ordinary
+control-plane changes must not pay for every task verifier merely because they
+live under `benchmarks/tooling`. A full dataset Oracle requires `FULL=1`;
 ordinary Oracle runs require `TASKS` and never expand an omitted selection
 implicitly.
 
@@ -210,7 +215,8 @@ contract change:
    secrets, host paths, raw caches, and floating dependencies.
 
 For a cross-cutting reward or diagnostic migration, run the complete generic
-verifier matrix in addition to selected task leaves and Oracles. Leaf tests can
+verifier matrix with `make harbor-check-all` in addition to selected task leaves
+and Oracles. Leaf tests can
 miss a task-local exception or a metadata-driven contract regression; the
 generic matrix should cover replaced and malformed visible input, malformed
 and wrong-shaped submissions, unhashable assurance values, false assurance,

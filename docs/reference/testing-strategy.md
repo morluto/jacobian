@@ -11,7 +11,7 @@ encode a required research sequence.
 | Change | First local check | Escalate when |
 | --- | --- | --- |
 | Documentation | `make docs-linkcheck` | Checked examples also run when their supported contract changes |
-| Python behavior | `make quick`, then `make check` | Add a named specialist lane when the change crosses that boundary |
+| Python behavior | `make check`, then the owning named lane | Use `make check-all` only for an intentional complete ordinary reproduction |
 | Mathematical domain | Owning domain/component tests | Add composition only for real cross-domain handoff |
 | MCP projection | Focused MCP boundary tests | Add stdio/HTTP parity when transport behavior changes |
 | Checker protocol or authority | Focused checker and authority tests | Require an independent exact-diff review |
@@ -31,10 +31,11 @@ Make targets that own storage, process, MCP, and Lean isolation. `make
 check-external` covers Lean and maintained-provider probes when those trees
 change.
 
-Hosted CI runs that same ordinary suite as six fixed semantic lanes: `unit`,
+`make check` is the bounded local handoff: lint, typecheck, and unit tests.
+Hosted CI runs the complete ordinary suite as six fixed semantic lanes: `unit`,
 `component`, `domain`, `composition`, `e2e`, and `provider`. These are static
-Make targets, not path-selected or timing-planned shards; `make check` runs all
-six in the same order.
+Make targets, not path-selected or timing-planned shards. Use the named lane
+that owns the change; `make check-all` runs all six locally in the same order.
 
 ## Test ownership
 
@@ -64,6 +65,22 @@ fixtures are reserved for complete inventory, cross-domain wiring, checker
 authorization, lifecycle, and host boundaries. One operation's request/result
 matrix belongs to its domain or component seam.
 
+Admission follows the asserted contract:
+
+- a test that names one mathematical domain belongs under that domain;
+- a test that directly validates a model belongs in unit;
+- one adapter, checker, or provider seam belongs in component;
+- composition requires a cross-domain edge, complete-portfolio invariant,
+  authority transition, hydration lifecycle, or global policy;
+- boundary tests require the real SQLite, process, MCP, Lean, or optional-provider
+  boundary they assert; and
+- e2e retains only complete caller journeys that would be materially weaker when
+  decomposed.
+
+Names such as `frontier`, `migration`, `regression`, `release`, and issue numbers
+describe history rather than ownership. Put a regression under its permanent
+semantic owner and give it a descriptive behavioral name.
+
 The canonical commands are:
 
 ```sh
@@ -77,8 +94,11 @@ make test-mcp
 make test-provider
 make test-lean
 make test-e2e
+make test-exhaustive
+make test-checker-subprocess-coverage
 make quick
 make check
+make check-all
 make check-external
 make check-static
 ```
@@ -87,6 +107,22 @@ make check-static
 Before starting it, confirm that no other pytest job from this checkout is
 running. Concurrent runtime/store/subprocess suites can turn per-test
 timeouts into host-contention noise.
+
+Ordinary CI coverage instruments each pytest process but does not automatically
+instrument every child it launches. Independent checker calls therefore retain
+their real fresh-process behavior without each short-lived worker producing a
+coverage database. `make test-checker-subprocess-coverage` is the focused
+coverage-transport contract: it enables coverage.py's subprocess patch in an
+isolated profile, exercises accepted, rejected, malformed, and undeclared-import
+worker outcomes, and fails unless child execution is present in the combined
+data. The required aggregate coverage job includes that focused database and
+retains the repository threshold.
+
+Broad finite reference sweeps that are valuable but disproportionate for pull
+requests use the `exhaustive` marker. The component lane excludes them, and
+scheduled validation owns `make test-exhaustive`. Keep a representative
+behavioral case in the ordinary owning lane; do not use the marker to defer
+boundary, authorization, persistence, or public-API coverage.
 
 ## Test principles
 
@@ -104,6 +140,19 @@ carrier invariance, and algebraic invariants when a property expresses the
 contract better than examples. Use representative storage and process seams
 when the claim depends on SQLite, filesystem publication, subprocesses, or
 cancellation.
+
+Let pytest own collection and fixture lifetime through the narrowest owning
+`conftest.py`. Broaden fixture scope only for reusable installation state whose
+tests do not mutate it; tests that revoke authority, patch shared services, or
+otherwise change runtime state retain an isolated fixture.
+
+For repeated installation, first select the smallest production domain bundle.
+Group read-only assertions around an immutable module-scoped fixture only when
+isolation permits it. If measurement still justifies reuse for mutating tests,
+clone a quiesced state template into a private test directory. Keep a
+function-scoped cold start when construction, authorization, or hydration is the
+contract. Do not introduce a universal fixture registry or installation-plan
+abstraction for test convenience.
 
 Do not substitute source-reading tests for caller-visible behavior. If a
 behavioral regression proof is infeasible, state the proof gap.
@@ -268,11 +317,11 @@ skill and exact task validation path when those files change.
 
 After implementation freezes the behavioral tree:
 
-1. run `make check`;
+1. run `make check` and the named lane that owns the change;
 2. run any named specialist lane the change actually crossed;
 3. complete any required independent exact-diff review;
 4. resolve its consolidated findings;
-5. rerun `make check` on the final tree; and
+5. rerun the invalidated focused checks on the final tree; and
 6. report only evidence that actually ran, including material proof gaps.
 
 After any edit, rerun only checks whose evidence the edit invalidated. Do not

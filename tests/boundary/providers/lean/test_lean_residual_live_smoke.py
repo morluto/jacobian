@@ -94,13 +94,15 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     #    `exact True.intro` closes the goal `⊢ True` via the constructor term.
     opened = project_operation_result(
         term_apply.invoke(
-            CapabilityRequest(
-                capability_id="lean.term.apply",
-                input={
-                    "environment": "CORE",
-                    "statement": "True",
-                    "term": "True.intro",
-                },
+            term_apply.prepare(
+                CapabilityRequest(
+                    capability_id="lean.term.apply",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "term": "True.intro",
+                    },
+                )
             )
         )
     )
@@ -113,23 +115,27 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     #    Reopen a non-completed state for inspection.
     reopened = project_operation_result(
         proof_state.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "P → P",
-                    "proof_prefix": ["intro P"],
-                    "tactic": "skip",
-                },
+            proof_state.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "P → P",
+                        "proof_prefix": ["intro P"],
+                        "tactic": "skip",
+                    },
+                )
             )
         )
     )
     open_state_uri = reopened.output["successor_states"][0]["state_uri"]
     inspected = project_operation_result(
         inspect.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.inspect",
-                input={"environment": "CORE", "state_uri": open_state_uri},
+            inspect.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.inspect",
+                    input={"environment": "CORE", "state_uri": open_state_uri},
+                )
             )
         )
     )
@@ -140,9 +146,11 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     # 3. lean.proof_state.metavariable_fields: structured fields via the helper.
     fields = project_operation_result(
         metavariable.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.metavariable_fields",
-                input={"environment": "CORE", "state_uri": open_state_uri},
+            metavariable.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.metavariable_fields",
+                    input={"environment": "CORE", "state_uri": open_state_uri},
+                )
             )
         )
     )

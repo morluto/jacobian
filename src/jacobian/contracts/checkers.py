@@ -8,6 +8,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
+from jacobian.canonical import canonicalize_json, sha256_digest
 from jacobian.contracts._verification_rules import (
     validate_certified_relationship_endpoints,
     validate_decisive_replayable_evidence,
@@ -145,6 +146,14 @@ class CheckerManifest(ContractModel):
         _require_exact_external_runtime(self.provider_runtime, self.entrypoint)
         return self
 
+    def implementation_digest(self) -> str:
+        """Return the canonical identity digest bound by checker records."""
+
+        return sha256_digest(
+            b"jacobian.checker-implementation.v2\x00"
+            + canonicalize_json(self.model_dump(mode="json", exclude_none=True))
+        )
+
 
 _REQUIRED_WORKER_DISTRIBUTIONS = frozenset({"pydantic", "pydantic-core", "rfc8785"})
 
@@ -218,6 +227,8 @@ class CheckerRegistration(ContractModel):
 
     @model_validator(mode="after")
     def require_manifest_scope(self) -> Self:
+        if self.implementation_digest != self.implementation.implementation_digest():
+            raise ValueError("checker implementation digest must match its manifest")
         expected_contracts = tuple(
             sorted(
                 {

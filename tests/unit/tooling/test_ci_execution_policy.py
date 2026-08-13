@@ -155,9 +155,32 @@ def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None
 
     assert "$(MAKE) test-component" in all_ci
     assert "$(MAKE) test-exhaustive" in all_ci
+    assert "$(WORKTREE_ADMISSION) run --target test-all-ci" in all_ci
     assert all_ci.index("$(MAKE) test-component") < all_ci.index(
         "$(MAKE) test-exhaustive"
     )
+
+
+def test_focused_unit_lane_skips_worktree_admission() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    unit = makefile.split("test-unit:", 1)[1].split("test-component:", 1)[0]
+    exhaustive = makefile.split("test-exhaustive:", 1)[1].split("test-ordering:", 1)[0]
+    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
+
+    assert "WORKTREE_ADMISSION" not in unit
+    assert "$(WORKTREE_ADMISSION) run --target test-exhaustive" in exhaustive
+    assert "$(WORKTREE_ADMISSION) run --target harbor-check-all" in harbor
+    assert "$(WORKTREE_ADMISSION) run --target harbor-host-validation" in harbor
+    assert "$(WORKTREE_ADMISSION) run --target harbor-oracle-all" in harbor
+
+
+def test_component_lane_uses_module_fixture_affinity() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    component = makefile.split("test-component:", 1)[1].split("test-domain:", 1)[0]
+    domain = makefile.split("test-domain:", 1)[1].split("test-composition:", 1)[0]
+
+    assert "--dist loadscope" in component
+    assert "--dist worksteal" in domain
 
 
 def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> None:
@@ -233,7 +256,11 @@ def test_paths_file_stays_on_harbor_planning() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert "PATHS_FILE" not in makefile
-    assert "PATHS_FILE" in harbor
+    assert "PATHS_FILE :=" not in harbor
+    assert "$(shell mktemp)" not in harbor
+    assert "tr '\\n' ' '" not in harbor
+    assert "--paths-file \"$$tmp_dir/changed-paths.txt\"" in harbor
+    assert "--config make/harbor.mk" in harbor
     assert "PATHS_FILE" not in workflow
 
 
@@ -307,6 +334,8 @@ def test_local_oracle_targets_require_explicit_scope() -> None:
     assert '"$(TASKS)" -o "$(FULL)" = "1"' in oracle
     assert '"$(TASKS)" -o "$(FULL)" = "1"' in runner
     assert "DATASET=$$dataset FULL=1" in harbor
+    assert "$(MAKE) harbor-check\n" in oracle
+    assert "harbor-check-all" not in oracle
 
 
 def test_local_oracle_attempts_are_serialized_on_a_shared_docker_host() -> None:

@@ -85,5 +85,6 @@ def test_help_all_retains_specialist_and_compatibility_commands() -> None:
         "deploy-check",
         "npm-test",
         "test-all-ci",
+        "validation-status",
     }
     assert "precommit" in commands

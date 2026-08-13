@@ -65,11 +65,13 @@ and verifies child-process coverage collection.
 - **Lean or optional providers:** `make check-external` when those trees
   change. CI owns the full Lean and optional-provider environments.
 - **Exhaustive local reproduction:** `make test-all-ci` is an explicit exception
-  path, not a routine gate. Before it, verify that no other pytest or
-  delegated-agent validation is running on the host, and never assign it to a
-  parallel agent sharing the checkout. The manually dispatched Python Debug and
-  Lean Debug workflows reproduce one pytest file or node in a prepared remote
-  environment when the relevant local runtime is impractical.
+  path, not a routine gate. It takes this worktree's exhaustive validation
+  lease; `make validation-status` shows whether that lease is held. Before it,
+  verify that no other pytest or delegated-agent validation is running on the
+  host, and never assign it to a parallel agent sharing the checkout. The
+  manually dispatched Python Debug and Lean Debug workflows reproduce one
+  pytest file or node in a prepared remote environment when the relevant local
+  runtime is impractical.
 
 ## Development environment
 
@@ -146,12 +148,24 @@ Oracle or model.
 config, job-level Compose overlays, adapters, and execution helpers) and the
 unit tests that own them; it deliberately excludes unrelated task-specific
 verifier regressions. `make harbor-check-all` is the explicit full integration
-reproduction. Task `environment/docker-compose.yaml` files are
+reproduction and takes the same worktree admission lease as other exhaustive
+local targets. `make harbor-plan` normalizes changed paths once and feeds that
+canonical file to the planner, validator, and receipt; temps live only inside
+the recipe. Task `environment/docker-compose.yaml` files are
 executable benchmark input, not job overlays, and remain gated by
 `make harbor-check-task` and `make harbor-oracle-task`. Use
 `make harbor-plan BASE=origin/main` for benchmark contracts and Oracle scope;
 run it through Make because the planner requires the pinned Harbor runtime to
 compute task digests.
+
+Current GitHub Actions identity is the workflow YAML on the default branch.
+Historical registrations whose files are gone, including leftover
+`agent-port-*` and `agent-rebase-*` workflows, stay disabled in the GitHub UI
+with their run history retained; do not add an auto-disable bot.
+`python tools/inventory_github_workflows.py` is the non-mutating inventory.
+To rebuild a leaf from `main` (or another declared parent) plus unique
+commits, run `python tools/restack_feature_branch.py`; the helper reports
+duplicate subjects and never force-pushes.
 
 For the exact task authoring workflow and verifier changes, use the
 [`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md) skill. The

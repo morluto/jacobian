@@ -46,7 +46,10 @@ class PolynomialCoefficientRecurrenceTableRequest(ContractModel):
                 "values must include the initial range and at least one checked step"
             )
         for polynomial in self.coefficient_polynomials:
-            if not polynomial or len(polynomial) > MAX_P_RECURSIVE_POLYNOMIAL_DEGREE + 1:
+            if (
+                not polynomial
+                or len(polynomial) > MAX_P_RECURSIVE_POLYNOMIAL_DEGREE + 1
+            ):
                 raise ValueError("coefficient polynomial degree is outside the bound")
             if polynomial[-1].as_fraction() == 0:
                 raise ValueError("coefficient polynomial must omit trailing zero terms")

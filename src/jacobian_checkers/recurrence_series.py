@@ -460,9 +460,13 @@ def _replay_polynomial_coefficient_recurrence_table(
         residual = sum(
             (
                 sum(
-                    (coefficient * index**power for power, coefficient in enumerate(polynomials[offset])),
+                    (
+                        coefficient * index**power
+                        for power, coefficient in enumerate(polynomials[offset])
+                    ),
                     Fraction(),
-                ) * values[index - offset]
+                )
+                * values[index - offset]
                 for offset in range(order + 1)
             ),
             Fraction(),

@@ -22,9 +22,7 @@ class Graph6DecodeRequest(ContractModel):
     graph6: StrictStr = Field(min_length=1, max_length=352)
 
 
-def _graph6_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+def _graph6_runtime(*, checker_ids: tuple[str, ...] = ()) -> CapabilityProviderRuntime:
     return source_provider_runtime(
         "jacobian.graph6-checker",
         version="1",

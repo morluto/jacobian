@@ -30,9 +30,7 @@ class Graph6DecodeValue(ContractModel):
     degrees: tuple[StrictInt, ...] = Field(max_length=62)
     graph_digest: Sha256Digest
     format: Literal["GRAPH6_SMALL_ORDER"] = "GRAPH6_SMALL_ORDER"
-    bit_order: Literal["COLUMN_MAJOR_UPPER_TRIANGLE"] = (
-        "COLUMN_MAJOR_UPPER_TRIANGLE"
-    )
+    bit_order: Literal["COLUMN_MAJOR_UPPER_TRIANGLE"] = "COLUMN_MAJOR_UPPER_TRIANGLE"
 
     @model_validator(mode="after")
     def bind_dimensions(self) -> Self:
@@ -63,11 +61,7 @@ def decode_graph6(encoded: str) -> Graph6DecodeValue:
     bit_count = order * (order - 1) // 2
     if len(codes) != 1 + (bit_count + 5) // 6:
         raise ValueError("graph6 payload length does not match its order header")
-    bits = [
-        (code >> shift) & 1
-        for code in codes[1:]
-        for shift in range(5, -1, -1)
-    ]
+    bits = [(code >> shift) & 1 for code in codes[1:] for shift in range(5, -1, -1)]
     if any(bits[bit_count:]):
         raise ValueError("unused graph6 padding bits must be zero")
     pairs = [(first, second) for second in range(1, order) for first in range(second)]

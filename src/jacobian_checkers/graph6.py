@@ -51,14 +51,12 @@ def check_graph6_decode(request: object) -> dict[str, Any]:
         bit_count = order * (order - 1) // 2
         if len(codes) != 1 + (bit_count + 5) // 6:
             raise ValueError("graph6 length does not match order")
-        bits = [
-            (code >> shift) & 1
-            for code in codes[1:]
-            for shift in range(5, -1, -1)
-        ]
+        bits = [(code >> shift) & 1 for code in codes[1:] for shift in range(5, -1, -1)]
         if any(bits[bit_count:]):
             raise ValueError("graph6 padding bits are nonzero")
-        pairs = [(first, second) for second in range(1, order) for first in range(second)]
+        pairs = [
+            (first, second) for second in range(1, order) for first in range(second)
+        ]
         edges = sorted(pair for pair, bit in zip(pairs, bits, strict=False) if bit)
         degrees = [0] * order
         for first, second in edges:

@@ -59,87 +59,99 @@ def _univariate_polynomial(*fields: str) -> Callable[[object], bool]:
     return supports
 
 
-def _materialized_syzygy_supports(payload: object) -> bool:  # noqa: C901
+def _polynomial_replay_shape(
+    polynomial: dict[str, object], maximum_degree: int
+) -> tuple[int, int, int, int] | None:
+    body = polynomial.get("polynomial")
+    terms = body.get("terms") if isinstance(body, dict) else None
+    if not isinstance(terms, list):
+        return None
+    coefficient_digits = 0
+    for term in terms:
+        if not isinstance(term, dict):
+            return None
+        digits = _rational_decimal_digits(term.get("coefficient"))
+        if digits is None:
+            return None
+        coefficient_digits += digits
+    homogeneous_degree = max(
+        (
+            sum(term.get("exponents", ()))
+            for term in terms
+            if isinstance(term, dict)
+            and isinstance(term.get("exponents"), list)
+            and all(type(value) is int for value in term["exponents"])
+        ),
+        default=0,
+    )
+    if (
+        terms
+        and all(
+            isinstance(term, dict)
+            and isinstance(term.get("exponents"), list)
+            and len(term["exponents"]) == 3
+            for term in terms
+        )
+        and any(
+            all(term["exponents"][variable] == 0 for term in terms)
+            for variable in range(3)
+        )
+    ):
+        maximum_degree = 0
+    return maximum_degree, homogeneous_degree, len(terms), coefficient_digits
+
+
+def _factor_replay_shape(
+    factors: list[object], maximum_degree: int
+) -> tuple[int, int, int, int] | None:
+    homogeneous_degree = len(factors)
+    coefficient_digits = 0
+    support: set[tuple[int, ...]] = {(0, 0, 0)}
+    for factor in factors:
+        coefficients = factor.get("coefficients") if isinstance(factor, dict) else None
+        if not isinstance(coefficients, list) or len(coefficients) != 3:
+            return None
+        for coefficient in coefficients:
+            digits = _rational_decimal_digits(coefficient)
+            if digits is None:
+                return None
+            coefficient_digits += digits
+        active_variables = tuple(
+            index
+            for index, coefficient in enumerate(coefficients)
+            if isinstance(coefficient, dict) and coefficient.get("num") != "0"
+        )
+        if not active_variables:
+            return None
+        support = {
+            tuple(
+                exponent + (1 if variable == index else 0)
+                for index, exponent in enumerate(monomial)
+            )
+            for monomial in support
+            for variable in active_variables
+        }
+    if len(support) == 1 and sum(value > 0 for value in next(iter(support))) < 3:
+        maximum_degree = 0
+    return maximum_degree, homogeneous_degree, len(support), coefficient_digits
+
+
+def _materialized_syzygy_supports(payload: object) -> bool:
     """Bound aggregate checker work while retaining cheap degree-zero cases."""
 
     if not isinstance(payload, dict) or type(payload.get("max_degree")) is not int:
         return False
     maximum_degree = payload["max_degree"]
-    polynomial = payload.get("polynomial")
-    factors = payload.get("linear_factors")
-    if isinstance(polynomial, dict):
-        body = polynomial.get("polynomial")
-        terms = body.get("terms") if isinstance(body, dict) else None
-        if not isinstance(terms, list):
-            return False
-        coefficient_digits = 0
-        for term in terms:
-            if not isinstance(term, dict):
-                return False
-            digits = _rational_decimal_digits(term.get("coefficient"))
-            if digits is None:
-                return False
-            coefficient_digits += digits
-        homogeneous_degree = max(
-            (
-                sum(term.get("exponents", ()))
-                for term in terms
-                if isinstance(term, dict)
-                and isinstance(term.get("exponents"), list)
-                and all(type(value) is int for value in term["exponents"])
-            ),
-            default=0,
-        )
-        term_count = len(terms)
-        if (
-            terms
-            and all(
-                isinstance(term, dict)
-                and isinstance(term.get("exponents"), list)
-                and len(term["exponents"]) == 3
-                for term in terms
-            )
-            and any(
-                all(term["exponents"][variable] == 0 for term in terms)
-                for variable in range(3)
-            )
-        ):
-            maximum_degree = 0
-    elif isinstance(factors, list):
-        homogeneous_degree = len(factors)
-        coefficient_digits = 0
-        support: set[tuple[int, ...]] = {(0, 0, 0)}
-        for factor in factors:
-            coefficients = (
-                factor.get("coefficients") if isinstance(factor, dict) else None
-            )
-            if not isinstance(coefficients, list) or len(coefficients) != 3:
-                return False
-            for coefficient in coefficients:
-                digits = _rational_decimal_digits(coefficient)
-                if digits is None:
-                    return False
-                coefficient_digits += digits
-            active_variables = tuple(
-                index
-                for index, coefficient in enumerate(coefficients)
-                if isinstance(coefficient, dict) and coefficient.get("num") != "0"
-            )
-            if not active_variables:
-                return False
-            support = {
-                tuple(
-                    exponent + (1 if variable == index else 0)
-                    for index, exponent in enumerate(monomial)
-                )
-                for monomial in support
-                for variable in active_variables
-            }
-        term_count = len(support)
-        if len(support) == 1 and sum(value > 0 for value in next(iter(support))) < 3:
-            maximum_degree = 0
+    shape: tuple[int, int, int, int] | None
+    if isinstance(payload.get("polynomial"), dict):
+        shape = _polynomial_replay_shape(payload["polynomial"], maximum_degree)
+    elif isinstance(payload.get("linear_factors"), list):
+        shape = _factor_replay_shape(payload["linear_factors"], maximum_degree)
     else:
         return False
+    if shape is None:
+        return False
+    maximum_degree, homogeneous_degree, term_count, coefficient_digits = shape
     replay_cells = sum(
         (3 * ((degree + 2) * (degree + 1) // 2))
         * ((homogeneous_degree + degree + 1) * (homogeneous_degree + degree) // 2)

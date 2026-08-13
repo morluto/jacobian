@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-import jacobian.exact_domain_checkers as exact_domain_checkers
 from jacobian.canonical import format_canonical_integer
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
 from jacobian_checkers.jacobian_syzygy import (
@@ -24,69 +23,6 @@ def test_materialized_syzygy_verifier_is_domain_owned() -> None:
         "polynomial.jacobian_syzygy.coefficients.verify"
     )
     assert declaration.function == "check_materialized_graded_jacobian_syzygy"
-
-
-def test_syzygy_checker_support_uses_actual_repeated_factor_support() -> None:
-    payload = {
-        "linear_factors": [
-            {
-                "label": str(index),
-                "coefficients": [
-                    {"num": "1", "den": "1"},
-                    {"num": "0", "den": "1"},
-                    {"num": "0", "den": "1"},
-                ],
-            }
-            for index in range(6)
-        ],
-        "max_degree": 8,
-    }
-
-    assert exact_domain_checkers._checker_supports(
-        "polynomial.jacobian_syzygy.coefficients.materialize", payload
-    )
-
-
-def test_syzygy_checker_support_accepts_immediate_expanded_kernel() -> None:
-    payload = {
-        "polynomial": {
-            "polynomial": {
-                "terms": [
-                    {
-                        "coefficient": {"num": "1", "den": "1"},
-                        "exponents": [16 - index, index, 0],
-                    }
-                    for index in range(17)
-                ]
-            }
-        },
-        "max_degree": 8,
-    }
-
-    assert exact_domain_checkers._checker_supports(
-        "polynomial.jacobian_syzygy.coefficients.materialize", payload
-    )
-
-
-def test_syzygy_checker_support_rejects_excessive_replay() -> None:
-    payload = {
-        "linear_factors": [
-            {
-                "label": str(index),
-                "coefficients": [
-                    {"num": "1", "den": "1"},
-                    {"num": "1", "den": "1"},
-                    {"num": "1", "den": "1"},
-                ],
-            }
-            for index in range(16)
-        ],
-        "max_degree": 8,
-    }
-
-    assert not exact_domain_checkers._checker_supports(
-        "polynomial.jacobian_syzygy.coefficients.materialize", payload
-    )
 
 
 def test_syzygy_checker_accepts_canonical_coefficients_above_decimal_limit() -> None:

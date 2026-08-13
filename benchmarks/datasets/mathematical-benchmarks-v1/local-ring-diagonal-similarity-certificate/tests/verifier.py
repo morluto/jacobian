@@ -50,6 +50,7 @@ _PRODUCTS_AGREE = (
     "pa and bp coincide",
     "pa and bp agree",
     "pa=bp",
+    "pa = bp",
     "pa equals bp",
     "pa and bp match",
     "pa and bp are equal",
@@ -71,6 +72,7 @@ _DETERMINANT_UNIT = (
 _DIAGONAL_MATCH = (
     "unit entries",
     "unit entry",
+    "diagonal entries match",
     "matched diagonal pair",
     "diagonal pair",
     "matched pairs agree",

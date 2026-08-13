@@ -192,7 +192,8 @@ checker authorization out of plugins and search code.
 
 ## Repository Gotchas
 
-- Before final validation, use `make check` (and `make check-external` when
+- Before final validation, use `make check` plus the named lane that owns the
+  changed behavior (and `make check-external` when
   Lean or optional providers change) on the final tree. In a shared checkout,
   agents must own
   disjoint paths and must not switch branches, stage, commit, clean, or rewrite
@@ -262,9 +263,9 @@ Non-obvious caveats:
   not break the kernel, catalog, or the core test suites. Only install Lean/elan
   or those executables when specifically exercising `lean_runtime` tests or SAT
   proof-artifact capabilities.
-- `make test-unit` is the cheap unit lane. `make quick` adds lint and
-  typecheck. `make check` is the PR-equivalent ordinary pytest run (Lean-free
-  default `testpaths`, same flags as CI `python`). Use `make test-all-ci` only
+- `make test-unit` is the cheap unit lane. `make quick` adds lint; `make check`
+  adds lint and typecheck. `make check-all` explicitly reproduces the Lean-free
+  ordinary CI matrix. Use `make test-all-ci` only
   for an explicit exhaustive local reproduction. Default `uv run pytest` does
   not collect Lean, storage, process, or MCP; use the matching `make test-*`
   target for those trees. Never run bare `uv run pytest` as a substitute for

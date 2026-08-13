@@ -1,29 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
-from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.posets import build_finite_poset_bundle
-
-
-@pytest.fixture
-def poset_services(tmp_path: Path) -> Iterator[DomainTestServices]:
-    """Install only the finite-poset bundle exercised by this module."""
-
-    with open_domain_services(
-        tmp_path / "state", build_finite_poset_bundle()
-    ) as services:
-        yield services
-
 
 _DIAMOND = {
     "elements": ["0", "a", "b", "1"],

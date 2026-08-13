@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
@@ -15,12 +14,14 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
 
 
-@pytest.fixture
-def number_theory_services(tmp_path: Path) -> Iterator[DomainTestServices]:
+@pytest.fixture(scope="module")
+def number_theory_services(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[DomainTestServices]:
     """Install number theory and its exact checkers without a portfolio."""
 
     with open_exact_domain_services(
-        tmp_path / "state",
+        tmp_path_factory.mktemp("number-theory") / "state",
         build_number_theory_bundle(),
     ) as services:
         yield services

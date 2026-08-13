@@ -1,6 +1,6 @@
 # Persistent state format
 
-The current and minimum supported state format is revision 10. Older stores are
+The current and minimum supported state format is revision 11. Older stores are
 rejected before any migration code runs.
 
 To recover data from an older store, keep that directory unchanged and open it
@@ -15,4 +15,10 @@ upgrade path. Revisions 9 and 10 replace the broad checker-package digest with
 a versioned per-checker manifest that separates checker and worker source,
 records exact Python distributions, and produces one implementation digest;
 existing checker authorization rows are deliberately not reinterpreted. New
-stores apply the complete ordered schema and record revision 10.
+stores apply the complete ordered schema and record revision 11.
+
+Verification records are immutable artifacts rather than state-table rows.
+Record schema v4 payloads snapshot the accepting checker's full manifest.
+Revision 11 is an explicit cutover: revision-10 stores and their v3 records
+remain readable with a matching older checkout and are not reinterpreted by the
+current runtime. There is no legacy checker-authorization or record import path.

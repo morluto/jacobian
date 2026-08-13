@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
@@ -24,22 +23,24 @@ PY = {"x": ZERO, "y": TWO}
 PXY = {"x": TWO, "y": TWO}
 
 
-@pytest.fixture
-def geometry_services(tmp_path: Path) -> Iterator[DomainTestServices]:
+@pytest.fixture(scope="module")
+def geometry_services(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[DomainTestServices]:
     """Install geometry and its exact checkers without the full portfolio."""
 
     with open_exact_domain_services(
-        tmp_path / "state",
+        tmp_path_factory.mktemp("geometry") / "state",
         build_geometry_bundle(),
     ) as services:
         yield services
 
 
 def test_geometry_checker_availability_does_not_grant_authority(
-    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     with open_exact_domain_services(
-        tmp_path / "state",
+        tmp_path_factory.mktemp("geometry-no-authority") / "state",
         build_geometry_bundle(),
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:

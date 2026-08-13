@@ -93,6 +93,11 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/development_profiles.py"),
+        # Developer helpers that shell out to git, gh, or Make. They are not
+        # product process callers.
+        PurePosixPath("tools/inventory_github_workflows.py"),
+        PurePosixPath("tools/restack_feature_branch.py"),
+        PurePosixPath("tools/worktree_admission.py"),
         # This clean-room verifier must independently replay the pinned Lean
         # protocol inside its isolated verifier image.  It cannot import the
         # repository command runner without widening the verifier build
@@ -159,6 +164,8 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_unsupported_surfaces.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),
+        PurePosixPath("tests/unit/tooling/test_restack_feature_branch.py"),
+        PurePosixPath("tests/unit/tooling/test_worktree_admission.py"),
         # Benchmark regressions spawn task-owned solution or Oracle entrypoints.
         PurePosixPath(
             "benchmarks/validation/mathematical_benchmarks_v1/"
@@ -1352,6 +1359,49 @@ def _unsupported_surface_text_violations(
     return tuple(violations)
 
 
+_EXPENSIVE_RUNTIME_FIXTURES = frozenset(
+    {
+        "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
+        "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
+        "fresh_complete_runtime",
+    }
+)
+
+
+def _calls_create_runtime(node: ast.AST) -> bool:
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        func = child.func
+        if isinstance(func, ast.Name) and func.id == "create_runtime":
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == "create_runtime":
+            return True
+    return False
+
+
+def _discarded_expensive_runtime_fixtures(node: ast.FunctionDef) -> frozenset[str]:
+    params = {arg.arg for arg in node.args.args}
+    requested = params & _EXPENSIVE_RUNTIME_FIXTURES
+    if not requested:
+        return frozenset()
+    discarded: set[str] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Assign) or len(child.targets) != 1:
+            continue
+        target = child.targets[0]
+        if (
+            isinstance(target, ast.Name)
+            and target.id == "_"
+            and isinstance(child.value, ast.Name)
+            and child.value.id in requested
+        ):
+            discarded.add(child.value.id)
+    return frozenset(discarded)
+
+
 _HISTORICAL_TEST_BUCKET_WORDS = frozenset(
     {"frontier", "migration", "regression", "release"}
 )
@@ -1383,6 +1433,27 @@ def _imports_jacobian_runtime(tree: ast.AST) -> bool:
     return False
 
 
+def _discarded_runtime_setup_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    violations: list[Violation] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
+            continue
+        discarded = _discarded_expensive_runtime_fixtures(node)
+        if discarded and _calls_create_runtime(node):
+            names = ", ".join(sorted(discarded))
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "expensive runtime fixtures must be the subject under test, "
+                    f"not discarded setup: {names}",
+                )
+            )
+    return tuple(violations)
+
+
 def _test_ownership_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -1402,6 +1473,7 @@ def _test_ownership_violations(
                 "focused tests must use their owning seam instead of the complete runtime",
             )
         )
+    violations.extend(_discarded_runtime_setup_violations(relative, tree))
 
     if (
         not focused_suite

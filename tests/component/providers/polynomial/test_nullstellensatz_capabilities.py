@@ -31,7 +31,7 @@ from jacobian.domains.polynomial_nullstellensatz.core import (
     VERIFY_CAPABILITY_ID,
     _failure_details,
 )
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.config import CheckerAuthorityMode
 
 
 def test_failure_details_are_bounded_and_summarize_validation_errors() -> None:

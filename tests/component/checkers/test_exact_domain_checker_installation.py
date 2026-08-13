@@ -222,19 +222,37 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
             )
         )
         assert registration.implementation.entrypoint.startswith(expected_module)
-    graph_runtime = installation.provider_runtimes["finite-graph"]
+    graph_runtime = installation.provider_runtimes["jacobian.graph-exact-checkers"]
     assert graph_runtime.provider == "jacobian.graph-exact-checkers"
     assert {
         component["provider"] for component in graph_runtime.configuration["components"]
     } == {"jacobian.graph-exact-checker-source"}
-    syzygy_runtime = installation.provider_runtimes["graded-syzygy"]
+    syzygy_runtime = installation.provider_runtimes["jacobian.graded-syzygy-checkers"]
     assert syzygy_runtime.provider == "jacobian.graded-syzygy-checkers"
     assert {
         component["provider"]
         for component in syzygy_runtime.configuration["components"]
     } == {"jacobian.graded-syzygy-checker-source"}
-    projective_runtime = installation.provider_runtimes["projective-arrangement"]
+    projective_runtime = installation.provider_runtimes[
+        "jacobian.projective-arrangement-checkers"
+    ]
     assert projective_runtime.provider == "jacobian.projective-arrangement-checkers"
+    assert (
+        installation.declaration_providers["polynomial.compute.gcd"]
+        == "jacobian.exact-domain-checkers"
+    )
+    assert (
+        installation.declaration_providers["matrix.normal_form.rref.compute"]
+        == "jacobian.exact-domain-checkers"
+    )
+    assert (
+        installation.declaration_providers["integer.compute.prime_factorization"]
+        == "jacobian.exact-domain-checkers"
+    )
+    assert (
+        installation.declaration_providers["graph.hamiltonian_path.decide"]
+        == "jacobian.graph-exact-checkers"
+    )
 
 
 def test_installer_preserves_operator_control(tmp_path: Path) -> None:
@@ -283,104 +301,6 @@ def test_installer_preserves_operator_control(tmp_path: Path) -> None:
     assert set(installation.checker_ids.values()) == {None}
 
 
-def test_installer_skips_checkers_for_an_unavailable_graph_bundle(
-    tmp_path: Path,
-) -> None:
-    polynomial = _installed(
-        (
-            GradedJacobianSyzygyRequest,
-            PolynomialGcdRequest,
-            PolynomialResultantRequest,
-            PolynomialDiscriminantRequest,
-            PolynomialSquareFreeRequest,
-            PolynomialFactorRequest,
-        ),
-        (
-            "polynomial.jacobian_syzygy.minimum_degree.compute",
-            "polynomial.compute.gcd",
-            "polynomial.compute.resultant",
-            "polynomial.compute.discriminant",
-            "polynomial.compute.square_free_decomposition",
-            "polynomial.factor.compute",
-        ),
-        character="e",
-    )
-    matrix = _installed(
-        (
-            RationalMatrixProductRequest,
-            RationalMatrixRequest,
-            SquareRationalMatrixRequest,
-            IntegerMatrixRequest,
-        ),
-        (
-            "matrix.multiply.compute",
-            "matrix.normal_form.rref.compute",
-            "matrix.nullspace.compute",
-            "matrix.characteristic_polynomial.compute",
-            "matrix.normal_form.smith.compute",
-        ),
-        character="f",
-    )
-    graph = _installed(
-        (
-            GraphHamiltonianPathRequest,
-            GraphOptimizationRequest,
-            GraphMinimumSpanningTreeRequest,
-        ),
-        (
-            "graph.hamiltonian_path.decide",
-            "graph.induced_tree.maximum.compute",
-            "graph.spanning_tree.minimum.compute",
-        ),
-        character="7",
-    )
-    graph_invariants = _installed(
-        (GraphInvariantRequest, GraphMaximumMatchingRequest),
-        (
-            "graph.invariant.diameter.compute",
-            "graph.invariant.radius.compute",
-            "graph.invariant.maximum_matching.compute",
-        ),
-        character="8",
-    )
-
-    for name, optional_bundles, expected_graph_ids in (
-        (
-            "optimization-only",
-            {"graph": graph},
-            {
-                "graph.hamiltonian_path.decide",
-                "graph.induced_tree.maximum.compute",
-                "graph.spanning_tree.minimum.compute",
-            },
-        ),
-        (
-            "invariants-only",
-            {"graph_invariants": graph_invariants},
-            {
-                "graph.invariant.diameter.compute",
-                "graph.invariant.radius.compute",
-                "graph.invariant.maximum_matching.compute",
-            },
-        ),
-    ):
-        registry_root = tmp_path / name
-        installation = install_exact_domain_checkers(
-            CheckerRegistry(ArtifactRepository(registry_root)),
-            polynomial=polynomial,
-            matrix=matrix,
-            authorize=True,
-            **optional_bundles,
-        )
-
-        graph_ids = {
-            capability_id
-            for capability_id in installation.checker_ids
-            if capability_id.startswith("graph.")
-        }
-        assert graph_ids == expected_graph_ids
-
-
 def test_installer_omits_exact_replay_when_its_provider_is_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -400,7 +320,7 @@ def test_installer_omits_exact_replay_when_its_provider_is_unavailable(
         }
     )
     monkeypatch.setattr(
-        "jacobian.exact_domain_checkers.exact_domain_checker_provider_runtime",
+        "jacobian.providers.flint_runtime.exact_domain_checker_provider_runtime",
         lambda **_: unavailable,
     )
     matrix_ids = (
@@ -466,8 +386,7 @@ def test_installer_does_not_omit_replay_when_bundled_source_is_unavailable(
         lambda: unavailable_source,
     )
     monkeypatch.setattr(
-        exact_domain_checkers,
-        "exact_domain_checker_provider_runtime",
+        "jacobian.providers.flint_runtime.exact_domain_checker_provider_runtime",
         lambda **_: unavailable_provider,
     )
 

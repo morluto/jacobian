@@ -21,7 +21,7 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomial_system_capabilities import (
     install_polynomial_system_capabilities,
 )
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.verification.errors import CheckerExecutionError
 
 

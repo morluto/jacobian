@@ -67,6 +67,7 @@ from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_
 from jacobian.storage.errors import StorageError
 from jacobian.storage.models import StoredArtifact
 from jacobian.storage.repository import ArtifactRepository
+from jacobian.validation_diagnostics import bounded_validation_exception_message
 from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
@@ -158,6 +159,8 @@ class _InstalledDeclaration:
 
 
 def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
+    if declaration.provider_runtime is not None:
+        return f"declaration:{declaration.capability_id}"
     if declaration.entrypoint_module == "jacobian_checkers.linear":
         return {
             "check_rational_solution": "linear-solution",
@@ -232,9 +235,22 @@ def install_exact_domain_checkers(
             features=("standard-library-rational-replay", "clean-process-checker"),
         ),
     }
+    available_declarations = _available_declaration_bundles(bundles)
     provider_runtimes = {
         runtime_key: factory() for runtime_key, factory in runtime_factories.items()
     }
+    for _installed, declaration in available_declarations:
+        if declaration.provider_runtime is None:
+            continue
+        runtime_key = _provider_runtime_key(declaration)
+        previous = provider_runtimes.setdefault(
+            runtime_key,
+            declaration.provider_runtime,
+        )
+        if previous != declaration.provider_runtime:
+            raise ValueError(
+                "exact replay declarations disagree on their owned provider runtime"
+            )
     checker_ids: dict[str, str | None] = {}
     declarations_by_id: dict[str, ExactReplayCheckerDeclaration] = {}
     diagnostics: list[CapabilityDiagnostic] = []
@@ -242,7 +258,7 @@ def install_exact_domain_checkers(
         exact_domain_checker_source_provider_runtime().availability
         is CapabilityProviderAvailability.AVAILABLE
     )
-    for installed, declaration in _available_declaration_bundles(bundles):
+    for installed, declaration in available_declarations:
         declarations_by_id[declaration.capability_id] = declaration
         runtime_key = _provider_runtime_key(declaration)
         provider_runtime = provider_runtimes[runtime_key]
@@ -308,13 +324,21 @@ def install_exact_domain_checkers(
         )
         for runtime_key in provider_runtimes
     }
+    resolved_provider_runtimes: dict[str, CapabilityProviderRuntime] = {}
+    for runtime_key, provider_runtime in provider_runtimes.items():
+        checker_ids_for_runtime = authorized_ids[runtime_key]
+        factory = runtime_factories.get(runtime_key)
+        resolved_provider_runtimes[runtime_key] = (
+            factory(checker_ids=checker_ids_for_runtime)
+            if factory is not None
+            else provider_runtime.model_copy(
+                update={"checker_ids": checker_ids_for_runtime}
+            )
+        )
     return ExactDomainCheckerInstallation(
         checker_ids=checker_ids,
         diagnostics=tuple(diagnostics),
-        provider_runtimes={
-            runtime_key: factory(checker_ids=authorized_ids[runtime_key])
-            for runtime_key, factory in runtime_factories.items()
-        },
+        provider_runtimes=resolved_provider_runtimes,
     )
 
 
@@ -828,7 +852,7 @@ class ExactComputedVerificationAdapter:
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_INPUT",
                     stage="request_validation",
-                    message=str(exc),
+                    message=bounded_validation_exception_message(exc),
                     hint=(
                         "input must satisfy the producer request contract and "
                         "candidate must satisfy its result contract."
@@ -870,7 +894,7 @@ class ExactComputedVerificationAdapter:
                 CapabilityDiagnostic(
                     code="INVALID_EXACT_DOMAIN_RESULT",
                     stage="artifact_resolution",
-                    message=str(exc),
+                    message=bounded_validation_exception_message(exc),
                     path="result_uri",
                     hint="Pass the result_uri returned by this exact producer.",
                 )

@@ -31,6 +31,11 @@ Make targets that own storage, process, MCP, and Lean isolation. `make
 check-external` covers Lean and maintained-provider probes when those trees
 change.
 
+Hosted CI runs that same ordinary suite as six fixed semantic lanes: `unit`,
+`component`, `domain`, `composition`, `e2e`, and `provider`. These are static
+Make targets, not path-selected or timing-planned shards; `make check` runs all
+six in the same order.
+
 ## Test ownership
 
 The filesystem is the metadata. A test under `tests/domain/` is a domain test;

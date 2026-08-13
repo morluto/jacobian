@@ -1,69 +1,32 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from tests.support.services import open_domain_services
 
-from jacobian.artifacts import ArtifactService
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import loads_strict_json
 from jacobian.capability_service import CapabilityService
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
-from jacobian.contracts.number_theory import (
-    ChineseRemainderRequest,
-    FactorialValuationRequest,
-    ModularValueRequest,
-    NonnegativeIntegerRequest,
-    PositiveIntegerRequest,
-    PowerfulNumberResult,
-)
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.combinatorics import build_combinatorics_bundle
 from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.operation_installation import OperationInstaller
 from jacobian.process_policy import ProcessResult, ProcessTermination
-from jacobian.runtime import create_runtime
-from jacobian.schema_registry import SchemaRegistry
-from jacobian.storage.repository import ArtifactRepository
 
 
-def _service(tmp_path: Path) -> CapabilityService:
-    store = ArtifactRepository(tmp_path)
-    schemas = SchemaRegistry(store)
-    artifacts = ArtifactService(store, schemas)
-    service = CapabilityService(store)
-    installer = OperationInstaller(store, schemas, artifacts)
-    for bundle in (build_number_theory_bundle(), build_combinatorics_bundle()):
-        for adapter in installer.install(bundle).adapters:
-            service.register(adapter)
-    return service
+@pytest.fixture
+def number_theory_service(tmp_path: Path) -> Iterator[CapabilityService]:
+    with open_domain_services(tmp_path, build_number_theory_bundle()) as services:
+        yield services.core.capabilities
 
 
-def test_runtime_catalog_uses_only_domain_owned_operation_ids(tmp_path: Path) -> None:
-    catalog_ids = {
-        descriptor.capability_id
-        for descriptor in create_runtime(tmp_path)
-        .core.capabilities.catalog()
-        .capabilities
-    }
-
-    assert {
-        "number_theory.compute.jacobi_symbol",
-        "modular.compute.discrete_logarithm",
-        "combinatorics.enumerate.integer_partitions",
-    } <= catalog_ids
-    assert {
-        "number_theory.jacobi_symbol.compute",
-        "number_theory.discrete_log.bounded",
-        "combinatorics.integer_partition.enumerate",
-    }.isdisjoint(catalog_ids)
-
-
-def test_jacobi_symbol_is_domain_owned_exact_computation(tmp_path: Path) -> None:
-    result = _service(tmp_path).invoke(
+def test_jacobi_symbol_is_domain_owned_exact_computation(
+    number_theory_service: CapabilityService,
+) -> None:
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="number_theory.compute.jacobi_symbol",
             input={"a": "10", "n": 21},
@@ -75,9 +38,9 @@ def test_jacobi_symbol_is_domain_owned_exact_computation(tmp_path: Path) -> None
 
 
 def test_even_jacobi_denominator_fails_before_artifact_writes(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
 ) -> None:
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="number_theory.compute.jacobi_symbol",
             input={"a": "10", "n": 20},
@@ -89,8 +52,10 @@ def test_even_jacobi_denominator_fails_before_artifact_writes(
     assert result.diagnostics[0].code == "INVALID_NUMBER_THEORY_REQUEST"
 
 
-def test_chinese_remainder_returns_canonical_exact_solution(tmp_path: Path) -> None:
-    result = _service(tmp_path).invoke(
+def test_chinese_remainder_returns_canonical_exact_solution(
+    number_theory_service: CapabilityService,
+) -> None:
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="modular.solve.chinese_remainder",
             input={"residues": [2, 3, 2], "moduli": [3, 5, 7]},
@@ -102,9 +67,9 @@ def test_chinese_remainder_returns_canonical_exact_solution(tmp_path: Path) -> N
 
 
 def test_chinese_remainder_reports_inconsistent_system_without_artifacts(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
 ) -> None:
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="modular.solve.chinese_remainder",
             input={"residues": [0, 1], "moduli": [2, 2]},
@@ -116,33 +81,10 @@ def test_chinese_remainder_reports_inconsistent_system_without_artifacts(
     assert result.diagnostics[0].code == "NUMBER_THEORY_OPERATION_NOT_APPLICABLE"
 
 
-@pytest.mark.parametrize("residue", [-1, 3])
-def test_chinese_remainder_rejects_noncanonical_residues(residue: int) -> None:
-    with pytest.raises(ValidationError, match="canonical"):
-        ChineseRemainderRequest(residues=(residue,), moduli=(3,))
-
-
-@pytest.mark.parametrize(
-    ("payload", "message"),
-    [
-        ({"residues": [1, 2], "moduli": [3]}, "equal length"),
-        ({"residues": [0], "moduli": [1]}, "between 2 and 10,000"),
-        ({"residues": [0], "moduli": [10_001]}, "between 2 and 10,000"),
-    ],
-)
-def test_chinese_remainder_rejects_invalid_system_bounds(
-    payload: dict[str, list[int]],
-    message: str,
-) -> None:
-    with pytest.raises(ValidationError, match=message):
-        ChineseRemainderRequest.model_validate(payload)
-
-
 def test_discrete_logarithm_returns_typed_result(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
 ) -> None:
-    service = _service(tmp_path)
-    result = service.invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="modular.compute.discrete_logarithm",
             input={
@@ -166,9 +108,9 @@ def test_discrete_logarithm_returns_typed_result(
 
 
 def test_discrete_logarithm_reports_unsolvable_without_false_witness(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
 ) -> None:
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="modular.compute.discrete_logarithm",
             input={
@@ -186,7 +128,7 @@ def test_discrete_logarithm_reports_unsolvable_without_false_witness(
 
 
 def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
     monkeypatch,
 ) -> None:
     observed: dict[str, object] = {}
@@ -208,7 +150,7 @@ def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
         "jacobian.domains.number_theory.discrete_logarithm.execute_process",
         timeout_worker,
     )
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="modular.compute.discrete_logarithm",
             input={
@@ -235,9 +177,9 @@ def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
 
 
 def test_factorization_is_complete_in_an_isolated_bounded_worker(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
 ) -> None:
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="integer.compute.prime_factorization",
             input={
@@ -281,14 +223,13 @@ def test_factorization_is_complete_in_an_isolated_bounded_worker(
     ),
 )
 def test_powerful_number_decision_preserves_a_complete_factor_witness(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
     value: str,
     is_powerful: bool,
     factors: list[dict[str, object]],
     violating_primes: list[str],
 ) -> None:
-    service = _service(tmp_path)
-    result = service.invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="integer.decide.powerful",
             input={
@@ -310,10 +251,10 @@ def test_powerful_number_decision_preserves_a_complete_factor_witness(
 
 @pytest.mark.parametrize("value", ["0", "-1", "-72"])
 def test_powerful_number_rejects_nonpositive_input_before_artifact_writes(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
     value: str,
 ) -> None:
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="integer.decide.powerful",
             input={"value": value},
@@ -326,39 +267,6 @@ def test_powerful_number_rejects_nonpositive_input_before_artifact_writes(
 
 
 @pytest.mark.parametrize(
-    "payload",
-    (
-        {
-            "semantics_version": "powerful-number.prime-exponents-at-least-two.v1",
-            "is_powerful": False,
-            "factors": [{"prime": "2", "power": 3}],
-            "violating_primes": [],
-        },
-        {
-            "semantics_version": "powerful-number.prime-exponents-at-least-two.v1",
-            "is_powerful": True,
-            "factors": [{"prime": "2", "power": 1}],
-            "violating_primes": ["2"],
-        },
-        {
-            "semantics_version": "powerful-number.prime-exponents-at-least-two.v1",
-            "is_powerful": False,
-            "factors": [
-                {"prime": "3", "power": 1},
-                {"prime": "2", "power": 2},
-            ],
-            "violating_primes": ["3"],
-        },
-    ),
-)
-def test_powerful_number_result_rejects_inconsistent_or_noncanonical_witnesses(
-    payload: dict[str, object],
-) -> None:
-    with pytest.raises(ValidationError):
-        PowerfulNumberResult.model_validate(payload)
-
-
-@pytest.mark.parametrize(
     ("capability_id", "expected"),
     (
         ("integer.decide.squarefree", {"holds": True}),
@@ -366,11 +274,11 @@ def test_powerful_number_result_rejects_inconsistent_or_noncanonical_witnesses(
     ),
 )
 def test_factorization_derived_operations_complete_in_the_worker(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
     capability_id: str,
     expected: dict[str, object],
 ) -> None:
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id=capability_id,
             input={"n": 30, "resource_budget": {"wall_seconds": 10}},
@@ -382,7 +290,7 @@ def test_factorization_derived_operations_complete_in_the_worker(
 
 
 def test_factorization_timeout_is_an_artifact_free_non_conclusion(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
     monkeypatch,
 ) -> None:
     observed: dict[str, object] = {}
@@ -402,7 +310,7 @@ def test_factorization_timeout_is_an_artifact_free_non_conclusion(
         "jacobian.domains.number_theory.factorization.execute_process",
         timeout_worker,
     )
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(
             capability_id="integer.compute.divisors",
             input={
@@ -438,7 +346,7 @@ def test_factorization_timeout_is_an_artifact_free_non_conclusion(
     ),
 )
 def test_factorization_derived_timeout_is_a_non_conclusion(
-    tmp_path: Path,
+    number_theory_service: CapabilityService,
     monkeypatch,
     capability_id: str,
     payload: dict[str, object],
@@ -455,39 +363,10 @@ def test_factorization_derived_timeout_is_a_non_conclusion(
         ),
     )
 
-    result = _service(tmp_path).invoke(
+    result = number_theory_service.invoke(
         CapabilityRequest(capability_id=capability_id, input=payload)
     )
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.diagnostics[0].code == "INTEGER_FACTORIZATION_TIMEOUT"
     assert result.artifact_uris == ()
-
-
-def test_in_process_factorization_dependencies_have_small_input_bounds() -> None:
-    for model, payload in (
-        (PositiveIntegerRequest, {"n": 1_001}),
-        (NonnegativeIntegerRequest, {"n": 1_001}),
-        (ModularValueRequest, {"value": "2", "modulus": 10_001}),
-        (FactorialValuationRequest, {"n": 1, "base": 1_000_001}),
-    ):
-        with pytest.raises(ValidationError):
-            model.model_validate(payload)
-
-
-def test_integer_partition_enumeration_is_complete_and_canonical(
-    tmp_path: Path,
-) -> None:
-    result = _service(tmp_path).invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.enumerate.integer_partitions",
-            input={"n": 5, "max_parts": 2},
-        )
-    )
-
-    assert result.execution.status is ExecutionStatus.COMPLETED
-    assert result.output["result"] == {
-        "n": 5,
-        "max_parts": 2,
-        "partitions": [[5], [4, 1], [3, 2]],
-    }

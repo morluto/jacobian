@@ -194,8 +194,9 @@ def _bounded_candidate(candidate: object) -> dict[str, Any]:
     return candidate
 
 
-def _expected(source: dict[str, Any]) -> dict[str, object]:
-    table, base = _table(source)
+def _replay_support(
+    table: list[list[Fraction]],
+) -> tuple[list[dict[str, object]], list[tuple[Fraction, Fraction]]]:
     row_marginals = [sum(row, Fraction()) for row in table]
     column_marginals = [
         sum((table[row][column] for row in range(len(table))), Fraction())
@@ -222,19 +223,40 @@ def _expected(source: dict[str, Any]) -> dict[str, object]:
                     "likelihood_ratio": _wire(ratio),
                 }
             )
-    scale = lcm(*(probability.denominator for probability, _ in weighted_ratios))
+    return support, weighted_ratios
+
+
+def _replay_product(
+    scale: int,
+    weighted_ratios: list[tuple[Fraction, Fraction]],
+) -> Fraction:
     if scale.bit_length() > _SCALE_BITS_BOUND:
         raise ValueError("mutual-information scale exceeds checker scope")
     power_cost = 0
     product = Fraction(1)
     for probability, ratio in weighted_ratios:
         exponent = scale * probability.numerator // probability.denominator
+        if ratio == 1:
+            continue
         power_cost += exponent * (
             ratio.numerator.bit_length() + ratio.denominator.bit_length()
         )
         if power_cost > _POWER_COST_BITS_BOUND:
             raise ValueError("mutual-information product exceeds checker scope")
         product *= ratio**exponent
+    return product
+
+
+def _expected(source: dict[str, Any]) -> dict[str, object]:
+    table, base = _table(source)
+    row_marginals = [sum(row, Fraction()) for row in table]
+    column_marginals = [
+        sum((table[row][column] for row in range(len(table))), Fraction())
+        for column in range(len(table[0]))
+    ]
+    support, weighted_ratios = _replay_support(table)
+    scale = lcm(*(probability.denominator for probability, _ in weighted_ratios))
+    product = _replay_product(scale, weighted_ratios)
     if product < 1:
         raise ValueError("mutual-information product contradicts nonnegativity")
     base_exponent = _rational_base_exponent(product, base)

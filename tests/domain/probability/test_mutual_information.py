@@ -9,7 +9,6 @@ from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.math.probability import FiniteJointTable, mutual_information
 
-
 _PAYLOAD = {
     "row_labels": ["0", "1"],
     "column_labels": ["0", "1"],
@@ -72,8 +71,7 @@ def test_finite_joint_mutual_information_is_exact_and_verified(
         "identity": "SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT",
     }
     assert [
-        (item["row_index"], item["column_index"])
-        for item in result["positive_support"]
+        (item["row_index"], item["column_index"]) for item in result["positive_support"]
     ] == [(0, 0), (1, 1)]
     assert computed.artifact_uris == ()
 
@@ -135,6 +133,34 @@ def test_checker_formats_large_valid_log_product_without_decimal_limit_failure(
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.verification_record_uri is not None
+
+
+def test_unit_likelihood_ratios_do_not_consume_power_cost_budget(
+    probability_services,
+) -> None:
+    payload = {
+        "row_labels": ["rare", "common"],
+        "column_labels": ["only"],
+        "probabilities": [[_q(1, 100_000)], [_q(99_999, 100_000)]],
+        "log_base": 2,
+    }
+    computed = probability_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="probability.joint.mutual_information.compute",
+            input=payload,
+        )
+    )
+
+    assert computed.execution.status is ExecutionStatus.COMPLETED
+    result = computed.output["result"]
+    assert result["sign"] == "ZERO"
+    assert result["exact_value"] == _q(0)
+    assert result["log_product_certificate"]["scale"] == "100000"
+    assert result["log_product_certificate"]["product"] == _q(1)
+
+    verified = _verify(probability_services, payload, result)
+    assert verified.execution.status is ExecutionStatus.COMPLETED
+    assert verified.output["status"] == "VERIFIED"
 
 
 def test_mutual_information_checker_rejects_tampered_ratio(

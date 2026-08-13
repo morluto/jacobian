@@ -56,6 +56,75 @@ FiniteJointColumnMarginals = Annotated[
 ]
 
 
+def _bound_raw_probability_cell(cell: object) -> None:
+    if not isinstance(cell, Mapping):
+        return
+    for component in ("num", "den"):
+        raw_component = cell.get(component)
+        if (
+            isinstance(raw_component, str)
+            and len(raw_component.lstrip("-")) > MAX_INPUT_RATIONAL_DIGITS
+        ):
+            raise ValueError(
+                "joint-table probability exceeds the "
+                f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound"
+            )
+
+
+def _bound_raw_probability_row(row: object) -> int:
+    if not isinstance(row, (list, tuple)):
+        return 0
+    if len(row) > MAX_FINITE_JOINT_TABLE_COLUMNS:
+        raise ValueError("joint table exceeds the bounded column count")
+    for cell in row:
+        _bound_raw_probability_cell(cell)
+    return len(row)
+
+
+def _bound_raw_probability_matrix(value: Any) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    raw_table = value.get("probabilities")
+    if not isinstance(raw_table, (list, tuple)):
+        return value
+    if len(raw_table) > MAX_FINITE_JOINT_TABLE_ROWS:
+        raise ValueError("joint table exceeds the bounded row count")
+    cell_count = 0
+    for row in raw_table:
+        cell_count += _bound_raw_probability_row(row)
+        if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
+            raise ValueError("joint table exceeds the bounded cell count")
+    return value
+
+
+def _require_native_probability_shape(
+    row_labels: tuple[str, ...],
+    column_labels: tuple[str, ...],
+    probabilities: tuple[tuple[object, ...], ...],
+) -> None:
+    if len(probabilities) != len(row_labels):
+        raise ValueError("joint-table row count must match row labels")
+    if any(len(row) != len(column_labels) for row in probabilities):
+        raise ValueError("joint-table rows must match column labels")
+    if len(row_labels) * len(column_labels) > MAX_FINITE_JOINT_TABLE_CELLS:
+        raise ValueError("joint table exceeds the bounded cell count")
+
+
+def _require_native_probability_values(
+    probabilities: tuple[tuple[Fraction, ...], ...],
+) -> None:
+    total = Fraction()
+    for row in probabilities:
+        for probability in row:
+            if type(probability) is not Fraction:
+                raise TypeError("native joint-table probabilities must be Fractions")
+            if probability < 0:
+                raise ValueError("joint-table probabilities must be nonnegative")
+            total += probability
+    if total != 1:
+        raise ValueError("joint-table probabilities must sum exactly to 1")
+
+
 class FiniteJointTableMutualInformationRequest(ContractModel):
     """Canonical wire request for one bounded normalized rational joint table."""
 
@@ -77,37 +146,7 @@ class FiniteJointTableMutualInformationRequest(ContractModel):
     @classmethod
     def bound_raw_probability_matrix(cls, value: Any) -> Any:
         """Reject oversized collections before parsing any rational cell model."""
-
-        if not isinstance(value, Mapping):
-            return value
-        raw_table = value.get("probabilities")
-        if not isinstance(raw_table, (list, tuple)):
-            return value
-        if len(raw_table) > MAX_FINITE_JOINT_TABLE_ROWS:
-            raise ValueError("joint table exceeds the bounded row count")
-        cell_count = 0
-        for row in raw_table:
-            if not isinstance(row, (list, tuple)):
-                continue
-            if len(row) > MAX_FINITE_JOINT_TABLE_COLUMNS:
-                raise ValueError("joint table exceeds the bounded column count")
-            cell_count += len(row)
-            if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
-                raise ValueError("joint table exceeds the bounded cell count")
-            for cell in row:
-                if isinstance(cell, Mapping):
-                    for component in ("num", "den"):
-                        raw_component = cell.get(component)
-                        if (
-                            isinstance(raw_component, str)
-                            and len(raw_component.lstrip("-"))
-                            > MAX_INPUT_RATIONAL_DIGITS
-                        ):
-                            raise ValueError(
-                                "joint-table probability exceeds the "
-                                f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound"
-                            )
-        return value
+        return _bound_raw_probability_matrix(value)
 
     @model_validator(mode="after")
     def require_normalized_rectangular_table(self) -> Self:
@@ -115,15 +154,11 @@ class FiniteJointTableMutualInformationRequest(ContractModel):
             raise ValueError("joint-table row labels must be unique")
         if len(set(self.column_labels)) != len(self.column_labels):
             raise ValueError("joint-table column labels must be unique")
-        if len(self.probabilities) != len(self.row_labels):
-            raise ValueError("joint-table row count must match row labels")
-        if any(len(row) != len(self.column_labels) for row in self.probabilities):
-            raise ValueError("joint-table rows must match column labels")
-        if (
-            len(self.row_labels) * len(self.column_labels)
-            > MAX_FINITE_JOINT_TABLE_CELLS
-        ):
-            raise ValueError("joint table exceeds the bounded cell count")
+        _require_native_probability_shape(
+            self.row_labels,
+            self.column_labels,
+            self.probabilities,
+        )
         total = Fraction()
         for row in self.probabilities:
             for probability in row:
@@ -202,9 +237,7 @@ class FiniteJointTableMutualInformationResult(ContractModel):
     log_product_certificate: MutualInformationLogProductCertificate
     exact_value: CanonicalRational | None = None
     sign: Literal["ZERO", "POSITIVE"]
-    zero_cell_convention: Literal["ZERO_MASS_TERMS_OMITTED"] = (
-        "ZERO_MASS_TERMS_OMITTED"
-    )
+    zero_cell_convention: Literal["ZERO_MASS_TERMS_OMITTED"] = "ZERO_MASS_TERMS_OMITTED"
 
     @model_validator(mode="before")
     @classmethod
@@ -242,7 +275,9 @@ class FiniteJointTableMutualInformationResult(ContractModel):
             if term.row_index >= len(self.row_marginals):
                 raise ValueError("positive support row index lies outside the result")
             if term.column_index >= len(self.column_marginals):
-                raise ValueError("positive support column index lies outside the result")
+                raise ValueError(
+                    "positive support column index lies outside the result"
+                )
             if term.row_marginal != self.row_marginals[term.row_index]:
                 raise ValueError("positive support row marginal is inconsistent")
             if term.column_marginal != self.column_marginals[term.column_index]:
@@ -263,8 +298,7 @@ class FiniteJointTableMutualInformationResult(ContractModel):
 
         return cls(
             row_marginals=tuple(
-                CanonicalRational.from_fraction(value)
-                for value in result.row_marginals
+                CanonicalRational.from_fraction(value) for value in result.row_marginals
             ),
             column_marginals=tuple(
                 CanonicalRational.from_fraction(value)
@@ -375,7 +409,7 @@ MUTUAL_INFORMATION_CAPABILITY = inline_operation(
 )
 
 __all__ = [
+    "MUTUAL_INFORMATION_CAPABILITY",
     "FiniteJointTableMutualInformationRequest",
     "FiniteJointTableMutualInformationResult",
-    "MUTUAL_INFORMATION_CAPABILITY",
 ]

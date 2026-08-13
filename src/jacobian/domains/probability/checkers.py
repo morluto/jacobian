@@ -37,8 +37,7 @@ def _mutual_information_checker_runtime(
         "jacobian.mutual-information-checker",
         version="1",
         entrypoint=(
-            "jacobian_checkers.mutual_information:"
-            "check_finite_joint_mutual_information"
+            "jacobian_checkers.mutual_information:check_finite_joint_mutual_information"
         ),
         install_tier=CapabilityInstallTier.T1,
         license_id="MIT",

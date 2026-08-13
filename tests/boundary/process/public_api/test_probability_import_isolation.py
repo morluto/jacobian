@@ -35,4 +35,6 @@ def test_native_probability_import_does_not_load_its_wire_or_runtime_owner() -> 
         if name == prefix or name.startswith(f"{prefix}.")
     }
 
-    assert not leaked, f"native probability imported wire/runtime modules: {sorted(leaked)}"
+    assert not leaked, (
+        f"native probability imported wire/runtime modules: {sorted(leaked)}"
+    )

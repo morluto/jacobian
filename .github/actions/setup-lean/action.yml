@@ -18,6 +18,7 @@ runs:
       with:
         lake-package-directory: lean
         use-mathlib-cache: true
+        use-github-cache: false
         build: false
         test: false
         lint: false
@@ -55,8 +56,17 @@ runs:
       run: |
         started=$SECONDS
         set +e
-        lake build repl jacobian_lean_proof_state
+        lake build JacobianLeanRuntime repl jacobian_lean_proof_state
         status=$?
         set -e
         echo "| Build Jacobian Lean exploration runtime | $((SECONDS - started)) |" >> "$GITHUB_STEP_SUMMARY"
         exit "$status"
+    - name: Prove CORE and MATHLIB runtimes are available
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        JACOBIAN_LEAN_REQUIRED: "1"
+      run: |
+        started=$SECONDS
+        uv run --locked python tools/preflight_lean_runtime.py --required
+        echo "| Lean runtime preflight | $((SECONDS - started)) |" >> "$GITHUB_STEP_SUMMARY"

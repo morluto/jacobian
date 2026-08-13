@@ -9,10 +9,13 @@ import pytest
 import jacobian.checker_identity as checker_identity
 from jacobian.checker_identity import (
     CheckerManifestError,
+    batch_checker_manifest_measurement,
     build_checker_manifest,
     checker_implementation_digest,
+    require_manifest_material_unchanged,
     require_manifest_unchanged,
 )
+from jacobian.contracts.checkers import CheckerManifest
 from jacobian.implementation import (
     ImplementationError,
     package_source_digest,
@@ -135,6 +138,27 @@ def test_checker_manifest_separates_source_closures_and_worker_distributions(
         for item in manifest.python_distributions
     }
     assert {"pydantic", "pydantic-core", "rfc8785"} <= distributions
+
+
+def test_batched_measurement_preserves_checker_identity() -> None:
+    def measure() -> CheckerManifest:
+        return build_checker_manifest(
+            "jacobian_checkers.graph_exact_operations:check_graph_hamiltonian_path",
+            provider_runtime=None,
+            passive_contract_uris=("artifact://sha256/" + "0" * 64,),
+        )
+
+    expected = measure()
+
+    with batch_checker_manifest_measurement():
+        first = measure()
+        second = measure()
+
+    assert first == expected
+    assert second == expected
+    assert checker_implementation_digest(first) == checker_implementation_digest(
+        expected
+    )
 
 
 def test_checker_manifest_rejects_tampered_python_distribution_identity(
@@ -264,6 +288,34 @@ def test_checker_manifest_rejects_a_changed_declared_helper(
 
     with pytest.raises(CheckerManifestError, match="changed after authorization"):
         require_manifest_unchanged(manifest)
+
+
+def test_manifest_material_check_rejects_a_changed_declared_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = tmp_path / "changed_material_fixture"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "checker.py").write_text(
+        "from .helper import VALUE\n\ndef run(_request):\n    return VALUE\n",
+        encoding="utf-8",
+    )
+    helper = package / "helper.py"
+    helper.write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    manifest = build_checker_manifest(
+        "changed_material_fixture.checker:run",
+        provider_runtime=None,
+        passive_contract_uris=(),
+    )
+
+    helper.write_text("VALUE = 2\n", encoding="utf-8")
+    importlib.invalidate_caches()
+
+    with pytest.raises(CheckerManifestError, match="checker source changed"):
+        require_manifest_material_unchanged(manifest)
 
 
 def test_digest_resolution_does_not_execute_package_initializers(

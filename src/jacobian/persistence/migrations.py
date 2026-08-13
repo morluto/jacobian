@@ -512,6 +512,16 @@ def _install_checker_distribution_identity_boundary(
     )
 
 
+def _install_verification_record_manifest_boundary(
+    connection: sqlite3.Connection,
+) -> None:
+    """Cut over durable verification records to embedded checker manifests."""
+
+    connection.execute(
+        "UPDATE jacobian_state_format SET format_revision = 11 WHERE id = 0"
+    )
+
+
 STATE_MIGRATIONS = (
     Migration(
         revision=1,
@@ -591,7 +601,17 @@ STATE_MIGRATIONS = (
         ),
         apply=_install_checker_distribution_identity_boundary,
     ),
+    Migration(
+        revision=11,
+        name="verification-record-manifest-boundary-v1",
+        definition=(
+            "Require verification record v4 payloads to snapshot their complete "
+            "checker execution manifest; older record shapes remain owned by "
+            "their matching state revision and checkout."
+        ),
+        apply=_install_verification_record_manifest_boundary,
+    ),
 )
 
-SUPPORTED_STATE_FLOOR = 10
-CURRENT_STATE_FORMAT_REVISION = 10
+SUPPORTED_STATE_FLOOR = 11
+CURRENT_STATE_FORMAT_REVISION = 11

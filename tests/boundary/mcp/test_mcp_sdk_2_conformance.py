@@ -15,6 +15,7 @@ from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.server import JacobianCoreExtension, create_server
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.contracts.capabilities import CapabilityResult
+from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
@@ -47,7 +48,10 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
         from mcp import Client
         from mcp.shared.exceptions import MCPError
 
-        server = create_server(tmp_path)
+        server = create_server(
+            tmp_path,
+            checker_authority=CheckerAuthorityMode.NONE,
+        )
         assert not hasattr(server_module, "Context")
         async with Client(server, raise_exceptions=True) as client:
             listed = await client.list_tools()

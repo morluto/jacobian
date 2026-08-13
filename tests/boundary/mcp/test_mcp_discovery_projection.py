@@ -6,8 +6,11 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import CapabilityDescriptor
+from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.polynomial import build_polynomial_bundle
+from jacobian.domains.probability import build_finite_probability_bundle
+from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 
 def test_math_find_discovers_finite_expectation_by_natural_vocabulary(
@@ -16,18 +19,22 @@ def test_math_find_discovers_finite_expectation_by_natural_vocabulary(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
-            discovered = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "search",
-                        "query": "expectation of a discrete random variable",
-                        "domain": "probability",
-                        "limit": 5,
-                    }
-                },
-            )
+        with open_focused_mcp_server(
+            tmp_path,
+            build_finite_probability_bundle(),
+        ) as server:
+            async with Client(server, raise_exceptions=True) as client:
+                discovered = await client.call_tool(
+                    "math.find",
+                    {
+                        "request": {
+                            "op": "search",
+                            "query": "expectation of a discrete random variable",
+                            "domain": "probability",
+                            "limit": 5,
+                        }
+                    },
+                )
 
         assert isinstance(discovered.structured_content, dict)
         assert "probability.finite_distribution.raw_moment.compute" in {
@@ -43,18 +50,19 @@ def test_math_find_search_returns_compact_lexical_and_availability_facts(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
-            result = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "search",
-                        "query": "compute an exact matrix determinant",
-                        "domain": "matrix",
-                        "limit": 3,
-                    }
-                },
-            )
+        with open_focused_mcp_server(tmp_path, build_matrix_bundle()) as server:
+            async with Client(server, raise_exceptions=True) as client:
+                result = await client.call_tool(
+                    "math.find",
+                    {
+                        "request": {
+                            "op": "search",
+                            "query": "compute an exact matrix determinant",
+                            "domain": "matrix",
+                            "limit": 3,
+                        }
+                    },
+                )
 
         assert isinstance(result.structured_content, dict)
         match = next(
@@ -85,16 +93,17 @@ def test_math_find_exact_inspection_returns_one_authoritative_descriptor(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
-            result = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "capability_id": "polynomial.expression.normalize",
-                    }
-                },
-            )
+        with open_focused_mcp_server(tmp_path, build_polynomial_bundle()) as server:
+            async with Client(server, raise_exceptions=True) as client:
+                result = await client.call_tool(
+                    "math.find",
+                    {
+                        "request": {
+                            "op": "inspect",
+                            "capability_id": "polynomial.compute.gcd",
+                        }
+                    },
+                )
 
         assert isinstance(result.structured_content, dict)
         structured = result.structured_content
@@ -103,7 +112,7 @@ def test_math_find_exact_inspection_returns_one_authoritative_descriptor(
             "capability",
         }
         descriptor = CapabilityDescriptor.model_validate(structured["capability"])
-        assert descriptor.capability_id == "polynomial.expression.normalize"
+        assert descriptor.capability_id == "polynomial.compute.gcd"
         assert descriptor.invocation_examples
         payload = descriptor.invocation_examples[0].input
         validator = Draft202012Validator(descriptor.input_schema)

@@ -53,11 +53,18 @@ CONTROL_PLANE_HOST_TESTS = {
         "benchmarks/validation/test_heldout_bundle.py",
         "benchmarks/validation/test_heldout_runner.py",
     ),
+    # The root Makefile is parsed by the benchmark contract targets, but its
+    # product-test targets do not alter host verifier behavior. Harbor-owned
+    # execution commands live in make/harbor.mk below.
+    "Makefile": (),
     "benchmarks/tooling/benchmark_timings.py": (
         "benchmarks/validation/test_benchmark_timings.py",
     ),
     "benchmarks/tooling/benchmark_validation.py": (
         "benchmarks/validation/test_benchmark_validation.py",
+    ),
+    "benchmarks/tooling/benchmark_contracts.py": (
+        "benchmarks/validation/test_benchmark_contracts.py",
     ),
     "benchmarks/tooling/host_validation.py": (
         "benchmarks/validation/test_host_validation.py",
@@ -92,7 +99,7 @@ CONTROL_PLANE_HOST_TESTS = {
     ),
 }
 SHARED_HOST_HARNESS_PATHS = {
-    "Makefile",
+    "make/harbor.mk",
     "tools/pytest_lifecycle.py",
 }
 

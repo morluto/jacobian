@@ -5,8 +5,11 @@ from __future__ import annotations
 import pytest
 
 from jacobian.domain_bundles import DomainBundle
-from jacobian.portfolio import PortfolioPlan, build_builtin_portfolio
-from jacobian.portfolio.builtin import build_builtin_portfolio_components
+from jacobian.portfolio.builtin import (
+    build_builtin_portfolio,
+    build_builtin_portfolio_components,
+)
+from jacobian.portfolio.model import PortfolioPlan
 
 
 def test_builtin_portfolio_is_an_explicit_plan_of_components() -> None:

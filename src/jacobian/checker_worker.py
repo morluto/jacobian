@@ -22,6 +22,7 @@ from jacobian.checker_identity import (
     UndeclaredCheckerImportError,
     checker_implementation_digest,
     install_manifest_import_guard,
+    require_manifest_material_unchanged,
     require_manifest_unchanged,
 )
 from jacobian.contracts.capabilities import (
@@ -159,7 +160,7 @@ def _execute(manifest_json: str, request_bytes: bytes) -> CheckerWorkerSuccess:
     with contextlib.redirect_stdout(sys.stderr):
         checker = _resolve(manifest.entrypoint)
         response = checker(request)
-    measured_after = require_manifest_unchanged(manifest)
+    measured_after = require_manifest_material_unchanged(manifest)
     if measured_after != measured_before:
         raise _CheckerWorkerFailureError("SOURCE_CHANGED")
     _, runtime_digest_after = _measure_runtime(runtime)

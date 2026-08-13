@@ -8,7 +8,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import (
+    CapabilityAdapter,
+    _validate_strict_json_model,
+)
 from jacobian.capability_errors import (
     CapabilityError,
     CapabilityInvocationError,
@@ -291,8 +294,10 @@ def _adapter_output_model_failure(
             # PrimeFieldMatrix) into mappings, which strict model validation
             # quite correctly rejects even though the published output is
             # already a valid typed model.
-            output_type.model_validate_json(
-                output.model_dump_json(warnings="error"), strict=True
+            _validate_strict_json_model(
+                output_type,
+                output.model_dump_json(warnings="error").encode(),
+                output.model_dump(mode="json"),
             )
         except (TypeError, ValueError, ValidationError):
             pass

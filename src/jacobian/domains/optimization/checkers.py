@@ -22,6 +22,7 @@ def _rational_lp_runtime(
         checker_ids=checker_ids,
     )
 
+
 RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
         "optimization.linear.rational_optimum.compute",

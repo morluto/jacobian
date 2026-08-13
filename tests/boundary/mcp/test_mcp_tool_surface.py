@@ -20,10 +20,15 @@ def test_math_tool_surface_is_consistent_across_discovery(tmp_path: Path) -> Non
             assert set(tools) == {"math.find", "math.run"}
             assert tools["math.find"].title == "Search installed Jacobian math tools"
             assert tools["math.run"].title == "Run one installed Jacobian math tool"
-            assert "authoritative runtime inventory" in (
-                tools["math.find"].description or ""
+            find_description = tools["math.find"].description or ""
+            assert "authoritative for local search and exact operation inspection" in (
+                find_description
             )
-            assert "math.find" in (tools["math.run"].description or "")
+            assert "capability://catalog" in find_description
+            assert "authoritative runtime inventory" not in find_description
+            run_description = tools["math.run"].description or ""
+            assert "select one item from `invocation_examples`" in run_description
+            assert "item's `input` object as the `payload`" in run_description
 
             described = await client.call_tool(
                 "math.find",

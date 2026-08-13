@@ -23,15 +23,15 @@ from jacobian.domains.combinatorics.operations import (
     fibonacci_pair,
     lucas,
 )
-from jacobian.math.combinatorics import (
-    PolynomialCoefficientRecurrenceTableRequest,
-    PolynomialCoefficientRecurrenceTableResult,
-    recurrence_table_residuals,
-)
 from jacobian.domains.combinatorics.recurrence_series_operations import (
     compute_rational_generating_function_coefficients,
     evaluate_linear_recurrence,
     evaluate_polynomial_coefficient_recurrence,
+)
+from jacobian.math.combinatorics import (
+    PolynomialCoefficientRecurrenceTableRequest,
+    PolynomialCoefficientRecurrenceTableResult,
+    recurrence_table_residuals,
 )
 
 RECURRENCE_CAPABILITIES = (

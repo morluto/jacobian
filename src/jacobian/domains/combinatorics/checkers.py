@@ -1,9 +1,6 @@
 """Independent checker declarations owned by exact combinatorics."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.math.combinatorics import (
-    PolynomialCoefficientRecurrenceTableRequest,
-)
 from jacobian.contracts.combinatorics import (
     CyclicDifferenceSetExtensionRequest,
     CyclicPerfectDifferenceSetRequest,
@@ -11,6 +8,9 @@ from jacobian.contracts.combinatorics import (
     LinearRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationRequest,
     RationalGeneratingFunctionCoefficientsRequest,
+)
+from jacobian.math.combinatorics import (
+    PolynomialCoefficientRecurrenceTableRequest,
 )
 
 _ENTRYPOINT = "jacobian_checkers.recurrence_series"

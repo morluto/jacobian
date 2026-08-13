@@ -17,7 +17,6 @@ import pytest
 from pydantic import Field
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityService
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityInstallTier,
@@ -137,13 +136,11 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
         schemas = SchemaRegistry(store)
         artifacts = ArtifactService(store, schemas)
         operations = OperationInstaller(store, schemas, artifacts)
-        capabilities = CapabilityService(store)
         checkers = CheckerRegistry(store)
         verification = VerificationService(store, checkers, schemas)
         registered: list[str] = []
 
         def register_capability(adapter: Any) -> None:
-            capabilities.register(adapter)
             registered.append(adapter.descriptor.capability_id)
 
         context = InstallationContext(
@@ -151,7 +148,6 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
             schemas=schemas,
             artifacts=artifacts,
             values=operations.values,
-            capabilities=capabilities,
             checkers=checkers,
             verification=verification,
             operations=operations,

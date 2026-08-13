@@ -199,7 +199,7 @@ class JacobianCoreExtension(Extension):
 
     async def intercept_tool_call(
         self,
-        params: Any,
+        _params: Any,
         ctx: Any,
         call_next: Any,
     ) -> Any:

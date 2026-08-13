@@ -11,7 +11,7 @@ encode a required research sequence.
 | Change | First local check | Escalate when |
 | --- | --- | --- |
 | Documentation | `make docs-linkcheck` | Checked examples also run when their supported contract changes |
-| Python behavior | `make quick`, then `make check` | Add a named specialist lane when the change crosses that boundary |
+| Python behavior | `make check`, then the owning named lane | Use `make check-all` only for an intentional complete ordinary reproduction |
 | Mathematical domain | Owning domain/component tests | Add composition only for real cross-domain handoff |
 | MCP projection | Focused MCP boundary tests | Add stdio/HTTP parity when transport behavior changes |
 | Checker protocol or authority | Focused checker and authority tests | Require an independent exact-diff review |
@@ -31,10 +31,11 @@ Make targets that own storage, process, MCP, and Lean isolation. `make
 check-external` covers Lean and maintained-provider probes when those trees
 change.
 
-Hosted CI runs that same ordinary suite as six fixed semantic lanes: `unit`,
+`make check` is the bounded local handoff: lint, typecheck, and unit tests.
+Hosted CI runs the complete ordinary suite as six fixed semantic lanes: `unit`,
 `component`, `domain`, `composition`, `e2e`, and `provider`. These are static
-Make targets, not path-selected or timing-planned shards; `make check` runs all
-six in the same order.
+Make targets, not path-selected or timing-planned shards. Use the named lane
+that owns the change; `make check-all` runs all six locally in the same order.
 
 ## Test ownership
 
@@ -81,6 +82,7 @@ make test-exhaustive
 make test-checker-subprocess-coverage
 make quick
 make check
+make check-all
 make check-external
 make check-static
 ```
@@ -291,11 +293,11 @@ skill and exact task validation path when those files change.
 
 After implementation freezes the behavioral tree:
 
-1. run `make check`;
+1. run `make check` and the named lane that owns the change;
 2. run any named specialist lane the change actually crossed;
 3. complete any required independent exact-diff review;
 4. resolve its consolidated findings;
-5. rerun `make check` on the final tree; and
+5. rerun the invalidated focused checks on the final tree; and
 6. report only evidence that actually ran, including material proof gaps.
 
 After any edit, rerun only checks whose evidence the edit invalidated. Do not

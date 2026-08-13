@@ -16,7 +16,7 @@ Use the installed catalog and current references for present tool membership.
 
 ## Contributor quick path
 
-Most changes need only the locked environment and the ordinary check:
+Most changes need only the locked environment and the bounded local handoff:
 
 ```sh
 make setup
@@ -25,12 +25,12 @@ make check
 
 Then open a pull request. `make setup` installs the locked development
 environment with the complete maintained Python backend stack. `make check`
-runs Ruff, mypy, and the same Lean-free ordinary test suite CI covers in fixed
-semantic groups.
+runs Ruff, mypy, and the unit lane. Add the named `make test-*` lane for the
+behavior or boundary changed; CI runs the complete fixed semantic matrix.
 Open the PR once it is green, and add any explicitly relevant specialist
 validation called out below.
 
-`make quick` is the cheaper loop: lint, types, and `tests/unit` only. The
+`make quick` is the cheaper loop: lint and `tests/unit` only. The
 pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
@@ -79,8 +79,10 @@ Jacobian uses Python 3.12 and the uv release pinned in [`.uv-version`](.uv-versi
 make setup          # locked dev environment and Python backends
 ```
 
-`make check` is the PR-equivalent ordinary Python validation. `make quick` is
-lint, types, and unit tests. The pre-push hook intentionally runs only
+`make check` is the bounded lint, type, and unit handoff; `make quick` omits
+typechecking for a shorter edit loop.
+`make check-all` explicitly reproduces every ordinary Python CI lane. The
+pre-push hook intentionally runs only
 `make lint typecheck` so it stays below the interactive feedback budget.
 `make check-static` adds dependency/dead-code checks and a package build when a
 focused change needs them. Run `make help` for the common command index and
@@ -114,12 +116,12 @@ while another agent is working. Integrate their edits first, then run the
 planned checks on the final tree. Use isolated worktrees only when the workflow
 explicitly assigns them.
 
-Before final validation, run `make check` on the final tree. If the tree
-changes during validation, rerun checks whose evidence was invalidated by
-that change; do not describe results from an earlier tree as final-tree
-validation. `make check` is the normal local handoff; CI owns the exhaustive
-evidence described above. Use `make check-external` when Lean or optional
-providers change.
+Before final validation, run `make check` plus the named lane that owns the
+changed behavior. If the tree changes during validation, rerun checks whose
+evidence was invalidated by that change; do not describe results from an
+earlier tree as final-tree validation. `make check-all` is an explicit broad
+reproduction, not a routine closeout requirement. CI owns the complete matrix.
+Use `make check-external` when Lean or optional providers change.
 
 ## Harbor and Oracle validation
 

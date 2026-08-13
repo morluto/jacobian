@@ -10,9 +10,9 @@ PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
 # Fixed semantic lanes covering the Lean-free ordinary testpaths. CI runs these
-# independently; `make check` runs the same lanes locally in this order.
+# independently; `make check-all` reproduces them locally in this order.
 ORDINARY_TEST_LANES := unit component domain composition e2e provider
-PUBLIC_COMMANDS := setup quick check check-external fix
+PUBLIC_COMMANDS := setup quick check check-all check-external fix
 
 include make/development.mk
 include make/harbor.mk
@@ -150,15 +150,17 @@ coverage: ## Combine coverage data files and enforce the repository threshold.
 build: ## Build Python source and wheel distributions.
 	uv build
 
-quick: lint typecheck test-unit ## Cheap iteration: lint, types, unit tests.
+quick: lint test-unit ## Cheap iteration: lint and unit tests.
 
-check: lint typecheck test-ordinary ## PR-equivalent ordinary Python validation.
+check: lint typecheck test-unit ## Routine local handoff: lint, types, and unit tests.
+
+check-all: lint typecheck test-ordinary ## Explicitly reproduce all ordinary CI lanes.
 
 check-external: test-lean test-provider ## Lean and maintained-provider isolation.
 
 precommit: ## Fix and run every routine local handoff check.
 	$(MAKE) fix
-	$(MAKE) quick
+	$(MAKE) check
 
 check-static: lint-full typecheck import-contracts architecture todo-check build ## CI-owned static checks plus a local package build.
 

@@ -1,10 +1,38 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel, ValidationError, field_validator
 
-from jacobian.capability_errors import PayloadValidationError
+from jacobian.capability_errors import PayloadValidationError, enriched_invalid_request
 from jacobian.capability_validation import validate_payload
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+
+
+def test_enriched_invalid_request_hides_input_derived_pydantic_messages() -> None:
+    marker = "private_validation_marker"
+
+    class InputFixture(BaseModel):
+        value: str
+
+        @field_validator("value")
+        @classmethod
+        def reject_value(cls, value: str) -> str:
+            raise ValueError(f"rejected value: {value}")
+
+    with pytest.raises(ValidationError) as exc_info:
+        InputFixture.model_validate({"value": marker})
+
+    diagnostic = enriched_invalid_request(
+        CapabilityDiagnostic(
+            code="INVALID_REQUEST",
+            stage="input_validation",
+            message="Invalid request.",
+        ),
+        exc_info.value,
+    )
+
+    assert marker not in diagnostic.model_dump_json()
+    assert diagnostic.path == "value"
 
 
 def test_payload_validation_reports_exact_maximum_constraint() -> None:

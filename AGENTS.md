@@ -207,6 +207,10 @@ checker authorization out of plugins and search code.
   validation. Exercise incompatible-but-individually-valid values through the
   serialized installed-operation boundary and assert an invalid-request result
   with no execution or publication.
+- Mathematical inputs are not presumed confidential. Public diagnostics should
+  expose a stable domain reason, path, limit, and recovery direction—not
+  arbitrary rejected values, which may be unbounded or user-controlled. This
+  projection must not add another validation pass.
 - A `COMPLETED` bounded operation may return a domain result marked `UNKNOWN` or
   `INCOMPLETE`. Execution completion alone does not establish optimality or a
   mathematical conclusion.

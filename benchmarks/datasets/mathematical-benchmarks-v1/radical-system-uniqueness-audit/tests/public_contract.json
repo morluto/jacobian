@@ -41,7 +41,7 @@
   "schema_definitions": {},
   "schema_version": "1",
   "scope": {
-    "const": null,
+    "const": "Complete real solution set under principal-root semantics.",
     "enum": null,
     "pattern": null,
     "type": "string"
@@ -51,6 +51,7 @@
     "additionalProperties": false,
     "properties": {
       "elimination_coefficients": {
+        "description": "Coefficients of the elimination polynomial in ascending power order: [u^0, u^1, u^2, u^3, u^4].",
         "items": {
           "type": "integer"
         },
@@ -220,6 +221,7 @@
         "additionalProperties": false,
         "properties": {
           "elimination_coefficients": {
+            "description": "Coefficients of the elimination polynomial in ascending power order: [u^0, u^1, u^2, u^3, u^4].",
             "items": {
               "type": "integer"
             },
@@ -332,6 +334,7 @@
         "type": "object"
       },
       "scope": {
+        "const": "Complete real solution set under principal-root semantics.",
         "type": "string"
       },
       "task_id": {

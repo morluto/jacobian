@@ -24,7 +24,7 @@ Write `/app/submission.json` to the exact schema in `environment/submission_sche
 
 - **Conclusion:** one of `UNIQUE_REAL_SOLUTION`, `MULTIPLE_REAL_SOLUTIONS`, `INSUFFICIENT_EVIDENCE`
 - **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** a string value
+- **Scope:** the exact value declared in `submission_schema.json`
 - **Completeness:** one of `COMPLETE`, `PARTIAL`, `UNKNOWN`.
 - **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
 - **Evidence media types:** `text/plain`.

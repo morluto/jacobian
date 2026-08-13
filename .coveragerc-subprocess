@@ -1,0 +1,11 @@
+[run]
+branch = true
+parallel = true
+patch = subprocess
+source =
+    jacobian
+
+[report]
+fail_under = 50
+show_missing = true
+skip_covered = true

@@ -25,6 +25,7 @@ MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS = (
 MAX_MUTUAL_INFORMATION_LIKELIHOOD_RATIO_DIGITS = (
     MAX_INPUT_RATIONAL_DIGITS * (1 + 2 * MAX_FINITE_JOINT_TABLE_ROWS) + 4
 )
+_MAX_INPUT_RATIONAL_MAGNITUDE = 10**MAX_INPUT_RATIONAL_DIGITS
 
 
 def _require_native_labels(labels: tuple[str, ...], maximum: int, axis: str) -> None:
@@ -57,6 +58,14 @@ def _require_native_probability_values(
         for probability in row:
             if type(probability) is not Fraction:
                 raise TypeError("native joint-table probabilities must use Fractions")
+            if (
+                abs(probability.numerator) >= _MAX_INPUT_RATIONAL_MAGNITUDE
+                or probability.denominator >= _MAX_INPUT_RATIONAL_MAGNITUDE
+            ):
+                raise ValueError(
+                    "joint-table probability exceeds the "
+                    f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound"
+                )
             if probability < 0:
                 raise ValueError("joint-table probabilities must be nonnegative")
             total += probability

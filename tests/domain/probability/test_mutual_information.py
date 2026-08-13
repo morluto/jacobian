@@ -55,6 +55,17 @@ def test_native_mutual_information_composes_with_fractions() -> None:
     assert result.exact_value == Fraction(1, 4)
 
 
+def test_native_table_rejects_oversized_probability_components() -> None:
+    oversized = Fraction(1, 10**256 + 1)
+
+    with pytest.raises(ValueError, match="256-digit bound"):
+        FiniteJointTable(
+            row_labels=("rare", "common"),
+            column_labels=("only",),
+            probabilities=((oversized,), (1 - oversized,)),
+        )
+
+
 def test_native_result_rejects_support_that_does_not_reconstruct_marginals() -> None:
     with pytest.raises(ValueError, match="does not reconstruct row marginals"):
         MutualInformationResult(

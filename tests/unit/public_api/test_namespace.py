@@ -68,6 +68,7 @@ PUBLIC_API = {
         "triangle_count",
     ),
     "jacobian.math.matrices": (
+        "SmithNormalForm",
         "adjugate",
         "characteristic_polynomial",
         "determinant",
@@ -78,7 +79,6 @@ PUBLIC_API = {
         "smith_normal_form",
         "solve_linear_system",
         "trace",
-        "SmithNormalForm",
     ),
     "jacobian.math.polynomials": (
         "derivative",

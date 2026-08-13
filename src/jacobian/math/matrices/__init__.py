@@ -15,6 +15,7 @@ from jacobian.math.matrices.operations import (
 from jacobian.math.matrices.values import SmithNormalForm
 
 __all__ = [
+    "SmithNormalForm",
     "adjugate",
     "characteristic_polynomial",
     "determinant",
@@ -25,5 +26,4 @@ __all__ = [
     "smith_normal_form",
     "solve_linear_system",
     "trace",
-    "SmithNormalForm",
 ]

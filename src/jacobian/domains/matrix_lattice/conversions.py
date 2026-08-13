@@ -99,5 +99,7 @@ def smith_normal_form_from_sympy(matrix: Any) -> SmithNormalForm:
     return SmithNormalForm(
         normal_form=integer_matrix_from_sympy(canonical),
         rank=rank,
-        invariant_factors=tuple(format_canonical_integer(value) for value in invariant_factors),
+        invariant_factors=tuple(
+            format_canonical_integer(value) for value in invariant_factors
+        ),
     )

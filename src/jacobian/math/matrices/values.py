@@ -38,7 +38,9 @@ class SmithNormalForm(ContractModel):
             raise ValueError("nonzero invariant factor count must equal rank")
         if self.rank > min(rows, columns):
             raise ValueError("Smith rank cannot exceed the matrix dimensions")
-        factors = tuple(parse_canonical_integer(value) for value in self.invariant_factors)
+        factors = tuple(
+            parse_canonical_integer(value) for value in self.invariant_factors
+        )
         if any(value <= 0 for value in factors):
             raise ValueError("Smith invariant factors must be positive")
         if any(right % left != 0 for left, right in pairwise(factors)):

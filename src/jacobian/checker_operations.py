@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.results import ContractModel
+
+ProviderRuntimeFactory = Callable[[], CapabilityProviderRuntime]
 
 # Producer operation verb segments stripped when deriving a verifier capability
 # ID. Each producer capability ID contains exactly one of these segments; the
@@ -91,10 +94,13 @@ class ExactReplayCheckerDeclaration:
     are strictly constructed from the producer capability ID so that no
     verifier metadata is absent at installation.
 
-    A declaration may own its complete clean-process provider runtime directly.
-    Existing built-in families may continue to use the legacy central runtime
-    registry while they are migrated. Direct runtimes must not carry checker
-    IDs before operator authorization.
+    A declaration may own a passive factory for its complete clean-process
+    provider runtime. The factory is evaluated and cached only when installation
+    asks for ``provider_runtime``; importing a domain declaration therefore does
+    not identify or hash checker source. Existing built-in families may continue
+    to use the legacy central runtime registry while they are migrated. A
+    realized declaration runtime must not carry checker IDs before operator
+    authorization.
     """
 
     capability_id: str
@@ -107,14 +113,20 @@ class ExactReplayCheckerDeclaration:
         "operator-authorized Python-FLINT exact replay independent of the "
         "SymPy producer"
     )
-    provider_runtime: CapabilityProviderRuntime | None = None
+    provider_runtime_factory: ProviderRuntimeFactory | None = None
     verification_capability_id: str | None = None
     verification_title: str | None = None
     verification_description: str | None = None
     verification_tags: tuple[str, ...] = ()
+    _provider_runtime: CapabilityProviderRuntime | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
-        for field, value in {
+        for field_name, value in {
             "capability_id": self.capability_id,
             "function": self.function,
             "format_id": self.format_id,
@@ -124,12 +136,8 @@ class ExactReplayCheckerDeclaration:
         }.items():
             if not value.strip():
                 raise ValueError(
-                    f"exact replay checker declaration {field} must not be empty"
+                    f"exact replay checker declaration {field_name} must not be empty"
                 )
-        if self.provider_runtime is not None and self.provider_runtime.checker_ids:
-            raise ValueError(
-                "declaration-owned provider runtime must not pre-authorize checker IDs"
-            )
         derived_id = derive_verification_capability_id(self.capability_id)
         explicit_text = (
             self.verification_title,
@@ -176,6 +184,29 @@ class ExactReplayCheckerDeclaration:
                 derive_verification_tags(self.capability_id),
             )
 
+    @property
+    def provider_runtime(self) -> CapabilityProviderRuntime | None:
+        """Realize this declaration's provider identity at installation time."""
+
+        factory = self.provider_runtime_factory
+        if factory is None:
+            return None
+        cached = self._provider_runtime
+        if cached is not None:
+            return cached
+        runtime = factory()
+        if not isinstance(runtime, CapabilityProviderRuntime):
+            raise TypeError(
+                "declaration-owned provider runtime factory must return "
+                "CapabilityProviderRuntime"
+            )
+        if runtime.checker_ids:
+            raise ValueError(
+                "declaration-owned provider runtime must not pre-authorize checker IDs"
+            )
+        object.__setattr__(self, "_provider_runtime", runtime)
+        return runtime
+
 
 @dataclass(frozen=True, slots=True)
 class CheckerOperation:
@@ -202,9 +233,9 @@ class CheckerOperation:
             "format_version": self.format_version,
             "reason": self.reason,
         }
-        for field, value in required_text.items():
+        for field_name, value in required_text.items():
             if not value.strip():
-                raise ValueError(f"checker operation {field} must not be empty")
+                raise ValueError(f"checker operation {field_name} must not be empty")
         if not self.claim_schema_uris:
             raise ValueError("checker operation must declare a claim schema")
         if not self.semantics_uris:

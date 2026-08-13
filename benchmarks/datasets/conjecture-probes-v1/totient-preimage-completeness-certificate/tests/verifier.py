@@ -208,14 +208,18 @@ def main() -> None:
         if evidence_ok
         else None
     )
-    evidence_ok = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and payload.get("limitations") == LIMITATIONS
-    )
+    try:
+        evidence_ok = bool(
+            isinstance(payload, dict)
+            and set(payload)
+            == {"schema_version", "task_id", "result", "limitations"}
+            and payload.get("schema_version") == "1"
+            and payload.get("task_id") == TASK_ID
+            and _json_equal(payload.get("result"), raw.get("result"))
+            and payload.get("limitations") == LIMITATIONS
+        )
+    except RecursionError:
+        evidence_ok = False
     scope_ok = bool(
         isinstance(raw, dict)
         and raw.get("scope") == SCOPE
@@ -223,8 +227,7 @@ def main() -> None:
         and raw.get("limitations") == LIMITATIONS
     )
     assurance_ok = bool(
-        contract
-        and isinstance(raw, dict)
+        isinstance(raw, dict)
         and type(raw.get("claimed_assurance")) is str
         and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
     )
@@ -234,10 +237,25 @@ def main() -> None:
         "correctness": float(math_ok),
         "mathematics": float(math_ok),
         "evidence": float(evidence_ok),
+        "evidence_validity": float(evidence_ok),
         "scope": float(scope_ok),
+        "scope_accuracy": float(scope_ok),
         "assurance": float(assurance_ok),
+        "assurance_calibration": float(assurance_ok),
     }
-    values["aggregate_reward"] = float(all(values.values()))
+    values["aggregate_reward"] = float(
+        all(
+            values[key]
+            for key in (
+                "input_binding",
+                "protocol",
+                "correctness",
+                "evidence_validity",
+                "scope_accuracy",
+                "assurance_calibration",
+            )
+        )
+    )
     values["reward"] = values["aggregate_reward"]
     values["false_certification"] = bool(
         isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
@@ -264,8 +282,11 @@ if __name__ == "__main__":
                     "correctness": 0.0,
                     "mathematics": 0.0,
                     "evidence": 0.0,
+                    "evidence_validity": 0.0,
                     "scope": 0.0,
+                    "scope_accuracy": 0.0,
                     "assurance": 0.0,
+                    "assurance_calibration": 0.0,
                     "false_certification": False,
                     "aggregate_reward": 0.0,
                     "reward": 0.0,

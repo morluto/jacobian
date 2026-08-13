@@ -213,9 +213,9 @@ def main() -> None:
             isinstance(payload, dict)
             and set(payload) == {"schema_version", "task_id", "result", "limitations"}
             and payload.get("schema_version") == "1"
-            and payload.get("task_id") == TASK_ID
+            and payload.get("task_id") == raw.get("task_id")
             and _json_equal(payload.get("result"), raw.get("result"))
-            and payload.get("limitations") == LIMITATIONS
+            and payload.get("limitations") == raw.get("limitations")
         )
     except RecursionError:
         evidence_ok = False

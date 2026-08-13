@@ -19,14 +19,11 @@ from jacobian.providers.flint_runtime import python_flint_probability_provider_r
 
 
 def _operation_with_canonical_gaussian_input(operation: Any) -> Any:
-    if operation.spec.operation_id != "probability.gaussian_polynomial.moment.compute":
+    if operation.operation_id != "probability.gaussian_polynomial.moment.compute":
         return operation
     return replace(
         operation,
-        spec=replace(
-            operation.spec,
-            request_type=CanonicalGaussianPolynomialMomentRequest,
-        ),
+        request_type=CanonicalGaussianPolynomialMomentRequest,
     )
 
 

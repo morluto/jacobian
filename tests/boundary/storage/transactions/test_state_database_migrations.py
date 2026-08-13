@@ -68,7 +68,19 @@ def test_fresh_store_records_immutable_ordered_migrations(tmp_path: Path) -> Non
         assert not any(name.startswith("workspace") for name in tables)
         legacy_episode_prefix = "research_" + "episode"
         assert not any(name.startswith(legacy_episode_prefix) for name in tables)
-        assert {"reasoning_runs", "reasoning_events"} <= tables
+        assert {
+            "operation_catalog_snapshots",
+            "operation_catalog_entries",
+            "active_operation_catalog",
+            "operation_checker_bindings",
+        } <= tables
+        assert not {
+            "experiments",
+            "search_experiments",
+            "installed_plugins",
+            "reasoning_runs",
+            "reasoning_events",
+        } & tables
         assert connection.execute(
             "SELECT format_revision FROM jacobian_state_format WHERE id = 0"
         ).fetchone() == (CURRENT_STATE_FORMAT_REVISION,)
@@ -82,29 +94,61 @@ def test_fresh_store_records_immutable_ordered_migrations(tmp_path: Path) -> Non
         connection.close()
 
 
-def test_reasoning_log_tables_reject_update_and_delete(tmp_path: Path) -> None:
+def test_revision_twelve_preserves_artifacts_and_retires_runtime_tables(
+    tmp_path: Path,
+) -> None:
     with ArtifactRepository(tmp_path):
         pass
 
     connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
     try:
-        connection.execute("INSERT INTO reasoning_runs(run_id) VALUES ('fixture-run')")
+        connection.execute("DELETE FROM jacobian_schema_migrations WHERE revision = 12")
+        connection.execute(
+            "UPDATE jacobian_state_format SET format_revision = 11 WHERE id = 0"
+        )
+        for table in (
+            "operation_checker_bindings",
+            "active_operation_catalog",
+            "operation_catalog_entries",
+            "operation_catalog_snapshots",
+        ):
+            connection.execute(f"DROP TABLE {table}")
         connection.execute(
             """
-            INSERT INTO reasoning_events(
-                run_id, sequence, kind, event_json
-            ) VALUES ('fixture-run', 0, 'PLAN', '{}')
+            INSERT INTO artifacts(
+                artifact_uri, manifest_digest, object_digest, payload_digest,
+                schema_uri, semantics_uri, canonicalizer_digest, summary
+            ) VALUES (
+                'artifact://sha256/legacy', 'sha256:manifest', 'sha256:object',
+                'sha256:payload', 'schema://legacy', 'semantics://legacy',
+                'sha256:canonicalizer', 'legacy artifact'
+            )
             """
         )
         connection.commit()
-        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
-            connection.execute(
-                "UPDATE reasoning_events SET kind = 'FINAL' WHERE run_id = 'fixture-run'"
+    finally:
+        connection.close()
+
+    database = StateDatabase(tmp_path / "metadata.sqlite3", synchronous="FULL")
+    try:
+        database.migrate(STATE_MIGRATIONS)
+    finally:
+        database.close(checkpoint=False)
+
+    connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
+    try:
+        assert connection.execute(
+            "SELECT summary FROM artifacts WHERE artifact_uri = ?",
+            ("artifact://sha256/legacy",),
+        ).fetchone() == ("legacy artifact",)
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
-        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
-            connection.execute(
-                "DELETE FROM reasoning_runs WHERE run_id = 'fixture-run'"
-            )
+        }
+        assert "reasoning_runs" not in tables
+        assert "operation_catalog_snapshots" in tables
     finally:
         connection.close()
 

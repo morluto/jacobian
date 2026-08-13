@@ -522,6 +522,88 @@ def _install_verification_record_manifest_boundary(
     )
 
 
+_OPERATION_CATALOG_SCHEMA_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS operation_catalog_snapshots (
+        revision INTEGER PRIMARY KEY AUTOINCREMENT,
+        package_version TEXT NOT NULL,
+        format_version INTEGER NOT NULL,
+        provider_inventory_digest TEXT NOT NULL,
+        checker_binding_digest TEXT NOT NULL,
+        diagnostics_json BLOB NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS operation_catalog_entries (
+        snapshot_revision INTEGER NOT NULL,
+        operation_id TEXT NOT NULL,
+        search_card_json BLOB NOT NULL,
+        descriptor_json BLOB NOT NULL,
+        input_schema_json BLOB NOT NULL,
+        output_schema_json BLOB NOT NULL,
+        bundle_module TEXT NOT NULL,
+        declaration_digest TEXT NOT NULL,
+        PRIMARY KEY (snapshot_revision, operation_id),
+        FOREIGN KEY (snapshot_revision)
+            REFERENCES operation_catalog_snapshots(revision) ON DELETE RESTRICT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS operation_catalog_entries_by_operation
+    ON operation_catalog_entries(operation_id, snapshot_revision)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS active_operation_catalog (
+        id INTEGER PRIMARY KEY CHECK (id = 0),
+        snapshot_revision INTEGER NOT NULL UNIQUE,
+        FOREIGN KEY (snapshot_revision)
+            REFERENCES operation_catalog_snapshots(revision) ON DELETE RESTRICT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS operation_checker_bindings (
+        snapshot_revision INTEGER NOT NULL,
+        operation_id TEXT NOT NULL,
+        checker_id TEXT NOT NULL,
+        manifest_digest TEXT NOT NULL,
+        PRIMARY KEY (snapshot_revision, operation_id),
+        FOREIGN KEY (snapshot_revision)
+            REFERENCES operation_catalog_snapshots(revision) ON DELETE RESTRICT,
+        FOREIGN KEY (checker_id)
+            REFERENCES checkers(checker_id) ON DELETE RESTRICT
+    )
+    """,
+)
+_OPERATION_CATALOG_SCHEMA = "\n-- statement boundary --\n".join(
+    _OPERATION_CATALOG_SCHEMA_STATEMENTS
+)
+
+_RETIRED_RUNTIME_TABLES = (
+    "search_events",
+    "search_idempotency",
+    "search_recovery_failures",
+    "search_experiments",
+    "experiment_recovery_failures",
+    "experiments",
+    "installed_plugins",
+    "reasoning_events",
+    "reasoning_runs",
+)
+
+
+def _install_operation_catalog_boundary(connection: sqlite3.Connection) -> None:
+    """Install deployment-owned operation state and retire generic runtime data."""
+
+    for table in _RETIRED_RUNTIME_TABLES:
+        connection.execute(f"DROP TABLE IF EXISTS {table}")
+    for statement in _OPERATION_CATALOG_SCHEMA_STATEMENTS:
+        connection.execute(statement)
+    connection.execute(
+        "UPDATE jacobian_state_format SET format_revision = 12 WHERE id = 0"
+    )
+
+
 STATE_MIGRATIONS = (
     Migration(
         revision=1,
@@ -611,7 +693,18 @@ STATE_MIGRATIONS = (
         ),
         apply=_install_verification_record_manifest_boundary,
     ),
+    Migration(
+        revision=12,
+        name="operation-catalog-boundary-v1",
+        definition=(
+            _OPERATION_CATALOG_SCHEMA
+            + "\nRetire experiments, search experiments, installed plugins, and "
+            "reasoning logs; advance the state format to revision 12."
+        ),
+        apply=_install_operation_catalog_boundary,
+        requires_foreign_keys_off=True,
+    ),
 )
 
 SUPPORTED_STATE_FLOOR = 11
-CURRENT_STATE_FORMAT_REVISION = 11
+CURRENT_STATE_FORMAT_REVISION = 12

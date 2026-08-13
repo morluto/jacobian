@@ -19,30 +19,56 @@ def _runtime():
     )
 
 
-def test_exact_replay_declaration_owns_unassigned_provider_runtime() -> None:
-    runtime = _runtime()
+def test_exact_replay_declaration_defers_and_caches_provider_runtime() -> None:
+    calls = 0
+
+    def factory():
+        nonlocal calls
+        calls += 1
+        return _runtime()
+
     declaration = ExactReplayCheckerDeclaration(
         "test.compute.value",
         CanonicalRational,
         "check_rational_solution",
         "test.value.replay",
         entrypoint_module="jacobian_checkers.linear",
-        provider_runtime=runtime,
+        provider_runtime_factory=factory,
     )
 
-    assert declaration.provider_runtime == runtime
-    assert declaration.provider_runtime.checker_ids == ()
+    assert calls == 0
+    runtime = declaration.provider_runtime
+    assert calls == 1
+    assert runtime is not None
+    assert runtime.checker_ids == ()
+    assert declaration.provider_runtime is runtime
+    assert calls == 1
 
 
-def test_exact_replay_declaration_rejects_preauthorized_runtime() -> None:
+def test_exact_replay_declaration_rejects_preauthorized_realized_runtime() -> None:
     runtime = _runtime().model_copy(update={"checker_ids": ("checker:test",)})
+    declaration = ExactReplayCheckerDeclaration(
+        "test.compute.value",
+        CanonicalRational,
+        "check_rational_solution",
+        "test.value.replay",
+        entrypoint_module="jacobian_checkers.linear",
+        provider_runtime_factory=lambda: runtime,
+    )
 
     with pytest.raises(ValueError, match="must not pre-authorize checker IDs"):
-        ExactReplayCheckerDeclaration(
-            "test.compute.value",
-            CanonicalRational,
-            "check_rational_solution",
-            "test.value.replay",
-            entrypoint_module="jacobian_checkers.linear",
-            provider_runtime=runtime,
-        )
+        _ = declaration.provider_runtime
+
+
+def test_exact_replay_declaration_rejects_wrong_runtime_factory_result() -> None:
+    declaration = ExactReplayCheckerDeclaration(
+        "test.compute.value",
+        CanonicalRational,
+        "check_rational_solution",
+        "test.value.replay",
+        entrypoint_module="jacobian_checkers.linear",
+        provider_runtime_factory=lambda: object(),  # type: ignore[return-value]
+    )
+
+    with pytest.raises(TypeError, match="must return CapabilityProviderRuntime"):
+        _ = declaration.provider_runtime

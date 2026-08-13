@@ -39,8 +39,7 @@ class FiniteAbelianGroupFactorizationRequest(ContractModel):
     @model_validator(mode="after")
     def require_bounded_product_group(self) -> Self:
         if any(
-            modulus < 2 or modulus > MAX_FINITE_GROUP_MODULUS
-            for modulus in self.moduli
+            modulus < 2 or modulus > MAX_FINITE_GROUP_MODULUS for modulus in self.moduli
         ):
             raise ValueError("cyclic moduli must be between 2 and 1,000,000")
         if prod(self.moduli) > MAX_FINITE_GROUP_ORDER:
@@ -64,9 +63,7 @@ class FiniteAbelianGroupFactorizationRequest(ContractModel):
             normalized = {
                 tuple(
                     coordinate % modulus
-                    for coordinate, modulus in zip(
-                        element, self.moduli, strict=True
-                    )
+                    for coordinate, modulus in zip(element, self.moduli, strict=True)
                 )
                 for element in factor
             }
@@ -148,9 +145,7 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
             if any(
                 coordinate < 0 or coordinate >= modulus
                 for element in factor
-                for coordinate, modulus in zip(
-                    element, self.moduli, strict=True
-                )
+                for coordinate, modulus in zip(element, self.moduli, strict=True)
             ):
                 raise ValueError("normalized factor coordinates must be residues")
         if self.pair_count != len(self.normalized_left) * len(self.normalized_right):
@@ -184,11 +179,15 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
             raise ValueError("distinct sum count must match the histogram")
 
     def _validate_decision_witness_presence(self) -> None:
-        exact = self.pair_count == self.group_order and self.representation_histogram == (
-            FiniteAbelianRepresentationCount(
-                representation_count=1,
-                element_count=self.group_order,
-            ),
+        exact = (
+            self.pair_count == self.group_order
+            and self.representation_histogram
+            == (
+                FiniteAbelianRepresentationCount(
+                    representation_count=1,
+                    element_count=self.group_order,
+                ),
+            )
         )
         if self.is_exact_factorization != exact:
             raise ValueError("factorization decision must match the complete histogram")
@@ -211,9 +210,7 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
         def canonical(element: tuple[int, ...]) -> bool:
             return len(element) == len(self.moduli) and all(
                 0 <= coordinate < modulus
-                for coordinate, modulus in zip(
-                    element, self.moduli, strict=True
-                )
+                for coordinate, modulus in zip(element, self.moduli, strict=True)
             )
 
         if self.first_missing is not None and not canonical(self.first_missing):
@@ -279,11 +276,7 @@ def finite_abelian_group_factorization(
         None,
     )
     duplicate_element = next(
-        (
-            element
-            for element in group
-            if len(representations.get(element, ())) > 1
-        ),
+        (element for element in group if len(representations.get(element, ())) > 1),
         None,
     )
     duplicate = None

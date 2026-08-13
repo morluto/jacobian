@@ -9,6 +9,7 @@ import jacobian
 PUBLIC_API = {
     "jacobian.math": (
         "arithmetic",
+        "finite_abelian_groups",
         "finite_fields",
         "graphs",
         "matrices",

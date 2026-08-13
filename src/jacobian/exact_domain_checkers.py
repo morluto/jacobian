@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -56,7 +57,6 @@ from jacobian.validation_diagnostics import bounded_validation_exception_message
 from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
-_OPTIONAL_EXACT_REPLAY_PROVIDERS = frozenset({"jacobian.exact-domain-checkers"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,28 +83,14 @@ class _InstalledDeclaration:
 @dataclass(frozen=True, slots=True)
 class _DeclaredRuntimeGroup:
     probe: CapabilityProviderRuntime
-    factory: Callable[..., CapabilityProviderRuntime]
+    factory: Callable[..., CapabilityProviderRuntime] | None
     members: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...]
     factories: tuple[Callable[..., CapabilityProviderRuntime], ...]
-
-
-def _declaration_factory(
-    declaration: ExactReplayCheckerDeclaration,
-) -> Callable[..., CapabilityProviderRuntime]:
-    factory = declaration.provider_runtime_factory
-    if factory is None:
-        raise ValueError(
-            "exact replay checker declaration requires a provider runtime factory"
-        )
-    return factory
 
 
 def _declared_runtime_groups(
     pairs: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...],
 ) -> tuple[_DeclaredRuntimeGroup, ...]:
-    probes: dict[
-        Callable[..., CapabilityProviderRuntime], CapabilityProviderRuntime
-    ] = {}
     grouped: dict[
         str,
         tuple[
@@ -114,25 +100,31 @@ def _declared_runtime_groups(
         ],
     ] = {}
     for installed, declaration in pairs:
-        factory = _declaration_factory(declaration)
-        probe = probes.setdefault(factory, factory())
+        factory = object.__getattribute__(declaration, "provider_runtime_factory")
+        probe = declaration.provider_runtime
+        if probe is None:
+            continue
         current = grouped.get(probe.provider)
         if current is None:
-            grouped[probe.provider] = (probe, [factory], [(installed, declaration)])
+            grouped[probe.provider] = (
+                probe,
+                [] if factory is None else [factory],
+                [(installed, declaration)],
+            )
             continue
         existing_probe, factories, members = current
-        if existing_probe != probe:
+        if existing_probe.model_dump(mode="json") != probe.model_dump(mode="json"):
             raise ValueError(
                 "exact replay grouped distinct probes under one provider "
                 f"identity: {probe.provider}"
             )
-        if factory not in factories:
+        if factory is not None and factory not in factories:
             factories.append(factory)
         members.append((installed, declaration))
     return tuple(
         _DeclaredRuntimeGroup(
             probe=probe,
-            factory=factories[0],
+            factory=factories[0] if factories else None,
             members=tuple(members),
             factories=tuple(factories),
         )
@@ -147,15 +139,13 @@ def _authorize_replay_operation(
     authorize: bool,
     provider_runtime: CapabilityProviderRuntime,
     source_available: bool,
+    optional: bool,
     capability_id: str,
     diagnostics: list[CapabilityDiagnostic],
 ) -> str | None:
     if provider_runtime.availability is CapabilityProviderAvailability.AVAILABLE:
         return installer.install(operation, authorize=authorize).checker_id
-    can_omit = (
-        provider_runtime.provider in _OPTIONAL_EXACT_REPLAY_PROVIDERS
-        and source_available
-    )
+    can_omit = optional and source_available
     if not can_omit:
         return installer.install(operation, authorize=authorize).checker_id
     diagnostic = CapabilityDiagnostic(
@@ -181,6 +171,23 @@ def _authorized_provider_runtimes(
     groups: tuple[_DeclaredRuntimeGroup, ...],
     checker_ids: Mapping[str, str | None],
 ) -> dict[str, CapabilityProviderRuntime]:
+    def realize(
+        factory: Callable[..., CapabilityProviderRuntime],
+        checker_ids: tuple[str, ...],
+    ) -> CapabilityProviderRuntime:
+        parameters = inspect.signature(factory).parameters.values()
+        accepts_checker_ids = any(
+            parameter.name == "checker_ids"
+            or parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters
+        )
+        runtime = factory(checker_ids=checker_ids) if accepts_checker_ids else factory()
+        if not isinstance(runtime, CapabilityProviderRuntime):
+            raise TypeError(
+                "provider runtime factory must return CapabilityProviderRuntime"
+            )
+        return runtime
+
     provider_runtimes: dict[str, CapabilityProviderRuntime] = {}
     for group in groups:
         authorized = tuple(
@@ -188,18 +195,23 @@ def _authorized_provider_runtimes(
             for _installed, declaration in group.members
             if (checker_id := checker_ids[declaration.capability_id]) is not None
         )
-        runtime = group.factory(checker_ids=authorized)
+        if group.factory is None:
+            runtime = group.probe.model_copy(update={"checker_ids": authorized})
+        else:
+            runtime = realize(group.factory, authorized)
         for factory in group.factories:
             if factory is group.factory:
                 continue
-            other = factory(checker_ids=authorized)
+            other = realize(factory, authorized)
             if other != runtime:
                 raise ValueError(
                     "exact replay grouped distinct runtimes under one provider "
                     f"identity: {group.probe.provider}"
                 )
         existing = provider_runtimes.get(runtime.provider)
-        if existing is not None and existing != runtime:
+        if existing is not None and existing.model_dump(
+            mode="json"
+        ) != runtime.model_dump(mode="json"):
             raise ValueError(
                 "exact replay grouped distinct runtimes under one provider "
                 f"identity: {runtime.provider}"
@@ -222,15 +234,26 @@ def install_exact_domain_checkers(
     """Install independent exact replay against dynamically registered schemas."""
 
     installer = CheckerInstaller(checkers)
-    groups = _declared_runtime_groups(_available_declaration_bundles(bundles))
+    available_declarations = _available_declaration_bundles(bundles)
     checker_ids: dict[str, str | None] = {}
     declaration_providers: dict[str, str] = {}
     diagnostics: list[CapabilityDiagnostic] = []
+    checker_ids.update(
+        (declaration.capability_id, None)
+        for _installed, declaration in available_declarations
+    )
+    if not authorize and not installer.bind_existing:
+        return ExactDomainCheckerInstallation(
+            checker_ids=checker_ids,
+            provider_runtimes={},
+            declaration_providers={},
+        )
     source_available = (
         exact_domain_checker_source_provider_runtime().availability
         is CapabilityProviderAvailability.AVAILABLE
     )
     with batch_checker_manifest_measurement():
+        groups = _declared_runtime_groups(available_declarations)
         for group in groups:
             for installed, declaration in group.members:
                 declaration_providers[declaration.capability_id] = group.probe.provider
@@ -261,6 +284,7 @@ def install_exact_domain_checkers(
                     authorize=authorize,
                     provider_runtime=group.probe,
                     source_available=source_available,
+                    optional=declaration.optional,
                     capability_id=declaration.capability_id,
                     diagnostics=diagnostics,
                 )

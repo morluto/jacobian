@@ -59,8 +59,7 @@ def _source(
     if not isinstance(raw_moduli, list) or not 1 <= len(raw_moduli) <= 6:
         raise ValueError("malformed finite-group moduli")
     if any(
-        type(value) is not int or not 2 <= value <= 1_000_000
-        for value in raw_moduli
+        type(value) is not int or not 2 <= value <= 1_000_000 for value in raw_moduli
     ):
         raise ValueError("malformed finite-group modulus")
     moduli = tuple(raw_moduli)
@@ -129,11 +128,7 @@ def _expected(
         None,
     )
     duplicate_element = next(
-        (
-            element
-            for element in group
-            if len(representations.get(element, ())) > 1
-        ),
+        (element for element in group if len(representations.get(element, ())) > 1),
         None,
     )
     duplicate = _duplicate_witness(duplicate_element, representations)

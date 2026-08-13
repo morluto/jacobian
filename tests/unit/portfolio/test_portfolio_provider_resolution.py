@@ -6,12 +6,12 @@ from collections.abc import Callable
 
 import pytest
 
+import jacobian.portfolio.provider_resolution as provider_resolution
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
 )
-from jacobian.portfolio import provider_resolution
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
 from jacobian.provider_runtime import ProviderRuntimeError, known_provider_runtime
 

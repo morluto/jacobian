@@ -30,6 +30,17 @@ MAX_EXPRESSION_TERMS = 1024
 MAX_EXPRESSION_EXPONENT = 127
 MAX_EXPRESSION_INTEGER_DIGITS = 256
 MAX_EXPRESSION_COEFFICIENT_DIGIT_BUDGET = 4096
+POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES = frozenset(
+    {
+        "polynomial expression variables must be unique",
+        "polynomial expressions are limited to 128 AST nodes",
+        "polynomial expressions are limited to depth 16",
+        "polynomial expression exponent exceeds 127 for a declared variable",
+        "polynomial expression exceeds the exact coefficient digit budget",
+        "polynomial rational literals are limited to 256 decimal digits",
+        "expression variable is not declared",
+    }
+)
 SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION = {
     "distribution": "sympy",
     "domain": "QQ",
@@ -223,7 +234,7 @@ def _analyze_variable_node(
 ) -> _NodeAnalysis:
     index = variable_indices.get(expression.name)
     if index is None:
-        raise ValueError(f"expression variable {expression.name!r} is not declared")
+        raise ValueError("expression variable is not declared")
     variable_degrees = [0] * dimension
     variable_degrees[index] = 1
     return _NodeAnalysis(1, 1, 1, tuple(variable_degrees), 1)

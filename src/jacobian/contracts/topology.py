@@ -15,6 +15,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.certified_snf import (
@@ -109,7 +110,10 @@ def _require_request_complex(
         )
     for left, right in combinations(canonical, 2):
         if set(left) < set(right) or set(right) < set(left):
-            raise ValueError("facet input must contain only maximal simplices")
+            raise PydanticCustomError(
+                "topology_non_maximal_facets",
+                "facet input must contain only maximal simplices",
+            )
     closure = face_closure(tuple(canonical))
     if sum(map(len, closure)) > MAX_TOPOLOGY_FACES:
         raise ValueError(

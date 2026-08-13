@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.validation_diagnostics import validation_error_message
 
 
 class CapabilityError(RuntimeError):
@@ -56,13 +57,10 @@ def enriched_invalid_request(
     first = errors[0]
     loc = first.get("loc", ())
     path = "/".join(str(part) for part in loc) if loc else None
-    message = str(first.get("msg", ""))
-    if message.startswith("Value error, "):
-        message = message[len("Value error, ") :]
     return base.model_copy(
         update={
             "path": path,
-            "hint": message if message else base.hint,
+            "hint": validation_error_message(exc),
         }
     )
 

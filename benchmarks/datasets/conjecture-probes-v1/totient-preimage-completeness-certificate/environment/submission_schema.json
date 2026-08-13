@@ -80,7 +80,7 @@
         "additionalProperties": false,
         "properties": {
           "path": {
-            "const": "evidence/answer.txt"
+            "const": "evidence/answer.json"
           },
           "sha256": {
             "pattern": "^sha256:[0-9a-f]{64}$",

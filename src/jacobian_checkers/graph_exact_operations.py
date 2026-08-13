@@ -896,7 +896,7 @@ def _validate_distance_matrix_entries(
     for source_index, row in enumerate(matrix):
         for target_index, distance in enumerate(row):
             if distance is not None and (
-                type(distance) is not int or distance < 0 or distance > 31
+                type(distance) is not int or distance < 0 or distance > 63
             ):
                 return False
             if source_index == target_index:
@@ -931,7 +931,7 @@ def _validate_distance_matrix_triangle(
 def _distance_matrix(source: dict[str, Any], result: dict[str, Any]) -> bool:
     input_vertices, normalized_edges, adjacency = _finite_simple_graph(
         source,
-        maximum_order=32,
+        maximum_order=64,
     )
     vertices = tuple(sorted(input_vertices))
     if not _validate_distance_matrix_header(result, vertices):

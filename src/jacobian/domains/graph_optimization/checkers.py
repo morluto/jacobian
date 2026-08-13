@@ -1,6 +1,7 @@
 """Independent checker declarations owned by the graph-optimization domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.graph_distance_matrix import GraphDistanceMatrixRequest
 from jacobian.contracts.graph_invariant_operations import (
     GraphInvariantRequest,
     GraphMaximumMatchingRequest,
@@ -136,7 +137,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
     ),
     ExactReplayCheckerDeclaration(
         "graph.distance_matrix.compute",
-        GraphInvariantRequest,
+        GraphDistanceMatrixRequest,
         "check_graph_distance_matrix",
         "graph.distance-matrix.all-sources-bfs-v1",
         entrypoint_module=_GRAPH_ENTRYPOINT,

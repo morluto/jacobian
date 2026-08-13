@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
@@ -20,12 +19,14 @@ _RECURRENCE_CONVENTION = "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
 _P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
 
 
-@pytest.fixture
-def combinatorics_services(tmp_path: Path) -> Iterator[DomainTestServices]:
+@pytest.fixture(scope="module")
+def combinatorics_services(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[DomainTestServices]:
     """Install combinatorics and its independent exact checkers only."""
 
     with open_exact_domain_services(
-        tmp_path / "state",
+        tmp_path_factory.mktemp("combinatorics-verification") / "state",
         build_combinatorics_bundle(),
     ) as services:
         yield services

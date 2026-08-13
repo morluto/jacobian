@@ -11,9 +11,6 @@ from tests.composition.runtime.provider_spike_isolation import (
     assert_unavailable_spike_preserves_catalog,
 )
 
-# Composition-lane admission category for architecture ratchets.
-COMPOSITION_ADMISSION = "WIRING"
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RunSpike = Callable[..., Mapping[str, object]]
 SpikeArguments = Callable[[Path], dict[str, Path]]

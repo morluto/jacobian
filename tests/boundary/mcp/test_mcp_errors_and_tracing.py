@@ -124,9 +124,8 @@ def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) 
             ),
             raise_exceptions=False,
         ) as client:
-            with pytest.raises(MCPError) as authentication_error:
-                await client.call_tool("math.find", {})
-            assert str(authentication_error.value) == "Internal server error"
+            authentication_error = await client.call_tool("math.find", {})
+            assert authentication_error.is_error is True
 
     asyncio.run(scenario())
 

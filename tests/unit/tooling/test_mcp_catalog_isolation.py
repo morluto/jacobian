@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+from typing import Any, cast
+
+from jacobian.adapters.mcp.context import AppState
+from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
+from jacobian.adapters.mcp.tools import _OperationSearchRequest, math_find
+from jacobian.contracts.operations import OperationDiscoveryResult
+
+
+class _Catalog:
+    def discover(self, request: Any) -> OperationDiscoveryResult:
+        return OperationDiscoveryResult(
+            query=request.query,
+            matches=(),
+            total_matches=0,
+            truncated=False,
+        )
+
+
+def test_math_find_does_not_acquire_an_execution_runtime() -> None:
+    def acquire_runtime() -> Any:
+        raise AssertionError("math.find acquired an execution runtime")
+
+    state = AppState(
+        acquire_runtime=acquire_runtime,
+        operation_catalog=_Catalog(),
+        worker_registry=MCPBlockingWorkerRegistry(),
+    )
+    context = SimpleNamespace(
+        request_context=SimpleNamespace(lifespan_context=state)
+    )
+
+    result = math_find(
+        _OperationSearchRequest(op="search", query="gcd"),
+        ctx=cast(Any, context),
+    )
+
+    assert result.root.kind == "discovery"

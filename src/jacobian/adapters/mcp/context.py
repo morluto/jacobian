@@ -27,12 +27,13 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class AppState:
-    acquire_runtime: Callable[[], RuntimeLease]
+    acquire_runtime: Callable[[], RuntimeScope]
+    operation_catalog: Any
     worker_registry: MCPBlockingWorkerRegistry
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeLease:
+class RuntimeScope:
     """One request's runtime and optional release action."""
 
     runtime: JacobianRuntime
@@ -55,7 +56,7 @@ _active_runtime: ContextVar[JacobianRuntime | None] = ContextVar(
 
 @contextmanager
 def _runtime(ctx: Context[Any, Any]) -> Iterator[JacobianRuntime]:
-    """Return a runtime, holding a tenant lease for the full request lifetime.
+    """Return a runtime, holding a tenant runtime hold for the full request lifetime.
 
     When tenant isolation is active, the lease is held until the context
     manager exits so the runtime cannot be evicted mid-request.
@@ -74,6 +75,18 @@ def _runtime(ctx: Context[Any, Any]) -> Iterator[JacobianRuntime]:
         )
     with _runtime_scope(state) as runtime:
         yield runtime
+
+
+def _catalog(ctx: Context[Any, Any]) -> Any:
+    """Return the deployment catalog without acquiring an execution runtime."""
+
+    state = ctx.request_context.lifespan_context
+    if not isinstance(state, AppState):
+        raise AgentRecoveryError(
+            "Jacobian is unavailable for this request. Retry once; if it fails "
+            "again, inspect the local Jacobian log."
+        )
+    return state.operation_catalog
 
 
 @contextmanager
@@ -96,31 +109,6 @@ def _runtime_scope(state: AppState) -> Iterator[JacobianRuntime]:
 def _start_lean_warmup(runtime: JacobianRuntime) -> None:
     if os.environ.get("JACOBIAN_LEAN_WARMUP") == "1":
         runtime.start_lean_warmup()
-
-
-@contextmanager
-def _static_resource_runtime(
-    state: AppState,
-) -> Iterator[JacobianRuntime]:
-    """Route SDK static resources through the active authentication context.
-
-    MCP 2.0.0 does not inject ``Context`` into static resources, but its HTTP
-    authentication middleware still scopes the access token with a contextvar.
-    Template resources use native ``Context`` injection and ``_runtime`` instead.
-    """
-
-    active_runtime = _active_runtime.get()
-    if active_runtime is not None:
-        yield active_runtime
-        return
-
-    lease = state.acquire_runtime()
-    try:
-        _start_lean_warmup(lease.runtime)
-        yield lease.runtime
-    finally:
-        if lease.release is not None:
-            lease.release()
 
 
 def _configured_root(state_dir: str | Path | None) -> Path:

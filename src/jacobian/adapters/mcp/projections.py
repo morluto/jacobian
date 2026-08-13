@@ -23,7 +23,7 @@ from jacobian.operation_errors import OperationDiscoveryCursorError
 _LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from jacobian.runtime.model import JacobianRuntime
+    pass
 
 
 def _mcp_text_json_bytes(value: object) -> bytes:
@@ -68,7 +68,7 @@ def _discovery_operation_card(
 
 
 def _operation_discovery_response(
-    runtime: JacobianRuntime,
+    runtime: Any,
     *,
     query: str,
     domain: str | None,
@@ -86,7 +86,8 @@ def _operation_discovery_response(
         cursor=cursor,
     )
     try:
-        discovered = runtime.core.operations.discover(discovery_request)
+        operations = getattr(getattr(runtime, "core", None), "operations", runtime)
+        discovered = operations.discover(discovery_request)
     except OperationDiscoveryCursorError:
         return {
             "error": {
@@ -106,7 +107,7 @@ def _operation_discovery_response(
             match,
             cast(
                 OperationDescriptor,
-                runtime.core.operations.inspect(match["operation_id"]),
+                operations.inspect(match["operation_id"]),
             ),
         )
         for match in cast(list[dict[str, Any]], discovered_payload["matches"])

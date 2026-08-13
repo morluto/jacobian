@@ -9,7 +9,7 @@ from mcp.server.mcpserver import Context
 from mcp_types import CallToolResult, ResourceLink, TextContent
 from pydantic import BaseModel, ConfigDict, Field, RootModel, StrictInt
 
-from jacobian.adapters.mcp.context import AppState, _runtime
+from jacobian.adapters.mcp.context import AppState, _catalog, _runtime
 from jacobian.adapters.mcp.projections import (
     _operation_discovery_response,
 )
@@ -196,12 +196,13 @@ def _find_result(response: dict[str, Any]) -> OperationFindResponse:
 
 
 def _unknown_operation_context(
-    runtime: JacobianRuntime,
+    runtime: Any,
     operation_id: OperationId,
 ) -> dict[str, Any]:
     """Return bounded SDK-facing recovery without embedding the full catalog."""
 
-    discovered = runtime.core.operations.discover(
+    operations = getattr(getattr(runtime, "core", None), "operations", runtime)
+    discovered = operations.discover(
         OperationDiscoveryRequest(query=operation_id, limit=5)
     )
     return {
@@ -265,40 +266,40 @@ def math_find(
     *,
     ctx: Context[AppState, Any],
 ) -> OperationFindResponse:
-    with _runtime(ctx) as active_runtime:
-        if isinstance(request, _OperationSearchRequest):
-            discovery_response = _operation_discovery_response(
-                active_runtime,
-                query=request.query,
-                domain=request.domain,
-                input_kind=request.input_kind,
-                artifact_type=request.artifact_type,
-                limit=request.limit,
-                cursor=request.cursor,
-            )
-            return _find_result(discovery_response)
-        operation_id = request.operation_id
-        descriptor = active_runtime.core.operations.inspect(operation_id)
-        if descriptor is None:
-            hint = "Call math.find with a mathematical query to search installed operations."
-            error_response = {
-                "error": {
-                    "code": "UNKNOWN_OPERATION",
-                    "stage": "operation_resolution",
-                    "message": f"Unknown operation: {operation_id}",
-                    "hint": hint,
-                    **_unknown_operation_context(
-                        active_runtime,
-                        operation_id,
-                    ),
-                }
+    active_catalog = _catalog(ctx)
+    if isinstance(request, _OperationSearchRequest):
+        discovery_response = _operation_discovery_response(
+            active_catalog,
+            query=request.query,
+            domain=request.domain,
+            input_kind=request.input_kind,
+            artifact_type=request.artifact_type,
+            limit=request.limit,
+            cursor=request.cursor,
+        )
+        return _find_result(discovery_response)
+    operation_id = request.operation_id
+    descriptor = active_catalog.inspect(operation_id)
+    if descriptor is None:
+        hint = "Call math.find with a mathematical query to search installed operations."
+        error_response = {
+            "error": {
+                "code": "UNKNOWN_OPERATION",
+                "stage": "operation_resolution",
+                "message": f"Unknown operation: {operation_id}",
+                "hint": hint,
+                **_unknown_operation_context(
+                    active_catalog,
+                    operation_id,
+                ),
             }
-            return _find_result(error_response)
-        response: dict[str, Any] = {
-            "kind": "operation",
-            "operation": descriptor.model_dump(mode="json"),
         }
-        return _find_result(response)
+        return _find_result(error_response)
+    response: dict[str, Any] = {
+        "kind": "operation",
+        "operation": descriptor.model_dump(mode="json"),
+    }
+    return _find_result(response)
 
 
 async def math_run(

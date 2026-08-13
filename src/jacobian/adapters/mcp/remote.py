@@ -16,10 +16,11 @@ from typing import Any, Literal
 from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken
 
+from jacobian import __version__
 from jacobian.adapters.mcp.context import (
     AppState,
     AuthenticationError,
-    RuntimeLease,
+    RuntimeScope,
     TenantRuntimeLimitError,
     _configured_root,
 )
@@ -29,6 +30,7 @@ from jacobian.adapters.mcp.lifecycle import (
 )
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
+from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_service import OperationPolicy
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
@@ -49,7 +51,7 @@ class _TenantRuntimeEntry:
     last_used: float
 
 
-class TenantRuntimeLease:
+class TenantRuntimeScope:
     """One caller-owned hold preventing eviction or shutdown of a runtime."""
 
     def __init__(
@@ -77,7 +79,7 @@ class TenantRuntimeLease:
 
 
 type _AcquisitionPlan = (
-    TenantRuntimeLease | tuple[str, _TenantRuntimeEntry] | Literal["CREATE", "WAIT"]
+    TenantRuntimeScope | tuple[str, _TenantRuntimeEntry] | Literal["CREATE", "WAIT"]
 )
 
 
@@ -180,7 +182,7 @@ class TenantRuntimeRouter:
         finally:
             lease.release()
 
-    def lease_for(self, subject: str | None) -> TenantRuntimeLease:
+    def lease_for(self, subject: str | None) -> TenantRuntimeScope:
         """Acquire one tenant runtime, creating or evicting outside the lock."""
 
         tenant_key = self._tenant_key(subject)
@@ -191,7 +193,7 @@ class TenantRuntimeRouter:
                         "tenant runtime router is closing"
                     )
                 plan = self._plan_acquisition(tenant_key)
-                if isinstance(plan, TenantRuntimeLease):
+                if isinstance(plan, TenantRuntimeScope):
                     return plan
                 if plan == "WAIT":
                     self._condition.wait()
@@ -220,7 +222,7 @@ class TenantRuntimeRouter:
             )
             self._runtimes[tenant_key] = entry
             self._condition.notify_all()
-        return TenantRuntimeLease(self, tenant_key, runtime)
+        return TenantRuntimeScope(self, tenant_key, runtime)
 
     def _tenant_key(self, subject: str | None) -> str:
         tenant = subject
@@ -249,7 +251,7 @@ class TenantRuntimeRouter:
         ):
             entry.active_leases += 1
             entry.last_used = now
-            return TenantRuntimeLease(self, tenant_key, entry.runtime)
+            return TenantRuntimeScope(self, tenant_key, entry.runtime)
         if entry is not None:
             return self._begin_eviction(tenant_key, self._runtimes.pop(tenant_key))
         quarantined = self._quarantined.pop(tenant_key, None)
@@ -466,8 +468,9 @@ def create_remote_server(
 
     from mcp.server.auth.middleware.auth_context import get_access_token
 
+    root = _configured_root(state_dir)
     router = TenantRuntimeRouter(
-        _configured_root(state_dir),
+        root,
         checker_authority=selected_checker_authority(checker_authority),
         allow_anonymous=allow_anonymous,
         anonymous_tenant_id=anonymous_tenant_id,
@@ -485,14 +488,19 @@ def create_remote_server(
         runtime_factory=create_runtime if runtime_factory is None else runtime_factory,
     )
 
-    def acquire_runtime() -> RuntimeLease:
+    def acquire_runtime() -> RuntimeScope:
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
         lease = router.lease_for(subject)
-        return RuntimeLease(lease.runtime, lease.release)
+        return RuntimeScope(lease.runtime, lease.release)
 
     state = AppState(
         acquire_runtime=acquire_runtime,
+        operation_catalog=OperationCatalog(
+            root / "metadata.sqlite3",
+            operation_policy or OperationPolicy(),
+            expected_package_version=__version__,
+        ),
         worker_registry=MCPBlockingWorkerRegistry(),
     )
     return _build_server(

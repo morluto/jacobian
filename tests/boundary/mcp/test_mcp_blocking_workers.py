@@ -11,7 +11,7 @@ import pytest
 
 from jacobian.adapters.mcp.context import (
     AppState,
-    RuntimeLease,
+    RuntimeScope,
     _runtime,
     _runtime_scope,
 )
@@ -227,7 +227,7 @@ def test_repeated_cancellation_keeps_draining_blocking_work() -> None:
 def test_cancelled_worker_retains_its_request_lease_until_late_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A late worker cannot outlive the tenant lease protecting its runtime."""
+    """A late worker cannot outlive the tenant runtime hold protecting its runtime."""
 
     monkeypatch.setattr(
         "jacobian.adapters.mcp.tooling._CANCEL_DRAIN_GRACE_SECONDS", 0.05
@@ -323,9 +323,6 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
         async def close(self) -> None:
             await super().close(timeout_seconds=0)
 
-    monkeypatch.setattr(
-        "jacobian.adapters.mcp.server._start_lean_warmup", lambda _: None
-    )
     registry = ImmediateShutdownRegistry()
 
     async def scenario() -> None:
@@ -338,7 +335,8 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
         registry.register(worker, request_scope=None)
         with pytest.raises(MCPBlockingWorkerShutdownError):
             state = AppState(
-                acquire_runtime=lambda: RuntimeLease(Runtime()),  # type: ignore[arg-type]
+                acquire_runtime=lambda: RuntimeScope(Runtime()),  # type: ignore[arg-type]
+                operation_catalog=object(),
                 worker_registry=registry,
             )
             async with runtime_lifespan(
@@ -359,20 +357,21 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
 def test_failed_tenant_warmup_releases_the_acquired_lease(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Warmup executes inside the scope which owns every tenant lease."""
+    """Warmup executes inside the scope which owns every tenant runtime hold."""
 
     released = threading.Event()
     acquired = 0
 
     runtime = object()
 
-    def acquire_runtime() -> RuntimeLease:
+    def acquire_runtime() -> RuntimeScope:
         nonlocal acquired
         acquired += 1
-        return RuntimeLease(runtime, released.set)  # type: ignore[arg-type]
+        return RuntimeScope(runtime, released.set)  # type: ignore[arg-type]
 
     state = AppState(
         acquire_runtime=acquire_runtime,
+        operation_catalog=object(),
         worker_registry=MCPBlockingWorkerRegistry(),
     )
     ctx = SimpleNamespace(
@@ -406,13 +405,14 @@ def test_injected_context_reuses_the_interceptor_tenant_lease(
         nonlocal released
         released += 1
 
-    def acquire_runtime() -> RuntimeLease:
+    def acquire_runtime() -> RuntimeScope:
         nonlocal acquired
         acquired += 1
-        return RuntimeLease(runtime, release_runtime)  # type: ignore[arg-type]
+        return RuntimeScope(runtime, release_runtime)  # type: ignore[arg-type]
 
     state = AppState(
         acquire_runtime=acquire_runtime,
+        operation_catalog=object(),
         worker_registry=MCPBlockingWorkerRegistry(),
     )
     ctx = SimpleNamespace(

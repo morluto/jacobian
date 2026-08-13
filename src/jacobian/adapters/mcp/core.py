@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from mcp.server import MCPServer
-from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.resources import FunctionResource
 from mcp.shared.exceptions import MCPError
@@ -16,12 +15,10 @@ from mcp_types import Tool as MCPTool
 from jacobian.adapters.mcp.context import (
     AppState,
     _public_tool_error,
-    _runtime_scope,
-    _static_resource_runtime,
 )
 from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
-from jacobian.adapters.mcp.tooling import AgentRecoveryError, _tool_annotations
+from jacobian.adapters.mcp.tooling import _tool_annotations
 from jacobian.adapters.mcp.tools import math_find, math_run
 from jacobian.contracts.operations import OperationCatalogSnapshot
 
@@ -111,24 +108,6 @@ def _schema_accepts_container(
     )
 
 
-async def tool_runtime_scope(
-    ctx: ServerRequestContext[AppState, Any],
-    call_next: CallNext,
-) -> HandlerResult:
-    """Retain the selected runtime and worker scope for one tool call."""
-
-    if ctx.method != "tools/call":
-        return await call_next(ctx)
-    state = ctx.lifespan_context
-    if not isinstance(state, AppState):
-        raise AgentRecoveryError(
-            "Jacobian is unavailable for this request. Retry once; if it "
-            "fails again, inspect the local Jacobian log."
-        )
-    with _runtime_scope(state):
-        return await call_next(ctx)
-
-
 def register_core_projection(
     server: MCPServer[AppState],
     state: AppState,
@@ -153,9 +132,8 @@ def register_core_projection(
         structured_output=True,
     )
 
-    async def operation_catalog() -> OperationCatalogSnapshot:
-        with _static_resource_runtime(state) as active_runtime:
-            return active_runtime.core.operations.catalog()
+    def operation_catalog() -> OperationCatalogSnapshot:
+        return cast(OperationCatalogSnapshot, state.operation_catalog.catalog())
 
     server.add_resource(
         FunctionResource.from_function(
@@ -188,4 +166,4 @@ def register_core_projection(
         )
 
 
-__all__ = ["JacobianMCPServer", "register_core_projection", "tool_runtime_scope"]
+__all__ = ["JacobianMCPServer", "register_core_projection"]

@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from jacobian.adapters.mcp.remote import (
-    TenantRuntimeLease,
     TenantRuntimeRouter,
     TenantRuntimeRouterClosedError,
+    TenantRuntimeScope,
 )
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.storage.errors import ArtifactNotFoundError
@@ -224,7 +224,7 @@ def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
     evictor.start()
     assert close_started.wait(timeout=2)
 
-    acquired: list[TenantRuntimeLease] = []
+    acquired: list[TenantRuntimeScope] = []
     reacquirer_waiting = threading.Event()
     original_wait = router._condition.wait
 

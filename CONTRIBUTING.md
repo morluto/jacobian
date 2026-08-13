@@ -62,8 +62,11 @@ and verifies child-process coverage collection.
 - **Broad or unknown impact** (CI, dependencies, shared infrastructure): run
   `make check-static` plus the affected tests, and let CI own the fail-closed
   functional lanes.
-- **Lean or optional providers:** `make check-external` when those trees
-  change. CI owns the full Lean and optional-provider environments.
+- **Lean:** `make check-external` when Lean or Mathlib trees change. That
+  target is the pinned Lean specialist lane only (`test-lean`).
+- **Optional or maintained Python providers:** `make test-provider` when those
+  trees change. `make check-all` already includes that lane; `check-external`
+  does not rerun it. CI owns the full Lean and optional-provider environments.
 - **Exhaustive local reproduction:** `make test-all-ci` is an explicit exception
   path, not a routine gate. It takes this worktree's exhaustive validation
   lease; `make validation-status` shows whether that lease is held. Before it,
@@ -123,7 +126,8 @@ changed behavior. If the tree changes during validation, rerun checks whose
 evidence was invalidated by that change; do not describe results from an
 earlier tree as final-tree validation. `make check-all` is an explicit broad
 reproduction, not a routine closeout requirement. CI owns the complete matrix.
-Use `make check-external` when Lean or optional providers change.
+Use `make check-external` when Lean or Mathlib change, and `make test-provider`
+when optional or maintained Python providers change.
 
 ## Harbor and Oracle validation
 

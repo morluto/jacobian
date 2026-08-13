@@ -11,6 +11,7 @@ from verifier_support import (
     evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
     strict_submission_contract,
     workspace_input_is_bound,
@@ -147,7 +148,9 @@ def _raw(path: Path = Path("/app/submission.json")):
 def _write(values):
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
-    (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
+    reward_path = path / "reward.json"
+    reward_path.write_text(json.dumps(values, sort_keys=True))
+    normalize_reward_file(reward_path)
 
 
 def main():
@@ -174,12 +177,14 @@ def main():
         else None
     )
     evidence_ok = _evidence_payload_matches_submission(payload, raw)
+    mathematics_score = float(
+        bool(isinstance(raw, dict) and mathematics(raw.get("result")))
+    )
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(bool(contract)),
-        "mathematics": float(
-            bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-        ),
+        "correctness": mathematics_score,
+        "mathematics": mathematics_score,
         "evidence": float(evidence_ok),
         "scope": float(
             bool(
@@ -220,6 +225,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
+                "correctness": 0.0,
                 "evidence": 0.0,
                 "scope": 0.0,
                 "assurance": 0.0,

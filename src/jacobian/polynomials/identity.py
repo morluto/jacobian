@@ -100,13 +100,15 @@ class PolynomialIdentityAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialIdentityRequest:
+        return _validate_request(
             PolynomialIdentityRequest,
             request.input,
             code="INVALID_POLYNOMIAL_IDENTITY_REQUEST",
             operation="identity verification",
         )
+
+    def invoke(self, validated: PolynomialIdentityRequest) -> OperationProjection:
         return self.verify(validated).project(self.descriptor)
 
     def verify(

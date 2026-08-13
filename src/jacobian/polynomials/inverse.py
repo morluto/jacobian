@@ -426,17 +426,20 @@ class PolynomialMapInverseSynthesizeAdapter:
             verification_artifact_uri,
         )
 
-    def invoke(
-        self,
-        request: CapabilityRequest,
-    ) -> OperationProjection:
-        started = time.monotonic()
-        validated = _validate_request(
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialMapInverseSynthesisRequest:
+        return _validate_request(
             PolynomialMapInverseSynthesisRequest,
             request.input,
             code="INVALID_POLYNOMIAL_MAP_INVERSE_SYNTHESIS_REQUEST",
             operation="map inverse candidate synthesis",
         )
+
+    def invoke(
+        self, validated: PolynomialMapInverseSynthesisRequest
+    ) -> OperationProjection:
+        started = time.monotonic()
         forward_artifact = self.resources.artifacts.put(
             schema_uri=self.resources.installation.map_schema_uri,
             semantics_uri=self.resources.installation.inverse_semantics_uri,
@@ -625,13 +628,17 @@ class PolynomialMapInverseVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialMapInverseVerifyRequest:
+        return _validate_request(
             PolynomialMapInverseVerifyRequest,
             request.input,
             code="INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST",
             operation="map inverse verification",
         )
+
+    def invoke(
+        self, validated: PolynomialMapInverseVerifyRequest
+    ) -> OperationProjection:
         return self.verify(validated).project(self.descriptor)
 
     def verify(

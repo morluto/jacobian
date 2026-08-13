@@ -208,6 +208,13 @@ checker authorization out of plugins and search code.
   validation. Exercise incompatible-but-individually-valid values through the
   serialized installed-operation boundary and assert an invalid-request result
   with no execution or publication.
+- Parse agent-supplied JSON strictly into the owning Pydantic request model;
+  advertised integers must not accept numeric strings or other coercions. An
+  adapter prepares that typed request before provider readiness and executes
+  only the prepared value. Strict transport encoding is lossless: do not reduce
+  rationals, normalize Unicode, or otherwise repair semantic input before the
+  owning model validates it. At the final projection, require the published
+  Pydantic model to match the installed output contract before serializing it.
 - Mathematical inputs are not presumed confidential. Public diagnostics should
   expose a stable domain reason, path, limit, and recovery direction—not
   arbitrary rejected values, which may be unbounded or user-controlled. This

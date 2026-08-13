@@ -48,6 +48,21 @@ def test_arithmetic_capabilities_return_exact_results(
         assert result.output["result"] == expected, capability_id
 
 
+def test_rational_operation_rejects_unreduced_input_before_execution(
+    domain_services: DomainTestServices,
+) -> None:
+    result = domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="rational.compute.reciprocal",
+            input={"value": {"num": "2", "den": "4"}},
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "INVALID_ARITHMETIC_REQUEST"
+    assert result.artifact_uris == ()
+
+
 def test_rational_product_formats_results_above_python_digit_limit(
     domain_services: DomainTestServices,
 ) -> None:

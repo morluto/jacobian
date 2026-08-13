@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_adapters import CapabilityAdapter
@@ -35,7 +35,7 @@ class InstallationContext:
     verification: VerificationService
     operations: OperationInstaller
     checker_authority: CheckerAuthorityMode
-    register_capability: Callable[[CapabilityAdapter], None]
+    register_capability: Callable[[CapabilityAdapter[Any]], None]
 
     @property
     def authorizes_bundled_checkers(self) -> bool:
@@ -58,8 +58,7 @@ def create_installation_context(
 
     The registrar is the only place where capability exclusions are applied;
     installers can therefore remain independent of runtime configuration while
-    every adapter (including adapters loaded from an entrypoint) follows the
-    same policy.
+    every built-in adapter follows the same policy.
     """
 
     if services.core is not core:
@@ -67,7 +66,7 @@ def create_installation_context(
 
     excluded = options.capability_exclusions
 
-    def register(adapter: CapabilityAdapter) -> None:
+    def register(adapter: CapabilityAdapter[Any]) -> None:
         if adapter.descriptor.capability_id not in excluded:
             core.capabilities.register(adapter)
 

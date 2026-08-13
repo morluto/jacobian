@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import (
     CapabilityInvocationError,
     enriched_invalid_request,
@@ -138,8 +139,6 @@ class _VerificationProjection:
 class CertificateVerificationAdapter:
     """Replay one domain certificate with its installation-bound checker."""
 
-    typed_input = True
-
     def __init__(self, projection: _VerificationProjection) -> None:
         self.projection = projection
         self._descriptor = projection.descriptor(CertificateReplayRequest)
@@ -148,13 +147,15 @@ class CertificateVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> CertificateReplayRequest:
         try:
-            validated = CertificateReplayRequest.model_validate(request.input)
+            return parse_capability_input(CertificateReplayRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 enriched_invalid_request(_INVALID_REPLAY_REQUEST, exc)
             ) from exc
+
+    def invoke(self, validated: CertificateReplayRequest) -> OperationProjection:
         result = self.projection.verification.verify_certificate(
             certificate_uri=validated.certificate_uri,
             checker_id=self.projection.checker_id,
@@ -165,8 +166,6 @@ class CertificateVerificationAdapter:
 class WitnessVerificationAdapter:
     """Replay one domain witness with its installation-bound checker."""
 
-    typed_input = True
-
     def __init__(self, projection: _VerificationProjection) -> None:
         self.projection = projection
         self._descriptor = projection.descriptor(WitnessReplayRequest)
@@ -175,13 +174,15 @@ class WitnessVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> WitnessReplayRequest:
         try:
-            validated = WitnessReplayRequest.model_validate(request.input)
+            return parse_capability_input(WitnessReplayRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 enriched_invalid_request(_INVALID_REPLAY_REQUEST, exc)
             ) from exc
+
+    def invoke(self, validated: WitnessReplayRequest) -> OperationProjection:
         result = self.projection.verification.verify_witness(
             claim_uri=validated.claim_uri,
             candidate_uri=validated.candidate_uri,
@@ -199,7 +200,7 @@ def certificate_verification_adapter(
     checker_id: CheckerUri | None,
     tags: tuple[str, ...],
     verification: VerificationService,
-) -> CapabilityAdapter | None:
+) -> CapabilityAdapter[Any] | None:
     if checker_id is None:
         return None
     return CertificateVerificationAdapter(
@@ -222,7 +223,7 @@ def witness_verification_adapter(
     checker_id: CheckerUri | None,
     tags: tuple[str, ...],
     verification: VerificationService,
-) -> CapabilityAdapter | None:
+) -> CapabilityAdapter[Any] | None:
     if checker_id is None:
         return None
     return WitnessVerificationAdapter(

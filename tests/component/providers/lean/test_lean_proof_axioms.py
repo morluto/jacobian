@@ -67,13 +67,15 @@ def test_proof_hole_inspection_ignores_strings_and_identifiers(
         )
         result = project_operation_result(
             adapter.invoke(
-                CapabilityRequest(
-                    capability_id="lean.proof.axioms.inspect",
-                    input={
-                        "environment": "CORE",
-                        "statement": "True",
-                        "proof": proof,
-                    },
+                adapter.prepare(
+                    CapabilityRequest(
+                        capability_id="lean.proof.axioms.inspect",
+                        input={
+                            "environment": "CORE",
+                            "statement": "True",
+                            "proof": proof,
+                        },
+                    )
                 )
             )
         )

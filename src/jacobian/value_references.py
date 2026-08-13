@@ -61,7 +61,10 @@ class ValueReferenceStore:
                 self._total_bytes -= evicted.canonical_bytes
             token = self._new_token()
             self._values[token] = StoredValue(
-                value=value.model_copy(deep=True),
+                # ContractModel values are frozen semantic values. Keep the
+                # validated instance so typed composition preserves identity;
+                # canonical bytes above remain the bounded integrity view.
+                value=value,
                 value_type=type(value),
                 digest=f"sha256:{hashlib.sha256(encoded).hexdigest()}",
                 canonical_bytes=len(encoded),
@@ -90,7 +93,7 @@ class ValueReferenceStore:
                     f"expected {expected_type.__name__}"
                 )
             self._values.move_to_end(value_ref)
-            return stored.value.model_copy(deep=True)
+            return stored.value
 
     def inspect(self, value_ref: ValueUri) -> StoredValue:
         """Return immutable stored facts for runtime tests and diagnostics."""

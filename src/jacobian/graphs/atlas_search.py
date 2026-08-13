@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -52,8 +53,6 @@ class GraphAtlasSearchResources:
 class GraphAtlasSearchAdapter:
     """Search NetworkX's bounded Graph Atlas using exact computed properties."""
 
-    typed_input = True
-
     def __init__(self, resources: GraphAtlasSearchResources) -> None:
         self.resources = resources
         self._descriptor = CapabilityDescriptor(
@@ -85,10 +84,9 @@ class GraphAtlasSearchAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        started = time.monotonic()
+    def prepare(self, request: CapabilityRequest) -> GraphAtlasSearchRequest:
         try:
-            validated = GraphAtlasSearchRequest.model_validate(request.input)
+            return parse_capability_input(GraphAtlasSearchRequest, request.input)
         except ValidationError as exc:
             error = exc.errors()[0]
             error_message = str(error.get("msg", ""))
@@ -125,6 +123,9 @@ class GraphAtlasSearchAdapter:
                     ),
                 )
             ) from exc
+
+    def invoke(self, validated: GraphAtlasSearchRequest) -> OperationProjection:
+        started = time.monotonic()
         order = validated.order
         constraints = validated.constraints
         limit = validated.limit

@@ -65,13 +65,15 @@ def test_propose_elaborates_valid_statement(tmp_path: Path) -> None:
 
     result = project_operation_result(
         propose.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.propose",
-                input={
-                    "environment": "CORE",
-                    "informal_claim": "one plus one equals two",
-                    "proposed_statement": "1 + 1 = 2",
-                },
+            propose.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.propose",
+                    input={
+                        "environment": "CORE",
+                        "informal_claim": "one plus one equals two",
+                        "proposed_statement": "1 + 1 = 2",
+                    },
+                )
             )
         )
     )
@@ -91,13 +93,15 @@ def test_propose_reports_elaboration_failure(tmp_path: Path) -> None:
 
     result = project_operation_result(
         propose.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.propose",
-                input={
-                    "environment": "CORE",
-                    "informal_claim": "bogus claim",
-                    "proposed_statement": "1 + + 1 = 2",
-                },
+            propose.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.propose",
+                    input={
+                        "environment": "CORE",
+                        "informal_claim": "bogus claim",
+                        "proposed_statement": "1 + + 1 = 2",
+                    },
+                )
             )
         )
     )
@@ -113,13 +117,15 @@ def test_propose_rejects_forbidden_statement(tmp_path: Path) -> None:
 
     with pytest.raises(CapabilityInvocationError) as exc_info:
         propose.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.propose",
-                input={
-                    "environment": "CORE",
-                    "informal_claim": "bogus",
-                    "proposed_statement": "sorry",
-                },
+            propose.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.propose",
+                    input={
+                        "environment": "CORE",
+                        "informal_claim": "bogus",
+                        "proposed_statement": "sorry",
+                    },
+                )
             )
         )
 
@@ -131,13 +137,15 @@ def test_propose_rejects_mathlib_environment(tmp_path: Path) -> None:
 
     with pytest.raises(CapabilityInvocationError) as exc_info:
         propose.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.propose",
-                input={
-                    "environment": "MATHLIB",
-                    "informal_claim": "claim",
-                    "proposed_statement": "1 + 1 = 2",
-                },
+            propose.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.propose",
+                    input={
+                        "environment": "MATHLIB",
+                        "informal_claim": "claim",
+                        "proposed_statement": "1 + 1 = 2",
+                    },
+                )
             )
         )
 
@@ -160,13 +168,15 @@ def test_propose_returns_diagnostic_when_lean_unavailable(
 
     with pytest.raises(CapabilityInvocationError) as exc_info:
         propose.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.propose",
-                input={
-                    "environment": "CORE",
-                    "informal_claim": "one plus one equals two",
-                    "proposed_statement": "1 + 1 = 2",
-                },
+            propose.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.propose",
+                    input={
+                        "environment": "CORE",
+                        "informal_claim": "one plus one equals two",
+                        "proposed_statement": "1 + 1 = 2",
+                    },
+                )
             )
         )
 
@@ -211,13 +221,15 @@ def test_propose_directly_elaborates_environment_bound_proposition(
 
     result = project_operation_result(
         propose.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.propose",
-                input={
-                    "operation": "ELABORATE_PROPOSITION",
-                    "environment": "CORE",
-                    "proposed_statement": "1 = 1",
-                },
+            propose.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.propose",
+                    input={
+                        "operation": "ELABORATE_PROPOSITION",
+                        "environment": "CORE",
+                        "proposed_statement": "1 = 1",
+                    },
+                )
             )
         )
     )
@@ -312,15 +324,17 @@ def test_compare_identical_statements(tmp_path: Path) -> None:
 
     result = project_operation_result(
         compare.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.compare",
-                input={
-                    "environment": "CORE",
-                    "statement_a": "1 + 1 = 2",
-                    "statement_b": "1 + 1 = 2",
-                    "axiom_set_a": [],
-                    "axiom_set_b": [],
-                },
+            compare.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.compare",
+                    input={
+                        "environment": "CORE",
+                        "statement_a": "1 + 1 = 2",
+                        "statement_b": "1 + 1 = 2",
+                        "axiom_set_a": [],
+                        "axiom_set_b": [],
+                    },
+                )
             )
         )
     )
@@ -342,15 +356,17 @@ def test_compare_different_statements(tmp_path: Path) -> None:
 
     result = project_operation_result(
         compare.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.compare",
-                input={
-                    "environment": "CORE",
-                    "statement_a": "1 + 1 = 2",
-                    "statement_b": "1 + 1 = 3",
-                    "axiom_set_a": ["Classical.choice"],
-                    "axiom_set_b": [],
-                },
+            compare.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.compare",
+                    input={
+                        "environment": "CORE",
+                        "statement_a": "1 + 1 = 2",
+                        "statement_b": "1 + 1 = 3",
+                        "axiom_set_a": ["Classical.choice"],
+                        "axiom_set_b": [],
+                    },
+                )
             )
         )
     )
@@ -375,13 +391,15 @@ def test_compare_works_without_lean_for_syntactic_comparison(
 
     result = project_operation_result(
         compare.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.compare",
-                input={
-                    "environment": "CORE",
-                    "statement_a": "1 + 1 = 2",
-                    "statement_b": "1 + 1 = 2",
-                },
+            compare.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.compare",
+                    input={
+                        "environment": "CORE",
+                        "statement_a": "1 + 1 = 2",
+                        "statement_b": "1 + 1 = 2",
+                    },
+                )
             )
         )
     )
@@ -487,13 +505,15 @@ def test_compare_normalizes_whitespace(tmp_path: Path) -> None:
 
     result = project_operation_result(
         compare.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.compare",
-                input={
-                    "environment": "CORE",
-                    "statement_a": "1 + 1  =  2",
-                    "statement_b": "1 + 1 = 2",
-                },
+            compare.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.compare",
+                    input={
+                        "environment": "CORE",
+                        "statement_a": "1 + 1  =  2",
+                        "statement_b": "1 + 1 = 2",
+                    },
+                )
             )
         )
     )
@@ -506,13 +526,15 @@ def test_compare_rejects_forbidden_statement(tmp_path: Path) -> None:
 
     with pytest.raises(CapabilityInvocationError) as exc_info:
         compare.invoke(
-            CapabilityRequest(
-                capability_id="lean.statement.compare",
-                input={
-                    "environment": "CORE",
-                    "statement_a": "sorry",
-                    "statement_b": "True",
-                },
+            compare.prepare(
+                CapabilityRequest(
+                    capability_id="lean.statement.compare",
+                    input={
+                        "environment": "CORE",
+                        "statement_a": "sorry",
+                        "statement_b": "True",
+                    },
+                )
             )
         )
 

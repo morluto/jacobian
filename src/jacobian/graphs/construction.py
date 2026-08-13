@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -88,9 +89,11 @@ class GraphExplicitConstructionAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> GraphExplicitConstructionRequest:
         try:
-            validated = GraphExplicitConstructionRequest.model_validate(request.input)
+            return parse_capability_input(
+                GraphExplicitConstructionRequest, request.input
+            )
         except ValidationError as exc:
             errors, validation_error_count = project_validation_errors(exc)
             path_parts = errors[0]["loc"] if errors else ()
@@ -124,6 +127,9 @@ class GraphExplicitConstructionAdapter:
                 )
             ) from exc
 
+    def invoke(
+        self, validated: GraphExplicitConstructionRequest
+    ) -> OperationProjection:
         terminal = execute_operation(self.spec, validated)
         if not isinstance(terminal, Completed):
             return OperationProjection(

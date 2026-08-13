@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces sixteen PR10 invariants:
+runtime.  It enforces eighteen focused invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -58,7 +58,13 @@ runtime.  It enforces sixteen PR10 invariants:
 15. **internal-capability-request**: only CLI and MCP boundaries may construct
     the generic capability request envelope; in-process composition stays typed.
 
-16. **test-ownership**: tests are organized by semantic owner rather than
+16. **capability-result-projection**: only the final operation projection may
+    construct the generic public result envelope.
+
+17. **legacy-adapter-mode**: built-in adapters may not restore marker-selected
+    schema execution paths; every adapter owns its typed parse.
+
+18. **test-ownership**: tests are organized by semantic owner rather than
     historical rollout buckets, and focused suites cannot acquire complete or
     multi-domain runtime fixtures by convenience.
 
@@ -267,6 +273,12 @@ _CAPABILITY_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
     }
 )
 
+_CAPABILITY_RESULT_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
+    {PurePosixPath("src/jacobian/operation_projection.py")}
+)
+
+_LEGACY_ADAPTER_MODE_NAMES = frozenset({"TypedInputAdapter", "typed_input"})
+
 # Public-contract checks apply to datasets with agent-visible contract projections.
 _PUBLIC_CONTRACT_DATASET_PREFIXES = (
     PurePosixPath("benchmarks/datasets/mathematical-benchmarks-v1"),
@@ -468,6 +480,17 @@ def _imported_names(node: ast.Import | ast.ImportFrom) -> list[str]:
     return [alias.name for alias in node.names]
 
 
+def _attribute_path(node: ast.AST) -> str | None:
+    """Return one dotted name path without evaluating the expression."""
+
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _attribute_path(node.value)
+        return f"{parent}.{node.attr}" if parent is not None else None
+    return None
+
+
 def _internal_capability_request_violations(
     relative: PurePosixPath,
     tree: ast.AST,
@@ -488,6 +511,136 @@ def _internal_capability_request_violations(
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id == "CapabilityRequest"
+    )
+
+
+def _capability_result_from_import_from(
+    relative: PurePosixPath, node: ast.ImportFrom
+) -> tuple[set[str], set[str]]:
+    pairs = zip(node.names, _import_references(relative, node), strict=True)
+    pairs = tuple(pairs)
+    constructor_names = {
+        alias.asname or alias.name
+        for alias, reference in pairs
+        if reference
+        in {
+            "jacobian.contracts.capabilities.CapabilityResult",
+            "contracts.capabilities.CapabilityResult",
+        }
+    }
+    module_names = {
+        alias.asname or alias.name
+        for alias, reference in pairs
+        if reference in {"jacobian.contracts.capabilities", "contracts.capabilities"}
+    }
+    module_names.update(
+        alias.asname or alias.name
+        for alias, reference in pairs
+        if reference in {"jacobian.contracts", "contracts"}
+        and alias.name == "capabilities"
+    )
+    module_names.update(
+        f"{alias.asname or alias.name}.capabilities"
+        for alias, reference in pairs
+        if reference == "jacobian" and alias.name == "contracts"
+    )
+    return constructor_names, module_names
+
+
+def _capability_result_from_import(
+    node: ast.Import,
+) -> tuple[set[str], set[str]]:
+    module_names = {
+        alias.asname or alias.name
+        for alias in node.names
+        if alias.name == "jacobian.contracts.capabilities"
+    }
+    module_names.update(
+        f"{alias.asname or alias.name}.capabilities"
+        for alias in node.names
+        if alias.name == "jacobian.contracts"
+    )
+    module_names.update(
+        f"{alias.asname or alias.name}.contracts.capabilities"
+        for alias in node.names
+        if alias.name == "jacobian"
+    )
+    return set(), module_names
+
+
+def _capability_result_bindings(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[set[str], set[str]]:
+    constructor_names: set[str] = set()
+    module_names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            constructors, modules = _capability_result_from_import_from(relative, node)
+        elif isinstance(node, ast.Import):
+            constructors, modules = _capability_result_from_import(node)
+        else:
+            continue
+        constructor_names.update(constructors)
+        module_names.update(modules)
+    return constructor_names, module_names
+
+
+def _capability_result_projection_violations(
+    relative: PurePosixPath,
+    tree: ast.AST,
+) -> tuple[Violation, ...]:
+    if not str(relative).startswith("src/jacobian/"):
+        return ()
+    if relative in _CAPABILITY_RESULT_ALLOWED_EXACT:
+        return ()
+    constructor_names, module_names = _capability_result_bindings(relative, tree)
+
+    def is_result_constructor(call: ast.Call) -> bool:
+        if isinstance(call.func, ast.Name):
+            return call.func.id in constructor_names
+        if not isinstance(call.func, ast.Attribute):
+            return False
+        path = _attribute_path(call.func)
+        return path is not None and any(
+            path == f"{module}.CapabilityResult" for module in module_names
+        )
+
+    return tuple(
+        Violation(
+            str(relative),
+            "capability-result-projection",
+            "only operation_projection.py may construct the public "
+            "CapabilityResult envelope",
+            node.lineno,
+        )
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and is_result_constructor(node)
+    )
+
+
+def _legacy_adapter_mode_violations(
+    relative: PurePosixPath,
+    tree: ast.AST,
+) -> tuple[Violation, ...]:
+    if not str(relative).startswith("src/jacobian/"):
+        return ()
+    return tuple(
+        Violation(
+            str(relative),
+            "legacy-adapter-mode",
+            "adapters own one typed parse; marker-selected schema execution "
+            "modes are not supported",
+            node.lineno,
+        )
+        for node in ast.walk(tree)
+        if (
+            isinstance(node, ast.Name) and node.id in _LEGACY_ADAPTER_MODE_NAMES
+        ) or (
+            isinstance(node, ast.ImportFrom)
+            and any(
+                alias.name in _LEGACY_ADAPTER_MODE_NAMES for alias in node.names
+            )
+        )
     )
 
 
@@ -1572,6 +1725,8 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
 
     violations: list[Violation] = []
     violations.extend(_internal_capability_request_violations(relative, tree))
+    violations.extend(_capability_result_projection_violations(relative, tree))
+    violations.extend(_legacy_adapter_mode_violations(relative, tree))
     violations.extend(_subprocess_violations(relative, tree))
     violations.extend(_run_bounded_process_violations(relative, tree))
     violations.extend(_shutil_which_violations(relative, tree))

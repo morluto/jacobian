@@ -274,21 +274,41 @@ def test_enumerate_paginates_with_limit_and_offset(
     assert first_uris.isdisjoint(second_uris)
 
 
-def test_enumerate_rejects_order_outside_backend_boundary(
-    graph_services: DomainTestServices,
+def test_enumerate_rejects_invalid_order_before_provider_or_publication(
+    graph_services: DomainTestServices, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     runtime = graph_services
+
+    def unexpected_provider_load() -> None:
+        pytest.fail("invalid input must not load the NetworkX provider")
+
+    def unexpected_artifact_publication(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("invalid input must not publish graph artifacts")
+
+    class UnavailableProvider:
+        def get(self) -> None:
+            unexpected_provider_load()
+
+    monkeypatch.setattr(
+        "jacobian.graphs.composition.networkx_loader",
+        UnavailableProvider(),
+    )
+    monkeypatch.setattr(
+        runtime.core.artifacts,
+        "put",
+        unexpected_artifact_publication,
+    )
 
     result = runtime.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="graph.enumerate.nonisomorphic",
-            input={"order": 10},
+            input={"order": "4"},
         )
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].code == "INVALID_ENUMERATION_REQUEST"
 
 
 def test_enumerate_order_zero_returns_single_empty_graph(

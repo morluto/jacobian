@@ -309,11 +309,7 @@ def _bounded_run_result(
     if not (result.diagnostics and result.diagnostics[0].code == "UNKNOWN_CAPABILITY"):
         return result
     payload = result.model_dump(mode="json")
-    output = {
-        key: value
-        for key, value in payload["output"].items()
-        if key != "available_capability_ids"
-    }
+    output = payload["output"]
     output.update(_unknown_capability_context(runtime, result.capability_id))
     payload["output"] = output
     return CapabilityResult.model_validate(payload)

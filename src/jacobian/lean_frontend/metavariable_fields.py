@@ -18,6 +18,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 import jacobian.lean_frontend.exploration as _exploration_support
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -83,9 +84,11 @@ class LeanMetavariableFieldsAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanMetavariableFieldsRequest:
         try:
-            validated = LeanMetavariableFieldsRequest.model_validate(request.input)
+            validated = parse_capability_input(
+                LeanMetavariableFieldsRequest, request.input
+            )
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -95,6 +98,9 @@ class LeanMetavariableFieldsAdapter:
                     hint="Supply a state_uri returned by a proof-state capability.",
                 )
             ) from exc
+        return validated
+
+    def invoke(self, validated: LeanMetavariableFieldsRequest) -> OperationProjection:
         started = time.monotonic()
         installation = self.resources.installations[validated.environment]
         environment_digest = _environment_digest(

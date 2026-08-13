@@ -60,7 +60,7 @@ def test_invalid_request_uri_values_are_summarized_without_echoing(
     ) as services:
         adapter = services.core.capabilities._adapters[VERIFY_CAPABILITY_ID]
         with pytest.raises(CapabilityInvocationError) as caught:
-            adapter.invoke(
+            adapter.prepare(
                 CapabilityRequest(
                     capability_id=VERIFY_CAPABILITY_ID,
                     input={

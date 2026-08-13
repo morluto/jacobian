@@ -44,6 +44,9 @@ class UnavailableAdapter:
         output_schema={"type": "object"},
     )
 
+    def prepare(self, request: CapabilityRequest) -> CapabilityRequest:
+        return request
+
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
         raise AssertionError(f"unavailable adapter invoked: {request.capability_id}")
 

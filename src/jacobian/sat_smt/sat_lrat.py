@@ -10,7 +10,7 @@ from typing import Literal
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -61,7 +61,7 @@ def install_sat_lrat_verifier(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[CapabilityAdapter | None, SatLratInstallation]:
+) -> tuple[CapabilityAdapter[SatLratVerificationRequest] | None, SatLratInstallation]:
     proof_schema_uri = schemas.register_model(
         name="jacobian.sat-lrat-proof", version="1", model=SatLratProofArtifact
     )
@@ -106,8 +106,6 @@ def install_sat_lrat_verifier(
 
 
 class SatLratVerificationAdapter:
-    typed_input = True
-
     def __init__(
         self,
         *,
@@ -161,8 +159,10 @@ class SatLratVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = SatLratVerificationRequest.model_validate(request.input)
+    def prepare(self, request: CapabilityRequest) -> SatLratVerificationRequest:
+        return parse_capability_input(SatLratVerificationRequest, request.input)
+
+    def invoke(self, validated: SatLratVerificationRequest) -> OperationProjection:
         try:
             resolved = self.sat.resolve_cnf(validated.cnf_uri)
             semantics = self.store.get(self.sat.installation.semantics_uri)

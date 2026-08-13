@@ -8,6 +8,7 @@ import time
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -82,9 +83,11 @@ class LeanPremiseRetrievalAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanPremiseRetrievalRequest:
         try:
-            validated = LeanPremiseRetrievalRequest.model_validate(request.input)
+            validated = parse_capability_input(
+                LeanPremiseRetrievalRequest, request.input
+            )
             _validate_source_parts(validated.statement, validated.proof_prefix)
         except (ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
@@ -98,6 +101,9 @@ class LeanPremiseRetrievalAdapter:
                     ),
                 )
             ) from exc
+        return validated
+
+    def invoke(self, validated: LeanPremiseRetrievalRequest) -> OperationProjection:
         started = time.monotonic()
         environment = LeanEnvironment.MATHLIB
         installation = self.resources.installations[environment]

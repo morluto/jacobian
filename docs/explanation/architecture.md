@@ -165,10 +165,15 @@ external payload
 Pydantic owns complete request validation, including relationships among
 otherwise valid fields. Required agreement of parents, characteristics,
 presentations, axes, bases, labels, and bound identities is checked during the
-single request parse, before preflight or any provider call. JSON Schema is
-generated for discovery and is not executed as an additional validation pass
-for built-ins. Provider and subprocess output is a separate untrusted boundary
-and is parsed independently.
+single strict, lossless request parse, before provider readiness, preflight, or
+execution. Domain canonicalization happens only after the owning request model
+has accepted the original values; transport parsing does not reduce rationals
+or normalize Unicode.
+JSON Schema is generated for discovery and is not executed as an additional
+validation pass for built-ins. Before the single final serialization, dispatch
+checks that the published Pydantic model still generates the installed output
+contract. Provider and subprocess output is a separate untrusted boundary and
+is parsed independently.
 
 Preflight distinguishes supported, unsupported, provider unavailable, and
 resource-limit-exceeded outcomes. Where practical it estimates work, output
@@ -284,8 +289,8 @@ Using a request-local carrier does not change a value or grant assurance.
 ## Structural JSON
 
 The runtime retains direct bounded JSON functions rather than a codec
-framework: a strict loader, deterministic serializer, Pydantic adapters, and
-one explicit schema-only adapter. Generic JSON rejects duplicate keys and
+framework: a strict loader, deterministic serializer, and Pydantic adapters.
+Generic JSON rejects duplicate keys and
 unsupported numbers, enforces depth/member/byte limits, preserves keys and
 strings exactly, and performs no Unicode or mathematical normalization.
 

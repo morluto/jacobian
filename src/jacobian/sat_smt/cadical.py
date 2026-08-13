@@ -11,10 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import ValidationError
-
 from jacobian.bounded_process import bounded_process_cancelled
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -79,7 +77,10 @@ def install_cadical_capabilities(
     runtime: CapabilityProviderRuntime,
     *,
     executable: str | Path | None = None,
-) -> tuple[CapabilityAdapter, CapabilityAdapter]:
+) -> tuple[
+    CapabilityAdapter[SatExplorationRequest],
+    CapabilityAdapter[SatExplorationRequest],
+]:
     """Install model and proof producers for one exact available runtime."""
 
     if (
@@ -336,8 +337,6 @@ class _CadicalBackend:
 class CadicalModelFindAdapter:
     """Attempt to produce one total assignment without validating it."""
 
-    typed_input = True
-
     def __init__(
         self,
         *,
@@ -377,8 +376,11 @@ class CadicalModelFindAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated, resolved = _resolve_request(self.sat, request)
+    def prepare(self, request: CapabilityRequest) -> SatExplorationRequest:
+        return parse_capability_input(SatExplorationRequest, request.input)
+
+    def invoke(self, validated: SatExplorationRequest) -> OperationProjection:
+        resolved = _resolve_request(self.sat, validated)
         run = self.backend.run_model(resolved.cnf, validated.resource_budget)
         if (
             run.execution_status is ExecutionStatus.COMPLETED
@@ -463,8 +465,6 @@ class CadicalModelFindAdapter:
 class CadicalUnsatProofFindAdapter:
     """Attempt to preserve raw text DRAT without validating the proof."""
 
-    typed_input = True
-
     def __init__(
         self,
         *,
@@ -504,8 +504,11 @@ class CadicalUnsatProofFindAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated, resolved = _resolve_request(self.sat, request)
+    def prepare(self, request: CapabilityRequest) -> SatExplorationRequest:
+        return parse_capability_input(SatExplorationRequest, request.input)
+
+    def invoke(self, validated: SatExplorationRequest) -> OperationProjection:
+        resolved = _resolve_request(self.sat, validated)
         run = self.backend.run_proof(resolved.cnf, validated.resource_budget)
         if (
             run.execution_status is ExecutionStatus.COMPLETED
@@ -557,12 +560,11 @@ class CadicalUnsatProofFindAdapter:
 
 def _resolve_request(
     sat: SatArtifactService,
-    request: CapabilityRequest,
-) -> tuple[SatExplorationRequest, ResolvedSatCnf]:
+    request: SatExplorationRequest,
+) -> ResolvedSatCnf:
     try:
-        validated = SatExplorationRequest.model_validate(request.input)
-        resolved = sat.resolve_cnf(validated.cnf_uri)
-    except (SatArtifactError, ValidationError) as exc:
+        return sat.resolve_cnf(request.cnf_uri)
+    except SatArtifactError as exc:
         raise CapabilityInvocationError(
             CapabilityDiagnostic(
                 code="INVALID_SAT_EXPLORATION_REQUEST",
@@ -578,7 +580,6 @@ def _resolve_request(
                 ),
             )
         ) from exc
-    return validated, resolved
 
 
 def _completed_result(

@@ -262,7 +262,7 @@ def test_polynomial_map_evaluation_is_exact_and_materialized(
                 ],
                 "second_point": [{"num": "0", "den": "1"}],
             },
-            "INVALID_REQUEST",
+            "INVALID_POLYNOMIAL_COLLISION_REQUEST",
         ),
         (
             "polynomial.map.collision_witness",

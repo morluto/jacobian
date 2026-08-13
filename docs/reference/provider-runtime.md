@@ -86,26 +86,28 @@ SMT-LIB parser and proof APIs are checked lazily at first use. Missing or
 mismatched package identity is a broken installation, while a first-use
 readiness failure fails the selected invocation closed.
 
-Source-backed adapters can construct metadata without importing their
-implementation:
+Source-backed checker implementations can construct metadata without importing
+their implementation:
 
 ```python
 from jacobian.contracts.capabilities import CapabilityInstallTier
 from jacobian.provider_runtime import source_provider_runtime
 
 runtime = source_provider_runtime(
-    "example.provider",
+    "example.checker",
     version="1",
-    entrypoint="example_adapter:create_adapter",
+    entrypoint="example_checker:check",
     install_tier=CapabilityInstallTier.T1,
     license_id="MIT",
     license_files=("LICENSE",),
-    features=("exact-example-operation",),
+    features=("exact-example-check",),
 )
 ```
 
-The adapter places `runtime` in its descriptor. Registration remains
-fail-closed if the source identity cannot be resolved.
+The checker registration binds `runtime` to its independently authorized
+entrypoint. Registration remains fail-closed if the source identity cannot be
+resolved. External operation packages and adapter entrypoint discovery are not
+supported.
 
 ### External checker runtimes
 

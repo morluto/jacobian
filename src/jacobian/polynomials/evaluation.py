@@ -101,13 +101,15 @@ class PolynomialMapEvaluationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialEvaluationRequest:
+        return _validate_request(
             PolynomialEvaluationRequest,
             request.input,
             code="INVALID_POLYNOMIAL_EVALUATION_REQUEST",
             operation="evaluation",
         )
+
+    def invoke(self, validated: PolynomialEvaluationRequest) -> OperationProjection:
         started = time.monotonic()
         polynomial_map = validated.map
         polynomial_map, map_uri = _materialize_map(self.resources, polynomial_map)
@@ -189,13 +191,15 @@ class PolynomialJacobianAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialJacobianRequest:
+        return _validate_request(
             PolynomialJacobianRequest,
             request.input,
             code="INVALID_POLYNOMIAL_JACOBIAN_REQUEST",
             operation="Jacobian computation",
         )
+
+    def invoke(self, validated: PolynomialJacobianRequest) -> OperationProjection:
         return self.compute(validated)
 
     def compute(
@@ -372,13 +376,19 @@ class PolynomialKellerConditionVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialKellerConditionVerifyRequest:
+        return _validate_request(
             PolynomialKellerConditionVerifyRequest,
             request.input,
             code="INVALID_POLYNOMIAL_KELLER_CONDITION_REQUEST",
             operation="Keller-condition verification",
         )
+
+    def invoke(
+        self, validated: PolynomialKellerConditionVerifyRequest
+    ) -> OperationProjection:
         checker_id = self.resources.installation.keller_checker_id
         if checker_id is None:
             raise _polynomial_error(

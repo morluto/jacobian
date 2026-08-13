@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -379,16 +380,31 @@ class SingularNullstellensatzCertificateAdapter:
             ),
         )
 
+    def prepare(self, request: CapabilityRequest) -> NullstellensatzCertificateRequest:
+        try:
+            return parse_capability_input(
+                NullstellensatzCertificateRequest,
+                request.input,
+            )
+        except ValidationError as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INVALID_NULLSTELLENSATZ_CERTIFICATE_REQUEST",
+                    stage="artifact_resolution",
+                    message="The request does not name the frozen producer-owned system artifact.",
+                    hint="Invoke the materialization capability and pass its system_uri.",
+                )
+            ) from exc
+
     def _resolve_request(
         self,
-        request: CapabilityRequest,
+        validated: NullstellensatzCertificateRequest,
     ) -> tuple[
         NullstellensatzCertificateRequest,
         StoredArtifact,
         NormalizedJacobianDegreeSliceSystem,
     ]:
         try:
-            validated = NullstellensatzCertificateRequest.model_validate(request.input)
             system_artifact = self.context.store.get(validated.system_uri)
             identity = (
                 system_artifact.manifest.schema_uri,
@@ -441,8 +457,10 @@ class SingularNullstellensatzCertificateAdapter:
             )
         )
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated, system_artifact, system = self._resolve_request(request)
+    def invoke(
+        self, validated: NullstellensatzCertificateRequest
+    ) -> OperationProjection:
+        validated, system_artifact, system = self._resolve_request(validated)
         started = time.monotonic()
         executable = self.provider_runtime.configuration.get("executable")
         if not isinstance(executable, str):

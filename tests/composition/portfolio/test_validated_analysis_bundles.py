@@ -27,6 +27,7 @@ def test_subject_bundles_preserve_wire_contracts_and_report_one_backend() -> Non
             "python-flint",
             "jacobian.validated-analysis",
             (
+                "probability.joint.mutual_information.compute",
                 "probability.finite_distribution.raw_moment.compute",
                 "probability.finite_distribution.event_probability.compute",
                 "probability.finite_distribution.condition.compute",

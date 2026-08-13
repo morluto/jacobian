@@ -89,6 +89,12 @@ class LeanCandidate(ContractModel):
     proof: str = Field(min_length=1, max_length=20_000)
 
 
+class LeanCheckRequest(ContractModel):
+    statement: str = Field(min_length=1, max_length=2_000)
+    proof: str = Field(min_length=1, max_length=20_000)
+    environment: LeanEnvironment = LeanEnvironment.CORE
+
+
 class LeanVerifyResult(ContractModel):
     claim_uri: ArtifactUri
     candidate_uri: ArtifactUri

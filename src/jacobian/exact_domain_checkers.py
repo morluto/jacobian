@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityError, CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_identity import batch_checker_manifest_measurement
@@ -272,7 +272,7 @@ def install_exact_domain_verification(
     *,
     bundles: Mapping[str, tuple[DomainBundle, InstalledDomainBundle]],
     authorize: bool,
-) -> tuple[tuple[CapabilityAdapter, ...], ExactDomainCheckerInstallation]:
+) -> tuple[tuple[CapabilityAdapter[Any], ...], ExactDomainCheckerInstallation]:
     """Authorize exact replay and expose per-producer verification capabilities.
 
     Each authorized exact replay declaration becomes one
@@ -304,7 +304,7 @@ def install_exact_domain_verification(
         checker_id is not None for checker_id in installation.checker_ids.values()
     ):
         return (), installation
-    adapters: list[CapabilityAdapter] = []
+    adapters: list[CapabilityAdapter[Any]] = []
     result_models = {
         operation.spec.operation_id: operation.spec.result_type
         for bundle, _installed_bundle in bundles.values()
@@ -458,10 +458,13 @@ class ExactComputedVerificationAdapter:
         self.witness_schema_uri = witness_schema_uri
         self.stored_result_input = stored_result_input
         generic_request_model: Any = ExactComputedVerificationRequest
-        self.input_model = generic_request_model[
-            declaration.declaration.request_model,
-            declaration.result_model,
-        ]
+        self.input_model: type[ContractModel] = cast(
+            type[ContractModel],
+            generic_request_model[
+                declaration.declaration.request_model,
+                declaration.result_model,
+            ],
+        )
         self.candidate_port = (
             InputPort(
                 name="candidate",
@@ -516,23 +519,61 @@ class ExactComputedVerificationAdapter:
             ),
         )
 
-    typed_input: Literal[True] = True
-
     @property
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> ContractModel:
+        request_model: type[ContractModel] = (
+            ExactDomainResultVerificationRequest
+            if self.stored_result_input
+            else self.input_model
+        )
+        try:
+            payload = request.input
+            if request.inputs:
+                if self.candidate_port is None:
+                    raise ValueError("this exact checker declares no value inputs")
+                unknown = sorted(set(request.inputs) - {self.candidate_port.name})
+                if unknown:
+                    raise ValueError(
+                        "unknown exact-checker input port: " + ", ".join(unknown)
+                    )
+                candidate = self.values.resolve(
+                    request.inputs[self.candidate_port.name],
+                    self.candidate_port.value_type,
+                )
+                payload = self.candidate_port.bind_to_request(payload, candidate)
+            return parse_capability_input(request_model, payload)
+        except (ValidationError, ValueError, ValueReferenceError) as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INVALID_EXACT_DOMAIN_INPUT",
+                    stage="request_validation",
+                    message=bounded_validation_exception_message(exc),
+                    hint=(
+                        "input must satisfy the producer request contract and "
+                        "candidate must satisfy its result contract."
+                    ),
+                )
+            ) from exc
+
+    def invoke(self, request: ContractModel) -> OperationProjection:
         declaration = self.declaration
         source_artifacts: tuple[StoredArtifact, StoredArtifact, StoredArtifact] | None
         normalized_candidate: dict[str, object] | None
         if self.stored_result_input:
-            source_artifacts = self._resolve_stored_result(request)
+            source_artifacts = self._resolve_stored_result(
+                cast(ExactDomainResultVerificationRequest, request)
+            )
             normalized_input = source_artifacts[0].payload
             normalized_candidate = None
         else:
             normalized_input, normalized_candidate = self._validated_inline_payloads(
-                request
+                cast(
+                    ExactComputedVerificationRequest[ContractModel, ContractModel],
+                    request,
+                )
             )
             source_artifacts = None
         # Check the authorized checker's bounded input scope before any artifact write.
@@ -792,32 +833,18 @@ class ExactComputedVerificationAdapter:
         return statuses.get(execution_status, "ERROR")
 
     def _validated_inline_payloads(
-        self, request: CapabilityRequest
+        self,
+        request: ExactComputedVerificationRequest[ContractModel, ContractModel],
     ) -> tuple[dict[str, object], dict[str, object]]:
         declaration = self.declaration
         try:
-            payload = request.input
-            if request.inputs:
-                if self.candidate_port is None:
-                    raise ValueError("this exact checker declares no value inputs")
-                unknown = sorted(set(request.inputs) - {self.candidate_port.name})
-                if unknown:
-                    raise ValueError(
-                        "unknown exact-checker input port: " + ", ".join(unknown)
-                    )
-                candidate = self.values.resolve(
-                    request.inputs[self.candidate_port.name],
-                    self.candidate_port.value_type,
-                )
-                payload = self.candidate_port.bind_to_request(payload, candidate)
-            validated = self.input_model.model_validate(payload)
             normalized_input = self.schemas.validate(
                 declaration.input_schema_uri,
-                validated.input.model_dump(mode="json"),
+                request.input.model_dump(mode="json"),
             )
             normalized_candidate = self.schemas.validate(
                 declaration.result_schema_uri,
-                validated.candidate.model_dump(mode="json"),
+                request.candidate.model_dump(mode="json"),
             )
         except (
             SchemaRegistryError,
@@ -839,15 +866,13 @@ class ExactComputedVerificationAdapter:
         return normalized_input, normalized_candidate
 
     def _resolve_stored_result(
-        self, request: CapabilityRequest
+        self, request: ExactDomainResultVerificationRequest
     ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
         """Resolve the declared producer's exact materialized lineage."""
 
         declaration = self.declaration
         try:
-            result_uri = ExactDomainResultVerificationRequest.model_validate(
-                request.input
-            ).result_uri
+            result_uri = request.result_uri
             result_artifact = self.store.get(result_uri)
             if (
                 result_artifact.manifest.schema_uri != declaration.result_schema_uri

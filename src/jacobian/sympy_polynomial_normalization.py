@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -72,7 +72,7 @@ class _SympyNormalizationRun:
 def install_sympy_polynomial_normalization_capability(
     expressions: PolynomialExpressionArtifactService,
     runtime: CapabilityProviderRuntime,
-) -> CapabilityAdapter:
+) -> CapabilityAdapter[Any]:
     """Install the producer only for the exact supported SymPy profile."""
 
     if (
@@ -171,8 +171,6 @@ class _SympyPolynomialNormalizationBackend:
 class SympyPolynomialExpressionNormalizeAdapter:
     """Normalize one safe typed expression to canonical sparse coefficients."""
 
-    typed_input = True
-
     def __init__(
         self,
         *,
@@ -237,17 +235,15 @@ class SympyPolynomialExpressionNormalizeAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(
+    def prepare(
         self,
         request: CapabilityRequest,
-    ) -> OperationProjection:
+    ) -> PolynomialExpressionNormalizeRequest:
         try:
-            validated = PolynomialExpressionNormalizeRequest.model_validate(
-                request.input
+            return parse_capability_input(
+                PolynomialExpressionNormalizeRequest,
+                request.input,
             )
-            expression_uri = self.expressions.put_expression(
-                validated.expression
-            ).artifact_uri
         except (ValidationError, ValueError) as exc:
             budget_error = _expansion_budget_error(exc)
             if budget_error is not None:
@@ -334,6 +330,13 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 )
             ) from exc
 
+    def invoke(
+        self,
+        validated: PolynomialExpressionNormalizeRequest,
+    ) -> OperationProjection:
+        expression_uri = self.expressions.put_expression(
+            validated.expression
+        ).artifact_uri
         run = self.backend.run(validated)
         normalization_uri: str | None = None
         if (

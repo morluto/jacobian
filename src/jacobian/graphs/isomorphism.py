@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -196,8 +197,10 @@ class GraphIsomorphismAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = GraphIsomorphismVerifyRequest.model_validate(request.input)
+    def prepare(self, request: CapabilityRequest) -> GraphIsomorphismVerifyRequest:
+        return parse_capability_input(GraphIsomorphismVerifyRequest, request.input)
+
+    def invoke(self, validated: GraphIsomorphismVerifyRequest) -> OperationProjection:
         checker_id = self.installation.checker_id
         if checker_id is None:
             raise CapabilityInvocationError(

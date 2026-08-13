@@ -107,12 +107,11 @@ def test_finite_coverage_unknown_canonicalizer_reports_precise_schema_error(
 
     assert result.execution.status is ExecutionStatus.ERROR
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "INVALID_REQUEST"
+    assert diagnostic.code == "INVALID_FINITE_COVERAGE_REQUEST"
     assert diagnostic.path == "canonicalizer_id"
-    assert diagnostic.actual_type == "string"
-    assert diagnostic.expected == (
-        'one of: "finite.integer.decimal@1", "finite.string.nfc@1"'
-    )
+    assert diagnostic.actual_type is None
+    assert diagnostic.expected is None
+    assert "literal_error" in (diagnostic.hint or "")
 
 
 def test_finite_coverage_rejects_nfc_collisions_in_scope(

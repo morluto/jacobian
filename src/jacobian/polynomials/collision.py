@@ -120,13 +120,15 @@ class PolynomialCollisionAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialCollisionRequest:
+        return _validate_request(
             PolynomialCollisionRequest,
             request.input,
             code="INVALID_POLYNOMIAL_COLLISION_REQUEST",
             operation="collision construction",
         )
+
+    def invoke(self, validated: PolynomialCollisionRequest) -> OperationProjection:
         started = time.monotonic()
         first_evaluation, first_evaluation_artifact = _load_evaluation(
             self.resources,
@@ -280,16 +282,17 @@ class PolynomialCollisionSearchAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(
-        self,
-        request: CapabilityRequest,
-    ) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialCollisionSearchRequest:
+        return _validate_request(
             PolynomialCollisionSearchRequest,
             request.input,
             code="INVALID_POLYNOMIAL_COLLISION_SEARCH_REQUEST",
             operation="collision search",
         )
+
+    def invoke(
+        self, validated: PolynomialCollisionSearchRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         polynomial_map, map_uri = _materialize_map(self.resources, validated.map)
         scalar_values = tuple(
@@ -529,13 +532,17 @@ class PolynomialCollisionVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialCollisionVerifyRequest:
+        return _validate_request(
             PolynomialCollisionVerifyRequest,
             request.input,
             code="INVALID_POLYNOMIAL_COLLISION_VERIFY_REQUEST",
             operation="collision verification",
         )
+
+    def invoke(
+        self, validated: PolynomialCollisionVerifyRequest
+    ) -> OperationProjection:
         _, map_uri = _materialize_map(self.resources, validated.map)
         candidate = self.resources.store.get(map_uri)
         claim_artifact = self.resources.artifacts.put(
@@ -642,13 +649,19 @@ class PolynomialMapInverseCollisionVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialMapInverseCollisionVerifyRequest:
+        return _validate_request(
             PolynomialMapInverseCollisionVerifyRequest,
             request.input,
             code="INVALID_POLYNOMIAL_MAP_INVERSE_COLLISION_REQUEST",
             operation="polynomial-map inverse obstruction",
         )
+
+    def invoke(
+        self, validated: PolynomialMapInverseCollisionVerifyRequest
+    ) -> OperationProjection:
         checker_id = self.resources.installation.inverse_collision_checker_id
         if checker_id is None:
             raise _polynomial_error(

@@ -175,8 +175,8 @@ def test_sparse_input_normalization_rejects_malformed_terms_before_artifacts(
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["error"]["code"] == "INVALID_REQUEST"
-    assert result.output["error"]["stage"] == "capability_input_validation"
+    assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST"
+    assert result.output["error"]["stage"] == "request_validation"
     assert result.artifact_uris == ()
 
 

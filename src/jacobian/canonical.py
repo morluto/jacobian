@@ -169,6 +169,68 @@ def _normalize(value: Any, *, limits: CanonicalLimits, depth: int) -> Any:
     raise CanonicalizationError("unsupported JSON value type")
 
 
+def _validate_json_value(value: Any, *, limits: CanonicalLimits, depth: int) -> None:
+    """Validate bounded interoperable JSON without changing semantic values."""
+
+    if depth > limits.max_depth:
+        raise CanonicalizationError("JSON nesting exceeds the configured depth limit")
+    if isinstance(value, float):
+        raise CanonicalizationError("JSON floating-point numbers are not allowed")
+    if isinstance(value, int):
+        _validate_json_integer(value)
+        return
+    if isinstance(value, list):
+        _validate_json_items(value, limits=limits, depth=depth)
+        return
+    if isinstance(value, dict):
+        _validate_json_object(value, limits=limits, depth=depth)
+        return
+    if value is None or isinstance(value, str):
+        return
+    raise CanonicalizationError("unsupported JSON value type")
+
+
+def _validate_json_integer(value: int) -> None:
+    if abs(value) > _MAX_SAFE_JSON_INTEGER:
+        raise CanonicalizationError(
+            "JSON integers outside the interoperable range must be encoded as strings"
+        )
+
+
+def _validate_json_items(
+    values: list[Any], *, limits: CanonicalLimits, depth: int
+) -> None:
+    for value in values:
+        _validate_json_value(value, limits=limits, depth=depth + 1)
+
+
+def _validate_json_object(
+    value: dict[Any, Any], *, limits: CanonicalLimits, depth: int
+) -> None:
+    for key, nested in value.items():
+        if not isinstance(key, str):
+            raise CanonicalizationError("JSON object keys must be strings")
+        _validate_json_value(nested, limits=limits, depth=depth + 1)
+
+
+def encode_strict_json(
+    value: Any,
+    *,
+    limits: CanonicalLimits | None = None,
+) -> bytes:
+    """Encode bounded JSON deterministically without semantic normalization."""
+
+    active_limits = limits or CanonicalLimits()
+    _validate_json_value(value, limits=active_limits, depth=0)
+    try:
+        encoded = rfc8785.dumps(value)
+    except (rfc8785.CanonicalizationError, RecursionError) as exc:
+        raise CanonicalizationError("value cannot be encoded as strict JSON") from exc
+    if len(encoded) > active_limits.max_output_bytes:
+        raise CanonicalizationError("JSON exceeds the configured size limit")
+    return encoded
+
+
 def _normalize_object(
     value: dict[str, Any], *, limits: CanonicalLimits, depth: int
 ) -> dict[str, Any]:

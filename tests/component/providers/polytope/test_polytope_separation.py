@@ -110,14 +110,17 @@ def test_backend_failure_keeps_provider_detail_local(
             generator_set_uri=generators_uri,
         )
     )
+    adapter = PolytopeSeparationAdapter(polytope_services.application.polytope)
     projected = project_operation_result(
-        PolytopeSeparationAdapter(polytope_services.application.polytope).invoke(
-            CapabilityRequest(
-                capability_id="polytope.separate",
-                input={
-                    "point_uri": point_uri,
-                    "generator_set_uri": generators_uri,
-                },
+        adapter.invoke(
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="polytope.separate",
+                    input={
+                        "point_uri": point_uri,
+                        "generator_set_uri": generators_uri,
+                    },
+                )
             )
         )
     )

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -125,9 +126,9 @@ class LeanProofEditAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanProofEditRequest:
         try:
-            validated = LeanProofEditRequest.model_validate(request.input)
+            validated = parse_capability_input(LeanProofEditRequest, request.input)
             if _FORBIDDEN_PROOF_HOLE.search(
                 validated.original_proof
             ) or _FORBIDDEN_PROOF_HOLE.search(validated.edited_proof):
@@ -144,6 +145,9 @@ class LeanProofEditAdapter:
                     ),
                 )
             ) from exc
+        return validated
+
+    def invoke(self, validated: LeanProofEditRequest) -> OperationProjection:
         started = time.monotonic()
         baseline = self.lean.verify(
             environment=validated.environment,

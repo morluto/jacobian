@@ -9,6 +9,9 @@ from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.number_theory.checkers import NUMBER_THEORY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.number_theory.derived import DERIVED_NUMBER_THEORY_CAPABILITIES
 from jacobian.domains.number_theory.divisibility import DIVISIBILITY_CAPABILITIES
+from jacobian.domains.number_theory.finite_abelian_groups import (
+    FINITE_ABELIAN_GROUP_FACTORIZATION_CAPABILITY,
+)
 from jacobian.domains.number_theory.modular import MODULAR_CAPABILITIES
 from jacobian.domains.number_theory.modular_identity import (
     MODULAR_IDENTITY_CAPABILITIES,
@@ -29,11 +32,12 @@ def build_number_theory_bundle() -> DomainBundle:
         schema_namespace="jacobian.number-theory",
         semantics=DomainSemantics(
             name="jacobian.exact-integer-number-theory",
-            version="1",
+            version="2",
             definition={
                 "description": (
                     "Exact integer divisibility, primes, arithmetic functions, "
-                    "and modular arithmetic over bounded inputs"
+                    "modular arithmetic, and bounded finite abelian group "
+                    "factorization"
                 ),
                 "integer_encoding": "canonical decimal string",
             },
@@ -49,6 +53,7 @@ def build_number_theory_bundle() -> DomainBundle:
             *MODULAR_CAPABILITIES,
             *MODULAR_IDENTITY_CAPABILITIES,
             *DERIVED_NUMBER_THEORY_CAPABILITIES,
+            FINITE_ABELIAN_GROUP_FACTORIZATION_CAPABILITY,
         ),
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(

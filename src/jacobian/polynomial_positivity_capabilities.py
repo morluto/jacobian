@@ -311,14 +311,20 @@ class PolynomialIntervalPositivityDecideAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialIntervalPositivityRequest:
+        return _validate_request(
             PolynomialIntervalPositivityRequest,
             request.input,
             code="INVALID_POLYNOMIAL_POSITIVITY_REQUEST",
             operation="positivity decision",
             error_factory=_positivity_error,
         )
+
+    def invoke(
+        self, validated: PolynomialIntervalPositivityRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         polynomial = validated.polynomial
         interval = validated.interval
@@ -442,14 +448,20 @@ class PolynomialIntervalPositivityVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialIntervalPositivityVerifyRequest:
+        return _validate_request(
             PolynomialIntervalPositivityVerifyRequest,
             request.input,
             code="INVALID_POLYNOMIAL_POSITIVITY_VERIFY_REQUEST",
             operation="positivity verification",
             error_factory=_positivity_error,
         )
+
+    def invoke(
+        self, validated: PolynomialIntervalPositivityVerifyRequest
+    ) -> OperationProjection:
         installation = self.resources.installation
         checker_id = installation.checker_id
         if checker_id is None:

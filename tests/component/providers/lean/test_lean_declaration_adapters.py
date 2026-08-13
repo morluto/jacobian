@@ -65,10 +65,10 @@ _RUNTIME = CapabilityProviderRuntime(
 
 
 def _invoke_public(
-    adapter: CapabilityAdapter,
+    adapter: CapabilityAdapter[Any],
     request: CapabilityRequest,
 ):
-    projection = adapter.invoke(request)
+    projection = adapter.invoke(adapter.prepare(request))
     assert isinstance(projection, OperationProjection)
     return project_operation_result(projection)
 

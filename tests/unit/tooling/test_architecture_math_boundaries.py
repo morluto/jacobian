@@ -41,6 +41,129 @@ def test_product_code_cannot_construct_internal_capability_requests(
     assert "internal-capability-request" in _codes(tmp_path)
 
 
+def test_product_code_cannot_construct_public_result_envelopes(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/adapter.py",
+        "from jacobian.contracts.capabilities import CapabilityResult\n"
+        "result = CapabilityResult(capability_id='x', capability_version='1', "
+        "execution={}, output={})\n",
+    )
+
+    assert "capability-result-projection" in _codes(tmp_path)
+
+
+def test_result_envelope_ratchet_resolves_import_aliases(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/aliased_adapter.py",
+        "from jacobian.contracts.capabilities import CapabilityResult as PublicResult\n"
+        "result = PublicResult(capability_id='x', capability_version='1', "
+        "execution={}, output={})\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/qualified_adapter.py",
+        "import jacobian.contracts.capabilities as capabilities\n"
+        "result = capabilities.CapabilityResult(capability_id='x', "
+        "capability_version='1', execution={}, output={})\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/parent_alias_adapter.py",
+        "import jacobian.contracts as contracts\n"
+        "result = contracts.capabilities.CapabilityResult(capability_id='x', "
+        "capability_version='1', execution={}, output={})\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/root_alias_adapter.py",
+        "import jacobian as j\n"
+        "result = j.contracts.capabilities.CapabilityResult(capability_id='x', "
+        "capability_version='1', execution={}, output={})\n",
+    )
+
+    violations = [
+        item
+        for item in check_architecture(tmp_path).violations
+        if item.code == "capability-result-projection"
+    ]
+    assert {item.path for item in violations} == {
+        "src/jacobian/polynomials/aliased_adapter.py",
+        "src/jacobian/polynomials/parent_alias_adapter.py",
+        "src/jacobian/polynomials/qualified_adapter.py",
+        "src/jacobian/polynomials/root_alias_adapter.py",
+    }
+
+
+def test_result_envelope_ratchet_resolves_relative_imports(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/domains/example/adapter.py",
+        "from ...contracts.capabilities import CapabilityResult\n"
+        "result = CapabilityResult(capability_id='x', capability_version='1', "
+        "execution={}, output={})\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/domains/example/qualified_adapter.py",
+        "from ...contracts import capabilities as caps\n"
+        "result = caps.CapabilityResult(capability_id='x', "
+        "capability_version='1', execution={}, output={})\n",
+    )
+
+    violations = [
+        item
+        for item in check_architecture(tmp_path).violations
+        if item.code == "capability-result-projection"
+    ]
+    assert {item.path for item in violations} == {
+        "src/jacobian/domains/example/adapter.py",
+        "src/jacobian/domains/example/qualified_adapter.py",
+    }
+
+
+def test_final_projection_may_construct_public_result_envelopes(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/operation_projection.py",
+        "from jacobian.contracts.capabilities import CapabilityResult\n"
+        "result = CapabilityResult(capability_id='x', capability_version='1', "
+        "execution={}, output={})\n",
+    )
+
+    assert "capability-result-projection" not in _codes(tmp_path)
+
+
+def test_product_code_cannot_restore_marker_selected_adapter_modes(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/adapter.py",
+        "class Adapter:\n    typed_input = True\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/graphs/adapter.py",
+        "from jacobian.capability_adapters import TypedInputAdapter\n",
+    )
+
+    violations = [
+        item
+        for item in check_architecture(tmp_path).violations
+        if item.code == "legacy-adapter-mode"
+    ]
+    assert {item.path for item in violations} == {
+        "src/jacobian/graphs/adapter.py",
+        "src/jacobian/polynomials/adapter.py",
+    }
+
+
 def test_contracts_can_import_canonical_and_contract_modules(tmp_path: Path) -> None:
     _write(
         tmp_path,

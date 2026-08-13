@@ -8,8 +8,8 @@ from typing import Any, cast
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.canonical import CanonicalizationError, canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.canonical import CanonicalizationError, encode_strict_json
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import (
     CapabilityInvocationError,
     enriched_invalid_request,
@@ -49,7 +49,7 @@ from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 class InstalledDomainBundle:
     """Resources and adapters created for one installed domain bundle."""
 
-    adapters: tuple[CapabilityAdapter, ...]
+    adapters: tuple[CapabilityAdapter[Any], ...]
     semantics_uri: str
     input_schema_uris: dict[type[ContractModel], str]
     result_schema_uris: dict[str, str]
@@ -149,7 +149,7 @@ class OperationInstaller:
         operation: DomainOperation,
         bundle: DomainBundle,
         resources: OperationResources,
-    ) -> CapabilityAdapter:
+    ) -> CapabilityAdapter[Any]:
         return InstalledOperationAdapter(operation, bundle, resources)
 
     @staticmethod
@@ -165,8 +165,6 @@ class OperationInstaller:
 
 class InstalledOperationAdapter:
     """Execute one semantic operation, then apply its publication policy."""
-
-    typed_input = True
 
     def __init__(
         self,
@@ -240,7 +238,7 @@ class InstalledOperationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> ContractModel:
         maximum_bytes = self.resources.artifacts.store.limits.max_artifact_bytes
         try:
             assembled_input = self._bind_inputs(request)
@@ -252,7 +250,7 @@ class InstalledOperationAdapter:
                 )
                 for key, value in assembled_input.items()
             }
-            request_bytes = canonicalize_json(bounded_input)
+            request_bytes = encode_strict_json(bounded_input)
         except CanonicalizationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -272,7 +270,10 @@ class InstalledOperationAdapter:
                 )
             )
         try:
-            parsed_request = self.spec.request_type.model_validate(assembled_input)
+            parsed_request = cast(
+                ContractModel,
+                parse_capability_input(self.spec.request_type, assembled_input),
+            )
         except ValidationError as exc:
             base = self.spec.invalid_request or self.bundle.diagnostics.invalid_request
             raise CapabilityInvocationError(
@@ -281,6 +282,10 @@ class InstalledOperationAdapter:
                 else enriched_invalid_request(base, exc)
             ) from exc
 
+        return parsed_request
+
+    def invoke(self, prepared: ContractModel) -> OperationProjection:
+        parsed_request = prepared
         try:
             terminal = execute_operation(self.spec, parsed_request)
         except ValidationError as exc:

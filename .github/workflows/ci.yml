@@ -12,6 +12,8 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
+  # A newer PR commit supersedes stale evidence; the required aggregate must
+  # still fail closed if cancellation reaches its dependencies.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -213,7 +215,7 @@ jobs:
 
   coverage:
     name: Coverage
-    if: ${{ always() && !cancelled() }}
+    if: ${{ always() }}
     needs: [python, boundaries, subprocess_coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -296,7 +298,7 @@ jobs:
 
   required:
     name: required
-    if: ${{ always() && !cancelled() }}
+    if: ${{ always() }}
     needs: [static, python, boundaries, wheel, coverage, lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -319,7 +321,7 @@ jobs:
 
   python-test:
     name: Python Tests
-    if: ${{ always() && !cancelled() }}
+    if: ${{ always() }}
     needs: [required]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -331,7 +333,7 @@ jobs:
 
   lean-test:
     name: Lean Tests
-    if: ${{ always() && !cancelled() }}
+    if: ${{ always() }}
     needs: [lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -343,7 +345,7 @@ jobs:
 
   deployment-test:
     name: Deployment Tests
-    if: ${{ always() && !cancelled() }}
+    if: ${{ always() }}
     needs: [static]
     runs-on: ubuntu-latest
     timeout-minutes: 5

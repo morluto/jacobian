@@ -286,14 +286,15 @@ def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
     assert "Plan receipt: \\\\`$(python" not in workflow
 
 
-def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> None:
+def test_required_ci_gates_fail_closed_after_cancellation() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     required = workflow.split("  required:", 1)[1].split("  python-test:", 1)[0]
     aggregate_tail = workflow.split("  required:", 1)[1]
 
     assert "treating gate as non-failure" not in workflow
-    assert "if: ${{ always() }}" not in aggregate_tail
-    assert aggregate_tail.count("if: ${{ always() && !cancelled() }}") == 4
+    assert aggregate_tail.count("if: ${{ always() }}") == 4
+    assert "if: ${{ always() && !cancelled() }}" not in aggregate_tail
+    assert "if: ${{ always() }}" in required
     assert "name: required" in workflow
     assert "name: Python Tests" in workflow
     assert "name: Lean Tests" in workflow
@@ -305,6 +306,27 @@ def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> Non
     lean_job = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
     assert "github.event_name != 'pull_request'" not in lean_job
     assert "JACOBIAN_LEAN_REQUIRED" in lean_job
+
+
+def test_required_pr_workflows_cancel_stale_evidence() -> None:
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    benchmarks = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
+
+    expected_concurrency = (
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
+    )
+    assert expected_concurrency in ci
+    assert expected_concurrency in benchmarks
+    validation = benchmarks.split("  validation:", 1)[1].split("  timings:", 1)[0]
+    assert "if: ${{ always() }}" in validation
+    assert "if: ${{ always() && !cancelled() }}" not in validation
+    assert (
+        '--lane "static:${PLAN_CHECK:-false}:${STATIC_RESULT:-cancelled}"' in validation
+    )
+    assert (
+        '--lane "oracle:${ORACLE_FLAG:-false}:${ORACLE_RESULT:-cancelled}"'
+        in validation
+    )
 
 
 def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:

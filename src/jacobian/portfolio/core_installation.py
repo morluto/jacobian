@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jacobian.checker_identity import batch_checker_manifest_measurement
 from jacobian.contracts.capabilities import CapabilityProviderAvailability
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.polynomial_nullstellensatz.core import (
@@ -68,7 +69,7 @@ class CoreApplicationInstaller:
         """Install the named Nullstellensatz family at the composition root.
 
         This family has an artifact-producing core and an optional Singular
-        producer that depends on that core.  It is deliberately not represented
+        producer that depends on that core. It is deliberately not represented
         as a generic portfolio callback: ordinary portfolio plans contain only
         :class:`DomainBundle` declarations.
         """
@@ -192,16 +193,20 @@ class CoreApplicationInstaller:
         }
         if not exact_bundles:
             return None
-        adapters, installation = install_exact_domain_verification(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            ctx.values,
-            ctx.verification,
-            ctx.checkers,
-            bundles=exact_bundles,
-            authorize=ctx.authorizes_bundled_checkers,
-        )
+        # Batch identity material across the complete declaration set while the
+        # exact-domain installer resolves both legacy and declaration-owned
+        # provider runtimes. Nested measurement remains safe for direct callers.
+        with batch_checker_manifest_measurement():
+            adapters, installation = install_exact_domain_verification(
+                ctx.store,
+                ctx.schemas,
+                ctx.artifacts,
+                ctx.values,
+                ctx.verification,
+                ctx.checkers,
+                bundles=exact_bundles,
+                authorize=ctx.authorizes_bundled_checkers,
+            )
         for adapter in adapters:
             self.context.register_capability(adapter)
         return installation

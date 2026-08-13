@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="6fe02bcf29f843830c5807a65fa10a0e0c443f6c02268ddbc799f4ca7ef2958a"
+LABEL jacobian.checksum="aa70552653e820310b26be21021aee03f73fa6df10bceb2b9c482322aeabca0f"
 # Exact rational verifier for a rank-one spectral limit certificate.
 LABEL jacobian.task="jacobian/rank-one-spectral-limit-certificate"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

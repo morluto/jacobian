@@ -2,8 +2,9 @@
 
 The frozen input contains scalar values and a 4×4 principal submatrix extracted
 from the canonical exact rational Farkas certificate in the Bandeira 0.2a
-repository. Establish the two scalar sign checks and certify that this matrix
-is positive definite using either:
+repository. Replay the scalar identity `m00 = y0 + c00_y`, establish the two
+sign checks `m00 < 0` and `objective > 0`, and certify that this matrix is
+positive definite using either:
 
 - `LDL`: an exact unit-lower-triangular `L` and positive diagonal `D`
   satisfying `Q=L D L^T`; or

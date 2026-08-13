@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 from types import SimpleNamespace
 
-from jacobian.portfolio import assembler
+import jacobian.portfolio.assembler as assembler
 from jacobian.runtime.portfolio import PortfolioResources
 
 

@@ -25,7 +25,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify an integer prime factorization",
         verification_description=(
             "Independently verify the complete canonical prime-power "
-            "factorization of one stored nonzero integer result."
+            "factorization submitted with its exact nonzero integer input."
         ),
         verification_tags=(
             "verification",
@@ -49,8 +49,9 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         verification_capability_id="integer.powerful.verify",
         verification_title="Verify a powerful-number decision",
         verification_description=(
-            "Independently verify one stored powerful-number decision, its "
-            "complete canonical factor witness, and every violating prime."
+            "Independently verify one submitted powerful-number decision against "
+            "its exact integer input, complete canonical factor witness, and every "
+            "violating prime."
         ),
         verification_tags=(
             "verification",

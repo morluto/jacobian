@@ -84,7 +84,7 @@ def test_zero_hole_qf_uf_proof_is_independently_verified(
     produced = _produce(carcara_services, "QF_UF", "qf_uf_equality_unsat.smt2")
 
     assert produced.output["contains_holes"] is False
-    assert produced.output["conclusion"] == "UNKNOWN"
+    assert "conclusion" not in produced.output
     verified = _verify(carcara_services, produced.output["proof_uri"])
 
     assert verified.execution.status is ExecutionStatus.COMPLETED

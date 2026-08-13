@@ -19,7 +19,7 @@ CERTIFIED_SNF_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify a transformation-certified Smith normal form",
         verification_description=(
             "Independently verify the full Smith diagonal and both unimodular "
-            "basis transformations against the exact stored integer matrix."
+            "basis transformations against the exact submitted integer matrix input."
         ),
         verification_tags=(
             "verification",

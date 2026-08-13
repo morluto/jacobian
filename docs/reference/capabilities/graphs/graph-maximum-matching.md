@@ -6,20 +6,20 @@
 matching together with a Tutte–Berge barrier certificate. The producer remains
 `COMPUTED`. An operator-authorized
 `graph.invariant.maximum_matching.verify` capability may promote the exact
-stored result to `VERIFIED` only after independent clean-process replay.
+submitted `{input, candidate}` claim to `VERIFIED` only after independent
+clean-process replay.
 
 ## Exact claim and scope
 
 The verifier checks one claim:
 
-> The stored witness edges form a maximum-cardinality matching of the exact
-> stored finite simple undirected graph.
+> The submitted witness edges form a maximum-cardinality matching of the exact
+> submitted finite simple undirected graph.
 
-The claim is bound to the producer input artifact, result artifact, graph
-semantics, result schema version, checker identity, and checker provider
-runtime. It does not certify a graph supplied directly by the caller, a
-different matching, or any theorem that uses the matching as an intermediate
-fact.
+The claim is bound to canonical producer-input and candidate digests, graph
+semantics, checker identity, and checker provider runtime. It does not certify
+a different graph or matching, or any theorem that uses the matching as an
+intermediate fact.
 
 The producer accepts at most 64 vertices and 2,016 edges through a
 matching-specific graph contract. Other graph invariants retain their own

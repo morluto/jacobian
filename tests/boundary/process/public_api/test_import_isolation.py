@@ -125,6 +125,22 @@ def test_native_matrices_does_not_import_capabilities_or_provider_loading() -> N
     )
 
 
+def test_native_probability_import_does_not_load_wire_or_runtime_owner() -> None:
+    imported = _imported_modules("jacobian.math.probability")
+    _assert_not_imported(
+        imported,
+        (
+            "jacobian.domains.probability",
+            "jacobian.operation_bindings",
+            "jacobian.operation_installation",
+            "jacobian.provider_runtime",
+            "jacobian.providers",
+            "jacobian.runtime",
+            "jacobian_checkers",
+        ),
+    )
+
+
 def test_native_finite_fields_does_not_eagerly_import_flint() -> None:
     imported = _imported_modules("jacobian.math.finite_fields")
     _assert_not_imported(imported, ("flint",))

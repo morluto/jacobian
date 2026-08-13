@@ -335,7 +335,7 @@ def test_multivariate_gaussian_polynomial_moment_uses_independence(
     assert result.output["result"]["expanded_monomial_count"] == 5
 
 
-def test_gaussian_polynomial_rejects_nonlexicographic_terms_with_recovery_detail(
+def test_gaussian_polynomial_canonicalizes_nonlexicographic_terms(
     domain_services: DomainTestServices,
 ) -> None:
     result = domain_services.core.capabilities.invoke(
@@ -354,12 +354,10 @@ def test_gaussian_polynomial_rejects_nonlexicographic_terms_with_recovery_detail
         )
     )
 
-    assert result.execution.status is ExecutionStatus.ERROR
-    diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "INVALID_FINITE_PROBABILITY_REQUEST"
-    assert diagnostic.hint is not None
-    assert "lexicographic exponent-vector order" in diagnostic.hint
-    assert "[1, 0] then [0, 1]" in diagnostic.hint
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["moment"] == _complex(2)
+    assert result.output["result"]["expansion_path_count"] == 4
+    assert result.output["result"]["expanded_monomial_count"] == 3
     assert result.artifact_uris == ()
 
 

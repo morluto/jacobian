@@ -22,22 +22,34 @@ operation, not a Gaussian-identity search or proof workflow.
 
 ## Contract and scope
 
-The request bounds are:
+The request accepts either bounded loose wire terms or the strict canonical
+`GaussianPolynomial` value emitted by parsing those terms. The bounds are:
 
 | Field | Bound |
 | --- | --- |
 | Gaussian variables | 1–8 |
-| Nonzero sparse terms | 1–16 |
+| Raw sparse terms | 1–16 before canonicalization |
+| Canonical nonzero sparse terms | 1–16 after canonicalization |
 | Total degree of each input term | at most 8 |
 | Fixed moment order \(m\) | 0–16 |
 | Raw ordered expansion paths | `term_count ** m <= 65536` |
-| Input rational numerator/denominator | at most 128 decimal digits |
+| Each raw rational numerator/denominator | at most 128 decimal digits |
+| Each strict canonical rational component | at most 4,096 decimal digits |
 
-Terms use exponent vectors of length `variable_count`, in strictly increasing
-lexicographic order. A coefficient has separate canonical rational `real` and
-`imaginary` components. Duplicate monomials, zero coefficients, negative
-exponents, inconsistent dimensions, and requests beyond the complete-expansion
-bound fail validation before computation or artifact writes.
+Loose wire terms use exponent vectors of length `variable_count`. They may arrive
+in any order, repeat an exponent vector, or carry an exact zero coefficient. The
+request boundary checks the raw 16-term and 128-digit limits before combining
+duplicates over \(\mathbb Q(i)\), removes exact zero terms, and orders the
+surviving terms lexicographically. Exact accumulation may grow beyond 128 digits,
+but the strict canonical value retains the 4,096-digit component bound and can be
+serialized and parsed again by the producer or checker without reapplying the
+per-raw-term limit.
+
+A request whose terms cancel completely is rejected, as are negative exponents,
+inconsistent dimensions, more than 16 raw terms, canonical values with more than
+16 nonzero terms, and requests beyond the complete-expansion bound. Direct
+`GaussianPolynomial` values remain strict: terms must already be nonzero, unique,
+and lexicographically ordered.
 
 The producer exactly expands \(P^m\) via pinned Python-FLINT `fmpq_mpoly`
 binary exponentiation over a typed real/imaginary coefficient pair,

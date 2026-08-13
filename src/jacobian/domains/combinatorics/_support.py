@@ -1,7 +1,10 @@
 """Combinatorics operation declarations."""
 
-from jacobian.operation_bindings import DurableOperationFactory, InlineOperationFactory
-from jacobian.operations import OperationFailure
+from jacobian.operation_declarations import (
+    DurableOperationFactory,
+    InlineOperationFactory,
+    OperationFailure,
+)
 
 _FAILURE = OperationFailure(
     code="COMBINATORICS_OPERATION_NOT_APPLICABLE",

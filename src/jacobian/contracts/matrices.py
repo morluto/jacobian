@@ -1,4 +1,4 @@
-"""Exact rational matrix capability contracts."""
+"""Exact rational matrix operation contracts."""
 
 from __future__ import annotations
 

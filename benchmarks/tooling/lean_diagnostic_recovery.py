@@ -119,7 +119,7 @@ class RecoveryDiagnosticEvidenceExpectation(BaseModel):
 class RecoveryDiagnosticProbe(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    capability_id: str = Field(min_length=1)
+    operation_id: str = Field(min_length=1)
     payload: dict[str, Any]
     expected_diagnostic_evidence: RecoveryDiagnosticEvidenceExpectation
 
@@ -128,12 +128,12 @@ class RecoveryCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     case_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-    injected_capability_id: str = Field(min_length=1)
+    injected_operation_id: str = Field(min_length=1)
     injected_payload: dict[str, Any]
     expected_diagnostic_codes: tuple[str, ...] = Field(min_length=1)
     expected_diagnostic_evidence: RecoveryDiagnosticEvidenceExpectation | None = None
     diagnostic_probe: RecoveryDiagnosticProbe | None = None
-    terminal_capability_id: str = Field(min_length=1)
+    terminal_operation_id: str = Field(min_length=1)
     terminal_immutable_input_fields: tuple[str, ...] = Field(min_length=1)
     prompt: str = Field(min_length=1)
 
@@ -400,7 +400,7 @@ def _diagnostic_probe_evidence_observed(
         return None
     expectation = probe.expected_diagnostic_evidence
     return any(
-        attempt.get("capability_id") == probe.capability_id
+        attempt.get("operation_id") == probe.operation_id
         and attempt.get("input") == probe.payload
         and _diagnostic_evidence_observed(
             expected_codes={expectation.code},
@@ -491,7 +491,7 @@ def _rejection_fingerprint(invocation: Mapping[str, Any]) -> tuple[str, str]:
         sort_keys=True,
     ).encode("utf-8")
     return (
-        str(invocation.get("capability_id")),
+        str(invocation.get("operation_id")),
         _sha256_bytes(canonical_input),
     )
 
@@ -525,7 +525,7 @@ type _AttemptRecord = tuple[Mapping[str, Any], Mapping[str, Any] | None]
 
 def _is_exact_injection(case: RecoveryCase, item: Mapping[str, Any]) -> bool:
     return bool(
-        item.get("capability_id") == case.injected_capability_id
+        item.get("operation_id") == case.injected_operation_id
         and item.get("input") == case.injected_payload
     )
 
@@ -535,7 +535,7 @@ def _invocation_matches_attempt(
     invocation: Mapping[str, Any],
 ) -> bool:
     return bool(
-        invocation.get("capability_id") == attempt.get("capability_id")
+        invocation.get("operation_id") == attempt.get("operation_id")
         and invocation.get("input") == attempt.get("input")
     )
 
@@ -610,12 +610,12 @@ def classify_recovery(
 ) -> dict[str, Any]:
     invocations = tuple(
         invocation
-        for invocation in telemetry.get("capability_invocations", [])
+        for invocation in telemetry.get("operation_invocations", [])
         if isinstance(invocation, Mapping)
     )
     attempts = tuple(
         attempt
-        for attempt in telemetry.get("capability_attempts", [])
+        for attempt in telemetry.get("operation_attempts", [])
         if isinstance(attempt, Mapping)
     )
 
@@ -636,14 +636,14 @@ def classify_recovery(
             else ()
         )
         if invocation is not None
-        and invocation.get("capability_id") == case.terminal_capability_id
+        and invocation.get("operation_id") == case.terminal_operation_id
     )
     repeated_errors = _repeated_rejection_count(attempt_records)
     probe_evidence = _diagnostic_probe_evidence_observed(case, attempts)
     usage = telemetry.get("usage")
     return {
         "injection_attempted": any(
-            attempt.get("capability_id") == case.injected_capability_id
+            attempt.get("operation_id") == case.injected_operation_id
             for attempt in attempts
         ),
         "injection_payload_exact": injection_payload_exact,

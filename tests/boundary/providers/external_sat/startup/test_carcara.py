@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    ProviderAvailability,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.smt import SmtResourceBudget
@@ -17,8 +17,8 @@ from jacobian.providers.external_solver_runtime import (
     cvc5_provider_runtime,
 )
 from jacobian.runtime.config import CheckerAuthorityMode
-from jacobian.sat_smt.cvc5 import install_cvc5_capability
-from jacobian.sat_smt.smt_capabilities import install_smt_unsat_proof_checker
+from jacobian.sat_smt.cvc5 import install_cvc5_operation
+from jacobian.sat_smt.smt_operations import install_smt_unsat_proof_checker
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -28,17 +28,17 @@ def carcara_services(
     tmp_path: Path,
 ) -> Iterator[DomainTestServices]:
     carcara = carcara_provider_runtime()
-    if carcara.availability is not CapabilityProviderAvailability.AVAILABLE:
+    if carcara.availability is not ProviderAvailability.AVAILABLE:
         pytest.skip("the exact operator-provenanced Carcara runtime is unavailable")
     cvc5 = cvc5_provider_runtime()
-    if cvc5.availability is not CapabilityProviderAvailability.AVAILABLE:
+    if cvc5.availability is not ProviderAvailability.AVAILABLE:
         pytest.skip("the pinned cvc5 runtime is unavailable")
     with open_domain_services(
         tmp_path / "state",
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
-        services.installation.register_capability(
-            install_cvc5_capability(services.core.smt, cvc5)
+        services.installation.register_operation(
+            install_cvc5_operation(services.core.smt, cvc5)
         )
         verifier, installation = install_smt_unsat_proof_checker(
             services.core.store,
@@ -52,14 +52,14 @@ def carcara_services(
         )
         assert verifier is not None
         assert installation.checker_id is not None
-        services.installation.register_capability(verifier)
+        services.installation.register_operation(verifier)
         yield services
 
 
 def _produce(runtime: DomainTestServices, logic: str, fixture: str):
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="smt.unsat_proof.find",
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="smt.unsat_proof.find",
             input={
                 "logic": logic,
                 "smtlib_text": (_FIXTURES / fixture).read_text(encoding="ascii"),
@@ -70,9 +70,9 @@ def _produce(runtime: DomainTestServices, logic: str, fixture: str):
 
 
 def _verify(runtime: DomainTestServices, proof_uri: str):
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="smt.unsat_proof.verify",
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="smt.unsat_proof.verify",
             input={"proof_uri": proof_uri},
         )
     )

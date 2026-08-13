@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from jacobian.contracts.capabilities import CapabilityProviderAvailability
+from jacobian.contracts.operations import ProviderAvailability
 
 PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON = (
     "the pinned Lean and Mathlib runtime is unavailable"
@@ -27,7 +27,7 @@ def pinned_lean_core_runtime_diagnostic() -> str | None:
     from jacobian.providers.lean_runtime import lean_frontend_provider_runtime
 
     runtime = lean_frontend_provider_runtime()
-    if runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+    if runtime.availability is ProviderAvailability.AVAILABLE:
         return None
     return runtime.diagnostic or PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON
 
@@ -41,7 +41,7 @@ def pinned_mathlib_runtime_diagnostic() -> str | None:
         profiles={"mathlib": {"mathlib_commit": "pinned"}},
         checker_ids=(),
     )
-    if runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+    if runtime.availability is ProviderAvailability.AVAILABLE:
         return None
     return runtime.diagnostic or PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON
 

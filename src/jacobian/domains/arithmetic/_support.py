@@ -1,7 +1,9 @@
 """Arithmetic operation declarations."""
 
-from jacobian.operation_bindings import InlineOperationFactory
-from jacobian.operations import OperationFailure
+from jacobian.operation_declarations import (
+    InlineOperationFactory,
+    OperationFailure,
+)
 
 arithmetic_operation = InlineOperationFactory(
     OperationFailure(

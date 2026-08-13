@@ -1,7 +1,7 @@
 """Independent checker declarations owned by the finite-poset domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.posets import (
     FinitePosetRequest,
     LinearExtensionRequest,
@@ -17,7 +17,7 @@ _REASON = (
 )
 
 
-def _poset_runtime(*, checker_ids: tuple[str, ...] = ()) -> CapabilityProviderRuntime:
+def _poset_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.poset_exact_checker_provider_runtime(checker_ids=checker_ids)
 
 

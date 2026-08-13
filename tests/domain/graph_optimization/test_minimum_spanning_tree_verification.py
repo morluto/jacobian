@@ -9,8 +9,8 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import build_graph_optimization_bundle
@@ -57,15 +57,15 @@ def test_weighted_minimum_spanning_tree_is_independently_verified(
     graph_optimization_services,
 ) -> None:
     payload = _connected_payload()
-    computed = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.compute",
+    computed = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.compute",
             input=payload,
         )
     )
-    verified = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.verify",
+    verified = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.verify",
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -89,9 +89,9 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
     graph_optimization_services,
 ) -> None:
     payload = _connected_payload()
-    computed = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.compute",
+    computed = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.compute",
             input=payload,
         )
     )
@@ -130,9 +130,9 @@ def test_minimum_spanning_tree_verifier_rejects_a_feasible_nonminimum_tree(
         "maximum_tree_path_weight"
     ] = _q(4)
 
-    rejected = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.verify",
+    rejected = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.verify",
             input={"input": payload, "candidate": forged_candidate},
         )
     )
@@ -152,15 +152,15 @@ def test_disconnected_no_spanning_tree_result_is_completely_replayed(
             "edges": [_edge("a", "b", -1)],
         }
     }
-    computed = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.compute",
+    computed = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.compute",
             input=payload,
         )
     )
-    verified = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.verify",
+    verified = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.verify",
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
@@ -27,6 +26,7 @@ from jacobian.contracts.polynomials import (
     RationalPolynomial,
     RationalPolynomialMap,
 )
+from jacobian.operation_adapters import OperationAdapter
 from jacobian.polynomials.collision import (
     PolynomialCollisionAdapter,
     PolynomialCollisionSearchAdapter,
@@ -49,7 +49,7 @@ from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
-from jacobian.verification_capabilities import witness_verification_adapter
+from jacobian.verification_operations import witness_verification_adapter
 
 
 def install_polynomial_capabilities(
@@ -60,7 +60,7 @@ def install_polynomial_capabilities(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[tuple[CapabilityAdapter[Any], ...], PolynomialInstallation]:
+) -> tuple[tuple[OperationAdapter[Any], ...], PolynomialInstallation]:
     """Register exact polynomial-map schemas, adapters, and optional checker."""
 
     semantics_uri = store.register_descriptor(
@@ -403,7 +403,7 @@ def install_polynomial_capabilities(
         installation=installation,
     )
     collision_evidence_verify = witness_verification_adapter(
-        capability_id="polynomial.map.collision_evidence.verify",
+        operation_id="polynomial.map.collision_evidence.verify",
         title="Verify stored polynomial-map collision evidence",
         description=(
             "Independently replay one exact stored collision witness against its "

@@ -14,7 +14,7 @@ The explicit `combinatorics` bundle includes three generic, bounded operations:
 - `combinatorics.generating_function.coefficients.compute`.
 
 They complement rather than replace the named Fibonacci, consecutive-Fibonacci,
-and Lucas capabilities. `combinatorics.recurrence.linear.verify`,
+and Lucas operations. `combinatorics.recurrence.linear.verify`,
 `combinatorics.recurrence.p_recursive.verify`, and
 `combinatorics.generating_function.coefficients.verify` independently replay
 the corresponding producer result when bundled checker authorization is enabled.
@@ -120,7 +120,7 @@ or forged residuals, lineage mismatch, checker interruption, and runtime drift
 produce no verification record and no opposite mathematical conclusion.
 
 The public overlap regression freezes four discovery intents: named Fibonacci
-and Lucas queries must continue to select their named capabilities, while
+and Lucas queries must continue to select their named operations, while
 generic recurrence and rational-series queries select the new operations. This
 is deterministic catalog/discovery harness validation, not a model-in-the-loop
 performance or statistical claim.

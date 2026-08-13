@@ -1,4 +1,4 @@
-"""Triangle-owned exact geometry capabilities."""
+"""Triangle-owned exact geometry operations."""
 
 from jacobian.contracts.geometry import (
     GeometryCircleResult,
@@ -10,7 +10,7 @@ from jacobian.domains._examples import example
 from jacobian.domains.geometry._support import geometry_operation
 from jacobian.domains.geometry.operations import centroid, circumcircle, orientation
 
-TRIANGLE_CAPABILITIES = (
+TRIANGLE_OPERATIONS = (
     geometry_operation(
         "geometry.triangle.compute.orientation",
         "Compute triangle orientation",
@@ -20,7 +20,7 @@ TRIANGLE_CAPABILITIES = (
         orientation,
         "geometry",
         "orientation",
-        invocation_examples=(
+        examples=(
             example(
                 "counterclockwise_triangle",
                 "Compute orientation of a counterclockwise triangle.",
@@ -50,7 +50,7 @@ TRIANGLE_CAPABILITIES = (
         centroid,
         "geometry",
         "construction",
-        invocation_examples=(
+        examples=(
             example(
                 "right_triangle_centroid",
                 "Construct the centroid of a right triangle.",
@@ -80,7 +80,7 @@ TRIANGLE_CAPABILITIES = (
         circumcircle,
         "geometry",
         "circle",
-        invocation_examples=(
+        examples=(
             example(
                 "right_triangle_circumcircle",
                 "Construct the circumcircle of a right triangle.",

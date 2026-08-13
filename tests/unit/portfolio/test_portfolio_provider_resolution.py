@@ -7,10 +7,10 @@ from collections.abc import Callable
 import pytest
 
 import jacobian.portfolio.provider_resolution as provider_resolution
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
 from jacobian.provider_runtime import ProviderRuntimeError, known_provider_runtime
@@ -21,8 +21,8 @@ def test_resolve_builds_one_typed_plan_from_each_declared_probe(
 ) -> None:
     calls: list[str] = []
 
-    def probe(name: str) -> Callable[[], CapabilityProviderRuntime]:
-        def resolve() -> CapabilityProviderRuntime:
+    def probe(name: str) -> Callable[[], ProviderObservation]:
+        def resolve() -> ProviderObservation:
             calls.append(name)
             return known_provider_runtime(name)
 
@@ -56,11 +56,11 @@ def test_resolve_builds_one_typed_plan_from_each_declared_probe(
 def test_resolve_rejects_a_missing_packaged_python_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    unavailable = CapabilityProviderRuntime(
+    unavailable = ProviderObservation(
         provider="jacobian.networkx",
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         platform="test-platform",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="BSD-3-Clause",
         diagnostic="NetworkX is missing",
     )
@@ -80,19 +80,19 @@ def test_resolve_rejects_a_missing_packaged_python_backend(
 
 
 def test_packaged_backend_failure_reports_every_broken_provider() -> None:
-    missing = CapabilityProviderRuntime(
+    missing = ProviderObservation(
         provider="jacobian.networkx",
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         platform="test-platform",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="BSD-3-Clause",
         diagnostic="NetworkX is missing",
     )
-    skewed = CapabilityProviderRuntime(
+    skewed = ProviderObservation(
         provider="jacobian.sympy",
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         platform="test-platform",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="BSD-3-Clause",
         diagnostic="SymPy version does not match the pin",
     )
@@ -116,7 +116,7 @@ def test_lean_resolution_preserves_installed_checker_profile_inputs(
         *,
         profiles: object,
         checker_ids: tuple[str, ...],
-    ) -> CapabilityProviderRuntime:
+    ) -> ProviderObservation:
         observed["profiles"] = profiles
         observed["checker_ids"] = checker_ids
         return known_provider_runtime("lean")

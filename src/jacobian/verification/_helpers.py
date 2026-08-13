@@ -10,7 +10,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.registry import (
     CheckerRegistryError,
 )
@@ -61,7 +61,7 @@ def _digest_bytes(data: bytes) -> str:
 
 def _environment_digest(
     implementation_digest: str,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
 ) -> str:
     identity: dict[str, Any] = {
         "environment_version": "1",

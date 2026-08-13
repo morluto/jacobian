@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
 )
 from jacobian.contracts.polytope import PolytopeSeparateRequest, PolytopeSeparateResult
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_adapters import parse_operation_input
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -25,8 +25,8 @@ class PolytopeSeparationAdapter:
 
     def __init__(self, service: PolytopeService) -> None:
         self._service = service
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polytope.separate",
+        self._descriptor = OperationDescriptor(
+            operation_id="polytope.separate",
             version="1",
             title="Separate a rational point from a convex hull",
             description=(
@@ -43,11 +43,11 @@ class PolytopeSeparationAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolytopeSeparateRequest:
-        return parse_capability_input(PolytopeSeparateRequest, request.input)
+    def prepare(self, request: OperationRequest) -> PolytopeSeparateRequest:
+        return parse_operation_input(PolytopeSeparateRequest, request.input)
 
     def invoke(self, parsed: PolytopeSeparateRequest) -> OperationProjection:
         value = self._service.separate(parsed)
@@ -61,7 +61,7 @@ class PolytopeSeparationAdapter:
             else Failed(
                 status=value.execution.status,
                 runtime_ms=value.execution.runtime_ms,
-                diagnostic=CapabilityDiagnostic(
+                diagnostic=OperationDiagnostic(
                     code="POLYTOPE_SEPARATION_NOT_COMPLETED",
                     stage="solver_execution",
                     message=(
@@ -72,7 +72,7 @@ class PolytopeSeparationAdapter:
             )
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(

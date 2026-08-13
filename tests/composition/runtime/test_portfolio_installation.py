@@ -67,7 +67,7 @@ def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None
     )
     monkeypatch.setattr(
         assembler,
-        "ResourceCapabilityInstaller",
+        "ResourceOperationInstaller",
         lambda _context: _installer(events, "resource"),
     )
 

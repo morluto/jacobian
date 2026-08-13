@@ -1,10 +1,6 @@
 """Independent checker declarations owned by the matrix domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.matrix_lattice import HermiteNormalFormRequest
 from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
@@ -14,25 +10,29 @@ from jacobian.contracts.matrix_operations import (
     RationalMatrixRequest,
     SquareRationalMatrixRequest,
 )
+from jacobian.contracts.operations import (
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.provider_runtime import source_provider_runtime
 from jacobian.providers import flint_runtime
 
 
 def _flint_exact_replay_runtime(
     *, checker_ids: tuple[str, ...] = (), refresh: bool = False
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.exact_domain_checker_provider_runtime(
         checker_ids=checker_ids,
         refresh=refresh,
     )
 
 
-def _hnf_runtime(*, checker_ids: tuple[str, ...] = ()) -> CapabilityProviderRuntime:
+def _hnf_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.matrix-hnf-checker",
         version="1",
         entrypoint="jacobian_checkers.matrix_normal_forms:check_hermite_normal_form",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("standard-library-integer-replay", "clean-process-checker"),
         checker_ids=checker_ids,
@@ -51,7 +51,7 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
             "standard-library checker independently validates H=UA, unimodularity, "
             "and the full retained row-HNF certificate"
         ),
-        verification_capability_id="matrix.normal_form.hermite.verify",
+        verification_operation_id="matrix.normal_form.hermite.verify",
         verification_title="Verify a transformation-certified row Hermite normal form",
         verification_description=(
             "Independently verify the retained H and U certificate against its "

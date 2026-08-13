@@ -23,10 +23,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "selected_capability"
+        "selected_operation"
       ],
       "properties": {
-        "selected_capability": {
+        "selected_operation": {
           "type": "string"
         }
       }

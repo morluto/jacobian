@@ -62,8 +62,8 @@ not install prompts, skills, or client-specific mathematical workflows.
 
 The `external-proof` profile does not download or trust native executables on
 the user's behalf. Their exact version and provenance contracts are defined in
-the [SAT artifact reference](../reference/capabilities/sat-smt/sat-artifacts.md) and
-[SMT artifact reference](../reference/capabilities/sat-smt/smt-artifacts.md). If a required provider
+the [SAT artifact reference](../reference/operations/sat-smt/sat-artifacts.md) and
+[SMT artifact reference](../reference/operations/sat-smt/smt-artifacts.md). If a required provider
 is absent or has the wrong identity, doctor fails before client configuration.
 The `lean` profile likewise uses the repository's pinned toolchain and manifest
 instead of a floating Lean installation.

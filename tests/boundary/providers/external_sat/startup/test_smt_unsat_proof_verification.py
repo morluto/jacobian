@@ -13,15 +13,15 @@ from tests.boundary.providers.external_sat.external_sat_support import (
 from tests.support.services import DomainTestServices
 
 import jacobian_checkers.smt
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-    CapabilityResult,
-)
 from jacobian.contracts.evidence import CertificateEnvelope
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.smt import SmtResourceBudget
 from jacobian.contracts.verification import VerificationRecord
@@ -34,15 +34,15 @@ _PROBLEM = (_FIXTURES / "qf_uf_equality_unsat.smt2").read_text(encoding="ascii")
 _PROOF = (_FIXTURES / "qf_uf_equality_unsat.alethe").read_bytes()
 
 
-def _producer() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _producer() -> ProviderObservation:
+    return ProviderObservation(
         provider="cvc5",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1.3.4",
         digest="sha256:" + "d" * 64,
-        digest_kind=CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+        digest_kind=ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="BSD-3-Clause",
         features=("alethe-proof-production",),
         configuration={
@@ -60,7 +60,7 @@ def _services_with_runtime(
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
 ) -> Iterator[DomainTestServices]:
     runtime = carcara_provider_runtime(executable)
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     with open_smt_proof_verifier_services(
         root,
         runtime,
@@ -98,7 +98,7 @@ def test_carcara_runtime_requires_exact_operator_provenance(
 
     runtime = carcara_provider_runtime(executable)
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.version is None
     assert runtime.digest is None
     assert runtime.diagnostic is not None
@@ -115,10 +115,10 @@ def _proof(runtime: DomainTestServices) -> tuple[str, str]:
     return problem.artifact_uri, proof.artifact_uri
 
 
-def _verify(runtime: DomainTestServices, proof_uri: str) -> CapabilityResult:
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="smt.unsat_proof.verify",
+def _verify(runtime: DomainTestServices, proof_uri: str) -> OperationResult:
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="smt.unsat_proof.verify",
             input={"proof_uri": proof_uri},
         )
     )
@@ -241,8 +241,8 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
     ):
         for services in (without_references, without_runtime):
             assert "smt.unsat_proof.verify" not in {
-                descriptor.capability_id
-                for descriptor in services.core.capabilities.catalog().capabilities
+                descriptor.operation_id
+                for descriptor in services.core.operations.catalog().operations
             }
 
 

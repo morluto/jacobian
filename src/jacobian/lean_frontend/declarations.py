@@ -24,7 +24,6 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.lean import (
     LeanDeclarationInspectOutput,
     LeanDeclarationInspectRequest,
@@ -34,6 +33,7 @@ from jacobian.contracts.lean import (
     LeanDependencyGraphRequest,
     LeanEnvironment,
 )
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationBackendResult,
     LeanDeclarationDependenciesPayload,
@@ -100,7 +100,7 @@ class LeanDeclarationBackend(Protocol):
 
 
 class LeanDeclarationBackendError(RuntimeError):
-    """A bounded backend failure safe for capability diagnostic mapping."""
+    """A bounded backend failure safe for operation diagnostic mapping."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -610,7 +610,7 @@ class LeanSubprocessDeclarationBackend:
         *,
         lean_executable: Path,
         mathlib_runtime: Path | None,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
         cache_root: Path | None = None,
         session_backend: Literal["clean", "persistent"] = "clean",
         cache_results: bool = True,
@@ -647,7 +647,7 @@ class LeanSubprocessDeclarationBackend:
             if _sha256_file(self.lean_executable) != self.provider_runtime.digest:
                 raise LeanDeclarationBackendError(
                     "LEAN_ENVIRONMENT_CHANGED",
-                    "The pinned Lean executable changed after capability registration.",
+                    "The pinned Lean executable changed after operation registration.",
                 )
             if "semantic_runtime" in self.provider_runtime.configuration:
                 require_lean_semantic_runtime_identity(self.provider_runtime)
@@ -1157,7 +1157,7 @@ class LeanDeclarationService:
 
 
 def installed_lean_declaration_service(
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
     *,
     cache_root: Path | None = None,
 ) -> LeanDeclarationService:

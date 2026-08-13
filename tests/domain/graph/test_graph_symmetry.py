@@ -7,8 +7,8 @@ import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_symmetry import build_graph_symmetry_bundle
@@ -31,9 +31,9 @@ def _result_payload(services: DomainTestServices, result: object) -> dict[str, o
 def test_cycle_rotation_has_one_vertex_and_one_edge_orbit(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input={
                 "graph": {
                     "vertices": ["a", "b", "c", "d"],
@@ -91,9 +91,9 @@ def test_cycle_rotation_has_one_vertex_and_one_edge_orbit(
 def test_colored_path_reflection_preserves_declared_classes(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
@@ -133,9 +133,9 @@ def test_colored_path_reflection_preserves_declared_classes(
 def test_empty_generator_set_materializes_identity_subgroup_orbits(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input={
                 "graph": {
                     "vertices": ["a", "b"],
@@ -155,9 +155,9 @@ def test_empty_generator_set_materializes_identity_subgroup_orbits(
 def test_color_breaking_generator_fails_before_artifact_writes(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
@@ -193,9 +193,9 @@ def test_maximum_contract_payloads_fit_artifact_and_checker_budgets(
         for right in range(left + 1, 256)
     ][:4_096]
     identity = {vertex: vertex for vertex in vertices}
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input={
                 "graph": {"vertices": vertices, "edges": edges},
                 "generators": [
@@ -230,9 +230,9 @@ def test_multibyte_payload_over_artifact_budget_is_a_scored_input_error(
     ][:4_096]
     identity = {vertex: vertex for vertex in vertices}
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input={
                 "graph": {"vertices": vertices, "edges": edges},
                 "generators": [

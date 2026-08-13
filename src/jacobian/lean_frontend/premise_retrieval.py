@@ -1,4 +1,4 @@
-"""Premise-retrieval capability adapter for bounded Lean exploration."""
+"""Premise-retrieval operation adapter for bounded Lean exploration."""
 
 from __future__ import annotations
 
@@ -8,20 +8,18 @@ import time
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import (
     LeanPremiseCandidate,
     LeanPremiseRetrievalArtifact,
     LeanPremiseRetrievalOutput,
     LeanPremiseRetrievalRequest,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
 )
 from jacobian.lean_frontend.artifacts import _proof_state_command
 from jacobian.lean_frontend.exploration import (
@@ -36,6 +34,8 @@ from jacobian.lean_frontend.exploration import (
 )
 from jacobian.lean_frontend.repl import _response_errors
 from jacobian.lean_frontend.repl_protocol import LeanReplProofStepResponse
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -44,8 +44,8 @@ from jacobian.operations import Completed
 class LeanPremiseRetrievalAdapter:
     def __init__(self, resources: _Resources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.retrieve.premises",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.retrieve.premises",
             version="2",
             title="Retrieve Lean premises",
             description=(
@@ -61,8 +61,8 @@ class LeanPremiseRetrievalAdapter:
             input_schema=LeanPremiseRetrievalRequest.model_json_schema(),
             output_schema=LeanPremiseRetrievalOutput.model_json_schema(),
             tags=("lean", "mathlib", "premise-retrieval", "exploration"),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="square_nonnegative_after_intro",
                     description=(
                         "Ask Mathlib exact? for a premise after introducing x; "
@@ -80,17 +80,17 @@ class LeanPremiseRetrievalAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanPremiseRetrievalRequest:
+    def prepare(self, request: OperationRequest) -> LeanPremiseRetrievalRequest:
         try:
-            validated = parse_capability_input(
+            validated = parse_operation_input(
                 LeanPremiseRetrievalRequest, request.input
             )
             _validate_source_parts(validated.statement, validated.proof_prefix)
         except (ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 _request_validation_diagnostic(
                     exc,
                     code="INVALID_LEAN_RETRIEVAL_REQUEST",
@@ -120,8 +120,8 @@ class LeanPremiseRetrievalAdapter:
             )
         except RuntimeError as exc:
             raw_backend_message = str(exc)[:1_000]
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_RETRIEVAL_FAILED",
                     stage="premise_retrieval",
                     message="Pinned Mathlib premise retrieval did not return a result.",
@@ -135,8 +135,8 @@ class LeanPremiseRetrievalAdapter:
         command_errors = _response_errors(command_response)
         tactic_errors = _response_errors(tactic_response)
         if command_errors:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_RETRIEVAL_FAILED",
                     stage="premise_retrieval",
                     message=(
@@ -153,8 +153,8 @@ class LeanPremiseRetrievalAdapter:
         if tactic_errors and not any(
             "`exact?` could not close the goal" in error for error in tactic_errors
         ):
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_RETRIEVAL_FAILED",
                     stage="premise_retrieval",
                     message=f"Mathlib exact? failed: {tactic_errors[0][:500]}",
@@ -205,7 +205,7 @@ class LeanPremiseRetrievalAdapter:
             retrieval_uri=artifact.artifact_uri,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=output, runtime_ms=_runtime_ms(started)),
             publication=PublishedOperation(

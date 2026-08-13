@@ -46,7 +46,7 @@ async def main() -> None:
             client,
             "math.run",
             {
-                "capability_id": "lean.declaration.search",
+                "operation_id": "lean.declaration.search",
                 "payload": {
                     "environment": "MATHLIB",
                     "name_contains": "irrational_sqrt_two",
@@ -63,7 +63,7 @@ async def main() -> None:
             client,
             "math.run",
             {
-                "capability_id": "lean.declaration.inspect",
+                "operation_id": "lean.declaration.inspect",
                 "payload": {
                     "environment": "MATHLIB",
                     "declaration_name": declaration_name,
@@ -81,7 +81,7 @@ async def main() -> None:
             client,
             "math.run",
             {
-                "capability_id": "lean.check",
+                "operation_id": "lean.check",
                 "payload": {
                     "environment": "MATHLIB",
                     "statement": "Irrational (Real.sqrt 2)",

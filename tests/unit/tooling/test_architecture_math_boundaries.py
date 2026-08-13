@@ -28,17 +28,17 @@ def test_contracts_cannot_import_runtime_or_domains(tmp_path: Path) -> None:
     assert "contract-dependency-leaf" in _codes(tmp_path)
 
 
-def test_product_code_cannot_construct_internal_capability_requests(
+def test_product_code_cannot_construct_internal_operation_requests(
     tmp_path: Path,
 ) -> None:
     _write(
         tmp_path,
         "src/jacobian/polynomials/composition.py",
-        "from jacobian.contracts.capabilities import CapabilityRequest\n"
-        "request = CapabilityRequest(capability_id='x', input={})\n",
+        "from jacobian.contracts.operations import OperationRequest\n"
+        "request = OperationRequest(operation_id='x', input={})\n",
     )
 
-    assert "internal-capability-request" in _codes(tmp_path)
+    assert "internal-operation-request" in _codes(tmp_path)
 
 
 def test_product_code_cannot_construct_public_result_envelopes(
@@ -47,48 +47,48 @@ def test_product_code_cannot_construct_public_result_envelopes(
     _write(
         tmp_path,
         "src/jacobian/polynomials/adapter.py",
-        "from jacobian.contracts.capabilities import CapabilityResult\n"
-        "result = CapabilityResult(capability_id='x', capability_version='1', "
+        "from jacobian.contracts.operations import OperationResult\n"
+        "result = OperationResult(operation_id='x', operation_version='1', "
         "execution={}, output={})\n",
     )
 
-    assert "capability-result-projection" in _codes(tmp_path)
+    assert "operation-result-projection" in _codes(tmp_path)
 
 
 def test_result_envelope_ratchet_resolves_import_aliases(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "src/jacobian/polynomials/aliased_adapter.py",
-        "from jacobian.contracts.capabilities import CapabilityResult as PublicResult\n"
-        "result = PublicResult(capability_id='x', capability_version='1', "
+        "from jacobian.contracts.operations import OperationResult as PublicResult\n"
+        "result = PublicResult(operation_id='x', operation_version='1', "
         "execution={}, output={})\n",
     )
     _write(
         tmp_path,
         "src/jacobian/polynomials/qualified_adapter.py",
-        "import jacobian.contracts.capabilities as capabilities\n"
-        "result = capabilities.CapabilityResult(capability_id='x', "
-        "capability_version='1', execution={}, output={})\n",
+        "import jacobian.contracts.operations as operations\n"
+        "result = operations.OperationResult(operation_id='x', "
+        "operation_version='1', execution={}, output={})\n",
     )
     _write(
         tmp_path,
         "src/jacobian/polynomials/parent_alias_adapter.py",
         "import jacobian.contracts as contracts\n"
-        "result = contracts.capabilities.CapabilityResult(capability_id='x', "
-        "capability_version='1', execution={}, output={})\n",
+        "result = contracts.operations.OperationResult(operation_id='x', "
+        "operation_version='1', execution={}, output={})\n",
     )
     _write(
         tmp_path,
         "src/jacobian/polynomials/root_alias_adapter.py",
         "import jacobian as j\n"
-        "result = j.contracts.capabilities.CapabilityResult(capability_id='x', "
-        "capability_version='1', execution={}, output={})\n",
+        "result = j.contracts.operations.OperationResult(operation_id='x', "
+        "operation_version='1', execution={}, output={})\n",
     )
 
     violations = [
         item
         for item in check_architecture(tmp_path).violations
-        if item.code == "capability-result-projection"
+        if item.code == "operation-result-projection"
     ]
     assert {item.path for item in violations} == {
         "src/jacobian/polynomials/aliased_adapter.py",
@@ -102,22 +102,22 @@ def test_result_envelope_ratchet_resolves_relative_imports(tmp_path: Path) -> No
     _write(
         tmp_path,
         "src/jacobian/domains/example/adapter.py",
-        "from ...contracts.capabilities import CapabilityResult\n"
-        "result = CapabilityResult(capability_id='x', capability_version='1', "
+        "from ...contracts.operations import OperationResult\n"
+        "result = OperationResult(operation_id='x', operation_version='1', "
         "execution={}, output={})\n",
     )
     _write(
         tmp_path,
         "src/jacobian/domains/example/qualified_adapter.py",
-        "from ...contracts import capabilities as caps\n"
-        "result = caps.CapabilityResult(capability_id='x', "
-        "capability_version='1', execution={}, output={})\n",
+        "from ...contracts import operations as caps\n"
+        "result = caps.OperationResult(operation_id='x', "
+        "operation_version='1', execution={}, output={})\n",
     )
 
     violations = [
         item
         for item in check_architecture(tmp_path).violations
-        if item.code == "capability-result-projection"
+        if item.code == "operation-result-projection"
     ]
     assert {item.path for item in violations} == {
         "src/jacobian/domains/example/adapter.py",
@@ -131,12 +131,12 @@ def test_final_projection_may_construct_public_result_envelopes(
     _write(
         tmp_path,
         "src/jacobian/operation_projection.py",
-        "from jacobian.contracts.capabilities import CapabilityResult\n"
-        "result = CapabilityResult(capability_id='x', capability_version='1', "
+        "from jacobian.contracts.operations import OperationResult\n"
+        "result = OperationResult(operation_id='x', operation_version='1', "
         "execution={}, output={})\n",
     )
 
-    assert "capability-result-projection" not in _codes(tmp_path)
+    assert "operation-result-projection" not in _codes(tmp_path)
 
 
 def test_product_code_cannot_restore_marker_selected_adapter_modes(
@@ -150,7 +150,7 @@ def test_product_code_cannot_restore_marker_selected_adapter_modes(
     _write(
         tmp_path,
         "src/jacobian/graphs/adapter.py",
-        "from jacobian.capability_adapters import TypedInputAdapter\n",
+        "from jacobian.operation_adapters import TypedInputAdapter\n",
     )
 
     violations = [
@@ -187,13 +187,13 @@ def test_contracts_cannot_bypass_leaf_policy_with_relative_imports(
     assert "contract-dependency-leaf" in _codes(tmp_path)
 
 
-def test_native_math_cannot_load_runtime_or_capability_layers(tmp_path: Path) -> None:
+def test_native_math_cannot_load_runtime_or_operation_layers(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "src/jacobian/math/matrices.py",
         "from jacobian.runtime.model import JacobianRuntime\n"
         "from jacobian.adapters.mcp import tooling\n"
-        "from jacobian.capability_service import CapabilityService\n",
+        "from jacobian.operation_service import OperationService\n",
     )
 
     assert "native-math-boundary" in _codes(tmp_path)

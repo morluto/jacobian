@@ -56,17 +56,17 @@ def _parser() -> argparse.ArgumentParser:
         help="fixed operator-chosen tenant namespace for anonymous mode",
     )
     parser.add_argument(
-        "--capability-policy-profile",
+        "--operation-policy-profile",
         choices=("DEFAULT", "COMPUTE_VERIFY_NO_RETRIEVAL"),
         default="DEFAULT",
     )
     for option, destination, help_text in (
-        ("--allow-capability", "allowed_capability_ids", "allow this capability ID"),
-        ("--deny-capability", "denied_capability_ids", "deny this capability ID"),
+        ("--allow-operation", "allowed_operation_ids", "allow this operation ID"),
+        ("--deny-operation", "denied_operation_ids", "deny this operation ID"),
         ("--allow-domain", "allowed_domains", "allow this domain"),
         ("--deny-domain", "denied_domains", "deny this domain"),
-        ("--allow-tag", "allowed_tags", "allow capabilities with this tag"),
-        ("--deny-tag", "denied_tags", "deny capabilities with this tag"),
+        ("--allow-tag", "allowed_tags", "allow operations with this tag"),
+        ("--deny-tag", "denied_tags", "deny operations with this tag"),
     ):
         parser.add_argument(
             option,
@@ -100,7 +100,7 @@ def main() -> None:
         create_remote_server,
         load_static_token_file,
     )
-    from jacobian.capability_service import CapabilityPolicy
+    from jacobian.operation_service import OperationPolicy
 
     token_verifier = None
     auth = None
@@ -125,10 +125,10 @@ def main() -> None:
         anonymous_tenant_id=args.anonymous_tenant_id,
         token_verifier=token_verifier,
         auth=auth,
-        capability_policy=CapabilityPolicy(
-            profile=args.capability_policy_profile,
-            allowed_capability_ids=frozenset(args.allowed_capability_ids),
-            denied_capability_ids=frozenset(args.denied_capability_ids),
+        operation_policy=OperationPolicy(
+            profile=args.operation_policy_profile,
+            allowed_operation_ids=frozenset(args.allowed_operation_ids),
+            denied_operation_ids=frozenset(args.denied_operation_ids),
             allowed_domains=frozenset(args.allowed_domains),
             denied_domains=frozenset(args.denied_domains),
             allowed_tags=frozenset(args.allowed_tags),

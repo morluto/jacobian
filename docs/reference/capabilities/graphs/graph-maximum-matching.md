@@ -5,7 +5,7 @@
 `graph.invariant.maximum_matching.compute` version `3` returns a feasible
 matching together with a Tutte–Berge barrier certificate. The producer remains
 `COMPUTED`. An operator-authorized
-`graph.invariant.maximum_matching.verify` capability may promote the exact
+`graph.invariant.maximum_matching.verify` operation may promote the exact
 submitted `{input, candidate}` claim to `VERIFIED` only after independent
 clean-process replay.
 

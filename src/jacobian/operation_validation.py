@@ -1,4 +1,4 @@
-"""Schema validation owned by capability registration and dispatch."""
+"""Schema validation owned by operation registration and dispatch."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
-from jacobian.capability_errors import CapabilityError, PayloadValidationError
+from jacobian.operation_errors import OperationError, PayloadValidationError
 from jacobian.schema_compiler import SCHEMA_COMPILER, SchemaCompilationError
 
 
@@ -21,10 +21,10 @@ def compiled_validator(canonical_schema: bytes) -> Draft202012Validator:
     try:
         normalized = loads_strict_json(canonical_schema)
         if not isinstance(normalized, dict):
-            raise CapabilityError("capability JSON Schema must be an object")
+            raise OperationError("operation JSON Schema must be an object")
         return SCHEMA_COMPILER.compile(normalized).validator
     except SchemaCompilationError as exc:
-        raise CapabilityError("capability JSON Schema is invalid") from exc
+        raise OperationError("operation JSON Schema is invalid") from exc
 
 
 def validator(schema: dict[str, object]) -> Draft202012Validator:
@@ -45,7 +45,7 @@ def validate_payload(
             expected="bounded canonical JSON",
         ) from exc
     if not isinstance(normalized, dict):
-        raise CapabilityError("capability payload must normalize to an object")
+        raise OperationError("operation payload must normalize to an object")
     errors = sorted(
         validator(schema).iter_errors(normalized),
         key=lambda error: tuple(str(part) for part in error.absolute_path),
@@ -109,12 +109,12 @@ def schema_expectation(error: JsonSchemaValidationError) -> str:
     label = constraint_labels.get(str(error.validator))
     if label is not None:
         rendered = json.dumps(error.validator_value, ensure_ascii=False)
-        # Truncate to stay within CapabilityDiagnostic.expected's 1024-char limit
+        # Truncate to stay within OperationDiagnostic.expected's 1024-char limit
         max_value = 1024 - len(label) - 1
         if len(rendered) > max_value:
             rendered = rendered[: max(0, max_value - 3)] + "..."
         return f"{label} {rendered}"
-    return "input matching the capability descriptor JSON Schema"
+    return "input matching the operation descriptor JSON Schema"
 
 
 def schema_violation_details(error: JsonSchemaValidationError) -> dict[str, object]:

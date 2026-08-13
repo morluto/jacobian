@@ -18,11 +18,11 @@ from pydantic import (
 )
 
 from jacobian.canonical import canonicalize_json, sha256_digest
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderObservation,
+)
 from jacobian.contracts.results import ContractModel
 
 SatVariableName = Annotated[
@@ -167,7 +167,7 @@ class SatCnfMaterializationRequest(ContractModel):
 
 
 class SatCnfMaterializationOutput(ContractModel):
-    """Stored canonical CNF identity consumable by SAT capabilities."""
+    """Stored canonical CNF identity consumable by SAT operations."""
 
     materialization_version: Literal["1"] = "1"
     cnf_uri: ArtifactUri
@@ -252,7 +252,7 @@ class SatAssignmentArtifact(ContractModel):
     cnf: SatCnfBinding
     declared_scope: Literal["FULL_CNF"] = "FULL_CNF"
     values: tuple[StrictBool, ...] = Field(max_length=1_000_000)
-    producer: CapabilityProviderRuntime
+    producer: ProviderObservation
     resource_budget: SatResourceBudget
 
     @model_validator(mode="after")
@@ -363,7 +363,7 @@ class SatProofArtifact(ContractModel):
     proof_encoding: Literal["BASE64"] = "BASE64"
     proof_base64: CanonicalBase64
     proof_digest: Sha256Digest
-    producer: CapabilityProviderRuntime
+    producer: ProviderObservation
     resource_budget: SatResourceBudget
 
     @model_validator(mode="after")
@@ -382,7 +382,7 @@ class SatProofArtifact(ContractModel):
         *,
         cnf: SatCnfBinding,
         proof: bytes,
-        producer: CapabilityProviderRuntime,
+        producer: ProviderObservation,
         resource_budget: SatResourceBudget,
     ) -> SatProofArtifact:
         """Encode exact raw proof bytes without interpreting solver output."""
@@ -680,6 +680,6 @@ def _decode_base64(value: str) -> bytes:
         raise ValueError("proof bytes must use canonical base64") from exc
 
 
-def _require_available_producer(producer: CapabilityProviderRuntime) -> None:
-    if producer.availability is not CapabilityProviderAvailability.AVAILABLE:
+def _require_available_producer(producer: ProviderObservation) -> None:
+    if producer.availability is not ProviderAvailability.AVAILABLE:
         raise ValueError("SAT evidence requires an available producer runtime")

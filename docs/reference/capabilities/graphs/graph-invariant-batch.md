@@ -59,7 +59,7 @@ Each per-invariant result is stored in its own
 `jacobian.graph-invariant-result@1` artifact with the source graph as parent.
 The `jacobian.graph-property-batch@2` artifact binds the source graph, registry
 version, supported and requested names, backend version, per-invariant results,
-and their artifact URIs. The capability relationship targets both the batch
+and their artifact URIs. The operation relationship targets both the batch
 artifact and every individual result artifact.
 
 A completed batch is `COMPLETE` when every requested name has one of the three
@@ -70,7 +70,7 @@ results.
 
 ## Relationship to `graph.invariant.*`
 
-Standalone `graph.invariant.*` capabilities are not aliases of the batch.
+Standalone `graph.invariant.*` operations are not aliases of the batch.
 They accept inline bounded graphs, may expose operation-specific witnesses or
 budgets, and in some cases use a different backend:
 

@@ -13,15 +13,15 @@ from tests.boundary.providers.external_sat.external_sat_support import (
 from tests.support.services import DomainTestServices
 
 import jacobian_checkers.sat
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-    CapabilityResult,
-)
 from jacobian.contracts.evidence import CertificateEnvelope
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatResourceBudget
 from jacobian.contracts.verification import VerificationRecord
@@ -30,15 +30,15 @@ from jacobian.runtime import CheckerAuthorityMode
 from jacobian.verification.errors import CheckerExecutionError
 
 
-def _producer() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _producer() -> ProviderObservation:
+    return ProviderObservation(
         provider="cadical",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="3.0.1",
         digest="sha256:" + "d" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
     )
 
@@ -51,7 +51,7 @@ def _services_with_runtime(
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
 ) -> Iterator[DomainTestServices]:
     runtime = drat_trim_provider_runtime(executable)
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     with open_sat_proof_verifier_services(
         root,
         runtime,
@@ -89,7 +89,7 @@ def test_drat_trim_runtime_requires_exact_operator_provenance(
 
     runtime = drat_trim_provider_runtime(executable)
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.version is None
     assert runtime.digest is None
     assert runtime.diagnostic is not None
@@ -109,10 +109,10 @@ def _proof(runtime: DomainTestServices) -> tuple[str, str]:
     return cnf.artifact_uri, proof.artifact_uri
 
 
-def _verify(runtime: DomainTestServices, proof_uri: str) -> CapabilityResult:
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.unsat_proof.verify",
+def _verify(runtime: DomainTestServices, proof_uri: str) -> OperationResult:
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.unsat_proof.verify",
             input={"proof_uri": proof_uri},
         )
     )
@@ -217,8 +217,8 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
     ):
         for services in (without_references, without_runtime):
             assert "sat.unsat_proof.verify" not in {
-                descriptor.capability_id
-                for descriptor in services.core.capabilities.catalog().capabilities
+                descriptor.operation_id
+                for descriptor in services.core.operations.catalog().operations
             }
 
 

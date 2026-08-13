@@ -1,4 +1,4 @@
-# Finite math capability references
+# Finite math operation references
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

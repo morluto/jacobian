@@ -3,16 +3,16 @@
 from dataclasses import replace
 from typing import Any
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.probability.checkers import PROBABILITY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.probability.gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
 from jacobian.domains.probability.mutual_information import (
-    MUTUAL_INFORMATION_CAPABILITY,
+    MUTUAL_INFORMATION_OPERATION,
 )
-from jacobian.domains.probability.operations import FINITE_PROBABILITY_CAPABILITIES
+from jacobian.domains.probability.operations import FINITE_PROBABILITY_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION
 from jacobian.providers.flint_runtime import python_flint_probability_provider_runtime
@@ -53,15 +53,15 @@ def build_finite_probability_bundle() -> DomainBundle:
         ),
         provider_runtime=python_flint_probability_provider_runtime(),
         backend_version=f"python-flint-{PYTHON_FLINT_VERSION}",
-        capabilities=(
-            MUTUAL_INFORMATION_CAPABILITY,
+        operations=(
+            MUTUAL_INFORMATION_OPERATION,
             *(
                 _operation_with_canonical_gaussian_input(operation)
-                for operation in FINITE_PROBABILITY_CAPABILITIES
+                for operation in FINITE_PROBABILITY_OPERATIONS
             ),
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_FINITE_PROBABILITY_REQUEST",
                 stage="finite_probability_input_validation",
                 message="Input does not satisfy the bounded exact-probability contract.",

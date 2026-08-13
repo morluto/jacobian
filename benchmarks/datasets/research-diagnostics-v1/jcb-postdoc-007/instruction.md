@@ -4,7 +4,7 @@ In the language of one binary operation ◇, decide whether x=x◇((y◇x)◇(x�
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. The current countermodel search request accepts maximum order 4, while the public witness has order 8. A complete search through order 4 is only a bounded negative result.
+report the operation boundary honestly. The current countermodel search request accepts maximum order 4, while the public witness has order 8. A complete search through order 4 is only a bounded negative result.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

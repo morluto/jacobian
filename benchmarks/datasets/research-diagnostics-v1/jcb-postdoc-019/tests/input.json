@@ -31,6 +31,6 @@
     "chart_generator": "t*a_i*b_j-1",
     "chart_count": 12
   },
-  "tier": "CAPABILITY_DISCOVERY_COMPOSITION_AND_CALIBRATION",
+  "tier": "OPERATION_DISCOVERY_COMPOSITION_AND_CALIBRATION",
   "contamination_class": "public-answer-visible-diagnostic"
 }

@@ -15,7 +15,7 @@
 - solved, disproved, conditional, partial-case, or disputed status;
 - finite obligations and imported mathematical boundaries;
 - relevant installed producer and verifier candidates;
-- source, artifact, family, implementation, capability, provider, diagnostic, and root-cause overlap;
+- source, artifact, family, implementation, operation, provider, diagnostic, and root-cause overlap;
 - source decision and reason.
 
 ## Accept only when
@@ -36,7 +36,7 @@
 - checking a nearby determinant, rank, flat lattice, or specialization does not certify the published obligation;
 - the task requires private data or inaccessible certificates;
 - the same conjecture or artifact was already evaluated;
-- only one family supports a speculative new capability.
+- only one family supports a speculative new operation.
 
 Record rejections immediately. Do not run model arms to confirm a known mismatch.
 

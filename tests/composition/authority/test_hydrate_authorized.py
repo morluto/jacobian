@@ -16,9 +16,9 @@ from jacobian.runtime.services import CoreServices
 
 def _verify_ids(core: CoreServices) -> set[str]:
     return {
-        entry.capability_id
-        for entry in core.capabilities.catalog().capabilities
-        if ".verify" in entry.capability_id
+        entry.operation_id
+        for entry in core.operations.catalog().operations
+        if ".verify" in entry.operation_id
     }
 
 

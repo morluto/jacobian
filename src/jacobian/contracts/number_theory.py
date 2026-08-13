@@ -1,4 +1,4 @@
-"""Named Pydantic wire contracts for exact integer number-theory capabilities.
+"""Named Pydantic wire contracts for exact integer number-theory operations.
 
 These contracts cover gcd/lcm, Bezout coefficients, divisors, prime
 factorization, p-adic valuation, multiplicative arithmetic functions,

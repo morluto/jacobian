@@ -1,4 +1,4 @@
-"""Proof-state capability adapter for bounded Lean exploration."""
+"""Proof-state operation adapter for bounded Lean exploration."""
 
 from __future__ import annotations
 
@@ -10,14 +10,6 @@ from pathlib import Path
 from pydantic import ValidationError
 
 import jacobian.lean_frontend.exploration as _exploration_support
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanDiagnosticPhase, LeanDiagnosticSource
 from jacobian.contracts.lean_exploration import (
     LeanProofStateArtifact,
@@ -26,6 +18,12 @@ from jacobian.contracts.lean_exploration import (
     LeanProofStateTransitionArtifact,
     LeanProofSuccessorState,
     LeanTypedGoal,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.lean_frontend._state_validation import _load_validated_proof_state
@@ -48,6 +46,8 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplProofStepResponse,
     LeanReplValidatedExecution,
 )
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -55,7 +55,7 @@ from jacobian.operations import Completed
 
 @dataclass(frozen=True, slots=True)
 class LeanProofStateApplication:
-    """Typed transition result before the public capability projection."""
+    """Typed transition result before the public operation projection."""
 
     output: LeanProofStateOutput
     execution: Execution
@@ -65,8 +65,8 @@ class LeanProofStateApplication:
 class LeanProofStateAdapter:
     def __init__(self, resources: _Resources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.proof_state.apply_tactic",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.proof_state.apply_tactic",
             version="3",
             title="Apply one Lean tactic and inspect resulting goals",
             description=(
@@ -93,8 +93,8 @@ class LeanProofStateAdapter:
                 "tactic-error",
                 "source-span",
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="close_true_with_trivial",
                     description=(
                         "Apply trivial to a replayable proof state for True; "
@@ -108,7 +108,7 @@ class LeanProofStateAdapter:
                         }
                     ).model_dump(mode="json"),
                 ),
-                CapabilityInvocationExample(
+                OperationExample(
                     name="continue_returned_state",
                     description=(
                         "Continue an immutable successor state using only its URI, "
@@ -129,14 +129,14 @@ class LeanProofStateAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanProofStateRequest:
+    def prepare(self, request: OperationRequest) -> LeanProofStateRequest:
         try:
-            return parse_capability_input(LeanProofStateRequest, request.input)
+            return parse_operation_input(LeanProofStateRequest, request.input)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 _request_validation_diagnostic(
                     exc,
                     code="INVALID_LEAN_TRANSITION_REQUEST",
@@ -165,11 +165,11 @@ class LeanProofStateAdapter:
             validated.state_uri,
             expected_environment=validated.environment,
             expected_environment_digest=environment_digest,
-            invalid_state_hint="Use a state URI returned by this capability.",
+            invalid_state_hint="Use a state URI returned by this operation.",
         )
         if bound_state.completed:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_PROOF_STATE_COMPLETED",
                     stage="state_validation",
                     message="The supplied proof state has no remaining goals.",
@@ -180,8 +180,8 @@ class LeanProofStateAdapter:
                 )
             )
         if len(bound_state.tactic_prefix) >= 64:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_PROOF_STATE_PREFIX_LIMIT",
                     stage="state_validation",
                     message="The replayable proof state reached the 64-tactic limit.",
@@ -217,8 +217,8 @@ class LeanProofStateAdapter:
                 *_response_errors(validation_response),
             )
             if reconstruction_errors:
-                raise CapabilityInvocationError(
-                    CapabilityDiagnostic(
+                raise OperationInvocationError(
+                    OperationDiagnostic(
                         code="LEAN_STATE_RECONSTRUCTION_FAILED",
                         stage="state_reconstruction",
                         message=(
@@ -244,8 +244,8 @@ class LeanProofStateAdapter:
                         request=validated,
                     )
                 except _exploration_support.LeanHelperError as exc:
-                    raise CapabilityInvocationError(
-                        CapabilityDiagnostic(
+                    raise OperationInvocationError(
+                        OperationDiagnostic(
                             code=exc.code,
                             stage="proof_state_extraction",
                             message=(f"Lean helper reported an error: {exc.code}."),
@@ -256,8 +256,8 @@ class LeanProofStateAdapter:
                         )
                     ) from exc
                 except RuntimeError as exc:
-                    raise CapabilityInvocationError(
-                        CapabilityDiagnostic(
+                    raise OperationInvocationError(
+                        OperationDiagnostic(
                             code="LEAN_PROOF_STATE_EXTRACTION_FAILED",
                             stage="proof_state_extraction",
                             message=(
@@ -275,7 +275,7 @@ class LeanProofStateAdapter:
     def invoke(self, validated: LeanProofStateRequest) -> OperationProjection:
         applied = self.apply(validated)
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=applied.output,
@@ -307,8 +307,8 @@ class LeanProofStateAdapter:
             else:
                 _validate_source_parts("True", (validated.tactic,))
         except ValueError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_TRANSITION_REQUEST",
                     stage="request_validation",
                     message="The Lean statement or tactic sequence is invalid.",
@@ -337,8 +337,8 @@ class LeanProofStateAdapter:
         _command_response, validation_response, tactic_response = responses
         replayed_goals = _normalized_response_goals(validation_response)
         if bound_state is not None and replayed_goals != bound_state.normalized_goals:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="STALE_LEAN_PROOF_STATE",
                     stage="state_validation",
                     message=(

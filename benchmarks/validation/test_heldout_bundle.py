@@ -21,7 +21,7 @@ from benchmarks.tooling.heldout_bundle import (
 from benchmarks.tooling.observation_comparison import compare_evidence
 from benchmarks.tooling.observation_results import (
     _heldout_plan_failures,
-    _mark_invoked_if_capability_used,
+    _mark_invoked_if_operation_used,
     collect_heldout_evidence,
 )
 
@@ -65,7 +65,7 @@ def _manifest() -> dict:
     snapshot_id = "sha256:" + "f" * 64
     return {
         "schema_version": "3",
-        "bundle_id": "capability-held-out-v1",
+        "bundle_id": "operation-held-out-v1",
         "bundle_version": "1.0.0",
         "snapshot_lock": {
             "lock_id": snapshot_id,
@@ -77,7 +77,7 @@ def _manifest() -> dict:
             "sha256": "sha256:" + "d" * 64,
         },
         "dataset": {
-            "id": "capability-held-out-v1",
+            "id": "operation-held-out-v1",
             "path": "dataset",
             "manifest_digest": "sha256:" + "e" * 64,
             "minimum_independent_families": 2,
@@ -148,7 +148,7 @@ def _bundle(tmp_path: Path, value: dict) -> Path:
         task["oracle_tree_digest"] = _tree_digest(solution)
     dataset_entries = [
         "[dataset]",
-        'name = "jacobian/capability-held-out-v1"',
+        'name = "jacobian/operation-held-out-v1"',
         "",
     ]
     for task in value["tasks"]:
@@ -167,8 +167,8 @@ def _bundle(tmp_path: Path, value: dict) -> Path:
         "snapshot_id": value["snapshot_lock"]["lock_id"],
         "lock_digest": "sha256:" + "0" * 64,
         "suite": {
-            "id": "capability-held-out-v1",
-            "name": "jacobian/capability-held-out-v1",
+            "id": "operation-held-out-v1",
+            "name": "jacobian/operation-held-out-v1",
             "title": "Held-out",
             "purpose": "Held-out evaluation",
             "claim_class": "held-out-comparative-evaluation",
@@ -374,7 +374,7 @@ def test_bundle_rejects_dataset_manifest_task_drift(
     monkeypatch.setattr(heldout_bundle, "task_digest", lambda _path: "a" * 64)
     manifest = root / value["dataset"]["path"] / "dataset.toml"
     manifest.write_text(
-        '[dataset]\nname = "jacobian/capability-held-out-v1"\n\n'
+        '[dataset]\nname = "jacobian/operation-held-out-v1"\n\n'
         '[[tasks]]\nname = "jacobian/held-out-0"\n'
         f'digest = "{value["tasks"][0]["digest"]}"\n',
         encoding="utf-8",
@@ -861,7 +861,7 @@ def _c2_routing_contract(routing_status: str = "AVAILABLE_UNUSED") -> dict:
     }
 
 
-def test_mark_invoked_transitions_on_successful_capability_invoke(
+def test_mark_invoked_transitions_on_successful_operation_invoke(
     tmp_path: Path,
 ) -> None:
     ledger = {"routing_status": {"C2": _c2_routing_contract()}}
@@ -872,7 +872,7 @@ def test_mark_invoked_transitions_on_successful_capability_invoke(
             "tool_errors": 0,
         }
     ]
-    _mark_invoked_if_capability_used(ledger, trials, contract_dir=tmp_path)
+    _mark_invoked_if_operation_used(ledger, trials, contract_dir=tmp_path)
 
     assert ledger["routing_status"]["C2"]["routing_status"] == "AVAILABLE_INVOKED"
     assert (tmp_path / "routing-status-c2.json").is_file()
@@ -889,7 +889,7 @@ def test_mark_invoked_fail_closed_on_errored_invocation(tmp_path: Path) -> None:
             "tool_errors": 2,
         }
     ]
-    _mark_invoked_if_capability_used(ledger, trials, contract_dir=tmp_path)
+    _mark_invoked_if_operation_used(ledger, trials, contract_dir=tmp_path)
 
     assert ledger["routing_status"]["C2"]["routing_status"] == "AVAILABLE_UNUSED"
     assert not (tmp_path / "routing-status-c2.json").exists()
@@ -906,7 +906,7 @@ def test_mark_invoked_fail_closed_on_non_completed_trial(tmp_path: Path) -> None
             "tool_errors": 0,
         }
     ]
-    _mark_invoked_if_capability_used(ledger, trials, contract_dir=tmp_path)
+    _mark_invoked_if_operation_used(ledger, trials, contract_dir=tmp_path)
 
     assert ledger["routing_status"]["C2"]["routing_status"] == "AVAILABLE_UNUSED"
 
@@ -922,7 +922,7 @@ def test_mark_invoked_fail_closed_on_timeout_trial(tmp_path: Path) -> None:
             "tool_errors": 0,
         }
     ]
-    _mark_invoked_if_capability_used(ledger, trials, contract_dir=tmp_path)
+    _mark_invoked_if_operation_used(ledger, trials, contract_dir=tmp_path)
 
     assert ledger["routing_status"]["C2"]["routing_status"] == "AVAILABLE_UNUSED"
 
@@ -938,7 +938,7 @@ def test_mark_invoked_no_transition_when_already_invoked(tmp_path: Path) -> None
             "tool_errors": 0,
         }
     ]
-    _mark_invoked_if_capability_used(ledger, trials, contract_dir=tmp_path)
+    _mark_invoked_if_operation_used(ledger, trials, contract_dir=tmp_path)
 
     assert ledger["routing_status"]["C2"]["routing_status"] == "AVAILABLE_INVOKED"
     assert not (tmp_path / "routing-status-c2.json").exists()
@@ -960,7 +960,7 @@ def test_mark_invoked_mixed_trials_one_success_transitions(tmp_path: Path) -> No
             "tool_errors": 0,
         },
     ]
-    _mark_invoked_if_capability_used(ledger, trials, contract_dir=tmp_path)
+    _mark_invoked_if_operation_used(ledger, trials, contract_dir=tmp_path)
 
     assert ledger["routing_status"]["C2"]["routing_status"] == "AVAILABLE_INVOKED"
 

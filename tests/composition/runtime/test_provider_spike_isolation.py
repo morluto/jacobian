@@ -83,7 +83,7 @@ def test_unavailable_provider_spikes_preserve_complete_runtime_catalog(
     fresh_complete_runtime: Any,
     tmp_path: Path,
 ) -> None:
-    """Feasibility probes must not register or remove core capabilities."""
+    """Feasibility probes must not register or remove core operations."""
 
     for name, arguments in SPIKES:
         run_spike = _run_spike(name)

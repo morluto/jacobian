@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
 
@@ -22,9 +22,9 @@ def combinatorics_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 def test_integer_partition_enumeration_is_complete_and_canonical(
     combinatorics_services: DomainTestServices,
 ) -> None:
-    result = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.enumerate.integer_partitions",
+    result = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.enumerate.integer_partitions",
             input={"n": 5, "max_parts": 2},
         )
     )

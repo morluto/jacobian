@@ -1,4 +1,4 @@
-"""Errors shared by capability registration and invocation boundaries."""
+"""Errors shared by operation registration and invocation boundaries."""
 
 from __future__ import annotations
 
@@ -6,15 +6,15 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.validation_diagnostics import validation_error_message
 
 
-class CapabilityError(RuntimeError):
-    """A capability descriptor, request, or verification boundary is invalid."""
+class OperationError(RuntimeError):
+    """A operation descriptor, request, or verification boundary is invalid."""
 
 
-class PayloadValidationError(CapabilityError):
+class PayloadValidationError(OperationError):
     """Structured descriptor-schema failure safe for public diagnostics."""
 
     def __init__(
@@ -33,22 +33,22 @@ class PayloadValidationError(CapabilityError):
         self.details = details or {}
 
 
-class CapabilityDiscoveryCursorError(ValueError):
+class OperationDiscoveryCursorError(ValueError):
     """A continuation cursor does not belong to the filtered result."""
 
 
-class CapabilityInvocationError(RuntimeError):
+class OperationInvocationError(RuntimeError):
     """An expected adapter failure that is safe to return to a model."""
 
-    def __init__(self, diagnostic: CapabilityDiagnostic) -> None:
+    def __init__(self, diagnostic: OperationDiagnostic) -> None:
         super().__init__(diagnostic.message)
         self.diagnostic = diagnostic
 
 
 def enriched_invalid_request(
-    base: CapabilityDiagnostic,
+    base: OperationDiagnostic,
     exc: ValidationError,
-) -> CapabilityDiagnostic:
+) -> OperationDiagnostic:
     """Add the first Pydantic error location to an invocation diagnostic."""
 
     errors = exc.errors()
@@ -66,9 +66,9 @@ def enriched_invalid_request(
 
 
 __all__ = [
-    "CapabilityDiscoveryCursorError",
-    "CapabilityError",
-    "CapabilityInvocationError",
+    "OperationDiscoveryCursorError",
+    "OperationError",
+    "OperationInvocationError",
     "PayloadValidationError",
     "enriched_invalid_request",
 ]

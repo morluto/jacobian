@@ -141,7 +141,7 @@ def test_exact_delaunay_spike_passes_but_defers_production(tmp_path: Path) -> No
         for limitation in report["limitations"]
     )
     assert report["checker_feasibility"]["decision"] == "REVISE"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_absent_provider_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
@@ -157,7 +157,7 @@ def test_absent_provider_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
     assert report["status"] == "UNAVAILABLE"
     assert report["conclusion"] == "NO_CONCLUSION"
     assert report["diagnostic"]["code"] == "PROVIDER_FILE_UNAVAILABLE"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_source_version_mismatch_fails_before_execution(tmp_path: Path) -> None:

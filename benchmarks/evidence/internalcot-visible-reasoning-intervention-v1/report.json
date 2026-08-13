@@ -75,7 +75,7 @@
   },
   "evidence_class": "PAIRED_ACTIVE_VISIBLE_REASONING_INTERVENTION",
   "limitations": [
-    "The selected tasks were previously observed in passive #1259 work; blocking controls task identity but this is not an unseen-task capability evaluation.",
+    "The selected tasks were previously observed in passive #1259 work; blocking controls task identity but this is not an unseen-task operation evaluation.",
     "The paired contrast identifies the bundled prompt, skill, and CLI intervention, not internalcot notes in isolation.",
     "Conditional b and b_star gains are held-out predictive associations; paired behavior effects are a separate estimand.",
     "Thirty-two non-deterministic weak-model trials provide limited uncertainty resolution.",

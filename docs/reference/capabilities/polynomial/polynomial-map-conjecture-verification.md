@@ -1,6 +1,6 @@
 # Polynomial-map Keller and inverse-obstruction verification
 
-Jacobian exposes two narrow verification capabilities for the exact
+Jacobian exposes two narrow verification operations for the exact
 polynomial-map moves that recur in published Jacobian-conjecture
 counterexamples. They are claim binders, not a Jacobian-conjecture solver.
 
@@ -33,13 +33,13 @@ re-evaluates both points and binds the collision to the exact claim
 
 The logical bridge is elementary and explicit: a two-sided polynomial inverse
 would make the map injective, so two distinct points with the same image rule
-out such an inverse for this exact map and domain. The capability does not
+out such an inverse for this exact map and domain. The operation does not
 claim that a bounded search failed, that no rational inverse exists under some
 other semantics, or that the original conjecture is false in every field.
 
 ## Evidence and independence
 
-Both capabilities preserve the source map, claim, candidate/witness,
+Both operations preserve the source map, claim, candidate/witness,
 certificate, and verification record. Checker authorization remains in the
 operator-managed registry. The producer uses the pinned SymPy installation;
 the checker uses a separate exact sparse-rational implementation in

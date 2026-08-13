@@ -1,28 +1,28 @@
 from __future__ import annotations
 
-from jacobian.capability_discovery import discovery_relevance
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
+from jacobian.operation_discovery import discovery_relevance
 
 
 def test_discovery_phrase_matching_respects_token_boundaries() -> None:
-    runtime = CapabilityProviderRuntime(
+    runtime = ProviderObservation(
         provider="tests",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1",
         digest="sha256:" + "a" * 64,
-        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        digest_kind=ProviderDigestKind.SOURCE_TREE,
         platform="any",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
     )
-    descriptor = CapabilityDescriptor(
-        capability_id="fixture.text.inspect",
+    descriptor = OperationDescriptor(
+        operation_id="fixture.text.inspect",
         version="1",
         title="Inspect text",
         description="Inspect some paragraph of structured text.",

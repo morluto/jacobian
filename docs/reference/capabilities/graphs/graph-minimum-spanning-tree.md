@@ -82,7 +82,7 @@ tree as optimal.
 
 One invocation covers only the supplied finite weighted graph. It does not
 certify a TSP tour, an approximation trace, a graph family, or an
-all-orders theorem. Exact bounded TSP remains a separate deferred capability.
+all-orders theorem. Exact bounded TSP remains a separate deferred operation.
 
 The public `metric-tsp-proof-repair` case motivated this fundamental primitive,
 but its answer is public and no model run was performed for this change. A

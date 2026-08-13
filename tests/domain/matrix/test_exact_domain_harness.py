@@ -17,8 +17,8 @@ def test_open_exact_domain_services_installs_bundle_and_verifiers(
     bundle = build_matrix_bundle()
     with open_exact_domain_services(tmp_path / "state", bundle) as services:
         catalog_ids = {
-            item.capability_id
-            for item in services.core.capabilities.catalog().capabilities
+            item.operation_id
+            for item in services.core.operations.catalog().operations
         }
         assert "matrix.determinant.compute" in catalog_ids
         assert any(item.endswith(".verify") for item in catalog_ids)
@@ -34,8 +34,8 @@ def test_open_exact_domain_services_respects_absent_authority(
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         catalog_ids = {
-            item.capability_id
-            for item in services.core.capabilities.catalog().capabilities
+            item.operation_id
+            for item in services.core.operations.catalog().operations
         }
         assert "matrix.determinant.compute" in catalog_ids
         assert not any(item.endswith(".verify") for item in catalog_ids)

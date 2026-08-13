@@ -3,15 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.support.capabilities import invoke_capability
 from tests.support.exact_domain import open_exact_domain_services
+from tests.support.operations import invoke_operation
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-)
 from jacobian.contracts.linear import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalSolutionFindRequest,
+)
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.domains.rational_linear import build_rational_linear_bundle
 from jacobian.domains.rational_linear.protocol import (
@@ -95,7 +95,7 @@ def test_inconsistency_candidate_is_inline_and_replayable(tmp_path: Path) -> Non
         tmp_path,
         build_rational_linear_bundle(),
     ) as services:
-        computed = invoke_capability(
+        computed = invoke_operation(
             services,
             "linear.rational_inconsistency.compute",
             _system(),
@@ -105,9 +105,9 @@ def test_inconsistency_candidate_is_inline_and_replayable(tmp_path: Path) -> Non
             {"num": "1", "den": "1"},
         ]
         assert computed.artifact_uris == ()
-        verified = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="linear.rational_inconsistency.verify",
+        verified = services.core.operations.invoke(
+            OperationRequest(
+                operation_id="linear.rational_inconsistency.verify",
                 input={"input": _system(), "candidate": computed.output["result"]},
             )
         )

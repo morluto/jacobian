@@ -7,7 +7,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 
@@ -48,12 +48,12 @@ def test_order_33_determinant_computes_and_verifies(
     matrix_services: DomainTestServices,
 ) -> None:
     payload = {"matrix": _truncated_legendre_matrix(71)}
-    computed = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id="matrix.determinant.compute", input=payload)
+    computed = matrix_services.core.operations.invoke(
+        OperationRequest(operation_id="matrix.determinant.compute", input=payload)
     )
-    verified = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.verify",
+    verified = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.verify",
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -70,9 +70,9 @@ def test_determinant_rejects_order_above_64(
     matrix = _matrix(
         [[1 if row == column else 0 for column in range(65)] for row in range(65)]
     )
-    result = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.compute",
+    result = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.compute",
             input={"matrix": matrix},
         )
     )

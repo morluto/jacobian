@@ -47,12 +47,12 @@
       "result": {
         "additionalProperties": false,
         "properties": {
-          "selected_capability": {
+          "selected_operation": {
             "type": "string"
           }
         },
         "required": [
-          "selected_capability"
+          "selected_operation"
         ],
         "type": "object"
       },

@@ -4,13 +4,13 @@ import importlib
 from pathlib import Path
 
 import pytest
-from tests.support.capabilities import invoke_capability
 from tests.support.exact_domain import open_exact_domain_services
+from tests.support.operations import invoke_operation
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-)
 from jacobian.contracts.matrices import IntegerMatrix
+from jacobian.contracts.operations import (
+    OperationRequest,
+)
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.domains.matrix_lattice.hnf import _parse_hnf_worker_result
 from jacobian.operation_bindings import DurablePublication
@@ -39,7 +39,7 @@ def test_hnf_is_domain_owned_and_explicitly_durable() -> None:
     bundle = build_matrix_bundle()
     operation = next(
         operation
-        for operation in bundle.capabilities
+        for operation in bundle.operations
         if operation.spec.operation_id == "matrix.normal_form.hermite.materialize"
     )
     assert isinstance(operation.publication, DurablePublication)
@@ -48,7 +48,7 @@ def test_hnf_is_domain_owned_and_explicitly_durable() -> None:
 
 
 def test_python_flint_hnf_produces_a_durable_certificate(hnf_services) -> None:
-    result = invoke_capability(
+    result = invoke_operation(
         hnf_services,
         "matrix.normal_form.hermite.materialize",
         _matrix([[0, 2, 4], [0, 6, 8]]),
@@ -93,14 +93,14 @@ def test_hnf_worker_envelope_requires_identity_and_source_shapes() -> None:
 
 
 def test_hnf_checker_replays_the_retained_certificate(hnf_services) -> None:
-    computed = invoke_capability(
+    computed = invoke_operation(
         hnf_services,
         "matrix.normal_form.hermite.materialize",
         _matrix([[1, 2], [3, 4]]),
     )
-    verified = hnf_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.hermite.verify",
+    verified = hnf_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.hermite.verify",
             input={"result_uri": computed.output["result_uri"]},
         )
     )

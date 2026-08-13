@@ -45,12 +45,12 @@ An orbit is relative to a specified group action; the
 [GAP reference manual](https://docs.gap-system.org/doc/ref/manual.pdf) treats
 group actions and their orbits as distinct first-class operations. Maintained
 graph libraries can search for mappings and graph symmetries—for example,
-[NetworkX graph isomorphism](https://networkx.org/documentation/stable/reference/algorithms/isomorphism.html)—but this capability does not invoke a
+[NetworkX graph isomorphism](https://networkx.org/documentation/stable/reference/algorithms/isomorphism.html)—but this operation does not invoke a
 search backend or claim that the supplied generators generate the full
 automorphism group.
 
 The existing direct graph-isomorphism verifier checks one mapping between two
-stored graphs. This capability instead validates zero or more automorphisms of
+stored graphs. This operation instead validates zero or more automorphisms of
 one graph and computes the complete partitions induced by their generated
 subgroup. Generic plugin canonicalization metadata remains untrusted and is not
 used as checker authority.
@@ -60,7 +60,7 @@ used as checker authority.
 Vertex colors can distinguish terminal classes and edge colors can bind equal
 probability classes. The resulting edge orbits are useful, inspectable
 compression metadata, but they are not edge-state orbits and do not establish
-a reliability identity. This capability does not emit a quotient graph,
+a reliability identity. This operation does not emit a quotient graph,
 canonical label, group order, stabilizer, Burnside count, state-orbit mass, or
 terminal connection probability.
 

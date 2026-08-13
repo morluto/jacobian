@@ -1,23 +1,23 @@
-"""Installation bundle for exact SymPy-backed number-theory capabilities."""
+"""Installation bundle for exact SymPy-backed number-theory operations."""
 
 from __future__ import annotations
 
 import platform
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.number_theory.checkers import NUMBER_THEORY_EXACT_REPLAY_CHECKERS
-from jacobian.domains.number_theory.derived import DERIVED_NUMBER_THEORY_CAPABILITIES
-from jacobian.domains.number_theory.divisibility import DIVISIBILITY_CAPABILITIES
+from jacobian.domains.number_theory.derived import DERIVED_NUMBER_THEORY_OPERATIONS
+from jacobian.domains.number_theory.divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.domains.number_theory.finite_abelian_groups import (
-    FINITE_ABELIAN_GROUP_FACTORIZATION_CAPABILITY,
+    FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
 )
-from jacobian.domains.number_theory.modular import MODULAR_CAPABILITIES
+from jacobian.domains.number_theory.modular import MODULAR_OPERATIONS
 from jacobian.domains.number_theory.modular_identity import (
-    MODULAR_IDENTITY_CAPABILITIES,
     MODULAR_IDENTITY_CHECKERS,
+    MODULAR_IDENTITY_OPERATIONS,
 )
-from jacobian.domains.number_theory.primes import PRIME_CAPABILITIES
+from jacobian.domains.number_theory.primes import PRIME_OPERATIONS
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
@@ -47,16 +47,16 @@ def build_number_theory_bundle() -> DomainBundle:
             features=("exact-integer-number-theory",),
         ),
         backend_version=f"python-{platform.python_version()};sympy-{SYMPY_VERSION}",
-        capabilities=(
-            *DIVISIBILITY_CAPABILITIES,
-            *PRIME_CAPABILITIES,
-            *MODULAR_CAPABILITIES,
-            *MODULAR_IDENTITY_CAPABILITIES,
-            *DERIVED_NUMBER_THEORY_CAPABILITIES,
-            FINITE_ABELIAN_GROUP_FACTORIZATION_CAPABILITY,
+        operations=(
+            *DIVISIBILITY_OPERATIONS,
+            *PRIME_OPERATIONS,
+            *MODULAR_OPERATIONS,
+            *MODULAR_IDENTITY_OPERATIONS,
+            *DERIVED_NUMBER_THEORY_OPERATIONS,
+            FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_NUMBER_THEORY_REQUEST",
                 stage="number_theory_input_validation",
                 message="Input does not satisfy the exact number-theory contract.",

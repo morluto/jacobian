@@ -7,7 +7,7 @@
       "cue_level": "EXPLICIT",
       "prompt": "Use the Jacobian MCP server. Discover or inspect the exact operation contract, then compute gcd(3918848, 1653264). Report the exact integer result. Do not use shell, Python, or mental arithmetic when Jacobian offers the operation.",
       "expectation": "USE",
-      "expected_capability_ids": [
+      "expected_operation_ids": [
         "integer.compute.gcd"
       ]
     },
@@ -16,7 +16,7 @@
       "cue_level": "EXPLICIT",
       "prompt": "Use the Jacobian MCP server. Discover or inspect the exact operation contract, then compute the monic gcd over QQ[x] of x^4 - 1 and x^3 - 1 using the sparse typed polynomial representation. Report the exact polynomial result. Do not use shell, Python, or a CAS outside Jacobian.",
       "expectation": "USE",
-      "expected_capability_ids": [
+      "expected_operation_ids": [
         "polynomial.compute.gcd"
       ]
     },
@@ -25,7 +25,7 @@
       "cue_level": "EXPLICIT",
       "prompt": "Use the Jacobian MCP server to compute the Smith normal form of the integer matrix [[2,4],[6,8]], then independently verify that produced result with the linked exact replay verifier. Inspect exact contracts as needed. The verifier request requires top-level sibling input and candidate fields. Report the invariant factors and whether a verification record was produced. Do not use shell or Python.",
       "expectation": "USE",
-      "expected_capability_ids": [
+      "expected_operation_ids": [
         "matrix.normal_form.smith.compute",
         "matrix.normal_form.smith.verify"
       ],

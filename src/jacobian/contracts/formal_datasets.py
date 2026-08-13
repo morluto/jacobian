@@ -382,7 +382,7 @@ def formal_dataset_diagnostics(
             code="EXECUTION_NOT_REQUESTED",
             message=(
                 "The row was materialized but not executed; submit the normalized "
-                "source to a compatible Lean project or verification capability."
+                "source to a compatible Lean project or verification operation."
             ),
         )
     ]

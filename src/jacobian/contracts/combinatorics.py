@@ -1,4 +1,4 @@
-"""Named Pydantic wire contracts for exact combinatorics capabilities."""
+"""Named Pydantic wire contracts for exact combinatorics operations."""
 
 from __future__ import annotations
 

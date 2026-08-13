@@ -8,7 +8,7 @@ def test_solution_adapter_rejects_missing_checker_under_optimized_python() -> No
     """An optimized interpreter must not erase checker-authorization guards."""
 
     script = """
-from jacobian.polynomial_system_capabilities import (
+from jacobian.polynomial_system_operations import (
     PolynomialSystemInstallation,
     PolynomialSystemResources,
     PolynomialSystemSolutionAdapter,

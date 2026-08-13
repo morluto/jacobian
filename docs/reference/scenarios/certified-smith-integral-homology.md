@@ -20,7 +20,7 @@ This family adds two atomic mathematical outcomes:
   certificates needed to inspect every integral homology group of one finite
   simplicial complex.
 
-The corresponding operator-authorized verification capabilities are
+The corresponding operator-authorized verification operations are
 `matrix.normal_form.smith.certified.verify` and
 `topology.simplicial_homology.integral.verify`. Producers remain capped at
 `COMPUTED`; only an accepted independent replay can return `VERIFIED`.
@@ -90,7 +90,7 @@ invariant factors, not hidden runtime dependencies of the checker.
 ## Integral simplicial homology
 
 The input is the canonical materialized finite complex described by
-[Finite simplicial topology](../capabilities/finite-math/finite-simplicial-topology.md), plus an explicit
+[Finite simplicial topology](../operations/finite-math/finite-simplicial-topology.md), plus an explicit
 `REDUCED` or `UNREDUCED` convention. Every simplex uses lexicographic vertex
 orientation. For each dimension \(k\), the result exposes:
 

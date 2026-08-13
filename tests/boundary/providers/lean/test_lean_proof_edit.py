@@ -6,8 +6,8 @@ from tests.support.provider_lean import (
     skip_unless_pinned_lean_core_runtime,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 
 pytestmark = [
@@ -22,9 +22,9 @@ def test_exact_proof_edit_is_bound_to_authorized_lean_check(
     authorized_complete_runtime,
 ) -> None:
 
-    result = authorized_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_edit.validate",
+    result = authorized_complete_runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.proof_edit.validate",
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -55,9 +55,9 @@ def test_proof_edit_rejects_holes_before_checker_invocation(
     authorized_complete_runtime,
 ) -> None:
 
-    result = authorized_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_edit.validate",
+    result = authorized_complete_runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.proof_edit.validate",
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -75,9 +75,9 @@ def test_rejected_edit_keeps_checker_evidence_without_becoming_accepted(
     authorized_complete_runtime,
 ) -> None:
 
-    result = authorized_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_edit.validate",
+    result = authorized_complete_runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.proof_edit.validate",
             input={
                 "environment": "CORE",
                 "statement": "True",
@@ -100,9 +100,9 @@ def test_valid_edit_is_not_accepted_when_original_baseline_is_invalid(
     authorized_complete_runtime,
 ) -> None:
 
-    result = authorized_complete_runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_edit.validate",
+    result = authorized_complete_runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.proof_edit.validate",
             input={
                 "environment": "CORE",
                 "statement": "True",

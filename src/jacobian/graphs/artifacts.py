@@ -9,18 +9,18 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.artifacts import ArtifactPutResult
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_isomorphism import (
     SimpleUndirectedGraph as SimpleUndirectedGraphContract,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.graphs.atlas import networkx_loader
 from jacobian.graphs.conversions import (
     graph_contract_from_value,
     graph_value_from_contract,
 )
 from jacobian.math.graphs import SimpleUndirectedGraph
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.schema_registry import model_schema
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
@@ -45,7 +45,7 @@ class GraphArtifactResources:
 
 
 def nx() -> Any:
-    """Load NetworkX only when a graph capability is invoked."""
+    """Load NetworkX only when a graph operation is invoked."""
 
     return networkx_loader.get()
 
@@ -94,8 +94,8 @@ def load_graph_value(
     try:
         artifact = resources.store.get(graph_uri)
     except StorageError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="GRAPH_ARTIFACT_NOT_FOUND",
                 stage="graph_resolution",
                 message="The requested graph artifact is unavailable.",
@@ -111,8 +111,8 @@ def load_graph_value(
         or artifact.manifest.semantics_uri != resources.semantics_uri
         or not isinstance(artifact.payload, dict)
     ):
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INCOMPATIBLE_GRAPH_ARTIFACT",
                 stage="graph_validation",
                 message="The artifact is not a compatible simple undirected graph.",
@@ -128,14 +128,14 @@ def load_graph_value(
         contract = SimpleUndirectedGraphContract.model_validate(artifact.payload)
         return graph_value_from_contract(contract)
     except ValidationError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INCOMPATIBLE_GRAPH_ARTIFACT",
                 stage="graph_validation",
                 message="The graph artifact payload is malformed.",
                 path="graph_uri",
                 schema_uri=resources.graph_schema_uri,
-                hint="Recreate the graph through its owning capability.",
+                hint="Recreate the graph through its owning operation.",
             )
         ) from exc
 

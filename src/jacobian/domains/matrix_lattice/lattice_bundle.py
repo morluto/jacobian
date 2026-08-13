@@ -1,9 +1,9 @@
 """Installation bundle for bounded lattice reduction."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.matrix_lattice.lattice import (
-    LATTICE_CAPABILITIES,
+    LATTICE_OPERATIONS,
     LATTICE_RUNTIME,
 )
 from jacobian.operations import DomainDiagnostics, DomainSemantics
@@ -39,9 +39,9 @@ def build_lattice_bundle() -> DomainBundle:
         backend_version=(
             f"python-flint {PYTHON_FLINT_VERSION} / FLINT {PYTHON_FLINT_HNF_FLINT_VERSION}"
         ),
-        capabilities=LATTICE_CAPABILITIES,
+        operations=LATTICE_OPERATIONS,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_LATTICE_REDUCTION_REQUEST",
                 stage="lattice_input_validation",
                 message="Input does not satisfy the bounded exact lattice contract.",

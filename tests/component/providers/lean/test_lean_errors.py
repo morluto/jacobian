@@ -12,7 +12,7 @@ def test_partial_lean_service_explains_how_to_list_environments() -> None:
 
     with pytest.raises(
         ValueError,
-        match=r"math\.find with capability_id='lean\.check'",
+        match=r"math\.find with operation_id='lean\.check'",
     ):
         service.verify(
             statement="1 + 1 = 2",

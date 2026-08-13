@@ -1,4 +1,4 @@
-"""Shared helpers for exact polynomial capability adapters."""
+"""Shared helpers for exact polynomial operation adapters."""
 
 from __future__ import annotations
 
@@ -18,12 +18,11 @@ from jacobian.canonical import (
     format_canonical_integer,
     loads_strict_json,
 )
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-)
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+)
 from jacobian.contracts.polynomials import (
     _CANONICALIZATION_PREFLIGHT_CONTEXT_KEY,
     MAX_POLYNOMIAL_EXPONENT,
@@ -44,6 +43,7 @@ from jacobian.contracts.results import (
     Execution,
     ExecutionStatus,
 )
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -70,7 +70,7 @@ class PolynomialOperationResult[ResultT: ContractModel]:
     artifact_uris: tuple[str, ...]
     verification_record_uri: str | None = None
 
-    def project(self, descriptor: CapabilityDescriptor) -> OperationProjection:
+    def project(self, descriptor: OperationDescriptor) -> OperationProjection:
         terminal = (
             Completed(
                 value=self.value,
@@ -80,7 +80,7 @@ class PolynomialOperationResult[ResultT: ContractModel]:
             if self.execution.status is ExecutionStatus.COMPLETED
             else Failed(
                 status=self.execution.status,
-                diagnostic=CapabilityDiagnostic(
+                diagnostic=OperationDiagnostic(
                     code="POLYNOMIAL_OPERATION_NOT_COMPLETED",
                     stage="operation_execution",
                     message=(
@@ -92,7 +92,7 @@ class PolynomialOperationResult[ResultT: ContractModel]:
             )
         )
         return OperationProjection(
-            operation_id=descriptor.capability_id,
+            operation_id=descriptor.operation_id,
             version=descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
@@ -125,7 +125,7 @@ class _SparsePolynomialInputTerm(ContractModel):
 
 
 class _SparsePolynomialInput(ContractModel):
-    """Bounded noncanonical sparse terms accepted only at capability input."""
+    """Bounded noncanonical sparse terms accepted only at operation input."""
 
     terms: tuple[_SparsePolynomialInputTerm, ...] = Field(
         default=(),
@@ -249,8 +249,8 @@ def _load_evaluation(
     try:
         artifact = resources.store.get(evaluation_uri)
     except StorageError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="POLYNOMIAL_EVALUATION_ARTIFACT_NOT_FOUND",
                 stage="evaluation_resolution",
                 message="The requested polynomial evaluation artifact is unavailable.",
@@ -264,8 +264,8 @@ def _load_evaluation(
         or artifact.manifest.semantics_uri != resources.installation.semantics_uri
         or not isinstance(artifact.payload, dict)
     ):
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INCOMPATIBLE_POLYNOMIAL_EVALUATION_ARTIFACT",
                 stage="evaluation_validation",
                 message="The artifact is not a compatible polynomial-map evaluation.",
@@ -277,8 +277,8 @@ def _load_evaluation(
     try:
         evaluation = PolynomialMapEvaluation.model_validate(artifact.payload)
     except ValidationError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INCOMPATIBLE_POLYNOMIAL_EVALUATION_ARTIFACT",
                 stage="evaluation_validation",
                 message="The polynomial-map evaluation artifact payload is malformed.",
@@ -288,8 +288,8 @@ def _load_evaluation(
             )
         ) from exc
     if evaluation.map_uri not in artifact.manifest.parents:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="MISBOUND_POLYNOMIAL_EVALUATION_ARTIFACT",
                 stage="evaluation_validation",
                 message="The evaluation artifact is not bound to its declared map.",
@@ -308,8 +308,8 @@ def _load_polynomial_map(
     try:
         artifact = resources.store.get(map_uri)
     except StorageError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="POLYNOMIAL_MAP_ARTIFACT_NOT_FOUND",
                 stage="map_resolution",
                 message="The polynomial map referenced by an evaluation is unavailable.",
@@ -323,8 +323,8 @@ def _load_polynomial_map(
         or artifact.manifest.semantics_uri != resources.installation.semantics_uri
         or not isinstance(artifact.payload, dict)
     ):
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INCOMPATIBLE_POLYNOMIAL_MAP_ARTIFACT",
                 stage="map_validation",
                 message="An evaluation references an incompatible polynomial map.",
@@ -336,8 +336,8 @@ def _load_polynomial_map(
     try:
         polynomial_map = RationalPolynomialMap.model_validate(artifact.payload)
     except ValidationError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INCOMPATIBLE_POLYNOMIAL_MAP_ARTIFACT",
                 stage="map_validation",
                 message="The referenced polynomial map artifact payload is malformed.",
@@ -651,7 +651,7 @@ def _validate_request[RequestModel: ContractModel](
     *,
     code: str,
     operation: str,
-    error_factory: Callable[[str, str, str], CapabilityInvocationError] | None = None,
+    error_factory: Callable[[str, str, str], OperationInvocationError] | None = None,
 ) -> RequestModel:
     try:
         strict_payload = loads_strict_json(encode_strict_json(payload))
@@ -777,7 +777,7 @@ def _materialize_evaluation(
 
 def _completed_projection[ResultT: ContractModel](
     *,
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     output: ResultT,
     runtime_ms: int,
     artifact_uris: tuple[str, ...],
@@ -785,7 +785,7 @@ def _completed_projection[ResultT: ContractModel](
     """Return one completed polynomial value awaiting public projection."""
 
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Completed(value=output, runtime_ms=runtime_ms),
         publication=PublishedOperation(
@@ -797,7 +797,7 @@ def _completed_projection[ResultT: ContractModel](
 
 def _computed_result[ResultT: ContractModel](
     *,
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     started: float,
     output: ResultT,
     artifact_uris: tuple[str, ...],
@@ -816,9 +816,9 @@ def _polynomial_error(
     code: str,
     stage: str,
     message: str,
-) -> CapabilityInvocationError:
-    return CapabilityInvocationError(
-        CapabilityDiagnostic(
+) -> OperationInvocationError:
+    return OperationInvocationError(
+        OperationDiagnostic(
             code=code,
             stage=stage,
             message=message,

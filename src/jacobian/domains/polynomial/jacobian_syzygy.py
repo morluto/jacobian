@@ -7,9 +7,6 @@ from fractions import Fraction
 from typing import Any, Literal, cast
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.contracts.capabilities import (
-    CapabilityInvocationExample,
-)
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.jacobian_syzygy import (
     GradedJacobianCoefficientMap,
@@ -18,6 +15,9 @@ from jacobian.contracts.jacobian_syzygy import (
     GradedJacobianRankMinor,
     GradedJacobianSyzygyRequest,
     GradedJacobianSyzygyResult,
+)
+from jacobian.contracts.operations import (
+    OperationExample,
 )
 from jacobian.contracts.polynomials import (
     RationalPolynomial,
@@ -156,7 +156,7 @@ def compute_graded_jacobian_syzygy(
     if request.coefficient_map_detail != "CERTIFICATES":
         raise ValueError(
             "full sparse coefficient maps are available through the explicit "
-            "jacobian syzygy coefficient-ledger capability"
+            "jacobian syzygy coefficient-ledger operation"
         )
     return _compute_graded_jacobian_syzygy(request)
 
@@ -318,7 +318,7 @@ def _compute_graded_jacobian_syzygy(
     )
 
 
-GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
+GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
     "polynomial.jacobian_syzygy.minimum_degree.compute",
     "Compute the first graded Jacobian syzygy degree",
     (
@@ -342,8 +342,8 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
     "kernel",
     "exact",
     version="4",
-    invocation_examples=(
-        CapabilityInvocationExample(
+    examples=(
+        OperationExample(
             name="sparse-homogeneous-polynomial",
             description=(
                 "Supply h=x^2+y^2+z^2 with unique nonzero terms in descending "
@@ -372,7 +372,7 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
                 "max_degree": 0,
             },
         ),
-        CapabilityInvocationExample(
+        OperationExample(
             name="labelled-linear-factor-product",
             description=(
                 "Bind h=x*y*z directly to three labelled rational linear factors."
@@ -411,7 +411,7 @@ GRADED_JACOBIAN_SYZYGY_CAPABILITY = polynomial_operation(
     ),
 )
 
-JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY = materialized_polynomial_operation(
+JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = materialized_polynomial_operation(
     "polynomial.jacobian_syzygy.coefficients.materialize",
     "Materialize graded Jacobian syzygy coefficient ledger",
     (
@@ -434,6 +434,6 @@ JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY = materialized_polynomial_operatio
 
 
 __all__ = [
-    "GRADED_JACOBIAN_SYZYGY_CAPABILITY",
-    "JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY",
+    "GRADED_JACOBIAN_SYZYGY_OPERATION",
+    "JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION",
 ]

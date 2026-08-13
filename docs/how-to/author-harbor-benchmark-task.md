@@ -76,7 +76,7 @@ strictly read-only.
 
 Do not add task symlinks, aliases, or a second fixture home. The task
 README is maintainer context and is not injected into a trial. Instructions
-describe the requested outcome without prescribing Jacobian capabilities or a
+describe the requested outcome without prescribing Jacobian operations or a
 research strategy.
 
 Verifier attack tests should cover malformed and unknown fields, wrong answers,

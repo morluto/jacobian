@@ -8,7 +8,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
 
@@ -41,9 +41,9 @@ def test_submitted_table_residuals_compute_and_verify(
     combinatorics_services: DomainTestServices,
 ) -> None:
     payload = _payload()
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "combinatorics.recurrence.p_recursive.table_residuals.compute"
             ),
             input=payload,
@@ -56,9 +56,9 @@ def test_submitted_table_residuals_compute_and_verify(
     assert [item["index"] for item in output["residuals"]] == [1, 2, 3, 4, 5]
     assert {item["value"]["num"] for item in output["residuals"]} == {"0"}
 
-    verified = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    verified = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "combinatorics.recurrence.p_recursive.table_residuals.verify"
             ),
             input={"input": payload, "candidate": output},
@@ -73,9 +73,9 @@ def test_submitted_table_reports_failure_and_rejects_forged_success(
 ) -> None:
     payload = _payload()
     payload["values"][-1] = _q(121)
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "combinatorics.recurrence.p_recursive.table_residuals.compute"
             ),
             input=payload,
@@ -89,9 +89,9 @@ def test_submitted_table_reports_failure_and_rejects_forged_success(
     forged["residuals"][-1]["value"] = _q(0)
     forged["satisfies_recurrence"] = True
     forged["first_failure_index"] = None
-    rejected = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    rejected = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "combinatorics.recurrence.p_recursive.table_residuals.verify"
             ),
             input={"input": payload, "candidate": forged},

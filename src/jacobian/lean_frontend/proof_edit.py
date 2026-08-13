@@ -10,18 +10,16 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean_proof_edit import (
     LeanProofEditArtifact,
     LeanProofEditOutput,
     LeanProofEditRequest,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+    ProviderObservation,
 )
 from jacobian.contracts.results import (
     Conclusion,
@@ -29,6 +27,8 @@ from jacobian.contracts.results import (
     VerificationResult,
 )
 from jacobian.lean_frontend.service import LeanService
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -44,12 +44,12 @@ class LeanProofEditInstallation:
     artifact_schema_uri: str
 
 
-def install_lean_proof_edit_capability(
+def install_lean_proof_edit_operation(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
     lean: LeanService,
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> tuple[LeanProofEditAdapter, LeanProofEditInstallation]:
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -89,14 +89,14 @@ class LeanProofEditAdapter:
         self,
         lean: LeanService,
         artifacts: ArtifactService,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
         installation: LeanProofEditInstallation,
     ) -> None:
         self.lean = lean
         self.artifacts = artifacts
         self.installation = installation
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.proof_edit.validate",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.proof_edit.validate",
             version="3",
             title="Independently validate an exact Lean proof edit",
             description=(
@@ -123,19 +123,19 @@ class LeanProofEditAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanProofEditRequest:
+    def prepare(self, request: OperationRequest) -> LeanProofEditRequest:
         try:
-            validated = parse_capability_input(LeanProofEditRequest, request.input)
+            validated = parse_operation_input(LeanProofEditRequest, request.input)
             if _FORBIDDEN_PROOF_HOLE.search(
                 validated.original_proof
             ) or _FORBIDDEN_PROOF_HOLE.search(validated.edited_proof):
                 raise ValueError("proof edit contains a proof hole")
         except (ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_PROOF_EDIT_REQUEST",
                     stage="request_validation",
                     message="The exact Lean proof-edit request is invalid.",
@@ -219,7 +219,7 @@ class LeanProofEditAdapter:
             else Failed(
                 status=execution.status,
                 runtime_ms=execution.runtime_ms,
-                diagnostic=CapabilityDiagnostic(
+                diagnostic=OperationDiagnostic(
                     code="LEAN_PROOF_EDIT_CHECKER_NOT_COMPLETED",
                     stage="checker_replay",
                     message=(
@@ -248,7 +248,7 @@ class LeanProofEditAdapter:
             artifact.artifact_uri,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(

@@ -2,32 +2,32 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiscoveryRequest
+from jacobian.contracts.operations import OperationDiscoveryRequest
 from jacobian.runtime.model import JacobianRuntime
 
 
 def test_catalog_keeps_chromatic_number_without_unused_encoding_workflow(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    capability_ids = {
-        descriptor.capability_id
+    operation_ids = {
+        descriptor.operation_id
         for descriptor in (
-            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
+            attached_complete_runtime_read_only.core.operations.catalog().operations
         )
     }
 
-    assert "graph.invariant.chromatic_number.compute" in capability_ids
+    assert "graph.invariant.chromatic_number.compute" in operation_ids
     assert {
         "graph.coloring.encode_k_cnf",
         "graph.coloring.encoding.verify",
-    }.isdisjoint(capability_ids)
+    }.isdisjoint(operation_ids)
 
 
 def test_discovery_filters_hidden_and_nonmatching_domains(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
-        CapabilityDiscoveryRequest(query="artifact", domain="artifact")
+    discovered = attached_complete_runtime_read_only.core.operations.discover(
+        OperationDiscoveryRequest(query="artifact", domain="artifact")
     )
 
     assert discovered.domain == "artifact"
@@ -38,9 +38,9 @@ def test_small_bounded_operation_is_published_inline(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
     descriptors = {
-        descriptor.capability_id: descriptor
+        descriptor.operation_id: descriptor
         for descriptor in (
-            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
+            attached_complete_runtime_read_only.core.operations.catalog().operations
         )
     }
     induced_tree = descriptors["graph.induced_tree.maximum.compute"]
@@ -51,9 +51,9 @@ def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
     descriptors = {
-        descriptor.capability_id: descriptor
+        descriptor.operation_id: descriptor
         for descriptor in (
-            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
+            attached_complete_runtime_read_only.core.operations.catalog().operations
         )
     }
     assert descriptors["poset.finite.compute"].produced_artifact_types == ()
@@ -63,27 +63,27 @@ def test_materialize_to_width_produced_types_are_symmetric_and_discoverable(
 def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    capabilities = attached_complete_runtime_read_only.core.capabilities
+    operations = attached_complete_runtime_read_only.core.operations
 
-    strong = capabilities.discover(
-        CapabilityDiscoveryRequest(
+    strong = operations.discover(
+        OperationDiscoveryRequest(
             query="graded Jacobian syzygy minimum degree",
             limit=3,
         )
     )
-    assert strong.matches[0].capability_id == (
+    assert strong.matches[0].operation_id == (
         "polynomial.jacobian_syzygy.minimum_degree.compute"
     )
     assert strong.matches[0].relevance_score > 0
     assert strong.matches[0].applicability == "NEEDS_MORE_TYPED_REQUIREMENTS"
 
-    gaussian = capabilities.discover(
-        CapabilityDiscoveryRequest(
+    gaussian = operations.discover(
+        OperationDiscoveryRequest(
             query="exact fixed order Gaussian polynomial moment Wick contraction",
             limit=3,
         )
     )
-    assert gaussian.matches[0].capability_id == (
+    assert gaussian.matches[0].operation_id == (
         "probability.gaussian_polynomial.moment.compute"
     )
     assert gaussian.matches[0].relevance_score > 0
@@ -91,18 +91,18 @@ def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
         gaussian.matches[0].description
     )
 
-    reliability = capabilities.discover(
-        CapabilityDiscoveryRequest(
+    reliability = operations.discover(
+        OperationDiscoveryRequest(
             query="exact small graph reliability terminal connection probability",
             limit=3,
         )
     )
-    assert reliability.matches[0].capability_id == (
+    assert reliability.matches[0].operation_id == (
         "probability.graph_reliability.connection_probability.compute"
     )
 
-    symmetry = capabilities.discover(
-        CapabilityDiscoveryRequest(
+    symmetry = operations.discover(
+        OperationDiscoveryRequest(
             query=(
                 "declared graph automorphism generators vertex edge orbit "
                 "symmetry compression"
@@ -110,12 +110,12 @@ def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
             limit=3,
         )
     )
-    assert symmetry.matches[0].capability_id == (
+    assert symmetry.matches[0].operation_id == (
         "graph.symmetry.generator_orbits.compute"
     )
 
-    absent = capabilities.discover(
-        CapabilityDiscoveryRequest(query="quuxonium frobnicator", limit=3)
+    absent = operations.discover(
+        OperationDiscoveryRequest(query="quuxonium frobnicator", limit=3)
     )
     assert absent.matches == ()
 
@@ -123,23 +123,23 @@ def test_discovery_ranks_lexical_matches_and_returns_no_synthetic_fit_labels(
 def test_discovery_finds_resultant_producer_from_plain_language(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    capabilities = attached_complete_runtime_read_only.core.capabilities
+    operations = attached_complete_runtime_read_only.core.operations
 
     for query in (
         "compute the exact resultant of two univariate rational polynomials",
         "compute and independently verify the exact resultant of two univariate rational polynomials",
     ):
-        discovered = capabilities.discover(
-            CapabilityDiscoveryRequest(query=query, limit=8)
+        discovered = operations.discover(
+            OperationDiscoveryRequest(query=query, limit=8)
         )
 
-        ids = [match.capability_id for match in discovered.matches]
+        ids = [match.operation_id for match in discovered.matches]
         assert "polynomial.compute.resultant" in ids
         assert ids.index("polynomial.compute.resultant") <= 1
         resultant = next(
             match
             for match in discovered.matches
-            if match.capability_id == "polynomial.compute.resultant"
+            if match.operation_id == "polynomial.compute.resultant"
         )
         assert resultant.relevance_score > 0
 
@@ -147,15 +147,15 @@ def test_discovery_finds_resultant_producer_from_plain_language(
 def test_discovery_maps_exceeds_bound_language_to_interval_positivity(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = attached_complete_runtime_read_only.core.operations.discover(
+        OperationDiscoveryRequest(
             query="verify a rational derivative exceeds a proposed bound",
             domain="polynomial",
             limit=10,
         )
     )
 
-    matches = {match.capability_id: match for match in discovered.matches}
+    matches = {match.operation_id: match for match in discovered.matches}
     assert "polynomial.interval.positivity.decide" in matches
     assert matches["polynomial.interval.positivity.decide"].relevance_score > 0
 
@@ -163,14 +163,14 @@ def test_discovery_maps_exceeds_bound_language_to_interval_positivity(
 def test_sum_of_squares_intent_discovers_the_identity_verifier(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    discovered = attached_complete_runtime_read_only.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = attached_complete_runtime_read_only.core.operations.discover(
+        OperationDiscoveryRequest(
             query="independently verify a polynomial sum-of-squares identity",
             limit=8,
         )
     )
 
-    matches = {match.capability_id: match for match in discovered.matches}
+    matches = {match.operation_id: match for match in discovered.matches}
     assert "polynomial.identity.verify" in matches
     assert matches["polynomial.identity.verify"].relevance_score > 0
 
@@ -178,7 +178,7 @@ def test_sum_of_squares_intent_discovers_the_identity_verifier(
 def test_domain_intents_discover_poset_and_topology_operations(
     attached_complete_runtime_read_only: JacobianRuntime,
 ) -> None:
-    capabilities = attached_complete_runtime_read_only.core.capabilities
+    operations = attached_complete_runtime_read_only.core.operations
     cases = (
         (
             "maximum antichain and minimum chain decomposition of a finite poset",
@@ -193,10 +193,10 @@ def test_domain_intents_discover_poset_and_topology_operations(
             "topology.simplicial_homology.compute",
         ),
     )
-    for query, capability_id in cases:
-        discovered = capabilities.discover(
-            CapabilityDiscoveryRequest(query=query, limit=5)
+    for query, operation_id in cases:
+        discovered = operations.discover(
+            OperationDiscoveryRequest(query=query, limit=5)
         )
 
-        assert discovered.matches[0].capability_id == capability_id, query
+        assert discovered.matches[0].operation_id == operation_id, query
         assert discovered.matches[0].relevance_score > 0, query

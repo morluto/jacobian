@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus, InputStatus
 
@@ -10,9 +10,9 @@ def _rational(value: int) -> dict[str, str]:
     return {"num": str(value), "den": "1"}
 
 
-def _request(image: int) -> CapabilityRequest:
-    return CapabilityRequest(
-        capability_id="polynomial.map.collision.verify",
+def _request(image: int) -> OperationRequest:
+    return OperationRequest(
+        operation_id="polynomial.map.collision.verify",
         input={
             "map": {
                 "variables": ["x"],
@@ -38,7 +38,7 @@ def test_direct_collision_verifier_promotes_only_independent_replay(
     authorized_polynomial_services,
 ) -> None:
 
-    result = authorized_polynomial_services.core.capabilities.invoke(_request(1))
+    result = authorized_polynomial_services.core.operations.invoke(_request(1))
 
     assert result.output["collision_verified"] is True
     assert result.output["conclusion"] == "FALSE"
@@ -56,18 +56,18 @@ def test_collision_verifier_advertises_and_executes_bounded_example(
     authorized_polynomial_services,
 ) -> None:
     descriptors = {
-        item.capability_id: item
-        for item in authorized_polynomial_services.core.capabilities.catalog().capabilities
+        item.operation_id: item
+        for item in authorized_polynomial_services.core.operations.catalog().operations
     }
     descriptor = descriptors["polynomial.map.collision.verify"]
 
     assert "exponent 32 per variable" in descriptor.description
-    assert len(descriptor.invocation_examples) == 1
-    invocation = descriptor.invocation_examples[0]
+    assert len(descriptor.examples) == 1
+    invocation = descriptor.examples[0]
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
             input=invocation.input,
         )
     )
@@ -81,7 +81,7 @@ def test_direct_collision_verifier_fails_closed_for_wrong_image(
     authorized_polynomial_services,
 ) -> None:
 
-    result = authorized_polynomial_services.core.capabilities.invoke(_request(2))
+    result = authorized_polynomial_services.core.operations.invoke(_request(2))
 
     assert result.output["collision_verified"] is False
     assert result.output["conclusion"] == "UNKNOWN"
@@ -99,5 +99,5 @@ def test_direct_collision_verifier_requires_authorized_reference_checker(
     runtime = polynomial_services
 
     assert "polynomial.map.collision.verify" not in {
-        item.capability_id for item in runtime.core.capabilities.catalog().capabilities
+        item.operation_id for item in runtime.core.operations.catalog().operations
     }

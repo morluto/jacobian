@@ -26,7 +26,7 @@ logic
 - environment_mode: separate
 
 The task is self-contained and offline. The instruction names no agent tool,
-capability, or invocation order. The verifier reconstructs and exhausts the
+operation, or invocation order. The verifier reconstructs and exhausts the
 finite coloring CSP with propagation and color-symmetry reduction, while the
 submitted partition is checked directly. It scores correctness, evidence validity, scope
 accuracy, assurance calibration, and aggregate reward; a wrong result or an

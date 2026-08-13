@@ -41,7 +41,7 @@ class BundleInstallation:
 
     domain_id: str
     status: BundleInstallationStatus
-    capability_ids: tuple[str, ...]
+    operation_ids: tuple[str, ...]
     installed: InstalledDomainBundle | None
     diagnostic: PortfolioDiagnostic | None
 

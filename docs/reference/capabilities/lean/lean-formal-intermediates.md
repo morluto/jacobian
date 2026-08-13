@@ -12,7 +12,7 @@ Independent acceptance uses **checker tools** (`lean.check`, and proof-edit
 validation bound to that checker)—separate catalog IDs, not a mode switch.
 
 Availability depends on the pinned Lean profile and bundled-reference
-installation. Inspect `capability://catalog` and call `math.find`
+installation. Inspect `operation://catalog` and call `math.find`
 before using any payload below.
 
 ## Tools

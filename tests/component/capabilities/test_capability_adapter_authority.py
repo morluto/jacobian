@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from typing import Any, cast
 
 import pytest
-from tests.component.capabilities.capability_service_support import (
+from tests.component.operations.operation_service_support import (
     TEST_RUNTIME,
     ComputedAdapter,
     CrashingAdapter,
@@ -21,30 +21,30 @@ from tests.component.capabilities.capability_service_support import (
 )
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.builtin_capabilities import LeanCheckAdapter
-from jacobian.capability_errors import CapabilityError
-from jacobian.capability_service import CapabilityPolicy
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.builtin_operations import LeanCheckAdapter
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_errors import OperationError
+from jacobian.operation_service import OperationPolicy
 
 
 @pytest.fixture
-def capability_core_services(tmp_path) -> Iterator[DomainTestServices]:
+def operation_core_services(tmp_path) -> Iterator[DomainTestServices]:
     with open_domain_services(tmp_path / "state") as services:
         yield services
 
 
 def test_external_adapter_invocation_is_recorded_and_retrievable(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ComputedAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ComputedAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.double",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="example.double",
             input={"value": 21},
         )
     )
@@ -53,14 +53,14 @@ def test_external_adapter_invocation_is_recorded_and_retrievable(
 
 
 def test_provider_required_attributes_are_checked_before_first_use(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(NotReadyProviderAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(NotReadyProviderAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.not-ready-provider",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="example.not-ready-provider",
             input={},
         )
     )
@@ -74,31 +74,31 @@ def test_provider_required_attributes_are_checked_before_first_use(
 
 
 def test_invalid_request_precedes_provider_readiness(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(NotReadyProviderAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(NotReadyProviderAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.not-ready-provider",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="example.not-ready-provider",
             input={"unexpected": True},
         )
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_REQUEST"
-    assert result.diagnostics[0].stage == "capability_input_validation"
+    assert result.diagnostics[0].stage == "operation_input_validation"
 
 
 def test_published_model_must_match_installed_output_contract(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(MismatchedOutputAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(MismatchedOutputAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(capability_id="example.mismatched-output", input={})
+    result = core.operations.invoke(
+        OperationRequest(operation_id="example.mismatched-output", input={})
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
@@ -109,39 +109,39 @@ def test_published_model_must_match_installed_output_contract(
 
 
 def test_published_model_instance_must_satisfy_its_contract(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(
         InvalidOutputValueAdapter()
     )
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(capability_id="example.invalid-output-value", input={})
+    result = core.operations.invoke(
+        OperationRequest(operation_id="example.invalid-output-value", input={})
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "ADAPTER_RESULT_INVALID"
 
 
-def test_unknown_capability_returns_an_actionable_result(
-    capability_core_services: DomainTestServices,
+def test_unknown_operation_returns_an_actionable_result(
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ComputedAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ComputedAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="missing.capability",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="missing.operation",
             input={},
         )
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "UNKNOWN_CAPABILITY"
-    assert result.diagnostics[0].stage == "capability_resolution"
+    assert result.diagnostics[0].code == "UNKNOWN_OPERATION"
+    assert result.diagnostics[0].stage == "operation_resolution"
     assert result.diagnostics[0].message == (
-        "Capability 'missing.capability' is not installed."
+        "Operation 'missing.operation' is not installed."
     )
     assert "math.find" in (result.diagnostics[0].hint or "")
     assert result.output == {
@@ -150,24 +150,24 @@ def test_unknown_capability_returns_an_actionable_result(
 
 
 def test_policy_denial_does_not_embed_the_policy_document(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ComputedAdapter())
-    core.capabilities.policy = CapabilityPolicy(
-        denied_capability_ids=frozenset({"example.double"})
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ComputedAdapter())
+    core.operations.policy = OperationPolicy(
+        denied_operation_ids=frozenset({"example.double"})
     )
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(capability_id="example.double", input={"value": 21})
+    result = core.operations.invoke(
+        OperationRequest(operation_id="example.double", input={"value": 21})
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.diagnostics[0].code == "CAPABILITY_POLICY_DENIED"
+    assert result.diagnostics[0].code == "OPERATION_POLICY_DENIED"
     assert result.diagnostics[0].details == {
         "policy_profile": "DEFAULT",
-        "policy_digest": core.capabilities.policy.digest,
-        "reasons": ["capability_id_denied"],
+        "policy_digest": core.operations.policy.digest,
+        "reasons": ["operation_id_denied"],
         "checker_authorization_affected": False,
     }
     assert result.output == {
@@ -176,15 +176,15 @@ def test_policy_denial_does_not_embed_the_policy_document(
 
 
 def test_tool_id_owns_role(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
     """Tool identity determines role; no client mode switch."""
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ComputedAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ComputedAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.double",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="example.double",
             input={"value": 21},
         )
     )
@@ -193,15 +193,15 @@ def test_tool_id_owns_role(
     assert result.output["value"] == 42
 
 
-def test_invalid_capability_input_does_not_echo_payload(
-    capability_core_services: DomainTestServices,
+def test_invalid_operation_input_does_not_echo_payload(
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ComputedAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ComputedAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.double",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="example.double",
             input={"value": "fixture-secret-value"},
         )
     )
@@ -209,7 +209,7 @@ def test_invalid_capability_input_does_not_echo_payload(
     diagnostic = result.diagnostics[0]
     assert diagnostic.code == "INVALID_REQUEST"
     assert diagnostic.path == "value"
-    assert diagnostic.message == "The capability request is invalid."
+    assert diagnostic.message == "The operation request is invalid."
     assert diagnostic.actual_type is None
     assert diagnostic.expected is None
     assert "fixture-secret-value" not in diagnostic.message
@@ -221,14 +221,14 @@ def test_invalid_capability_input_does_not_echo_payload(
     assert "fixture-secret-value" not in repr(diagnostic)
 
 
-def test_capability_input_does_not_coerce_numeric_strings(
-    capability_core_services: DomainTestServices,
+def test_operation_input_does_not_coerce_numeric_strings(
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ComputedAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ComputedAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(capability_id="example.double", input={"value": "21"})
+    result = core.operations.invoke(
+        OperationRequest(operation_id="example.double", input={"value": "21"})
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
@@ -236,24 +236,24 @@ def test_capability_input_does_not_coerce_numeric_strings(
     assert result.diagnostics[0].path == "value"
 
 
-def test_non_json_capability_input_is_an_invalid_request(
-    capability_core_services: DomainTestServices,
+def test_non_json_operation_input_is_an_invalid_request(
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ComputedAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ComputedAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(capability_id="example.double", input={"value": object()})
+    result = core.operations.invoke(
+        OperationRequest(operation_id="example.double", input={"value": object()})
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_REQUEST"
-    assert result.diagnostics[0].stage == "capability_input_validation"
+    assert result.diagnostics[0].stage == "operation_input_validation"
     assert result.diagnostics[0].path is None
 
 
 def test_lean_check_parses_its_typed_request_before_execution(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
     class _UnexpectedLean:
         def verify(self, **_kwargs: object) -> None:
@@ -263,12 +263,12 @@ def test_lean_check_parses_its_typed_request_before_execution(
         cast(Any, _UnexpectedLean()),
         TEST_RUNTIME.model_copy(update={"provider": "jacobian.lean4"}),
     )
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(adapter)
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(adapter)
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.check",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.check",
             input={"statement": "True"},
         )
     )
@@ -279,14 +279,14 @@ def test_lean_check_parses_its_typed_request_before_execution(
 
 
 def test_adapter_failure_does_not_expose_internal_exception_text(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(CrashingAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(CrashingAdapter())
 
-    result = core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="example.crash",
+    result = core.operations.invoke(
+        OperationRequest(
+            operation_id="example.crash",
             input={},
         )
     )
@@ -294,26 +294,26 @@ def test_adapter_failure_does_not_expose_internal_exception_text(
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "ADAPTER_EXECUTION_FAILED"
     assert result.diagnostics[0].message == (
-        "The capability stopped before returning a result."
+        "The operation stopped before returning a result."
     )
     assert result.diagnostics[0].hint == (
         "Retry once. If it fails again, inspect the local Jacobian log for this "
-        "capability."
+        "operation."
     )
     assert "fixture" not in result.execution.detail
     assert "RuntimeError" not in result.execution.detail
 
 
 def test_adapter_cannot_promote_without_a_local_verification_record(
-    capability_core_services: DomainTestServices,
+    operation_core_services: DomainTestServices,
 ) -> None:
-    core = capability_core_services.core
-    capability_core_services.installation.register_capability(ForgedVerifiedAdapter())
+    core = operation_core_services.core
+    operation_core_services.installation.register_operation(ForgedVerifiedAdapter())
 
-    with pytest.raises(CapabilityError, match="verification record"):
-        core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="example.forged",
+    with pytest.raises(OperationError, match="verification record"):
+        core.operations.invoke(
+            OperationRequest(
+                operation_id="example.forged",
                 input={},
             )
         )

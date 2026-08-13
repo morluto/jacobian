@@ -8,7 +8,7 @@ description: Run source-grounded Jacobian reliability evaluations using recently
 Treat conjectures as probes. The objective is to improve Jacobian from discovery
 through final-answer use, not to accumulate solved examples.
 
-This skill owns source selection, deterministic capability audits, optional
+This skill owns source selection, deterministic operation audits, optional
 control/treatment evaluation, attribution, and repository-action decisions. It
 does not create Harbor tasks. Use `harbor-benchmarks` and
 `verifier-evaluations` when a selected case is later packaged as a benchmark.
@@ -29,11 +29,11 @@ requests it. A loop does not authorize unlimited model calls.
 3. Reconstruct the gold result independently of evaluated model arms.
 4. Audit current main deterministically before any model call.
 5. Keep `COMPUTED`, `VERIFIED`, source-imported, and unproved claims separate.
-6. Treat missing capability, timeout, cancellation, transport failure, and failure to find evidence as non-conclusions.
+6. Treat missing operation, timeout, cancellation, transport failure, and failure to find evidence as non-conclusions.
 7. Never attribute a model-authored fallback error to Jacobian when no Jacobian result produced it.
 8. Never weaken verification, artifact binding, scope, or assurance to make a case pass.
 9. Never merge a PR. Open only a draft PR when the localized-fix gate passes.
-10. Never create a benchmark-specific capability from one conjecture family.
+10. Never create a benchmark-specific operation from one conjecture family.
 
 ## Run the workflow
 
@@ -41,7 +41,7 @@ requests it. A loop does not authorize unlimited model calls.
 
 Search saved reports, suites, trajectories, issues, PRs of every state,
 branches, and active reservations. Search in layers: exact identifier/title,
-artifact, mathematical family, required capability/provider, and suspected root
+artifact, mathematical family, required operation/provider, and suspected root
 cause. One exact-source miss does not establish independence.
 
 Run the local helper with positional arguments, then search GitHub separately:
@@ -86,7 +86,7 @@ Then:
 
 1. Search with natural task language.
 2. Treat bounded `math.find` search as candidate retrieval, not complete inventory;
-   use `capability://catalog` when full installed membership matters.
+   use `operation://catalog` when full installed membership matters.
 3. Inspect returned cards and exact IDs for schemas, examples, domains, bounds,
    and provider availability. Treat these as operation facts, not workflow advice.
 4. Inspect the producer and independent checker as separate operation contracts.
@@ -130,7 +130,7 @@ retries, concise visible reasoning, and final answers.
 Assign each failure to one primary class: Jacobian implementation; tool
 interface or contract; discovery or routing; evaluator or telemetry;
 infrastructure or transport; model transcription or input binding; model
-mathematical reasoning; unsupported capability; or no issue.
+mathematical reasoning; unsupported operation; or no issue.
 
 Reproduce suspected Jacobian failures directly on current main and search
 ownership again. Read [action-policy.md](references/action-policy.md) before

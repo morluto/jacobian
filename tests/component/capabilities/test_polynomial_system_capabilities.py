@@ -14,12 +14,12 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.polynomial_system_capabilities import (
-    install_polynomial_system_capabilities,
+from jacobian.polynomial_system_operations import (
+    install_polynomial_system_operations,
 )
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.verification.errors import CheckerExecutionError
@@ -38,7 +38,7 @@ def _open_polynomial_system_services(
     )
     with open_domain_services(root, checker_authority=authority) as services:
         with atomic_installation(services.core):
-            adapter, _installation = install_polynomial_system_capabilities(
+            adapter, _installation = install_polynomial_system_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
@@ -47,7 +47,7 @@ def _open_polynomial_system_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             if adapter is not None:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield services
 
 
@@ -82,13 +82,13 @@ def _input(value: int) -> dict[str, Any]:
     }
 
 
-def test_solution_capability_verifies_valid_assignment(
+def test_solution_operation_verifies_valid_assignment(
     polynomial_system_services,
 ) -> None:
 
-    result = polynomial_system_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.system.solution.verify",
+    result = polynomial_system_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.system.solution.verify",
             input=_input(2),
         )
     )
@@ -117,13 +117,13 @@ def test_solution_capability_verifies_valid_assignment(
     assert record.payload["obligation_uri"] is None
 
 
-def test_solution_capability_verifies_invalid_assignment(
+def test_solution_operation_verifies_invalid_assignment(
     polynomial_system_services,
 ) -> None:
 
-    result = polynomial_system_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.system.solution.verify",
+    result = polynomial_system_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.system.solution.verify",
             input=_input(1),
         )
     )
@@ -140,7 +140,7 @@ def test_solution_capability_verifies_invalid_assignment(
     assert record.payload["obligation_uri"] is None
 
 
-def test_solution_capability_keeps_checker_failure_unknown(
+def test_solution_operation_keeps_checker_failure_unknown(
     polynomial_system_services,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -153,9 +153,9 @@ def test_solution_capability_keeps_checker_failure_unknown(
         "execute",
         fail,
     )
-    result = polynomial_system_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.system.solution.verify",
+    result = polynomial_system_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.system.solution.verify",
             input=_input(1),
         )
     )
@@ -165,7 +165,7 @@ def test_solution_capability_keeps_checker_failure_unknown(
     assert result.verification_record_uri is None
 
 
-def test_solution_capability_rejects_dimension_mismatch_before_artifact_writes(
+def test_solution_operation_rejects_dimension_mismatch_before_artifact_writes(
     polynomial_system_services: DomainTestServices,
 ) -> None:
     connection = sqlite3.connect(polynomial_system_services.core.store.db_path)
@@ -176,9 +176,9 @@ def test_solution_capability_rejects_dimension_mismatch_before_artifact_writes(
     invalid = _input(2)
     invalid["assignment"].append({"num": "3", "den": "1"})
 
-    result = polynomial_system_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.system.solution.verify",
+    result = polynomial_system_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.system.solution.verify",
             input=invalid,
         )
     )
@@ -194,14 +194,14 @@ def test_solution_capability_rejects_dimension_mismatch_before_artifact_writes(
     assert before == after
 
 
-def test_solution_capability_is_only_available_with_checker(
+def test_solution_operation_is_only_available_with_checker(
     unauthorized_polynomial_system_services,
 ) -> None:
     runtime = unauthorized_polynomial_system_services
 
     ids = {
-        descriptor.capability_id
-        for descriptor in runtime.core.capabilities.catalog().capabilities
+        descriptor.operation_id
+        for descriptor in runtime.core.operations.catalog().operations
     }
 
     assert "polynomial.system.solution.verify" not in ids

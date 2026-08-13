@@ -52,6 +52,6 @@ checks contiguous page indices and bounds, and establishes that every scope
 key has count exactly one. Invalid coverage returns `UNKNOWN`, leaves the
 claim obligation open, and does not create a verification record.
 
-The capability does not infer a finite scope, stream unbounded archives,
+The operation does not infer a finite scope, stream unbounded archives,
 accept caller-defined canonicalization code, or prove that an external data
 source was completely exported into the supplied pages.

@@ -1,4 +1,4 @@
-"""NetworkX/Z3 finite-graph optimization capability contracts."""
+"""NetworkX/Z3 finite-graph optimization operation contracts."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import pytest
 import z3
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -32,13 +32,13 @@ def _payload(graph: nx.Graph[str], **budget: int) -> dict[str, object]:
 
 def _invoke(
     runtime: DomainTestServices,
-    capability_id: str,
+    operation_id: str,
     graph: nx.Graph[str],
     **budget: int,
 ):
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation_id,
             input=_payload(graph, **budget),
         )
     )
@@ -62,7 +62,7 @@ def _edge_subsets(graph: nx.Graph[str]):
     )
 
 
-def _brute_force_optimum(capability_id: str, graph: nx.Graph[str]) -> int:
+def _brute_force_optimum(operation_id: str, graph: nx.Graph[str]) -> int:
     assert len(graph) <= 6, (
         f"brute-force oracle is exponential; got {len(graph)} vertices (max 6)"
     )
@@ -70,27 +70,27 @@ def _brute_force_optimum(capability_id: str, graph: nx.Graph[str]) -> int:
         "brute-force oracle is exponential; "
         f"got {graph.number_of_edges()} edges (max 10)"
     )
-    if capability_id == "graph.domination.minimum.compute":
+    if operation_id == "graph.domination.minimum.compute":
         return min(
             len(subset)
             for subset in _vertex_subsets(graph)
             if nx.is_dominating_set(graph, subset)
         )
-    if capability_id == "graph.matching.maximal.minimum.compute":
+    if operation_id == "graph.matching.maximal.minimum.compute":
         return min(
             len(subset)
             for subset in _edge_subsets(graph)
             if nx.is_matching(graph, subset) and nx.is_maximal_matching(graph, subset)
         )
 
-    if capability_id == "graph.induced_forest.maximum.compute":
+    if operation_id == "graph.induced_forest.maximum.compute":
         predicate = nx.is_forest
-    elif capability_id == "graph.induced_tree.maximum.compute":
+    elif operation_id == "graph.induced_tree.maximum.compute":
         predicate = nx.is_tree
-    elif capability_id == "graph.induced_bipartite.maximum.compute":
+    elif operation_id == "graph.induced_bipartite.maximum.compute":
         predicate = nx.is_bipartite
     else:  # pragma: no cover - protects the test helper from silent extension
-        raise AssertionError(f"unsupported capability: {capability_id}")
+        raise AssertionError(f"unsupported operation: {operation_id}")
     return max(
         len(subset)
         for subset in _vertex_subsets(graph)
@@ -98,7 +98,7 @@ def _brute_force_optimum(capability_id: str, graph: nx.Graph[str]) -> int:
     )
 
 
-_ORACLE_CAPABILITIES = (
+_ORACLE_OPERATIONS = (
     "graph.domination.minimum.compute",
     "graph.matching.maximal.minimum.compute",
     "graph.induced_forest.maximum.compute",
@@ -118,19 +118,19 @@ def test_graph_optimizer_matches_independent_small_brute_force_oracle(
     graph_optimization_services: DomainTestServices,
 ) -> None:
     for graph_name, graph in _ORACLE_GRAPHS:
-        for capability_id in _ORACLE_CAPABILITIES:
-            case = f"{graph_name}:{capability_id}"
+        for operation_id in _ORACLE_OPERATIONS:
+            case = f"{graph_name}:{operation_id}"
             relabeled: nx.Graph[str] = nx.relabel_nodes(
                 graph, lambda vertex: f"v{vertex}"
             )
 
-            result = _invoke(graph_optimization_services, capability_id, relabeled)
+            result = _invoke(graph_optimization_services, operation_id, relabeled)
 
             assert result.execution.status is ExecutionStatus.COMPLETED, case
             output = result.output["result"]
             assert output["status"] == "EXACT", case
             assert output["optimum_value"] == _brute_force_optimum(
-                capability_id, relabeled
+                operation_id, relabeled
             ), case
 
 
@@ -173,10 +173,10 @@ def test_graph_optimizer_returns_exact_typed_witness(
 ) -> None:
     runtime = graph_optimization_services
 
-    for capability_id, graph, optimum, witness_field in _WITNESS_CASES:
-        case = capability_id
+    for operation_id, graph, optimum, witness_field in _WITNESS_CASES:
+        case = operation_id
         relabeled = nx.relabel_nodes(graph, lambda vertex: f"v{vertex}")
-        result = _invoke(runtime, capability_id, relabeled)
+        result = _invoke(runtime, operation_id, relabeled)
 
         output = result.output["result"]
         assert output["status"] == "EXACT", case
@@ -185,17 +185,17 @@ def test_graph_optimizer_returns_exact_typed_witness(
         assert output["upper_bound"] == optimum, case
         assert len(output[witness_field]) == optimum, case
         assert result.artifact_uris == (), case
-        if capability_id == "graph.domination.minimum.compute":
+        if operation_id == "graph.domination.minimum.compute":
             assert nx.is_dominating_set(relabeled, output["witness_vertices"]), case
-        elif capability_id == "graph.matching.maximal.minimum.compute":
+        elif operation_id == "graph.matching.maximal.minimum.compute":
             matching = {tuple(edge) for edge in output["witness_edges"]}
             assert nx.is_matching(relabeled, matching), case
             assert nx.is_maximal_matching(relabeled, matching), case
         else:
             induced = relabeled.subgraph(output["witness_vertices"])
-            if capability_id == "graph.induced_forest.maximum.compute":
+            if operation_id == "graph.induced_forest.maximum.compute":
                 assert nx.is_forest(induced), case
-            elif capability_id == "graph.induced_tree.maximum.compute":
+            elif operation_id == "graph.induced_tree.maximum.compute":
                 assert nx.is_tree(induced), case
             else:
                 assert nx.is_bipartite(induced), case
@@ -276,7 +276,7 @@ def test_invalid_solver_witness_fails_closed_before_artifact_writes(
     from jacobian.domains.graph_optimization import finite_optimization
 
     runtime = graph_optimization_services
-    for solver_name, capability_id, update in _INVALID_WITNESS_CASES:
+    for solver_name, operation_id, update in _INVALID_WITNESS_CASES:
         original = getattr(finite_optimization, solver_name)
 
         def invalid_witness(*args, _original=original, _update=update, **kwargs):
@@ -287,29 +287,29 @@ def test_invalid_solver_witness_fails_closed_before_artifact_writes(
             case_patch.setattr(finite_optimization, solver_name, invalid_witness)
             result = _invoke(
                 runtime,
-                capability_id,
+                operation_id,
                 nx.path_graph(["a", "b", "c"]),
             )
 
-        assert result.execution.status is ExecutionStatus.ERROR, capability_id
+        assert result.execution.status is ExecutionStatus.ERROR, operation_id
         assert result.diagnostics[0].code == "GRAPH_OPTIMIZATION_WITNESS_INVALID", (
-            capability_id
+            operation_id
         )
-        assert result.artifact_uris == (), capability_id
+        assert result.artifact_uris == (), operation_id
 
 
 def test_empty_graph_boundary_is_exact_zero(
     graph_optimization_services: DomainTestServices,
 ) -> None:
     runtime = graph_optimization_services
-    for capability_id in _ORACLE_CAPABILITIES:
-        result = _invoke(runtime, capability_id, nx.Graph())
+    for operation_id in _ORACLE_OPERATIONS:
+        result = _invoke(runtime, operation_id, nx.Graph())
 
         output = result.output["result"]
-        assert output["status"] == "EXACT", capability_id
-        assert output["optimum_value"] == 0, capability_id
-        assert output["incumbent_value"] == 0, capability_id
-        assert output["termination_reason"] == "SPECIAL_CASE", capability_id
+        assert output["status"] == "EXACT", operation_id
+        assert output["optimum_value"] == 0, operation_id
+        assert output["incumbent_value"] == 0, operation_id
+        assert output["termination_reason"] == "SPECIAL_CASE", operation_id
 
 
 def test_order_budget_fails_before_artifact_writes(

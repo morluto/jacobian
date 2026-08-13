@@ -1,4 +1,4 @@
-"""Rational-owned exact arithmetic capabilities.
+"""Rational-owned exact arithmetic operations.
 
 The arithmetic domain owns rational arithmetic (reciprocal, negation,
 absolute value, sum, difference, product, quotient), rational order
@@ -34,7 +34,7 @@ from jacobian.domains.arithmetic.operations import (
     sum_rationals,
 )
 
-RATIONAL_CAPABILITIES = (
+RATIONAL_OPERATIONS = (
     arithmetic_operation(
         "rational.compute.reciprocal",
         "Compute rational reciprocal",
@@ -44,7 +44,7 @@ RATIONAL_CAPABILITIES = (
         reciprocal,
         "rational",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "reciprocal_two_thirds",
                 "Compute the reciprocal of two thirds.",
@@ -61,7 +61,7 @@ RATIONAL_CAPABILITIES = (
         negation,
         "rational",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "negation_two_thirds",
                 "Negate two thirds.",
@@ -78,7 +78,7 @@ RATIONAL_CAPABILITIES = (
         rational_absolute_value,
         "rational",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "absolute_value_negative_three_halves",
                 "Compute the absolute value of negative three halves.",
@@ -95,7 +95,7 @@ RATIONAL_CAPABILITIES = (
         sum_rationals,
         "rational",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "one_half_plus_one_third",
                 "Add one half and one third.",
@@ -112,7 +112,7 @@ RATIONAL_CAPABILITIES = (
         difference,
         "rational",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "three_fourths_minus_one_sixth",
                 "Subtract one sixth from three fourths.",
@@ -129,7 +129,7 @@ RATIONAL_CAPABILITIES = (
         product,
         "rational",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "two_thirds_times_three_fifths",
                 "Multiply two thirds by three fifths.",
@@ -146,7 +146,7 @@ RATIONAL_CAPABILITIES = (
         quotient,
         "rational",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "three_fourths_divided_by_two_thirds",
                 "Divide three fourths by two thirds.",
@@ -163,7 +163,7 @@ RATIONAL_CAPABILITIES = (
         minimum,
         "rational",
         "order",
-        invocation_examples=(
+        examples=(
             example(
                 "minimum_one_half_two_thirds",
                 "Find the lesser of one half and two thirds.",
@@ -180,7 +180,7 @@ RATIONAL_CAPABILITIES = (
         maximum,
         "rational",
         "order",
-        invocation_examples=(
+        examples=(
             example(
                 "maximum_one_half_two_thirds",
                 "Find the greater of one half and two thirds.",
@@ -197,7 +197,7 @@ RATIONAL_CAPABILITIES = (
         floor,
         "rational",
         "rounding",
-        invocation_examples=(
+        examples=(
             example(
                 "floor_seven_thirds",
                 "Compute the floor of seven thirds.",
@@ -214,7 +214,7 @@ RATIONAL_CAPABILITIES = (
         ceiling,
         "rational",
         "rounding",
-        invocation_examples=(
+        examples=(
             example(
                 "ceiling_seven_thirds",
                 "Compute the ceiling of seven thirds.",
@@ -231,7 +231,7 @@ RATIONAL_CAPABILITIES = (
         continued_fraction,
         "rational",
         "representation",
-        invocation_examples=(
+        examples=(
             example(
                 "negative_seven_fifths",
                 "Expand negative seven fifths as a continued fraction.",
@@ -248,7 +248,7 @@ RATIONAL_CAPABILITIES = (
         equal,
         "rational",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "equal_negative_one_half_negative_one_half",
                 "Check equality of two reduced equivalent rationals.",
@@ -268,7 +268,7 @@ RATIONAL_CAPABILITIES = (
         less_than,
         "rational",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "less_than_one_half_two_thirds",
                 "Check whether one half is less than two thirds.",

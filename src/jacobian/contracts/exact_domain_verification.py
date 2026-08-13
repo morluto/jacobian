@@ -1,7 +1,7 @@
 """Contracts for independent verification of exact domain-operation results.
 
 The exact-domain verifier migration moves from grouped ``result_uri``
-verification to per-producer typed verifier capability contracts for inline
+verification to per-producer typed verifier operation contracts for inline
 results. A verification request carries the producer's exact input and
 candidate (result) values directly; the verifier validates both, checks the
 authorized checker's scope, and binds canonical inline value digests into an
@@ -21,10 +21,10 @@ from typing import Literal, Self
 from pydantic import model_validator
 
 from jacobian.canonical import canonicalize_json, sha256_digest
-from jacobian.contracts.capabilities import CapabilityId
 from jacobian.contracts.checkers import CheckerDecision, CheckerManifest, EvidenceKind
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.evidence import EvidenceBindings
+from jacobian.contracts.operations import OperationId
 from jacobian.contracts.results import ContractModel
 
 
@@ -71,7 +71,7 @@ class ExactComputedVerificationOutput(ContractModel):
         "ERROR",
     ]
     conclusion: Literal["TRUE", "UNKNOWN"]
-    operation_id: CapabilityId
+    operation_id: OperationId
     # Inline replay deliberately leaves these absent: ordinary values remain
     # inline, while a successful record binds their canonical digests.
     input_uri: ArtifactUri | None = None
@@ -118,7 +118,7 @@ class InlineExactVerificationRecord(ContractModel):
     record_schema_version: Literal["4"] = "4"
     evidence_kind: Literal[EvidenceKind.WITNESS] = EvidenceKind.WITNESS
     witness_format: str
-    operation_id: CapabilityId
+    operation_id: OperationId
     format_version: Literal["1"] = "1"
     checker_id: CheckerUri
     implementation_digest: Sha256Digest

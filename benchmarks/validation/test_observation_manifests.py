@@ -229,11 +229,11 @@ def test_server_runtime_log_accounts_for_nested_jacobian_calls(
                 "service": "jacobian",
                 "_content": "\n".join(
                     [
-                        "INFO MCP capability attempt request_digest=aaaaaaaaaaaaaaaa",
+                        "INFO MCP operation attempt request_digest=aaaaaaaaaaaaaaaa",
                         "     execution_status=ERROR",
                         "INFO MCP tool call tool=math.run status=error",
                         "     request_digest=bbbbbbbbbbbbbbbb",
-                        "INFO MCP capability attempt request_digest=cccccccccccccccc",
+                        "INFO MCP operation attempt request_digest=cccccccccccccccc",
                         "     execution_status=COMPLETED",
                         "INFO MCP tool call tool=math.run          server.py:314",
                         "     status=success request_digest=aaaaaaaaaaaaaaaa",

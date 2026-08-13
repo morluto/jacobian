@@ -1,4 +1,4 @@
-"""Validated real-analysis capabilities."""
+"""Validated real-analysis operations."""
 
 from jacobian.domains.analysis.bundle import build_real_analysis_bundle
 

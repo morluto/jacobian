@@ -11,7 +11,7 @@ __all__ = ["build_polynomial_bundle"]
 
 
 def build_polynomial_bundle() -> DomainBundle:
-    """Construct the optional capability bundle without polluting native imports."""
+    """Construct the optional operation bundle without polluting native imports."""
 
     from jacobian.domains.polynomial.bundle import build_polynomial_bundle as _build
 

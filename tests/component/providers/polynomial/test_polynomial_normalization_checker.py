@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.operations import invoke_operation as _invoke
 from tests.support.rationals import rational_payload as _q
 
 from jacobian.contracts.results import ExecutionStatus

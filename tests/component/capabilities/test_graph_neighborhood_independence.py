@@ -3,14 +3,14 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from tests.component.capabilities.graph_capabilities_support import (
+from tests.component.operations.graph_capabilities_support import (
     GraphTestServices,
     open_graph_services,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityInputKind,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationInputKind,
+    OperationRequest,
 )
 from jacobian.contracts.results import Conclusion
 
@@ -63,9 +63,9 @@ def test_neighborhood_independence_reproduces_wowii_200_invariant(
         summary="WOWII Conjecture 200 public counterexample graph",
     )
 
-    result = authorized_graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.compute.neighborhood_independence",
+    result = authorized_graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.compute.neighborhood_independence",
             input={"graph_uri": graph.artifact_uri},
         )
     )
@@ -80,9 +80,9 @@ def test_neighborhood_independence_reproduces_wowii_200_invariant(
     assert result.output["certificate_uri"] in result.artifact_uris
     assert "conclusion" not in result.output
 
-    verified = authorized_graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.neighborhood_independence.verify",
+    verified = authorized_graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.neighborhood_independence.verify",
             input={
                 "certificate_uri": result.output["certificate_uri"],
             },
@@ -95,10 +95,10 @@ def test_neighborhood_independence_reproduces_wowii_200_invariant(
 
     descriptor = next(
         item
-        for item in authorized_graph_services.core.capabilities.catalog().capabilities
-        if item.capability_id == "graph.compute.neighborhood_independence"
+        for item in authorized_graph_services.core.operations.catalog().operations
+        if item.operation_id == "graph.compute.neighborhood_independence"
     )
-    assert descriptor.accepted_input_kinds == (CapabilityInputKind.TYPED_ARTIFACT,)
+    assert descriptor.accepted_input_kinds == (OperationInputKind.TYPED_ARTIFACT,)
     assert descriptor.accepted_artifact_types == (
         authorized_graph_services.graph.graph_schema_uri,
     )

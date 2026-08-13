@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiscoveryRequest,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDiscoveryRequest,
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
@@ -94,24 +94,24 @@ def test_discovery_overlap_keeps_named_and_generic_intents_distinct(
     query: str,
     expected: str,
 ) -> None:
-    discovered = combinatorics_services.core.capabilities.discover(
-        CapabilityDiscoveryRequest(query=query, limit=5)
+    discovered = combinatorics_services.core.operations.discover(
+        OperationDiscoveryRequest(query=query, limit=5)
     )
-    assert discovered.matches[0].capability_id == expected
+    assert discovered.matches[0].operation_id == expected
 
 
 def test_linear_recurrence_exposes_requested_values_and_complete_replay(
     combinatorics_services,
 ) -> None:
-    prefix = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.recurrence.linear.evaluate",
+    prefix = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.recurrence.linear.evaluate",
             input=_recurrence_payload(),
         )
     )
-    sparse = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.recurrence.linear.evaluate",
+    sparse = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.recurrence.linear.evaluate",
             input=_recurrence_payload(
                 scope="INDICES",
                 term_count=None,
@@ -139,9 +139,9 @@ def test_linear_recurrence_exposes_requested_values_and_complete_replay(
 def test_polynomial_coefficient_recurrence_exposes_exact_terms_and_residuals(
     combinatorics_services,
 ) -> None:
-    result = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.recurrence.p_recursive.evaluate",
+    result = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.recurrence.p_recursive.evaluate",
             input={
                 "coefficient_polynomials": [
                     [_q(1), _q(1)],
@@ -189,8 +189,8 @@ def test_polynomial_coefficient_recurrence_is_discoverable_by_intuitive_domain(
     combinatorics_services,
     domain: str,
 ) -> None:
-    discovered = combinatorics_services.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = combinatorics_services.core.operations.discover(
+        OperationDiscoveryRequest(
             query=(
                 "exactly compute terms of a sequence and residuals of a "
                 "variable-coefficient polynomial recurrence"
@@ -201,16 +201,16 @@ def test_polynomial_coefficient_recurrence_is_discoverable_by_intuitive_domain(
     )
 
     assert "combinatorics.recurrence.p_recursive.evaluate" in {
-        match.capability_id for match in discovered.matches
+        match.operation_id for match in discovered.matches
     }
 
 
 def test_polynomial_coefficient_recurrence_rejects_singular_required_step(
     combinatorics_services,
 ) -> None:
-    result = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.recurrence.p_recursive.evaluate",
+    result = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.recurrence.p_recursive.evaluate",
             input={
                 "coefficient_polynomials": [[_q(-2), _q(1)], [_q(-1)]],
                 "initial_values": [_q(1)],
@@ -230,9 +230,9 @@ def test_large_rational_results_cross_the_python_conversion_limit_safely(
     combinatorics_services,
 ) -> None:
     large = "9" * 64
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.recurrence.linear.evaluate",
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.recurrence.linear.evaluate",
             input={
                 "coefficients": [_q_string(large)],
                 "initial_values": [_q_string(large)],
@@ -251,7 +251,7 @@ def test_large_rational_results_cross_the_python_conversion_limit_safely(
 
 
 @pytest.mark.parametrize(
-    ("capability_id", "payload"),
+    ("operation_id", "payload"),
     (
         (
             "combinatorics.recurrence.linear.evaluate",
@@ -289,14 +289,14 @@ def test_large_rational_results_cross_the_python_conversion_limit_safely(
 )
 def test_oversized_derived_results_are_rejected_before_artifact_writes(
     combinatorics_services,
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, object],
 ) -> None:
     with combinatorics_services.core.store.connection() as connection:
         before = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
 
-    result = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
+    result = combinatorics_services.core.operations.invoke(
+        OperationRequest(operation_id=operation_id, input=payload)
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
@@ -310,9 +310,9 @@ def test_oversized_derived_results_are_rejected_before_artifact_writes(
 def test_rational_generating_function_exposes_exact_residual_congruence(
     combinatorics_services,
 ) -> None:
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.generating_function.coefficients.compute",
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.generating_function.coefficients.compute",
             input=_series_payload(),
         )
     )
@@ -358,13 +358,13 @@ def test_cross_field_validation_precedes_artifact_writes(
 ) -> None:
     with combinatorics_services.core.store.connection() as connection:
         before = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
-    capability_id = (
+    operation_id = (
         "combinatorics.recurrence.linear.evaluate"
         if "initial_values" in payload
         else "combinatorics.generating_function.coefficients.compute"
     )
-    result = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
+    result = combinatorics_services.core.operations.invoke(
+        OperationRequest(operation_id=operation_id, input=payload)
     )
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_COMBINATORICS_REQUEST"

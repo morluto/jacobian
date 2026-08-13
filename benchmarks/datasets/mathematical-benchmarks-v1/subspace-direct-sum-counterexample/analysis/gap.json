@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "subspace-direct-sum-counterexample",
   "analysis": {
     "mathematical_moves": [
@@ -10,12 +10,12 @@
     ],
     "current_capabilities": [
       {
-        "capability_id": "matrix.nullspace.compute",
+        "operation_id": "matrix.nullspace.compute",
         "availability": "AVAILABLE",
         "boundary": "Returns nullity and the complete canonical basis of exact rational dependencies among ordered generator columns; rank is determined by rank-nullity."
       },
       {
-        "capability_id": "matrix.result.verify",
+        "operation_id": "matrix.result.verify",
         "availability": "AVAILABLE",
         "boundary": "Independently replays the exact stored nullspace basis and binds a verification record to the input and result."
       }

@@ -7,21 +7,21 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import (
-    CapabilityInvocationError,
-    enriched_invalid_request,
-)
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.common import ArtifactUri, CheckerUri
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+)
 from jacobian.contracts.results import (
     ContractModel,
     ExecutionStatus,
     VerificationResult,
+)
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import (
+    OperationInvocationError,
+    enriched_invalid_request,
 )
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -52,9 +52,9 @@ class WitnessReplayRequest(ContractModel):
     witness_uri: ArtifactUri
 
 
-_INVALID_REPLAY_REQUEST = CapabilityDiagnostic(
+_INVALID_REPLAY_REQUEST = OperationDiagnostic(
     code="INVALID_REQUEST",
-    stage="capability_input_validation",
+    stage="operation_input_validation",
     message="The checker replay request is invalid.",
     hint="Inspect the checker operation and retry with its required artifact inputs.",
 )
@@ -62,16 +62,16 @@ _INVALID_REPLAY_REQUEST = CapabilityDiagnostic(
 
 @dataclass(frozen=True, slots=True)
 class _VerificationProjection:
-    capability_id: str
+    operation_id: str
     title: str
     description: str
     checker_id: CheckerUri
     tags: tuple[str, ...]
     verification: VerificationService
 
-    def descriptor(self, request_model: type[ContractModel]) -> CapabilityDescriptor:
-        return CapabilityDescriptor(
-            capability_id=self.capability_id,
+    def descriptor(self, request_model: type[ContractModel]) -> OperationDescriptor:
+        return OperationDescriptor(
+            operation_id=self.operation_id,
             version="1",
             title=self.title,
             description=self.description,
@@ -113,7 +113,7 @@ class _VerificationProjection:
             else Failed(
                 status=result.execution.status,
                 runtime_ms=result.execution.runtime_ms,
-                diagnostic=CapabilityDiagnostic(
+                diagnostic=OperationDiagnostic(
                     code="CHECKER_REPLAY_EXECUTION_FAILED",
                     stage="checker_replay",
                     message=(
@@ -125,7 +125,7 @@ class _VerificationProjection:
             )
         )
         return OperationProjection(
-            operation_id=self.capability_id,
+            operation_id=self.operation_id,
             version="1",
             terminal=terminal,
             publication=PublishedOperation(
@@ -144,14 +144,14 @@ class CertificateVerificationAdapter:
         self._descriptor = projection.descriptor(CertificateReplayRequest)
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> CertificateReplayRequest:
+    def prepare(self, request: OperationRequest) -> CertificateReplayRequest:
         try:
-            return parse_capability_input(CertificateReplayRequest, request.input)
+            return parse_operation_input(CertificateReplayRequest, request.input)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 enriched_invalid_request(_INVALID_REPLAY_REQUEST, exc)
             ) from exc
 
@@ -171,14 +171,14 @@ class WitnessVerificationAdapter:
         self._descriptor = projection.descriptor(WitnessReplayRequest)
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> WitnessReplayRequest:
+    def prepare(self, request: OperationRequest) -> WitnessReplayRequest:
         try:
-            return parse_capability_input(WitnessReplayRequest, request.input)
+            return parse_operation_input(WitnessReplayRequest, request.input)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 enriched_invalid_request(_INVALID_REPLAY_REQUEST, exc)
             ) from exc
 
@@ -194,18 +194,18 @@ class WitnessVerificationAdapter:
 
 def certificate_verification_adapter(
     *,
-    capability_id: str,
+    operation_id: str,
     title: str,
     description: str,
     checker_id: CheckerUri | None,
     tags: tuple[str, ...],
     verification: VerificationService,
-) -> CapabilityAdapter[Any] | None:
+) -> OperationAdapter[Any] | None:
     if checker_id is None:
         return None
     return CertificateVerificationAdapter(
         _VerificationProjection(
-            capability_id=capability_id,
+            operation_id=operation_id,
             title=title,
             description=description,
             checker_id=checker_id,
@@ -217,18 +217,18 @@ def certificate_verification_adapter(
 
 def witness_verification_adapter(
     *,
-    capability_id: str,
+    operation_id: str,
     title: str,
     description: str,
     checker_id: CheckerUri | None,
     tags: tuple[str, ...],
     verification: VerificationService,
-) -> CapabilityAdapter[Any] | None:
+) -> OperationAdapter[Any] | None:
     if checker_id is None:
         return None
     return WitnessVerificationAdapter(
         _VerificationProjection(
-            capability_id=capability_id,
+            operation_id=operation_id,
             title=title,
             description=description,
             checker_id=checker_id,

@@ -3,8 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -42,15 +42,15 @@ def test_graph_symmetry_orbits_are_independently_replayed(
     graph_symmetry_services,
 ) -> None:
     payload = _cycle_request()
-    computed = graph_symmetry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    computed = graph_symmetry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input=payload,
         )
     )
-    verified = graph_symmetry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.verify",
+    verified = graph_symmetry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.verify",
             input={
                 "input": payload,
                 "candidate": computed.output["result"],
@@ -70,9 +70,9 @@ def test_graph_symmetry_checker_rejects_forged_orbit_partition(
     graph_symmetry_services,
 ) -> None:
     payload = _cycle_request()
-    computed = graph_symmetry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.compute",
+    computed = graph_symmetry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.compute",
             input=payload,
         )
     )
@@ -91,9 +91,9 @@ def test_graph_symmetry_checker_rejects_forged_orbit_partition(
     ]
     forged_candidate["vertex_orbit_count"] = 2
 
-    rejected = graph_symmetry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.symmetry.generator_orbits.verify",
+    rejected = graph_symmetry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.symmetry.generator_orbits.verify",
             input={
                 "input": payload,
                 "candidate": forged_candidate,

@@ -10,10 +10,6 @@ from typing import Any, overload
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-)
 from jacobian.contracts.number_theory import (
     ArithmeticFunctionRequest,
     BooleanResult,
@@ -23,6 +19,10 @@ from jacobian.contracts.number_theory import (
     PowerfulNumberRequest,
     PowerfulNumberResult,
     PrimeFactorizationResult,
+)
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    OperationExample,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains._examples import example
@@ -45,10 +45,10 @@ from jacobian.domains.number_theory.factorization_protocol import (
     parse_factorization_worker_response,
 )
 from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationAbortError,
     OperationRefusalError,
-    OperationSpec,
 )
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
@@ -58,8 +58,8 @@ _STDERR_LIMIT = 64_000
 _ADDRESS_SPACE_LIMIT = 512 * 1024 * 1024
 
 
-def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
-    return CapabilityDiagnostic(
+def _diagnostic(code: str, message: str) -> OperationDiagnostic:
+    return OperationDiagnostic(
         code=code,
         stage="integer_factorization",
         message=message,
@@ -288,18 +288,18 @@ def _compute_radical(
 
 def _operation[RequestT: ContractModel, ResultT: ContractModel](
     *,
-    capability_id: str,
+    operation_id: str,
     title: str,
     description: str,
     request_model: type[RequestT],
     result_model: type[ResultT],
     implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
-    invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+    examples: tuple[OperationExample, ...] = (),
 ) -> InstalledOperation[RequestT, ResultT]:
     return inline_operation(
-        OperationSpec(
-            operation_id=capability_id,
+        OperationDeclaration(
+            operation_id=operation_id,
             version="2",
             title=title,
             description=description,
@@ -307,14 +307,14 @@ def _operation[RequestT: ContractModel, ResultT: ContractModel](
             result_type=result_model,
             execute=implementation,
             tags=tags,
-            invocation_examples=invocation_examples,
+            examples=examples,
         )
     )
 
 
-FACTORIZATION_CAPABILITIES = (
+FACTORIZATION_OPERATIONS = (
     _operation(
-        capability_id="integer.compute.divisors",
+        operation_id="integer.compute.divisors",
         title="Enumerate positive divisors",
         description=(
             "Enumerate every positive divisor in an isolated, resource-bounded "
@@ -324,14 +324,14 @@ FACTORIZATION_CAPABILITIES = (
         result_model=DivisorListResult,
         implementation=_compute_divisors,
         tags=("number-theory", "enumeration"),
-        invocation_examples=(
+        examples=(
             example(
                 "divisors_12", "Enumerate the positive divisors of 12.", {"value": "12"}
             ),
         ),
     ),
     _operation(
-        capability_id="integer.compute.proper_divisors",
+        operation_id="integer.compute.proper_divisors",
         title="Enumerate proper divisors",
         description=(
             "Enumerate every positive proper divisor in an isolated, "
@@ -341,7 +341,7 @@ FACTORIZATION_CAPABILITIES = (
         result_model=DivisorListResult,
         implementation=_compute_proper_divisors,
         tags=("number-theory", "enumeration"),
-        invocation_examples=(
+        examples=(
             example(
                 "proper_divisors_12",
                 "Enumerate the proper divisors of 12.",
@@ -350,7 +350,7 @@ FACTORIZATION_CAPABILITIES = (
         ),
     ),
     _operation(
-        capability_id="integer.compute.prime_factorization",
+        operation_id="integer.compute.prime_factorization",
         title="Factor an integer",
         description=(
             "Compute a complete prime-power factorization in an isolated, "
@@ -360,7 +360,7 @@ FACTORIZATION_CAPABILITIES = (
         result_model=PrimeFactorizationResult,
         implementation=_compute_prime_factorization,
         tags=("number-theory", "factorization"),
-        invocation_examples=(
+        examples=(
             example(
                 "prime_factorization_360",
                 "Factor 360 into prime powers.",
@@ -369,7 +369,7 @@ FACTORIZATION_CAPABILITIES = (
         ),
     ),
     _operation(
-        capability_id="integer.decide.powerful",
+        operation_id="integer.decide.powerful",
         title="Decide powerful-number status",
         description=(
             "Decide whether every prime exponent of one positive integer is at "
@@ -380,7 +380,7 @@ FACTORIZATION_CAPABILITIES = (
         result_model=PowerfulNumberResult,
         implementation=_compute_powerful,
         tags=("number-theory", "factorization", "predicate"),
-        invocation_examples=(
+        examples=(
             example(
                 "powerful_72",
                 "Decide whether 72 is powerful and inspect its factor witness.",
@@ -389,7 +389,7 @@ FACTORIZATION_CAPABILITIES = (
         ),
     ),
     _operation(
-        capability_id="integer.decide.squarefree",
+        operation_id="integer.decide.squarefree",
         title="Decide squarefreeness",
         description=(
             "Decide whether a bounded nonnegative integer is square-free in an "
@@ -399,12 +399,12 @@ FACTORIZATION_CAPABILITIES = (
         result_model=BooleanResult,
         implementation=_compute_squarefree,
         tags=("number-theory", "predicate"),
-        invocation_examples=(
+        examples=(
             example("squarefree_30", "Check whether 30 is square-free.", {"n": 30}),
         ),
     ),
     _operation(
-        capability_id="integer.compute.radical",
+        operation_id="integer.compute.radical",
         title="Compute integer radical",
         description=(
             "Compute the product of distinct prime divisors in an isolated, "
@@ -414,7 +414,7 @@ FACTORIZATION_CAPABILITIES = (
         result_model=IntegerValueResult,
         implementation=_compute_radical,
         tags=("number-theory", "arithmetic-function"),
-        invocation_examples=(
+        examples=(
             example("radical_360", "Compute the radical of 360.", {"n": 360}),
         ),
     ),

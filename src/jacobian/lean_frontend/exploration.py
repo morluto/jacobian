@@ -1,4 +1,4 @@
-"""Pinned, replayable exploratory Lean capabilities."""
+"""Pinned, replayable exploratory Lean operations."""
 
 from __future__ import annotations
 
@@ -20,10 +20,6 @@ from jacobian.canonical import (
     loads_strict_json,
 )
 from jacobian.checker_authorization import LeanCheckerInstallation
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.lean import (
     LeanDiagnostic,
     LeanDiagnosticPhase,
@@ -40,6 +36,10 @@ from jacobian.contracts.lean_exploration import (
 from jacobian.contracts.lean_metavariable_fields import (
     LeanMetavariableFieldsArtifact,
     LeanMetavariableFieldsRequest,
+)
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    ProviderObservation,
 )
 from jacobian.lean_frontend.diagnostics import repl_diagnostics
 from jacobian.lean_frontend.helper_protocol import (
@@ -129,7 +129,7 @@ class _Resources:
     retrieval_schema_uri: str
     installations: Mapping[LeanEnvironment, LeanCheckerInstallation]
     runtime: Path
-    provider_runtime: CapabilityProviderRuntime
+    provider_runtime: ProviderObservation
     repl: LeanExplorationReplRuntime
 
 
@@ -138,7 +138,7 @@ def install_lean_exploration_capabilities(
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
     installations: Mapping[LeanEnvironment, LeanCheckerInstallation],
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> tuple[
     tuple[
         LeanProofStateAdapter,
@@ -251,7 +251,7 @@ def _request_validation_diagnostic(
     code: str,
     subject: str,
     hint: str,
-) -> CapabilityDiagnostic:
+) -> OperationDiagnostic:
     """Project bounded Pydantic/source-validation evidence for Lean requests."""
 
     if isinstance(error, ValidationError):
@@ -282,7 +282,7 @@ def _request_validation_diagnostic(
             }
         ]
     first = validation_errors[0]
-    return CapabilityDiagnostic(
+    return OperationDiagnostic(
         code=code,
         stage="request_validation",
         message=f"{subject}: {first['reason']}",

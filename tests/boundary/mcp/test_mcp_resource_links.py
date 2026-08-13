@@ -27,7 +27,7 @@ def test_mcp_inline_results_do_not_emit_resource_links(
                 result = await client.call_tool(
                     "math.run",
                     {
-                        "capability_id": "integer.compute.gcd",
+                        "operation_id": "integer.compute.gcd",
                         "payload": {"left": "84", "right": "30"},
                     },
                 )
@@ -53,7 +53,7 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
             result = await client.call_tool(
                 "math.run",
                 {
-                    "capability_id": "sat.cnf.materialize",
+                    "operation_id": "sat.cnf.materialize",
                     "payload": {
                         "variable_names": ["x"],
                         "clauses": [[1]],

@@ -1,4 +1,4 @@
-"""Exact SymPy-backed integer number-theory capabilities."""
+"""Exact SymPy-backed integer number-theory operations."""
 
 from jacobian.domains.number_theory.bundle import build_number_theory_bundle
 

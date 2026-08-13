@@ -1,4 +1,4 @@
-"""Domain-owned exact rational-linear capabilities."""
+"""Domain-owned exact rational-linear operations."""
 
 from __future__ import annotations
 

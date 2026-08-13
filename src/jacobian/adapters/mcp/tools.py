@@ -1,4 +1,4 @@
-"""MCP tool handlers for the capability surface."""
+"""MCP tool handlers for the operation surface."""
 
 from __future__ import annotations
 
@@ -11,22 +11,22 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel, StrictInt
 
 from jacobian.adapters.mcp.context import AppState, _runtime
 from jacobian.adapters.mcp.projections import (
-    _capability_discovery_response,
+    _operation_discovery_response,
 )
 from jacobian.adapters.mcp.tooling import (
-    _invoke_capability_attempt,
-)
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiscoveryMatch,
-    CapabilityDiscoveryRequest,
-    CapabilityId,
-    CapabilityInputKind,
-    CapabilityProviderAvailability,
-    CapabilityResult,
-    CapabilityValuePort,
+    _invoke_operation_attempt,
 )
 from jacobian.contracts.common import ArtifactUri, ValueUri
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiscoveryMatch,
+    OperationDiscoveryRequest,
+    OperationId,
+    OperationInputKind,
+    OperationResult,
+    OperationValuePort,
+    ProviderAvailability,
+)
 from jacobian.runtime.model import JacobianRuntime
 
 
@@ -40,23 +40,23 @@ class _ValueReferenceArgument(_MCPOutputModel):
     value_ref: ValueUri
 
 
-class _CapabilityDiscoveryOperationCard(CapabilityDiscoveryMatch):
-    accepted_input_kinds: tuple[CapabilityInputKind, ...]
+class _OperationDiscoveryOperationCard(OperationDiscoveryMatch):
+    accepted_input_kinds: tuple[OperationInputKind, ...]
     accepted_artifact_types: tuple[ArtifactUri, ...]
     produced_artifact_types: tuple[ArtifactUri, ...]
-    input_ports: tuple[CapabilityValuePort, ...]
-    output_ports: tuple[CapabilityValuePort, ...]
-    provider_availability: CapabilityProviderAvailability | Literal["UNKNOWN"]
+    input_ports: tuple[OperationValuePort, ...]
+    output_ports: tuple[OperationValuePort, ...]
+    provider_availability: ProviderAvailability | Literal["UNKNOWN"]
 
 
-class _CapabilitySearchRequest(_MCPOutputModel):
+class _OperationSearchRequest(_MCPOutputModel):
     op: Literal["search"]
     query: Annotated[str, Field(min_length=1, max_length=512)]
     domain: Annotated[
         str | None,
         Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),
     ] = None
-    input_kind: CapabilityInputKind | None = None
+    input_kind: OperationInputKind | None = None
     artifact_type: Annotated[
         str | None,
         Field(pattern=r"^artifact://sha256/[0-9a-f]{64}$"),
@@ -71,77 +71,77 @@ class _CapabilitySearchRequest(_MCPOutputModel):
     ] = None
 
 
-class _CapabilityInspectRequest(_MCPOutputModel):
+class _OperationInspectRequest(_MCPOutputModel):
     op: Literal["inspect"]
-    capability_id: CapabilityId
+    operation_id: OperationId
 
 
-CapabilityFindRequest = Annotated[
-    _CapabilitySearchRequest | _CapabilityInspectRequest,
+OperationFindRequest = Annotated[
+    _OperationSearchRequest | _OperationInspectRequest,
     Field(discriminator="op"),
 ]
 
 
-class _CapabilityFindCallArguments(_MCPOutputModel):
-    request: _CapabilitySearchRequest
+class _OperationFindCallArguments(_MCPOutputModel):
+    request: _OperationSearchRequest
 
 
-class _CapabilitySearchRecoveryPath(_MCPOutputModel):
+class _OperationSearchRecoveryPath(_MCPOutputModel):
     action: Literal["search"]
     tool: Literal["math.find"] = "math.find"
-    arguments: _CapabilityFindCallArguments
+    arguments: _OperationFindCallArguments
 
 
-class _CapabilityCatalogPointer(_MCPOutputModel):
+class _OperationCatalogPointer(_MCPOutputModel):
     action: Literal["inspect_catalog"]
-    resource_uri: Literal["capability://catalog"] = "capability://catalog"
+    resource_uri: Literal["operation://catalog"] = "operation://catalog"
 
 
-CapabilityErrorRecoveryPath = _CapabilitySearchRecoveryPath | _CapabilityCatalogPointer
+OperationErrorRecoveryPath = _OperationSearchRecoveryPath | _OperationCatalogPointer
 
 
-class _CapabilityDiscoveryErrorDetail(_MCPOutputModel):
-    code: Literal["INVALID_CURSOR", "UNKNOWN_CAPABILITY"]
-    stage: Literal["capability_discovery", "capability_resolution"]
+class _OperationDiscoveryErrorDetail(_MCPOutputModel):
+    code: Literal["INVALID_CURSOR", "UNKNOWN_OPERATION"]
+    stage: Literal["operation_discovery", "operation_resolution"]
     message: str
     hint: str
-    nearby_capability_ids: tuple[CapabilityId, ...] = ()
-    available_recovery_paths: tuple[CapabilityErrorRecoveryPath, ...] = ()
+    nearby_operation_ids: tuple[OperationId, ...] = ()
+    available_recovery_paths: tuple[OperationErrorRecoveryPath, ...] = ()
 
 
-class _CapabilityDiscoveryResult(_MCPOutputModel):
+class _OperationDiscoveryResult(_MCPOutputModel):
     kind: Literal["discovery"]
     discovery_version: Literal["1"]
     query: str
     domain: str | None = None
-    input_kind: CapabilityInputKind | None = None
+    input_kind: OperationInputKind | None = None
     artifact_type: str | None = None
-    matches: tuple[_CapabilityDiscoveryOperationCard, ...]
+    matches: tuple[_OperationDiscoveryOperationCard, ...]
     total_matches: StrictInt
     truncated: bool
     next_cursor: str | None = None
-    catalog_resource: Literal["capability://catalog"]
+    catalog_resource: Literal["operation://catalog"]
     response_byte_limit: StrictInt
     truncation_reason: str | None = None
     match_metadata_truncated: bool
 
 
-class _CapabilityInspectionResult(_MCPOutputModel):
-    kind: Literal["capability"]
-    capability: CapabilityDescriptor
+class _OperationInspectionResult(_MCPOutputModel):
+    kind: Literal["operation"]
+    operation: OperationDescriptor
 
 
-class _CapabilityDiscoveryError(_MCPOutputModel):
+class _OperationDiscoveryError(_MCPOutputModel):
     kind: Literal["error"]
-    error: _CapabilityDiscoveryErrorDetail
+    error: _OperationDiscoveryErrorDetail
 
 
-class CapabilityDiscoveryResponse(
+class OperationDiscoveryResponse(
     RootModel[
         Annotated[
-            _CapabilityDiscoveryResult
-            | _CapabilityInspectionResult
-            | _CapabilityDiscoveryError,
+            _OperationDiscoveryResult
+            | _OperationInspectionResult
+            | _OperationDiscoveryError,
             Field(discriminator="kind"),
         ]
     ]
@@ -154,11 +154,11 @@ class CapabilityDiscoveryResponse(
     model_config = ConfigDict(json_schema_extra={"type": "object"})
 
 
-CapabilityDiscoveryToolResult = Annotated[
+OperationDiscoveryToolResult = Annotated[
     CallToolResult,
-    CapabilityDiscoveryResponse,
+    OperationDiscoveryResponse,
 ]
-CapabilityRunToolResult = Annotated[CallToolResult, CapabilityResult]
+OperationRunToolResult = Annotated[CallToolResult, OperationResult]
 
 
 def _text_result(
@@ -210,7 +210,7 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
                 {
                     key: match[key]
                     for key in (
-                        "capability_id",
+                        "operation_id",
                         "title",
                         "description",
                         "accepted_input_kinds",
@@ -233,11 +233,11 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
             "next_cursor": response.get("next_cursor"),
             "catalog_resource": response.get("catalog_resource"),
         }
-    capability = response.get("capability", {})
-    capability_projection: dict[str, Any] = {
-        key: capability[key]
+    operation = response.get("operation", {})
+    operation_projection: dict[str, Any] = {
+        key: operation[key]
         for key in (
-            "capability_id",
+            "operation_id",
             "title",
             "description",
             "accepted_input_kinds",
@@ -246,11 +246,11 @@ def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
             "input_ports",
             "output_ports",
         )
-        if key in capability
+        if key in operation
     }
     projection: dict[str, Any] = {
         "kind": response.get("kind"),
-        "capability": capability_projection,
+        "operation": operation_projection,
     }
     return projection
 
@@ -264,17 +264,17 @@ def _find_result(response: dict[str, Any]) -> CallToolResult:
     )
 
 
-def _unknown_capability_context(
+def _unknown_operation_context(
     runtime: JacobianRuntime,
-    capability_id: CapabilityId,
+    operation_id: OperationId,
 ) -> dict[str, Any]:
     """Return bounded SDK-facing recovery without embedding the full catalog."""
 
-    discovered = runtime.core.capabilities.discover(
-        CapabilityDiscoveryRequest(query=capability_id, limit=5)
+    discovered = runtime.core.operations.discover(
+        OperationDiscoveryRequest(query=operation_id, limit=5)
     )
     return {
-        "nearby_capability_ids": [match.capability_id for match in discovered.matches],
+        "nearby_operation_ids": [match.operation_id for match in discovered.matches],
         "available_recovery_paths": [
             {
                 "action": "search",
@@ -282,14 +282,14 @@ def _unknown_capability_context(
                 "arguments": {
                     "request": {
                         "op": "search",
-                        "query": capability_id,
+                        "query": operation_id,
                         "limit": 5,
                     }
                 },
             },
             {
                 "action": "inspect_catalog",
-                "resource_uri": "capability://catalog",
+                "resource_uri": "operation://catalog",
             },
         ],
     }
@@ -297,24 +297,24 @@ def _unknown_capability_context(
 
 def _bounded_run_result(
     runtime: JacobianRuntime,
-    result: CapabilityResult,
-) -> CapabilityResult:
-    """Keep unknown-capability recovery small in structured MCP output."""
+    result: OperationResult,
+) -> OperationResult:
+    """Keep unknown-operation recovery small in structured MCP output."""
 
-    if not (result.diagnostics and result.diagnostics[0].code == "UNKNOWN_CAPABILITY"):
+    if not (result.diagnostics and result.diagnostics[0].code == "UNKNOWN_OPERATION"):
         return result
     payload = result.model_dump(mode="json")
     output = payload["output"]
-    output.update(_unknown_capability_context(runtime, result.capability_id))
+    output.update(_unknown_operation_context(runtime, result.operation_id))
     payload["output"] = output
-    return CapabilityResult.model_validate(payload)
+    return OperationResult.model_validate(payload)
 
 
-def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
+def _run_text_projection(result: OperationResult) -> dict[str, Any]:
     """Agent-visible projection: mathematical value first, then status."""
     payload = result.model_dump(mode="json")
     projection: dict[str, Any] = {
-        "capability_id": payload["capability_id"],
+        "operation_id": payload["operation_id"],
         "output": payload["output"],
         "execution": payload["execution"],
     }
@@ -330,13 +330,13 @@ def _run_text_projection(result: CapabilityResult) -> dict[str, Any]:
 
 
 async def math_find(
-    request: CapabilityFindRequest,
+    request: OperationFindRequest,
     *,
     ctx: Context[AppState, Any],
-) -> CapabilityDiscoveryToolResult:
+) -> OperationDiscoveryToolResult:
     with _runtime(ctx) as active_runtime:
-        if isinstance(request, _CapabilitySearchRequest):
-            discovery_response = _capability_discovery_response(
+        if isinstance(request, _OperationSearchRequest):
+            discovery_response = _operation_discovery_response(
                 active_runtime,
                 query=request.query,
                 domain=request.domain,
@@ -346,42 +346,42 @@ async def math_find(
                 cursor=request.cursor,
             )
             return _find_result(discovery_response)
-        capability_id = request.capability_id
-        descriptor = active_runtime.core.capabilities.inspect(capability_id)
+        operation_id = request.operation_id
+        descriptor = active_runtime.core.operations.inspect(operation_id)
         if descriptor is None:
-            hint = "Call math.find with a mathematical query to search installed capabilities."
+            hint = "Call math.find with a mathematical query to search installed operations."
             error_response = {
                 "error": {
-                    "code": "UNKNOWN_CAPABILITY",
-                    "stage": "capability_resolution",
-                    "message": f"Unknown capability: {capability_id}",
+                    "code": "UNKNOWN_OPERATION",
+                    "stage": "operation_resolution",
+                    "message": f"Unknown operation: {operation_id}",
                     "hint": hint,
-                    **_unknown_capability_context(
+                    **_unknown_operation_context(
                         active_runtime,
-                        capability_id,
+                        operation_id,
                     ),
                 }
             }
             return _find_result(error_response)
         response: dict[str, Any] = {
-            "kind": "capability",
-            "capability": descriptor.model_dump(mode="json"),
+            "kind": "operation",
+            "operation": descriptor.model_dump(mode="json"),
         }
         return _find_result(response)
 
 
 async def math_run(
-    capability_id: CapabilityId,
+    operation_id: OperationId,
     payload: dict[str, Any],
     inputs: dict[str, _ValueReferenceArgument] | None = None,
     *,
     ctx: Context[AppState, Any],
-) -> CapabilityRunToolResult:
+) -> OperationRunToolResult:
     """Run one math tool. Role comes from the tool ID."""
     with _runtime(ctx) as active_runtime:
-        result = await _invoke_capability_attempt(
+        result = await _invoke_operation_attempt(
             active_runtime,
-            capability_id=capability_id,
+            operation_id=operation_id,
             payload=payload,
             inputs=(
                 {name: binding.value_ref for name, binding in inputs.items()}

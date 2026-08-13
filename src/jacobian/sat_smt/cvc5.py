@@ -15,22 +15,22 @@ from pydantic import ValidationError
 
 from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.canonical import loads_strict_json
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.smt import (
     SmtUnsatProofFindOutput,
     SmtUnsatProofFindRequest,
 )
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -63,24 +63,24 @@ class _Cvc5Run:
     solver_status: _SolverStatus | None = None
     proof: bytes | None = None
     alethe_hole_count: int | None = None
-    diagnostic: CapabilityDiagnostic | None = None
+    diagnostic: OperationDiagnostic | None = None
 
 
-def install_cvc5_capability(
+def install_cvc5_operation(
     smt: SmtArtifactService,
-    runtime: CapabilityProviderRuntime,
-) -> CapabilityAdapter[SmtUnsatProofFindRequest]:
+    runtime: ProviderObservation,
+) -> OperationAdapter[SmtUnsatProofFindRequest]:
     """Install the Alethe producer for one exact available cvc5 runtime."""
 
     if (
         runtime.provider != "cvc5"
-        or runtime.availability is not CapabilityProviderAvailability.AVAILABLE
+        or runtime.availability is not ProviderAvailability.AVAILABLE
         or runtime.version != CVC5_VERSION
         or runtime.digest is None
         or runtime.digest_kind
-        is not CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
+        is not ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
     ):
-        raise ValueError("cvc5 capability requires the pinned available runtime")
+        raise ValueError("cvc5 operation requires the pinned available runtime")
     return Cvc5UnsatProofFindAdapter(
         smt=smt,
         backend=_Cvc5Backend(runtime=runtime),
@@ -88,7 +88,7 @@ def install_cvc5_capability(
 
 
 class _Cvc5Backend:
-    def __init__(self, *, runtime: CapabilityProviderRuntime) -> None:
+    def __init__(self, *, runtime: ProviderObservation) -> None:
         self.runtime = runtime
 
     def run(
@@ -197,8 +197,8 @@ class Cvc5UnsatProofFindAdapter:
     ) -> None:
         self.smt = smt
         self.backend = backend
-        self._descriptor = CapabilityDescriptor(
-            capability_id="smt.unsat_proof.find",
+        self._descriptor = OperationDescriptor(
+            operation_id="smt.unsat_proof.find",
             version="1",
             title="Find a quantifier-free SMT UNSAT proof",
             description=(
@@ -222,8 +222,8 @@ class Cvc5UnsatProofFindAdapter:
                 "qf-lia",
                 "qf-lra",
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="qf-lia-contradiction",
                     description=(
                         "Minimal valid request shape for a bounded arithmetic "
@@ -245,14 +245,14 @@ class Cvc5UnsatProofFindAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SmtUnsatProofFindRequest:
+    def prepare(self, request: OperationRequest) -> SmtUnsatProofFindRequest:
         try:
-            return parse_capability_input(SmtUnsatProofFindRequest, request.input)
+            return parse_operation_input(SmtUnsatProofFindRequest, request.input)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 _invalid_smt_unsat_proof_request_diagnostic(self.smt, exc)
             ) from exc
 
@@ -264,7 +264,7 @@ class Cvc5UnsatProofFindAdapter:
             ).artifact_uri
             resolved = self.smt.resolve_problem(problem_uri)
         except ValueError as exc:
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 _invalid_smt_unsat_proof_request_diagnostic(self.smt, exc)
             ) from exc
         run = self.backend.run(resolved, validated)
@@ -275,7 +275,7 @@ class Cvc5UnsatProofFindAdapter:
             run = _Cvc5Run(
                 execution_status=ExecutionStatus.CANCELLED,
                 runtime_ms=run.runtime_ms,
-                diagnostic=CapabilityDiagnostic(
+                diagnostic=OperationDiagnostic(
                     code="CVC5_CANCELLED",
                     stage="solver_execution",
                     message=(
@@ -335,8 +335,8 @@ class Cvc5UnsatProofFindAdapter:
 
 def _invalid_smt_unsat_proof_request_diagnostic(
     smt: SmtArtifactService, exc: Exception
-) -> CapabilityDiagnostic:
-    return CapabilityDiagnostic(
+) -> OperationDiagnostic:
+    return OperationDiagnostic(
         code="INVALID_SMT_UNSAT_PROOF_REQUEST",
         stage="input_validation",
         message=str(exc),
@@ -354,7 +354,7 @@ def _invalid_smt_unsat_proof_request_diagnostic(
 
 
 def _completed_result(
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     run: _Cvc5Run,
     output: SmtUnsatProofFindOutput,
     artifact_uris: tuple[str, ...],
@@ -362,7 +362,7 @@ def _completed_result(
     """Keep raw proof production typed until the public dispatch boundary."""
 
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Completed(value=output, runtime_ms=run.runtime_ms),
         publication=PublishedOperation(
@@ -373,14 +373,14 @@ def _completed_result(
 
 
 def _failed_result(
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     resolved: ResolvedSmtProblem,
     run: _Cvc5Run,
 ) -> OperationProjection:
     if run.diagnostic is None:
         raise RuntimeError("run diagnostic is unexpectedly None")
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Failed(
             status=run.execution_status,
@@ -490,7 +490,7 @@ def _run_failure(
     return _Cvc5Run(
         execution_status=status,
         runtime_ms=_runtime_ms(started),
-        diagnostic=CapabilityDiagnostic(
+        diagnostic=OperationDiagnostic(
             code=code,
             stage=stage,
             message=message,

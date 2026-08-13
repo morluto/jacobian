@@ -3,12 +3,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.checkers import (
     CheckerManifest,
     CheckerPythonDistribution,
@@ -17,6 +11,12 @@ from jacobian.contracts.checkers import (
     CheckerSandboxPolicy,
     CheckerSourceModule,
     EvidenceKind,
+)
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 
 _ARTIFACT_URI = "artifact://sha256/" + "a" * 64
@@ -41,15 +41,15 @@ def _worker_distributions() -> tuple[CheckerPythonDistribution, ...]:
 def _python_distribution_runtime(
     *,
     configuration: dict[str, str] | None = None,
-) -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+) -> ProviderObservation:
+    return ProviderObservation(
         provider="tests.distribution",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1.2.3",
         digest="sha256:" + "b" * 64,
-        digest_kind=CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+        digest_kind=ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         configuration=configuration
         or {
@@ -59,7 +59,7 @@ def _python_distribution_runtime(
     )
 
 
-def _registration(runtime: CapabilityProviderRuntime) -> CheckerRegistration:
+def _registration(runtime: ProviderObservation) -> CheckerRegistration:
     manifest = CheckerManifest(
         entrypoint="jacobian_checkers.reject:check",
         checker_source_modules=(
@@ -117,15 +117,15 @@ def test_checker_registration_rejects_a_manifest_digest_mismatch() -> None:
 def _source_tree_runtime(
     *,
     configuration: dict[str, str] | None = None,
-) -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+) -> ProviderObservation:
+    return ProviderObservation(
         provider="tests.source-tree",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1",
         digest="sha256:" + "e" * 64,
-        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        digest_kind=ProviderDigestKind.SOURCE_TREE,
         platform="any",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         configuration=(
             {"entrypoint": "jacobian_checkers.reject:check"}
@@ -141,7 +141,7 @@ def test_checker_registration_accepts_bound_python_distribution_runtime() -> Non
     assert registration.implementation.provider_runtime is not None
     assert (
         registration.implementation.provider_runtime.digest_kind
-        is CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
+        is ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
     )
 
 
@@ -151,7 +151,7 @@ def test_checker_registration_accepts_remeasurable_source_tree_runtime() -> None
     assert registration.implementation.provider_runtime is not None
     assert (
         registration.implementation.provider_runtime.digest_kind
-        is CapabilityProviderDigestKind.SOURCE_TREE
+        is ProviderDigestKind.SOURCE_TREE
     )
 
 

@@ -12,8 +12,8 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
@@ -52,7 +52,7 @@ def _open_graph_isomorphism_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             for adapter in graph_adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
             adapter, isomorphism = install_graph_isomorphism(
                 services.core.store,
                 services.core.schemas,
@@ -63,7 +63,7 @@ def _open_graph_isomorphism_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             if adapter is not None:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield GraphIsomorphismTestServices(
             core=services.core,
             application=services.application,
@@ -136,9 +136,9 @@ def test_graph_isomorphism_verifies_a_valid_bijection(
     graph_isomorphism_services,
 ) -> None:
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input=_input(graph_isomorphism_services, {"a": "x", "b": "z", "c": "y"}),
         )
     )
@@ -154,9 +154,9 @@ def test_graph_isomorphism_verifies_a_negative_result(
     graph_isomorphism_services,
 ) -> None:
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input=_input(graph_isomorphism_services, {"a": "x", "b": "y", "c": "z"}),
         )
     )
@@ -189,9 +189,9 @@ def test_graph_isomorphism_preserves_an_empty_missing_vertex_label(
         edges=[],
     )
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input={
                 "left_graph_uri": left_graph_uri,
                 "right_graph_uri": right_graph_uri,
@@ -219,9 +219,9 @@ def test_graph_isomorphism_reports_missing_target_for_empty_source(
         edges=[],
     )
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input={
                 "left_graph_uri": left_graph_uri,
                 "right_graph_uri": right_graph_uri,
@@ -252,9 +252,9 @@ def test_graph_isomorphism_keeps_checker_rejection_unknown(
         checker_id, reason="force fail-closed integration case"
     )
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input=request_input,
         )
     )
@@ -268,9 +268,9 @@ def test_graph_isomorphism_keeps_checker_rejection_unknown(
 def test_graph_isomorphism_accepts_graph_atlas_artifact_handoff(
     graph_isomorphism_services,
 ) -> None:
-    searched = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.search.atlas",
+    searched = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.search.atlas",
             input={"order": 3, "constraints": {"connected": True}, "limit": 1},
         )
     )
@@ -278,9 +278,9 @@ def test_graph_isomorphism_accepts_graph_atlas_artifact_handoff(
     graph_uri = candidate["graph_uri"]
     vertices = candidate["graph"]["vertices"]
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input={
                 "left_graph_uri": graph_uri,
                 "right_graph_uri": graph_uri,
@@ -311,9 +311,9 @@ def test_graph_isomorphism_accepts_valid_unsorted_graph_artifacts(
         edges=[["y", "z"], ["x", "y"]],
     )
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input={
                 "left_graph_uri": left_graph_uri,
                 "right_graph_uri": right_graph_uri,
@@ -350,9 +350,9 @@ def test_graph_isomorphism_rejects_incompatible_graph_artifact(
         edges=[],
     )
 
-    result = graph_isomorphism_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.isomorphism.verify",
+    result = graph_isomorphism_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.isomorphism.verify",
             input={
                 "left_graph_uri": wrong_artifact.artifact_uri,
                 "right_graph_uri": right_graph_uri,
@@ -372,6 +372,6 @@ def test_graph_isomorphism_is_unavailable_without_reference_checkers(
     runtime = unauthorized_graph_isomorphism_services
 
     assert "graph.isomorphism.verify" not in {
-        descriptor.capability_id
-        for descriptor in runtime.core.capabilities.catalog().capabilities
+        descriptor.operation_id
+        for descriptor in runtime.core.operations.catalog().operations
     }

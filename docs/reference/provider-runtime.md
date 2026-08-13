@@ -14,7 +14,7 @@ status, or package digest is never evidence that a mathematical claim is
 
 ## Descriptor metadata
 
-Every registered `CapabilityDescriptor` carries `provider_runtime`:
+Every registered `OperationDescriptor` carries `provider_runtime`:
 
 | Field | Meaning |
 | --- | --- |
@@ -58,7 +58,7 @@ is `READINESS_FAILED`; it does not change the import-free availability probe.
 
 ## Availability
 
-`CapabilityService.register` rejects descriptors without runtime identity and
+`OperationService.register` rejects descriptors without runtime identity and
 descriptors whose runtime is `UNAVAILABLE`. Built-in locked Python providers
 must import, expose the required feature symbols, and have a hashed
 distribution RECORD. The Lean probe validates the pinned Lean version and
@@ -76,7 +76,7 @@ profile does not require a Mathlib checkout.
 
 If the separately managed Lean runtime is absent or unhealthy, the runtime
 still starts. Capabilities requiring the failed profile are absent from
-`capability://catalog`, and no invocation is attempted. Explicit
+`operation://catalog`, and no invocation is attempted. Explicit
 operator-installed adapters fail registration instead of silently falling
 back to another provider.
 
@@ -90,14 +90,14 @@ Source-backed checker implementations can construct metadata without importing
 their implementation:
 
 ```python
-from jacobian.contracts.capabilities import CapabilityInstallTier
+from jacobian.contracts.operations import OperationInstallTier
 from jacobian.provider_runtime import source_provider_runtime
 
 runtime = source_provider_runtime(
     "example.checker",
     version="1",
     entrypoint="example_checker:check",
-    install_tier=CapabilityInstallTier.T1,
+    install_tier=OperationInstallTier.T1,
     license_id="MIT",
     license_files=("LICENSE",),
     features=("exact-example-check",),
@@ -124,7 +124,7 @@ provider probe may require a strict operator-managed provenance sidecar that
 binds the expected upstream release and source commit to the locally measured
 executable digest. Such a sidecar records the operator's authorization basis;
 it is not mathematical evidence or upstream attestation. A missing, malformed,
-or digest-mismatched sidecar leaves the checker capability unavailable.
+or digest-mismatched sidecar leaves the checker operation unavailable.
 
 The pinned Lean runtime is measured under this rule when it is selected for an
 independent checker. Its source/build identity and executable/runtime digest
@@ -132,7 +132,7 @@ are recorded with the checker authorization and remeasured around replay.
 
 ## Repeatable measurement
 
-Measure the provider selected for one installed capability:
+Measure the provider selected for one installed operation:
 
 ```sh
 uv run jacobian --checker-authority NONE \

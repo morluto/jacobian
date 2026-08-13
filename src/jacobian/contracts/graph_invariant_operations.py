@@ -20,7 +20,7 @@ class GraphInvariantRequest(ContractModel):
 
 
 class GraphMaximumMatchingGraph(ChromaticGraph):
-    """A simple graph bounded for the polynomial-time matching capability."""
+    """A simple graph bounded for the polynomial-time matching operation."""
 
     vertices: tuple[GraphVertex, ...] = Field(max_length=64)
     edges: tuple[tuple[GraphVertex, GraphVertex], ...] = Field(max_length=2_016)

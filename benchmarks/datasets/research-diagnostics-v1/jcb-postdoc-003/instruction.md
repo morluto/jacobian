@@ -4,7 +4,7 @@ In the language of one binary operation ◇, determine whether the identity x◇
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. A found model needs a separately inspectable law-evaluation result. Absence at any chosen maximum order proves only nonexistence inside that finite scope.
+report the operation boundary honestly. A found model needs a separately inspectable law-evaluation result. Absence at any chosen maximum order proves only nonexistence inside that finite scope.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

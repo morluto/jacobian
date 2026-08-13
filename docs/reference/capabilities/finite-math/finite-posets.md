@@ -7,7 +7,7 @@
 - Independent replay: standard-library clean-process checker
 - Producer assurance: at most `COMPUTED`
 
-The `poset` bundle exposes five atomic capabilities:
+The `poset` bundle exposes five atomic operations:
 
 - `poset.finite.compute`;
 - `poset.width.compute`;

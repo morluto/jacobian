@@ -47,7 +47,7 @@ invocation, completion, abstention, unexpected operations, and independently
 bound verification evidence.
 
 Case contracts gate only required outcome operations and verification evidence.
-Optional `diagnostic_capability_ids` record whether an operation was discovered,
+Optional `diagnostic_operation_ids` record whether an operation was discovered,
 attempted, or completed without requiring one fixed tool sequence for success.
 `acceptable_output_outcomes` can instead require substantive fields from any one
 of several completed atomic operations; this scores structured mathematical

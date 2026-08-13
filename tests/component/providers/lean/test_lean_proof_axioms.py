@@ -6,16 +6,16 @@ from types import SimpleNamespace
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanEnvironment
+from jacobian.contracts.operations import (
+    OperationRequest,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.lean_frontend import proof_axioms
-from jacobian.lean_frontend.proof_axioms import install_lean_proof_axioms_capability
+from jacobian.lean_frontend.proof_axioms import install_lean_proof_axioms_operation
 from jacobian.operation_projection import project_operation_result
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -25,14 +25,14 @@ def test_proof_hole_inspection_ignores_strings_and_identifiers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = CapabilityProviderRuntime(
+    runtime = ProviderObservation(
         provider="jacobian.lean4",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="4.31.0",
         digest="sha256:" + "a" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="test",
-        install_tier=CapabilityInstallTier.T3,
+        install_tier=ProviderInstallTier.T3,
         license_id="Apache-2.0",
         features=("CORE",),
     )
@@ -58,7 +58,7 @@ def test_proof_hole_inspection_ignores_strings_and_identifiers(
     with ArtifactRepository(tmp_path) as store:
         schemas = SchemaRegistry(store)
         artifacts = ArtifactService(store, schemas)
-        adapter, _installation = install_lean_proof_axioms_capability(
+        adapter, _installation = install_lean_proof_axioms_operation(
             store,
             schemas,
             artifacts,
@@ -68,8 +68,8 @@ def test_proof_hole_inspection_ignores_strings_and_identifiers(
         result = project_operation_result(
             adapter.invoke(
                 adapter.prepare(
-                    CapabilityRequest(
-                        capability_id="lean.proof.axioms.inspect",
+                    OperationRequest(
+                        operation_id="lean.proof.axioms.inspect",
                         input={
                             "environment": "CORE",
                             "statement": "True",

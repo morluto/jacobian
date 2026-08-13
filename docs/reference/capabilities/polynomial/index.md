@@ -1,4 +1,4 @@
-# Polynomial capability references
+# Polynomial operation references
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
@@ -23,7 +23,7 @@ Each operation preflights its own degree, coefficient, expansion, enumeration,
 and output limits before converting to SymPy. A structurally valid value can
 therefore be rejected as too expensive for a particular operation.
 
-SymPy conversion is owned by the polynomial domain. Capability operations use
+SymPy conversion is owned by the polynomial domain. Operation operations use
 the same typed producer kernels as the small native
 `jacobian.math.polynomials` API; neither route serializes an intermediate
 polynomial through JSON. Independent checkers consume the authoritative

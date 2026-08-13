@@ -5,7 +5,7 @@ import pytest
 
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
-from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.operations import invoke_operation as _invoke
 from tests.support.services import DomainTestServices, open_domain_services
 
 

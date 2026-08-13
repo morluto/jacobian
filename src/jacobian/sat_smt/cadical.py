@@ -12,15 +12,13 @@ from pathlib import Path
 from typing import Literal
 
 from jacobian.bounded_process import bounded_process_cancelled
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import (
@@ -30,6 +28,8 @@ from jacobian.contracts.sat import (
     SatModelFindOutput,
     SatUnsatProofFindOutput,
 )
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -61,7 +61,7 @@ class _CadicalRun:
     model_literals: tuple[int, ...] = ()
     proof: bytes | None = None
     removed_deletion_steps: int = 0
-    diagnostic: CapabilityDiagnostic | None = None
+    diagnostic: OperationDiagnostic | None = None
 
 
 class _CadicalRawProofLimitError(OverflowError):
@@ -74,23 +74,23 @@ class _CadicalDurableProofLimitError(OverflowError):
 
 def install_cadical_capabilities(
     sat: SatArtifactService,
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     *,
     executable: str | Path | None = None,
 ) -> tuple[
-    CapabilityAdapter[SatExplorationRequest],
-    CapabilityAdapter[SatExplorationRequest],
+    OperationAdapter[SatExplorationRequest],
+    OperationAdapter[SatExplorationRequest],
 ]:
     """Install model and proof producers for one exact available runtime."""
 
     if (
         runtime.provider != "cadical"
-        or runtime.availability is not CapabilityProviderAvailability.AVAILABLE
+        or runtime.availability is not ProviderAvailability.AVAILABLE
         or runtime.version != CADICAL_VERSION
         or runtime.digest is None
-        or runtime.digest_kind is not CapabilityProviderDigestKind.EXECUTABLE
+        or runtime.digest_kind is not ProviderDigestKind.EXECUTABLE
     ):
-        raise ValueError("CaDiCaL capabilities require the pinned available runtime")
+        raise ValueError("CaDiCaL operations require the pinned available runtime")
     configured = runtime.configuration.get("executable")
     selected = executable if executable is not None else configured
     if not isinstance(selected, (str, Path)):
@@ -112,7 +112,7 @@ class _CadicalBackend:
     def __init__(
         self,
         *,
-        runtime: CapabilityProviderRuntime,
+        runtime: ProviderObservation,
         executable: Path,
     ) -> None:
         self.runtime = runtime
@@ -247,7 +247,7 @@ class _CadicalBackend:
                 stage="provider_identity",
                 message=(
                     "The CaDiCaL executable no longer matches the runtime digest "
-                    "advertised by the capability."
+                    "advertised by the operation."
                 ),
             )
         with tempfile.TemporaryDirectory(prefix="jacobian-cadical-") as directory:
@@ -345,8 +345,8 @@ class CadicalModelFindAdapter:
     ) -> None:
         self.sat = sat
         self.backend = backend
-        self._descriptor = CapabilityDescriptor(
-            capability_id="sat.model.find",
+        self._descriptor = OperationDescriptor(
+            operation_id="sat.model.find",
             version="1",
             title="Find a SAT assignment",
             description=(
@@ -373,11 +373,11 @@ class CadicalModelFindAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SatExplorationRequest:
-        return parse_capability_input(SatExplorationRequest, request.input)
+    def prepare(self, request: OperationRequest) -> SatExplorationRequest:
+        return parse_operation_input(SatExplorationRequest, request.input)
 
     def invoke(self, validated: SatExplorationRequest) -> OperationProjection:
         resolved = _resolve_request(self.sat, validated)
@@ -406,7 +406,7 @@ class CadicalModelFindAdapter:
                     _CadicalRun(
                         execution_status=ExecutionStatus.ERROR,
                         runtime_ms=run.runtime_ms,
-                        diagnostic=CapabilityDiagnostic(
+                        diagnostic=OperationDiagnostic(
                             code="INVALID_CADICAL_MODEL",
                             stage="model_capture",
                             message=(
@@ -473,8 +473,8 @@ class CadicalUnsatProofFindAdapter:
     ) -> None:
         self.sat = sat
         self.backend = backend
-        self._descriptor = CapabilityDescriptor(
-            capability_id="sat.unsat_proof.find",
+        self._descriptor = OperationDescriptor(
+            operation_id="sat.unsat_proof.find",
             version="1",
             title="Find a SAT UNSAT proof",
             description=(
@@ -501,11 +501,11 @@ class CadicalUnsatProofFindAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SatExplorationRequest:
-        return parse_capability_input(SatExplorationRequest, request.input)
+    def prepare(self, request: OperationRequest) -> SatExplorationRequest:
+        return parse_operation_input(SatExplorationRequest, request.input)
 
     def invoke(self, validated: SatExplorationRequest) -> OperationProjection:
         resolved = _resolve_request(self.sat, validated)
@@ -565,8 +565,8 @@ def _resolve_request(
     try:
         return sat.resolve_cnf(request.cnf_uri)
     except SatArtifactError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INVALID_SAT_EXPLORATION_REQUEST",
                 stage="artifact_resolution",
                 message=str(exc),
@@ -583,7 +583,7 @@ def _resolve_request(
 
 
 def _completed_result(
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     run: _CadicalRun,
     output: SatModelFindOutput | SatUnsatProofFindOutput,
     artifact_uris: tuple[str, ...],
@@ -591,7 +591,7 @@ def _completed_result(
     """Keep unverified solver output typed until public dispatch."""
 
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Completed(value=output, runtime_ms=run.runtime_ms),
         publication=PublishedOperation(
@@ -602,14 +602,14 @@ def _completed_result(
 
 
 def _failed_result(
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     resolved: ResolvedSatCnf,
     run: _CadicalRun,
 ) -> OperationProjection:
     if run.diagnostic is None:
         raise RuntimeError("run diagnostic is unexpectedly None")
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Failed(
             status=run.execution_status,
@@ -683,7 +683,7 @@ def _cancelled_after_solver(run: _CadicalRun) -> _CadicalRun:
     return _CadicalRun(
         execution_status=ExecutionStatus.CANCELLED,
         runtime_ms=run.runtime_ms,
-        diagnostic=CapabilityDiagnostic(
+        diagnostic=OperationDiagnostic(
             code="CADICAL_CANCELLED",
             stage="solver_execution",
             message=(
@@ -705,7 +705,7 @@ def _run_failure(
     return _CadicalRun(
         execution_status=status,
         runtime_ms=_runtime_ms(started),
-        diagnostic=CapabilityDiagnostic(
+        diagnostic=OperationDiagnostic(
             code=code,
             stage=stage,
             message=message,

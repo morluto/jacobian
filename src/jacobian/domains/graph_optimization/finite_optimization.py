@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, cast
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_coloring import ChromaticGraph
 from jacobian.contracts.graph_optimization import (
     GraphDominationMinimumOutput,
@@ -16,6 +15,7 @@ from jacobian.contracts.graph_optimization import (
     GraphOptimizationBudget,
     GraphOptimizationRequest,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains.graph_optimization.exact_search import (
     solve_domination,
@@ -26,7 +26,8 @@ from jacobian.domains.graph_optimization.exact_search import (
 )
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.operation_bindings import InstalledOperation, inline_operation
-from jacobian.operations import OperationAbortError, OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operations import OperationAbortError
 
 
 class _HasStatus(Protocol):
@@ -74,7 +75,7 @@ def _valid_witness(graph: Any, result: ContractModel) -> bool:
     return False
 
 
-_INVALID_GRAPH_OPTIMIZATION_REQUEST = CapabilityDiagnostic(
+_INVALID_GRAPH_OPTIMIZATION_REQUEST = OperationDiagnostic(
     code="INVALID_GRAPH_OPTIMIZATION_REQUEST",
     stage="graph_optimization_input_validation",
     message="Input does not satisfy the bounded finite-graph optimization contract.",
@@ -98,7 +99,7 @@ def _execute[ResultT: ContractModel](
     if not _valid_witness(graph, result):
         raise OperationAbortError(
             ExecutionStatus.ERROR,
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="GRAPH_OPTIMIZATION_WITNESS_INVALID",
                 stage="graph_optimization_postcondition",
                 message=(
@@ -112,7 +113,7 @@ def _execute[ResultT: ContractModel](
     if state.termination_reason in {"WALL_TIME", "SOLVER_UNKNOWN"}:
         raise OperationAbortError(
             ExecutionStatus.TIMEOUT,
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="GRAPH_OPTIMIZATION_TIMEOUT",
                 stage="graph_optimization_search",
                 message=(
@@ -133,7 +134,7 @@ def _operation[ResultT: ContractModel](
     *tags: str,
 ) -> InstalledOperation[GraphOptimizationRequest, ResultT]:
     return inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id=operation_id,
             version="1",
             title=title,
@@ -147,7 +148,7 @@ def _operation[ResultT: ContractModel](
     )
 
 
-DOMINATION_MINIMUM_CAPABILITY = _operation(
+DOMINATION_MINIMUM_OPERATION = _operation(
     "graph.domination.minimum.compute",
     "Minimum dominating set",
     "Compute the domination number and an attaining set within explicit budgets.",
@@ -157,7 +158,7 @@ DOMINATION_MINIMUM_CAPABILITY = _operation(
     "minimum",
 )
 
-MINIMUM_MAXIMAL_MATCHING_CAPABILITY = _operation(
+MINIMUM_MAXIMAL_MATCHING_OPERATION = _operation(
     "graph.matching.maximal.minimum.compute",
     "Minimum maximal matching",
     "Compute the saturation number and an attaining maximal matching within explicit budgets.",
@@ -170,7 +171,7 @@ MINIMUM_MAXIMAL_MATCHING_CAPABILITY = _operation(
     "minimum",
 )
 
-INDUCED_FOREST_MAXIMUM_CAPABILITY = _operation(
+INDUCED_FOREST_MAXIMUM_OPERATION = _operation(
     "graph.induced_forest.maximum.compute",
     "Maximum induced forest",
     "Compute a maximum-order induced forest and vertex witness within explicit budgets.",
@@ -180,7 +181,7 @@ INDUCED_FOREST_MAXIMUM_CAPABILITY = _operation(
     "maximum",
 )
 
-INDUCED_TREE_MAXIMUM_CAPABILITY = _operation(
+INDUCED_TREE_MAXIMUM_OPERATION = _operation(
     "graph.induced_tree.maximum.compute",
     "Maximum induced tree",
     "Compute a maximum-order induced tree and vertex witness within explicit budgets.",
@@ -190,7 +191,7 @@ INDUCED_TREE_MAXIMUM_CAPABILITY = _operation(
     "maximum",
 )
 
-INDUCED_BIPARTITE_MAXIMUM_CAPABILITY = _operation(
+INDUCED_BIPARTITE_MAXIMUM_OPERATION = _operation(
     "graph.induced_bipartite.maximum.compute",
     "Maximum induced bipartite subgraph",
     "Compute a maximum-order induced bipartite subgraph within explicit budgets.",
@@ -200,10 +201,10 @@ INDUCED_BIPARTITE_MAXIMUM_CAPABILITY = _operation(
     "maximum",
 )
 
-FINITE_GRAPH_OPTIMIZATION_CAPABILITIES = (
-    DOMINATION_MINIMUM_CAPABILITY,
-    MINIMUM_MAXIMAL_MATCHING_CAPABILITY,
-    INDUCED_FOREST_MAXIMUM_CAPABILITY,
-    INDUCED_TREE_MAXIMUM_CAPABILITY,
-    INDUCED_BIPARTITE_MAXIMUM_CAPABILITY,
+FINITE_GRAPH_OPTIMIZATION_OPERATIONS = (
+    DOMINATION_MINIMUM_OPERATION,
+    MINIMUM_MAXIMAL_MATCHING_OPERATION,
+    INDUCED_FOREST_MAXIMUM_OPERATION,
+    INDUCED_TREE_MAXIMUM_OPERATION,
+    INDUCED_BIPARTITE_MAXIMUM_OPERATION,
 )

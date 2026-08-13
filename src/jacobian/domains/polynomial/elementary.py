@@ -1,4 +1,4 @@
-"""Domain-owned elementary integer and rational polynomial capabilities."""
+"""Domain-owned elementary integer and rational polynomial operations."""
 
 from jacobian.contracts.polynomial_operations import (
     IntegerPolynomialCompositionRequest,
@@ -38,7 +38,7 @@ from jacobian.domains.polynomial.elementary_operations import (
     rational_polynomial_integral,
 )
 
-INTEGER_POLYNOMIAL_CAPABILITIES = (
+INTEGER_POLYNOMIAL_OPERATIONS = (
     polynomial_operation(
         "polynomial.integer.compute.gcd",
         "Compute an integer-polynomial GCD",
@@ -52,7 +52,7 @@ INTEGER_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "integer",
         "gcd",
-        invocation_examples=(
+        examples=(
             example(
                 "integer_gcd",
                 "Compute the GCD of two integer polynomials.",
@@ -73,7 +73,7 @@ INTEGER_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "integer",
         "content",
-        invocation_examples=(
+        examples=(
             example(
                 "content_6x2_plus_9x",
                 "Compute the coefficient content of 6x²+9x.",
@@ -94,7 +94,7 @@ INTEGER_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "integer",
         "primitive",
-        invocation_examples=(
+        examples=(
             example(
                 "primitive_part_6x2_plus_9x",
                 "Compute the primitive part of 6x²+9x.",
@@ -112,7 +112,7 @@ INTEGER_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "integer",
         "evaluation",
-        invocation_examples=(
+        examples=(
             example(
                 "evaluate_at_four",
                 "Evaluate 2x²-3x+1 at 4.",
@@ -130,7 +130,7 @@ INTEGER_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "integer",
         "composition",
-        invocation_examples=(
+        examples=(
             example(
                 "compose_x_plus_one",
                 "Compose x+1 with x².",
@@ -157,7 +157,7 @@ INTEGER_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "integer",
         "shift",
-        invocation_examples=(
+        examples=(
             example(
                 "shift_x2_by_two",
                 "Compute p(x+2) for p(x)=x².",
@@ -173,7 +173,7 @@ INTEGER_POLYNOMIAL_CAPABILITIES = (
     ),
 )
 
-RATIONAL_POLYNOMIAL_CAPABILITIES = (
+RATIONAL_POLYNOMIAL_OPERATIONS = (
     polynomial_operation(
         "polynomial.rational.compute.quotient_remainder",
         "Divide rational polynomials",
@@ -187,7 +187,7 @@ RATIONAL_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "rational",
         "division",
-        invocation_examples=(
+        examples=(
             example(
                 "divide_x_squared_minus_one",
                 "Divide x²-1 by x-1.",
@@ -240,7 +240,7 @@ RATIONAL_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "rational",
         "evaluation",
-        invocation_examples=(
+        examples=(
             example(
                 "rational_evaluate_x2_plus_one",
                 "Evaluate x²+1 at 2.",
@@ -277,7 +277,7 @@ RATIONAL_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "rational",
         "derivative",
-        invocation_examples=(
+        examples=(
             example(
                 "cubic_derivative",
                 "Differentiate one half x³ minus 2x.",
@@ -316,7 +316,7 @@ RATIONAL_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "rational",
         "integration",
-        invocation_examples=(
+        examples=(
             example(
                 "integral_two_x",
                 "Integrate 2x with zero constant.",
@@ -351,7 +351,7 @@ RATIONAL_POLYNOMIAL_CAPABILITIES = (
         "polynomial",
         "rational-function",
         "partial-fraction",
-        invocation_examples=(
+        examples=(
             example(
                 "partial_fraction_one_over_x2_minus_one",
                 "Decompose 1/(x²-1) into partial fractions.",
@@ -393,6 +393,6 @@ RATIONAL_POLYNOMIAL_CAPABILITIES = (
 )
 
 __all__ = [
-    "INTEGER_POLYNOMIAL_CAPABILITIES",
-    "RATIONAL_POLYNOMIAL_CAPABILITIES",
+    "INTEGER_POLYNOMIAL_OPERATIONS",
+    "RATIONAL_POLYNOMIAL_OPERATIONS",
 ]

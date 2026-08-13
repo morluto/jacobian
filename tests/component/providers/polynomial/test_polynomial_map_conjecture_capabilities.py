@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus, InputStatus
 
@@ -58,15 +58,15 @@ def test_public_jacobian_counterexample_fixture_replays_both_claim_bindings(
     )
     runtime = authorized_polynomial_services
 
-    keller_result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.keller_condition.verify",
+    keller_result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.keller_condition.verify",
             input={"map": keller["map"]},
         )
     )
-    obstruction_result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.inverse.refute_by_collision",
+    obstruction_result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.inverse.refute_by_collision",
             input={
                 "map": obstruction["map"],
                 "first_point": obstruction["first_point"],
@@ -87,9 +87,9 @@ def test_public_jacobian_counterexample_fixture_replays_both_claim_bindings(
 def test_keller_condition_verifies_the_published_style_exact_map(
     authorized_polynomial_services,
 ) -> None:
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.keller_condition.verify",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.keller_condition.verify",
             input={"map": _identity_map()},
         )
     )
@@ -104,9 +104,9 @@ def test_keller_condition_verifies_the_published_style_exact_map(
 def test_keller_condition_verifies_a_false_conclusion_for_nonconstant_determinant(
     authorized_polynomial_services,
 ) -> None:
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.keller_condition.verify",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.keller_condition.verify",
             input={"map": _square_map()},
         )
     )
@@ -120,9 +120,9 @@ def test_keller_condition_verifies_a_false_conclusion_for_nonconstant_determinan
 def test_collision_refutes_two_sided_inverse(
     authorized_polynomial_services,
 ) -> None:
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.inverse.refute_by_collision",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.inverse.refute_by_collision",
             input={
                 "map": _square_map(),
                 "first_point": [_rational(-1)],
@@ -141,9 +141,9 @@ def test_collision_refutes_two_sided_inverse(
 def test_collision_inverse_obstruction_fails_closed_for_wrong_image(
     authorized_polynomial_services,
 ) -> None:
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.inverse.refute_by_collision",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.inverse.refute_by_collision",
             input={
                 "map": _square_map(),
                 "first_point": [_rational(-1)],
@@ -165,10 +165,10 @@ def test_collision_inverse_obstruction_fails_closed_for_wrong_image(
 def test_new_checker_capabilities_are_omitted_without_authorization(
     polynomial_services,
 ) -> None:
-    capability_ids = {
-        item.capability_id
-        for item in polynomial_services.core.capabilities.catalog().capabilities
+    operation_ids = {
+        item.operation_id
+        for item in polynomial_services.core.operations.catalog().operations
     }
 
-    assert "polynomial.map.keller_condition.verify" not in capability_ids
-    assert "polynomial.map.inverse.refute_by_collision" not in capability_ids
+    assert "polynomial.map.keller_condition.verify" not in operation_ids
+    assert "polynomial.map.inverse.refute_by_collision" not in operation_ids

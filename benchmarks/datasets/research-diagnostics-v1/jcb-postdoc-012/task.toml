@@ -25,7 +25,7 @@ derivation = "The public resolution requires a long formal construction in local
 historical_fit = "MISSING"
 current_status = "OPEN_GAP"
 evaluation_status = "BLOCKED_ON_INTERVENTION"
-next_action = "Route this case to commutative-algebra discovery rather than treating it as evidence for a generic topology capability."
+next_action = "Route this case to commutative-algebra discovery rather than treating it as evidence for a generic topology operation."
 
 [agent]
 timeout_sec = 600.0

@@ -10,18 +10,16 @@ from typing import Literal
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationInputKind,
+    OperationRequest,
+)
 from jacobian.contracts.results import (
     Conclusion,
     Execution,
@@ -33,6 +31,8 @@ from jacobian.contracts.sat import (
     SatLratVerificationOutput,
     SatLratVerificationRequest,
 )
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -61,7 +61,7 @@ def install_sat_lrat_verifier(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[CapabilityAdapter[SatLratVerificationRequest] | None, SatLratInstallation]:
+) -> tuple[OperationAdapter[SatLratVerificationRequest] | None, SatLratInstallation]:
     proof_schema_uri = schemas.register_model(
         name="jacobian.sat-lrat-proof", version="1", model=SatLratProofArtifact
     )
@@ -123,8 +123,8 @@ class SatLratVerificationAdapter:
         checker_id = installation.checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
-        self._descriptor = CapabilityDescriptor(
-            capability_id="sat.lrat.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="sat.lrat.verify",
             version="2",
             title="Replay and verify an LRAT UNSAT proof",
             description=(
@@ -152,23 +152,23 @@ class SatLratVerificationAdapter:
                 "invalid-step",
                 "rejection-witness",
             ),
-            accepted_input_kinds=(CapabilityInputKind.STRUCTURED_REQUEST,),
+            accepted_input_kinds=(OperationInputKind.STRUCTURED_REQUEST,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SatLratVerificationRequest:
-        return parse_capability_input(SatLratVerificationRequest, request.input)
+    def prepare(self, request: OperationRequest) -> SatLratVerificationRequest:
+        return parse_operation_input(SatLratVerificationRequest, request.input)
 
     def invoke(self, validated: SatLratVerificationRequest) -> OperationProjection:
         try:
             resolved = self.sat.resolve_cnf(validated.cnf_uri)
             semantics = self.store.get(self.sat.installation.semantics_uri)
         except (SatArtifactError, StorageError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_SAT_CNF",
                     stage="artifact_resolution",
                     message=str(exc),
@@ -315,7 +315,7 @@ class SatLratVerificationAdapter:
 
 def _verification_projection(
     *,
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     execution: Execution,
     output: SatLratVerificationOutput,
     artifact_uris: tuple[str, ...],
@@ -327,7 +327,7 @@ def _verification_projection(
     publication = PublishedOperation(output=output, artifact_uris=artifact_uris)
     if execution.status is ExecutionStatus.COMPLETED:
         return OperationProjection(
-            operation_id=descriptor.capability_id,
+            operation_id=descriptor.operation_id,
             version=descriptor.version,
             terminal=Completed(
                 value=output,
@@ -338,12 +338,12 @@ def _verification_projection(
             verification_record_uri=verification_record_uri,
         )
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Failed(
             status=execution.status,
             runtime_ms=execution.runtime_ms,
-            diagnostic=CapabilityDiagnostic(
+            diagnostic=OperationDiagnostic(
                 code="SAT_LRAT_CHECK_NONCONCLUSIVE",
                 stage="verification",
                 message=detail,

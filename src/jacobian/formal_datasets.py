@@ -5,15 +5,15 @@ from __future__ import annotations
 import hashlib
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-)
 from jacobian.contracts.formal_datasets import (
     FormalDatasetArtifact,
     FormalDatasetDiagnosticBaseline,
     FormalDatasetMaterializeRequest,
     formal_dataset_diagnostics,
     formal_dataset_preprocessing,
+)
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
 )
 from jacobian.operations import OperationRefusalError
 from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
@@ -85,7 +85,7 @@ def _materialize_operation(
         and validated.expected_row_digest != payload.row_digest
     ):
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="FORMAL_DATASET_ROW_DIGEST_MISMATCH",
                 stage="source_binding",
                 message="The supplied row does not match expected_row_digest.",

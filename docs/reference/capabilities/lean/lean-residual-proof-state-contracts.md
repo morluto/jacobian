@@ -17,7 +17,7 @@ and fail-closed boundary.
 
 The request accepts either an explicit statement and tactic prefix (which first
 materializes the bound input-state artifact) or a `state_uri` returned by a
-prior proof-state capability, plus a single `term` expression. The term must be
+prior proof-state operation, plus a single `term` expression. The term must be
 one Lean expression: no newlines, `:=`, or forbidden commands. The adapter
 constructs `exact <term>` and delegates to the proof-state adapter, so the
 returned transition artifact records the elaborated tactic, the successor-state
@@ -77,7 +77,7 @@ closed as non-conclusions.
 `Lean.Meta.Coe` APIs (`expandCoe`, `getCoeFnInfo?`) operate on expressions
 during elaboration and do not retain a per-metavariable coercion log on a
 pickled proof state. Inferring coercions by parsing pretty-printed output is
-forbidden by the repository contract model, so this capability reports the
+forbidden by the repository contract model, so this operation reports the
 limitation honestly rather than fabricating provenance or hand-rolling
 instrumentation. The `coercion_provenance_basis` field records the reason.
 

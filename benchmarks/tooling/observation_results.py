@@ -831,14 +831,14 @@ def _heldout_runtime_invariants(plan: dict[str, Any]) -> dict[str, Any]:
 _MATH_RUN_TOOL = "math.run"
 
 
-def _mark_invoked_if_capability_used(
+def _mark_invoked_if_operation_used(
     ledger: dict[str, Any],
     trials: list[dict[str, Any]],
     *,
     contract_dir: Path,
 ) -> bool:
     """Transition treatment routing_status to AVAILABLE_INVOKED when
-    a successful Jacobian capability invocation is observed during
+    a successful Jacobian operation invocation is observed during
     normalization.  Only actual observed tool_calls evidence this; the
     preflight proves AVAILABLE_UNUSED and the runner must not override it.
     Persists the updated contract to ``routing-status-c2.json``.
@@ -897,7 +897,7 @@ def collect_heldout_evidence(
     failures.extend(run_failures)
     experiment = manifest["experiment"]
     if condition == "C2":
-        routing_changed = _mark_invoked_if_capability_used(
+        routing_changed = _mark_invoked_if_operation_used(
             ledger, trials, contract_dir=ledger_path.parent
         )
         if routing_changed:

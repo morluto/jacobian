@@ -1,4 +1,4 @@
-"""Exact simple-graph degree-sequence realization capability."""
+"""Exact simple-graph degree-sequence realization operation."""
 
 from __future__ import annotations
 
@@ -10,13 +10,6 @@ from typing import Any, Literal, cast
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.graph_degree_sequence import (
     GraphDegreeSequenceClaim,
@@ -25,6 +18,11 @@ from jacobian.contracts.graph_degree_sequence import (
     GraphDegreeSequenceReplayPayload,
     GraphDegreeSequenceRequest,
     GraphDegreeSequenceResultArtifact,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
 )
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import (
@@ -35,6 +33,8 @@ from jacobian.graphs.artifacts import (
 from jacobian.graphs.artifacts import (
     graph_payload as canonical_graph_payload,
 )
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -55,8 +55,8 @@ class GraphDegreeSequenceAdapter:
 
     def __init__(self, resources: GraphDegreeSequenceResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="graph.realize.degree_sequence",
+        self._descriptor = OperationDescriptor(
+            operation_id="graph.realize.degree_sequence",
             version="1",
             title="Realize a simple-graph degree sequence",
             description=(
@@ -81,7 +81,7 @@ class GraphDegreeSequenceAdapter:
                 "construction",
                 "counterexample",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "triangle_degree_sequence",
                     "Realize the degree sequence of a triangle.",
@@ -91,15 +91,15 @@ class GraphDegreeSequenceAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> GraphDegreeSequenceRequest:
+    def prepare(self, request: OperationRequest) -> GraphDegreeSequenceRequest:
         try:
-            return parse_capability_input(GraphDegreeSequenceRequest, request.input)
+            return parse_operation_input(GraphDegreeSequenceRequest, request.input)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_DEGREE_SEQUENCE_REQUEST",
                     stage="request_validation",
                     message="The complete degree-sequence request is invalid.",
@@ -227,7 +227,7 @@ class GraphDegreeSequenceAdapter:
         if graph_artifact is not None:
             artifact_uris.insert(0, graph_artifact.artifact_uri)
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=output, runtime_ms=runtime_ms(started)),
             publication=PublishedOperation(

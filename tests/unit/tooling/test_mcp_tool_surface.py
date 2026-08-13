@@ -40,13 +40,13 @@ def test_server_instructions_distinguish_search_from_complete_inventory() -> Non
     combined = "\n".join((SERVER_INSTRUCTIONS, MATH_FIND_DESCRIPTION))
 
     assert "authoritative local search and exact-inspection interface" in combined
-    assert "capability://catalog" in combined
+    assert "operation://catalog" in combined
     assert "math.find is the authoritative local inventory" not in combined
     assert "authoritative runtime inventory" not in combined
 
 
 def test_server_instructions_allow_known_contracts_to_run_directly() -> None:
-    assert "exact installed capability ID and its typed" in SERVER_INSTRUCTIONS
+    assert "exact installed operation ID and its typed" in SERVER_INSTRUCTIONS
     assert "math.run may execute a known contract directly" in SERVER_INSTRUCTIONS
     assert "math.find is operation lookup, not confirmation" in SERVER_INSTRUCTIONS
 
@@ -77,9 +77,9 @@ def test_math_run_checks_status_before_using_output() -> None:
 
 
 def test_math_run_copies_one_example_input_as_payload() -> None:
-    assert "select one item from `invocation_examples`" in MATH_RUN_DESCRIPTION
+    assert "select one item from `examples`" in MATH_RUN_DESCRIPTION
     assert "item's `input` object as the `payload`" in MATH_RUN_DESCRIPTION
-    assert "copy its `invocation_examples`" not in MATH_RUN_DESCRIPTION
+    assert "copy its `examples`" not in MATH_RUN_DESCRIPTION
 
 
 def test_server_instructions_preserve_evidence_sensitive_abstention() -> None:

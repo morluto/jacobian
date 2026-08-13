@@ -36,7 +36,7 @@ from jacobian.operations import NonConclusion
 def test_bundle_declares_atomic_port_bound_operations() -> None:
     bundle = build_finite_field_bundle()
 
-    assert bundle.capability_ids == (
+    assert bundle.operation_ids == (
         "finite_field.projective_line.enumerate",
         "finite_field.restrict_scalars.compute",
         "finite_field.linear_map.rank.compute",
@@ -57,7 +57,7 @@ def test_bundle_declares_atomic_port_bound_operations() -> None:
         fibers,
         collision,
         permutation,
-    ) = bundle.capabilities
+    ) = bundle.operations
     assert projective.output_ports[0].value_type is ProjectiveLine
     assert tuple(port.value_type for port in restrict_operation.input_ports) == (
         FiniteDimensionalSubspace,
@@ -89,7 +89,7 @@ def test_bundle_declares_atomic_port_bound_operations() -> None:
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:
-    operation = build_finite_field_bundle().capabilities[0]
+    operation = build_finite_field_bundle().operations[0]
     request = ProjectiveLineRequest(
         presentation=FiniteFieldPresentation(
             characteristic=2,
@@ -105,7 +105,7 @@ def test_projective_enumeration_refuses_large_output_before_allocation() -> None
 
 
 def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
-    operation = build_finite_field_bundle().capabilities[5]
+    operation = build_finite_field_bundle().operations[5]
     presentation = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
     one = element(presentation, (1,) + (0,) * 7)
     request = FiniteMapTableRequest(
@@ -121,7 +121,7 @@ def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
 
 
 def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
-    operation = build_finite_field_bundle().capabilities[3]
+    operation = build_finite_field_bundle().operations[3]
     presentation = finite_field(2, (1, 1, 1))
     row_axis = Axis(name="rows", labels=("r0", "r1"))
     column_axis = Axis(

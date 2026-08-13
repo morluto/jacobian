@@ -1,6 +1,6 @@
 # Research records
 
-Research records document capability discovery and its task- or
+Research records document operation discovery and its task- or
 snapshot-owned handoffs. They are separate from executable Harbor benchmarks:
 
 - `benchmarks/datasets/` contains executable Harbor cases;

@@ -12,8 +12,9 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from jacobian.contracts.capabilities import (  # noqa: E402
-    CapabilityProviderAvailability,
+    OperationProviderAvailability,
 )
+
 from jacobian.providers.lean_runtime import (  # noqa: E402
     lean_frontend_provider_runtime,
     lean_provider_runtime,
@@ -31,7 +32,7 @@ def _report(name: str, runtime: object) -> bool:
         semantic = configuration.get("semantic_runtime")
         if isinstance(semantic, dict) and "digest" in semantic:
             print(f"  semantic digest: {semantic['digest']}")
-    return availability is CapabilityProviderAvailability.AVAILABLE
+    return availability is OperationProviderAvailability.AVAILABLE
 
 
 def main() -> int:

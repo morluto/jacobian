@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.arithmetic import build_arithmetic_bundle
 
@@ -39,21 +39,21 @@ def test_arithmetic_capabilities_return_exact_results(
             {"sign": -1, "base": 2, "digits": ["1", "0", "1", "0"]},
         ),
     )
-    for capability_id, payload, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload, expected in cases:
+        result = domain_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
 
-        assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
-        assert result.output["result"] == expected, capability_id
+        assert result.execution.status is ExecutionStatus.COMPLETED, operation_id
+        assert result.output["result"] == expected, operation_id
 
 
 def test_rational_operation_rejects_unreduced_input_before_execution(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="rational.compute.reciprocal",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="rational.compute.reciprocal",
             input={"value": {"num": "2", "den": "4"}},
         )
     )
@@ -68,9 +68,9 @@ def test_rational_product_formats_results_above_python_digit_limit(
 ) -> None:
     factor = "1" + "0" * 2500
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="rational.compute.product",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="rational.compute.product",
             input={
                 "left": {"num": factor, "den": "1"},
                 "right": {"num": factor, "den": "1"},
@@ -97,9 +97,9 @@ def test_integer_nth_root_accepts_canonical_integers_above_small_scalar_bound(
     degree: int,
     expected: dict[str, object],
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.nth_root",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="integer.compute.nth_root",
             input={"value": value, "degree": degree},
         )
     )
@@ -113,9 +113,9 @@ def test_rational_difference_accepts_contract_sized_components(
 ) -> None:
     value = {"num": _LARGE_CANONICAL_INTEGER, "den": "1"}
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="rational.compute.difference",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="rational.compute.difference",
             input={"left": value, "right": value},
         )
     )
@@ -129,39 +129,39 @@ def test_integer_and_rational_operations_cross_the_large_integer_boundary(
 ) -> None:
     value = "1" + ("0" * 5_000)
 
-    absolute_value = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.absolute_value",
+    absolute_value = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="integer.compute.absolute_value",
             input={"value": value},
         )
     )
-    digit_count = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.decimal_digit_count",
+    digit_count = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="integer.compute.decimal_digit_count",
             input={"value": value},
         )
     )
-    digit_sum = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.decimal_digit_sum",
+    digit_sum = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="integer.compute.decimal_digit_sum",
             input={"value": value},
         )
     )
-    floor = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="rational.compute.floor",
+    floor = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="rational.compute.floor",
             input={"value": {"num": value, "den": "1"}},
         )
     )
-    ceiling = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="rational.compute.ceiling",
+    ceiling = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="rational.compute.ceiling",
             input={"value": {"num": value, "den": "1"}},
         )
     )
-    continued_fraction = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="rational.compute.continued_fraction",
+    continued_fraction = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="rational.compute.continued_fraction",
             input={"value": {"num": value, "den": "1"}},
         )
     )

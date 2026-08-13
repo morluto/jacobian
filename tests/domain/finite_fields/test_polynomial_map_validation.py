@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.finite_fields import build_finite_field_bundle
 from jacobian.math.finite_fields import (
@@ -47,10 +47,10 @@ def test_installed_consumers_reject_targets_not_produced_by_the_polynomial(
         build_finite_field_bundle(),
     ) as services:
         results = tuple(
-            services.core.capabilities.invoke(
-                CapabilityRequest(capability_id=capability_id, input={"table": payload})
+            services.core.operations.invoke(
+                OperationRequest(operation_id=operation_id, input={"table": payload})
             )
-            for capability_id in (
+            for operation_id in (
                 "finite_field.polynomial_map.fibers.compute",
                 "finite_field.polynomial_map.collision.compute",
                 "finite_field.polynomial_map.permutation.compute",
@@ -84,13 +84,13 @@ def test_valid_tables_report_operation_specific_nonconclusions(tmp_path: Path) -
         build_finite_field_bundle(),
     ) as services:
         results = tuple(
-            services.core.capabilities.invoke(
-                CapabilityRequest(
-                    capability_id=capability_id,
+            services.core.operations.invoke(
+                OperationRequest(
+                    operation_id=operation_id,
                     input={"table": table.model_dump(mode="json")},
                 )
             )
-            for capability_id, table, _ in cases
+            for operation_id, table, _ in cases
         )
 
     for result, (_, _, code) in zip(results, cases, strict=True):

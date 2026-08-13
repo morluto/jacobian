@@ -1,4 +1,4 @@
-"""Exact polynomial invariant capabilities."""
+"""Exact polynomial invariant operations."""
 
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
@@ -22,7 +22,7 @@ from jacobian.domains.polynomial.operations import (
     polynomial_square_free_decomposition,
 )
 
-POLYNOMIAL_INVARIANT_CAPABILITIES = (
+POLYNOMIAL_INVARIANT_OPERATIONS = (
     polynomial_operation(
         "polynomial.compute.gcd",
         "Compute a polynomial GCD and Bézout identity",
@@ -33,7 +33,7 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
         "polynomial",
         "gcd",
         "bezout",
-        invocation_examples=(
+        examples=(
             example(
                 "gcd_x2_minus_one_x_minus_one",
                 "Compute the GCD of x²-1 and x-1.",
@@ -88,7 +88,7 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
         "elimination",
         "univariate",
         "rational",
-        invocation_examples=(
+        examples=(
             example(
                 "resultant_x2_minus_one_x_minus_two",
                 "Compute the resultant of x²-1 and x-2.",
@@ -141,7 +141,7 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
         polynomial_discriminant,
         "polynomial",
         "discriminant",
-        invocation_examples=(
+        examples=(
             example(
                 "discriminant_x2_minus_one",
                 "Compute the discriminant of x²-1.",
@@ -178,7 +178,7 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
         "polynomial",
         "square-free",
         "multiplicity",
-        invocation_examples=(
+        examples=(
             example(
                 "square_free_x2_minus_one",
                 "Compute the square-free decomposition of x²-1.",
@@ -218,7 +218,7 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
         "polynomial",
         "factorization",
         "exact-computation",
-        invocation_examples=(
+        examples=(
             example(
                 "factor_x_squared_minus_one",
                 "Factor x²-1 over QQ.",
@@ -246,4 +246,4 @@ POLYNOMIAL_INVARIANT_CAPABILITIES = (
     ),
 )
 
-__all__ = ["POLYNOMIAL_INVARIANT_CAPABILITIES"]
+__all__ = ["POLYNOMIAL_INVARIANT_OPERATIONS"]

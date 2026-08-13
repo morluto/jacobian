@@ -1,4 +1,4 @@
-"""Shared capability-installation contracts."""
+"""Shared operation-installation contracts."""
 
 from jacobian.installation.context import (
     InstallationContext,

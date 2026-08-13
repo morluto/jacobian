@@ -1,4 +1,4 @@
-# Graph capability references
+# Graph operation references
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

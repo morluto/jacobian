@@ -5,14 +5,14 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.operations import invoke_operation as _invoke
 from tests.support.rationals import rational_payload as _q
 
 import jacobian.providers.sympy_runtime as sympy_runtime
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderInstallTier,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.process_policy import ProcessResult, ProcessTermination
@@ -33,9 +33,9 @@ def _expression(
 
 def test_sympy_normalization_runtime_has_exact_profile() -> None:
     runtime = sympy_polynomial_normalization_provider_runtime()
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     assert runtime.version == "1.14.0"
-    assert runtime.install_tier is CapabilityInstallTier.T0
+    assert runtime.install_tier is ProviderInstallTier.T0
     assert runtime.digest is not None and runtime.digest.startswith("sha256:")
     assert runtime.configuration == {
         "distribution": "sympy",
@@ -60,7 +60,7 @@ def test_sympy_normalization_runtime_rejects_unpinned_version(monkeypatch) -> No
         lambda *_args, **_kwargs: wrong,
     )
     rejected = sympy_polynomial_normalization_provider_runtime(refresh=True)
-    assert rejected.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert rejected.availability is ProviderAvailability.UNAVAILABLE
     assert rejected.version is None
     assert rejected.digest is None
     assert "pinned 1.14.0" in rejected.diagnostic

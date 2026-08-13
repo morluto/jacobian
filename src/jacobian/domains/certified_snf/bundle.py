@@ -1,9 +1,9 @@
 """Explicit bundle for transformation-certified Smith normal forms."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.certified_snf.checkers import CERTIFIED_SNF_EXACT_REPLAY_CHECKERS
-from jacobian.domains.certified_snf.operations import CERTIFIED_SNF_CAPABILITIES
+from jacobian.domains.certified_snf.operations import CERTIFIED_SNF_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
@@ -42,9 +42,9 @@ def build_certified_snf_bundle() -> DomainBundle:
             ),
         ),
         backend_version=SYMPY_VERSION,
-        capabilities=CERTIFIED_SNF_CAPABILITIES,
+        operations=CERTIFIED_SNF_OPERATIONS,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_CERTIFIED_SMITH_REQUEST",
                 stage="certified_smith_input_validation",
                 message="Input does not satisfy the bounded certified-Smith contract.",

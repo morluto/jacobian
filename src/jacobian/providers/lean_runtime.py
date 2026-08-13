@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.provider_runtime import _platform_tag, _sha256_file, _unavailable_runtime
 
@@ -212,7 +212,7 @@ def lean_semantic_runtime_identity(
 
 
 def require_lean_semantic_runtime_identity(
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
 ) -> None:
     """Fail closed unless the declared Lean semantic environment is unchanged."""
 
@@ -257,7 +257,7 @@ def lean_provider_runtime(
     *,
     profiles: Mapping[str, Mapping[str, Any]],
     checker_ids: tuple[str, ...],
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Inspect the separately managed pinned Lean/Mathlib runtime."""
 
     from jacobian_checkers import lean4
@@ -293,7 +293,7 @@ def lean_provider_runtime(
         )
         return _unavailable_runtime(
             provider="jacobian.lean4",
-            install_tier=CapabilityInstallTier.T3,
+            install_tier=ProviderInstallTier.T3,
             license_id="Apache-2.0",
             diagnostic=diagnostic,
         )
@@ -305,14 +305,14 @@ def lean_provider_runtime(
     if lake_executable is not None:
         configuration["lake_executable"] = str(lake_executable)
         configuration["lake_digest"] = lake_digest
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider="jacobian.lean4",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=lean4.LEAN_VERSION,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform=_platform_tag(),
-        install_tier=CapabilityInstallTier.T3,
+        install_tier=ProviderInstallTier.T3,
         license_id="Apache-2.0",
         features=tuple(sorted(profiles)),
         checker_ids=checker_ids,
@@ -320,8 +320,8 @@ def lean_provider_runtime(
     )
 
 
-def lean_frontend_provider_runtime() -> CapabilityProviderRuntime:
-    """Inspect the pinned Lean executable used by CORE elaboration capabilities."""
+def lean_frontend_provider_runtime() -> ProviderObservation:
+    """Inspect the pinned Lean executable used by CORE elaboration operations."""
 
     from jacobian_checkers import lean4
 
@@ -335,19 +335,19 @@ def lean_frontend_provider_runtime() -> CapabilityProviderRuntime:
     except (OSError, RuntimeError) as exc:
         return _unavailable_runtime(
             provider="jacobian.lean4",
-            install_tier=CapabilityInstallTier.T3,
+            install_tier=ProviderInstallTier.T3,
             license_id="Apache-2.0",
             diagnostic=str(exc)
             or f"The pinned Lean {lean4.LEAN_VERSION} executable is unavailable.",
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider="jacobian.lean4",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=lean4.LEAN_VERSION,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform=_platform_tag(),
-        install_tier=CapabilityInstallTier.T3,
+        install_tier=ProviderInstallTier.T3,
         license_id="Apache-2.0",
         features=("CORE", "elaboration", "lean-statement"),
         configuration={

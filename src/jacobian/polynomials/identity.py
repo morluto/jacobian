@@ -1,4 +1,4 @@
-"""Adapter implementations for sparse rational polynomial-map capabilities."""
+"""Adapter implementations for sparse rational polynomial-map operations."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ import hashlib
 from fractions import Fraction
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityInvocationExample,
-    CapabilityRequest,
-)
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
 )
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationExample,
+    OperationRequest,
+)
 from jacobian.contracts.polynomials import (
     PolynomialCoefficientMismatch,
     PolynomialIdentityClaim,
@@ -49,8 +49,8 @@ class PolynomialIdentityAdapter:
             if resources.installation.identity_checker_id is not None
             else ()
         )
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.identity.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.identity.verify",
             version="2",
             title="Compare exact polynomials coefficient by coefficient",
             description=(
@@ -78,8 +78,8 @@ class PolynomialIdentityAdapter:
                 "coefficient-mismatch",
                 "counter-witness",
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="zero_identity",
                     description=(
                         "Independently verify that two zero polynomials are equal "
@@ -97,10 +97,10 @@ class PolynomialIdentityAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialIdentityRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialIdentityRequest:
         return _validate_request(
             PolynomialIdentityRequest,
             request.input,

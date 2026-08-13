@@ -8,14 +8,14 @@ from typing import Never
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityProviderAvailability,
-)
 from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.contracts.matrix_lattice import (
     HermiteNormalFormRequest,
     HermiteNormalFormResult,
+)
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    ProviderAvailability,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
@@ -25,9 +25,9 @@ from jacobian.domains.matrix_lattice.hnf_protocol import (
     parse_hnf_worker_response,
 )
 from jacobian.operation_bindings import InstalledOperation, durable_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationAbortError,
-    OperationSpec,
 )
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.providers.flint_runtime import python_flint_hnf_provider_runtime
@@ -41,7 +41,7 @@ HNF_STDERR_LIMIT = 64_000
 def _failure(status: ExecutionStatus, code: str, message: str) -> Never:
     raise OperationAbortError(
         status,
-        CapabilityDiagnostic(
+        OperationDiagnostic(
             code=code,
             stage="matrix_hnf_provider",
             message=message,
@@ -65,7 +65,7 @@ def compute_hermite_normal_form(
 ) -> HermiteNormalFormResult:
     runtime = python_flint_hnf_provider_runtime(refresh=True)
     if (
-        HNF_RUNTIME.availability is not CapabilityProviderAvailability.AVAILABLE
+        HNF_RUNTIME.availability is not ProviderAvailability.AVAILABLE
         or runtime != HNF_RUNTIME
     ):
         return _failure(
@@ -136,11 +136,11 @@ def compute_hermite_normal_form(
     return result
 
 
-HERMITE_NORMAL_FORM_CAPABILITY: InstalledOperation[
+HERMITE_NORMAL_FORM_OPERATION: InstalledOperation[
     HermiteNormalFormRequest,
     HermiteNormalFormResult,
 ] = durable_operation(
-    OperationSpec(
+    OperationDeclaration(
         operation_id="matrix.normal_form.hermite.materialize",
         version="1",
         title="Materialize an exact row Hermite normal form",
@@ -158,7 +158,7 @@ HERMITE_NORMAL_FORM_CAPABILITY: InstalledOperation[
             "certificate",
             "python-flint",
         ),
-        invocation_examples=(
+        examples=(
             example(
                 "unit_matrix",
                 "Materialize the row HNF of the one-by-one unit matrix.",
@@ -173,4 +173,4 @@ HERMITE_NORMAL_FORM_CAPABILITY: InstalledOperation[
     provider_runtime=HNF_RUNTIME,
 )
 
-__all__ = ["HERMITE_NORMAL_FORM_CAPABILITY", "compute_hermite_normal_form"]
+__all__ = ["HERMITE_NORMAL_FORM_OPERATION", "compute_hermite_normal_form"]

@@ -14,7 +14,7 @@ from jacobian.contracts.graph_symmetry import (
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import nx
 from jacobian.operation_bindings import InstalledOperation, inline_operation
-from jacobian.operations import OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
 
 
 def _canonical_edge(left: str, right: str) -> tuple[str, str]:
@@ -107,9 +107,9 @@ def _generator_orbits(
     )
 
 
-GRAPH_SYMMETRY_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
+GRAPH_SYMMETRY_OPERATIONS: tuple[InstalledOperation[Any, Any], ...] = (
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="graph.symmetry.generator_orbits.compute",
             version="5",
             title="Exact declared graph-symmetry orbit partitions",
@@ -130,7 +130,7 @@ GRAPH_SYMMETRY_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
                 "exact",
                 "bounded",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "cycle_rotation_orbits",
                     "Compute vertex and edge orbits of one declared quarter-turn of C4.",
@@ -162,4 +162,4 @@ GRAPH_SYMMETRY_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
     ),
 )
 
-__all__ = ["GRAPH_SYMMETRY_CAPABILITIES"]
+__all__ = ["GRAPH_SYMMETRY_OPERATIONS"]

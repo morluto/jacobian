@@ -25,14 +25,14 @@ __all__ = (
     "authorized_complete_runtime",
     "authorized_complete_runtime_read_only",
     "authorized_portfolio_template",
-    "capability_core_services",
     "complete_portfolio_template",
     "fresh_complete_runtime",
+    "operation_core_services",
 )
 
 
 @pytest.fixture
-def capability_core_services(tmp_path: Path) -> Iterator[DomainTestServices]:
+def operation_core_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Open production core/application seams for service-level composition tests."""
 
     with open_domain_services(tmp_path / "state") as services:

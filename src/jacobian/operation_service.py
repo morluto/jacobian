@@ -1,4 +1,4 @@
-"""Capability service composition and operator policy.
+"""Operation service composition and operator policy.
 
 The service is deliberately a small composition root. Registration, discovery,
 dispatch, verification, validation, and telemetry each live in their owning
@@ -12,30 +12,30 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter
-from jacobian.capability_discovery import (
-    CapabilityDiscoveryMixin,
+from jacobian.contracts.operations import OperationDescriptor
+from jacobian.operation_adapters import OperationAdapter
+from jacobian.operation_discovery import (
+    OperationDiscoveryMixin,
 )
-from jacobian.capability_discovery import (
-    capability_domain as _capability_domain,
-)
-from jacobian.capability_discovery import (
+from jacobian.operation_discovery import (
     normalize_domain as _normalize_domain,
 )
-from jacobian.capability_dispatch import CapabilityDispatchMixin
-from jacobian.capability_registry import CapabilityRegistryMixin
-from jacobian.capability_verification import CapabilityVerificationMixin
-from jacobian.contracts.capabilities import CapabilityDescriptor
+from jacobian.operation_discovery import (
+    operation_domain as _operation_domain,
+)
+from jacobian.operation_dispatch import OperationDispatchMixin
+from jacobian.operation_registry import OperationRegistryMixin
+from jacobian.operation_verification import OperationVerificationMixin
 from jacobian.storage.repository import ArtifactRepository
 
 
 @dataclass(frozen=True, slots=True)
-class CapabilityPolicy:
+class OperationPolicy:
     """Operator-controlled visibility policy, separate from checker authority."""
 
     profile: Literal["DEFAULT", "COMPUTE_VERIFY_NO_RETRIEVAL"] = "DEFAULT"
-    allowed_capability_ids: frozenset[str] = frozenset()
-    denied_capability_ids: frozenset[str] = frozenset()
+    allowed_operation_ids: frozenset[str] = frozenset()
+    denied_operation_ids: frozenset[str] = frozenset()
     allowed_domains: frozenset[str] = frozenset()
     denied_domains: frozenset[str] = frozenset()
     allowed_tags: frozenset[str] = frozenset()
@@ -43,38 +43,38 @@ class CapabilityPolicy:
 
     def __post_init__(self) -> None:
         if self.profile not in {"DEFAULT", "COMPUTE_VERIFY_NO_RETRIEVAL"}:
-            raise ValueError(f"unknown capability policy profile: {self.profile!r}")
+            raise ValueError(f"unknown operation policy profile: {self.profile!r}")
         if self.profile == "COMPUTE_VERIFY_NO_RETRIEVAL":
             object.__setattr__(self, "denied_tags", self.denied_tags | {"retrieval"})
         for allowed, denied, label in (
-            (self.allowed_capability_ids, self.denied_capability_ids, "capability IDs"),
+            (self.allowed_operation_ids, self.denied_operation_ids, "operation IDs"),
             (self.allowed_domains, self.denied_domains, "domains"),
             (self.allowed_tags, self.denied_tags, "tags"),
         ):
             overlap = allowed & denied
             if overlap:
                 raise ValueError(
-                    f"capability policy allows and denies the same {label}: "
+                    f"operation policy allows and denies the same {label}: "
                     + ", ".join(sorted(str(item) for item in overlap))
                 )
         for value in (
-            *self.allowed_capability_ids,
-            *self.denied_capability_ids,
+            *self.allowed_operation_ids,
+            *self.denied_operation_ids,
             *self.allowed_domains,
             *self.denied_domains,
             *self.allowed_tags,
             *self.denied_tags,
         ):
             if not value.strip():
-                raise ValueError("capability policy values must not be blank")
+                raise ValueError("operation policy values must not be blank")
 
     @property
     def definition(self) -> dict[str, object]:
         return {
             "policy_version": "1",
             "profile": self.profile,
-            "allowed_capability_ids": sorted(self.allowed_capability_ids),
-            "denied_capability_ids": sorted(self.denied_capability_ids),
+            "allowed_operation_ids": sorted(self.allowed_operation_ids),
+            "denied_operation_ids": sorted(self.denied_operation_ids),
             "allowed_domains": sorted(self.allowed_domains),
             "denied_domains": sorted(self.denied_domains),
             "allowed_tags": sorted(self.allowed_tags),
@@ -90,26 +90,26 @@ class CapabilityPolicy:
             "sha256:" + hashlib.sha256(canonicalize_json(self.definition)).hexdigest()
         )
 
-    def project(self, descriptor: CapabilityDescriptor) -> CapabilityDescriptor | None:
+    def project(self, descriptor: OperationDescriptor) -> OperationDescriptor | None:
         if self.denial_reasons(descriptor):
             return None
         return descriptor
 
     def denial_reasons(
         self,
-        descriptor: CapabilityDescriptor,
+        descriptor: OperationDescriptor,
     ) -> tuple[str, ...]:
-        capability_id = descriptor.capability_id
-        domain = _normalize_domain(_capability_domain(descriptor))
+        operation_id = descriptor.operation_id
+        domain = _normalize_domain(_operation_domain(descriptor))
         tags = {_normalize_domain(tag) for tag in descriptor.tags}
         reasons: list[str] = []
         if (
-            self.allowed_capability_ids
-            and capability_id not in self.allowed_capability_ids
+            self.allowed_operation_ids
+            and operation_id not in self.allowed_operation_ids
         ):
-            reasons.append("capability_id_not_allowed")
-        if capability_id in self.denied_capability_ids:
-            reasons.append("capability_id_denied")
+            reasons.append("operation_id_not_allowed")
+        if operation_id in self.denied_operation_ids:
+            reasons.append("operation_id_denied")
         if self.allowed_domains and domain not in {
             _normalize_domain(value) for value in self.allowed_domains
         }:
@@ -126,27 +126,27 @@ class CapabilityPolicy:
         return tuple(reasons)
 
 
-class CapabilityService(
-    CapabilityRegistryMixin,
-    CapabilityDiscoveryMixin,
-    CapabilityDispatchMixin,
-    CapabilityVerificationMixin,
+class OperationService(
+    OperationRegistryMixin,
+    OperationDiscoveryMixin,
+    OperationDispatchMixin,
+    OperationVerificationMixin,
 ):
-    """Typed composition root for capability lifecycle and invocation."""
+    """Typed composition root for operation lifecycle and invocation."""
 
     def __init__(
         self,
         store: ArtifactRepository,
         *,
-        policy: CapabilityPolicy | None = None,
+        policy: OperationPolicy | None = None,
     ) -> None:
         self.store = store
-        self.policy = policy or CapabilityPolicy()
-        self._adapters: dict[str, CapabilityAdapter[Any]] = {}
-        self._descriptors: dict[str, CapabilityDescriptor] = {}
+        self.policy = policy or OperationPolicy()
+        self._adapters: dict[str, OperationAdapter[Any]] = {}
+        self._descriptors: dict[str, OperationDescriptor] = {}
 
 
 __all__ = [
-    "CapabilityPolicy",
-    "CapabilityService",
+    "OperationPolicy",
+    "OperationService",
 ]

@@ -124,7 +124,7 @@ Observation results are normalized into content-bound JSON before comparison.
 Correctness, evidence validity, scope, assurance calibration, false
 certification, tool traces, tokens, time, and cost remain separate. Reports
 from the public workflow suite are workflow evidence only, never causal
-capability evidence.
+operation evidence.
 
 The committed three-attempt control and treatment jobs are manual
 reproducibility fixtures. An operator may run `make agent-eval` with

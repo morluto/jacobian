@@ -13,7 +13,7 @@ from typer import _click
 from typer.core import TyperGroup
 
 from jacobian.canonical import loads_strict_json
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.runtime.config import CheckerAuthorityMode
 
 if TYPE_CHECKING:
@@ -94,7 +94,7 @@ def initialize(context: typer.Context) -> None:
     """Initialize storage and report the installed operation count."""
 
     state = _state(context)
-    count = len(state.runtime.core.capabilities.catalog().capabilities)
+    count = len(state.runtime.core.operations.catalog().operations)
     typer.echo(f"Initialized Jacobian state in {state.runtime.core.store.root}")
     typer.echo(f"Installed {count} mathematical operations.")
 
@@ -102,19 +102,19 @@ def initialize(context: typer.Context) -> None:
 def catalog(context: typer.Context) -> None:
     """Print the complete installed operation catalog."""
 
-    value = _state(context).runtime.core.capabilities.catalog()
+    value = _state(context).runtime.core.operations.catalog()
     _emit(value.model_dump(mode="json"))
 
 
 def inspect_operation(context: typer.Context, operation_id: str) -> None:
     """Print one exact installed operation declaration."""
 
-    catalog_value = _state(context).runtime.core.capabilities.catalog()
+    catalog_value = _state(context).runtime.core.operations.catalog()
     descriptor = next(
         (
             item
-            for item in catalog_value.capabilities
-            if item.capability_id == operation_id
+            for item in catalog_value.operations
+            if item.operation_id == operation_id
         ),
         None,
     )
@@ -147,8 +147,8 @@ def run_operation(
     payload = loads_strict_json(source)
     if not isinstance(payload, dict):
         raise ValueError("operation payload must be a JSON object")
-    result = _state(context).runtime.core.capabilities.invoke(
-        CapabilityRequest(capability_id=operation_id, input=payload)
+    result = _state(context).runtime.core.operations.invoke(
+        OperationRequest(operation_id=operation_id, input=payload)
     )
     _emit(result.model_dump(mode="json"))
 
@@ -165,12 +165,12 @@ def provider_measure(
 
     from jacobian.provider_measurements import measure_provider
 
-    catalog_value = _state(context).runtime.core.capabilities.catalog()
+    catalog_value = _state(context).runtime.core.operations.catalog()
     descriptor = next(
         (
             item
-            for item in catalog_value.capabilities
-            if item.capability_id == operation_id
+            for item in catalog_value.operations
+            if item.operation_id == operation_id
         ),
         None,
     )

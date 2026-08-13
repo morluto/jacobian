@@ -12,7 +12,7 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.graphs.composition import install_graph_composition_capabilities
 from jacobian.graphs.installation import install_graph_capabilities
@@ -33,7 +33,7 @@ def graph_services(tmp_path: Path) -> Iterator[DomainTestServices]:
                 authorize_checker=False,
             )
             for adapter in graph_adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
             composition_adapters, _installation = (
                 install_graph_composition_capabilities(
                     services.core.store,
@@ -44,16 +44,16 @@ def graph_services(tmp_path: Path) -> Iterator[DomainTestServices]:
                 )
             )
             for adapter in composition_adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield services
 
 
 def _atlas_graph_uri(
     runtime: DomainTestServices, order: int, limit: int = 2
 ) -> list[str]:
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.search.atlas",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.search.atlas",
             input={
                 "order": order,
                 "constraints": {"connected": True},
@@ -77,9 +77,9 @@ def test_compose_complement_returns_computed_graph_artifact(
     graph_uris = _atlas_graph_uri(runtime, order=3, limit=1)
     left_uri = graph_uris[0]
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.construct.compose",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.construct.compose",
             input={
                 "operation": "COMPLEMENT",
                 "left_graph_uri": left_uri,
@@ -127,9 +127,9 @@ def test_compose_binary_operations_preserve_their_graph_contracts(
         ("LEXICOGRAPHIC_PRODUCT", 9, 0, "networkx.lexicographic_product"),
     )
     for operation, vertex_count, minimum_edges, backend in cases:
-        result = runtime.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="graph.construct.compose",
+        result = runtime.core.operations.invoke(
+            OperationRequest(
+                operation_id="graph.construct.compose",
                 input={
                     "operation": operation,
                     "left_graph_uri": left_uri,
@@ -177,9 +177,9 @@ def test_compose_rejects_invalid_inputs(graph_services: DomainTestServices) -> N
         ),
     )
     for request_input, diagnostic_code in cases:
-        result = runtime.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="graph.construct.compose",
+        result = runtime.core.operations.invoke(
+            OperationRequest(
+                operation_id="graph.construct.compose",
                 input=request_input,
             )
         )
@@ -199,9 +199,9 @@ def test_enumerate_returns_complete_atlas_catalog_with_boundary(
 ) -> None:
     runtime = graph_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.enumerate.nonisomorphic",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.enumerate.nonisomorphic",
             input={"order": 4, "limit": 100},
         )
     )
@@ -247,15 +247,15 @@ def test_enumerate_paginates_with_limit_and_offset(
 ) -> None:
     runtime = graph_services
 
-    first = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.enumerate.nonisomorphic",
+    first = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.enumerate.nonisomorphic",
             input={"order": 4, "limit": 3, "offset": 0},
         )
     )
-    second = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.enumerate.nonisomorphic",
+    second = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.enumerate.nonisomorphic",
             input={"order": 4, "limit": 3, "offset": 3},
         )
     )
@@ -299,9 +299,9 @@ def test_enumerate_rejects_invalid_order_before_provider_or_publication(
         unexpected_artifact_publication,
     )
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.enumerate.nonisomorphic",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.enumerate.nonisomorphic",
             input={"order": "4"},
         )
     )
@@ -316,9 +316,9 @@ def test_enumerate_order_zero_returns_single_empty_graph(
 ) -> None:
     runtime = graph_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.enumerate.nonisomorphic",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.enumerate.nonisomorphic",
             input={"order": 0},
         )
     )

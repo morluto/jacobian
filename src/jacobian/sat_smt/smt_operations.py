@@ -8,20 +8,18 @@ from typing import Literal
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationInputKind,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderObservation,
+)
 from jacobian.contracts.results import (
     Conclusion,
     ContractModel,
@@ -32,6 +30,8 @@ from jacobian.contracts.smt import (
     SmtUnsatProofVerificationOutput,
     SmtUnsatProofVerificationRequest,
 )
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -56,11 +56,11 @@ def install_smt_unsat_proof_checker(
     smt: SmtArtifactService,
     verification: VerificationService,
     checkers: CheckerRegistry,
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     *,
     authorize_checker: bool,
 ) -> tuple[
-    CapabilityAdapter[SmtUnsatProofVerificationRequest] | None,
+    OperationAdapter[SmtUnsatProofVerificationRequest] | None,
     SmtUnsatProofCheckerInstallation,
 ]:
     """Install the certificate schema and optionally authorize strict replay."""
@@ -90,7 +90,7 @@ def install_smt_unsat_proof_checker(
             ),
             authorize=(
                 authorize_checker
-                and runtime.availability is CapabilityProviderAvailability.AVAILABLE
+                and runtime.availability is ProviderAvailability.AVAILABLE
             ),
         )
         .checker_id
@@ -99,7 +99,7 @@ def install_smt_unsat_proof_checker(
         certificate_schema_uri=certificate_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter[SmtUnsatProofVerificationRequest] | None = None
+    adapter: OperationAdapter[SmtUnsatProofVerificationRequest] | None = None
     if checker_id is not None:
         adapter = SmtUnsatProofVerificationAdapter(
             store=store,
@@ -123,7 +123,7 @@ class SmtUnsatProofVerificationAdapter:
         smt: SmtArtifactService,
         verification: VerificationService,
         installation: SmtUnsatProofCheckerInstallation,
-        runtime: CapabilityProviderRuntime,
+        runtime: ProviderObservation,
     ) -> None:
         checker_id = installation.checker_id
         if checker_id is None:
@@ -134,8 +134,8 @@ class SmtUnsatProofVerificationAdapter:
         self.verification = verification
         self.installation = installation
         descriptor_runtime = runtime.model_copy(update={"checker_ids": (checker_id,)})
-        self._descriptor = CapabilityDescriptor(
-            capability_id="smt.unsat_proof.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="smt.unsat_proof.verify",
             version="1",
             title="Verify a compatible SMT UNSAT proof",
             description=(
@@ -156,18 +156,18 @@ class SmtUnsatProofVerificationAdapter:
                 "carcara",
             ),
             accepted_input_kinds=(
-                CapabilityInputKind.STRUCTURED_REQUEST,
-                CapabilityInputKind.TYPED_ARTIFACT,
+                OperationInputKind.STRUCTURED_REQUEST,
+                OperationInputKind.TYPED_ARTIFACT,
             ),
             accepted_artifact_types=(self.smt.installation.proof_schema_uri,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SmtUnsatProofVerificationRequest:
-        return parse_capability_input(SmtUnsatProofVerificationRequest, request.input)
+    def prepare(self, request: OperationRequest) -> SmtUnsatProofVerificationRequest:
+        return parse_operation_input(SmtUnsatProofVerificationRequest, request.input)
 
     def invoke(
         self, validated: SmtUnsatProofVerificationRequest
@@ -176,8 +176,8 @@ class SmtUnsatProofVerificationAdapter:
             resolved = self.smt.resolve_proof(validated.proof_uri)
             semantics = self.store.get(self.smt.installation.semantics_uri)
         except (SmtArtifactError, StorageError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_SMT_UNSAT_PROOF",
                     stage="artifact_resolution",
                     message=str(exc),
@@ -295,7 +295,7 @@ class SmtUnsatProofVerificationAdapter:
 
 def _verification_projection(
     *,
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     execution: Execution,
     output: ContractModel,
     artifact_uris: tuple[str, ...],
@@ -307,7 +307,7 @@ def _verification_projection(
     publication = PublishedOperation(output=output, artifact_uris=artifact_uris)
     if execution.status is ExecutionStatus.COMPLETED:
         return OperationProjection(
-            operation_id=descriptor.capability_id,
+            operation_id=descriptor.operation_id,
             version=descriptor.version,
             terminal=Completed(
                 value=output,
@@ -318,12 +318,12 @@ def _verification_projection(
             verification_record_uri=verification_record_uri,
         )
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Failed(
             status=execution.status,
             runtime_ms=execution.runtime_ms,
-            diagnostic=CapabilityDiagnostic(
+            diagnostic=OperationDiagnostic(
                 code="SMT_UNSAT_PROOF_CHECK_NONCONCLUSIVE",
                 stage="verification",
                 message=detail,

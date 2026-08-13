@@ -159,7 +159,7 @@ def test_spike_records_exact_reproduction_and_defers_production(
         report["checker_feasibility"]["nonisomorphic_generation"]["decision"]
         == "REVISE"
     )
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_absent_explicit_executable_is_an_isolated_non_conclusion(
@@ -183,7 +183,7 @@ def test_absent_explicit_executable_is_an_isolated_non_conclusion(
             "code": "PROVIDER_FILE_UNAVAILABLE",
             "detail": "The explicitly selected geng executable file is unavailable.",
         },
-        "capability_ids_registered": [],
+        "operation_ids_registered": [],
     }
 
 

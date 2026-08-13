@@ -10,20 +10,20 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-    CapabilityResult,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.domains.polynomial_nullstellensatz.core import (
-    MATERIALIZE_CAPABILITY_ID,
+    MATERIALIZE_OPERATION_ID,
     install_nullstellensatz_core,
 )
 from jacobian.domains.polynomial_nullstellensatz.singular import (
-    PRODUCE_CAPABILITY_ID,
+    PRODUCE_OPERATION_ID,
     install_singular_producer,
 )
 from jacobian.process_policy import ProcessResult, ProcessTermination
@@ -31,15 +31,15 @@ from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
 
 
-def _runtime() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _runtime() -> ProviderObservation:
+    return ProviderObservation(
         provider="singular",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="4.4.1p5",
         digest="sha256:" + "8" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="test-platform",
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="GPL-2.0-or-later",
         features=("nullstellensatz-certificate",),
         configuration={"executable": "/usr/bin/false"},
@@ -58,20 +58,20 @@ def _install(services: DomainTestServices) -> None:
     with atomic_installation(services.core):
         core = install_nullstellensatz_core(services.installation, core_runtime)
         for adapter in core.adapters:
-            services.installation.register_capability(adapter)
+            services.installation.register_operation(adapter)
         singular = install_singular_producer(services.installation, core, _runtime())
         for adapter in singular.adapters:
-            services.installation.register_capability(adapter)
+            services.installation.register_operation(adapter)
 
 
 def _invoke(
     services: DomainTestServices,
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, Any],
-) -> CapabilityResult:
-    return services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
+) -> OperationResult:
+    return services.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation_id,
             input=payload,
         )
     )
@@ -145,13 +145,13 @@ def test_singular_boundary_fails_closed(
         _install(services)
         materialized = _invoke(
             services,
-            MATERIALIZE_CAPABILITY_ID,
+            MATERIALIZE_OPERATION_ID,
             {},
         )
 
         result = _invoke(
             services,
-            PRODUCE_CAPABILITY_ID,
+            PRODUCE_OPERATION_ID,
             {"system_uri": materialized.output["system_uri"]},
         )
 
@@ -163,7 +163,7 @@ def test_singular_boundary_fails_closed(
 def test_missing_singular_only_marks_provider_unavailable() -> None:
     runtime = singular_provider_runtime("definitely-missing-jacobian-singular")
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert "4.4.1p5" in (runtime.diagnostic or "")
 
 
@@ -202,7 +202,7 @@ def test_singular_version_probe_matches_the_pinned_version_exactly(
     runtime = singular_provider_runtime()
 
     assert runtime.availability is (
-        CapabilityProviderAvailability.AVAILABLE
+        ProviderAvailability.AVAILABLE
         if available
-        else CapabilityProviderAvailability.UNAVAILABLE
+        else ProviderAvailability.UNAVAILABLE
     )

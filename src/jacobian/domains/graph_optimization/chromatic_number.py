@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_coloring import (
     GraphChromaticNumberOutput,
     GraphChromaticNumberRequest,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization.operations import (
     build_simple_graph,
     solve_chromatic_number,
 )
 from jacobian.operation_bindings import inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationAbortError,
     OperationRefusalError,
-    OperationSpec,
 )
 
 
@@ -29,7 +29,7 @@ def _search_chromatic_number(
         networkx_graph = build_simple_graph(request.graph)
     except (KeyError, ValueError, TypeError) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="CHROMATIC_NUMBER_GRAPH_NOT_APPLICABLE",
                 stage="graph_optimization_precondition",
                 message=str(exc),
@@ -60,7 +60,7 @@ def _search_chromatic_number(
     ):
         raise OperationAbortError(
             ExecutionStatus.ERROR,
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="CHROMATIC_NUMBER_COLORING_INVALID",
                 stage="graph_optimization_postcondition",
                 message="The solver returned a coloring that does not separate an edge.",
@@ -71,8 +71,8 @@ def _search_chromatic_number(
     return output
 
 
-CHROMATIC_NUMBER_CAPABILITY = inline_operation(
-    OperationSpec(
+CHROMATIC_NUMBER_OPERATION = inline_operation(
+    OperationDeclaration(
         operation_id="graph.invariant.chromatic_number.compute",
         version="1",
         title="Exact chromatic number",

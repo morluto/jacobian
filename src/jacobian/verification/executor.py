@@ -14,8 +14,8 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import CheckerDecision, CheckerManifest
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.verification._helpers import (
     _CHECKER_CANCELLED,
@@ -123,7 +123,7 @@ class BoundedCheckerExecutor:
     def _validate_response(
         completed: Any,
         expected_digest: str,
-        provider_runtime: CapabilityProviderRuntime | None,
+        provider_runtime: ProviderObservation | None,
     ) -> CheckerDecision:
         try:
             response = parse_checker_worker_response(

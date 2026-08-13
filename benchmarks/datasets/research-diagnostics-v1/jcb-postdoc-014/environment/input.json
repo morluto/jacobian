@@ -10,6 +10,6 @@
     },
     "listed_non_double_flats": [[1, 2, 3], [1, 4, 5], [1, 6, 7], [2, 4, 6], [2, 5, 8, 9], [3, 5, 7], [3, 6, 8], [4, 7, 9]]
   },
-  "tier": "CAPABILITY_GAP_PROBE",
+  "tier": "OPERATION_GAP_PROBE",
   "domains": ["algebraic geometry", "commutative algebra", "exact linear algebra"]
 }

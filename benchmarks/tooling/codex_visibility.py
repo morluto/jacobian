@@ -87,7 +87,7 @@ class VisibilityOutputOutcome(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    capability_id: str = Field(min_length=1)
+    operation_id: str = Field(min_length=1)
     required_output_fields: tuple[str, ...] = Field(min_length=1)
     expected_output_values: dict[str, Any] = Field(default_factory=dict)
 
@@ -109,37 +109,37 @@ class VisibilityCase(BaseModel):
     cue_level: CueLevel
     prompt: str = Field(min_length=1)
     expectation: AdoptionExpectation = AdoptionExpectation.USE
-    expected_capability_ids: tuple[str, ...] = ()
-    diagnostic_capability_ids: tuple[str, ...] = ()
+    expected_operation_ids: tuple[str, ...] = ()
+    diagnostic_operation_ids: tuple[str, ...] = ()
     acceptable_output_outcomes: tuple[VisibilityOutputOutcome, ...] = ()
     require_verified: bool = False
 
     @model_validator(mode="after")
     def _valid_expectation(self) -> VisibilityCase:
-        if len(set(self.expected_capability_ids)) != len(self.expected_capability_ids):
-            raise ValueError("expected_capability_ids must be unique")
-        if len(set(self.diagnostic_capability_ids)) != len(
-            self.diagnostic_capability_ids
+        if len(set(self.expected_operation_ids)) != len(self.expected_operation_ids):
+            raise ValueError("expected_operation_ids must be unique")
+        if len(set(self.diagnostic_operation_ids)) != len(
+            self.diagnostic_operation_ids
         ):
-            raise ValueError("diagnostic_capability_ids must be unique")
-        if set(self.expected_capability_ids) & set(self.diagnostic_capability_ids):
-            raise ValueError("required and diagnostic capability IDs must be disjoint")
+            raise ValueError("diagnostic_operation_ids must be unique")
+        if set(self.expected_operation_ids) & set(self.diagnostic_operation_ids):
+            raise ValueError("required and diagnostic operation IDs must be disjoint")
         outcome_ids = {
-            outcome.capability_id for outcome in self.acceptable_output_outcomes
+            outcome.operation_id for outcome in self.acceptable_output_outcomes
         }
         if not outcome_ids.issubset(
-            set(self.expected_capability_ids) | set(self.diagnostic_capability_ids)
+            set(self.expected_operation_ids) | set(self.diagnostic_operation_ids)
         ):
-            raise ValueError("output-outcome capability IDs must be tracked")
+            raise ValueError("output-outcome operation IDs must be tracked")
         if (
             self.expectation is AdoptionExpectation.USE
-            and not self.expected_capability_ids
+            and not self.expected_operation_ids
             and not self.acceptable_output_outcomes
         ):
             raise ValueError("USE cases require an operation or output outcome")
         if self.expectation is AdoptionExpectation.ABSTAIN and (
-            self.expected_capability_ids
-            or self.diagnostic_capability_ids
+            self.expected_operation_ids
+            or self.diagnostic_operation_ids
             or self.acceptable_output_outcomes
         ):
             raise ValueError("ABSTAIN cases cannot declare operations or outcomes")
@@ -227,7 +227,7 @@ def _output_outcome_matches(
     invocation: object,
 ) -> bool:
     if not isinstance(invocation, Mapping) or (
-        invocation.get("capability_id") != outcome.capability_id
+        invocation.get("operation_id") != outcome.operation_id
     ):
         return False
     observed: dict[str, object] = {}
@@ -248,40 +248,40 @@ def classify_visibility(
 ) -> dict[str, Any]:
     """Classify only observable adoption stages; do not grade answer prose."""
 
-    expected = set(case.expected_capability_ids)
-    diagnostic = set(case.diagnostic_capability_ids)
-    outcome_ids = {outcome.capability_id for outcome in case.acceptable_output_outcomes}
+    expected = set(case.expected_operation_ids)
+    diagnostic = set(case.diagnostic_operation_ids)
+    outcome_ids = {outcome.operation_id for outcome in case.acceptable_output_outcomes}
     tracked = expected | diagnostic | outcome_ids
     described = {
-        capability_id
-        for description in telemetry.get("capability_descriptions", [])
+        operation_id
+        for description in telemetry.get("operation_descriptions", [])
         if isinstance(description, Mapping)
-        for capability_id in (
-            [description.get("capability_id")]
-            if description.get("capability_id") is not None
+        for operation_id in (
+            [description.get("operation_id")]
+            if description.get("operation_id") is not None
             else description.get("match_ids", [])
         )
-        if isinstance(capability_id, str)
+        if isinstance(operation_id, str)
     }
     attempted_sequence = [
         value
-        for value in telemetry.get("capability_attempt_ids", [])
+        for value in telemetry.get("operation_attempt_ids", [])
         if isinstance(value, str)
     ]
     attempted = set(attempted_sequence)
     completed_sequence = [
-        value for value in telemetry.get("capability_ids", []) if isinstance(value, str)
+        value for value in telemetry.get("operation_ids", []) if isinstance(value, str)
     ]
     completed = set(completed_sequence)
     invocations = tuple(
         invocation
-        for invocation in telemetry.get("capability_invocations", [])
+        for invocation in telemetry.get("operation_invocations", [])
         if isinstance(invocation, Mapping)
     )
     verified = any(
         isinstance(invocation, Mapping)
-        and isinstance(invocation.get("capability_id"), str)
-        and invocation.get("capability_id") in expected
+        and isinstance(invocation.get("operation_id"), str)
+        and invocation.get("operation_id") in expected
         and _is_verified_invocation(invocation)
         for invocation in invocations
     )
@@ -295,13 +295,13 @@ def classify_visibility(
     mcp_calls = [
         value for value in telemetry.get("mcp_calls", []) if isinstance(value, str)
     ]
-    discovery_call_count = int(telemetry.get("capability_describe_index_calls", 0))
-    inspection_call_count = int(telemetry.get("capability_describe_exact_calls", 0))
+    discovery_call_count = int(telemetry.get("operation_describe_index_calls", 0))
+    inspection_call_count = int(telemetry.get("operation_describe_exact_calls", 0))
     resource_read_count = int(telemetry.get("mcp_resource_read_attempts", 0))
     expected_attempted = expected & attempted
     observed = {
-        "discovered": bool(telemetry.get("capability_describe_index_calls", 0)),
-        "inspected": bool(telemetry.get("capability_describe_exact_calls", 0)),
+        "discovered": bool(telemetry.get("operation_describe_index_calls", 0)),
+        "inspected": bool(telemetry.get("operation_describe_exact_calls", 0)),
         "invoked": bool(attempted),
         "completed": bool(completed),
         "verified": verified,
@@ -345,8 +345,8 @@ def classify_visibility(
         "output_outcomes": {
             "required": bool(case.acceptable_output_outcomes),
             "satisfied": bool(matched_outcomes),
-            "matched_capability_ids": sorted(
-                {outcome.capability_id for outcome in matched_outcomes}
+            "matched_operation_ids": sorted(
+                {outcome.operation_id for outcome in matched_outcomes}
             ),
         },
         "unexpected_capabilities": {
@@ -407,10 +407,10 @@ async def inspect_surface(
         missing = sorted(_REQUIRED_TOOLS - tool_names)
         if missing:
             raise RuntimeError(f"MCP surface is missing required tools: {missing}")
-        catalog_result = await client.read_resource("capability://catalog")
+        catalog_result = await client.read_resource("operation://catalog")
         catalog_content = catalog_result.contents[0]
         if not isinstance(catalog_content, TextResourceContents):
-            raise RuntimeError("capability catalog is not text")
+            raise RuntimeError("operation catalog is not text")
         catalog = json.loads(catalog_content.text)
         catalog_digest = _sha256_bytes(
             canonicalize_json(
@@ -431,7 +431,7 @@ async def inspect_surface(
                 "catalog_digest": catalog_digest,
                 "policy_profile": catalog["policy_profile"],
                 "policy_digest": catalog["policy_digest"],
-                "capability_count": len(catalog["capabilities"]),
+                "operation_count": len(catalog["capabilities"]),
                 "content_sha256": _sha256_bytes(catalog_content.text.encode("utf-8")),
             },
         }

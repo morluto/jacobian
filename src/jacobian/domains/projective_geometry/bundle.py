@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.projective_geometry.arrangements import (
-    PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY,
+    PROJECTIVE_LINE_ARRANGEMENT_OPERATION,
 )
 from jacobian.domains.projective_geometry.checkers import (
     PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
@@ -38,9 +38,9 @@ def build_projective_geometry_bundle() -> DomainBundle:
             features=("exact-rational-projective-incidence",),
         ),
         backend_version=SYMPY_VERSION,
-        capabilities=(PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY,),
+        operations=(PROJECTIVE_LINE_ARRANGEMENT_OPERATION,),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_PROJECTIVE_ARRANGEMENT_REQUEST",
                 stage="projective_arrangement_input_validation",
                 message=(

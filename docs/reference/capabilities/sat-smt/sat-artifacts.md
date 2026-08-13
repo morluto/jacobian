@@ -13,7 +13,7 @@
 Jacobian always installs canonical CNF, total assignment, and raw DRAT proof
 artifact contracts. It exposes `sat.cnf.materialize` to turn bounded
 named-variable clauses into that canonical CNF artifact. It conditionally
-exposes two exploration capabilities when the pinned CaDiCaL runtime is
+exposes two exploration operations when the pinned CaDiCaL runtime is
 available, but does not install the solver.
 These artifacts begin as typed, unverified evidence. Storing an assignment does
 not establish SAT, and storing proof bytes does not establish UNSAT. An
@@ -30,7 +30,7 @@ cancelled, or rejected proofs return `UNKNOWN` and never provide evidence that
 the formula is satisfiable. Exhausting the declared step or clause-literal
 budget is an operational `ERROR`, not an invalid-proof verdict.
 
-`sat.lrat.verify` capability version 2 additionally returns `invalid_step`
+`sat.lrat.verify` operation version 2 additionally returns `invalid_step`
 when the independent checker identifies a line-local replay failure. The typed
 witness contains the first proof line number, clause ID when parseable, stable
 failure code, a proof-line prefix bounded to 4,096 characters, an explicit
@@ -53,9 +53,9 @@ URIs registered by the current runtime:
 | Schema | `jacobian.witness-envelope@1` | Exact assignment replay evidence |
 | Schema | `jacobian.certificate-envelope@1` | Exact UNSAT proof replay evidence |
 
-The schema URIs are content addressed. They are not capability IDs. The
-assignment verification capability appears in `capability://catalog` only
-when its checker is operator authorized. The proof verification capability
+The schema URIs are content addressed. They are not operation IDs. The
+assignment verification operation appears in `operation://catalog` only
+when its checker is operator authorized. The proof verification operation
 also requires an available authorized DRAT-trim runtime.
 
 The SAT schemas are model backed. JSON Schema checks their closed structural
@@ -114,7 +114,7 @@ retain caller order. Larger maps remain available in the exact CNF artifact.
 The result has `COMPUTED` assurance and makes no SAT or UNSAT conclusion.
 `sat.model.find` and `sat.unsat_proof.find` consume the returned `cnf_uri`;
 their evidence can subsequently be passed to the corresponding independent
-verification capability when that checker is installed.
+verification operation when that checker is installed.
 
 ## Exact CNF binding
 
@@ -141,7 +141,7 @@ equal `variable_count`; partial assignments are not part of version 1. It also
 records:
 
 - declared scope `FULL_CNF`;
-- an available `CapabilityProviderRuntime`, including provider version and
+- an available `OperationProviderRuntime`, including provider version and
   exact runtime digest; and
 - the search resource budget, with a required wall-clock bound and optional
   memory and conflict bounds.
@@ -157,7 +157,7 @@ The runtime record uses install tier T2, license identifier `MIT`, the resolved
 executable path, platform, supported projection and proof formats, and the
 SHA-256 digest of the executable. Every invocation checks that digest before
 and after execution. A missing executable, another version, or a changed
-executable leaves the capabilities absent or makes the invocation fail without
+executable leaves the operations absent or makes the invocation fail without
 evidence.
 
 The implementation is tested against upstream tag `rel-3.0.1`, commit
@@ -234,7 +234,7 @@ assignment binding, total strict-Boolean vector, evidence bindings, and
 lineage. It returns `TRUE` only after evaluating every clause successfully.
 
 Acceptance creates the ordinary runtime `VerificationRecord` and allows the
-capability result to report `VERIFIED`. Assignment rejection reports
+operation result to report `VERIFIED`. Assignment rejection reports
 `UNKNOWN`: it does not establish UNSAT. A malformed or misbound artifact fails
 before checker dispatch. Timeout, checker error, cancellation, and incomplete
 execution likewise remain non-verified and carry no SAT or UNSAT conclusion.
@@ -274,7 +274,7 @@ instance, or other domain claim. Such a claim needs a domain-owned result and
 an operator-authorized domain checker that independently binds or reconstructs
 the encoding.
 
-The capability is installed only when bundled references are enabled and the
+The operation is installed only when bundled references are enabled and the
 operator authorizes an available DRAT-trim runtime. The supported runtime is
 upstream release `v05.22.2023`, source commit
 `2e5e29cb0019d5cfd547d4208dca1b3ec290349f`. DRAT-trim does not expose a
@@ -332,4 +332,4 @@ The two producer/checker pairs remain separate:
 
 CaDiCaL is a producer, not a checker. Its status is retained only as an
 unverified operational report. DRAT-trim replay is an independent
-clean-process capability and authorization boundary.
+clean-process operation and authorization boundary.

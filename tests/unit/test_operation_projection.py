@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.number_theory import IntegerValueResult
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.operation_publication import PublishedOperation
@@ -33,7 +33,7 @@ def test_completed_projection_preserves_published_artifact_lineage() -> None:
 
 
 def test_failed_projection_rejects_typed_output() -> None:
-    diagnostic = CapabilityDiagnostic(
+    diagnostic = OperationDiagnostic(
         code="EXAMPLE_FAILED",
         stage="execution",
         message="The example operation failed.",
@@ -51,7 +51,7 @@ def test_failed_projection_rejects_typed_output() -> None:
 
 
 def test_nonconclusion_projection_rejects_typed_output() -> None:
-    diagnostic = CapabilityDiagnostic(
+    diagnostic = OperationDiagnostic(
         code="EXAMPLE_UNSUPPORTED",
         stage="preflight",
         message="The example operation is unsupported.",
@@ -69,7 +69,7 @@ def test_nonconclusion_projection_rejects_typed_output() -> None:
 
 
 def test_projection_rejects_verification_record_without_completed_lineage() -> None:
-    diagnostic = CapabilityDiagnostic(
+    diagnostic = OperationDiagnostic(
         code="EXAMPLE_FAILED",
         stage="execution",
         message="The example operation failed.",
@@ -85,7 +85,7 @@ def test_projection_rejects_verification_record_without_completed_lineage() -> N
 
 
 def test_failed_projection_preserves_retained_artifacts_without_output() -> None:
-    diagnostic = CapabilityDiagnostic(
+    diagnostic = OperationDiagnostic(
         code="EXAMPLE_TIMEOUT",
         stage="execution",
         message="The example operation timed out.",

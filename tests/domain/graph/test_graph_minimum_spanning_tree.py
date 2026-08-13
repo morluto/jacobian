@@ -8,13 +8,13 @@ from pytest import fixture, raises
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiscoveryRequest,
-    CapabilityRequest,
-)
 from jacobian.contracts.graph_optimization import (
     GraphMinimumSpanningTreeRequest,
     GraphMinimumSpanningTreeResult,
+)
+from jacobian.contracts.operations import (
+    OperationDiscoveryRequest,
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization.bundle import (
@@ -60,9 +60,9 @@ def _result_payload(_services: DomainTestServices, result: object) -> dict[str, 
 def test_exact_weighted_minimum_spanning_tree_and_lineage(
     graph_optimization_services: DomainTestServices,
 ) -> None:
-    result = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.compute",
+    result = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.compute",
             input={
                 "graph": _weighted_graph(
                     vertices=["d", "c", "b", "a"],
@@ -141,9 +141,9 @@ def test_disconnected_and_empty_graphs_have_complete_no_tree_outcomes(
         ),
         (_weighted_graph(vertices=[], edges=[]), []),
     ):
-        result = graph_optimization_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="graph.spanning_tree.minimum.compute",
+        result = graph_optimization_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="graph.spanning_tree.minimum.compute",
                 input={"graph": graph},
             )
         )
@@ -182,9 +182,9 @@ def test_equal_weight_ties_are_deterministic_under_input_reordering(
     outputs = [
         _result_payload(
             graph_optimization_services,
-            graph_optimization_services.core.capabilities.invoke(
-                CapabilityRequest(
-                    capability_id="graph.spanning_tree.minimum.compute",
+            graph_optimization_services.core.operations.invoke(
+                OperationRequest(
+                    operation_id="graph.spanning_tree.minimum.compute",
                     input={"graph": graph},
                 )
             ),
@@ -203,8 +203,8 @@ def test_equal_weight_ties_are_deterministic_under_input_reordering(
 def test_weighted_mst_intent_is_discoverable_and_example_is_valid(
     graph_optimization_services: DomainTestServices,
 ) -> None:
-    discovered = graph_optimization_services.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = graph_optimization_services.core.operations.discover(
+        OperationDiscoveryRequest(
             query=(
                 "compute an exact weighted minimum spanning tree with total "
                 "weight and inspectable cycle optimality evidence"
@@ -214,21 +214,21 @@ def test_weighted_mst_intent_is_discoverable_and_example_is_valid(
         )
     )
 
-    assert discovered.matches[0].capability_id == (
+    assert discovered.matches[0].operation_id == (
         "graph.spanning_tree.minimum.compute"
     )
     assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
-        for descriptor in graph_optimization_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "graph.spanning_tree.minimum.compute"
+        for descriptor in graph_optimization_services.core.operations.catalog().operations
+        if descriptor.operation_id == "graph.spanning_tree.minimum.compute"
     )
-    assert descriptor.invocation_examples[0].name == "four_vertex_weighted_graph"
+    assert descriptor.examples[0].name == "four_vertex_weighted_graph"
 
-    result = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
-            input=descriptor.invocation_examples[0].input,
+    result = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
+            input=descriptor.examples[0].input,
         )
     )
 
@@ -264,9 +264,9 @@ def test_weighted_graph_contract_rejects_parallel_edges_and_oversized_weights() 
 def test_invalid_weighted_graph_fails_before_artifact_writes(
     graph_optimization_services: DomainTestServices,
 ) -> None:
-    result = graph_optimization_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.spanning_tree.minimum.compute",
+    result = graph_optimization_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.spanning_tree.minimum.compute",
             input={
                 "graph": _weighted_graph(
                     vertices=["a", "b"],

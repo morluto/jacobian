@@ -47,7 +47,7 @@ def test_clean_tree_passes(tmp_path: Path) -> None:
     )
     _write(
         tmp_path,
-        "src/jacobian/capability_service.py",
+        "src/jacobian/operation_service.py",
         "import os\nhome = os.environ.get('HOME')\n",
     )
     _write(

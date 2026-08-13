@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "well-total-domination-counterexample",
   "analysis": {
     "mathematical_moves": [
@@ -10,7 +10,7 @@
     ],
     "current_capabilities": [
       {
-        "capability_id": "graph.compute.properties",
+        "operation_id": "graph.compute.properties",
         "availability": "AVAILABLE",
         "boundary": "Computes elementary graph properties and degrees but does not enumerate or certify minimal total-dominating sets."
       }

@@ -15,19 +15,19 @@ from tests.support.services import (
 )
 
 import jacobian_checkers.sat
-from jacobian.contracts.capabilities import (
-    CapabilityInputKind,
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationInputKind,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatResourceBudget
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.runtime.config import CheckerAuthorityMode
-from jacobian.sat_smt.sat_capabilities import (
+from jacobian.sat_smt.sat_operations import (
     SatAssignmentCheckerInstallation,
     install_sat_assignment_checker,
 )
@@ -62,7 +62,7 @@ def _open_sat_assignment_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             if adapter is not None:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield SatAssignmentTestServices(
             core=services.core,
             application=services.application,
@@ -91,15 +91,15 @@ def unauthorized_sat_assignment_services(
         yield services
 
 
-def _producer() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _producer() -> ProviderObservation:
+    return ProviderObservation(
         provider="cadical",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="2.1.3",
         digest="sha256:" + "d" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
     )
 
@@ -123,9 +123,9 @@ def _assignment(
 
 
 def _verify(runtime: SatAssignmentTestServices, assignment_uri: str):
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.model.verify",
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.model.verify",
             input={"assignment_uri": assignment_uri},
         )
     )
@@ -136,11 +136,11 @@ def test_sat_assignment_verifier_declares_its_typed_artifact_route(
 ) -> None:
     descriptor = next(
         descriptor
-        for descriptor in sat_assignment_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "sat.model.verify"
+        for descriptor in sat_assignment_services.core.operations.catalog().operations
+        if descriptor.operation_id == "sat.model.verify"
     )
 
-    assert CapabilityInputKind.TYPED_ARTIFACT in descriptor.accepted_input_kinds
+    assert OperationInputKind.TYPED_ARTIFACT in descriptor.accepted_input_kinds
     assert descriptor.accepted_artifact_types == (
         sat_assignment_services.core.sat.installation.assignment_schema_uri,
     )
@@ -166,9 +166,9 @@ def test_invalid_assignment_diagnostic_routes_through_public_capabilities(
 def test_missing_assignment_is_reported_as_invalid_input(
     sat_assignment_services,
 ) -> None:
-    result = sat_assignment_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.model.verify",
+    result = sat_assignment_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.model.verify",
             input={},
         )
     )
@@ -246,8 +246,8 @@ def test_sat_assignment_verify_requires_operator_authorized_checker(
 
     assert runtime.assignment.checker_id is None
     assert "sat.model.verify" not in {
-        descriptor.capability_id
-        for descriptor in runtime.core.capabilities.catalog().capabilities
+        descriptor.operation_id
+        for descriptor in runtime.core.operations.catalog().operations
     }
 
 

@@ -8,7 +8,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization.bundle import build_graph_optimization_bundle
 
@@ -45,21 +45,21 @@ def test_hamiltonian_path_decision_has_independent_replay(
     graph: dict[str, object],
     decision: str,
 ) -> None:
-    computed = graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.hamiltonian_path.decide",
+    computed = graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.hamiltonian_path.decide",
             input={"graph": graph},
         )
     )
     assert computed.execution.status is ExecutionStatus.COMPLETED
     assert computed.output["result"]["decision"] == decision
-    assert "verification_capability_id" not in computed.output["result"]
+    assert "verification_operation_id" not in computed.output["result"]
     assert "verification_input_field" not in computed.output["result"]
     assert computed.artifact_uris == ()
 
-    verified = graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.hamiltonian_path.verify",
+    verified = graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.hamiltonian_path.verify",
             input={"input": {"graph": graph}, "candidate": computed.output["result"]},
         )
     )
@@ -76,9 +76,9 @@ def test_hamiltonian_checker_rejects_a_forged_negative_decision(
             "edges": [["a", "b"], ["b", "c"]],
         }
     }
-    computed = graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.hamiltonian_path.decide",
+    computed = graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.hamiltonian_path.decide",
             input=input_payload,
         )
     )
@@ -86,9 +86,9 @@ def test_hamiltonian_checker_rejects_a_forged_negative_decision(
     forged["decision"] = "DOES_NOT_EXIST"
     forged["path"] = []
 
-    checked = graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.hamiltonian_path.verify",
+    checked = graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.hamiltonian_path.verify",
             input={"input": input_payload, "candidate": forged},
         )
     )

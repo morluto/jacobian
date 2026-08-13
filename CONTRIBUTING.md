@@ -203,7 +203,7 @@ documentation according to the reader's task:
 - `docs/reference/` defines exact contracts and lookup information;
 - `docs/explanation/` records architecture, rationale, and tradeoffs.
 
-Domain-owned capability references live in `docs/reference/capabilities/<domain>/`.
+Domain-owned operation references live in `docs/reference/capabilities/<domain>/`.
 Adding an operation or provider does not require editing a central documentation
 list.
 

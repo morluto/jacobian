@@ -6,21 +6,21 @@ from typing import Any
 
 import pytest
 
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import project_operation_result
-from jacobian.polynomial_interval_capabilities import (
+from jacobian.polynomial_interval_operations import (
     PolynomialIntervalEnclosureVerifyAdapter,
-    install_polynomial_interval_capabilities,
+    install_polynomial_interval_operations,
 )
-from tests.support.capability_installations import install_capability_bundle
+from tests.support.operation_installations import install_operation_bundle
 from tests.support.polynomials import univariate_term as _term
 
 
-def _invoke(adapter: Any, request: CapabilityRequest):
+def _invoke(adapter: Any, request: OperationRequest):
     return adapter.invoke(adapter.prepare(request))
 
 
@@ -43,8 +43,8 @@ def _interval(lo: str, hi: str) -> dict[str, Any]:
 
 @pytest.fixture()
 def installation(tmp_path: Path):
-    with install_capability_bundle(
-        tmp_path, install_polynomial_interval_capabilities
+    with install_operation_bundle(
+        tmp_path, install_polynomial_interval_operations
     ) as bundle:
         yield bundle
 
@@ -62,7 +62,7 @@ def test_verify_adapter_rejects_missing_authorized_checker(installation) -> None
         PolynomialIntervalEnclosureVerifyAdapter(resources)
 
 
-def test_enclose_capability_computes_a_valid_bernstein_enclosure(
+def test_enclose_operation_computes_a_valid_bernstein_enclosure(
     installation,
 ) -> None:
     adapters, _installed, _store = installation
@@ -71,8 +71,8 @@ def test_enclose_capability_computes_a_valid_bernstein_enclosure(
     result = project_operation_result(
         _invoke(
             enclose,
-            CapabilityRequest(
-                capability_id="polynomial.interval.enclose",
+            OperationRequest(
+                operation_id="polynomial.interval.enclose",
                 input={
                     "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                     "interval": _interval("0", "1"),
@@ -95,7 +95,7 @@ def test_enclose_capability_computes_a_valid_bernstein_enclosure(
     assert result.output["enclosure_uri"] in result.artifact_uris
 
 
-def test_enclose_capability_handles_a_quadratic_on_a_shifted_interval(
+def test_enclose_operation_handles_a_quadratic_on_a_shifted_interval(
     installation,
 ) -> None:
     adapters, _installed, _store = installation
@@ -105,8 +105,8 @@ def test_enclose_capability_handles_a_quadratic_on_a_shifted_interval(
     result = project_operation_result(
         _invoke(
             enclose,
-            CapabilityRequest(
-                capability_id="polynomial.interval.enclose",
+            OperationRequest(
+                operation_id="polynomial.interval.enclose",
                 input={
                     "polynomial": _polynomial("x", [_term(1, 2)]),
                     "interval": _interval("-1", "1"),
@@ -127,7 +127,7 @@ def test_enclose_capability_handles_a_quadratic_on_a_shifted_interval(
     assert result.output["range_exactness"] == "ENCLOSURE_VALID_NOT_EXACT"
 
 
-def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
+def test_verify_operation_confirms_a_valid_enclosure(installation) -> None:
     adapters, _installed, _store = installation
     enclose, verify = adapters
     assert verify is not None
@@ -136,8 +136,8 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     enclose_result = project_operation_result(
         _invoke(
             enclose,
-            CapabilityRequest(
-                capability_id="polynomial.interval.enclose",
+            OperationRequest(
+                operation_id="polynomial.interval.enclose",
                 input={
                     "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                     "interval": _interval("0", "1"),
@@ -150,8 +150,8 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     result = project_operation_result(
         _invoke(
             verify,
-            CapabilityRequest(
-                capability_id="polynomial.interval.enclosure.verify",
+            OperationRequest(
+                operation_id="polynomial.interval.enclosure.verify",
                 input={
                     "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                     "interval": _interval("0", "1"),
@@ -169,7 +169,7 @@ def test_verify_capability_confirms_a_valid_enclosure(installation) -> None:
     assert result.output["verification_record_uri"] is not None
 
 
-def test_verify_capability_rejects_a_false_enclosure(installation) -> None:
+def test_verify_operation_rejects_a_false_enclosure(installation) -> None:
     adapters, _installed, _store = installation
     _enclose, verify = adapters
     assert verify is not None
@@ -179,8 +179,8 @@ def test_verify_capability_rejects_a_false_enclosure(installation) -> None:
     result = project_operation_result(
         _invoke(
             verify,
-            CapabilityRequest(
-                capability_id="polynomial.interval.enclosure.verify",
+            OperationRequest(
+                operation_id="polynomial.interval.enclosure.verify",
                 input={
                     "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                     "interval": _interval("0", "1"),
@@ -200,15 +200,15 @@ def test_verify_capability_rejects_a_false_enclosure(installation) -> None:
     assert result.output["conclusion"] == "FALSE"
 
 
-def test_enclose_capability_rejects_a_degenerate_interval(installation) -> None:
+def test_enclose_operation_rejects_a_degenerate_interval(installation) -> None:
     adapters, _installed, _store = installation
     enclose, _verify = adapters
 
-    with pytest.raises(CapabilityInvocationError):
+    with pytest.raises(OperationInvocationError):
         _invoke(
             enclose,
-            CapabilityRequest(
-                capability_id="polynomial.interval.enclose",
+            OperationRequest(
+                operation_id="polynomial.interval.enclose",
                 input={
                     "polynomial": _polynomial("x", [_term(1, 0)]),
                     "interval": _interval("1", "1"),

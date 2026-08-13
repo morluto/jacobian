@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
@@ -41,11 +41,11 @@ def _polynomial(
 
 def _invoke(
     domain_services: DomainTestServices,
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, object],
 ) -> dict[str, object]:
-    outcome = domain_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
+    outcome = domain_services.core.operations.invoke(
+        OperationRequest(operation_id=operation_id, input=payload)
     )
     assert outcome.execution.status is ExecutionStatus.COMPLETED
     assert outcome.artifact_uris == ()
@@ -264,9 +264,9 @@ def test_partial_fraction_normalizes_non_monic_denominators_exactly(
 def test_elementary_polynomial_requests_fail_closed_before_artifact_writes(
     domain_services,
 ) -> None:
-    outcome = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.integer.compute.compose",
+    outcome = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.integer.compute.compose",
             input={
                 "outer": {"coefficients": ["1", *(["0"] * 63), "1"]},
                 "inner": {"coefficients": ["1", *(["0"] * 63), "1"]},
@@ -282,9 +282,9 @@ def test_elementary_polynomial_requests_fail_closed_before_artifact_writes(
 def test_integer_polynomial_shift_is_exact_computed(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.integer.compute.shift",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.integer.compute.shift",
             input={
                 "polynomial": {
                     "coefficient_order": "DESCENDING_DEGREE",

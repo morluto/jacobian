@@ -18,19 +18,17 @@ from pathlib import Path
 from pydantic import ValidationError
 
 import jacobian.lean_frontend.exploration as _exploration_support
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean_metavariable_fields import (
     LeanMetavariableFieldsArtifact,
     LeanMetavariableFieldsOutput,
     LeanMetavariableFieldsRequest,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationInputKind,
+    OperationRequest,
+    ProviderObservation,
 )
 from jacobian.lean_frontend._state_validation import _load_validated_proof_state
 from jacobian.lean_frontend.artifacts import (
@@ -44,6 +42,8 @@ from jacobian.lean_frontend.exploration import (
     _validate_source_parts,
 )
 from jacobian.lean_frontend.repl import _response_errors
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -54,12 +54,12 @@ class LeanMetavariableFieldsAdapter:
         self,
         resources: _Resources,
         metavariable_schema_uri: str,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
     ) -> None:
         self.resources = resources
         self.metavariable_schema_uri = metavariable_schema_uri
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.proof_state.metavariable_fields",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.proof_state.metavariable_fields",
             version="1",
             title="Expose structured Lean metavariable and elaboration fields",
             description=(
@@ -74,28 +74,28 @@ class LeanMetavariableFieldsAdapter:
             output_schema=LeanMetavariableFieldsOutput.model_json_schema(),
             tags=("lean", "proof-state", "metavariable", "exploration"),
             accepted_input_kinds=(
-                CapabilityInputKind.STRUCTURED_REQUEST,
-                CapabilityInputKind.TYPED_ARTIFACT,
+                OperationInputKind.STRUCTURED_REQUEST,
+                OperationInputKind.TYPED_ARTIFACT,
             ),
             accepted_artifact_types=(resources.state_schema_uri,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanMetavariableFieldsRequest:
+    def prepare(self, request: OperationRequest) -> LeanMetavariableFieldsRequest:
         try:
-            validated = parse_capability_input(
+            validated = parse_operation_input(
                 LeanMetavariableFieldsRequest, request.input
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_METAVARIABLE_FIELDS_REQUEST",
                     stage="request_validation",
                     message=("The Lean metavariable-fields request is invalid."),
-                    hint="Supply a state_uri returned by a proof-state capability.",
+                    hint="Supply a state_uri returned by a proof-state operation.",
                 )
             ) from exc
         return validated
@@ -113,12 +113,12 @@ class LeanMetavariableFieldsAdapter:
             expected_environment=validated.environment,
             expected_environment_digest=environment_digest,
             invalid_state_hint=(
-                "Use a state URI returned by a proof-state capability."
+                "Use a state URI returned by a proof-state operation."
             ),
         )
         if bound_state.completed:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_PROOF_STATE_COMPLETED",
                     stage="state_validation",
                     message="The supplied proof state has no remaining goals.",
@@ -152,8 +152,8 @@ class LeanMetavariableFieldsAdapter:
                 *_response_errors(skip_response),
             )
             if reconstruction_errors:
-                raise CapabilityInvocationError(
-                    CapabilityDiagnostic(
+                raise OperationInvocationError(
+                    OperationDiagnostic(
                         code="LEAN_STATE_RECONSTRUCTION_FAILED",
                         stage="state_reconstruction",
                         message=(
@@ -174,8 +174,8 @@ class LeanMetavariableFieldsAdapter:
                     request=validated,
                 )
             except _exploration_support.LeanHelperError as exc:
-                raise CapabilityInvocationError(
-                    CapabilityDiagnostic(
+                raise OperationInvocationError(
+                    OperationDiagnostic(
                         code=exc.code,
                         stage="metavariable_field_extraction",
                         message=(f"Lean helper reported an error: {exc.code}."),
@@ -186,8 +186,8 @@ class LeanMetavariableFieldsAdapter:
                     )
                 ) from exc
             except RuntimeError as exc:
-                raise CapabilityInvocationError(
-                    CapabilityDiagnostic(
+                raise OperationInvocationError(
+                    OperationDiagnostic(
                         code="LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED",
                         stage="metavariable_field_extraction",
                         message=(
@@ -203,8 +203,8 @@ class LeanMetavariableFieldsAdapter:
             validation_response
         )
         if replayed_goals != bound_state.normalized_goals:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="STALE_LEAN_PROOF_STATE",
                     stage="state_validation",
                     message=(
@@ -219,8 +219,8 @@ class LeanMetavariableFieldsAdapter:
             )
         structured = payload.structured_metavariables
         if len(structured) != len(bound_state.normalized_goals):
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_METAVARIABLE_FIELDS_EXTRACTION_FAILED",
                     stage="metavariable_field_extraction",
                     message=(
@@ -259,7 +259,7 @@ class LeanMetavariableFieldsAdapter:
             metavariable_fields_uri=artifact.artifact_uri,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=output, runtime_ms=_runtime_ms(started)),
             publication=PublishedOperation(
@@ -269,10 +269,10 @@ class LeanMetavariableFieldsAdapter:
         )
 
 
-def install_lean_metavariable_fields_capability(
+def install_lean_metavariable_fields_operation(
     resources: _Resources,
     metavariable_schema_uri: str,
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> LeanMetavariableFieldsAdapter:
     return LeanMetavariableFieldsAdapter(
         resources, metavariable_schema_uri, provider_runtime
@@ -281,5 +281,5 @@ def install_lean_metavariable_fields_capability(
 
 __all__ = [
     "LeanMetavariableFieldsAdapter",
-    "install_lean_metavariable_fields_capability",
+    "install_lean_metavariable_fields_operation",
 ]

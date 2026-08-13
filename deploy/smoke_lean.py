@@ -1,4 +1,4 @@
-"""Capability and behavior smoke for a deployed pinned Lean portfolio."""
+"""Operation and behavior smoke for a deployed pinned Lean portfolio."""
 
 from __future__ import annotations
 
@@ -42,14 +42,14 @@ def _token() -> str | None:
 
 
 async def _run(
-    client: Any, capability_id: str, payload: dict[str, Any]
+    client: Any, operation_id: str, payload: dict[str, Any]
 ) -> dict[str, Any]:
     response = await client.call_tool(
         "math.run",
-        {"capability_id": capability_id, "payload": payload},
+        {"operation_id": operation_id, "payload": payload},
     )
     if response.is_error or not isinstance(response.structured_content, dict):
-        raise RuntimeError(f"{capability_id} did not return a structured result")
+        raise RuntimeError(f"{operation_id} did not return a structured result")
     return response.structured_content
 
 

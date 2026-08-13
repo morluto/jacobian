@@ -11,7 +11,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.provider_measurements import (
     ProviderInstalledSize,
     ProviderMeasurement,
@@ -193,7 +193,7 @@ def _measure_command(
 
 
 def _python_probe(
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     operation: str,
 ) -> ProviderMeasurementSample:
     return _measure_command(
@@ -240,7 +240,7 @@ def _tree_size(root: Path) -> int:
     return sum(_file_size(path) for path in root.rglob("*"))
 
 
-def _installed_size(runtime: CapabilityProviderRuntime) -> ProviderInstalledSize:
+def _installed_size(runtime: ProviderObservation) -> ProviderInstalledSize:
     distribution_name = runtime.configuration.get("distribution")
     try:
         if isinstance(distribution_name, str):
@@ -287,7 +287,7 @@ def _installed_size(runtime: CapabilityProviderRuntime) -> ProviderInstalledSize
         )
 
 
-def _cold_install_spec(runtime: CapabilityProviderRuntime) -> str | None:
+def _cold_install_spec(runtime: ProviderObservation) -> str | None:
     distribution_name = runtime.configuration.get("distribution")
     if isinstance(distribution_name, str) and runtime.version is not None:
         return f"{distribution_name}=={runtime.version}"
@@ -295,7 +295,7 @@ def _cold_install_spec(runtime: CapabilityProviderRuntime) -> str | None:
 
 
 def _measure_cold_install(
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     *,
     enabled: bool,
 ) -> ProviderMeasurementSample:
@@ -361,11 +361,11 @@ def _measure_cold_install(
 
 
 def measure_provider(
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     *,
     include_cold_install: bool = False,
 ) -> ProviderMeasurement:
-    """Measure one exact available runtime without changing the capability catalog."""
+    """Measure one exact available runtime without changing the operation catalog."""
 
     if runtime.provider == "jacobian.lean4":
         cold_start = _lean_probe(reproduction=False)

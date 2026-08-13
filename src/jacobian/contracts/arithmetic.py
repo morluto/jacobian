@@ -1,4 +1,4 @@
-"""Named Pydantic wire contracts for exact arithmetic capabilities.
+"""Named Pydantic wire contracts for exact arithmetic operations.
 
 The arithmetic domain owns integer absolute value, sign, decimal digit
 sum/count, base expansion, integer nth root, and rational arithmetic/order.

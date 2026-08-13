@@ -7,10 +7,6 @@ import time
 from collections.abc import Callable
 from typing import Any, cast
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-)
 from jacobian.contracts.graph_invariant_operations import (
     GraphCliqueNumberResult,
     GraphCoreRequest,
@@ -34,24 +30,28 @@ from jacobian.contracts.graph_optimization import (
     OptimizationSearchStep,
     OptimizationTermination,
 )
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    OperationExample,
+)
 from jacobian.contracts.results import ContractModel
 from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization._providers import Z3_LOADER
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationRefusalError,
-    OperationSpec,
 )
 
-_INVALID_REQUEST = CapabilityDiagnostic(
+_INVALID_REQUEST = OperationDiagnostic(
     code="INVALID_GRAPH_INVARIANT_REQUEST",
     stage="graph_invariant_input_validation",
     message="Input does not satisfy the bounded finite simple-graph contract.",
     hint="Supply a canonical simple graph with at most 32 vertices.",
 )
 
-_INVALID_MAXIMUM_MATCHING_REQUEST = CapabilityDiagnostic(
+_INVALID_MAXIMUM_MATCHING_REQUEST = OperationDiagnostic(
     code="INVALID_GRAPH_MAXIMUM_MATCHING_REQUEST",
     stage="graph_maximum_matching_input_validation",
     message=(
@@ -64,14 +64,14 @@ _INVALID_MAXIMUM_MATCHING_REQUEST = CapabilityDiagnostic(
 def _computed[
     ResultT: ContractModel,
 ](
-    capability_id: str,
+    operation_id: str,
     title: str,
     description: str,
     result_model: type[ResultT],
     operation: Callable[[Any], ResultT],
     *tags: str,
     version: str = "1",
-    invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+    examples: tuple[OperationExample, ...] = (),
 ) -> InstalledOperation[GraphInvariantRequest, ResultT]:
     def implementation(
         request: GraphInvariantRequest,
@@ -83,7 +83,7 @@ def _computed[
             return operation(graph)
         except (ArithmeticError, nx.NetworkXError, TypeError, ValueError) as exc:
             raise OperationRefusalError(
-                CapabilityDiagnostic(
+                OperationDiagnostic(
                     code="GRAPH_INVARIANT_NOT_APPLICABLE",
                     stage="graph_invariant_computation",
                     message=str(exc),
@@ -92,8 +92,8 @@ def _computed[
             ) from exc
 
     return inline_operation(
-        OperationSpec(
-            operation_id=capability_id,
+        OperationDeclaration(
+            operation_id=operation_id,
             version=version,
             title=title,
             description=description,
@@ -102,7 +102,7 @@ def _computed[
             execute=implementation,
             tags=("graph", "invariant", *tags),
             invalid_request=_INVALID_REQUEST,
-            invocation_examples=invocation_examples,
+            examples=examples,
         )
     )
 
@@ -244,7 +244,7 @@ def _maximum_matching_execute(
         return _maximum_matching(graph)
     except (ArithmeticError, nx.NetworkXError, TypeError, ValueError) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="GRAPH_INVARIANT_NOT_APPLICABLE",
                 stage="graph_invariant_computation",
                 message=str(exc),
@@ -291,7 +291,7 @@ def _k_core_execute(
         )
     except (nx.NetworkXError, TypeError, ValueError) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="GRAPH_INVARIANT_NOT_APPLICABLE",
                 stage="graph_invariant_computation",
                 message=str(exc),
@@ -424,8 +424,8 @@ def _clique_execute(
     )
 
 
-CLIQUE_NUMBER_CAPABILITY = inline_operation(
-    OperationSpec(
+CLIQUE_NUMBER_OPERATION = inline_operation(
+    OperationDeclaration(
         operation_id="graph.invariant.clique_number.compute",
         version="1",
         title="Clique number",
@@ -438,7 +438,7 @@ CLIQUE_NUMBER_CAPABILITY = inline_operation(
     )
 )
 
-EXACT_GRAPH_INVARIANT_CAPABILITIES = (
+EXACT_GRAPH_INVARIANT_OPERATIONS = (
     _computed(
         "graph.invariant.triangle_count.compute",
         "Triangle count",
@@ -447,7 +447,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         _triangle_count,
         "triangle",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "triangle_graph",
                 "Count triangles in a three-cycle.",
@@ -469,7 +469,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         "radius",
         "exact",
         version="2",
-        invocation_examples=(
+        examples=(
             example(
                 "path_three_radius",
                 "Compute the radius of a three-vertex path.",
@@ -483,7 +483,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         ),
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="graph.k_core.compute",
             version="2",
             title="Compute a graph k-core",
@@ -493,7 +493,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
             execute=_k_core_execute,
             tags=("graph", "invariant", "k-core", "exact"),
             invalid_request=_INVALID_REQUEST,
-            invocation_examples=(
+            examples=(
                 example(
                     "triangle_two_core",
                     "Compute the 2-core of a triangle.",
@@ -516,7 +516,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         _girth,
         "girth",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "triangle_girth",
                 "Compute the girth of a triangle.",
@@ -541,7 +541,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         "diameter",
         "exact",
         version="2",
-        invocation_examples=(
+        examples=(
             example(
                 "path_three_diameter",
                 "Compute the diameter of a three-vertex path.",
@@ -562,7 +562,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         _edge_connectivity,
         "edge-connectivity",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "triangle_edge_connectivity",
                 "Compute edge connectivity of a triangle.",
@@ -583,7 +583,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         _vertex_connectivity,
         "vertex-connectivity",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "triangle_vertex_connectivity",
                 "Compute vertex connectivity of a triangle.",
@@ -604,7 +604,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         _eulerian,
         "eulerian",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "triangle_eulerian",
                 "Decide whether a triangle has an Eulerian circuit.",
@@ -625,7 +625,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         _spanning_tree_count,
         "spanning-tree",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "triangle_spanning_trees",
                 "Count spanning trees of a triangle.",
@@ -639,7 +639,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
         ),
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="graph.invariant.maximum_matching.compute",
             version="3",
             title="Maximum matching",
@@ -652,7 +652,7 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
             execute=_maximum_matching_execute,
             tags=("graph", "invariant", "matching", "maximum", "exact"),
             invalid_request=_INVALID_MAXIMUM_MATCHING_REQUEST,
-            invocation_examples=(
+            examples=(
                 example(
                     "triangle_with_tail",
                     "Compute and certify a maximum matching of a triangle with one tail.",

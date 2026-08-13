@@ -1,4 +1,4 @@
-"""Exact finite-probability capabilities."""
+"""Exact finite-probability operations."""
 
 from jacobian.domains.probability.bundle import build_finite_probability_bundle
 

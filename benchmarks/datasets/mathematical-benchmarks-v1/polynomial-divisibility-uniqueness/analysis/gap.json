@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "polynomial-divisibility-uniqueness",
   "analysis": {
     "mathematical_moves": [
@@ -11,7 +11,7 @@
     ],
     "current_capabilities": [
       {
-        "capability_id": "polynomial.compute.gcd",
+        "operation_id": "polynomial.compute.gcd",
         "availability": "AVAILABLE",
         "boundary": "Computes a polynomial gcd and Bezout witness for supplied polynomials; symbolic remainder construction and the divisibility-family interpretation remain agent-owned."
       }

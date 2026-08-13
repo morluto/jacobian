@@ -4,7 +4,7 @@
 
 `integer.compute.prime_factorization` retains its existing request and result
 contracts and returns `COMPUTED` assurance. The operator-authorized
-`integer.prime_factorization.verify` capability independently replays one
+`integer.prime_factorization.verify` operation independently replays one
 submitted `{input, candidate}` pair with Python-FLINT and may promote that exact claim to
 `VERIFIED`.
 

@@ -1,8 +1,8 @@
 """Validated real-analysis domain bundle."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
-from jacobian.domains.analysis.operations import POINT_ENCLOSURE_CAPABILITIES
+from jacobian.domains.analysis.operations import POINT_ENCLOSURE_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION
 from jacobian.providers.flint_runtime import python_flint_analysis_provider_runtime
@@ -28,9 +28,9 @@ def build_real_analysis_bundle() -> DomainBundle:
         ),
         provider_runtime=python_flint_analysis_provider_runtime(),
         backend_version=f"python-flint-{PYTHON_FLINT_VERSION}",
-        capabilities=POINT_ENCLOSURE_CAPABILITIES,
+        operations=POINT_ENCLOSURE_OPERATIONS,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_REAL_ANALYSIS_REQUEST",
                 stage="real_analysis_input_validation",
                 message="Input does not satisfy the bounded real-analysis contract.",

@@ -58,8 +58,8 @@ def test_cli_catalog_and_inspect_share_installed_declaration(tmp_path: Path) -> 
     assert inspect_call.exit_code == 0, inspect_call.stderr
     catalog = json.loads(catalog_call.stdout)
     descriptor = json.loads(inspect_call.stdout)
-    assert descriptor["capability_id"] == "matrix.determinant.compute"
-    assert descriptor in catalog["capabilities"]
+    assert descriptor["operation_id"] == "matrix.determinant.compute"
+    assert descriptor in catalog["operations"]
 
 
 def test_cli_run_executes_one_installed_operation_from_inline_json(

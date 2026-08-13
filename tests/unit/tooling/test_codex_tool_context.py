@@ -78,7 +78,7 @@ def test_analyze_trajectory_counts_direct_nested_calls_without_scan(
         path,
         source=(
             "const a = await tools.mcp__jacobian__math_find({query:'gcd'});"
-            "const b = await tools.mcp__jacobian__math_run({capability_id:'x'});"
+            "const b = await tools.mcp__jacobian__math_run({operation_id:'x'});"
             "text(a.structuredContent ?? a); text(b.structuredContent ?? b);"
         ),
         content={"kind": "result"},

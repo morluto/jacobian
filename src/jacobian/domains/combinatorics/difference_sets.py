@@ -187,7 +187,7 @@ def decide_cyclic_difference_set_extension(
     )
 
 
-DIFFERENCE_SET_CAPABILITIES = (
+DIFFERENCE_SET_OPERATIONS = (
     combinatorics_operation(
         "combinatorics.integer_set.sidon.decide",
         "Decide the integer Sidon property",
@@ -202,7 +202,7 @@ DIFFERENCE_SET_CAPABILITIES = (
         "additive-combinatorics",
         "sidon-set",
         "ordered-differences",
-        invocation_examples=(
+        examples=(
             example(
                 "mian_chowla_prefix",
                 "Decide whether 1, 2, 4, 8, 13 is Sidon over the integers.",
@@ -224,7 +224,7 @@ DIFFERENCE_SET_CAPABILITIES = (
         "additive-combinatorics",
         "difference-set",
         "finite-design",
-        invocation_examples=(
+        examples=(
             example(
                 "fano_difference_set",
                 "Decide whether 0, 1, 3 is a perfect difference set modulo 7.",
@@ -246,7 +246,7 @@ DIFFERENCE_SET_CAPABILITIES = (
         "additive-combinatorics",
         "difference-set",
         "bounded-completion",
-        invocation_examples=(
+        examples=(
             example(
                 "mian_chowla_order_six",
                 "Decide fixed-order extension of 1, 2, 4, 8, 13 at order 6.",
@@ -261,7 +261,7 @@ DIFFERENCE_SET_CAPABILITIES = (
 
 
 __all__ = [
-    "DIFFERENCE_SET_CAPABILITIES",
+    "DIFFERENCE_SET_OPERATIONS",
     "decide_cyclic_difference_set_extension",
     "decide_cyclic_perfect_difference_set",
     "decide_integer_sidon",

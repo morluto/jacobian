@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.finite_fields import build_finite_field_bundle
 from jacobian.math.finite_fields import (
@@ -50,9 +50,9 @@ def test_installed_orbit_aggregation_rejects_a_forged_ledger(tmp_path: Path) -> 
         tmp_path,
         build_finite_field_bundle(),
     ) as services:
-        result = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.orbit_distribution.compute",
+        result = services.core.operations.invoke(
+            OperationRequest(
+                operation_id="finite_field.orbit_distribution.compute",
                 input={"ledger": _forged_ledger().model_dump(mode="json")},
             )
         )

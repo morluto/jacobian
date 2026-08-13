@@ -1,9 +1,9 @@
 """Independent checker declarations for finite-field operations."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.domains.finite_fields.contracts import (
     CollisionCertificateRequest,
@@ -22,14 +22,14 @@ from jacobian.provider_runtime import (
 
 def _finite_field_rank_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     source = source_provider_runtime(
         "jacobian.finite-field-rank-checker-source",
         version="1",
         entrypoint=(
             "jacobian_checkers.finite_field_rank:check_finite_field_linear_map_rank"
         ),
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
         features=("clean-process-checker",),
     )
@@ -47,12 +47,12 @@ def _finite_field_rank_runtime(
 
 def _finite_field_polynomial_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     source = source_provider_runtime(
         "jacobian.finite-field-polynomial-checker-source",
         version="1",
         entrypoint="jacobian_checkers.finite_field_polynomial:check_finite_map_table",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
         features=("clean-process-checker",),
     )

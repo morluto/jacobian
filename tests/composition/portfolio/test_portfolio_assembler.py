@@ -17,11 +17,11 @@ import pytest
 from pydantic import Field
 
 from jacobian.artifacts import ArtifactService
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    ProviderAvailability,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ContractModel
 from jacobian.domain_bundles import DomainBundle
@@ -31,7 +31,7 @@ from jacobian.operation_installation import OperationInstaller
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
-    OperationSpec,
+    OperationDeclaration,
 )
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
@@ -56,18 +56,18 @@ class _SyntheticResult(ContractModel):
     doubled: int
 
 
-def _available_runtime() -> CapabilityProviderRuntime:
+def _available_runtime() -> ProviderObservation:
     return known_provider_runtime("jacobian.synthetic", features=("deterministic",))
 
 
 def _unavailable_runtime(
     message: str = "synthetic provider is unavailable",
-) -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+) -> ProviderObservation:
+    return ProviderObservation(
         provider="jacobian.synthetic.unavailable",
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         platform="test-platform",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
         diagnostic=message,
     )
@@ -76,8 +76,8 @@ def _unavailable_runtime(
 def _synthetic_bundle(
     *,
     domain_id: str = "synthetic",
-    runtime: CapabilityProviderRuntime | None = None,
-    capabilities: tuple[InstalledOperation[Any, Any], ...] | None = None,
+    runtime: ProviderObservation | None = None,
+    operations: tuple[InstalledOperation[Any, Any], ...] | None = None,
 ) -> DomainBundle:
     def compute(request: _SyntheticRequest) -> _SyntheticResult:
         return _SyntheticResult(doubled=request.value * 2)
@@ -92,11 +92,11 @@ def _synthetic_bundle(
         ),
         provider_runtime=runtime or _available_runtime(),
         backend_version="synthetic-1",
-        capabilities=capabilities
-        if capabilities is not None
+        operations=operations
+        if operations is not None
         else (
             inline_operation(
-                OperationSpec(
+                OperationDeclaration(
                     operation_id=f"{domain_id}.compute.double",
                     version="2",
                     title="Double a bounded integer",
@@ -109,7 +109,7 @@ def _synthetic_bundle(
             ),
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_SYNTHETIC_REQUEST",
                 stage="synthetic_input_validation",
                 message="Input does not satisfy the synthetic contract.",
@@ -140,8 +140,8 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
         verification = VerificationService(store, checkers, schemas)
         registered: list[str] = []
 
-        def register_capability(adapter: Any) -> None:
-            registered.append(adapter.descriptor.capability_id)
+        def register_operation(adapter: Any) -> None:
+            registered.append(adapter.descriptor.operation_id)
 
         context = InstallationContext(
             store=store,
@@ -152,7 +152,7 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
             verification=verification,
             operations=operations,
             checker_authority=CheckerAuthorityMode.NONE,
-            register_capability=register_capability,
+            register_operation=register_operation,
         )
         yield _RecordingContext(context=context, store=store, registered=registered)
     finally:
@@ -175,7 +175,7 @@ def test_install_domains_installs_every_available_bundle_and_registers_adapters(
     (outcome,) = result.outcomes
     assert outcome.status is BundleInstallationStatus.INSTALLED
     assert outcome.installed is result.installed["alpha"]
-    assert outcome.capability_ids == ("alpha.compute.double",)
+    assert outcome.operation_ids == ("alpha.compute.double",)
     assert outcome.diagnostic is None
 
 
@@ -224,8 +224,8 @@ def test_unavailable_provider_is_skipped_with_typed_diagnostic(
     outcome = result.outcomes[1]
     assert outcome.status is BundleInstallationStatus.SKIPPED_PROVIDER_UNAVAILABLE
     assert outcome.installed is None
-    # Capability IDs are still exposed so callers can see what is missing.
-    assert outcome.capability_ids == ("beta.compute.double",)
+    # Operation IDs are still exposed so callers can see what is missing.
+    assert outcome.operation_ids == ("beta.compute.double",)
 
 
 def test_unavailable_provider_does_not_block_subsequent_bundles(
@@ -291,13 +291,13 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
 ) -> None:
     """A bundle installation defect must propagate, not be absorbed.
 
-    OperationInstaller rejects an empty-capability bundle. The assembler must
+    OperationInstaller rejects an empty-operation bundle. The assembler must
     not normalize that into a diagnostic; it must raise so the caller's
     enclosing transaction rolls back the partial portfolio atomically.
     """
 
     assembler = DomainBundleInstaller(assembly.context)
-    broken = _synthetic_bundle(domain_id="broken", capabilities=())
+    broken = _synthetic_bundle(domain_id="broken", operations=())
     plan = PortfolioPlan(
         components=(
             _synthetic_bundle(domain_id="alpha"),
@@ -315,20 +315,20 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
     assert "broken" not in assembly.registered
 
 
-def test_duplicate_capability_id_within_a_bundle_propagates(
+def test_duplicate_operation_id_within_a_bundle_propagates(
     assembly: _RecordingContext,
 ) -> None:
-    """OperationInstaller rejects duplicate capability IDs within a bundle.
+    """OperationInstaller rejects duplicate operation IDs within a bundle.
 
     The assembler must propagate that defect rather than recording a skip.
     """
 
     assembler = DomainBundleInstaller(assembly.context)
     base = _synthetic_bundle(domain_id="alpha")
-    duplicate = base.capabilities[0]
-    bundle = replace(base, capabilities=(base.capabilities[0], duplicate))
+    duplicate = base.operations[0]
+    bundle = replace(base, operations=(base.operations[0], duplicate))
 
-    with pytest.raises(ValueError, match="duplicate capability ID"):
+    with pytest.raises(ValueError, match="duplicate operation ID"):
         assembler.install(PortfolioPlan(components=(bundle,)))
 
     assert assembly.registered == []

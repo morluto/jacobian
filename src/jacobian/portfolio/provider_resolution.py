@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderObservation,
 )
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
@@ -36,16 +36,16 @@ from jacobian.providers.sympy_runtime import (
 class ProviderRuntimePlan:
     """Resolved runtimes consumed by installation without repeating probes."""
 
-    cadical: CapabilityProviderRuntime
-    carcara: CapabilityProviderRuntime
-    cvc5: CapabilityProviderRuntime
-    drat_trim: CapabilityProviderRuntime
-    sympy_polynomial_normalization: CapabilityProviderRuntime
+    cadical: ProviderObservation
+    carcara: ProviderObservation
+    cvc5: ProviderObservation
+    drat_trim: ProviderObservation
+    sympy_polynomial_normalization: ProviderObservation
 
 
 @dataclass(frozen=True, slots=True)
 class ProviderAvailabilityResolver:
-    """Resolve provider availability before capability installation begins."""
+    """Resolve provider availability before operation installation begins."""
 
     def resolve(self) -> ProviderRuntimePlan:
         cvc5 = cvc5_provider_runtime()
@@ -75,25 +75,25 @@ class ProviderAvailabilityResolver:
         *,
         profiles: Mapping[str, Mapping[str, object]],
         checker_ids: tuple[str, ...],
-    ) -> CapabilityProviderRuntime:
+    ) -> ProviderObservation:
         """Resolve Lean after authorized checker profiles have been installed."""
 
         return lean_provider_runtime(profiles=profiles, checker_ids=checker_ids)
 
-    def resolve_lean_frontend(self) -> CapabilityProviderRuntime:
+    def resolve_lean_frontend(self) -> ProviderObservation:
         """Resolve the pinned CORE Lean frontend before statement registration."""
 
         return lean_frontend_provider_runtime()
 
 
 def _require_packaged_python_backends(
-    runtimes: tuple[CapabilityProviderRuntime, ...],
+    runtimes: tuple[ProviderObservation, ...],
 ) -> None:
     """Reject an incomplete or version-skewed base installation."""
 
     failures: dict[str, str] = {}
     for runtime in runtimes:
-        if runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+        if runtime.availability is ProviderAvailability.AVAILABLE:
             continue
         detail = runtime.diagnostic or "the pinned runtime identity is unavailable"
         failures.setdefault(runtime.provider, detail[:256])

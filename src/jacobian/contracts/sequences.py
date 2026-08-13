@@ -1,4 +1,4 @@
-"""Typed wire contracts for finite integer-sequence capabilities."""
+"""Typed wire contracts for finite integer-sequence operations."""
 
 from __future__ import annotations
 

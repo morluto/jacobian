@@ -6,10 +6,6 @@ from fractions import Fraction
 from typing import TYPE_CHECKING
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-)
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.graph_optimization import (
     CanonicalWeightedTreeEdge,
@@ -18,16 +14,20 @@ from jacobian.contracts.graph_optimization import (
     GraphMstCycleCheck,
     GraphMstOptimalityCertificate,
 )
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    OperationExample,
+)
 from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationRefusalError,
-    OperationSpec,
 )
 
 if TYPE_CHECKING:
     import networkx as nx
 
-_INVALID_REQUEST = CapabilityDiagnostic(
+_INVALID_REQUEST = OperationDiagnostic(
     code="INVALID_MINIMUM_SPANNING_TREE_REQUEST",
     stage="minimum_spanning_tree_input_validation",
     message=(
@@ -169,7 +169,7 @@ def _execute(
         ValueError,
     ) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="MINIMUM_SPANNING_TREE_NOT_APPLICABLE",
                 stage="minimum_spanning_tree_computation",
                 message=str(exc),
@@ -181,11 +181,11 @@ def _execute(
         ) from exc
 
 
-MINIMUM_SPANNING_TREE_CAPABILITY: InstalledOperation[
+MINIMUM_SPANNING_TREE_OPERATION: InstalledOperation[
     GraphMinimumSpanningTreeRequest,
     GraphMinimumSpanningTreeResult,
 ] = inline_operation(
-    OperationSpec(
+    OperationDeclaration(
         operation_id="graph.spanning_tree.minimum.compute",
         version="4",
         title="Exact weighted minimum spanning tree",
@@ -210,8 +210,8 @@ MINIMUM_SPANNING_TREE_CAPABILITY: InstalledOperation[
             "cycle-property",
         ),
         invalid_request=_INVALID_REQUEST,
-        invocation_examples=(
-            CapabilityInvocationExample(
+        examples=(
+            OperationExample(
                 name="four_vertex_weighted_graph",
                 description=(
                     "Compute an exact minimum spanning tree and its cycle checks."
@@ -250,6 +250,6 @@ MINIMUM_SPANNING_TREE_CAPABILITY: InstalledOperation[
 
 
 __all__ = [
-    "MINIMUM_SPANNING_TREE_CAPABILITY",
+    "MINIMUM_SPANNING_TREE_OPERATION",
     "compute_minimum_spanning_tree",
 ]

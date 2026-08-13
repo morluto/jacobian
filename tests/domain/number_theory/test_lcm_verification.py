@@ -7,7 +7,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
 
@@ -31,12 +31,12 @@ def test_lcm_result_uses_independent_euclidean_replay(
     expected: str,
 ) -> None:
     payload = {"left": left, "right": right}
-    computed = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id="integer.compute.lcm", input=payload)
+    computed = number_theory_services.core.operations.invoke(
+        OperationRequest(operation_id="integer.compute.lcm", input=payload)
     )
-    verified = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.lcm.verify",
+    verified = number_theory_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="integer.lcm.verify",
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -52,9 +52,9 @@ def test_lcm_result_uses_independent_euclidean_replay(
 def test_lcm_verifier_rejects_schema_valid_wrong_value(
     number_theory_services: DomainTestServices,
 ) -> None:
-    rejected = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.lcm.verify",
+    rejected = number_theory_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="integer.lcm.verify",
             input={
                 "input": {"left": "60", "right": "72"},
                 "candidate": {"value": "720"},

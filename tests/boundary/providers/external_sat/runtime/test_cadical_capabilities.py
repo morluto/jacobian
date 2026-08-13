@@ -15,9 +15,9 @@ from tests.support.services import (
 )
 
 from jacobian.bounded_process import bounded_process_cancellation
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    ProviderAvailability,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatAssignmentArtifact, SatProofArtifact
@@ -27,7 +27,7 @@ from jacobian.providers.external_solver_runtime import (
 )
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.sat_smt.cadical import install_cadical_capabilities
-from jacobian.sat_smt.sat_capabilities import (
+from jacobian.sat_smt.sat_operations import (
     install_sat_assignment_checker,
     install_sat_unsat_proof_checker,
 )
@@ -59,14 +59,14 @@ def _install_fake_cadical(
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
 ) -> None:
     provider = cadical_provider_runtime(executable)
-    assert provider.availability is CapabilityProviderAvailability.AVAILABLE
+    assert provider.availability is ProviderAvailability.AVAILABLE
     with atomic_installation(services.core):
         for adapter in install_cadical_capabilities(
             services.core.sat,
             provider,
             executable=executable,
         ):
-            services.installation.register_capability(adapter)
+            services.installation.register_operation(adapter)
         if checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED:
             assignment, _assignment_installation = install_sat_assignment_checker(
                 services.core.store,
@@ -78,7 +78,7 @@ def _install_fake_cadical(
                 authorize_checker=True,
             )
             assert assignment is not None
-            services.installation.register_capability(assignment)
+            services.installation.register_operation(assignment)
             proof, _proof_installation = install_sat_unsat_proof_checker(
                 services.core.store,
                 services.core.schemas,
@@ -90,7 +90,7 @@ def _install_fake_cadical(
                 authorize_checker=True,
             )
             if proof is not None:
-                services.installation.register_capability(proof)
+                services.installation.register_operation(proof)
 
 
 @pytest.fixture
@@ -125,7 +125,7 @@ def fake_cadical_services(
 
 def _invoke(
     runtime: DomainTestServices,
-    capability_id: str,
+    operation_id: str,
     cnf_uri: str,
     *,
     wall_seconds: int = 2,
@@ -134,9 +134,9 @@ def _invoke(
     budget: dict[str, int] = {"wall_seconds": wall_seconds}
     if conflicts is not None:
         budget["conflicts"] = conflicts
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation_id,
             input={
                 "cnf_uri": cnf_uri,
                 "resource_budget": budget,
@@ -183,9 +183,9 @@ def test_model_find_materializes_only_an_unverified_bound_assignment(
     assert assignment.producer.provider == "cadical"
     assert stored.manifest.parents == (cnf.artifact_uri,)
 
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.model.verify",
+    verified = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.model.verify",
             input={"assignment_uri": assignment_uri},
         )
     )
@@ -284,9 +284,9 @@ def test_cadical_deletion_heavy_proof_replays_in_strict_checker(
     proof_uri = produced.output["proof_uri"]
     assert runtime.core.sat.resolve_proof(proof_uri).proof.raw_bytes() == b"0\n"
 
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.unsat_proof.verify",
+    verified = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.unsat_proof.verify",
             input={"proof_uri": proof_uri},
         )
     )
@@ -296,7 +296,7 @@ def test_cadical_deletion_heavy_proof_replays_in_strict_checker(
 
 
 @pytest.mark.parametrize(
-    ("capability_id", "body", "expected_status", "solver_status"),
+    ("operation_id", "body", "expected_status", "solver_status"),
     [
         (
             "sat.model.find",
@@ -321,7 +321,7 @@ def test_cadical_deletion_heavy_proof_replays_in_strict_checker(
 def test_opposite_or_unknown_solver_status_never_becomes_a_conclusion(
     tmp_path: Path,
     fake_cadical_services: Callable[..., DomainTestServices],
-    capability_id: str,
+    operation_id: str,
     body: str,
     expected_status: str,
     solver_status: str,
@@ -330,7 +330,7 @@ def test_opposite_or_unknown_solver_status_never_becomes_a_conclusion(
     runtime = fake_cadical_services(executable)
     cnf = runtime.core.sat.put_cnf(variable_names=("x",), clauses=((1,),))
 
-    result = _invoke(runtime, capability_id, cnf.artifact_uri)
+    result = _invoke(runtime, operation_id, cnf.artifact_uri)
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == expected_status
@@ -559,7 +559,7 @@ def test_wrong_cadical_version_is_unavailable(
 
     runtime = cadical_provider_runtime(executable)
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.version is None
     assert runtime.digest is None
     assert runtime.diagnostic is not None

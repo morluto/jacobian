@@ -130,7 +130,7 @@ def test_table_consumers_reject_unevaluated_targets() -> None:
 def test_slice_b_reuses_the_same_ports_for_table_and_certificate_handoff() -> None:
     polynomial_map = _map(3)
     _, _, _, _, _, table_operation, fiber_operation, collision_operation, _ = (
-        build_finite_field_bundle().capabilities
+        build_finite_field_bundle().operations
     )
 
     table_payload = table_operation.input_ports[0].bind_to_request({}, polynomial_map)

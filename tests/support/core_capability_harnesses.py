@@ -1,4 +1,4 @@
-"""Minimal installers for core finite/universal-algebra capability tests."""
+"""Minimal installers for core finite/universal-algebra operation tests."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from jacobian.finite_coverage import (
 )
 from jacobian.graphs import GraphInstallation, install_graph_capabilities
 from jacobian.runtime.config import CheckerAuthorityMode
-from jacobian.sat_smt.sat_capabilities import SatCnfMaterializationAdapter
-from jacobian.universal_algebra_capabilities import (
+from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
+from jacobian.universal_algebra_operations import (
     UniversalAlgebraInstallation,
-    install_universal_algebra_capabilities,
+    install_universal_algebra_operations,
 )
 from tests.support.services import (
     DomainTestServices,
@@ -67,7 +67,7 @@ def open_finite_coverage_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             if adapter is not None:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield FiniteCoverageTestServices(services=services, installation=installation)
 
 
@@ -77,14 +77,14 @@ def open_universal_algebra_services(
     *,
     authorize_checker: bool = True,
 ) -> Iterator[UniversalAlgebraTestServices]:
-    """Install only universal-algebra capabilities into a domain service graph."""
+    """Install only universal-algebra operations into a domain service graph."""
 
     with open_domain_services(
         root,
         checker_authority=_authority(authorize_checker),
     ) as services:
         with atomic_installation(services.core):
-            adapters, installation = install_universal_algebra_capabilities(
+            adapters, installation = install_universal_algebra_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
@@ -93,7 +93,7 @@ def open_universal_algebra_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             for adapter in adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield UniversalAlgebraTestServices(services=services, installation=installation)
 
 
@@ -101,7 +101,7 @@ def open_universal_algebra_services(
 def open_graph_core_services(
     root: str | Path,
 ) -> Iterator[tuple[DomainTestServices, GraphInstallation]]:
-    """Install core graph construction/search/property capabilities only."""
+    """Install core graph construction/search/property operations only."""
 
     with open_domain_services(root) as services:
         with atomic_installation(services.core):
@@ -114,7 +114,7 @@ def open_graph_core_services(
                 authorize_checker=False,
             )
             for adapter in adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield services, installation
 
 
@@ -126,7 +126,7 @@ def open_sat_materialization_services(
 
     with open_domain_services(root) as services:
         with atomic_installation(services.core):
-            services.installation.register_capability(
+            services.installation.register_operation(
                 SatCnfMaterializationAdapter(services.core.sat)
             )
         yield services

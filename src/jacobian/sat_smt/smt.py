@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.artifacts import ArtifactPutResult
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.smt import (
     SmtAletheProofArtifact,
     SmtLogic,
@@ -124,7 +124,7 @@ class SmtArtifactService:
         *,
         problem_uri: str,
         proof: bytes,
-        producer: CapabilityProviderRuntime,
+        producer: ProviderObservation,
         resource_budget: SmtResourceBudget,
     ) -> ArtifactPutResult:
         proof_artifact = SmtAletheProofArtifact.from_bytes(

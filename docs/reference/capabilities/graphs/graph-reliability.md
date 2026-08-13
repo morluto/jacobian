@@ -2,12 +2,12 @@
 
 [Documentation home](../../../index.md)
 
-- Capability: `probability.graph_reliability.connection_probability.compute`
+- Operation: `probability.graph_reliability.connection_probability.compute`
 - Verification: `probability.graph_reliability.connection_probability.verify`
 - Producer: pinned Python-FLINT exact rational arithmetic
 - Checker: isolated standard-library `Fraction` enumeration and graph traversal
 
-The capability computes one atomic outcome: the exact probability that two
+The operation computes one atomic outcome: the exact probability that two
 explicit terminals are connected when every edge of one finite simple
 undirected graph is independently open with its declared rational probability.
 
@@ -31,7 +31,7 @@ binds every state and the final sum to the stored request and result.
 
 ## Excluded claims
 
-This capability does not construct bunkbed graphs, compare two events, exploit
+This operation does not construct bunkbed graphs, compare two events, exploit
 symmetry, emit a reliability polynomial, prescribe a search, or support more
 than 12 edges. In particular, the explicit 7,222-vertex counterexample in
 [The bunkbed conjecture is false](https://arxiv.org/abs/2410.02545) is
@@ -40,6 +40,6 @@ separate compressed graph and symmetry artifacts; raising a JSON limit would
 not establish a complete calculation.
 
 The separately verified
-[declared graph-symmetry orbit](graph-symmetry-orbits.md) capability exposes
+[declared graph-symmetry orbit](graph-symmetry-orbits.md) operation exposes
 vertex and edge compression metadata under supplied generators. It does not
 lift that action to edge states or establish a reliability identity.

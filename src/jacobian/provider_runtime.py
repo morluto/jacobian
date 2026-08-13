@@ -1,4 +1,4 @@
-"""Fail-closed runtime identity probes for capability providers."""
+"""Fail-closed runtime identity probes for operation providers."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.implementation import ImplementationError, package_source_digest
 
@@ -119,7 +119,7 @@ def _license_files(
 def _jacobian_identity() -> tuple[str, str, tuple[str, ...]]:
     try:
         distribution = importlib.metadata.distribution("jacobian")
-        digest = package_source_digest("jacobian.capability_service:CapabilityService")
+        digest = package_source_digest("jacobian.operation_service:OperationService")
     except (importlib.metadata.PackageNotFoundError, ImplementationError) as exc:
         raise ProviderRuntimeError(
             "the Jacobian source runtime could not be identified",
@@ -184,13 +184,13 @@ def _python_distribution_identity(
 def _unavailable_runtime(
     *,
     provider: str,
-    install_tier: CapabilityInstallTier,
+    install_tier: ProviderInstallTier,
     license_id: str,
     diagnostic: str,
-) -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+) -> ProviderObservation:
+    return ProviderObservation(
         provider=provider,
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         platform=_platform_tag(),
         install_tier=install_tier,
         license_id=license_id,
@@ -201,19 +201,19 @@ def _unavailable_runtime(
 def composite_provider_runtime(
     provider: str,
     *,
-    components: tuple[CapabilityProviderRuntime, ...],
+    components: tuple[ProviderObservation, ...],
     features: tuple[str, ...] = (),
     checker_ids: tuple[str, ...] = (),
     configuration: Mapping[str, Any] | None = None,
-) -> CapabilityProviderRuntime:
-    """Bind one capability provider to every runtime component it executes."""
+) -> ProviderObservation:
+    """Bind one operation provider to every runtime component it executes."""
 
     if not components:
         raise ValueError("a composite provider requires at least one component")
     component_providers = tuple(component.provider for component in components)
     if len(set(component_providers)) != len(component_providers):
         raise ValueError("composite provider components must have unique identities")
-    install_tiers = tuple(CapabilityInstallTier)
+    install_tiers = tuple(ProviderInstallTier)
     install_tier = max(
         (component.install_tier for component in components),
         key=install_tiers.index,
@@ -221,7 +221,7 @@ def composite_provider_runtime(
     unavailable = tuple(
         component
         for component in components
-        if component.availability is CapabilityProviderAvailability.UNAVAILABLE
+        if component.availability is ProviderAvailability.UNAVAILABLE
     )
     if unavailable:
         names = ", ".join(component.provider for component in unavailable)
@@ -236,12 +236,12 @@ def composite_provider_runtime(
 
     component_records = [component.model_dump(mode="json") for component in components]
     digest = hashlib.sha256(canonicalize_json(component_records)).hexdigest()
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider=provider,
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="composite-1",
         digest=f"sha256:{digest}",
-        digest_kind=CapabilityProviderDigestKind.COMPOSITE,
+        digest_kind=ProviderDigestKind.COMPOSITE,
         platform=_platform_tag(),
         install_tier=install_tier,
         license_id=" AND ".join(
@@ -262,7 +262,7 @@ def jacobian_provider_runtime(
     features: tuple[str, ...] = (),
     checker_ids: tuple[str, ...] = (),
     configuration: Mapping[str, Any] | None = None,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify a source-backed provider implemented inside Jacobian."""
 
     try:
@@ -270,18 +270,18 @@ def jacobian_provider_runtime(
     except ProviderRuntimeError:
         return _unavailable_runtime(
             provider=provider,
-            install_tier=CapabilityInstallTier.T0,
+            install_tier=ProviderInstallTier.T0,
             license_id="MIT",
             diagnostic="The Jacobian source runtime could not be identified.",
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider=provider,
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=version,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        digest_kind=ProviderDigestKind.SOURCE_TREE,
         platform=_platform_tag(),
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
         license_files=license_files,
         features=features,
@@ -295,13 +295,13 @@ def source_provider_runtime(
     *,
     version: str,
     entrypoint: str,
-    install_tier: CapabilityInstallTier,
+    install_tier: ProviderInstallTier,
     license_id: str,
     license_files: tuple[str, ...] = (),
     features: tuple[str, ...] = (),
     checker_ids: tuple[str, ...] = (),
     configuration: Mapping[str, Any] | None = None,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify an operator-installed source package without importing its code."""
 
     try:
@@ -313,12 +313,12 @@ def source_provider_runtime(
             license_id=license_id,
             diagnostic="The provider source package could not be identified.",
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider=provider,
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=version,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        digest_kind=ProviderDigestKind.SOURCE_TREE,
         platform=_platform_tag(),
         install_tier=install_tier,
         license_id=license_id,
@@ -338,13 +338,13 @@ def python_distribution_provider_runtime(
     distribution_name: str,
     import_name: str,
     required_attributes: tuple[str, ...],
-    install_tier: CapabilityInstallTier,
+    install_tier: ProviderInstallTier,
     license_id: str,
     features: tuple[str, ...] = (),
     checker_ids: tuple[str, ...] = (),
     configuration: Mapping[str, Any] | None = None,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify one installed Python distribution without trusting an import alone."""
 
     try:
@@ -365,12 +365,12 @@ def python_distribution_provider_runtime(
                 f"The {distribution_name} provider is not installed and healthy."
             ),
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider=provider,
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=version,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+        digest_kind=ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
         platform=_platform_tag(),
         install_tier=install_tier,
         license_id=license_id,
@@ -387,10 +387,10 @@ def python_distribution_provider_runtime(
 
 
 def _validated_provider_runtime(
-    runtime: CapabilityProviderRuntime,
-) -> CapabilityProviderRuntime:
+    runtime: ProviderObservation,
+) -> ProviderObservation:
     try:
-        return CapabilityProviderRuntime.model_validate(runtime.model_dump(mode="json"))
+        return ProviderObservation.model_validate(runtime.model_dump(mode="json"))
     except (AttributeError, TypeError, ValidationError) as exc:
         raise ProviderRuntimeError(
             "provider runtime is malformed",
@@ -398,7 +398,7 @@ def _validated_provider_runtime(
         ) from exc
 
 
-def _require_executable_identity(runtime: CapabilityProviderRuntime) -> None:
+def _require_executable_identity(runtime: ProviderObservation) -> None:
     executable = runtime.configuration.get("executable")
     if not isinstance(executable, str):
         raise ProviderRuntimeError(
@@ -419,7 +419,7 @@ def _require_executable_identity(runtime: CapabilityProviderRuntime) -> None:
         )
 
 
-def _require_source_identity(runtime: CapabilityProviderRuntime) -> None:
+def _require_source_identity(runtime: ProviderObservation) -> None:
     entrypoint = runtime.configuration.get("entrypoint")
     if not isinstance(entrypoint, str):
         raise ProviderRuntimeError(
@@ -440,7 +440,7 @@ def _require_source_identity(runtime: CapabilityProviderRuntime) -> None:
         )
 
 
-def _require_python_identity(runtime: CapabilityProviderRuntime) -> None:
+def _require_python_identity(runtime: ProviderObservation) -> None:
     distribution = runtime.configuration.get("distribution")
     import_name = runtime.distribution_import_name
     if not isinstance(distribution, str) or import_name is None:
@@ -467,8 +467,8 @@ def _require_python_identity(runtime: CapabilityProviderRuntime) -> None:
 
 
 def _component_runtimes(
-    runtime: CapabilityProviderRuntime,
-) -> tuple[CapabilityProviderRuntime, ...]:
+    runtime: ProviderObservation,
+) -> tuple[ProviderObservation, ...]:
     components = runtime.configuration.get("components")
     if not isinstance(components, list) or not components:
         raise ProviderRuntimeError(
@@ -477,7 +477,7 @@ def _component_runtimes(
         )
     try:
         return tuple(
-            CapabilityProviderRuntime.model_validate(component)
+            ProviderObservation.model_validate(component)
             for component in components
         )
     except ValidationError as exc:
@@ -487,7 +487,7 @@ def _component_runtimes(
         ) from exc
 
 
-def _require_composite_identity(runtime: CapabilityProviderRuntime) -> None:
+def _require_composite_identity(runtime: ProviderObservation) -> None:
     component_runtimes = _component_runtimes(runtime)
     for component in component_runtimes:
         require_provider_runtime_unchanged(component)
@@ -510,14 +510,14 @@ def _require_composite_identity(runtime: CapabilityProviderRuntime) -> None:
 
 
 def require_provider_runtime_unchanged(
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
 ) -> None:
     """Remeasure every immutable component of an authorized provider runtime."""
 
     runtime = _validated_provider_runtime(runtime)
 
     if (
-        runtime.availability is not CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is not ProviderAvailability.AVAILABLE
         or runtime.digest is None
         or runtime.digest_kind is None
     ):
@@ -526,42 +526,42 @@ def require_provider_runtime_unchanged(
             code=ProviderRuntimeErrorCode.IDENTITY_INCOMPLETE,
         )
 
-    if runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE:
+    if runtime.digest_kind is ProviderDigestKind.EXECUTABLE:
         _require_executable_identity(runtime)
         return
 
-    if runtime.digest_kind is CapabilityProviderDigestKind.SOURCE_TREE:
+    if runtime.digest_kind is ProviderDigestKind.SOURCE_TREE:
         _require_source_identity(runtime)
         return
 
-    if runtime.digest_kind is CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD:
+    if runtime.digest_kind is ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD:
         _require_python_identity(runtime)
         return
 
     _require_composite_identity(runtime)
 
 
-def require_provider_runtime_ready(runtime: CapabilityProviderRuntime) -> None:
+def require_provider_runtime_ready(runtime: ProviderObservation) -> None:
     """Check first-use callable availability without changing identity policy."""
 
     runtime = _validated_provider_runtime(runtime)
-    if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
+    if runtime.availability is not ProviderAvailability.AVAILABLE:
         raise ProviderRuntimeError(
             "provider runtime is unavailable",
             code=ProviderRuntimeErrorCode.UNAVAILABLE,
         )
-    if runtime.digest_kind is CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD:
+    if runtime.digest_kind is ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD:
         _require_python_ready(runtime)
         return
-    if runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE:
+    if runtime.digest_kind is ProviderDigestKind.EXECUTABLE:
         _require_executable_ready(runtime)
         return
-    if runtime.digest_kind is CapabilityProviderDigestKind.COMPOSITE:
+    if runtime.digest_kind is ProviderDigestKind.COMPOSITE:
         for component in _component_runtimes(runtime):
             require_provider_runtime_ready(component)
 
 
-def _require_python_ready(runtime: CapabilityProviderRuntime) -> None:
+def _require_python_ready(runtime: ProviderObservation) -> None:
     import_name = runtime.distribution_import_name
     if import_name is None:
         raise ProviderRuntimeError(
@@ -579,7 +579,7 @@ def _require_python_ready(runtime: CapabilityProviderRuntime) -> None:
         ) from exc
 
 
-def _require_executable_ready(runtime: CapabilityProviderRuntime) -> None:
+def _require_executable_ready(runtime: ProviderObservation) -> None:
     executable = runtime.configuration.get("executable")
     if not isinstance(executable, str) or not Path(executable).is_file():
         raise ProviderRuntimeError(
@@ -594,7 +594,7 @@ def known_provider_runtime(
     features: tuple[str, ...] = (),
     checker_ids: tuple[str, ...] = (),
     configuration: Mapping[str, Any] | None = None,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Resolve runtime identity for a built-in provider family."""
 
     if provider == "jacobian.networkx":
@@ -603,19 +603,19 @@ def known_provider_runtime(
             distribution_name="networkx",
             import_name="networkx",
             required_attributes=("Graph", "graph_atlas_g"),
-            install_tier=CapabilityInstallTier.T0,
+            install_tier=ProviderInstallTier.T0,
             license_id="BSD-3-Clause",
             features=features,
             checker_ids=checker_ids,
             configuration=configuration,
         )
         if (
-            runtime.availability is CapabilityProviderAvailability.AVAILABLE
+            runtime.availability is ProviderAvailability.AVAILABLE
             and runtime.version != NETWORKX_VERSION
         ):
             return _unavailable_runtime(
                 provider=provider,
-                install_tier=CapabilityInstallTier.T0,
+                install_tier=ProviderInstallTier.T0,
                 license_id="BSD-3-Clause",
                 diagnostic=(
                     "NetworkX is installed but does not match the pinned "
@@ -629,19 +629,19 @@ def known_provider_runtime(
             distribution_name="sympy",
             import_name="sympy",
             required_attributes=("Matrix", "Poly"),
-            install_tier=CapabilityInstallTier.T0,
+            install_tier=ProviderInstallTier.T0,
             license_id="BSD-3-Clause",
             features=features,
             checker_ids=checker_ids,
             configuration=configuration,
         )
         if (
-            runtime.availability is CapabilityProviderAvailability.AVAILABLE
+            runtime.availability is ProviderAvailability.AVAILABLE
             and runtime.version != SYMPY_VERSION
         ):
             return _unavailable_runtime(
                 provider=provider,
-                install_tier=CapabilityInstallTier.T0,
+                install_tier=ProviderInstallTier.T0,
                 license_id="BSD-3-Clause",
                 diagnostic=(
                     "SymPy is installed but does not match the pinned "
@@ -655,19 +655,19 @@ def known_provider_runtime(
             distribution_name="z3-solver",
             import_name="z3",
             required_attributes=("Real", "Solver"),
-            install_tier=CapabilityInstallTier.T0,
+            install_tier=ProviderInstallTier.T0,
             license_id="MIT",
             features=features,
             checker_ids=checker_ids,
             configuration=configuration,
         )
         if (
-            runtime.availability is CapabilityProviderAvailability.AVAILABLE
+            runtime.availability is ProviderAvailability.AVAILABLE
             and runtime.version != Z3_SOLVER_VERSION
         ):
             return _unavailable_runtime(
                 provider=provider,
-                install_tier=CapabilityInstallTier.T0,
+                install_tier=ProviderInstallTier.T0,
                 license_id="MIT",
                 diagnostic=(
                     "Z3 is installed but does not match the pinned "

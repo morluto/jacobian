@@ -29,14 +29,14 @@ factual projections of installed declarations. Typed compatibility and
 preflight may narrow those results, but discovery does not plan a sequence or
 recommend a next operation.
 
-`capability://catalog` is the complete inventory. Search is not an alternate
+`operation://catalog` is the complete inventory. Search is not an alternate
 inventory protocol, and an empty query is not browse mode.
 
 `math.run` accepts an operation ID and payload:
 
 ```json
 {
-  "capability_id": "matrix.determinant.compute",
+  "operation_id": "matrix.determinant.compute",
   "payload": {
     "matrix": {
       "matrix_schema_version": "1",
@@ -85,7 +85,7 @@ declarations live outside `jacobian.math`.
 The portfolio composition root is the only owner that assembles runtime
 services and installation order. Ordinary `DomainBundle` values contain typed
 operation declarations only; they do not carry installer callbacks or runtime
-collaborators. A capability family with a genuinely specialized artifact or
+collaborators. A operation family with a genuinely specialized artifact or
 checker lifecycle is represented as an explicitly named managed portfolio
 component rather than widening the semantic bundle contract.
 An operation may still bind a typed computational backend, provided that
@@ -190,7 +190,7 @@ A postcondition runs before publication. Failure exposes no value reference,
 artifact, or verification record. Terminal execution state remains separate from the
 mathematical result and from verification authority.
 
-`CapabilityResult` is a wire projection, not an in-process return type. Domain
+`OperationResult` is a wire projection, not an in-process return type. Domain
 functions, operation executors, artifact services, and checker services return
 their owned typed values or terminal states. The public dispatcher constructs
 the wire envelope once, after publication has returned the complete artifact
@@ -249,7 +249,7 @@ authorization row. Record v3 belongs to state revision 10 and remains readable
 with the matching older checkout; the current runtime has no dual record shape.
 
 `VerificationResult` is the internal typed outcome of that checker execution,
-not a generic mathematical result envelope. Capability adapters project it
+not a generic mathematical result envelope. Operation adapters project it
 once into the ordinary operation response. Ordinary producers do not use it,
 so checker input validity, conclusions, and evidence bindings do not become
 knobs on every mathematical value.

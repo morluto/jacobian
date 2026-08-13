@@ -11,16 +11,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityInvocationExample,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    OperationExample,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ContractModel
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_ports import InputPort, OutputPort, validate_ports
 from jacobian.operations import (
     OperationFailure,
     OperationRefusalError,
-    OperationSpec,
 )
 
 
@@ -33,7 +33,7 @@ class ProviderBinding:
     recorded on the installed descriptor and invocation provenance.
     """
 
-    runtime: CapabilityProviderRuntime | None = None
+    runtime: ProviderObservation | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +80,7 @@ class InstalledOperation[
 ]:
     """One semantic operation bound to publication and provider selection."""
 
-    spec: OperationSpec[RequestT, ResultT]
+    spec: OperationDeclaration[RequestT, ResultT]
     publication: PublicationPolicy[RequestT, ResultT]
     provider_binding: ProviderBinding = ProviderBinding()
     input_ports: tuple[InputPort[Any], ...] = ()
@@ -103,9 +103,9 @@ def inline_operation[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    spec: OperationSpec[RequestT, ResultT],
+    spec: OperationDeclaration[RequestT, ResultT],
     *,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
     input_ports: tuple[InputPort[Any], ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
 ) -> InstalledOperation[RequestT, ResultT]:
@@ -125,13 +125,13 @@ def durable_operation[
     ResultT: ContractModel,
     PreviewT: ContractModel,
 ](
-    spec: OperationSpec[RequestT, ResultT],
+    spec: OperationDeclaration[RequestT, ResultT],
     *,
     resource_reason: str,
     preview_type: type[PreviewT] | None = None,
     preview: Callable[[ResultT], PreviewT] | None = None,
     preview_complete: bool = False,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
     input_ports: tuple[InputPort[Any], ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
 ) -> InstalledOperation[RequestT, ResultT]:
@@ -169,8 +169,8 @@ class InlineOperationFactory:
         result_type: type[ResultT],
         operation: Callable[[RequestT], ResultT],
         *tags: str,
-        invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
-        provider_runtime: CapabilityProviderRuntime | None = None,
+        examples: tuple[OperationExample, ...] = (),
+        provider_runtime: ProviderObservation | None = None,
         version: str = "2",
     ) -> InstalledOperation[RequestT, ResultT]:
         def execute(request: RequestT) -> ResultT:
@@ -180,7 +180,7 @@ class InlineOperationFactory:
                 raise OperationRefusalError(self.failure.diagnostic(exc)) from exc
 
         return inline_operation(
-            OperationSpec(
+            OperationDeclaration(
                 operation_id=operation_id,
                 version=version,
                 request_type=request_type,
@@ -189,7 +189,7 @@ class InlineOperationFactory:
                 title=title,
                 description=description,
                 tags=tags,
-                invocation_examples=invocation_examples,
+                examples=examples,
             ),
             provider_runtime=provider_runtime,
         )
@@ -213,9 +213,9 @@ class DurableOperationFactory:
         result_type: type[ResultT],
         operation: Callable[[RequestT], ResultT],
         *tags: str,
-        invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+        examples: tuple[OperationExample, ...] = (),
         resource_reason: str,
-        provider_runtime: CapabilityProviderRuntime | None = None,
+        provider_runtime: ProviderObservation | None = None,
         preview: Callable[[ResultT], ResultT] | None = None,
         preview_complete: bool = False,
         version: str = "2",
@@ -227,7 +227,7 @@ class DurableOperationFactory:
                 raise OperationRefusalError(self.failure.diagnostic(exc)) from exc
 
         return durable_operation(
-            OperationSpec(
+            OperationDeclaration(
                 operation_id=operation_id,
                 version=version,
                 request_type=request_type,
@@ -236,7 +236,7 @@ class DurableOperationFactory:
                 title=title,
                 description=description,
                 tags=tags,
-                invocation_examples=invocation_examples,
+                examples=examples,
             ),
             resource_reason=resource_reason,
             provider_runtime=provider_runtime,

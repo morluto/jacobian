@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -36,9 +36,9 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
     graph_symmetry_services,
 ) -> None:
     for case in _suite():
-        computed = graph_symmetry_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="graph.symmetry.generator_orbits.compute",
+        computed = graph_symmetry_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="graph.symmetry.generator_orbits.compute",
                 input=case["request"],
             )
         )
@@ -55,9 +55,9 @@ def test_public_declared_graph_symmetry_cases_reach_checker_bound_results(
             "FULL_AUTOMORPHISM_GROUP_NOT_CLAIMED"
         )
 
-        verified = graph_symmetry_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="graph.symmetry.generator_orbits.verify",
+        verified = graph_symmetry_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="graph.symmetry.generator_orbits.verify",
                 input={"input": case["request"], "candidate": result},
             )
         )

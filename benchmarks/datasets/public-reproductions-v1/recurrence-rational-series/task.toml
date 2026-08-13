@@ -3,8 +3,8 @@ artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/recurrence-rational-series"
 version = "1.0.0"
-description = "Select the most specific capability for a recurrence-series query."
-keywords = ["capability-discovery", "recurrence", "regression", "verification"]
+description = "Select the most specific operation for a recurrence-series query."
+keywords = ["operation-discovery", "recurrence", "regression", "verification"]
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
@@ -21,7 +21,7 @@ tags = ["discovery", "recurrence", "regression", "offline"]
 case_version = "public-reproductions-v1"
 contamination_class = "public-answer-visible-reproduction"
 fixture_digest = "sha256:4ae9894d5b8eae117e9037ac5ffcfc339739e2918c040c6fe9a69e381069566f"
-derivation = "Discovery regression for 'exact coefficient prefix of a rational generating function at zero'; expected first capability combinatorics.generating_function.coefficients.compute."
+derivation = "Discovery regression for 'exact coefficient prefix of a rational generating function at zero'; expected first operation combinatorics.generating_function.coefficients.compute."
 [agent]
 timeout_sec = 600.0
 [verifier]

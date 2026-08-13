@@ -1,4 +1,4 @@
-"""Adapter implementations for sparse rational polynomial-map capabilities."""
+"""Adapter implementations for sparse rational polynomial-map operations."""
 
 from __future__ import annotations
 
@@ -7,16 +7,16 @@ from itertools import product
 
 from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.canonical import format_canonical_integer
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityRequest,
-)
 from jacobian.contracts.evidence import (
     EvidenceBindings,
     WitnessEnvelope,
     WitnessRole,
 )
 from jacobian.contracts.exact import CanonicalRational, bounded_rational_scalars
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationRequest,
+)
 from jacobian.contracts.polynomials import (
     PolynomialCollisionOutput,
     PolynomialCollisionPayload,
@@ -92,8 +92,8 @@ class PolynomialCollisionAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.collision_witness",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.collision_witness",
             version="1",
             title="Construct a polynomial-map collision witness",
             description=(
@@ -117,10 +117,10 @@ class PolynomialCollisionAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialCollisionRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialCollisionRequest:
         return _validate_request(
             PolynomialCollisionRequest,
             request.input,
@@ -244,8 +244,8 @@ class PolynomialCollisionSearchAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.collision.search",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.collision.search",
             version="1",
             title="Search a bounded rational grid for a collision",
             description=(
@@ -265,7 +265,7 @@ class PolynomialCollisionSearchAdapter:
             input_schema=model_schema(PolynomialCollisionSearchRequest),
             output_schema=model_schema(PolynomialCollisionSearchOutput),
             tags=("polynomial", "map", "collision", "bounded-search"),
-            invocation_examples=(
+            examples=(
                 example(
                     "constant_map_collision",
                     "Find a collision for the constant zero map on a tiny grid.",
@@ -279,10 +279,10 @@ class PolynomialCollisionSearchAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialCollisionSearchRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialCollisionSearchRequest:
         return _validate_request(
             PolynomialCollisionSearchRequest,
             request.input,
@@ -484,8 +484,8 @@ class PolynomialCollisionVerifyAdapter:
         checker_id = resources.installation.collision_checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.collision.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.collision.verify",
             version="1",
             title="Verify a polynomial-map collision",
             description=(
@@ -502,7 +502,7 @@ class PolynomialCollisionVerifyAdapter:
             input_schema=model_schema(PolynomialCollisionVerifyRequest),
             output_schema=model_schema(PolynomialCollisionVerifyOutput),
             tags=("polynomial", "map", "collision", "verification"),
-            invocation_examples=(
+            examples=(
                 example(
                     "square_map_collision",
                     "Verify that x squared maps -1 and 1 to the common image 1.",
@@ -529,10 +529,10 @@ class PolynomialCollisionVerifyAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialCollisionVerifyRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialCollisionVerifyRequest:
         return _validate_request(
             PolynomialCollisionVerifyRequest,
             request.input,
@@ -625,8 +625,8 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         checker_id = resources.installation.inverse_collision_checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.inverse.refute_by_collision",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.inverse.refute_by_collision",
             version="1",
             title="Refute a polynomial-map inverse by collision",
             description=(
@@ -646,11 +646,11 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialMapInverseCollisionVerifyRequest:
         return _validate_request(
             PolynomialMapInverseCollisionVerifyRequest,

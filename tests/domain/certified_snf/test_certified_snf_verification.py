@@ -5,8 +5,8 @@ from typing import Any
 
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -22,9 +22,9 @@ def _matrix_payload() -> dict[str, object]:
 
 
 def _compute(certified_snf_services: DomainTestServices):
-    return certified_snf_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.certified.compute",
+    return certified_snf_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.certified.compute",
             input=_matrix_payload(),
         )
     )
@@ -49,9 +49,9 @@ def test_certified_smith_result_is_independently_verified(
     certified_snf_services: DomainTestServices,
 ) -> None:
     computed = _compute(certified_snf_services)
-    verified = certified_snf_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.certified.verify",
+    verified = certified_snf_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.certified.verify",
             input={"result_uri": computed.output["result_uri"]},
         )
     )
@@ -75,9 +75,9 @@ def test_certified_smith_checker_rejects_a_forged_relation(
     certificate["left_transformation"] = left
     forged_candidate["certificate"] = certificate
 
-    rejected = certified_snf_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.certified.verify",
+    rejected = certified_snf_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.certified.verify",
             input={
                 "result_uri": _forged_result_uri(
                     certified_snf_services, computed, forged_candidate

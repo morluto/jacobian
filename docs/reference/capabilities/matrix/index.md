@@ -1,4 +1,4 @@
-# Matrix capability references
+# Matrix operation references
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
@@ -30,12 +30,12 @@ The supported determinant, rank, RREF, inverse, and trace kernels live in
 [`jacobian.math.matrices`](../../../../src/jacobian/math/matrices/__init__.py).
 Its private `_sympy.py` backend owns SymPy calls, while
 `jacobian.domains.matrix_lattice.conversions` translates wire contracts at the
-operation boundary. Capability declarations and native callers therefore use
+operation boundary. Operation declarations and native callers therefore use
 one mathematical implementation. The native API accepts SymPy `MatrixBase`
 values directly, imports its backend lazily, and does not route through
-`math.run` or construct a capability runtime.
+`math.run` or construct a operation runtime.
 
-## Artifact-backed capabilities
+## Artifact-backed operations
 
 `matrix.normal_form.hermite.materialize` is deliberately artifact-backed: it stores the
 source matrix, HNF candidate, and left transformation under versioned
@@ -45,7 +45,7 @@ durable identity and independent retrieval.
 `matrix.determinant.compute` and `matrix.rank.compute` are inline
 `ComputedOperation` results in the `matrix_lattice` bundle. They write no
 artifact: their exact scalar result and pivot columns remain directly reusable
-in a later typed request. Their matching `.verify` capabilities accept those
+in a later typed request. Their matching `.verify` operations accept those
 authoritative inline request and result values directly. An accepted replay
 persists a verification record and its bound semantics artifact, but never
 materializes ordinary input or candidate values; both durable references appear
@@ -59,7 +59,7 @@ artifacts; LLL basis reduction is a `MaterializedOperation` that stores the
 reduced basis and transformation because the bounded worker result needs
 durable identity.
 
-## Capability reference pages
+## Operation reference pages
 
 - [Integer matrix Hermite normal form](matrix-hermite-normal-form.md)
 - [Exact rational matrix determinants](matrix-rational-determinant.md)

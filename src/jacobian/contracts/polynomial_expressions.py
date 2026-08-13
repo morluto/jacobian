@@ -9,12 +9,12 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderObservation,
+)
 from jacobian.contracts.polynomials import (
     PolynomialVariable,
     SparseRationalPolynomial,
@@ -415,7 +415,7 @@ class PolynomialExpressionNormalizationArtifact(ContractModel):
     source: PolynomialExpressionBinding
     declared_scope: Literal["FULL_EXPRESSION"] = "FULL_EXPRESSION"
     normalized: SparseRationalPolynomial
-    producer: CapabilityProviderRuntime
+    producer: ProviderObservation
     resource_budget: PolynomialExpressionResourceBudget
     method: Literal["SYMPY_POLY_QQ_CANONICAL_TERMS"] = "SYMPY_POLY_QQ_CANONICAL_TERMS"
 
@@ -429,7 +429,7 @@ class PolynomialExpressionNormalizationArtifact(ContractModel):
         if (
             self.producer.provider != "jacobian.sympy"
             or self.producer.availability
-            is not CapabilityProviderAvailability.AVAILABLE
+            is not ProviderAvailability.AVAILABLE
             or self.producer.version != "1.14.0"
             or self.producer.configuration
             != SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION

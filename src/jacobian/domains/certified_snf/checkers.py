@@ -1,14 +1,14 @@
 """Independent checker declaration for certified Smith normal forms."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.certified_snf import CertifiedSmithNormalFormRequest
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.providers import flint_runtime
 
 
 def _certified_snf_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.certified_snf_checker_provider_runtime(checker_ids=checker_ids)
 
 
@@ -25,7 +25,7 @@ CERTIFIED_SNF_EXACT_REPLAY_CHECKERS = (
             "operator-authorized independent checker validates D=UAV, both "
             "unimodular determinants, and the complete canonical divisibility chain"
         ),
-        verification_capability_id="matrix.normal_form.smith.certified.verify",
+        verification_operation_id="matrix.normal_form.smith.certified.verify",
         verification_title="Verify a transformation-certified Smith normal form",
         verification_description=(
             "Independently verify the full Smith diagonal and both unimodular "

@@ -1,4 +1,4 @@
-"""Installation records for polynomial-map capabilities."""
+"""Installation records for polynomial-map operations."""
 
 from __future__ import annotations
 

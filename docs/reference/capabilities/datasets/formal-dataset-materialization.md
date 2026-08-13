@@ -24,7 +24,7 @@ than interpreted heuristically.
 
 ```json
 {
-  "capability_id": "dataset.formal.materialize",
+  "operation_id": "dataset.formal.materialize",
   "input": {
     "dataset_revision": "3a5dceb842b916345a4d7bb7dc4c1dbd4b98aa",
     "sample_id": "mathd_algebra_1",
@@ -66,7 +66,7 @@ environment. The artifact retains the dataset split explicitly. Repeating the
 same request produces the same normalized source, digests, and result artifact
 URI.
 
-As a standard domain operation, the capability response places the
+As a standard domain operation, the operation response places the
 materialized record under `output.result` and exposes its content-addressed
 artifact as `output.result_uri`.
 

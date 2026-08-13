@@ -18,7 +18,7 @@
     },
     {
       "id": "canonicalization",
-      "description": "Upstream plus exact canonical sparse polynomial-map input normalization at capability boundaries."
+      "description": "Upstream plus exact canonical sparse polynomial-map input normalization at operation boundaries."
     },
     {
       "id": "canonicalization-recovery",

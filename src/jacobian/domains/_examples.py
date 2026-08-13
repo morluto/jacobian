@@ -2,15 +2,15 @@
 
 from typing import Any
 
-from jacobian.contracts.capabilities import CapabilityInvocationExample
+from jacobian.operation_declarations import OperationExample
 
 
 def example(
     name: str,
     description: str,
     payload: dict[str, Any],
-) -> CapabilityInvocationExample:
-    return CapabilityInvocationExample(
+) -> OperationExample:
+    return OperationExample(
         name=name,
         description=description,
         input=payload,

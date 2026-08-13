@@ -4,29 +4,17 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_distance_matrix import (
-    MAX_GRAPH_DISTANCE_MATRIX_EDGES,
-    MAX_GRAPH_DISTANCE_MATRIX_ORDER,
     GraphDistanceMatrixRequest,
     GraphDistanceMatrixResult,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.operation_bindings import inline_operation
-from jacobian.operations import OperationRefusalError, OperationSpec
-
-_INVALID_REQUEST = CapabilityDiagnostic(
-    code="INVALID_GRAPH_DISTANCE_MATRIX_REQUEST",
-    stage="graph_distance_matrix_input_validation",
-    message=(
-        "Input does not satisfy the bounded finite simple-graph distance contract."
-    ),
-    hint=(
-        "Supply a simple graph with at most "
-        f"{MAX_GRAPH_DISTANCE_MATRIX_ORDER} vertices and "
-        f"{MAX_GRAPH_DISTANCE_MATRIX_EDGES:,} edges."
-    ),
+from jacobian.operation_declarations import (
+    InlinePublication,
+    OperationDeclaration,
+    OperationRefusalError,
 )
 
 
@@ -62,7 +50,7 @@ def compute_distance_matrix(
         )
     except (ArithmeticError, nx.NetworkXError, TypeError, ValueError) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="GRAPH_DISTANCE_MATRIX_NOT_APPLICABLE",
                 stage="graph_distance_matrix_computation",
                 message=str(exc),
@@ -71,34 +59,32 @@ def compute_distance_matrix(
         ) from exc
 
 
-DISTANCE_MATRIX_OPERATION = inline_operation(
-    OperationSpec(
-        operation_id="graph.distance_matrix.compute",
-        version="2",
-        title="All-pairs distance matrix",
-        description=(
-            "Compute every exact unweighted shortest-path distance in a finite "
-            "simple graph of at most 64 vertices, using JSON null for unreachable "
-            "vertex pairs."
+DISTANCE_MATRIX_OPERATION = OperationDeclaration(
+    operation_id="graph.distance_matrix.compute",
+    version="2",
+    title="All-pairs distance matrix",
+    description=(
+        "Compute every exact unweighted shortest-path distance in a finite "
+        "simple graph of at most 64 vertices, using JSON null for unreachable "
+        "vertex pairs."
+    ),
+    request_type=GraphDistanceMatrixRequest,
+    result_type=GraphDistanceMatrixResult,
+    execute=compute_distance_matrix,
+    publication=InlinePublication(),
+    tags=("graph", "invariant", "distance", "matrix", "exact"),
+    examples=(
+        example(
+            "path_three_distance_matrix",
+            "Compute all ordered-pair distances in a three-vertex path.",
+            {
+                "graph": {
+                    "vertices": ["c", "a", "b"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                }
+            },
         ),
-        request_type=GraphDistanceMatrixRequest,
-        result_type=GraphDistanceMatrixResult,
-        execute=compute_distance_matrix,
-        tags=("graph", "invariant", "distance", "matrix", "exact"),
-        invalid_request=_INVALID_REQUEST,
-        invocation_examples=(
-            example(
-                "path_three_distance_matrix",
-                "Compute all ordered-pair distances in a three-vertex path.",
-                {
-                    "graph": {
-                        "vertices": ["c", "a", "b"],
-                        "edges": [["a", "b"], ["b", "c"]],
-                    }
-                },
-            ),
-        ),
-    )
+    ),
 )
 
 __all__ = ["DISTANCE_MATRIX_OPERATION", "compute_distance_matrix"]

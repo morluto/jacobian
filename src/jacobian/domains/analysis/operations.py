@@ -10,7 +10,7 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.validated_analysis import (
     ArbPointEnclosureRequest,
@@ -26,7 +26,8 @@ from jacobian.domains.analysis.protocol import (
     parse_arb_worker_response,
 )
 from jacobian.operation_bindings import inline_operation
-from jacobian.operations import OperationAbortError, OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operations import OperationAbortError
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessTermination,
@@ -71,8 +72,8 @@ def _run_worker(
     return parse_arb_worker_response(value)
 
 
-def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
-    return CapabilityDiagnostic(
+def _diagnostic(code: str, message: str) -> OperationDiagnostic:
+    return OperationDiagnostic(
         code=code,
         stage="validated_analysis_backend",
         message=message,
@@ -131,9 +132,9 @@ def _point_enclosure(
         ) from None
 
 
-POINT_ENCLOSURE_CAPABILITIES = (
+POINT_ENCLOSURE_OPERATIONS = (
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="analysis.real_function.point_enclosure.compute",
             version="1",
             title="Enclose a real function at a rational point",
@@ -162,7 +163,7 @@ POINT_ENCLOSURE_CAPABILITIES = (
                 "cosine",
                 "cos",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "sqrt_zero",
                     "Enclose sqrt(0) at 32-bit precision.",
@@ -178,4 +179,4 @@ POINT_ENCLOSURE_CAPABILITIES = (
     ),
 )
 
-__all__ = ["POINT_ENCLOSURE_CAPABILITIES"]
+__all__ = ["POINT_ENCLOSURE_OPERATIONS"]

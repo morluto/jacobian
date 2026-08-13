@@ -11,7 +11,7 @@ from jacobian.contracts.certified_snf import (
 from jacobian.domains._certified_snf import certificate_from_reduction, smith_reduce
 from jacobian.domains._examples import example
 from jacobian.operation_bindings import InstalledOperation, durable_operation
-from jacobian.operations import OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
 
 
 def _certified_smith(
@@ -28,9 +28,9 @@ def _certified_smith(
     )
 
 
-CERTIFIED_SNF_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
+CERTIFIED_SNF_OPERATIONS: tuple[InstalledOperation[Any, Any], ...] = (
     durable_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="matrix.normal_form.smith.certified.compute",
             version="4",
             title="Compute a transformation-certified Smith normal form",
@@ -51,7 +51,7 @@ CERTIFIED_SNF_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
                 "exact",
                 "bounded",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "certified_smith_two_by_two",
                     "Compute D, U, and V for a two-by-two integer matrix.",
@@ -72,4 +72,4 @@ CERTIFIED_SNF_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
     ),
 )
 
-__all__ = ["CERTIFIED_SNF_CAPABILITIES"]
+__all__ = ["CERTIFIED_SNF_OPERATIONS"]

@@ -10,25 +10,23 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityInvocationExample,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
     WitnessEnvelope,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationInputKind,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderObservation,
 )
 from jacobian.contracts.results import (
     Conclusion,
@@ -46,10 +44,13 @@ from jacobian.contracts.sat import (
     SatUnsatProofVerificationRequest,
     canonicalize_cnf,
 )
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_execution import execute_operation
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
-from jacobian.operations import Completed, Failed, OperationSpec
+from jacobian.operations import Completed, Failed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactError, SatArtifactService
@@ -76,7 +77,7 @@ class SatCnfMaterializationAdapter:
 
     def __init__(self, sat: SatArtifactService) -> None:
         self.sat = sat
-        self.spec = OperationSpec(
+        self.spec = OperationDeclaration(
             operation_id="sat.cnf.materialize",
             version="1",
             request_type=SatCnfMaterializationRequest,
@@ -87,7 +88,7 @@ class SatCnfMaterializationAdapter:
                 "Encode exact finite existence problems, including finite colorings "
                 "and forbidden configurations, as named Boolean variables and "
                 "clauses. Canonicalize and store the exact CNF consumed by SAT model "
-                "and certified exhaustive UNSAT search capabilities."
+                "and certified exhaustive UNSAT search operations."
             ),
             tags=(
                 "sat",
@@ -103,8 +104,8 @@ class SatCnfMaterializationAdapter:
                 "exact-finite-existence",
                 "certified-exhaustive-search",
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="finite-coloring-cnf",
                     description=(
                         "Encode two items with exactly one of two colors and forbid "
@@ -129,8 +130,8 @@ class SatCnfMaterializationAdapter:
                 ),
             ),
         )
-        self._descriptor = CapabilityDescriptor(
-            capability_id=self.spec.operation_id,
+        self._descriptor = OperationDescriptor(
+            operation_id=self.spec.operation_id,
             version=self.spec.version,
             title=self.spec.title,
             description=self.spec.description,
@@ -142,19 +143,19 @@ class SatCnfMaterializationAdapter:
             input_schema=model_schema(SatCnfMaterializationRequest),
             output_schema=model_schema(SatCnfMaterializationOutput),
             tags=self.spec.tags,
-            invocation_examples=self.spec.invocation_examples,
+            examples=self.spec.examples,
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SatCnfMaterializationRequest:
+    def prepare(self, request: OperationRequest) -> SatCnfMaterializationRequest:
         try:
-            return parse_capability_input(SatCnfMaterializationRequest, request.input)
+            return parse_operation_input(SatCnfMaterializationRequest, request.input)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_CNF",
                     stage="cnf_validation",
                     message="The named-variable CNF is not valid.",
@@ -242,7 +243,7 @@ def install_sat_assignment_checker(
     *,
     authorize_checker: bool,
 ) -> tuple[
-    CapabilityAdapter[SatAssignmentVerificationRequest] | None,
+    OperationAdapter[SatAssignmentVerificationRequest] | None,
     SatAssignmentCheckerInstallation,
 ]:
     """Install the assignment evidence schema and optionally authorize replay."""
@@ -274,7 +275,7 @@ def install_sat_assignment_checker(
         witness_schema_uri=witness_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter[SatAssignmentVerificationRequest] | None = None
+    adapter: OperationAdapter[SatAssignmentVerificationRequest] | None = None
     if checker_id is not None:
         adapter = SatAssignmentVerificationAdapter(
             store=store,
@@ -293,11 +294,11 @@ def install_sat_unsat_proof_checker(
     sat: SatArtifactService,
     verification: VerificationService,
     checkers: CheckerRegistry,
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     *,
     authorize_checker: bool,
 ) -> tuple[
-    CapabilityAdapter[SatUnsatProofVerificationRequest] | None,
+    OperationAdapter[SatUnsatProofVerificationRequest] | None,
     SatUnsatProofCheckerInstallation,
 ]:
     """Install the proof certificate schema and optionally authorize DRAT replay."""
@@ -324,7 +325,7 @@ def install_sat_unsat_proof_checker(
             ),
             authorize=(
                 authorize_checker
-                and runtime.availability is CapabilityProviderAvailability.AVAILABLE
+                and runtime.availability is ProviderAvailability.AVAILABLE
             ),
         )
         .checker_id
@@ -333,7 +334,7 @@ def install_sat_unsat_proof_checker(
         certificate_schema_uri=certificate_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter[SatUnsatProofVerificationRequest] | None = None
+    adapter: OperationAdapter[SatUnsatProofVerificationRequest] | None = None
     if checker_id is not None:
         adapter = SatUnsatProofVerificationAdapter(
             store=store,
@@ -366,8 +367,8 @@ class SatAssignmentVerificationAdapter:
         self.sat = sat
         self.verification = verification
         self.installation = installation
-        self._descriptor = CapabilityDescriptor(
-            capability_id="sat.model.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="sat.model.verify",
             version="1",
             title="Verify a SAT assignment",
             description=(
@@ -393,18 +394,18 @@ class SatAssignmentVerificationAdapter:
                 "named-assignment",
             ),
             accepted_input_kinds=(
-                CapabilityInputKind.STRUCTURED_REQUEST,
-                CapabilityInputKind.TYPED_ARTIFACT,
+                OperationInputKind.STRUCTURED_REQUEST,
+                OperationInputKind.TYPED_ARTIFACT,
             ),
             accepted_artifact_types=(self.sat.installation.assignment_schema_uri,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SatAssignmentVerificationRequest:
-        return parse_capability_input(SatAssignmentVerificationRequest, request.input)
+    def prepare(self, request: OperationRequest) -> SatAssignmentVerificationRequest:
+        return parse_operation_input(SatAssignmentVerificationRequest, request.input)
 
     def invoke(
         self, validated: SatAssignmentVerificationRequest
@@ -413,8 +414,8 @@ class SatAssignmentVerificationAdapter:
             resolved = self.sat.resolve_assignment(validated.assignment_uri)
             semantics = self.store.get(self.sat.installation.semantics_uri)
         except (SatArtifactError, StorageError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_SAT_ASSIGNMENT",
                     stage="artifact_resolution",
                     message=str(exc),
@@ -529,7 +530,7 @@ class SatUnsatProofVerificationAdapter:
         sat: SatArtifactService,
         verification: VerificationService,
         installation: SatUnsatProofCheckerInstallation,
-        runtime: CapabilityProviderRuntime,
+        runtime: ProviderObservation,
     ) -> None:
         checker_id = installation.checker_id
         if checker_id is None:
@@ -540,8 +541,8 @@ class SatUnsatProofVerificationAdapter:
         self.verification = verification
         self.installation = installation
         descriptor_runtime = runtime.model_copy(update={"checker_ids": (checker_id,)})
-        self._descriptor = CapabilityDescriptor(
-            capability_id="sat.unsat_proof.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="sat.unsat_proof.verify",
             version="1",
             title="Verify a SAT UNSAT proof",
             description=(
@@ -566,18 +567,18 @@ class SatUnsatProofVerificationAdapter:
                 "certified-exhaustive-search",
             ),
             accepted_input_kinds=(
-                CapabilityInputKind.STRUCTURED_REQUEST,
-                CapabilityInputKind.TYPED_ARTIFACT,
+                OperationInputKind.STRUCTURED_REQUEST,
+                OperationInputKind.TYPED_ARTIFACT,
             ),
             accepted_artifact_types=(self.sat.installation.proof_schema_uri,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> SatUnsatProofVerificationRequest:
-        return parse_capability_input(SatUnsatProofVerificationRequest, request.input)
+    def prepare(self, request: OperationRequest) -> SatUnsatProofVerificationRequest:
+        return parse_operation_input(SatUnsatProofVerificationRequest, request.input)
 
     def invoke(
         self, validated: SatUnsatProofVerificationRequest
@@ -586,8 +587,8 @@ class SatUnsatProofVerificationAdapter:
             resolved = self.sat.resolve_proof(validated.proof_uri)
             semantics = self.store.get(self.sat.installation.semantics_uri)
         except (SatArtifactError, StorageError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_SAT_UNSAT_PROOF",
                     stage="artifact_resolution",
                     message=str(exc),
@@ -707,7 +708,7 @@ class SatUnsatProofVerificationAdapter:
 
 def _verification_projection(
     *,
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     execution: Execution,
     output: ContractModel,
     artifact_uris: tuple[str, ...],
@@ -720,7 +721,7 @@ def _verification_projection(
     publication = PublishedOperation(output=output, artifact_uris=artifact_uris)
     if execution.status is ExecutionStatus.COMPLETED:
         return OperationProjection(
-            operation_id=descriptor.capability_id,
+            operation_id=descriptor.operation_id,
             version=descriptor.version,
             terminal=Completed(
                 value=output,
@@ -731,12 +732,12 @@ def _verification_projection(
             verification_record_uri=verification_record_uri,
         )
     return OperationProjection(
-        operation_id=descriptor.capability_id,
+        operation_id=descriptor.operation_id,
         version=descriptor.version,
         terminal=Failed(
             status=execution.status,
             runtime_ms=execution.runtime_ms,
-            diagnostic=CapabilityDiagnostic(
+            diagnostic=OperationDiagnostic(
                 code=failure_code,
                 stage="verification",
                 message=detail,

@@ -1,4 +1,4 @@
-"""Exact neighborhood-independence profile capability."""
+"""Exact neighborhood-independence profile operation."""
 
 from __future__ import annotations
 
@@ -11,14 +11,6 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityRequest,
-)
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.graph_invariants import (
@@ -29,7 +21,15 @@ from jacobian.contracts.graph_invariants import (
     GraphNeighborhoodIndependenceReplayPayload,
     GraphNeighborhoodIndependenceRequest,
 )
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationInputKind,
+    OperationRequest,
+)
 from jacobian.graphs.artifacts import GraphArtifactResources, load_graph, nx, runtime_ms
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -54,8 +54,8 @@ class GraphNeighborhoodIndependenceAdapter:
 
     def __init__(self, resources: GraphNeighborhoodIndependenceResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="graph.compute.neighborhood_independence",
+        self._descriptor = OperationDescriptor(
+            operation_id="graph.compute.neighborhood_independence",
             version="1",
             title="Compute neighborhood independence",
             description=(
@@ -81,24 +81,24 @@ class GraphNeighborhoodIndependenceAdapter:
                 "independence-number",
                 "exact-computation",
             ),
-            accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
+            accepted_input_kinds=(OperationInputKind.TYPED_ARTIFACT,),
             accepted_artifact_types=(resources.graph.graph_schema_uri,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> GraphNeighborhoodIndependenceRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 GraphNeighborhoodIndependenceRequest, request.input
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_NEIGHBORHOOD_INDEPENDENCE_REQUEST",
                     stage="request_validation",
                     message=(
@@ -113,8 +113,8 @@ class GraphNeighborhoodIndependenceAdapter:
         started = time.monotonic()
         graph = load_graph(self.resources.graph, validated.graph_uri)
         if graph.number_of_nodes() > 256:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="GRAPH_ORDER_LIMIT_EXCEEDED",
                     stage="invariant_computation",
                     message=("The graph exceeds the exact 256-vertex profile limit."),
@@ -124,8 +124,8 @@ class GraphNeighborhoodIndependenceAdapter:
         for vertex in sorted(graph):
             neighborhood = tuple(sorted(graph.neighbors(vertex)))
             if len(neighborhood) > 24:
-                raise CapabilityInvocationError(
-                    CapabilityDiagnostic(
+                raise OperationInvocationError(
+                    OperationDiagnostic(
                         code="NEIGHBORHOOD_ORDER_LIMIT_EXCEEDED",
                         stage="invariant_computation",
                         message=(
@@ -134,7 +134,7 @@ class GraphNeighborhoodIndependenceAdapter:
                         ),
                         hint=(
                             "Use a structurally certified bound or a separately "
-                            "budgeted solver-backed capability."
+                            "budgeted solver-backed operation."
                         ),
                     )
                 )
@@ -223,7 +223,7 @@ class GraphNeighborhoodIndependenceAdapter:
             average=average_wire,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=output, runtime_ms=runtime_ms(started)),
             publication=PublishedOperation(

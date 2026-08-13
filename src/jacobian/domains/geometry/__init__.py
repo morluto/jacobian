@@ -1,4 +1,4 @@
-"""Exact rational planar-geometry capabilities."""
+"""Exact rational planar-geometry operations."""
 
 from jacobian.domains.geometry.bundle import build_geometry_bundle
 

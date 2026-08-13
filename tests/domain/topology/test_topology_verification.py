@@ -3,11 +3,11 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from jacobian.checker_operations import derive_verification_capability_id
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-)
+from jacobian.checker_operations import derive_verification_operation_id
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
+from jacobian.contracts.operations import (
+    OperationRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 
 _PRESENTATION = {
@@ -21,9 +21,9 @@ def _result_payload(computed) -> dict:
 
 
 def _computed_cases(topology_services) -> list[tuple[str, dict, Any]]:
-    canonicalized = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.canonicalize",
+    canonicalized = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.canonicalize",
             input=_PRESENTATION,
         )
     )
@@ -34,9 +34,9 @@ def _computed_cases(topology_services) -> list[tuple[str, dict, Any]]:
         "prime": 2,
         "convention": "UNREDUCED",
     }
-    chain = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.chain_complex.compute",
+    chain = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.chain_complex.compute",
             input=chain_input,
         )
     )
@@ -45,9 +45,9 @@ def _computed_cases(topology_services) -> list[tuple[str, dict, Any]]:
         "prime": 2,
         "convention": "UNREDUCED",
     }
-    homology = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.compute",
+    homology = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.compute",
             input=homology_input,
         )
     )
@@ -62,9 +62,9 @@ def test_topology_results_are_independently_verified(
     topology_services,
 ) -> None:
     for producer_id, producer_input, computed in _computed_cases(topology_services):
-        verified = topology_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=derive_verification_capability_id(producer_id),
+        verified = topology_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=derive_verification_operation_id(producer_id),
                 input={
                     "input": producer_input,
                     "candidate": _result_payload(computed),
@@ -99,9 +99,9 @@ def test_topology_checker_rejects_forged_cycle_evidence(
     forged_groups[1] = forged_group
     forged_candidate["groups"] = forged_groups
 
-    rejected = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=derive_verification_capability_id(producer_id),
+    rejected = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=derive_verification_operation_id(producer_id),
             input={"input": _producer_input, "candidate": forged_candidate},
         )
     )
@@ -122,15 +122,15 @@ def test_integral_homology_has_a_dedicated_independent_verifier(
         "complex": _result_payload(canonicalized)["complex"],
         "convention": "UNREDUCED",
     }
-    computed = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.compute",
+    computed = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.compute",
             input=integral_input,
         )
     )
-    verified = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.verify",
+    verified = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.verify",
             input={"input": integral_input, "candidate": _result_payload(computed)},
         )
     )
@@ -151,9 +151,9 @@ def test_integral_homology_checker_rejects_a_forged_free_generator(
         "complex": _result_payload(canonicalized)["complex"],
         "convention": "UNREDUCED",
     }
-    computed = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.compute",
+    computed = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.compute",
             input=integral_input,
         )
     )
@@ -169,9 +169,9 @@ def test_integral_homology_checker_rejects_a_forged_free_generator(
     group["free_generators"] = generators
     groups[1] = group
     forged_candidate["groups"] = groups
-    rejected = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.verify",
+    rejected = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.verify",
             input={"input": integral_input, "candidate": forged_candidate},
         )
     )
@@ -187,8 +187,8 @@ def test_topology_checker_runtime_binds_only_independent_source(
 ) -> None:
     descriptor = next(
         item
-        for item in topology_services.core.capabilities.catalog().capabilities
-        if item.capability_id == "topology.simplicial_homology.verify"
+        for item in topology_services.core.operations.catalog().operations
+        if item.operation_id == "topology.simplicial_homology.verify"
     )
     assert descriptor.provider_runtime is not None
     assert {

@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from tests.support.core_capability_harnesses import UniversalAlgebraTestServices
+from tests.support.core_operation_harnesses import UniversalAlgebraTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.universal_algebra import (
     UniversalAlgebraCountermodelSearchRequest,
 )
@@ -56,13 +56,13 @@ def test_countermodel_descriptor_publishes_a_model_valid_invocation_example(
 ) -> None:
     runtime = universal_algebra_services.services
     descriptors = {
-        descriptor.capability_id: descriptor
-        for descriptor in runtime.core.capabilities.catalog().capabilities
+        descriptor.operation_id: descriptor
+        for descriptor in runtime.core.operations.catalog().operations
     }
     descriptor = descriptors["universal_algebra.search.countermodel"]
 
-    assert len(descriptor.invocation_examples) == 1
-    example = descriptor.invocation_examples[0]
+    assert len(descriptor.examples) == 1
+    example = descriptor.examples[0]
     validated = UniversalAlgebraCountermodelSearchRequest.model_validate(example.input)
     assert validated.order == 2
     assert validated.target_law.law_id == "associative"
@@ -74,10 +74,10 @@ def test_evaluate_laws_descriptor_example_encodes_idempotence(
     runtime = universal_algebra_services.services
     descriptor = next(
         descriptor
-        for descriptor in runtime.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "universal_algebra.evaluate_laws"
+        for descriptor in runtime.core.operations.catalog().operations
+        if descriptor.operation_id == "universal_algebra.evaluate_laws"
     )
-    example = descriptor.invocation_examples[0]
+    example = descriptor.examples[0]
     law = example.input["problem"]["laws"][0]
 
     assert law["law_id"] == "idempotence"
@@ -88,9 +88,9 @@ def test_evaluate_laws_descriptor_example_encodes_idempotence(
     }
     assert law["right"] == {"kind": "VARIABLE", "variable": "x"}
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
             input=example.input,
         )
     )
@@ -110,9 +110,9 @@ def test_evaluate_laws_returns_exact_truth_and_counterexample(
     universal_algebra_services: UniversalAlgebraTestServices,
 ) -> None:
     runtime = universal_algebra_services.services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="universal_algebra.evaluate_laws",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="universal_algebra.evaluate_laws",
             input={"problem": _left_projection_problem()},
         )
     )
@@ -141,9 +141,9 @@ def test_evaluate_laws_returns_exact_truth_and_counterexample(
     }
     assert result.output["certificate_uri"] in result.artifact_uris
     assert "verification_handoff" not in result.output
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="universal_algebra.law_evaluation.verify",
+    verified = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="universal_algebra.law_evaluation.verify",
             input={"certificate_uri": result.output["certificate_uri"]},
         )
     )
@@ -168,9 +168,9 @@ def test_complete_request_validation_precedes_artifact_writes(
 
     monkeypatch.setattr(runtime.core.artifacts, "put", recording_put)
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="universal_algebra.evaluate_laws",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="universal_algebra.evaluate_laws",
             input={"problem": problem},
         )
     )
@@ -186,9 +186,9 @@ def test_countermodel_search_reports_fixed_order_no_witness_without_conclusion(
     runtime = unauthorized_universal_algebra_services.services
     laws = _left_projection_problem()["laws"]
 
-    search = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="universal_algebra.search.countermodel",
+    search = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="universal_algebra.search.countermodel",
             input={
                 "order": 1,
                 "source_laws": [laws[0]],
@@ -221,9 +221,9 @@ def test_countermodel_request_validation_precedes_artifact_writes(
 
     monkeypatch.setattr(runtime.core.artifacts, "put", recording_put)
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="universal_algebra.search.countermodel",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="universal_algebra.search.countermodel",
             input={
                 "order": 2,
                 "source_laws": [laws[0]],
@@ -241,9 +241,9 @@ def test_finite_magma_table_enumeration_is_exact_and_canonical(
     unauthorized_universal_algebra_services: UniversalAlgebraTestServices,
 ) -> None:
     runtime = unauthorized_universal_algebra_services.services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_magma.table.enumerate",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_magma.table.enumerate",
             input={"order": 2},
         )
     )
@@ -266,9 +266,9 @@ def test_finite_magma_table_enumeration_handles_order_one(
     unauthorized_universal_algebra_services: UniversalAlgebraTestServices,
 ) -> None:
     runtime = unauthorized_universal_algebra_services.services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_magma.table.enumerate",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_magma.table.enumerate",
             input={"order": 1},
         )
     )
@@ -292,9 +292,9 @@ def test_finite_magma_table_enumeration_rejects_unsupported_order_before_writes(
         return original_put(*args, **kwargs)
 
     monkeypatch.setattr(runtime.core.artifacts, "put", recording_put)
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_magma.table.enumerate",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_magma.table.enumerate",
             input={"order": 3},
         )
     )

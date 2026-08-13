@@ -54,11 +54,11 @@ the ring orientation does not change the classification.
 - a polygon hull is strictly counterclockwise and starts at its least vertex.
 
 This normalization closes the previous checker gap without changing the
-capability ID.
+operation ID.
 
 ## Independent verification
 
-Each exact producer has its own `.verify` capability: for example,
+Each exact producer has its own `.verify` operation: for example,
 `geometry.points.convex_hull.verify`,
 `geometry.points.squared_distance.verify`, and
 `geometry.polygon.simple.verify`. The operator-authorized checker runs in a
@@ -74,4 +74,4 @@ remain `COMPUTED`; only an accepted bound checker run returns `VERIFIED`.
 
 Delaunay/Voronoi construction, arbitrary algebraic coordinates, three-
 dimensional geometry, and H/V polyhedral conversion remain separate provider
-or capability gates.
+or operation gates.

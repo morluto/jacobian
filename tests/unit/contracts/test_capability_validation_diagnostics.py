@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, ValidationError, field_validator
 
-from jacobian.capability_errors import PayloadValidationError, enriched_invalid_request
-from jacobian.capability_validation import validate_payload
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
+from jacobian.operation_errors import PayloadValidationError, enriched_invalid_request
+from jacobian.operation_validation import validate_payload
 
 
 def test_enriched_invalid_request_hides_input_derived_pydantic_messages() -> None:
@@ -23,7 +23,7 @@ def test_enriched_invalid_request_hides_input_derived_pydantic_messages() -> Non
         InputFixture.model_validate({"value": marker})
 
     diagnostic = enriched_invalid_request(
-        CapabilityDiagnostic(
+        OperationDiagnostic(
             code="INVALID_REQUEST",
             stage="input_validation",
             message="Invalid request.",
@@ -122,10 +122,10 @@ def test_payload_validation_bounds_serialized_diagnostic_size() -> None:
             {"s": "b"},
         )
 
-    diagnostic = CapabilityDiagnostic(
+    diagnostic = OperationDiagnostic(
         code="INVALID_REQUEST",
-        stage="capability_input_validation",
-        message="The capability input does not match its advertised schema at s.",
+        stage="operation_input_validation",
+        message="The operation input does not match its advertised schema at s.",
         path="s",
         expected=error.value.expected,
         actual_type=error.value.actual_type,

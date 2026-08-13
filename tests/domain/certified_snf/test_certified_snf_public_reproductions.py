@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -34,9 +34,9 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
     certified_snf_services,
 ) -> None:
     for case in _smith_cases():
-        computed = certified_snf_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="matrix.normal_form.smith.certified.compute",
+        computed = certified_snf_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="matrix.normal_form.smith.certified.compute",
                 input={"matrix": case["matrix"]},
             )
         )
@@ -47,9 +47,9 @@ def test_public_certified_smith_cases_reach_checker_bound_results(
         assert certificate["rank"] == case["expected_rank"]
         assert certificate["invariant_factors"] == case["expected_invariant_factors"]
 
-        verified = certified_snf_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="matrix.normal_form.smith.certified.verify",
+        verified = certified_snf_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="matrix.normal_form.smith.certified.verify",
                 input={"result_uri": computed.output["result_uri"]},
             )
         )

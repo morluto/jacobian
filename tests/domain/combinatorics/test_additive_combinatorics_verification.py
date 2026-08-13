@@ -7,8 +7,8 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
@@ -47,12 +47,12 @@ def test_additive_decisions_are_independently_verified(
     verifier_id: str,
     payload: dict[str, object],
 ) -> None:
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=producer_id, input=payload)
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(operation_id=producer_id, input=payload)
     )
-    verified = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
+    verified = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=verifier_id,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -70,15 +70,15 @@ def test_fixed_order_negative_result_is_verified_inline(
     producer_id = "combinatorics.cyclic_difference_set.extension.decide"
     verifier_id = "combinatorics.cyclic_difference_set.extension.verify"
     payload = {"base_elements": _BASE, "target_order": 7}
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer_id,
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=producer_id,
             input=payload,
         )
     )
-    verified = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=verifier_id,
+    verified = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=verifier_id,
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -95,15 +95,15 @@ def test_fixed_order_positive_witness_is_independently_verified(
     combinatorics_services,
 ) -> None:
     payload = {"base_elements": ["0", "1"], "target_order": 3}
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.cyclic_difference_set.extension.decide",
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.cyclic_difference_set.extension.decide",
             input=payload,
         )
     )
-    verified = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.cyclic_difference_set.extension.verify",
+    verified = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.cyclic_difference_set.extension.verify",
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -117,16 +117,16 @@ def test_inline_checker_rejects_a_contract_valid_false_sidon_result(
     combinatorics_services,
 ) -> None:
     payload = {"elements": _BASE}
-    different = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.integer_set.sidon.decide",
+    different = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.integer_set.sidon.decide",
             input={"elements": ["0", "1", "2"]},
         )
     )
 
-    rejected = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.integer_set.sidon.verify",
+    rejected = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.integer_set.sidon.verify",
             input={"input": payload, "candidate": different.output["result"]},
         )
     )
@@ -142,8 +142,8 @@ def test_additive_checker_runtime_binds_both_independent_sources(
 ) -> None:
     descriptor = next(
         item
-        for item in combinatorics_services.core.capabilities.catalog().capabilities
-        if item.capability_id == "combinatorics.integer_set.sidon.verify"
+        for item in combinatorics_services.core.operations.catalog().operations
+        if item.operation_id == "combinatorics.integer_set.sidon.verify"
     )
     assert descriptor.provider_runtime is not None
     assert {

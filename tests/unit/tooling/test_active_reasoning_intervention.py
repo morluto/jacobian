@@ -174,9 +174,9 @@ def test_internalcot_adherence_fails_closed_on_bad_order_or_workflow() -> None:
 def test_current_server_evidence_is_bound_without_assurance_inference() -> None:
     digest = "sha256:" + "3" * 64
     payload = (
-        "INFO MCP capability attempt request_digest=cccccccccccccccc "
+        "INFO MCP operation attempt request_digest=cccccccccccccccc "
         "trace_digest=cccccccc trace_source=request_id "
-        "capability_id=matrix.normal_form.hermite.verify capability_version=1 "
+        "operation_id=matrix.normal_form.hermite.verify operation_version=1 "
         "execution_status=COMPLETED verification_record_uri_present=True "
         "diagnostic_codes=none attempt_duration_ms=4.5 operation_runtime_ms=2 "
         f"response_bytes=120 argument_digest={digest}"
@@ -192,8 +192,8 @@ def test_current_server_evidence_is_bound_without_assurance_inference() -> None:
 
 def test_checker_without_bound_evidence_fails_closed() -> None:
     event = {
-        "kind": "CAPABILITY_ATTEMPT",
-        "capability_id": "matrix.normal_form.hermite.verify",
+        "kind": "OPERATION_ATTEMPT",
+        "operation_id": "matrix.normal_form.hermite.verify",
         "execution_status": "COMPLETED",
         "assurance": None,
         "verification_record_uri_present": False,

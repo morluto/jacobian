@@ -10,7 +10,7 @@ Jacobian is a **toolbox of atomic math tools** for AI agents: find them with
 `math.find`, run them with `math.run`, get **mathematical results**, and
 compose those values across turns. Checker tools are optional **additional**
 catalog IDs—separate from producers. Catalog entries are often still called
-*capabilities* in the API. The [product model](explanation/product-blueprint.md)
+*operations* in the API. The [product model](explanation/product-blueprint.md)
 and [Search and execute](explanation/architecture.md#search-and-execute) define
 the contract.
 
@@ -28,7 +28,7 @@ These documents define the current product contract:
 | What is Jacobian? | [Product model](explanation/product-blueprint.md) | Product and ownership model |
 | How is it structured? | [Architecture](explanation/architecture.md) | Dependencies and trust boundaries |
 | What does MCP expose? | [Tool surface](reference/tools.md) | Fixed MCP projection |
-| What operations are installed now? | Runtime `capability://catalog` | Current installation-specific inventory |
+| What operations are installed now? | Runtime `operation://catalog` | Current installation-specific inventory |
 | What work is open? | GitHub issues (e.g. architecture epics) | Implementation priorities live in issues, not a parallel goals doc |
 
 ## Tutorials
@@ -46,7 +46,7 @@ and build toward a complete result.
 How-to guides assume you already understand Jacobian's basic model and need to
 complete a specific task.
 
-- [Discover, invoke, and check domain math tools](how-to/invoke-domain-capabilities.md)
+- [Discover, invoke, and check domain math tools](how-to/invoke-domain-operations.md)
 - [Configure an agent from a source checkout](how-to/setup-agent-from-source.md)
 - [Install native and formal providers](how-to/install-native-and-formal-providers.md)
 - [Troubleshoot Z3 installation on macOS](how-to/troubleshoot-z3-macos.md)
@@ -69,7 +69,7 @@ expectations.
 - [Persistent state format](reference/state-format.md) — supported migration floor and fresh-store transition
 - [Testing strategy](reference/testing-strategy.md) — validation layers, commands, and CI responsibilities
 
-**Domain-owned references:** [Capability references](reference/capabilities/index.md)
+**Domain-owned references:** [Operation references](reference/operations/index.md)
 grouped by owning domain (graphs, matrix, polynomial, Lean, SAT/SMT, finite
 math, number theory, linear algebra, topology, geometry).
 Adding an operation or provider does not require editing a central list; each
@@ -83,8 +83,8 @@ performance measurement, and regression policy.
 **Reference scenarios:** [Worked cases](reference/scenarios/index.md) —
 mathematical scenario catalog and certified-homology case.
 
-Use the runtime `capability://catalog` and `math.find` for the
-installed capability inventory and exact operation schemas.
+Use the runtime `operation://catalog` and `math.find` for the
+installed operation inventory and exact operation schemas.
 
 ## Explanation
 

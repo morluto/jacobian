@@ -4,9 +4,9 @@ from copy import deepcopy
 
 from tests.support.rationals import rational_payload as _q
 
-from jacobian.checker_operations import derive_verification_capability_id
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.checker_operations import derive_verification_operation_id
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -100,14 +100,14 @@ _CASES = (
 def test_probability_results_are_independently_replayed(
     probability_services,
 ) -> None:
-    for capability_id, payload in _CASES:
-        computed = probability_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload in _CASES:
+        computed = probability_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
 
-        verified = probability_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=derive_verification_capability_id(capability_id),
+        verified = probability_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=derive_verification_operation_id(operation_id),
                 input={
                     "input": payload,
                     "candidate": computed.output["result"],
@@ -115,22 +115,22 @@ def test_probability_results_are_independently_replayed(
             )
         )
 
-        assert verified.execution.status is ExecutionStatus.COMPLETED, capability_id
-        assert verified.output["status"] == "VERIFIED", capability_id
-        assert verified.output["operation_id"] == capability_id, capability_id
+        assert verified.execution.status is ExecutionStatus.COMPLETED, operation_id
+        assert verified.output["status"] == "VERIFIED", operation_id
+        assert verified.output["operation_id"] == operation_id, operation_id
         assert verified.output["verification_record_uri"] in verified.artifact_uris, (
-            capability_id
+            operation_id
         )
-        assert verified.verification_record_uri is not None, capability_id
+        assert verified.verification_record_uri is not None, operation_id
 
 
 def test_probability_checker_rejects_forged_event_mass(
     probability_services,
 ) -> None:
     payload = {"distribution": _FAIR_BIT, "event_values": [_q(1)]}
-    computed = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.event_probability.compute",
+    computed = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.event_probability.compute",
             input=payload,
         )
     )
@@ -138,9 +138,9 @@ def test_probability_checker_rejects_forged_event_mass(
     forged_candidate["event_probability"] = _q(1)
     forged_candidate["selected_atoms"] = _FAIR_BIT["atoms"]
 
-    rejected = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("probability.finite_distribution.event_probability.verify"),
+    rejected = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("probability.finite_distribution.event_probability.verify"),
             input={"input": payload, "candidate": forged_candidate},
         )
     )
@@ -158,9 +158,9 @@ def test_probability_checker_rejects_forged_graph_reliability(
         "edge_probabilities": [{"edge": ["a", "b"], "open_probability": _q(1, 3)}],
         "terminals": ["a", "b"],
     }
-    computed = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    computed = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "probability.graph_reliability.connection_probability.compute"
             ),
             input=payload,
@@ -172,9 +172,9 @@ def test_probability_checker_rejects_forged_graph_reliability(
     forged_candidate["states"] = false_states
     forged_candidate["connection_probability"] = _q(1)
 
-    rejected = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    rejected = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "probability.graph_reliability.connection_probability.verify"
             ),
             input={"input": payload, "candidate": forged_candidate},

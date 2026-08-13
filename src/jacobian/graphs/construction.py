@@ -1,4 +1,4 @@
-"""Explicit graph construction capability."""
+"""Explicit graph construction operation."""
 
 from __future__ import annotations
 
@@ -6,17 +6,15 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityRequest,
-)
 from jacobian.contracts.graph_composition import (
     GraphExplicitConstructionOutput,
     GraphExplicitConstructionRequest,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
 )
 from jacobian.graphs.artifacts import (
     GraphArtifactResources,
@@ -24,10 +22,13 @@ from jacobian.graphs.artifacts import (
 )
 from jacobian.graphs.conversions import graph_contract_from_value
 from jacobian.math.graphs import SimpleUndirectedGraph, explicit_graph
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_execution import execute_operation
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
-from jacobian.operations import Completed, OperationSpec
+from jacobian.operations import Completed
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 from jacobian.validation_diagnostics import project_validation_errors
@@ -43,7 +44,7 @@ class GraphExplicitConstructionAdapter:
 
     def __init__(self, resources: GraphConstructionResources) -> None:
         self.resources = resources
-        self.spec = OperationSpec(
+        self.spec = OperationDeclaration(
             operation_id="graph.construct.explicit",
             version="1",
             request_type=GraphExplicitConstructionRequest,
@@ -53,11 +54,11 @@ class GraphExplicitConstructionAdapter:
             description=(
                 "Validate and canonicalize one bounded explicit finite simple "
                 "undirected graph, then return a domain-owned graph artifact accepted "
-                "by graph capabilities."
+                "by graph operations."
             ),
             tags=("graph", "construction", "explicit", "artifact-materialization"),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="three-vertex-path",
                     description=(
                         "Materialize a path while allowing noncanonical caller order."
@@ -69,8 +70,8 @@ class GraphExplicitConstructionAdapter:
                 ),
             ),
         )
-        self._descriptor = CapabilityDescriptor(
-            capability_id=self.spec.operation_id,
+        self._descriptor = OperationDescriptor(
+            operation_id=self.spec.operation_id,
             version=self.spec.version,
             title=self.spec.title,
             description=self.spec.description,
@@ -82,24 +83,24 @@ class GraphExplicitConstructionAdapter:
             input_schema=model_schema(GraphExplicitConstructionRequest),
             output_schema=model_schema(GraphExplicitConstructionOutput),
             tags=self.spec.tags,
-            invocation_examples=self.spec.invocation_examples,
+            examples=self.spec.examples,
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> GraphExplicitConstructionRequest:
+    def prepare(self, request: OperationRequest) -> GraphExplicitConstructionRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 GraphExplicitConstructionRequest, request.input
             )
         except ValidationError as exc:
             errors, validation_error_count = project_validation_errors(exc)
             path_parts = errors[0]["loc"] if errors else ()
             path = ".".join(str(item) for item in path_parts) or None
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_EXPLICIT_GRAPH",
                     stage="graph_input_validation",
                     message=(

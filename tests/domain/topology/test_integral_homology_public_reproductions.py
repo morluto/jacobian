@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -38,9 +38,9 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
     topology_services,
 ) -> None:
     for case in _suite():
-        canonicalized = topology_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="topology.simplicial_complex.canonicalize",
+        canonicalized = topology_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="topology.simplicial_complex.canonicalize",
                 input=case["presentation"],
             )
         )
@@ -49,9 +49,9 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
             "complex": complex_,
             "convention": case["convention"],
         }
-        computed = topology_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="topology.simplicial_homology.integral.compute",
+        computed = topology_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="topology.simplicial_homology.integral.compute",
                 input=integral_input,
             )
         )
@@ -63,9 +63,9 @@ def test_public_integral_homology_cases_bind_generators_and_torsion(
             case["expected_torsion"]
         )
 
-        verified = topology_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="topology.simplicial_homology.integral.verify",
+        verified = topology_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="topology.simplicial_homology.integral.verify",
                 input={
                     "input": integral_input,
                     "candidate": _inline_result_payload(computed),

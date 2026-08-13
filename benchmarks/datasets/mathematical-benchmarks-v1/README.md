@@ -73,7 +73,7 @@ not a causal performance claim.
 
 Jacobian-enabled jobs collect both Codex ATIF and the Jacobian sidecar's MCP
 runtime log. The runtime log is authoritative for `math.find` and `math.run`
-counts and failed capability attempts; the normalizer does
+counts and failed operation attempts; the normalizer does
 not infer executions from JavaScript source text. A missing configured trace or
 sidecar log makes the observation incomplete. Control jobs collect ATIF only
 because they do not start the Jacobian sidecar.

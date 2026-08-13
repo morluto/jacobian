@@ -8,11 +8,11 @@ from typing import Any
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    ProviderAvailability,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermination
@@ -20,7 +20,7 @@ from jacobian.provider_measurements import measure_provider
 from jacobian.provider_runtime import ProviderRuntimeError
 from jacobian.providers.external_solver_runtime import cvc5_provider_runtime
 from jacobian.runtime import create_runtime
-from jacobian.sat_smt.cvc5 import install_cvc5_capability
+from jacobian.sat_smt.cvc5 import install_cvc5_operation
 from jacobian.sat_smt.smt import SmtArtifactError
 
 # Provider lane owns readiness and isolation for this module.
@@ -52,9 +52,9 @@ _QF_UF_SAT = "(set-logic QF_UF)\n(declare-fun p () Bool)\n(assert p)\n(check-sat
 
 
 def _invoke(runtime: DomainTestServices, text: str, *, logic: str = "QF_UF"):
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="smt.unsat_proof.find",
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="smt.unsat_proof.find",
             input={
                 "logic": logic,
                 "smtlib_text": text,
@@ -65,9 +65,9 @@ def _invoke(runtime: DomainTestServices, text: str, *, logic: str = "QF_UF"):
 
 
 @pytest.fixture
-def cvc5_provider() -> CapabilityProviderRuntime:
+def cvc5_provider() -> ProviderObservation:
     provider = cvc5_provider_runtime()
-    if provider.availability is not CapabilityProviderAvailability.AVAILABLE:
+    if provider.availability is not ProviderAvailability.AVAILABLE:
         pytest.skip("the pinned cvc5 runtime is unavailable")
     return provider
 
@@ -75,31 +75,31 @@ def cvc5_provider() -> CapabilityProviderRuntime:
 @pytest.fixture
 def cvc5_services(
     tmp_path: Path,
-    cvc5_provider: CapabilityProviderRuntime,
+    cvc5_provider: ProviderObservation,
 ) -> Iterator[DomainTestServices]:
     with open_domain_services(tmp_path / "state") as services:
-        services.installation.register_capability(
-            install_cvc5_capability(services.core.smt, cvc5_provider)
+        services.installation.register_operation(
+            install_cvc5_operation(services.core.smt, cvc5_provider)
         )
         yield services
 
 
-def test_pinned_cvc5_capability_is_discoverable(
+def test_pinned_cvc5_operation_is_discoverable(
     cvc5_services: DomainTestServices,
-    cvc5_provider: CapabilityProviderRuntime,
+    cvc5_provider: ProviderObservation,
 ) -> None:
-    assert cvc5_provider.availability is CapabilityProviderAvailability.AVAILABLE
-    catalog = cvc5_services.core.capabilities.catalog().capabilities
+    assert cvc5_provider.availability is ProviderAvailability.AVAILABLE
+    catalog = cvc5_services.core.operations.catalog().operations
     descriptor = next(
         descriptor
         for descriptor in catalog
-        if descriptor.capability_id == "smt.unsat_proof.find"
+        if descriptor.operation_id == "smt.unsat_proof.find"
     )
     assert descriptor.provider == "cvc5"
     assert descriptor.provider_runtime == cvc5_provider
     assert descriptor.provider_runtime.checker_ids == ()
     assert "smt.unsat_proof.verify" not in {
-        installed.capability_id for installed in catalog
+        installed.operation_id for installed in catalog
     }
     assert cvc5_services.core.smt.installation.problem_schema_uri.startswith(
         "artifact://sha256/"
@@ -110,7 +110,7 @@ def test_pinned_cvc5_capability_is_discoverable(
 
 
 def test_pinned_cvc5_measurement_runs_its_proof_reproduction(
-    cvc5_provider: CapabilityProviderRuntime,
+    cvc5_provider: ProviderObservation,
 ) -> None:
     measurement = measure_provider(cvc5_provider)
 
@@ -299,11 +299,11 @@ def test_runtime_rejects_a_base_installation_without_cvc5(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    unavailable = CapabilityProviderRuntime(
+    unavailable = ProviderObservation(
         provider="cvc5",
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="BSD-3-Clause",
         diagnostic="cvc5 is intentionally unavailable for this test.",
     )

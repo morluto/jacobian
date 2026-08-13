@@ -16,7 +16,7 @@ ALLOWED = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 def _math(s, x, e):
     r = s.get("result", {})
-    return r.get("selected_capability") == e["expected_first"]
+    return r.get("selected_operation") == e["expected_first"]
 
 
 def main():

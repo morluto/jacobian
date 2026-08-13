@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.artifacts import ArtifactPutResult
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.sat import (
     CanonicalCnf,
     SatAssignmentArtifact,
@@ -147,7 +147,7 @@ class SatArtifactService:
         *,
         cnf_uri: str,
         values: Sequence[bool],
-        producer: CapabilityProviderRuntime,
+        producer: ProviderObservation,
         resource_budget: SatResourceBudget,
     ) -> ArtifactPutResult:
         """Materialize one total assignment candidate without verifying it."""
@@ -208,7 +208,7 @@ class SatArtifactService:
         *,
         cnf_uri: str,
         proof: bytes,
-        producer: CapabilityProviderRuntime,
+        producer: ProviderObservation,
         resource_budget: SatResourceBudget,
     ) -> ArtifactPutResult:
         """Preserve raw DRAT bytes without interpreting or verifying them."""

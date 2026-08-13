@@ -2,10 +2,10 @@
 
 import importlib
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.provider_runtime import (
     PYTHON_FLINT_HNF_FLINT_VERSION,
@@ -27,25 +27,25 @@ def _python_flint_runtime(
     configuration: dict[str, object],
     profile: str,
     refresh: bool,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     runtime = python_distribution_provider_runtime(
         "python-flint",
         distribution_name="python-flint",
         import_name="flint",
         required_attributes=required_attributes,
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT AND LGPL-3.0-or-later",
         features=features,
         configuration=configuration,
         refresh=refresh,
     )
     if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is ProviderAvailability.AVAILABLE
         and runtime.version != PYTHON_FLINT_VERSION
     ):
         return _unavailable_runtime(
             provider="python-flint",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT AND LGPL-3.0-or-later",
             diagnostic=(
                 "Python-FLINT is installed but does not match the pinned "
@@ -58,7 +58,7 @@ def _python_flint_runtime(
 def python_flint_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the exact packaged Python-FLINT compatibility profile."""
 
     return _python_flint_runtime(
@@ -83,7 +83,7 @@ def python_flint_provider_runtime(
 def python_flint_finite_field_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the exact packaged Python-FLINT finite-field API."""
 
     return _python_flint_runtime(
@@ -101,7 +101,7 @@ def python_flint_finite_field_provider_runtime(
 def python_flint_exact_checker_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the pinned Python-FLINT API used by exact-domain replay."""
 
     runtime = _python_flint_runtime(
@@ -121,13 +121,13 @@ def python_flint_exact_checker_provider_runtime(
         profile="exact-checker",
         refresh=refresh,
     )
-    if refresh and runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+    if refresh and runtime.availability is ProviderAvailability.AVAILABLE:
         try:
             flint = importlib.import_module("flint")
         except (ImportError, OSError):
             return _unavailable_runtime(
                 provider="python-flint",
-                install_tier=CapabilityInstallTier.T1,
+                install_tier=ProviderInstallTier.T1,
                 license_id="MIT AND LGPL-3.0-or-later",
                 diagnostic=(
                     "The pinned Python-FLINT exact-checker runtime cannot be imported."
@@ -138,7 +138,7 @@ def python_flint_exact_checker_provider_runtime(
         ):
             return _unavailable_runtime(
                 provider="python-flint",
-                install_tier=CapabilityInstallTier.T1,
+                install_tier=ProviderInstallTier.T1,
                 license_id="MIT AND LGPL-3.0-or-later",
                 diagnostic=(
                     "Python-FLINT is installed but its linked FLINT library does "
@@ -151,7 +151,7 @@ def python_flint_exact_checker_provider_runtime(
 def python_flint_analysis_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the pinned Arb API used by validated real analysis."""
 
     runtime = python_distribution_provider_runtime(
@@ -159,18 +159,18 @@ def python_flint_analysis_provider_runtime(
         distribution_name="python-flint",
         import_name="flint",
         required_attributes=("arb", "ctx", "fmpq"),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT AND LGPL-3.0-or-later",
         features=("arb-ball-arithmetic",),
         refresh=refresh,
     )
     if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is ProviderAvailability.AVAILABLE
         and runtime.version != PYTHON_FLINT_VERSION
     ):
         return _unavailable_runtime(
             provider="python-flint",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT AND LGPL-3.0-or-later",
             diagnostic=(
                 "Python-FLINT is installed but does not match the pinned "
@@ -183,7 +183,7 @@ def python_flint_analysis_provider_runtime(
 def python_flint_probability_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the pinned exact-rational API used by probability producers."""
 
     runtime = python_distribution_provider_runtime(
@@ -191,7 +191,7 @@ def python_flint_probability_provider_runtime(
         distribution_name="python-flint",
         import_name="flint",
         required_attributes=("fmpq",),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT AND LGPL-3.0-or-later",
         features=(
             "exact-rational-moments",
@@ -205,12 +205,12 @@ def python_flint_probability_provider_runtime(
         refresh=refresh,
     )
     if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is ProviderAvailability.AVAILABLE
         and runtime.version != PYTHON_FLINT_VERSION
     ):
         return _unavailable_runtime(
             provider="python-flint",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT AND LGPL-3.0-or-later",
             diagnostic=(
                 "Python-FLINT is installed but does not match the pinned "
@@ -220,7 +220,7 @@ def python_flint_probability_provider_runtime(
     return runtime
 
 
-def exact_domain_checker_source_provider_runtime() -> CapabilityProviderRuntime:
+def exact_domain_checker_source_provider_runtime() -> ProviderObservation:
     """Identify the bundled source used by exact-domain replay checkers."""
 
     try:
@@ -228,7 +228,7 @@ def exact_domain_checker_source_provider_runtime() -> CapabilityProviderRuntime:
     except ProviderRuntimeError:
         return _unavailable_runtime(
             provider="jacobian.exact-domain-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The exact-domain checker source could not be identified.",
         )
@@ -236,7 +236,7 @@ def exact_domain_checker_source_provider_runtime() -> CapabilityProviderRuntime:
         "jacobian.exact-domain-checker-source",
         version=version,
         entrypoint=("jacobian_checkers.exact_domain_operations:check_polynomial_gcd"),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("clean-process-replay",),
     )
@@ -246,7 +246,7 @@ def exact_domain_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind independent checker source and its pinned FLINT replay backend."""
 
     return composite_provider_runtime(
@@ -263,7 +263,7 @@ def exact_domain_checker_provider_runtime(
 def graph_exact_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind the independent finite-graph checker source without FLINT."""
 
     try:
@@ -271,7 +271,7 @@ def graph_exact_checker_provider_runtime(
     except ProviderRuntimeError:
         source = _unavailable_runtime(
             provider="jacobian.graph-exact-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The finite-graph checker source could not be identified.",
         )
@@ -283,7 +283,7 @@ def graph_exact_checker_provider_runtime(
                 "jacobian_checkers.graph_exact_operations:"
                 "check_graph_induced_tree_maximum"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=("clean-process-replay", "standard-library-only"),
@@ -306,7 +306,7 @@ def graph_exact_checker_provider_runtime(
 def probability_exact_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind the independent finite-probability checker source without FLINT."""
 
     try:
@@ -314,7 +314,7 @@ def probability_exact_checker_provider_runtime(
     except ProviderRuntimeError:
         source = _unavailable_runtime(
             provider="jacobian.probability-exact-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic=(
                 "The finite-probability checker source could not be identified."
@@ -327,7 +327,7 @@ def probability_exact_checker_provider_runtime(
             entrypoint=(
                 "jacobian_checkers.exact_probability_operations:check_finite_raw_moment"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=("clean-process-replay", "standard-library-only"),
@@ -349,7 +349,7 @@ def probability_exact_checker_provider_runtime(
 def combinatorics_exact_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind exact combinatorics checker source without producer dependencies."""
 
     try:
@@ -357,13 +357,13 @@ def combinatorics_exact_checker_provider_runtime(
     except ProviderRuntimeError:
         recurrence_source = _unavailable_runtime(
             provider="jacobian.combinatorics-exact-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The recurrence checker source could not be identified.",
         )
         additive_source = _unavailable_runtime(
             provider="jacobian.additive-combinatorics-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The additive-combinatorics checker source could not be identified.",
         )
@@ -374,7 +374,7 @@ def combinatorics_exact_checker_provider_runtime(
             entrypoint=(
                 "jacobian_checkers.recurrence_series:check_linear_recurrence_evaluation"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=("clean-process-replay", "standard-library-only"),
@@ -383,7 +383,7 @@ def combinatorics_exact_checker_provider_runtime(
             "jacobian.additive-combinatorics-checker-source",
             version=version,
             entrypoint=("jacobian_checkers.additive_combinatorics:check_integer_sidon"),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=(
@@ -411,7 +411,7 @@ def combinatorics_exact_checker_provider_runtime(
 def topology_exact_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind the independent finite-simplicial-topology checker source."""
 
     try:
@@ -419,7 +419,7 @@ def topology_exact_checker_provider_runtime(
     except ProviderRuntimeError:
         source = _unavailable_runtime(
             provider="jacobian.topology-exact-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The simplicial-topology checker source could not be identified.",
         )
@@ -431,7 +431,7 @@ def topology_exact_checker_provider_runtime(
                 "jacobian_checkers.simplicial_topology:"
                 "check_simplicial_complex_canonicalization"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=("clean-process-replay", "standard-library-only"),
@@ -455,7 +455,7 @@ def topology_exact_checker_provider_runtime(
 def certified_snf_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind the independent transformation-certified Smith checker source."""
 
     try:
@@ -463,7 +463,7 @@ def certified_snf_checker_provider_runtime(
     except ProviderRuntimeError:
         source = _unavailable_runtime(
             provider="jacobian.certified-snf-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The certified-Smith checker source could not be identified.",
         )
@@ -474,7 +474,7 @@ def certified_snf_checker_provider_runtime(
             entrypoint=(
                 "jacobian_checkers.certified_snf:check_certified_smith_normal_form"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=("clean-process-replay", "standard-library-only"),
@@ -496,7 +496,7 @@ def certified_snf_checker_provider_runtime(
 def poset_exact_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind the independent finite-poset checker source without NetworkX."""
 
     try:
@@ -504,7 +504,7 @@ def poset_exact_checker_provider_runtime(
     except ProviderRuntimeError:
         source = _unavailable_runtime(
             provider="jacobian.poset-exact-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The finite-poset checker source could not be identified.",
         )
@@ -515,7 +515,7 @@ def poset_exact_checker_provider_runtime(
             entrypoint=(
                 "jacobian_checkers.finite_posets:check_finite_poset_materialization"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=("clean-process-replay", "standard-library-only"),
@@ -538,7 +538,7 @@ def poset_exact_checker_provider_runtime(
 def graded_syzygy_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind the standard-library graded-syzygy checker source."""
 
     try:
@@ -546,7 +546,7 @@ def graded_syzygy_checker_provider_runtime(
     except ProviderRuntimeError:
         source = _unavailable_runtime(
             provider="jacobian.graded-syzygy-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic="The graded-syzygy checker source could not be identified.",
         )
@@ -557,7 +557,7 @@ def graded_syzygy_checker_provider_runtime(
             entrypoint=(
                 "jacobian_checkers.jacobian_syzygy:check_graded_jacobian_syzygy"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=(
@@ -582,7 +582,7 @@ def graded_syzygy_checker_provider_runtime(
 def projective_arrangement_checker_provider_runtime(
     *,
     checker_ids: tuple[str, ...] = (),
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Bind the standard-library projective-arrangement checker source."""
 
     try:
@@ -590,7 +590,7 @@ def projective_arrangement_checker_provider_runtime(
     except ProviderRuntimeError:
         source = _unavailable_runtime(
             provider="jacobian.projective-arrangement-checker-source",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             diagnostic=(
                 "The projective-arrangement checker source could not be identified."
@@ -604,7 +604,7 @@ def projective_arrangement_checker_provider_runtime(
                 "jacobian_checkers.projective_arrangements:"
                 "check_projective_line_arrangement_flats"
             ),
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT",
             license_files=license_files,
             features=(
@@ -629,7 +629,7 @@ def projective_arrangement_checker_provider_runtime(
 def python_flint_hnf_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the pinned Python-FLINT integer row-HNF profile."""
 
     runtime = python_distribution_provider_runtime(
@@ -637,7 +637,7 @@ def python_flint_hnf_provider_runtime(
         distribution_name="python-flint",
         import_name="flint",
         required_attributes=("fmpz", "fmpz_mat"),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT AND LGPL-3.0-or-later",
         features=(
             "exact-integer",
@@ -657,32 +657,32 @@ def python_flint_hnf_provider_runtime(
         refresh=refresh,
     )
     if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is ProviderAvailability.AVAILABLE
         and runtime.version != PYTHON_FLINT_VERSION
     ):
         return _unavailable_runtime(
             provider="python-flint",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT AND LGPL-3.0-or-later",
             diagnostic=(
                 "Python-FLINT is installed but does not match the pinned "
                 f"{PYTHON_FLINT_VERSION} HNF compatibility profile."
             ),
         )
-    if refresh and runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+    if refresh and runtime.availability is ProviderAvailability.AVAILABLE:
         try:
             flint = importlib.import_module("flint")
         except (ImportError, OSError):
             return _unavailable_runtime(
                 provider="python-flint",
-                install_tier=CapabilityInstallTier.T1,
+                install_tier=ProviderInstallTier.T1,
                 license_id="MIT AND LGPL-3.0-or-later",
                 diagnostic="The pinned Python-FLINT HNF runtime cannot be imported.",
             )
         if getattr(flint, "__FLINT_VERSION__", None) != PYTHON_FLINT_HNF_FLINT_VERSION:
             return _unavailable_runtime(
                 provider="python-flint",
-                install_tier=CapabilityInstallTier.T1,
+                install_tier=ProviderInstallTier.T1,
                 license_id="MIT AND LGPL-3.0-or-later",
                 diagnostic=(
                     "Python-FLINT is installed but its linked FLINT library does "
@@ -696,7 +696,7 @@ def python_flint_hnf_provider_runtime(
 def python_flint_lll_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the pinned Python-FLINT exact-gram LLL profile."""
 
     runtime = python_distribution_provider_runtime(
@@ -704,7 +704,7 @@ def python_flint_lll_provider_runtime(
         distribution_name="python-flint",
         import_name="flint",
         required_attributes=("fmpz", "fmpz_mat"),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT AND LGPL-3.0-or-later",
         features=(
             "exact-integer",
@@ -716,25 +716,25 @@ def python_flint_lll_provider_runtime(
         refresh=refresh,
     )
     if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is ProviderAvailability.AVAILABLE
         and runtime.version != PYTHON_FLINT_VERSION
     ):
         return _unavailable_runtime(
             provider="python-flint",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="MIT AND LGPL-3.0-or-later",
             diagnostic=(
                 "Python-FLINT is installed but does not match the pinned "
                 f"{PYTHON_FLINT_VERSION} LLL profile."
             ),
         )
-    if refresh and runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+    if refresh and runtime.availability is ProviderAvailability.AVAILABLE:
         try:
             flint = importlib.import_module("flint")
         except (ImportError, OSError):
             return _unavailable_runtime(
                 provider="python-flint",
-                install_tier=CapabilityInstallTier.T1,
+                install_tier=ProviderInstallTier.T1,
                 license_id="MIT AND LGPL-3.0-or-later",
                 diagnostic="The pinned Python-FLINT LLL runtime cannot be imported.",
             )
@@ -743,7 +743,7 @@ def python_flint_lll_provider_runtime(
         ):
             return _unavailable_runtime(
                 provider="python-flint",
-                install_tier=CapabilityInstallTier.T1,
+                install_tier=ProviderInstallTier.T1,
                 license_id="MIT AND LGPL-3.0-or-later",
                 diagnostic=(
                     "Python-FLINT is installed but its linked FLINT library does "

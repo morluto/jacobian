@@ -15,13 +15,12 @@ from typing import Any
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateRequest, LeanTypedGoal
+from jacobian.contracts.operations import (
+    OperationRequest,
+)
 from jacobian.lean_frontend.exploration import (
     _parse_typed_goal_envelope as _parse_typed_goal_envelope_public,
 )
@@ -42,6 +41,7 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplValidatedExecution,
 )
 from jacobian.lean_frontend.term_apply import LeanTermApplyAdapter
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import project_operation_result
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.schema_registry import SchemaRegistry
@@ -236,8 +236,8 @@ def _stored_input_state_uri(
     opened = project_operation_result(
         proof_state.invoke(
             proof_state.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": environment.value,
                         "statement": "True",
@@ -265,18 +265,18 @@ def _invoke_stored_state_consumer(
     }
     if consumer == "apply_tactic":
         adapter = proof_state
-        capability_id = "lean.proof_state.apply_tactic"
+        operation_id = "lean.proof_state.apply_tactic"
         request_input["tactic"] = "skip"
     elif consumer == "inspect":
         adapter = inspect
-        capability_id = "lean.proof_state.inspect"
+        operation_id = "lean.proof_state.inspect"
     else:
         adapter = metavariable
-        capability_id = "lean.proof_state.metavariable_fields"
+        operation_id = "lean.proof_state.metavariable_fields"
     adapter.invoke(
         adapter.prepare(
-            CapabilityRequest(
-                capability_id=capability_id,
+            OperationRequest(
+                operation_id=operation_id,
                 input=request_input,
             )
         )
@@ -307,8 +307,8 @@ def test_term_apply_elaborates_exact_term_and_returns_successor(
     result = project_operation_result(
         term_apply.invoke(
             term_apply.prepare(
-                CapabilityRequest(
-                    capability_id="lean.term.apply",
+                OperationRequest(
+                    operation_id="lean.term.apply",
                     input={
                         "environment": "CORE",
                         "statement": "P → P",
@@ -320,7 +320,7 @@ def test_term_apply_elaborates_exact_term_and_returns_successor(
         )
     )
 
-    assert result.capability_id == "lean.term.apply"
+    assert result.operation_id == "lean.term.apply"
     assert result.output["accepted"] is True
     assert result.output["completed"] is True
     assert result.output["tactic"] == "exact P"
@@ -335,11 +335,11 @@ def test_term_apply_rejects_multiline_term(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, term_apply, _, _, _ = _adapters(tmp_path)
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         term_apply.invoke(
             term_apply.prepare(
-                CapabilityRequest(
-                    capability_id="lean.term.apply",
+                OperationRequest(
+                    operation_id="lean.term.apply",
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -368,8 +368,8 @@ def test_term_apply_fails_closed_on_rejected_term(
     result = project_operation_result(
         term_apply.invoke(
             term_apply.prepare(
-                CapabilityRequest(
-                    capability_id="lean.term.apply",
+                OperationRequest(
+                    operation_id="lean.term.apply",
                     input={
                         "environment": "CORE",
                         "statement": "n = 0",
@@ -422,8 +422,8 @@ def test_inspect_returns_recorded_goals_without_replay(
     opened = project_operation_result(
         proof_state.invoke(
             proof_state.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "(P Q : Prop) → P ∧ Q",
@@ -439,8 +439,8 @@ def test_inspect_returns_recorded_goals_without_replay(
     result = project_operation_result(
         inspect.invoke(
             inspect.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.inspect",
+                OperationRequest(
+                    operation_id="lean.proof_state.inspect",
                     input={
                         "environment": "CORE",
                         "state_uri": successor_uri,
@@ -450,7 +450,7 @@ def test_inspect_returns_recorded_goals_without_replay(
         )
     )
 
-    assert result.capability_id == "lean.proof_state.inspect"
+    assert result.operation_id == "lean.proof_state.inspect"
     assert result.output["inspection"] == "READ_ONLY_NO_REPLAY"
     assert result.output["completed"] is False
     assert result.output["goal_count"] == 2
@@ -475,8 +475,8 @@ def test_inspect_rejects_stale_state(
     opened = project_operation_result(
         proof_state.invoke(
             proof_state.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -495,11 +495,11 @@ def test_inspect_rejects_stale_state(
         payload=stale_payload,
         summary="fixture with stale environment binding",
     )
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         inspect.invoke(
             inspect.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.inspect",
+                OperationRequest(
+                    operation_id="lean.proof_state.inspect",
                     input={
                         "environment": "CORE",
                         "state_uri": stale.artifact_uri,
@@ -564,8 +564,8 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     opened = project_operation_result(
         proof_state.invoke(
             proof_state.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "P → P",
@@ -589,15 +589,15 @@ def test_metavariable_fields_expose_structured_fields_and_unavailable_coercion(
     result = project_operation_result(
         metavariable.invoke(
             metavariable.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.metavariable_fields",
+                OperationRequest(
+                    operation_id="lean.proof_state.metavariable_fields",
                     input={"environment": "CORE", "state_uri": state_uri},
                 )
             )
         )
     )
 
-    assert result.capability_id == "lean.proof_state.metavariable_fields"
+    assert result.operation_id == "lean.proof_state.metavariable_fields"
     assert result.output["metavariable_schema_version"] == "1"
     assert result.output["coercion_provenance"] == "UNAVAILABLE"
     assert "Lean.Meta.Coe" in result.output["coercion_provenance_basis"]
@@ -651,8 +651,8 @@ def test_premise_retrieval_projects_completed_value_at_dispatch_boundary(
     result = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.retrieve.premises",
+                OperationRequest(
+                    operation_id="lean.retrieve.premises",
                     input={"statement": "True", "limit": 1},
                 )
             )
@@ -677,8 +677,8 @@ def test_metavariable_fields_reject_completed_state(
     opened = project_operation_result(
         proof_state.invoke(
             proof_state.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -689,11 +689,11 @@ def test_metavariable_fields_reject_completed_state(
         )
     )
     state_uri = opened.output["successor_states"][0]["state_uri"]
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         metavariable.invoke(
             metavariable.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.metavariable_fields",
+                OperationRequest(
+                    operation_id="lean.proof_state.metavariable_fields",
                     input={"environment": "CORE", "state_uri": state_uri},
                 )
             )
@@ -714,8 +714,8 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
     opened = project_operation_result(
         proof_state.invoke(
             proof_state.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "P → P",
@@ -740,11 +740,11 @@ def test_metavariable_fields_fails_closed_on_helper_failure(
         "jacobian.lean_frontend.exploration._extract_structured_metavariables",
         _fail,
     )
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         metavariable.invoke(
             metavariable.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.metavariable_fields",
+                OperationRequest(
+                    operation_id="lean.proof_state.metavariable_fields",
                     input={"environment": "CORE", "state_uri": state_uri},
                 )
             )
@@ -830,11 +830,11 @@ def test_term_apply_rejects_sorry_at_own_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, term_apply, _, _, _ = _adapters(tmp_path)
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         term_apply.invoke(
             term_apply.prepare(
-                CapabilityRequest(
-                    capability_id="lean.term.apply",
+                OperationRequest(
+                    operation_id="lean.term.apply",
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -852,11 +852,11 @@ def test_term_apply_rejects_admit_at_own_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, term_apply, _, _, _ = _adapters(tmp_path)
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         term_apply.invoke(
             term_apply.prepare(
-                CapabilityRequest(
-                    capability_id="lean.term.apply",
+                OperationRequest(
+                    operation_id="lean.term.apply",
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -873,11 +873,11 @@ def test_term_apply_rejects_forbidden_statement_before_execution(
 ) -> None:
     _, term_apply, _, _, _ = _adapters(tmp_path)
 
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         term_apply.invoke(
             term_apply.prepare(
-                CapabilityRequest(
-                    capability_id="lean.term.apply",
+                OperationRequest(
+                    operation_id="lean.term.apply",
                     input={
                         "environment": "CORE",
                         "statement": "run_tac pure ()",
@@ -1017,8 +1017,8 @@ def test_inspect_adapter_available_without_lean_runtime(
     result = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.inspect",
+                OperationRequest(
+                    operation_id="lean.proof_state.inspect",
                     input={
                         "environment": "CORE",
                         "state_uri": state.artifact_uri,
@@ -1028,7 +1028,7 @@ def test_inspect_adapter_available_without_lean_runtime(
         )
     )
 
-    assert adapter.descriptor.capability_id == "lean.proof_state.inspect"
+    assert adapter.descriptor.operation_id == "lean.proof_state.inspect"
     assert adapter.descriptor.read_only is True
     assert result.output["normalized_goals"] == ["⊢ True"]
     assert (
@@ -1066,7 +1066,7 @@ def test_stored_state_consumers_reject_cross_profile_artifacts_before_replay(
         raise AssertionError("cross-profile state reached the Lean runtime")
 
     monkeypatch.setattr(resources.repl, "execute_clean", _unexpected_replay)
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         _invoke_stored_state_consumer(
             consumer,
             proof_state=proof_state,
@@ -1083,14 +1083,14 @@ def test_stored_state_consumers_reject_cross_profile_artifacts_before_replay(
 @pytest.mark.parametrize(
     ("consumer", "expected_hint"),
     (
-        ("apply_tactic", "Use a state URI returned by this capability."),
+        ("apply_tactic", "Use a state URI returned by this operation."),
         (
             "inspect",
-            "Use a state URI returned by a proof-state capability.",
+            "Use a state URI returned by a proof-state operation.",
         ),
         (
             "metavariable_fields",
-            "Use a state URI returned by a proof-state capability.",
+            "Use a state URI returned by a proof-state operation.",
         ),
     ),
 )
@@ -1101,7 +1101,7 @@ def test_invalid_state_diagnostics_keep_consumer_specific_hints(
 ) -> None:
     proof_state, _, inspect, metavariable, _ = _adapters(tmp_path)
     missing_uri = "artifact://sha256/" + "d" * 64
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         _invoke_stored_state_consumer(
             consumer,
             proof_state=proof_state,
@@ -1149,11 +1149,11 @@ def test_metavariable_fields_rejects_stale_state_before_replay(
         raise AssertionError("stale state reached the Lean runtime")
 
     monkeypatch.setattr(resources.repl, "execute_clean", _unexpected_replay)
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         metavariable.invoke(
             metavariable.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.metavariable_fields",
+                OperationRequest(
+                    operation_id="lean.proof_state.metavariable_fields",
                     input={
                         "environment": "CORE",
                         "state_uri": stale.artifact_uri,
@@ -1208,11 +1208,11 @@ def test_inspect_rejects_forged_environment_metadata(
         payload=forged_payload,
         summary="fixture with forged lean_version",
     )
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         inspect.invoke(
             inspect.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.inspect",
+                OperationRequest(
+                    operation_id="lean.proof_state.inspect",
                     input={
                         "environment": environment.value,
                         "state_uri": forged.artifact_uri,
@@ -1245,8 +1245,8 @@ def test_term_apply_output_is_validated_through_typed_model(
     result = project_operation_result(
         term_apply.invoke(
             term_apply.prepare(
-                CapabilityRequest(
-                    capability_id="lean.term.apply",
+                OperationRequest(
+                    operation_id="lean.term.apply",
                     input={
                         "environment": "CORE",
                         "statement": "P → P",
@@ -1285,8 +1285,8 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
     opened = project_operation_result(
         proof_state.invoke(
             proof_state.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "(P Q : Prop) → P ∧ Q",
@@ -1307,11 +1307,11 @@ def test_metavariable_fields_rejects_goal_count_mismatch(
         elaboration=elaboration,
         before=["P Q : Prop\n⊢ P", "P Q : Prop\n⊢ Q"],
     )
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         metavariable.invoke(
             metavariable.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.metavariable_fields",
+                OperationRequest(
+                    operation_id="lean.proof_state.metavariable_fields",
                     input={"environment": "CORE", "state_uri": state_uri},
                 )
             )
@@ -1364,26 +1364,26 @@ def test_inspect_descriptor_advertises_state_schema_and_read_only(
 ) -> None:
     _, _, inspect, _, resources = _adapters(tmp_path)
     desc = inspect.descriptor
-    from jacobian.contracts.capabilities import CapabilityInputKind
+    from jacobian.contracts.operations import OperationInputKind
 
     assert desc.read_only is True
-    assert CapabilityInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
+    assert OperationInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
     assert resources.state_schema_uri in desc.accepted_artifact_types
 
 
 def test_metavariable_descriptor_advertises_state_schema(tmp_path: Path) -> None:
     _, _, _, metavariable, resources = _adapters(tmp_path)
     desc = metavariable.descriptor
-    from jacobian.contracts.capabilities import CapabilityInputKind
+    from jacobian.contracts.operations import OperationInputKind
 
-    assert CapabilityInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
+    assert OperationInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
     assert resources.state_schema_uri in desc.accepted_artifact_types
 
 
 def test_term_apply_descriptor_advertises_state_schema(tmp_path: Path) -> None:
     _, term_apply, _, _, resources = _adapters(tmp_path)
     desc = term_apply.descriptor
-    from jacobian.contracts.capabilities import CapabilityInputKind
+    from jacobian.contracts.operations import OperationInputKind
 
-    assert CapabilityInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
+    assert OperationInputKind.TYPED_ARTIFACT in desc.accepted_input_kinds
     assert resources.state_schema_uri in desc.accepted_artifact_types

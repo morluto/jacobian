@@ -8,13 +8,13 @@ from typing import Any, Never
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityProviderAvailability,
-)
 from jacobian.contracts.matrix_operations import (
     LatticeReductionRequest,
     LatticeReductionResult,
+)
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    ProviderAvailability,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
@@ -24,9 +24,9 @@ from jacobian.domains.matrix_lattice.lll_protocol import (
     parse_lll_worker_response,
 )
 from jacobian.operation_bindings import InstalledOperation, durable_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationAbortError,
-    OperationSpec,
 )
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.providers.flint_runtime import python_flint_lll_provider_runtime
@@ -44,7 +44,7 @@ def _failure(
 ) -> Never:
     raise OperationAbortError(
         status,
-        CapabilityDiagnostic(
+        OperationDiagnostic(
             code=code,
             stage="lattice_reduction",
             message=message,
@@ -60,7 +60,7 @@ def reduce_lattice_basis(
     request: LatticeReductionRequest,
 ) -> LatticeReductionResult:
     if (
-        LATTICE_RUNTIME.availability is not CapabilityProviderAvailability.AVAILABLE
+        LATTICE_RUNTIME.availability is not ProviderAvailability.AVAILABLE
         or python_flint_lll_provider_runtime(refresh=True) != LATTICE_RUNTIME
     ):
         return _failure(
@@ -135,9 +135,9 @@ def reduce_lattice_basis(
     return result
 
 
-LATTICE_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
+LATTICE_OPERATIONS: tuple[InstalledOperation[Any, Any], ...] = (
     durable_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="lattice.basis.reduce",
             version="3",
             title="Reduce an exact integer lattice basis",
@@ -149,7 +149,7 @@ LATTICE_CAPABILITIES: tuple[InstalledOperation[Any, Any], ...] = (
             result_type=LatticeReductionResult,
             execute=reduce_lattice_basis,
             tags=("lattice", "lll", "exact-integer", "bounded", "python-flint"),
-            invocation_examples=(
+            examples=(
                 example(
                     "unit_basis",
                     "Reduce the one-dimensional unit basis.",

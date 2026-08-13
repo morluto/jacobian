@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "multiplicative-grid-extremum",
   "benchmark_family": "Regression",
   "primary_reasoning_objective": "multiplicative-lattice extremal certification",

@@ -8,27 +8,27 @@ from tests.support.services import open_domain_services
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import loads_strict_json
-from jacobian.capability_service import CapabilityService
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.operation_service import OperationService
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
 @pytest.fixture
-def number_theory_service(tmp_path: Path) -> Iterator[CapabilityService]:
+def number_theory_service(tmp_path: Path) -> Iterator[OperationService]:
     with open_domain_services(tmp_path, build_number_theory_bundle()) as services:
-        yield services.core.capabilities
+        yield services.core.operations
 
 
 def test_jacobi_symbol_is_domain_owned_exact_computation(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="number_theory.compute.jacobi_symbol",
+        OperationRequest(
+            operation_id="number_theory.compute.jacobi_symbol",
             input={"a": "10", "n": 21},
         )
     )
@@ -38,11 +38,11 @@ def test_jacobi_symbol_is_domain_owned_exact_computation(
 
 
 def test_even_jacobi_denominator_fails_before_artifact_writes(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="number_theory.compute.jacobi_symbol",
+        OperationRequest(
+            operation_id="number_theory.compute.jacobi_symbol",
             input={"a": "10", "n": 20},
         )
     )
@@ -53,11 +53,11 @@ def test_even_jacobi_denominator_fails_before_artifact_writes(
 
 
 def test_chinese_remainder_returns_canonical_exact_solution(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="modular.solve.chinese_remainder",
+        OperationRequest(
+            operation_id="modular.solve.chinese_remainder",
             input={"residues": [2, 3, 2], "moduli": [3, 5, 7]},
         )
     )
@@ -67,11 +67,11 @@ def test_chinese_remainder_returns_canonical_exact_solution(
 
 
 def test_chinese_remainder_reports_inconsistent_system_without_artifacts(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="modular.solve.chinese_remainder",
+        OperationRequest(
+            operation_id="modular.solve.chinese_remainder",
             input={"residues": [0, 1], "moduli": [2, 2]},
         )
     )
@@ -82,11 +82,11 @@ def test_chinese_remainder_reports_inconsistent_system_without_artifacts(
 
 
 def test_discrete_logarithm_returns_typed_result(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="modular.compute.discrete_logarithm",
+        OperationRequest(
+            operation_id="modular.compute.discrete_logarithm",
             input={
                 "base": 7,
                 "target": 15,
@@ -108,11 +108,11 @@ def test_discrete_logarithm_returns_typed_result(
 
 
 def test_discrete_logarithm_reports_unsolvable_without_false_witness(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="modular.compute.discrete_logarithm",
+        OperationRequest(
+            operation_id="modular.compute.discrete_logarithm",
             input={
                 "base": 2,
                 "target": 3,
@@ -128,7 +128,7 @@ def test_discrete_logarithm_reports_unsolvable_without_false_witness(
 
 
 def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
     monkeypatch,
 ) -> None:
     observed: dict[str, object] = {}
@@ -151,8 +151,8 @@ def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
         timeout_worker,
     )
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="modular.compute.discrete_logarithm",
+        OperationRequest(
+            operation_id="modular.compute.discrete_logarithm",
             input={
                 "base": 7,
                 "target": 15,
@@ -177,11 +177,11 @@ def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
 
 
 def test_factorization_is_complete_in_an_isolated_bounded_worker(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.prime_factorization",
+        OperationRequest(
+            operation_id="integer.compute.prime_factorization",
             input={
                 "value": "360",
                 "resource_budget": {"wall_seconds": 10},
@@ -223,15 +223,15 @@ def test_factorization_is_complete_in_an_isolated_bounded_worker(
     ),
 )
 def test_powerful_number_decision_preserves_a_complete_factor_witness(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
     value: str,
     is_powerful: bool,
     factors: list[dict[str, object]],
     violating_primes: list[str],
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="integer.decide.powerful",
+        OperationRequest(
+            operation_id="integer.decide.powerful",
             input={
                 "value": value,
                 "resource_budget": {"wall_seconds": 10},
@@ -251,12 +251,12 @@ def test_powerful_number_decision_preserves_a_complete_factor_witness(
 
 @pytest.mark.parametrize("value", ["0", "-1", "-72"])
 def test_powerful_number_rejects_nonpositive_input_before_artifact_writes(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
     value: str,
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="integer.decide.powerful",
+        OperationRequest(
+            operation_id="integer.decide.powerful",
             input={"value": value},
         )
     )
@@ -267,20 +267,20 @@ def test_powerful_number_rejects_nonpositive_input_before_artifact_writes(
 
 
 @pytest.mark.parametrize(
-    ("capability_id", "expected"),
+    ("operation_id", "expected"),
     (
         ("integer.decide.squarefree", {"holds": True}),
         ("integer.compute.radical", {"value": "30"}),
     ),
 )
 def test_factorization_derived_operations_complete_in_the_worker(
-    number_theory_service: CapabilityService,
-    capability_id: str,
+    number_theory_service: OperationService,
+    operation_id: str,
     expected: dict[str, object],
 ) -> None:
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
+        OperationRequest(
+            operation_id=operation_id,
             input={"n": 30, "resource_budget": {"wall_seconds": 10}},
         )
     )
@@ -290,7 +290,7 @@ def test_factorization_derived_operations_complete_in_the_worker(
 
 
 def test_factorization_timeout_is_an_artifact_free_non_conclusion(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
     monkeypatch,
 ) -> None:
     observed: dict[str, object] = {}
@@ -311,8 +311,8 @@ def test_factorization_timeout_is_an_artifact_free_non_conclusion(
         timeout_worker,
     )
     result = number_theory_service.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.divisors",
+        OperationRequest(
+            operation_id="integer.compute.divisors",
             input={
                 "value": "9999999967",
                 "resource_budget": {"wall_seconds": 1},
@@ -329,7 +329,7 @@ def test_factorization_timeout_is_an_artifact_free_non_conclusion(
 
 
 @pytest.mark.parametrize(
-    ("capability_id", "payload"),
+    ("operation_id", "payload"),
     (
         (
             "integer.decide.squarefree",
@@ -346,9 +346,9 @@ def test_factorization_timeout_is_an_artifact_free_non_conclusion(
     ),
 )
 def test_factorization_derived_timeout_is_a_non_conclusion(
-    number_theory_service: CapabilityService,
+    number_theory_service: OperationService,
     monkeypatch,
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, object],
 ) -> None:
     monkeypatch.setattr(
@@ -364,7 +364,7 @@ def test_factorization_derived_timeout_is_a_non_conclusion(
     )
 
     result = number_theory_service.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
+        OperationRequest(operation_id=operation_id, input=payload)
     )
 
     assert result.execution.status is ExecutionStatus.TIMEOUT

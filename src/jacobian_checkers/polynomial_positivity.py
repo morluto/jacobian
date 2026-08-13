@@ -1,7 +1,7 @@
 """Independent exact Sturm-sequence replay for polynomial strict positivity.
 
 This checker is the independent verification boundary for the
-``polynomial.interval.positivity.verify`` capability. It recomputes the Sturm
+``polynomial.interval.positivity.verify`` operation. It recomputes the Sturm
 sequence of one univariate rational polynomial from scratch using only
 ``fractions.Fraction`` arithmetic. It does not import SymPy and does not
 depend on the adapter that proposed the decision.

@@ -652,7 +652,7 @@ def run_spike(
                     "add adversarial pairing, rank, value, and artifact-binding mutation tests",
                 ],
             },
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
             "limitations": [
                 "GUDHI receives integer ranks because its Python filtration API uses float",
                 "the provider is a producer and is not authorized as its own checker",
@@ -666,7 +666,7 @@ def run_spike(
             "status": exc.status,
             "conclusion": "NO_CONCLUSION",
             "diagnostic": {"code": exc.code, "detail": exc.detail},
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
         }
 
 

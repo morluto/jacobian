@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.contracts.capabilities import CapabilityProviderAvailability
+from jacobian.contracts.operations import ProviderAvailability
 from jacobian.installation.context import InstallationContext
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.portfolio.model import PortfolioPlan
@@ -31,9 +31,9 @@ class DomainBundleInstaller:
         diagnostics: list[PortfolioDiagnostic] = []
         outcomes: list[BundleInstallation] = []
         for bundle in plan.components:
-            capability_ids = bundle.capability_ids
+            operation_ids = bundle.operation_ids
             runtime = bundle.provider_runtime
-            if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
+            if runtime.availability is not ProviderAvailability.AVAILABLE:
                 diagnostic = PortfolioDiagnostic(
                     code=PROVIDER_UNAVAILABLE,
                     component_id=bundle.domain_id,
@@ -45,7 +45,7 @@ class DomainBundleInstaller:
                     BundleInstallation(
                         domain_id=bundle.domain_id,
                         status=BundleInstallationStatus.SKIPPED_PROVIDER_UNAVAILABLE,
-                        capability_ids=capability_ids,
+                        operation_ids=operation_ids,
                         installed=None,
                         diagnostic=diagnostic,
                     )
@@ -55,12 +55,12 @@ class DomainBundleInstaller:
             installation = self.context.operations.install(bundle)
             installed[bundle.domain_id] = installation
             for adapter in installation.adapters:
-                self.context.register_capability(adapter)
+                self.context.register_operation(adapter)
             outcomes.append(
                 BundleInstallation(
                     domain_id=bundle.domain_id,
                     status=BundleInstallationStatus.INSTALLED,
-                    capability_ids=capability_ids,
+                    operation_ids=operation_ids,
                     installed=installation,
                     diagnostic=None,
                 )

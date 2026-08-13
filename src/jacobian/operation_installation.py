@@ -9,23 +9,30 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import CanonicalizationError, encode_strict_json
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import (
-    CapabilityInvocationError,
-    enriched_invalid_request,
-)
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityProviderAvailability,
-    CapabilityRequest,
-    CapabilityValuePort,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
+    OperationValuePort,
+    ProviderAvailability,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
 from jacobian.operation_bindings import (
     InlinePublication,
-    InstalledOperation,
+)
+from jacobian.operation_declarations import (
+    Effect as DeclarationEffect,
+)
+from jacobian.operation_declarations import (
+    InlinePublication as DeclaredInlinePublication,
+)
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_errors import (
+    OperationInvocationError,
+    enriched_invalid_request,
 )
 from jacobian.operation_execution import execute_operation
 from jacobian.operation_projection import OperationProjection
@@ -39,7 +46,7 @@ from jacobian.operation_runtime import (
     OperationResources,
     operation_runtime,
 )
-from jacobian.operations import Completed, Effect, Failed, OperationSpec
+from jacobian.operations import Completed, Effect, Failed
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceError, ValueReferenceStore
@@ -49,31 +56,33 @@ from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 class InstalledDomainBundle:
     """Resources and adapters created for one installed domain bundle."""
 
-    adapters: tuple[CapabilityAdapter[Any], ...]
+    adapters: tuple[OperationAdapter[Any], ...]
     semantics_uri: str
     input_schema_uris: dict[type[ContractModel], str]
     result_schema_uris: dict[str, str]
     named_schema_uris: dict[str, str]
 
 
-def _spec(operation: InstalledOperation[Any, Any]) -> OperationSpec[Any, Any]:
-    return operation.spec
+def _spec(
+    operation: DomainOperation,
+) -> OperationDeclaration[Any, Any] | OperationDeclaration[Any, Any]:
+    return operation if isinstance(operation, OperationDeclaration) else operation.spec
 
 
 def _operation_id(operation: DomainOperation) -> str:
-    return operation.spec.operation_id
+    return _spec(operation).operation_id
 
 
 def _operation_version(operation: DomainOperation) -> str:
-    return operation.spec.version
+    return _spec(operation).version
 
 
 def _request_type(operation: DomainOperation) -> type[ContractModel]:
-    return operation.spec.request_type
+    return _spec(operation).request_type
 
 
 def _result_type(operation: DomainOperation) -> type[ContractModel]:
-    return operation.spec.result_type
+    return _spec(operation).result_type
 
 
 class OperationInstaller:
@@ -99,7 +108,7 @@ class OperationInstaller:
             version=bundle.semantics.version,
             definition=bundle.semantics.definition,
         )
-        request_models = {_request_type(operation) for operation in bundle.capabilities}
+        request_models = {_request_type(operation) for operation in bundle.operations}
         input_schema_uris = {
             model: self.schemas.register_model(
                 name=f"{bundle.schema_namespace}-input.{model.__name__}",
@@ -114,7 +123,7 @@ class OperationInstaller:
                 version=_operation_version(operation),
                 model=_result_type(operation),
             )
-            for operation in bundle.capabilities
+            for operation in bundle.operations
         }
         resources = OperationResources(
             artifacts=self.artifacts,
@@ -125,7 +134,7 @@ class OperationInstaller:
         )
         adapters = tuple(
             self._adapter(operation, bundle, resources)
-            for operation in bundle.capabilities
+            for operation in bundle.operations
             if self._operation_available(operation, bundle)
         )
         return InstalledDomainBundle(
@@ -142,25 +151,25 @@ class OperationInstaller:
         bundle: DomainBundle,
     ) -> bool:
         runtime = operation_runtime(operation, bundle)
-        return runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        return runtime.availability is ProviderAvailability.AVAILABLE
 
     @staticmethod
     def _adapter(
         operation: DomainOperation,
         bundle: DomainBundle,
         resources: OperationResources,
-    ) -> CapabilityAdapter[Any]:
+    ) -> OperationAdapter[Any]:
         return InstalledOperationAdapter(operation, bundle, resources)
 
     @staticmethod
     def _validate_bundle(bundle: DomainBundle) -> None:
-        if not bundle.capabilities:
-            raise ValueError("capability bundle must not be empty")
-        ids = tuple(_operation_id(operation) for operation in bundle.capabilities)
+        if not bundle.operations:
+            raise ValueError("operation bundle must not be empty")
+        ids = tuple(_operation_id(operation) for operation in bundle.operations)
         if len(ids) != len(set(ids)):
-            raise ValueError(f"duplicate capability ID in bundle {bundle.domain_id}")
+            raise ValueError(f"duplicate operation ID in bundle {bundle.domain_id}")
         if bundle.provider_runtime.provider == "":
-            raise ValueError("capability bundle provider must not be empty")
+            raise ValueError("operation bundle provider must not be empty")
 
 
 class InstalledOperationAdapter:
@@ -168,7 +177,7 @@ class InstalledOperationAdapter:
 
     def __init__(
         self,
-        operation: InstalledOperation[Any, Any],
+        operation: DomainOperation,
         bundle: DomainBundle,
         resources: OperationResources,
     ) -> None:
@@ -177,7 +186,7 @@ class InstalledOperationAdapter:
         self.bundle = bundle
         self.resources = resources
         publication = operation.publication
-        if isinstance(publication, InlinePublication):
+        if isinstance(publication, (InlinePublication, DeclaredInlinePublication)):
             from jacobian.contracts.domain_operations import (
                 InlineOperationOutput,
                 ReferencedInlineOperationOutput,
@@ -205,8 +214,8 @@ class InstalledOperationAdapter:
                 resources.result_schema_uris[self.spec.operation_id],
             )
         runtime = operation_runtime(operation, bundle)
-        self._descriptor = CapabilityDescriptor(
-            capability_id=self.spec.operation_id,
+        self._descriptor = OperationDescriptor(
+            operation_id=self.spec.operation_id,
             version=self.spec.version,
             title=self.spec.title,
             description=self.spec.description,
@@ -214,31 +223,44 @@ class InstalledOperationAdapter:
             provider_runtime=runtime,
             input_schema=model_schema(self.spec.request_type),
             output_schema=model_schema(output_model),
-            read_only=(self.spec.effect is Effect.READ_ONLY),
+            read_only=(
+                self.spec.effect in {Effect.READ_ONLY, DeclarationEffect.READ_ONLY}
+            ),
             tags=self.spec.tags,
             produced_artifact_types=produced_artifact_types,
             input_ports=tuple(
-                CapabilityValuePort(
+                OperationValuePort(
                     name=port.name,
                     value_type=port.value_type.__name__,
                 )
                 for port in operation.input_ports
             ),
             output_ports=tuple(
-                CapabilityValuePort(
+                OperationValuePort(
                     name=port.name,
                     value_type=port.value_type.__name__,
                 )
                 for port in operation.output_ports
             ),
-            invocation_examples=self.spec.invocation_examples,
+            examples=(
+                tuple(
+                    OperationExample(
+                        name=example.name,
+                        description=example.description,
+                        input=dict(example.input),
+                    )
+                    for example in self.spec.examples
+                )
+                if isinstance(self.spec, OperationDeclaration)
+                else self.spec.examples
+            ),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> ContractModel:
+    def prepare(self, request: OperationRequest) -> ContractModel:
         maximum_bytes = self.resources.artifacts.store.limits.max_artifact_bytes
         try:
             assembled_input = self._bind_inputs(request)
@@ -252,8 +274,8 @@ class InstalledOperationAdapter:
             }
             request_bytes = encode_strict_json(bounded_input)
         except CanonicalizationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="REQUEST_RESOURCE_LIMIT_EXCEEDED",
                     stage="operation_request",
                     message=str(exc),
@@ -261,8 +283,8 @@ class InstalledOperationAdapter:
                 )
             ) from exc
         if len(request_bytes) > maximum_bytes:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="REQUEST_RESOURCE_LIMIT_EXCEEDED",
                     stage="operation_request",
                     message=(f"request exceeds {maximum_bytes} canonical bytes"),
@@ -272,13 +294,18 @@ class InstalledOperationAdapter:
         try:
             parsed_request = cast(
                 ContractModel,
-                parse_capability_input(self.spec.request_type, assembled_input),
+                parse_operation_input(self.spec.request_type, assembled_input),
             )
         except ValidationError as exc:
-            base = self.spec.invalid_request or self.bundle.diagnostics.invalid_request
-            raise CapabilityInvocationError(
+            invalid_request = (
+                None
+                if isinstance(self.spec, OperationDeclaration)
+                else self.spec.invalid_request
+            )
+            base = invalid_request or self.bundle.diagnostics.invalid_request
+            raise OperationInvocationError(
                 base
-                if self.spec.invalid_request is not None
+                if invalid_request is not None
                 else enriched_invalid_request(base, exc)
             ) from exc
 
@@ -289,8 +316,8 @@ class InstalledOperationAdapter:
         try:
             terminal = execute_operation(self.spec, parsed_request)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="ADAPTER_EXECUTION_FAILED",
                     stage="operation_result_validation",
                     message="The operation returned an invalid typed result.",
@@ -299,7 +326,11 @@ class InstalledOperationAdapter:
             ) from exc
         publication = None
         if isinstance(terminal, Completed):
-            runtime = self.operation.provider_binding.runtime
+            runtime = (
+                None
+                if isinstance(self.operation, OperationDeclaration)
+                else self.operation.provider_binding.runtime
+            )
             backend_version = (
                 runtime.version
                 if runtime is not None and runtime.version is not None
@@ -326,7 +357,7 @@ class InstalledOperationAdapter:
             except PublicationLimitError as exc:
                 terminal = Failed(
                     status=ExecutionStatus.ERROR,
-                    diagnostic=CapabilityDiagnostic(
+                    diagnostic=OperationDiagnostic(
                         code="PUBLICATION_RESOURCE_LIMIT_EXCEEDED",
                         stage="operation_publication",
                         message=str(exc),
@@ -340,14 +371,14 @@ class InstalledOperationAdapter:
             publication=publication,
         )
 
-    def _bind_inputs(self, request: CapabilityRequest) -> dict[str, Any]:
+    def _bind_inputs(self, request: OperationRequest) -> dict[str, Any]:
         if not request.inputs:
             return request.input
         ports = {port.name: port for port in self.operation.input_ports}
         unknown = sorted(set(request.inputs) - set(ports))
         if unknown:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="UNKNOWN_INPUT_PORT",
                     stage="operation_input_binding",
                     message="Unknown operation input port: " + ", ".join(unknown),
@@ -361,8 +392,8 @@ class InstalledOperationAdapter:
                 value = self.resources.values.resolve(value_ref, port.value_type)
                 assembled = port.bind_to_request(assembled, value)
         except (TypeError, ValueError, ValueReferenceError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INCOMPATIBLE_VALUE_REFERENCE",
                     stage="operation_input_binding",
                     message=str(exc),

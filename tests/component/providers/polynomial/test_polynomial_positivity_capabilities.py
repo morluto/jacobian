@@ -6,17 +6,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.capability_installations import install_capability_bundle
+from tests.support.operation_installations import install_operation_bundle
 from tests.support.polynomials import univariate_term as _term
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_projection import project_operation_result
-from jacobian.polynomial_positivity_capabilities import (
+from jacobian.polynomial_positivity_operations import (
     PolynomialIntervalPositivityVerifyAdapter,
-    install_polynomial_positivity_capabilities,
+    install_polynomial_positivity_operations,
 )
 from jacobian_checkers.polynomial_positivity import check_positivity
 
@@ -25,7 +25,7 @@ from jacobian_checkers.polynomial_positivity import check_positivity
 # ---------------------------------------------------------------------------
 
 
-def _invoke(adapter: Any, request: CapabilityRequest):
+def _invoke(adapter: Any, request: OperationRequest):
     return adapter.invoke(adapter.prepare(request))
 
 
@@ -268,8 +268,8 @@ def test_checker_rejects_noncanonical_rational() -> None:
 
 @pytest.fixture()
 def installation(tmp_path: Path):
-    with install_capability_bundle(
-        tmp_path, install_polynomial_positivity_capabilities
+    with install_operation_bundle(
+        tmp_path, install_polynomial_positivity_operations
     ) as bundle:
         yield bundle
 
@@ -287,15 +287,15 @@ def test_verify_adapter_rejects_missing_authorized_checker(installation) -> None
         PolynomialIntervalPositivityVerifyAdapter(resources)
 
 
-def test_decide_capability_finds_positive_linear(installation) -> None:
+def test_decide_operation_finds_positive_linear(installation) -> None:
     adapters, _installed, _store = installation
     decide, _verify = adapters
 
     result = project_operation_result(
         _invoke(
             decide,
-            CapabilityRequest(
-                capability_id="polynomial.interval.positivity.decide",
+            OperationRequest(
+                operation_id="polynomial.interval.positivity.decide",
                 input={
                     "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                     "interval": _interval("0", "1"),
@@ -312,7 +312,7 @@ def test_decide_capability_finds_positive_linear(installation) -> None:
     assert result.output["decision_uri"] in result.artifact_uris
 
 
-def test_decide_capability_detects_root_in_interval(installation) -> None:
+def test_decide_operation_detects_root_in_interval(installation) -> None:
     adapters, _installed, _store = installation
     decide, _verify = adapters
 
@@ -320,8 +320,8 @@ def test_decide_capability_detects_root_in_interval(installation) -> None:
     result = project_operation_result(
         _invoke(
             decide,
-            CapabilityRequest(
-                capability_id="polynomial.interval.positivity.decide",
+            OperationRequest(
+                operation_id="polynomial.interval.positivity.decide",
                 input={
                     "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
                     "interval": _interval("0", "2"),
@@ -337,7 +337,7 @@ def test_decide_capability_detects_root_in_interval(installation) -> None:
     assert result.output["sign_changes_at_hi"] == 0
 
 
-def test_decide_capability_detects_endpoint_root(installation) -> None:
+def test_decide_operation_detects_endpoint_root(installation) -> None:
     adapters, _installed, _store = installation
     decide, _verify = adapters
 
@@ -345,8 +345,8 @@ def test_decide_capability_detects_endpoint_root(installation) -> None:
     result = project_operation_result(
         _invoke(
             decide,
-            CapabilityRequest(
-                capability_id="polynomial.interval.positivity.decide",
+            OperationRequest(
+                operation_id="polynomial.interval.positivity.decide",
                 input={
                     "polynomial": _polynomial("x", [_term(1, 1)]),
                     "interval": _interval("0", "1"),
@@ -360,7 +360,7 @@ def test_decide_capability_detects_endpoint_root(installation) -> None:
     assert result.output["endpoint_root"] is True
 
 
-def test_verify_capability_confirms_positive_decision(installation) -> None:
+def test_verify_operation_confirms_positive_decision(installation) -> None:
     adapters, _installed, _store = installation
     decide, verify = adapters
     assert verify is not None
@@ -368,8 +368,8 @@ def test_verify_capability_confirms_positive_decision(installation) -> None:
     decide_result = project_operation_result(
         _invoke(
             decide,
-            CapabilityRequest(
-                capability_id="polynomial.interval.positivity.decide",
+            OperationRequest(
+                operation_id="polynomial.interval.positivity.decide",
                 input={
                     "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                     "interval": _interval("0", "1"),
@@ -382,8 +382,8 @@ def test_verify_capability_confirms_positive_decision(installation) -> None:
     result = project_operation_result(
         _invoke(
             verify,
-            CapabilityRequest(
-                capability_id="polynomial.interval.positivity.verify",
+            OperationRequest(
+                operation_id="polynomial.interval.positivity.verify",
                 input={
                     "polynomial": _polynomial("x", [_term(2, 1), _term(1, 0)]),
                     "interval": _interval("0", "1"),
@@ -403,7 +403,7 @@ def test_verify_capability_confirms_positive_decision(installation) -> None:
     assert result.output["verification_record_uri"] is not None
 
 
-def test_verify_capability_refutes_false_positive_claim(installation) -> None:
+def test_verify_operation_refutes_false_positive_claim(installation) -> None:
     adapters, _installed, _store = installation
     _decide, verify = adapters
     assert verify is not None
@@ -414,8 +414,8 @@ def test_verify_capability_refutes_false_positive_claim(installation) -> None:
     result = project_operation_result(
         _invoke(
             verify,
-            CapabilityRequest(
-                capability_id="polynomial.interval.positivity.verify",
+            OperationRequest(
+                operation_id="polynomial.interval.positivity.verify",
                 input={
                     "polynomial": _polynomial("x", [_term(1, 1), _term(-1, 0)]),
                     "interval": _interval("0", "2"),

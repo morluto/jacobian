@@ -1,6 +1,6 @@
 """SymPy-backed exact rational univariate polynomial interval enclosures.
 
-This module installs two domain-atomic capabilities over one mathematical
+This module installs two domain-atomic operations over one mathematical
 outcome: an exact rational enclosure of the values of one univariate rational
 polynomial on one closed rational interval, derived from the Bernstein-
 coefficient bound.
@@ -8,7 +8,7 @@ coefficient bound.
 ``polynomial.interval.enclose`` (EXPLORE) computes the enclosure with pinned
 SymPy rational arithmetic and emits an inspectable enclosure artifact. The
 result creates no verification record; the independent Bernstein-coefficient
-checker is the separate verification boundary, and the capability does not
+checker is the separate verification boundary, and the operation does not
 invoke it.
 
 ``polynomial.interval.enclosure.verify`` (VERIFY) packages the claimed
@@ -34,17 +34,16 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+)
 from jacobian.contracts.polynomial_intervals import (
     PolynomialIntervalEnclosure,
     PolynomialIntervalEnclosureClaim,
@@ -61,6 +60,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
     PolynomialOperationResult,
@@ -79,7 +79,7 @@ if TYPE_CHECKING:
 
 
 class _SympyBackend(NamedTuple):
-    """Heavy SymPy implementation symbols loaded on first capability invocation."""
+    """Heavy SymPy implementation symbols loaded on first operation invocation."""
 
     QQ: Any
     Poly: Any
@@ -121,7 +121,7 @@ class PolynomialIntervalResources:
     installation: PolynomialIntervalInstallation
 
 
-def install_polynomial_interval_capabilities(
+def install_polynomial_interval_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
@@ -251,8 +251,8 @@ class PolynomialIntervalEncloseAdapter:
             if resources.installation.checker_id is not None
             else ()
         )
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.interval.enclose",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.interval.enclose",
             version="1",
             title="Enclose a univariate polynomial on a rational interval",
             description=(
@@ -283,7 +283,7 @@ class PolynomialIntervalEncloseAdapter:
                 "bernstein",
                 "exact-computation",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "constant_zero_interval",
                     "Enclose the zero polynomial on [0,1].",
@@ -299,10 +299,10 @@ class PolynomialIntervalEncloseAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialIntervalEnclosureRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialIntervalEnclosureRequest:
         return _validate_request(
             PolynomialIntervalEnclosureRequest,
             request.input,
@@ -383,8 +383,8 @@ class PolynomialIntervalEnclosureVerifyAdapter:
             raise RuntimeError(
                 "polynomial interval verify adapter requires an authorized checker"
             )
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.interval.enclosure.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.interval.enclosure.verify",
             version="1",
             title="Verify a polynomial interval Bernstein enclosure",
             description=(
@@ -418,11 +418,11 @@ class PolynomialIntervalEnclosureVerifyAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialIntervalEnclosureVerifyRequest:
         return _validate_request(
             PolynomialIntervalEnclosureVerifyRequest,
@@ -619,9 +619,9 @@ def _interval_error(
     code: str,
     stage: str,
     message: str,
-) -> CapabilityInvocationError:
-    return CapabilityInvocationError(
-        CapabilityDiagnostic(
+) -> OperationInvocationError:
+    return OperationInvocationError(
+        OperationDiagnostic(
             code=code,
             stage=stage,
             message=message,
@@ -639,5 +639,5 @@ __all__ = (
     "PolynomialIntervalEnclosureVerifyAdapter",
     "PolynomialIntervalInstallation",
     "PolynomialIntervalResources",
-    "install_polynomial_interval_capabilities",
+    "install_polynomial_interval_operations",
 )

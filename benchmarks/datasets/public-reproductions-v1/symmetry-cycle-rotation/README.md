@@ -24,7 +24,7 @@ graph-theory
 - environment_mode: separate
 
 The task is self-contained and offline. The instruction names no tool,
-capability, or invocation order. The verifier is a separate clean-room Python
+operation, or invocation order. The verifier is a separate clean-room Python
 script that scores correctness, evidence validity, scope accuracy, assurance
 calibration, and aggregate reward; a wrong result or an unsupported VERIFIED
 claim forces the reward to zero.

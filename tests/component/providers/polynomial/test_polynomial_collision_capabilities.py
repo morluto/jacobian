@@ -18,8 +18,8 @@ from tests.component.providers.polynomial.polynomial_capabilities_support import
     poly_payload as _poly_payload,
 )
 
-from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope, WitnessRole
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import Conclusion, InputStatus
 
 
@@ -28,27 +28,27 @@ def test_collision_checker_rejects_a_forged_image(
 ) -> None:
     runtime = authorized_polynomial_services
     polynomial_map = _jacobian_counterexample_map()
-    first_evaluation = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    first_evaluation = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={
                 "map": polynomial_map,
                 "point": _point(0, 0, Fraction(-1, 4)),
             },
         )
     )
-    second_evaluation = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    second_evaluation = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={
                 "map": polynomial_map,
                 "point": _point(1, Fraction(-3, 2), Fraction(13, 2)),
             },
         )
     )
-    collision = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_witness",
+    collision = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_witness",
             input={
                 "first_evaluation_uri": first_evaluation.output["evaluation_uri"],
                 "second_evaluation_uri": second_evaluation.output["evaluation_uri"],
@@ -80,9 +80,9 @@ def test_collision_checker_rejects_a_forged_image(
         summary="forged collision witness",
     )
 
-    rejected = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_evidence.verify",
+    rejected = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_evidence.verify",
             input={
                 "claim_uri": claim_uri,
                 "candidate_uri": candidate_uri,
@@ -107,9 +107,9 @@ def test_collision_comparison_does_not_promote_forged_evaluations(
         "variables": ["x"],
         "coordinates": [_poly_payload(Poly(x, x, domain="QQ"))],
     }
-    first_evaluation = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    first_evaluation = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={"map": identity_map, "point": _point(0)},
         )
     )
@@ -128,9 +128,9 @@ def test_collision_comparison_does_not_promote_forged_evaluations(
         parents=(map_uri,),
     )
 
-    candidate = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_witness",
+    candidate = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_witness",
             input={
                 "first_evaluation_uri": first_evaluation.output["evaluation_uri"],
                 "second_evaluation_uri": forged_evaluation.artifact_uri,
@@ -140,9 +140,9 @@ def test_collision_comparison_does_not_promote_forged_evaluations(
 
     assert candidate.output["candidate_collision"] is True
 
-    rejected = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_evidence.verify",
+    rejected = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_evidence.verify",
             input={
                 "claim_uri": candidate.output["claim_uri"],
                 "candidate_uri": candidate.output["candidate_uri"],
@@ -167,21 +167,21 @@ def test_noncollision_is_computed_evidence_without_witness_or_conclusion(
         "coordinates": [_poly_payload(Poly(x, x, domain="QQ"))],
     }
 
-    first_evaluation = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    first_evaluation = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={"map": identity_map, "point": _point(0)},
         )
     )
-    second_evaluation = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    second_evaluation = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={"map": identity_map, "point": _point(1)},
         )
     )
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_witness",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_witness",
             input={
                 "first_evaluation_uri": first_evaluation.output["evaluation_uri"],
                 "second_evaluation_uri": second_evaluation.output["evaluation_uri"],
@@ -210,22 +210,22 @@ def test_collision_rejects_evaluations_from_different_maps(
         "variables": ["x"],
         "coordinates": [_poly_payload(Poly(x**2, x, domain="QQ"))],
     }
-    first_evaluation = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    first_evaluation = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={"map": identity_map, "point": _point(1)},
         )
     )
-    second_evaluation = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    second_evaluation = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={"map": square_map, "point": _point(1)},
         )
     )
 
-    result = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_witness",
+    result = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_witness",
             input={
                 "first_evaluation_uri": first_evaluation.output["evaluation_uri"],
                 "second_evaluation_uri": second_evaluation.output["evaluation_uri"],
@@ -248,9 +248,9 @@ def test_collision_validates_evaluation_dimensions_before_artifact_writes(
         "variables": ["x"],
         "coordinates": [_poly_payload(Poly(x, x, domain="QQ"))],
     }
-    first_evaluation = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    first_evaluation = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={"map": identity_map, "point": _point(1)},
         )
     )
@@ -278,9 +278,9 @@ def test_collision_validates_evaluation_dimensions_before_artifact_writes(
 
     monkeypatch.setattr(polynomial_services.core.artifacts, "put", recording_put)
 
-    result = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_witness",
+    result = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_witness",
             input={
                 "first_evaluation_uri": first_evaluation.output["evaluation_uri"],
                 "second_evaluation_uri": incompatible_evaluation.artifact_uri,

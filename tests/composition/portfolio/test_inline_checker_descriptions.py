@@ -10,14 +10,14 @@ _INLINE_REPLAY_CHECKERS = tuple(
     for component in build_builtin_portfolio_components()
     if isinstance(component, DomainBundle)
     for declaration in component.checker_declarations
-    if ".materialize" not in declaration.capability_id
+    if ".materialize" not in declaration.operation_id
 )
 
 
 @pytest.mark.parametrize(
     "declaration",
     _INLINE_REPLAY_CHECKERS,
-    ids=lambda declaration: declaration.verification_capability_id,
+    ids=lambda declaration: declaration.verification_operation_id,
 )
 def test_inline_checker_cards_do_not_claim_stored_producer_lineage(declaration) -> None:
     """Inline checkers bind submitted values, not an unavailable result URI."""

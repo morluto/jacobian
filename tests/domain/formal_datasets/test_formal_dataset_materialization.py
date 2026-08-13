@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-    CapabilityResult,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.formal_datasets import build_formal_dataset_bundle
@@ -24,7 +24,7 @@ class _PublicAdapter:
         self._adapter = adapter
         self.resources = adapter.resources
 
-    def invoke(self, request: CapabilityRequest) -> CapabilityResult:
+    def invoke(self, request: OperationRequest) -> OperationResult:
         projection = self._adapter.invoke(self._adapter.prepare(request))
         assert isinstance(projection, OperationProjection)
         return project_operation_result(projection)
@@ -113,14 +113,14 @@ def test_supported_row_materializes_deterministically(
     payload = payload_factory()
 
     first = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
     second = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
@@ -140,8 +140,8 @@ def test_materialization_preserves_environment_and_preprocessing(
     adapter = _adapter(tmp_path)
 
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=_minif2f_request(),
         )
     )
@@ -181,8 +181,8 @@ def test_preprocessing_reports_only_transformations_that_occurred(
     payload["row"]["informal_proof"] += "\n"
 
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
@@ -210,8 +210,8 @@ def test_empty_optional_text_is_preserved_without_a_reported_rewrite(
     payload["row"]["formal_statement"] += "\n"
 
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
@@ -237,8 +237,8 @@ def test_incompatible_environment_has_explicit_diagnostics(tmp_path: Path) -> No
     }
 
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
@@ -258,8 +258,8 @@ def test_expected_row_digest_rejects_changed_content(tmp_path: Path) -> None:
     payload["expected_row_digest"] = "sha256:" + "0" * 64
 
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
@@ -272,8 +272,8 @@ def test_expected_row_digest_rejects_changed_content(tmp_path: Path) -> None:
 def test_artifact_tampering_is_detected_by_store(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=_proofnet_request(),
         )
     )
@@ -291,8 +291,8 @@ def test_materialization_preserves_split_and_leading_lines(tmp_path: Path) -> No
     payload["row"]["header"] = "\nimport Mathlib\n"
 
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
@@ -317,8 +317,8 @@ def test_materialization_preserves_trailing_spaces_inside_source(
     )
 
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=payload,
         )
     )
@@ -335,14 +335,14 @@ def test_model_backed_artifact_rejects_digest_tampering(tmp_path: Path) -> None:
     )
     adapter = _PublicAdapter(installation.adapters[0])
     result = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=_proofnet_request(),
         )
     )
     replay = adapter.invoke(
-        CapabilityRequest(
-            capability_id="dataset.formal.materialize",
+        OperationRequest(
+            operation_id="dataset.formal.materialize",
             input=_proofnet_request(),
         )
     )

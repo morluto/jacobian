@@ -5,12 +5,12 @@ from __future__ import annotations
 import hashlib
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityInvocationExample,
-    CapabilityRequest,
-)
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationExample,
+    OperationRequest,
+)
 from jacobian.contracts.polynomials import (
     RationalFunctionArtifact,
     RationalFunctionIdentityClaim,
@@ -36,8 +36,8 @@ class RationalFunctionIdentityAdapter:
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
         checker_id = resources.installation.rational_function_identity_checker_id
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.rational_function.identity.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.rational_function.identity.verify",
             version="1",
             title="Verify an exact rational-function identity",
             description=(
@@ -59,8 +59,8 @@ class RationalFunctionIdentityAdapter:
                 "identity",
                 "verification",
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="cancel_common_factor",
                     description="Verify that (x²-1)/(x-1) equals x+1 in QQ(x).",
                     input=RationalFunctionIdentityRequest.model_validate(
@@ -121,10 +121,10 @@ class RationalFunctionIdentityAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> RationalFunctionIdentityRequest:
+    def prepare(self, request: OperationRequest) -> RationalFunctionIdentityRequest:
         return _validate_request(
             RationalFunctionIdentityRequest,
             request.input,

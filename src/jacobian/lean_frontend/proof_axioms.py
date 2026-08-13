@@ -14,15 +14,6 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_proof_axioms import (
     LeanProofAxiomsArtifact,
@@ -30,6 +21,15 @@ from jacobian.contracts.lean_proof_axioms import (
     LeanProofAxiomsInspectRequest,
 )
 from jacobian.contracts.lean_statement import LeanElaborationDiagnostic
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
+    ProviderObservation,
+)
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -85,15 +85,15 @@ class _InspectionResources:
     installations: Mapping[LeanEnvironment, Any]
     semantics_uri: str
     artifact_schema_uri: str
-    provider_runtime: CapabilityProviderRuntime
+    provider_runtime: ProviderObservation
 
 
-def install_lean_proof_axioms_capability(
+def install_lean_proof_axioms_operation(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
     installations: Mapping[LeanEnvironment, Any],
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> tuple[LeanProofAxiomsAdapter, LeanProofAxiomsInstallation]:
     """Install fact-only proof inspection for the exact pinned Lean runtime."""
 
@@ -131,8 +131,8 @@ def install_lean_proof_axioms_capability(
 class LeanProofAxiomsAdapter:
     def __init__(self, resources: _InspectionResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.proof.axioms.inspect",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.proof.axioms.inspect",
             version="1",
             title="Inspect a Lean proof's reported axiom closure",
             description=(
@@ -146,8 +146,8 @@ class LeanProofAxiomsAdapter:
             output_schema=LeanProofAxiomsInspectOutput.model_json_schema(),
             read_only=True,
             tags=("lean", "proof", "axioms", "trust-base", "inspection"),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="inspect_true",
                     description="Inspect a proof of True without making a trust decision.",
                     input={
@@ -160,18 +160,18 @@ class LeanProofAxiomsAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanProofAxiomsInspectRequest:
+    def prepare(self, request: OperationRequest) -> LeanProofAxiomsInspectRequest:
         try:
-            validated = parse_capability_input(
+            validated = parse_operation_input(
                 LeanProofAxiomsInspectRequest, request.input
             )
             _validate_source(validated.statement, validated.proof)
         except (ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_PROOF_AXIOMS_REQUEST",
                     stage="request_validation",
                     message="The bounded Lean proof-inspection request is invalid.",
@@ -185,8 +185,8 @@ class LeanProofAxiomsAdapter:
 
     def invoke(self, validated: LeanProofAxiomsInspectRequest) -> OperationProjection:
         if validated.environment not in self.resources.installations:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_ENVIRONMENT_UNAVAILABLE",
                     stage="environment_resolution",
                     message="The requested pinned Lean environment is unavailable.",
@@ -198,8 +198,8 @@ class LeanProofAxiomsAdapter:
             try:
                 require_lean_semantic_runtime_identity(self.resources.provider_runtime)
             except LeanRuntimeIdentityError as exc:
-                raise CapabilityInvocationError(
-                    CapabilityDiagnostic(
+                raise OperationInvocationError(
+                    OperationDiagnostic(
                         code="LEAN_RUNTIME_IDENTITY_UNAVAILABLE",
                         stage="runtime_identity",
                         message=(
@@ -213,8 +213,8 @@ class LeanProofAxiomsAdapter:
         inspection = _inspect_source(validated)
         runtime = self.resources.provider_runtime
         if runtime.version is None or runtime.digest is None:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_PROVIDER_IDENTITY_INCOMPLETE",
                     stage="provider_identity",
                     message="The Lean runtime did not provide a pinned version and digest.",
@@ -264,7 +264,7 @@ class LeanProofAxiomsAdapter:
             proof_axioms_uri=artifact.artifact_uri,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -421,8 +421,8 @@ def _inspect_source(request: LeanProofAxiomsInspectRequest) -> dict[str, Any]:
         completed = lean4._run_lean(source, environment_name=request.environment.value)
         output = (completed.stdout + completed.stderr).strip()
     except (OSError, RuntimeError, TimeoutError) as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="LEAN_BACKEND_UNAVAILABLE",
                 stage="inspection",
                 message="The pinned Lean process could not complete inspection.",
@@ -460,8 +460,8 @@ def _inspect_source(request: LeanProofAxiomsInspectRequest) -> dict[str, Any]:
     try:
         package_manifest_digest = _manifest_digest(request.environment)
     except (OSError, RuntimeError) as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="LEAN_RUNTIME_IDENTITY_UNAVAILABLE",
                 stage="runtime_identity",
                 message="The pinned Lean runtime identity could not be inspected.",
@@ -522,7 +522,7 @@ def _manifest_digest(environment: LeanEnvironment) -> str | None:
 
 def _environment_digest(
     environment: LeanEnvironment,
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     manifest_digest: str | None,
 ) -> str:
     semantic_runtime = runtime.configuration.get("semantic_runtime")
@@ -571,5 +571,5 @@ def _mathlib_commit(
 __all__ = [
     "LeanProofAxiomsAdapter",
     "LeanProofAxiomsInstallation",
-    "install_lean_proof_axioms_capability",
+    "install_lean_proof_axioms_operation",
 ]

@@ -5,11 +5,11 @@ from copy import deepcopy
 import pytest
 from pydantic import ValidationError
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.sat import (
     CanonicalCnf,
@@ -30,15 +30,15 @@ _DIGEST_D = "sha256:" + "d" * 64
 _ARTIFACT_A = "artifact://sha256/" + "a" * 64
 
 
-def _producer() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _producer() -> ProviderObservation:
+    return ProviderObservation(
         provider="cadical",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="2.1.3",
         digest=_DIGEST_D,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
     )
 
@@ -151,7 +151,7 @@ def test_assignment_is_total_strict_and_cannot_claim_verification() -> None:
 def test_assignment_and_proof_require_an_available_exact_producer() -> None:
     unavailable = _producer().model_copy(
         update={
-            "availability": CapabilityProviderAvailability.UNAVAILABLE,
+            "availability": ProviderAvailability.UNAVAILABLE,
             "version": None,
             "digest": None,
             "digest_kind": None,

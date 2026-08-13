@@ -3,14 +3,14 @@
 from collections.abc import Callable
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.projective_geometry import ProjectiveLineArrangementRequest
 from jacobian.providers import flint_runtime
 
 
 def _projective_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.projective_arrangement_checker_provider_runtime(
         checker_ids=checker_ids
     )
@@ -41,7 +41,7 @@ PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library checker independently normalizes "
             "the lines, rebuilds every pair intersection and recovers all incidences"
         ),
-        verification_capability_id=(
+        verification_operation_id=(
             "geometry.projective_line_arrangement.flats.verify"
         ),
         verification_title="Verify projective line-arrangement flats",

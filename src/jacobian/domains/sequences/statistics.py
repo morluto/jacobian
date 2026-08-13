@@ -1,4 +1,4 @@
-"""Sequence statistic capabilities producing rational results."""
+"""Sequence statistic operations producing rational results."""
 
 from jacobian.contracts.sequences import (
     IntegerSequenceRationalResult,
@@ -11,7 +11,7 @@ from jacobian.domains.sequences.operations import (
     sequence_median,
 )
 
-SEQUENCE_STATISTIC_CAPABILITIES = (
+SEQUENCE_STATISTIC_OPERATIONS = (
     sequence_operation(
         "sequence.compute.mean",
         "Compute sequence mean",
@@ -21,7 +21,7 @@ SEQUENCE_STATISTIC_CAPABILITIES = (
         sequence_mean,
         "sequence",
         "statistic",
-        invocation_examples=(
+        examples=(
             example(
                 "mean_1_2_3",
                 "Compute the mean of 1, 2, and 3.",
@@ -38,7 +38,7 @@ SEQUENCE_STATISTIC_CAPABILITIES = (
         sequence_median,
         "sequence",
         "statistic",
-        invocation_examples=(
+        examples=(
             example(
                 "median_1_3_2",
                 "Compute the median of 1, 3, and 2.",

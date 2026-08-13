@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
-from jacobian.domains.matrix_lattice.capabilities import MATRIX_CAPABILITIES
 from jacobian.domains.matrix_lattice.checkers import MATRIX_EXACT_REPLAY_CHECKERS
-from jacobian.domains.matrix_lattice.hnf import HERMITE_NORMAL_FORM_CAPABILITY
+from jacobian.domains.matrix_lattice.hnf import HERMITE_NORMAL_FORM_OPERATION
+from jacobian.domains.matrix_lattice.operation_declarations import MATRIX_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
@@ -47,9 +47,9 @@ def build_matrix_bundle() -> DomainBundle:
             ),
         ),
         backend_version=SYMPY_VERSION,
-        capabilities=(*MATRIX_CAPABILITIES, HERMITE_NORMAL_FORM_CAPABILITY),
+        operations=(*MATRIX_OPERATIONS, HERMITE_NORMAL_FORM_OPERATION),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_EXACT_MATRIX_REQUEST",
                 stage="matrix_input_validation",
                 message="Input does not satisfy the bounded exact matrix contract.",

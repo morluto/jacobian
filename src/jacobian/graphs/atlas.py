@@ -1,7 +1,7 @@
 """Process-local immutable access to NetworkX Graph Atlas representatives.
 
 The NetworkX backend is loaded lazily through :data:`networkx_loader` so that
-importing this module (and the graph capability modules that depend on it) does
+importing this module (and the graph operation modules that depend on it) does
 not import NetworkX. The backend is loaded on first invocation of
 :func:`graph_atlas_order`.
 """
@@ -27,7 +27,7 @@ def _load_networkx() -> Any:
     return nx
 
 
-#: Single lazy owner of the NetworkX backend shared by the graph capability
+#: Single lazy owner of the NetworkX backend shared by the graph operation
 #: modules. Importing this module does not import NetworkX; the backend is
 #: loaded on the first :meth:`LazyLoader.get` call.
 networkx_loader: LazyLoader[Any] = LazyLoader(_load_networkx, component_id="networkx")

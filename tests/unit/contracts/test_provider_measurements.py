@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.provider_measurements import (
     ProviderInstalledSize,
@@ -25,15 +25,15 @@ from jacobian.provider_measurements import (
 )
 
 
-def _runtime_with_missing_distribution() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _runtime_with_missing_distribution() -> ProviderObservation:
+    return ProviderObservation(
         provider="tests.fixture",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1.2.3",
         digest="sha256:" + "a" * 64,
-        digest_kind=CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+        digest_kind=ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         configuration={"distribution": "missing-provider-distribution"},
     )

@@ -17,26 +17,26 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_proof_state_inspect import (
     LeanProofStateInspectOutput,
     LeanProofStateInspectRequest,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationInputKind,
+    OperationRequest,
+    ProviderObservation,
 )
 from jacobian.lean_frontend._state_validation import (
     _load_validated_proof_state,
     _StoredProofStateResources,
 )
 from jacobian.lean_frontend.artifacts import _environment_digest
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -56,11 +56,11 @@ class LeanProofStateInspectAdapter:
     def __init__(
         self,
         resources: _StoredProofStateResources,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
     ) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.proof_state.inspect",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.proof_state.inspect",
             version="1",
             title="Inspect an immutable Lean proof state without replay",
             description=(
@@ -76,28 +76,28 @@ class LeanProofStateInspectAdapter:
             read_only=True,
             tags=("lean", "proof-state", "inspection", "exploration"),
             accepted_input_kinds=(
-                CapabilityInputKind.STRUCTURED_REQUEST,
-                CapabilityInputKind.TYPED_ARTIFACT,
+                OperationInputKind.STRUCTURED_REQUEST,
+                OperationInputKind.TYPED_ARTIFACT,
             ),
             accepted_artifact_types=(resources.state_schema_uri,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanProofStateInspectRequest:
+    def prepare(self, request: OperationRequest) -> LeanProofStateInspectRequest:
         try:
-            validated = parse_capability_input(
+            validated = parse_operation_input(
                 LeanProofStateInspectRequest, request.input
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_PROOF_STATE_INSPECT_REQUEST",
                     stage="request_validation",
                     message="The Lean proof-state inspection request is invalid.",
-                    hint="Supply a state_uri returned by a proof-state capability.",
+                    hint="Supply a state_uri returned by a proof-state operation.",
                 )
             ) from exc
         return validated
@@ -117,7 +117,7 @@ class LeanProofStateInspectAdapter:
             expected_environment=validated.environment,
             expected_environment_digest=environment_digest,
             invalid_state_hint=(
-                "Use a state URI returned by a proof-state capability."
+                "Use a state URI returned by a proof-state operation."
             ),
         )
         output = LeanProofStateInspectOutput(
@@ -137,7 +137,7 @@ class LeanProofStateInspectAdapter:
             mathlib_commit=state.mathlib_commit,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -151,9 +151,9 @@ class LeanProofStateInspectAdapter:
         )
 
 
-def install_lean_proof_state_inspect_capability(
+def install_lean_proof_state_inspect_operation(
     resources: _StoredProofStateResources,
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> LeanProofStateInspectAdapter:
     return LeanProofStateInspectAdapter(resources, provider_runtime)
 
@@ -163,7 +163,7 @@ def install_lean_proof_state_inspect_only(
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
     installations: Mapping[LeanEnvironment, LeanCheckerInstallation],
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> LeanProofStateInspectAdapter:
     """Register the read-only proof-state inspect adapter without a Lean runtime.
 
@@ -211,6 +211,6 @@ def install_lean_proof_state_inspect_only(
 
 __all__ = [
     "LeanProofStateInspectAdapter",
-    "install_lean_proof_state_inspect_capability",
     "install_lean_proof_state_inspect_only",
+    "install_lean_proof_state_inspect_operation",
 ]

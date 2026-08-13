@@ -4,16 +4,16 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.core_capability_harnesses import open_sat_materialization_services
+from tests.support.core_operation_harnesses import open_sat_materialization_services
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.artifacts import ArtifactValidationError
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import (
@@ -37,15 +37,15 @@ def sat_materialization_services(tmp_path: Path) -> Iterator[DomainTestServices]
         yield services
 
 
-def _producer() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _producer() -> ProviderObservation:
+    return ProviderObservation(
         provider="cadical",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="2.1.3",
         digest="sha256:" + "d" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
     )
 
@@ -71,13 +71,13 @@ def test_sat_service_materializes_one_identity_for_equivalent_cnf_input(
     assert stored.manifest.semantics_uri == services.core.sat.installation.semantics_uri
 
 
-def test_sat_cnf_materialization_capability_exposes_reusable_identity(
+def test_sat_cnf_materialization_operation_exposes_reusable_identity(
     sat_materialization_services: DomainTestServices,
 ) -> None:
     services = sat_materialization_services
-    result = services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.cnf.materialize",
+    result = services.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.cnf.materialize",
             input={
                 "variable_names": ["b", "a"],
                 "clauses": [[1, -2, 1], [2], [1, -1]],
@@ -108,9 +108,9 @@ def test_sat_materialization_makes_lexicographic_name_order_explicit(
     sat_materialization_services: DomainTestServices,
 ) -> None:
     services = sat_materialization_services
-    result = services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.cnf.materialize",
+    result = services.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.cnf.materialize",
             input={
                 "variable_names": ["n1", "n2", "n10"],
                 "clauses": [[1], [-2], [3]],
@@ -145,9 +145,9 @@ def test_sat_cnf_materialization_validates_before_artifact_write(
         "put_canonical_cnf",
         unexpected_put_canonical_cnf,
     )
-    result = services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.cnf.materialize",
+    result = services.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.cnf.materialize",
             input={
                 "variable_names": ["a", "a"],
                 "clauses": [[1]],

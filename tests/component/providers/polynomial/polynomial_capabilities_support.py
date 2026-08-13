@@ -1,4 +1,4 @@
-"""Focused production services and payloads for polynomial capability tests."""
+"""Focused production services and payloads for polynomial operation tests."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from jacobian.runtime.config import CheckerAuthorityMode
 
 @dataclass(frozen=True, slots=True)
 class PolynomialTestServices(DomainTestServices):
-    """The exact production graph owned by polynomial capability behavior."""
+    """The exact production graph owned by polynomial operation behavior."""
 
     polynomial: PolynomialInstallation
 
@@ -34,7 +34,7 @@ def open_polynomial_services(
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
 ) -> Iterator[PolynomialTestServices]:
-    """Install only generic verification and polynomial-map capabilities."""
+    """Install only generic verification and polynomial-map operations."""
 
     with open_domain_services(
         root,
@@ -50,7 +50,7 @@ def open_polynomial_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             for adapter in adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield PolynomialTestServices(
             core=services.core,
             application=services.application,

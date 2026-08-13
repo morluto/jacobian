@@ -64,7 +64,7 @@ async def main() -> None:
             {
                 "request": {
                     "op": "inspect",
-                    "capability_id": "matrix.determinant.compute",
+                    "operation_id": "matrix.determinant.compute",
                 }
             },
         )
@@ -73,7 +73,7 @@ async def main() -> None:
         computed_call = await client.call_tool(
             "math.run",
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "payload": {"matrix": matrix},
             },
         )
@@ -85,7 +85,7 @@ async def main() -> None:
         verified_call = await client.call_tool(
             "math.run",
             {
-                "capability_id": "matrix.determinant.verify",
+                "operation_id": "matrix.determinant.verify",
                 "payload": {
                     "input": {"matrix": matrix},
                     "candidate": computed["output"]["result"],

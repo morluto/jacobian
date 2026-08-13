@@ -1,4 +1,4 @@
-"""Z3-backed exact chromatic-number capability contracts."""
+"""Z3-backed exact chromatic-number operation contracts."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import pytest
 import z3  # type: ignore[import-untyped]
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-    CapabilityResult,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -16,10 +16,10 @@ from jacobian.contracts.results import ExecutionStatus
 def _invoke(
     services: DomainTestServices,
     graph: dict[str, object],
-) -> CapabilityResult:
-    return services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.chromatic_number.compute",
+) -> OperationResult:
+    return services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.chromatic_number.compute",
             input={"graph": graph, "resource_budget": {"wall_seconds": 5}},
         )
     )

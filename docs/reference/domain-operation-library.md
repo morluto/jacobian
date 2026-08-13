@@ -10,7 +10,7 @@ catalog operations are typed bindings over that library, not a second
 implementation and not a facade invoked by the native API.
 
 This reference defines ownership and dependency rules. The live
-`capability://catalog` remains the authority for installed IDs, schemas, and
+`operation://catalog` remains the authority for installed IDs, schemas, and
 provider availability.
 
 ## Package ownership

@@ -1,6 +1,6 @@
 """Installed finite-field operations over the authoritative native values."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.finite_fields.checkers import (
     FINITE_FIELD_EXACT_REPLAY_CHECKERS,
@@ -46,15 +46,17 @@ from jacobian.math.finite_fields.operations import (
     _InvalidFiniteMapTableError,
 )
 from jacobian.operation_bindings import inline_operation
+from jacobian.operation_declarations import (
+    SUPPORTED,
+    OperationDeclaration,
+    PreflightResult,
+    PreflightStatus,
+)
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
-    SUPPORTED,
     DomainDiagnostics,
     DomainSemantics,
     OperationRefusalError,
-    OperationSpec,
-    PreflightResult,
-    PreflightStatus,
 )
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 from jacobian.providers.flint_runtime import python_flint_finite_field_provider_runtime
@@ -126,7 +128,7 @@ def _orbit_distribution(request: OrbitDistributionRequest) -> OrbitDistribution:
         return orbit_distribution(request.ledger)
     except _InvalidDirectionRankLedgerError as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="INVALID_DIRECTION_RANK_LEDGER",
                 stage="direction_rank_ledger_validation",
                 message=str(exc),
@@ -187,7 +189,7 @@ def _collision_certificate(
         raise _finite_map_table_refusal(exc) from exc
     except ValueError as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="FINITE_MAP_HAS_NO_COLLISION",
                 stage="finite_map_collision",
                 message=str(exc),
@@ -205,7 +207,7 @@ def _permutation_certificate(
         raise _finite_map_table_refusal(exc) from exc
     except ValueError as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="FINITE_MAP_NOT_PERMUTATION",
                 stage="finite_map_permutation",
                 message=str(exc),
@@ -216,7 +218,7 @@ def _permutation_certificate(
 
 def _finite_map_table_refusal(error: ValueError) -> OperationRefusalError:
     return OperationRefusalError(
-        CapabilityDiagnostic(
+        OperationDiagnostic(
             code="INVALID_FINITE_MAP_TABLE",
             stage="finite_map_table_validation",
             message=str(error),
@@ -256,7 +258,7 @@ def build_finite_field_bundle() -> DomainBundle:
     )
     flint_provider = python_flint_finite_field_provider_runtime()
     projective_line_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.projective_line.enumerate",
             version="1",
             request_type=ProjectiveLineRequest,
@@ -278,7 +280,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="directions", value_type=ProjectiveLine),),
     )
     restrict_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.restrict_scalars.compute",
             version="1",
             request_type=RestrictScalarsRequest,
@@ -304,7 +306,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="linear_map", value_type=FiniteLinearMap),),
     )
     rank_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.linear_map.rank.compute",
             version="1",
             request_type=LinearMapRankRequest,
@@ -330,7 +332,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="rank", value_type=RankResult),),
     )
     ledger_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.direction_rank_ledger.compute",
             version="1",
             request_type=DirectionRankLedgerRequest,
@@ -357,7 +359,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="ledger", value_type=DirectionRankLedger),),
     )
     orbit_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.orbit_distribution.compute",
             version="1",
             request_type=OrbitDistributionRequest,
@@ -379,7 +381,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="distribution", value_type=OrbitDistribution),),
     )
     table_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.polynomial_map.table.compute",
             version="1",
             request_type=FiniteMapTableRequest,
@@ -401,7 +403,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="table", value_type=FiniteMapTable),),
     )
     fiber_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.polynomial_map.fibers.compute",
             version="1",
             request_type=FiberPartitionRequest,
@@ -419,7 +421,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="fibers", value_type=FiberPartition),),
     )
     collision_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.polynomial_map.collision.compute",
             version="1",
             request_type=CollisionCertificateRequest,
@@ -437,7 +439,7 @@ def build_finite_field_bundle() -> DomainBundle:
         output_ports=(OutputPort(name="collision", value_type=CollisionCertificate),),
     )
     permutation_operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="finite_field.polynomial_map.permutation.compute",
             version="1",
             request_type=PermutationCertificateRequest,
@@ -469,7 +471,7 @@ def build_finite_field_bundle() -> DomainBundle:
         ),
         provider_runtime=provider,
         backend_version=f"sympy-{SYMPY_VERSION}",
-        capabilities=(
+        operations=(
             projective_line_operation,
             restrict_operation,
             rank_operation,
@@ -482,7 +484,7 @@ def build_finite_field_bundle() -> DomainBundle:
         ),
         checker_declarations=FINITE_FIELD_EXACT_REPLAY_CHECKERS,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_FINITE_FIELD_REQUEST",
                 stage="finite_field_input_validation",
                 message="Input does not satisfy the exact finite-field contract.",

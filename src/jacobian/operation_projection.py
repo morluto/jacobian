@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import assert_never
 
-from jacobian.contracts.capabilities import CapabilityResult
+from jacobian.contracts.operations import OperationResult
 from jacobian.contracts.results import ContractModel, Execution, ExecutionStatus
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed, NonConclusion
@@ -43,7 +43,7 @@ class OperationProjection:
             )
 
 
-def project_operation_result(projection: OperationProjection) -> CapabilityResult:
+def project_operation_result(projection: OperationProjection) -> OperationResult:
     """Compile one internal operation projection at the public boundary."""
 
     operation_id = projection.operation_id
@@ -55,9 +55,9 @@ def project_operation_result(projection: OperationProjection) -> CapabilityResul
         assert publication is not None
         published_output = publication.output
         assert published_output is not None
-        return CapabilityResult(
-            capability_id=operation_id,
-            capability_version=version,
+        return OperationResult(
+            operation_id=operation_id,
+            operation_version=version,
             execution=Execution(
                 status=ExecutionStatus.COMPLETED,
                 runtime_ms=terminal.runtime_ms,
@@ -78,9 +78,9 @@ def project_operation_result(projection: OperationProjection) -> CapabilityResul
         output = {"error": diagnostic.model_dump(mode="json", exclude_none=True)}
     else:
         output = {}
-    return CapabilityResult(
-        capability_id=operation_id,
-        capability_version=version,
+    return OperationResult(
+        operation_id=operation_id,
+        operation_version=version,
         execution=Execution(
             status=status,
             runtime_ms=runtime_ms,

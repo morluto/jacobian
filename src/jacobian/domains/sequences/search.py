@@ -1,4 +1,4 @@
-"""Sequence search and frequency capabilities over finite integer sequences."""
+"""Sequence search and frequency operations over finite integer sequences."""
 
 from jacobian.contracts.sequences import (
     IntegerSequenceFrequenciesResult,
@@ -12,7 +12,7 @@ from jacobian.domains.sequences.operations import (
     zero_indices,
 )
 
-SEQUENCE_SEARCH_CAPABILITIES = (
+SEQUENCE_SEARCH_OPERATIONS = (
     sequence_operation(
         "sequence.compute.frequencies",
         "Compute value frequencies",
@@ -22,7 +22,7 @@ SEQUENCE_SEARCH_CAPABILITIES = (
         frequencies,
         "sequence",
         "counting",
-        invocation_examples=(
+        examples=(
             example(
                 "frequencies_1_2_1",
                 "Count frequencies in 1, 2, and 1.",
@@ -39,7 +39,7 @@ SEQUENCE_SEARCH_CAPABILITIES = (
         zero_indices,
         "sequence",
         "search",
-        invocation_examples=(
+        examples=(
             example(
                 "zero_indices_2_0_3",
                 "Locate zero terms in 2, 0, and 3.",

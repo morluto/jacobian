@@ -7,8 +7,8 @@ def test_runtime_catalog_uses_only_domain_owned_operation_ids(
     fresh_complete_runtime: JacobianRuntime,
 ) -> None:
     catalog_ids = {
-        descriptor.capability_id
-        for descriptor in fresh_complete_runtime.core.capabilities.catalog().capabilities
+        descriptor.operation_id
+        for descriptor in fresh_complete_runtime.core.operations.catalog().operations
     }
 
     assert {

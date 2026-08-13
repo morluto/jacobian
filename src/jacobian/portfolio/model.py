@@ -64,5 +64,5 @@ def _validate_bundle(bundle: object) -> None:
         )
     if not bundle.domain_id:
         raise ValueError("portfolio contains a bundle with a blank domain id")
-    if len(bundle.capability_ids) != len(set(bundle.capability_ids)):
-        raise ValueError(f"bundle {bundle.domain_id} has duplicate capability IDs")
+    if len(bundle.operation_ids) != len(set(bundle.operation_ids)):
+        raise ValueError(f"bundle {bundle.domain_id} has duplicate operation IDs")

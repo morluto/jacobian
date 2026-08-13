@@ -1,4 +1,4 @@
-"""Recurrence-owned exact combinatorics capabilities."""
+"""Recurrence-owned exact combinatorics operations."""
 
 from jacobian.contracts.combinatorics import (
     FibonacciPairRequest,
@@ -34,7 +34,7 @@ from jacobian.math.combinatorics import (
     recurrence_table_residuals,
 )
 
-RECURRENCE_CAPABILITIES = (
+RECURRENCE_OPERATIONS = (
     combinatorics_operation(
         "combinatorics.compute.fibonacci",
         "Compute Fibonacci number",
@@ -44,7 +44,7 @@ RECURRENCE_CAPABILITIES = (
         fibonacci,
         "combinatorics",
         "sequence",
-        invocation_examples=(
+        examples=(
             example("fibonacci_10", "Compute the tenth Fibonacci number.", {"n": 10}),
         ),
     ),
@@ -58,7 +58,7 @@ RECURRENCE_CAPABILITIES = (
         "combinatorics",
         "fibonacci",
         "recurrence-boundary",
-        invocation_examples=(
+        examples=(
             example(
                 "fibonacci_pair_8",
                 "Return consecutive Fibonacci values at n=8.",
@@ -75,7 +75,7 @@ RECURRENCE_CAPABILITIES = (
         lucas,
         "combinatorics",
         "sequence",
-        invocation_examples=(
+        examples=(
             example("lucas_7", "Compute the seventh Lucas number.", {"n": 7}),
         ),
     ),
@@ -88,7 +88,7 @@ RECURRENCE_CAPABILITIES = (
         bernoulli,
         "combinatorics",
         "sequence",
-        invocation_examples=(
+        examples=(
             example("bernoulli_4", "Compute the fourth Bernoulli number.", {"n": 4}),
         ),
     ),
@@ -107,7 +107,7 @@ RECURRENCE_CAPABILITIES = (
         "recurrence",
         "linear-recurrence",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "generic_fibonacci_prefix",
                 "Evaluate the first eight terms of the Fibonacci recurrence.",
@@ -147,7 +147,7 @@ RECURRENCE_CAPABILITIES = (
         "p-recursive",
         "polynomial-coefficients",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "factorial_prefix",
                 "Evaluate the first seven terms of a_n=n*a_(n-1).",
@@ -186,7 +186,7 @@ RECURRENCE_CAPABILITIES = (
         "p-recursive",
         "submitted-table",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "factorial_table_residuals",
                 "Check a supplied factorial prefix against a_n=n*a_(n-1).",
@@ -225,7 +225,7 @@ RECURRENCE_CAPABILITIES = (
         "generating-function",
         "rational-series",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "geometric_series_prefix",
                 "Expand 1/(1-x) through six coefficients.",

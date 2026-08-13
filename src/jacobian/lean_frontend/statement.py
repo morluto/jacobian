@@ -1,6 +1,6 @@
 """Atomic Lean statement proposal and comparison adapters.
 
-Two domain-atomic capabilities, each producing exactly one inspectable
+Two domain-atomic operations, each producing exactly one inspectable
 artifact:
 
 * ``lean.statement.propose`` — either type-check one proposed Lean statement
@@ -29,17 +29,6 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityInvocationExample,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_statement import (
     LeanElaborationDiagnostic,
@@ -51,7 +40,18 @@ from jacobian.contracts.lean_statement import (
     LeanStatementProposalOutput,
     LeanStatementProposalRequest,
 )
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationInputKind,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderObservation,
+)
 from jacobian.domains._examples import example
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -144,7 +144,7 @@ _LEAN_KEYWORDS = frozenset(
 
 def _lean_version_info(
     executable: str | None = None,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
 ) -> tuple[str, str]:
     """Return (version, commit) from ``lean --version``; ``unknown`` on failure."""
 
@@ -186,7 +186,7 @@ def _elaborate_statement(
     statement: str,
     *,
     executable: str | None = None,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
     timeout_seconds: int = _ELAPSED_TIMEOUT_SECONDS,
 ) -> _ElaborationResult:
     """Elaborate ``example : {statement} := by sorry`` via the ``lean`` binary."""
@@ -206,7 +206,7 @@ def _elaborate_proposition(
     statement: str,
     *,
     executable: str | None = None,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
     timeout_seconds: int = _ELAPSED_TIMEOUT_SECONDS,
 ) -> _ElaborationResult:
     """Elaborate one expression against expected type ``Prop``."""
@@ -263,7 +263,7 @@ def _check_proof(
     proof: str,
     *,
     executable: str | None = None,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
     timeout_seconds: int = _ELAPSED_TIMEOUT_SECONDS,
 ) -> _ElaborationResult:
     """Check whether ``example : {statement} := by {proof}`` elaborates."""
@@ -284,7 +284,7 @@ def _run_lean_source(
     source: str,
     *,
     executable: str | None = None,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
     timeout_seconds: int,
 ) -> _ElaborationResult:
     output = _execute_lean_source(
@@ -310,7 +310,7 @@ def _execute_lean_source(
     source: str,
     *,
     executable: str | None = None,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
     timeout_seconds: int,
 ) -> str:
     _require_current_runtime(provider_runtime)
@@ -370,7 +370,7 @@ def _lean_executable() -> str:
 
 
 def _require_current_runtime(
-    provider_runtime: CapabilityProviderRuntime | None,
+    provider_runtime: ProviderObservation | None,
 ) -> None:
     if provider_runtime is None:
         return
@@ -475,7 +475,7 @@ def _environment_digest(
     return "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
 
 
-def _semantic_runtime_digest(runtime: CapabilityProviderRuntime | None) -> str | None:
+def _semantic_runtime_digest(runtime: ProviderObservation | None) -> str | None:
     if runtime is None:
         return None
     semantic_runtime = runtime.configuration.get("semantic_runtime")
@@ -531,7 +531,7 @@ class _Resources:
     semantics_uri: str
     proposal_schema_uri: str
     comparison_schema_uri: str
-    provider_runtime: CapabilityProviderRuntime
+    provider_runtime: ProviderObservation
     lean_executable: str | None
 
 
@@ -539,7 +539,7 @@ def install_lean_statement_capabilities(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
 ) -> tuple[
     tuple[
         LeanStatementProposalAdapter,
@@ -586,7 +586,7 @@ def install_lean_statement_capabilities(
         provider_runtime=provider_runtime,
         lean_executable=(
             str(provider_runtime.configuration["executable"])
-            if provider_runtime.availability is CapabilityProviderAvailability.AVAILABLE
+            if provider_runtime.availability is ProviderAvailability.AVAILABLE
             else None
         ),
     )
@@ -612,8 +612,8 @@ class LeanStatementProposalAdapter:
 
     def __init__(self, resources: _Resources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.statement.propose",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.statement.propose",
             version="2",
             title="Propose one Lean statement with type-check status",
             description=(
@@ -628,11 +628,11 @@ class LeanStatementProposalAdapter:
             output_schema=LeanStatementProposalOutput.model_json_schema(),
             tags=("lean", "statement", "elaboration", "proposal", "proposition"),
             accepted_input_kinds=(
-                CapabilityInputKind.STRUCTURED_REQUEST,
-                CapabilityInputKind.FORMAL_PROPOSITION,
+                OperationInputKind.STRUCTURED_REQUEST,
+                OperationInputKind.FORMAL_PROPOSITION,
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="elaborate_true",
                     description=(
                         "Elaborate the proposition True in the pinned CORE "
@@ -650,18 +650,18 @@ class LeanStatementProposalAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanStatementProposalRequest:
+    def prepare(self, request: OperationRequest) -> LeanStatementProposalRequest:
         try:
-            validated = parse_capability_input(
+            validated = parse_operation_input(
                 LeanStatementProposalRequest, request.input
             )
             _validate_statement(validated.proposed_statement)
         except (ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_STATEMENT_PROPOSAL",
                     stage="request_validation",
                     message="The Lean statement proposal is invalid.",
@@ -689,8 +689,8 @@ class LeanStatementProposalAdapter:
                 )
             )
         except _LeanUnavailableError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_BACKEND_UNAVAILABLE",
                     stage="elaboration",
                     message=str(exc),
@@ -749,7 +749,7 @@ class LeanStatementProposalAdapter:
             proposal_uri=artifact.artifact_uri,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=output),
             publication=PublishedOperation(
@@ -769,8 +769,8 @@ class LeanStatementCompareAdapter:
 
     def __init__(self, resources: _Resources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.statement.compare",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.statement.compare",
             version="1",
             title="Compare two Lean statements and axiom sets (fail-closed)",
             description=(
@@ -784,7 +784,7 @@ class LeanStatementCompareAdapter:
             input_schema=LeanStatementComparisonRequest.model_json_schema(),
             output_schema=LeanStatementComparisonOutput.model_json_schema(),
             tags=("lean", "statement", "comparison", "axiom-set"),
-            invocation_examples=(
+            examples=(
                 example(
                     "core_true_identity",
                     "Compare identical Lean Core propositions.",
@@ -798,19 +798,19 @@ class LeanStatementCompareAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanStatementComparisonRequest:
+    def prepare(self, request: OperationRequest) -> LeanStatementComparisonRequest:
         try:
-            validated = parse_capability_input(
+            validated = parse_operation_input(
                 LeanStatementComparisonRequest, request.input
             )
             _validate_statement(validated.statement_a)
             _validate_statement(validated.statement_b)
         except (ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_STATEMENT_COMPARISON",
                     stage="request_validation",
                     message="The Lean statement comparison request is invalid.",
@@ -882,7 +882,7 @@ class LeanStatementCompareAdapter:
             comparison_uri=artifact.artifact_uri,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=output),
             publication=PublishedOperation(

@@ -184,7 +184,7 @@ def test_exact_hv_spike_keeps_production_deferred(tmp_path: Path) -> None:
     ] == [4, 6, 4, 6]
     assert report["independent_replay"]["completeness"] == "NOT_ESTABLISHED"
     assert report["checker_feasibility"]["decision"] == "REVISE"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_absent_provider_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
@@ -204,7 +204,7 @@ def test_absent_provider_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
                 "The explicitly selected pycddlib Python interpreter is unavailable."
             ),
         },
-        "capability_ids_registered": [],
+        "operation_ids_registered": [],
     }
 
 
@@ -359,7 +359,7 @@ def test_worker_import_failure_preserves_unavailable_status(tmp_path: Path) -> N
 
     assert report["status"] == "UNAVAILABLE"
     assert report["diagnostic"]["code"] == "PROVIDER_IMPORT_ERROR"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_malformed_archives_do_not_escape_as_exceptions(tmp_path: Path) -> None:

@@ -12,7 +12,7 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.sat_lrat import install_sat_lrat_verifier
@@ -41,7 +41,7 @@ def _open_lrat_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             if adapter is not None:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield services
 
 
@@ -58,9 +58,9 @@ def unauthorized_lrat_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
 
 def _verify(runtime: DomainTestServices, cnf_uri: str, proof: bytes, **extra: object):
-    return runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sat.lrat.verify",
+    return runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="sat.lrat.verify",
             input={
                 "cnf_uri": cnf_uri,
                 "proof_base64": base64.b64encode(proof).decode("ascii"),
@@ -194,11 +194,11 @@ def test_lrat_resource_exhaustion_is_an_operational_error(
     assert result.verification_record_uri is None
 
 
-def test_capability_is_absent_without_operator_authorized_references(
+def test_operation_is_absent_without_operator_authorized_references(
     unauthorized_lrat_services: DomainTestServices,
 ) -> None:
     runtime = unauthorized_lrat_services
     ids = {
-        item.capability_id for item in runtime.core.capabilities.catalog().capabilities
+        item.operation_id for item in runtime.core.operations.catalog().operations
     }
     assert "sat.lrat.verify" not in ids

@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationRefusalError,
-    OperationSpec,
 )
 
 if TYPE_CHECKING:
@@ -92,7 +92,7 @@ def _execute(
         ValueError,
     ) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="GRAPH_HAMILTONIAN_PATH_NOT_APPLICABLE",
                 stage="graph_hamiltonian_path_computation",
                 message=str(exc),
@@ -104,11 +104,11 @@ def _execute(
         ) from exc
 
 
-HAMILTONIAN_PATH_CAPABILITY: InstalledOperation[
+HAMILTONIAN_PATH_OPERATION: InstalledOperation[
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
 ] = inline_operation(
-    OperationSpec(
+    OperationDeclaration(
         operation_id="graph.hamiltonian_path.decide",
         version="5",
         title="Decide bounded Hamiltonian-path existence",
@@ -132,4 +132,4 @@ HAMILTONIAN_PATH_CAPABILITY: InstalledOperation[
 )
 
 
-__all__ = ["HAMILTONIAN_PATH_CAPABILITY"]
+__all__ = ["HAMILTONIAN_PATH_OPERATION"]

@@ -6,7 +6,7 @@ import pytest
 from tests.boundary.providers.external_sat.external_sat_support import (
     open_verified_unsat_services,
 )
-from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.operations import invoke_operation as _invoke
 
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatProofArtifact

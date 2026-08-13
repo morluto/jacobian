@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -38,9 +38,9 @@ def test_public_gaussian_moment_reproductions_reach_checker_bound_results(
     probability_services,
 ) -> None:
     for case in _load_suite():
-        computed = probability_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="probability.gaussian_polynomial.moment.compute",
+        computed = probability_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="probability.gaussian_polynomial.moment.compute",
                 input=case["request"],
             )
         )
@@ -48,9 +48,9 @@ def test_public_gaussian_moment_reproductions_reach_checker_bound_results(
         assert computed.execution.status is ExecutionStatus.COMPLETED
         assert computed.output["result"]["moment"] == case["expected_moment"]
 
-        verified = probability_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="probability.gaussian_polynomial.moment.verify",
+        verified = probability_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="probability.gaussian_polynomial.moment.verify",
                 input={
                     "input": case["request"],
                     "candidate": computed.output["result"],

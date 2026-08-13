@@ -1,11 +1,11 @@
-"""Installation of built-in application and domain capabilities."""
+"""Installation of built-in application and domain operations."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from jacobian.checker_identity import batch_checker_manifest_measurement
-from jacobian.contracts.capabilities import CapabilityProviderAvailability
+from jacobian.contracts.operations import ProviderAvailability
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.polynomial_nullstellensatz.core import (
     install_nullstellensatz_core,
@@ -21,12 +21,12 @@ from jacobian.finite_coverage import install_finite_coverage
 from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
 from jacobian.installation.context import InstallationContext
-from jacobian.polynomial_system_capabilities import (
-    install_polynomial_system_capabilities,
+from jacobian.polynomial_system_operations import (
+    install_polynomial_system_operations,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
 from jacobian.polynomials import install_polynomial_capabilities
-from jacobian.polytope_capabilities import PolytopeSeparationAdapter
+from jacobian.polytope_operations import PolytopeSeparationAdapter
 from jacobian.portfolio.builtin import build_builtin_portfolio
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
@@ -36,8 +36,8 @@ from jacobian.portfolio.result import (
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.services import RuntimeServices
-from jacobian.universal_algebra_capabilities import (
-    install_universal_algebra_capabilities,
+from jacobian.universal_algebra_operations import (
+    install_universal_algebra_operations,
 )
 
 
@@ -51,7 +51,7 @@ class CoreApplicationInstaller:
         self,
         ctx: InstallationContext,
     ) -> GraphInstallation:
-        """Install retained graph capabilities."""
+        """Install retained graph operations."""
 
         graph_adapters, graph = install_graph_capabilities(
             ctx.store,
@@ -62,7 +62,7 @@ class CoreApplicationInstaller:
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
         for graph_adapter in graph_adapters:
-            self.context.register_capability(graph_adapter)
+            self.context.register_operation(graph_adapter)
         return graph
 
     def _install_nullstellensatz(self) -> None:
@@ -85,17 +85,17 @@ class CoreApplicationInstaller:
         )
         core = install_nullstellensatz_core(ctx, core_runtime)
         for adapter in core.adapters:
-            ctx.register_capability(adapter)
+            ctx.register_operation(adapter)
         singular_runtime = singular_provider_runtime()
         if (
             singular_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
+            is not ProviderAvailability.AVAILABLE
         ):
             return
 
         singular = install_singular_producer(ctx, core, singular_runtime)
         for adapter in singular.adapters:
-            ctx.register_capability(adapter)
+            ctx.register_operation(adapter)
 
     def install(
         self,
@@ -105,7 +105,7 @@ class CoreApplicationInstaller:
 
         ctx = self.context
 
-        self.context.register_capability(PolytopeSeparationAdapter(services.polytope))
+        self.context.register_operation(PolytopeSeparationAdapter(services.polytope))
         finite_coverage_adapter, _ = install_finite_coverage(
             ctx.store,
             ctx.schemas,
@@ -115,7 +115,7 @@ class CoreApplicationInstaller:
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
         if finite_coverage_adapter is not None:
-            self.context.register_capability(finite_coverage_adapter)
+            self.context.register_operation(finite_coverage_adapter)
 
         graph = self._install_graph_capabilities(ctx)
 
@@ -134,7 +134,7 @@ class CoreApplicationInstaller:
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
         if graph_isomorphism_adapter is not None:
-            self.context.register_capability(graph_isomorphism_adapter)
+            self.context.register_operation(graph_isomorphism_adapter)
 
         polynomial_adapters, _ = install_polynomial_capabilities(
             ctx.store,
@@ -145,10 +145,10 @@ class CoreApplicationInstaller:
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
         for polynomial_adapter in polynomial_adapters:
-            self.context.register_capability(polynomial_adapter)
+            self.context.register_operation(polynomial_adapter)
 
         polynomial_system_adapter, polynomial_system = (
-            install_polynomial_system_capabilities(
+            install_polynomial_system_operations(
                 ctx.store,
                 ctx.schemas,
                 ctx.artifacts,
@@ -158,15 +158,15 @@ class CoreApplicationInstaller:
             )
         )
         if polynomial_system_adapter is not None:
-            self.context.register_capability(polynomial_system_adapter)
-        self.context.register_capability(
+            self.context.register_operation(polynomial_system_adapter)
+        self.context.register_operation(
             PolynomialSystemRationalSearchAdapter(
                 ctx.artifacts,
                 polynomial_system,
             )
         )
 
-        universal_adapters, _ = install_universal_algebra_capabilities(
+        universal_adapters, _ = install_universal_algebra_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
@@ -175,7 +175,7 @@ class CoreApplicationInstaller:
             authorize_checker=ctx.authorizes_bundled_checkers,
         )
         for universal_adapter in universal_adapters:
-            self.context.register_capability(universal_adapter)
+            self.context.register_operation(universal_adapter)
         return graph
 
     def install_domain_verification(
@@ -208,5 +208,5 @@ class CoreApplicationInstaller:
                 authorize=ctx.authorizes_bundled_checkers,
             )
         for adapter in adapters:
-            self.context.register_capability(adapter)
+            self.context.register_operation(adapter)
         return installation

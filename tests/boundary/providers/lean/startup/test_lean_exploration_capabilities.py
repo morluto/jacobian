@@ -10,8 +10,8 @@ from tests.support.provider_lean import (
     skip_unless_pinned_mathlib_runtime,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 
@@ -28,9 +28,9 @@ def test_apply_tactic_exposes_child_goals_and_replay_source(tmp_path: Path) -> N
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.proof_state.apply_tactic",
             input={
                 "environment": "CORE",
                 "statement": "(P Q : Prop) → P → Q → P ∧ Q",
@@ -68,9 +68,9 @@ def test_apply_tactic_returns_structured_failure_without_conclusion(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.proof_state.apply_tactic",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.proof_state.apply_tactic",
             input={
                 "environment": "CORE",
                 "statement": "(P Q : Prop) → P → Q",
@@ -97,9 +97,9 @@ def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> N
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
-    suggested = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.retrieve.premises",
+    suggested = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.retrieve.premises",
             input={
                 "environment": "MATHLIB",
                 "statement": "(n : Nat) → Nat.gcd n 0 = n",
@@ -109,9 +109,9 @@ def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> N
         )
     )
 
-    empty = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.retrieve.premises",
+    empty = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.retrieve.premises",
             input={
                 "environment": "MATHLIB",
                 "statement": "(P Q : Prop) → P → Q",
@@ -145,18 +145,18 @@ def test_runtime_can_ablate_lean_capabilities_without_removing_checker(
     runtime = create_runtime(
         tmp_path,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-        capability_exclusions=frozenset(
+        operation_exclusions=frozenset(
             {
                 "lean.proof_state.apply_tactic",
                 "lean.retrieve.premises",
             }
         ),
     )
-    capability_ids = {
-        descriptor.capability_id
-        for descriptor in runtime.core.capabilities.catalog().capabilities
+    operation_ids = {
+        descriptor.operation_id
+        for descriptor in runtime.core.operations.catalog().operations
     }
 
-    assert "lean.check" in capability_ids
-    assert "lean.proof_state.apply_tactic" not in capability_ids
-    assert "lean.retrieve.premises" not in capability_ids
+    assert "lean.check" in operation_ids
+    assert "lean.proof_state.apply_tactic" not in operation_ids
+    assert "lean.retrieve.premises" not in operation_ids

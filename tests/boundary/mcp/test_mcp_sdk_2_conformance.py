@@ -11,7 +11,7 @@ from mcp_types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.server import create_server
-from jacobian.contracts.capabilities import CapabilityResult
+from jacobian.contracts.operations import OperationResult
 from jacobian.runtime import CheckerAuthorityMode
 
 
@@ -43,44 +43,44 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             )
             invoke = next(tool for tool in listed.tools if tool.name == "math.run")
             assert set(invoke.input_schema["properties"]) == {
-                "capability_id",
+                "operation_id",
                 "inputs",
                 "payload",
             }
-            assert invoke.output_schema == CapabilityResult.model_json_schema()
+            assert invoke.output_schema == OperationResult.model_json_schema()
             find = next(tool for tool in listed.tools if tool.name == "math.find")
             assert set(find.input_schema["properties"]) == {"request"}
             assert find.input_schema["properties"]["request"]["discriminator"] == {
                 "mapping": {
-                    "inspect": "#/$defs/_CapabilityInspectRequest",
-                    "search": "#/$defs/_CapabilitySearchRequest",
+                    "inspect": "#/$defs/_OperationInspectRequest",
+                    "search": "#/$defs/_OperationSearchRequest",
                 },
                 "propertyName": "op",
             }
             assert find.output_schema["type"] == "object"
             assert find.output_schema["discriminator"] == {
                 "mapping": {
-                    "capability": "#/$defs/_CapabilityInspectionResult",
-                    "discovery": "#/$defs/_CapabilityDiscoveryResult",
-                    "error": "#/$defs/_CapabilityDiscoveryError",
+                    "operation": "#/$defs/_OperationInspectionResult",
+                    "discovery": "#/$defs/_OperationDiscoveryResult",
+                    "error": "#/$defs/_OperationDiscoveryError",
                 },
                 "propertyName": "kind",
             }
             assert len(find.output_schema["oneOf"]) == 3
             assert set(
-                find.output_schema["$defs"]["_CapabilityDiscoveryResult"]["required"]
+                find.output_schema["$defs"]["_OperationDiscoveryResult"]["required"]
             ) >= {"kind", "matches", "total_matches", "truncated"}
             assert set(
-                find.output_schema["$defs"]["_CapabilityInspectionResult"]["required"]
-            ) >= {"kind", "capability"}
+                find.output_schema["$defs"]["_OperationInspectionResult"]["required"]
+            ) >= {"kind", "operation"}
             assert (
-                find.output_schema["$defs"]["_CapabilityDiscoveryOperationCard"][
+                find.output_schema["$defs"]["_OperationDiscoveryOperationCard"][
                     "additionalProperties"
                 ]
                 is False
             )
             assert (
-                find.output_schema["$defs"]["_CapabilityDiscoveryErrorDetail"][
+                find.output_schema["$defs"]["_OperationDiscoveryErrorDetail"][
                     "additionalProperties"
                 ]
                 is False
@@ -102,7 +102,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                     "request": {
                         "op": "search",
                         "query": "matrix rank",
-                        "capability_id": "matrix.rank.compute",
+                        "operation_id": "matrix.rank.compute",
                     }
                 },
             )
@@ -112,7 +112,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 await client.call_tool(
                     "math.run",
                     {
-                        "capability_id": "polynomial.expression.normalize",
+                        "operation_id": "polynomial.expression.normalize",
                         "payload": {},
                         "reasoning_run_id": "retired",
                     },
@@ -127,7 +127,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 (
                     "math.run",
                     {
-                        "capability_id": "polynomial.expression.normalize",
+                        "operation_id": "polynomial.expression.normalize",
                         "payload": "{}",
                     },
                 ),
@@ -141,7 +141,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 {
                     "request": {
                         "op": "inspect",
-                        "capability_id": "polynomial.expression.normalize",
+                        "operation_id": "polynomial.expression.normalize",
                     }
                 },
             )
@@ -150,14 +150,14 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             result = await client.call_tool(
                 "math.run",
                 {
-                    "capability_id": "polynomial.expression.normalize",
-                    "payload": contract["capability"]["invocation_examples"][0][
+                    "operation_id": "polynomial.expression.normalize",
+                    "payload": contract["operation"]["examples"][0][
                         "input"
                     ],
                 },
             )
             assert isinstance(result.structured_content, dict)
-            assert result.structured_content == CapabilityResult.model_validate(
+            assert result.structured_content == OperationResult.model_validate(
                 result.structured_content
             ).model_dump(mode="json")
 

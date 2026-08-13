@@ -15,13 +15,13 @@ from tests.support.provider_lean import (
 from tests.support.state import copy_template
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.lean import (
     LeanDeclarationSearchRequest,
     LeanEnvironment,
+)
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import (
     Arithmetic,
@@ -104,9 +104,9 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.declaration.dependencies",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.declaration.dependencies",
             input={
                 "environment": "CORE",
                 "root_declaration": "Nat.add_comm",
@@ -143,9 +143,9 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
     assert runtime.portfolio_resources.lean is not None
     assert runtime.portfolio_resources.lean_declarations is not None
 
-    searched = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.declaration.search",
+    searched = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.declaration.search",
             input={
                 "environment": "MATHLIB",
                 "name_contains": "irrational_sqrt_two",
@@ -153,9 +153,9 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
             },
         )
     )
-    inspected = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.declaration.inspect",
+    inspected = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.declaration.inspect",
             input={
                 "environment": "MATHLIB",
                 "declaration_name": "irrational_sqrt_two",
@@ -200,18 +200,18 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
     )
     assert runtime.portfolio_resources.lean is not None
 
-    inspected = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.declaration.inspect",
+    inspected = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.declaration.inspect",
             input={
                 "environment": "CORE",
                 "declaration_name": "Nat.add",
             },
         )
     )
-    outside_profile = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.declaration.search",
+    outside_profile = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.declaration.search",
             input={
                 "environment": "CORE",
                 "name_contains": "Lean.Meta.ppExpr",
@@ -284,7 +284,7 @@ def test_core_lean_accepts_single_expression_witness_forms(
     assert verified.result.verification_record_uri is not None
 
 
-def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> None:
+def test_core_lean_check_runs_through_operation_mcp_surface(tmp_path: Path) -> None:
     async def scenario() -> None:
         from mcp import Client
 
@@ -297,20 +297,20 @@ def test_core_lean_check_runs_through_capability_mcp_surface(tmp_path: Path) -> 
                 {
                     "request": {
                         "op": "inspect",
-                        "capability_id": "lean.check",
+                        "operation_id": "lean.check",
                     }
                 },
             )
             assert isinstance(described.structured_content, dict)
             descriptor = described.structured_content
-            assert descriptor["capability"]["invocation_examples"][0]["name"] == (
+            assert descriptor["operation"]["examples"][0]["name"] == (
                 "finite-witness-let"
             )
 
             response = await client.call_tool(
                 "math.run",
                 {
-                    "capability_id": "lean.check",
+                    "operation_id": "lean.check",
                     "payload": {
                         "statement": "∀ n : Nat, n + 0 = n",
                         "proof": (

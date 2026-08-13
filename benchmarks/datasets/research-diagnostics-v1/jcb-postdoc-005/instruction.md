@@ -4,7 +4,7 @@ Let X1,X2,T be independent standard real Gaussian variables, Z=(X1+iX2)/sqrt(2),
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. The catalog lacks a domain-owned Gaussian expectation or Wick-contraction capability that returns a symbolic all-m identity and proof obligations. Finite moment checks cannot establish the theorem.
+report the operation boundary honestly. The catalog lacks a domain-owned Gaussian expectation or Wick-contraction operation that returns a symbolic all-m identity and proof obligations. Finite moment checks cannot establish the theorem.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

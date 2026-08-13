@@ -9,12 +9,12 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.exact import (
     CanonicalInteger,
     CanonicalRational,
     require_bounded_rational,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ContractModel
 from jacobian.domains._examples import example
 from jacobian.math.probability.mutual_information import (
@@ -32,7 +32,8 @@ from jacobian.math.probability.values import (
     MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
 )
 from jacobian.operation_bindings import inline_operation
-from jacobian.operations import OperationRefusalError, OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operations import OperationRefusalError
 from jacobian.provider_runtime import jacobian_provider_runtime
 
 FiniteJointLabel = Annotated[
@@ -405,7 +406,7 @@ class FiniteJointTableMutualInformationResult(ContractModel):
         )
 
 
-_INVALID_REQUEST = CapabilityDiagnostic(
+_INVALID_REQUEST = OperationDiagnostic(
     code="INVALID_FINITE_JOINT_TABLE_REQUEST",
     stage="finite_joint_table_input_validation",
     message="Input does not satisfy the bounded normalized rational joint-table contract.",
@@ -425,7 +426,7 @@ def _execute(
         )
     except (ArithmeticError, OverflowError, TypeError, ValueError) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="MUTUAL_INFORMATION_CERTIFICATE_BOUND_EXCEEDED",
                 stage="finite_joint_mutual_information",
                 message=str(exc),
@@ -434,8 +435,8 @@ def _execute(
         ) from exc
 
 
-MUTUAL_INFORMATION_CAPABILITY = inline_operation(
-    OperationSpec(
+MUTUAL_INFORMATION_OPERATION = inline_operation(
+    OperationDeclaration(
         operation_id="probability.joint.mutual_information.compute",
         version="1",
         title="Exact finite-table mutual information certificate",
@@ -456,7 +457,7 @@ MUTUAL_INFORMATION_CAPABILITY = inline_operation(
             "certificate",
         ),
         invalid_request=_INVALID_REQUEST,
-        invocation_examples=(
+        examples=(
             example(
                 "perfectly_correlated_fair_bits",
                 "Compute exact base-two mutual information for two identical fair bits.",
@@ -485,7 +486,7 @@ MUTUAL_INFORMATION_CAPABILITY = inline_operation(
 )
 
 __all__ = [
-    "MUTUAL_INFORMATION_CAPABILITY",
+    "MUTUAL_INFORMATION_OPERATION",
     "FiniteJointTableMutualInformationRequest",
     "FiniteJointTableMutualInformationResult",
 ]

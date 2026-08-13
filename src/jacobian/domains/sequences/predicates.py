@@ -1,4 +1,4 @@
-"""Sequence predicate capabilities over finite integer sequences."""
+"""Sequence predicate operations over finite integer sequences."""
 
 from jacobian.contracts.sequences import (
     IntegerSequenceBooleanResult,
@@ -13,7 +13,7 @@ from jacobian.domains.sequences.operations import (
     decide_strictly_increasing,
 )
 
-SEQUENCE_PREDICATE_CAPABILITIES = (
+SEQUENCE_PREDICATE_OPERATIONS = (
     sequence_operation(
         "sequence.decide.arithmetic",
         "Decide arithmetic progression",
@@ -23,7 +23,7 @@ SEQUENCE_PREDICATE_CAPABILITIES = (
         decide_arithmetic,
         "sequence",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "arithmetic_sequence",
                 "Recognize an arithmetic sequence.",
@@ -40,7 +40,7 @@ SEQUENCE_PREDICATE_CAPABILITIES = (
         decide_geometric,
         "sequence",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "powers_of_two",
                 "Recognize a geometric sequence of powers of two.",
@@ -57,7 +57,7 @@ SEQUENCE_PREDICATE_CAPABILITIES = (
         decide_nondecreasing,
         "sequence",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "nondecreasing_sequence",
                 "Check nondecreasing order.",
@@ -74,7 +74,7 @@ SEQUENCE_PREDICATE_CAPABILITIES = (
         decide_strictly_increasing,
         "sequence",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "strictly_increasing_sequence",
                 "Check strict increase.",

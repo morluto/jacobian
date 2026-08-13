@@ -1,4 +1,4 @@
-"""Operator-facing measurements for installed capability providers."""
+"""Operator-facing measurements for installed operation providers."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderObservation,
 )
 from jacobian.contracts.results import ContractModel
 
@@ -67,7 +67,7 @@ class ProviderInstalledSize(ContractModel):
 
 class ProviderMeasurement(ContractModel):
     measurement_version: Literal["2"] = "2"
-    provider_runtime: CapabilityProviderRuntime
+    provider_runtime: ProviderObservation
     installed_size: ProviderInstalledSize
     cold_install: ProviderMeasurementSample
     cold_start: ProviderMeasurementSample
@@ -77,7 +77,7 @@ class ProviderMeasurement(ContractModel):
     def require_available_provider(self) -> Self:
         if (
             self.provider_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
+            is not ProviderAvailability.AVAILABLE
         ):
             raise ValueError("only an available provider runtime can be measured")
         return self

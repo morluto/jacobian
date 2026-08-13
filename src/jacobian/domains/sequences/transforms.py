@@ -1,4 +1,4 @@
-"""Sequence transform capabilities over finite integer sequences."""
+"""Sequence transform operations over finite integer sequences."""
 
 from jacobian.contracts.sequences import (
     IntegerSequenceListResult,
@@ -22,7 +22,7 @@ from jacobian.domains.sequences.operations import (
     sorted_unique,
 )
 
-SEQUENCE_TRANSFORM_CAPABILITIES = (
+SEQUENCE_TRANSFORM_OPERATIONS = (
     sequence_operation(
         "sequence.compute.prefix_sums",
         "Compute prefix sums",
@@ -32,7 +32,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         prefix_sums,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "prefix_sums_1_2_3",
                 "Compute prefix sums of 1, 2, and 3.",
@@ -49,7 +49,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         first_differences,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "square_first_differences",
                 "Compute differences of consecutive squares.",
@@ -66,7 +66,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         prefix_products,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "prefix_products_2_3_4",
                 "Compute prefix products of 2, 3, and 4.",
@@ -83,7 +83,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         prefix_minima,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "prefix_minima_3_1_2",
                 "Compute prefix minima of 3, 1, and 2.",
@@ -100,7 +100,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         prefix_maxima,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "prefix_maxima_1_3_2",
                 "Compute prefix maxima of 1, 3, and 2.",
@@ -117,7 +117,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         prefix_gcds,
         "sequence",
         "divisibility",
-        invocation_examples=(
+        examples=(
             example(
                 "prefix_gcds_18_24_15",
                 "Compute prefix gcds of 18, 24, and 15.",
@@ -134,7 +134,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         prefix_lcms,
         "sequence",
         "divisibility",
-        invocation_examples=(
+        examples=(
             example(
                 "prefix_lcms_2_3_4",
                 "Compute prefix lcms of 2, 3, and 4.",
@@ -151,7 +151,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         second_differences,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "second_differences_squares",
                 "Compute second differences of consecutive squares.",
@@ -168,7 +168,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         sorted_unique,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "sorted_unique_3_1_3_2",
                 "Sort and deduplicate a sequence.",
@@ -185,7 +185,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         sort_sequence,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "sort_3_1_2", "Sort an integer sequence.", {"values": ["3", "1", "2"]}
             ),
@@ -200,7 +200,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         reverse_sequence,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "reverse_1_2_3",
                 "Reverse an integer sequence.",
@@ -217,7 +217,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         parities,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "parities_1_2_3",
                 "Compute parities of 1, 2, and 3.",
@@ -234,7 +234,7 @@ SEQUENCE_TRANSFORM_CAPABILITIES = (
         signs,
         "sequence",
         "transform",
-        invocation_examples=(
+        examples=(
             example(
                 "signs_negative_zero_positive",
                 "Compute signs of negative, zero, and positive values.",

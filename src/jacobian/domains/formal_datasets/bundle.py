@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import platform
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.formal_datasets import (
     FormalDatasetArtifact,
     FormalDatasetMaterializeRequest,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains._examples import example
 from jacobian.formal_datasets import _materialize_operation
 from jacobian.operation_bindings import durable_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
-    OperationSpec,
 )
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
@@ -46,9 +46,9 @@ def build_formal_dataset_bundle() -> DomainBundle:
             f"python-{platform.python_version()};lean-{LEAN_VERSION};"
             f"mathlib-{MATHLIB_COMMIT}"
         ),
-        capabilities=(
+        operations=(
             durable_operation(
-                OperationSpec(
+                OperationDeclaration(
                     operation_id="dataset.formal.materialize",
                     version="3",
                     title="Materialize one pinned formal-dataset row",
@@ -60,7 +60,7 @@ def build_formal_dataset_bundle() -> DomainBundle:
                     result_type=FormalDatasetArtifact,
                     execute=_materialize_operation,
                     tags=("dataset", "formal-mathematics", "lean", "provenance"),
-                    invocation_examples=(
+                    examples=(
                         example(
                             "minif2f_core_true",
                             "Materialize a pinned MiniF2F-style CORE fixture.",
@@ -99,7 +99,7 @@ def build_formal_dataset_bundle() -> DomainBundle:
             ),
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_FORMAL_DATASET_ROW",
                 stage="request_validation",
                 message="The formal-dataset materialization request is invalid.",

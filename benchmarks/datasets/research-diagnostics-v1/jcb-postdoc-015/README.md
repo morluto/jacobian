@@ -17,7 +17,7 @@ integer Sidon property and complete fixed-order extension decisions at orders
 - historical_fit: `MISSING`
 - current_status: `PARTIAL`
 - evaluation_status: `RUNNABLE_PUBLIC_REPRODUCTION`
-- next_action: Run public Oracle validation, then evaluate capability discovery on protected transformed fixed-order cases.
+- next_action: Run public Oracle validation, then evaluate operation discovery on protected transformed fixed-order cases.
 
 ## Contract
 

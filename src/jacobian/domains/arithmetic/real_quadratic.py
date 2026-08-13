@@ -1,9 +1,9 @@
 """Typed real-quadratic order operation and checker declaration."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.domains._examples import example
 from jacobian.domains.arithmetic._support import arithmetic_operation
@@ -17,19 +17,19 @@ from jacobian.provider_runtime import source_provider_runtime
 
 def _real_quadratic_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.real-quadratic-checker",
         version="1",
         entrypoint="jacobian_checkers.real_quadratic:check_real_quadratic_order",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("standard-library-rational-replay", "clean-process-checker"),
         checker_ids=checker_ids,
     )
 
 
-REAL_QUADRATIC_CAPABILITIES = (
+REAL_QUADRATIC_OPERATIONS = (
     arithmetic_operation(
         "arithmetic.real_quadratic.order.compute",
         "Compare exact real quadratic values",
@@ -44,7 +44,7 @@ REAL_QUADRATIC_CAPABILITIES = (
         "real-quadratic",
         "quadratic-surd",
         "exact-order",
-        invocation_examples=(
+        examples=(
             example(
                 "pang_m4_scalar_gap",
                 "Compare 3*sqrt(3)/8 with 1/2+sqrt(3)/20 exactly.",
@@ -78,7 +78,7 @@ REAL_QUADRATIC_CHECKERS = (
             "operator-authorized standard-library checker independently compares "
             "the exact rational and radical squared magnitudes"
         ),
-        verification_capability_id="arithmetic.real_quadratic.order.verify",
+        verification_operation_id="arithmetic.real_quadratic.order.verify",
         verification_title="Verify an exact real-quadratic order",
         verification_description=(
             "Independently replay the shared-field difference, sign case, squared "
@@ -94,4 +94,4 @@ REAL_QUADRATIC_CHECKERS = (
     ),
 )
 
-__all__ = ["REAL_QUADRATIC_CAPABILITIES", "REAL_QUADRATIC_CHECKERS"]
+__all__ = ["REAL_QUADRATIC_CHECKERS", "REAL_QUADRATIC_OPERATIONS"]

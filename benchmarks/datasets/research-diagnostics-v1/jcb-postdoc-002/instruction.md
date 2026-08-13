@@ -4,7 +4,7 @@ Let G be obtained from K_{6,8}, with parts L={0,1,2,3,4,5} and R={6,7,8,9,10,11,
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. The current portfolio has no dedicated Hamiltonian-path decider in the nearby set, so the alternation obstruction may remain an agent-owned proof step. Exact maximum output must expose completeness, not only a lower-bound witness.
+report the operation boundary honestly. The current portfolio has no dedicated Hamiltonian-path decider in the nearby set, so the alternation obstruction may remain an agent-owned proof step. Exact maximum output must expose completeness, not only a lower-bound witness.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

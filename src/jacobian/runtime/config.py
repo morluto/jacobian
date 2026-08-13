@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from jacobian.capability_service import CapabilityPolicy
+    from jacobian.operation_service import OperationPolicy
 
 
 class CheckerAuthorityMode(StrEnum):
@@ -23,5 +23,5 @@ class RuntimeOptions:
     """Immutable inputs that determine runtime composition."""
 
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE
-    capability_exclusions: frozenset[str] = frozenset()
-    capability_policy: CapabilityPolicy | None = None
+    operation_exclusions: frozenset[str] = frozenset()
+    operation_policy: OperationPolicy | None = None

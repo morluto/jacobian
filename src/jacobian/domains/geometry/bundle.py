@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.geometry.checkers import GEOMETRY_EXACT_REPLAY_CHECKERS
-from jacobian.domains.geometry.lines import LINE_CAPABILITIES
-from jacobian.domains.geometry.points import POINT_CAPABILITIES
-from jacobian.domains.geometry.polygons import POLYGON_CAPABILITIES
-from jacobian.domains.geometry.segments import SEGMENT_CAPABILITIES
-from jacobian.domains.geometry.triangles import TRIANGLE_CAPABILITIES
+from jacobian.domains.geometry.lines import LINE_OPERATIONS
+from jacobian.domains.geometry.points import POINT_OPERATIONS
+from jacobian.domains.geometry.polygons import POLYGON_OPERATIONS
+from jacobian.domains.geometry.segments import SEGMENT_OPERATIONS
+from jacobian.domains.geometry.triangles import TRIANGLE_OPERATIONS
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
@@ -38,15 +38,15 @@ def build_geometry_bundle() -> DomainBundle:
             features=("exact-rational-geometry",),
         ),
         backend_version=SYMPY_VERSION,
-        capabilities=(
-            *POINT_CAPABILITIES,
-            *SEGMENT_CAPABILITIES,
-            *LINE_CAPABILITIES,
-            *TRIANGLE_CAPABILITIES,
-            *POLYGON_CAPABILITIES,
+        operations=(
+            *POINT_OPERATIONS,
+            *SEGMENT_OPERATIONS,
+            *LINE_OPERATIONS,
+            *TRIANGLE_OPERATIONS,
+            *POLYGON_OPERATIONS,
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_GEOMETRY_REQUEST",
                 stage="geometry_input_validation",
                 message="Input does not satisfy the exact planar-geometry contract.",

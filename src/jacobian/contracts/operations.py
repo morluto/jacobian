@@ -1,4 +1,4 @@
-"""Model-facing contracts for extensible mathematical capabilities."""
+"""Model-facing contracts for extensible mathematical operations."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from jacobian.canonical import canonicalize_json
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest, ValueUri
 from jacobian.contracts.results import ContractModel, Execution, ExecutionStatus
 
-CapabilityId = Annotated[
+OperationId = Annotated[
     str,
     StringConstraints(
         pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
@@ -22,7 +22,7 @@ CapabilityId = Annotated[
 ]
 
 
-class CapabilityInputKind(StrEnum):
+class OperationInputKind(StrEnum):
     """Coarse input boundary used to prevent incompatible discovery routes."""
 
     STRUCTURED_REQUEST = "STRUCTURED_REQUEST"
@@ -31,23 +31,23 @@ class CapabilityInputKind(StrEnum):
 
 
 def _validate_descriptor_input_contract(
-    accepted_input_kinds: tuple[CapabilityInputKind, ...],
+    accepted_input_kinds: tuple[OperationInputKind, ...],
     accepted_artifact_types: tuple[ArtifactUri, ...],
 ) -> None:
     if not accepted_input_kinds:
-        raise ValueError("a capability must accept at least one input kind")
+        raise ValueError("a operation must accept at least one input kind")
     if len(set(accepted_input_kinds)) != len(accepted_input_kinds):
         raise ValueError("accepted input kinds must be unique")
     if len(set(accepted_artifact_types)) != len(accepted_artifact_types):
         raise ValueError("accepted artifact types must be unique")
-    accepts_typed_artifact = CapabilityInputKind.TYPED_ARTIFACT in accepted_input_kinds
+    accepts_typed_artifact = OperationInputKind.TYPED_ARTIFACT in accepted_input_kinds
     if accepted_artifact_types and not accepts_typed_artifact:
         raise ValueError("accepted artifact types require TYPED_ARTIFACT input")
     if accepts_typed_artifact and not accepted_artifact_types:
         raise ValueError("TYPED_ARTIFACT input requires accepted artifact types")
 
 
-class CapabilityInvocationExample(ContractModel):
+class OperationExample(ContractModel):
     """One operator-authored, schema-valid example."""
 
     name: str = Field(
@@ -64,14 +64,14 @@ class CapabilityInvocationExample(ContractModel):
         return self
 
 
-class CapabilityValuePort(ContractModel):
+class OperationValuePort(ContractModel):
     """One named whole-value composition port."""
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     value_type: str = Field(min_length=1, max_length=128)
 
 
-class CapabilityDiscoveryRequest(ContractModel):
+class OperationDiscoveryRequest(ContractModel):
     """Compact installed-portfolio search, independent of any transport."""
 
     query: str = Field(min_length=1, max_length=512)
@@ -79,10 +79,10 @@ class CapabilityDiscoveryRequest(ContractModel):
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
     )
-    input_kind: CapabilityInputKind | None = None
+    input_kind: OperationInputKind | None = None
     artifact_type: ArtifactUri | None = None
     limit: int = Field(default=5, ge=1, le=20, strict=True)
-    cursor: CapabilityId | None = None
+    cursor: OperationId | None = None
 
     @model_validator(mode="after")
     def reject_blank_filters(self) -> Self:
@@ -91,21 +91,21 @@ class CapabilityDiscoveryRequest(ContractModel):
         if self.domain is not None and not self.domain.strip():
             raise ValueError("domain must contain a non-whitespace character")
         if self.artifact_type is not None and (
-            self.input_kind is not CapabilityInputKind.TYPED_ARTIFACT
+            self.input_kind is not OperationInputKind.TYPED_ARTIFACT
         ):
             raise ValueError("artifact_type requires input_kind=TYPED_ARTIFACT")
         if (
-            self.input_kind is CapabilityInputKind.TYPED_ARTIFACT
+            self.input_kind is OperationInputKind.TYPED_ARTIFACT
             and self.artifact_type is None
         ):
             raise ValueError("TYPED_ARTIFACT input requires artifact_type")
         return self
 
 
-class CapabilityDiscoveryMatch(ContractModel):
-    """One compact installed outcome returned by capability discovery."""
+class OperationDiscoveryMatch(ContractModel):
+    """One compact installed outcome returned by operation discovery."""
 
-    capability_id: CapabilityId
+    operation_id: OperationId
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=512)
     tags: tuple[str, ...] = ()
@@ -121,36 +121,36 @@ class CapabilityDiscoveryMatch(ContractModel):
     ]
 
 
-class CapabilityDiscoveryResult(ContractModel):
+class OperationDiscoveryResult(ContractModel):
     """Deterministically ranked compact installed outcomes."""
 
     discovery_version: Literal["1"] = "1"
     query: str
     domain: str | None = None
-    input_kind: CapabilityInputKind | None = None
+    input_kind: OperationInputKind | None = None
     artifact_type: ArtifactUri | None = None
-    matches: tuple[CapabilityDiscoveryMatch, ...]
+    matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: int = Field(ge=0, strict=True)
     truncated: bool
-    next_cursor: CapabilityId | None = None
+    next_cursor: OperationId | None = None
 
     @model_validator(mode="after")
     def bind_page_metadata(self) -> Self:
-        capability_ids = tuple(match.capability_id for match in self.matches)
-        if len(set(capability_ids)) != len(capability_ids):
-            raise ValueError("discovery matches must have unique capability IDs")
+        operation_ids = tuple(match.operation_id for match in self.matches)
+        if len(set(operation_ids)) != len(operation_ids):
+            raise ValueError("discovery matches must have unique operation IDs")
         if self.total_matches < len(self.matches):
             raise ValueError("total_matches cannot be smaller than the returned page")
         if self.truncated != (self.next_cursor is not None):
             raise ValueError("truncated must agree with next_cursor")
         if self.next_cursor is not None and (
-            not capability_ids or self.next_cursor != capability_ids[-1]
+            not operation_ids or self.next_cursor != operation_ids[-1]
         ):
             raise ValueError("next_cursor must identify the final returned match")
         return self
 
 
-class CapabilityInstallTier(StrEnum):
+class ProviderInstallTier(StrEnum):
     """Operational cost and isolation required to install one provider."""
 
     T0 = "T0"
@@ -159,14 +159,14 @@ class CapabilityInstallTier(StrEnum):
     T3 = "T3"
 
 
-class CapabilityProviderAvailability(StrEnum):
+class ProviderAvailability(StrEnum):
     """Whether this exact provider runtime is callable in the current process."""
 
     AVAILABLE = "AVAILABLE"
     UNAVAILABLE = "UNAVAILABLE"
 
 
-class CapabilityProviderDigestKind(StrEnum):
+class ProviderDigestKind(StrEnum):
     """What immutable provider material the runtime digest covers."""
 
     SOURCE_TREE = "SOURCE_TREE"
@@ -199,10 +199,10 @@ def _validate_distribution_import_name(distribution_import_name: str | None) -> 
 def _require_python_distribution_digest_for_probes(
     distribution_import_name: str | None,
     distribution_required_attributes: tuple[str, ...],
-    digest_kind: CapabilityProviderDigestKind | None,
+    digest_kind: ProviderDigestKind | None,
 ) -> None:
     if (distribution_import_name is not None or distribution_required_attributes) and (
-        digest_kind is not CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
+        digest_kind is not ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
     ):
         raise ValueError(
             "provider distribution probes require a Python distribution digest"
@@ -210,13 +210,13 @@ def _require_python_distribution_digest_for_probes(
 
 
 def _validate_provider_availability_identity(
-    availability: CapabilityProviderAvailability,
+    availability: ProviderAvailability,
     version: str | None,
     digest: Sha256Digest | None,
-    digest_kind: CapabilityProviderDigestKind | None,
+    digest_kind: ProviderDigestKind | None,
     diagnostic: str | None,
 ) -> None:
-    if availability is CapabilityProviderAvailability.AVAILABLE:
+    if availability is ProviderAvailability.AVAILABLE:
         if version is None or digest is None or digest_kind is None:
             raise ValueError(
                 "available provider runtime requires version, digest, and digest kind"
@@ -260,7 +260,7 @@ def _validate_provider_license_file_paths(license_files: tuple[str, ...]) -> Non
             raise ValueError("provider license files must be normalized relative paths")
 
 
-class CapabilityProviderRuntime(ContractModel):
+class ProviderObservation(ContractModel):
     """Exact runtime identity and operator-facing availability metadata."""
 
     runtime_version: Literal["1"] = "1"
@@ -269,12 +269,12 @@ class CapabilityProviderRuntime(ContractModel):
         min_length=3,
         max_length=128,
     )
-    availability: CapabilityProviderAvailability
+    availability: ProviderAvailability
     version: str | None = Field(default=None, min_length=1, max_length=128)
     digest: Sha256Digest | None = None
-    digest_kind: CapabilityProviderDigestKind | None = None
+    digest_kind: ProviderDigestKind | None = None
     platform: str = Field(min_length=1, max_length=128)
-    install_tier: CapabilityInstallTier
+    install_tier: ProviderInstallTier
     license_id: str = Field(min_length=1, max_length=128)
     license_files: tuple[str, ...] = ()
     features: tuple[str, ...] = ()
@@ -318,28 +318,28 @@ class CapabilityProviderRuntime(ContractModel):
         return self
 
 
-class CapabilityDescriptor(ContractModel):
+class OperationDescriptor(ContractModel):
     """One installed operation advertised by an operator-installed adapter."""
 
     descriptor_version: Literal["1"] = "1"
-    capability_id: CapabilityId
+    operation_id: OperationId
     version: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=512)
     provider: str = Field(min_length=1, max_length=128)
-    provider_runtime: CapabilityProviderRuntime | None = None
+    provider_runtime: ProviderObservation | None = None
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
     read_only: bool = False
     tags: tuple[str, ...] = ()
-    accepted_input_kinds: tuple[CapabilityInputKind, ...] = (
-        CapabilityInputKind.STRUCTURED_REQUEST,
+    accepted_input_kinds: tuple[OperationInputKind, ...] = (
+        OperationInputKind.STRUCTURED_REQUEST,
     )
     accepted_artifact_types: tuple[ArtifactUri, ...] = ()
     produced_artifact_types: tuple[ArtifactUri, ...] = ()
-    input_ports: tuple[CapabilityValuePort, ...] = ()
-    output_ports: tuple[CapabilityValuePort, ...] = ()
-    invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
+    input_ports: tuple[OperationValuePort, ...] = ()
+    output_ports: tuple[OperationValuePort, ...] = ()
+    examples: tuple[OperationExample, ...] = ()
 
     @model_validator(mode="after")
     def require_canonical_schemas(self) -> Self:
@@ -356,10 +356,10 @@ class CapabilityDescriptor(ContractModel):
             names = tuple(port.name for port in ports)
             if len(names) != len(set(names)):
                 raise ValueError(f"{label} port names must be unique")
-        if len({example.name for example in self.invocation_examples}) != len(
-            self.invocation_examples
+        if len({example.name for example in self.examples}) != len(
+            self.examples
         ):
-            raise ValueError("capability invocation example names must be unique")
+            raise ValueError("operation invocation example names must be unique")
         canonicalize_json(self.input_schema)
         canonicalize_json(self.output_schema)
         if (
@@ -370,14 +370,14 @@ class CapabilityDescriptor(ContractModel):
         return self
 
 
-class CapabilityRequest(ContractModel):
+class OperationRequest(ContractModel):
     request_version: Literal["1"] = "1"
-    capability_id: CapabilityId
+    operation_id: OperationId
     input: dict[str, Any]
     inputs: dict[str, ValueUri] = Field(default_factory=dict)
 
 
-class CapabilityDiagnostic(ContractModel):
+class OperationDiagnostic(ContractModel):
     """Actionable, stage-aware failure information without a truth claim."""
 
     code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
@@ -391,38 +391,38 @@ class CapabilityDiagnostic(ContractModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
-def _validate_capability_execution_lane(
+def _validate_operation_execution_lane(
     execution_status: ExecutionStatus,
-    diagnostics: tuple[CapabilityDiagnostic, ...],
+    diagnostics: tuple[OperationDiagnostic, ...],
     verification_record_uri: ArtifactUri | None,
 ) -> None:
     if execution_status is ExecutionStatus.COMPLETED and diagnostics:
-        raise ValueError("completed capability execution cannot carry diagnostics")
+        raise ValueError("completed operation execution cannot carry diagnostics")
     if (
         execution_status is not ExecutionStatus.COMPLETED
         and verification_record_uri is not None
     ):
         raise ValueError(
-            "failed capability execution cannot carry a verification record"
+            "failed operation execution cannot carry a verification record"
         )
 
 
-class CapabilityResult(ContractModel):
-    """Capability invocation result."""
+class OperationResult(ContractModel):
+    """Operation invocation result."""
 
     response_version: Literal["2"] = "2"
-    capability_id: CapabilityId
-    capability_version: str = Field(min_length=1, max_length=64)
+    operation_id: OperationId
+    operation_version: str = Field(min_length=1, max_length=64)
     execution: Execution
     output: dict[str, Any] = Field(default_factory=dict)
-    diagnostics: tuple[CapabilityDiagnostic, ...] = ()
+    diagnostics: tuple[OperationDiagnostic, ...] = ()
     verification_record_uri: ArtifactUri | None = None
     artifact_uris: tuple[ArtifactUri, ...] = ()
 
     @model_validator(mode="after")
     def enforce_lane_and_canonical_output(self) -> Self:
         canonicalize_json(self.output)
-        _validate_capability_execution_lane(
+        _validate_operation_execution_lane(
             self.execution.status,
             self.diagnostics,
             self.verification_record_uri,
@@ -437,17 +437,17 @@ class CapabilityResult(ContractModel):
         return self
 
 
-class CapabilityCatalog(ContractModel):
+class OperationCatalogSnapshot(ContractModel):
     catalog_version: Literal["1"] = "1"
     policy_profile: str = Field(min_length=1, max_length=64)
     policy_digest: Sha256Digest
-    capabilities: tuple[CapabilityDescriptor, ...]
+    operations: tuple[OperationDescriptor, ...]
 
     @model_validator(mode="after")
     def require_unique_sorted_capabilities(self) -> Self:
-        capability_ids = tuple(
-            descriptor.capability_id for descriptor in self.capabilities
+        operation_ids = tuple(
+            descriptor.operation_id for descriptor in self.operations
         )
-        if capability_ids != tuple(sorted(set(capability_ids))):
-            raise ValueError("catalog capability IDs must be unique and sorted")
+        if operation_ids != tuple(sorted(set(operation_ids))):
+            raise ValueError("catalog operation IDs must be unique and sorted")
         return self

@@ -7,16 +7,16 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateArtifact
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.lean_frontend.artifacts import (
     _environment_imports,
     _source_digest,
     _state_digest_payload,
 )
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
 
@@ -56,8 +56,8 @@ def _load_validated_proof_state(
             raise ValueError("artifact is not a Lean proof state")
         state = LeanProofStateArtifact.model_validate(stored.payload)
     except (StorageError, ValidationError, ValueError) as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INVALID_LEAN_PROOF_STATE",
                 stage="state_loading",
                 message="The supplied state artifact is unavailable or invalid.",
@@ -76,8 +76,8 @@ def _load_validated_proof_state(
         or state.source_digest != _source_digest(state.statement, state.tactic_prefix)
         or state.state_digest != _state_digest_payload(state)
     ):
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="STALE_LEAN_PROOF_STATE",
                 stage="state_validation",
                 message=(

@@ -36,7 +36,7 @@
     "y": "Final answer and submitted-artifact structure plus independent verifier diagnostics, with the predicted target masked.",
     "b": "Control-arm non-final ordinary agent_message items, redacted and bounded before fixed structural and lexicon counts.",
     "b_star": "Treatment-arm visible internalcot note output only, redacted and bounded before fixed structural and reasoning-lexicon counts; note text is never committed.",
-    "tau_tools": "Ordered passive server telemetry for math.find/math.run and joined capability attempts: public operation identity, execution/evidence outcome, diagnostics, timing, response size, and digest availability; never arguments or results."
+    "tau_tools": "Ordered passive server telemetry for math.find/math.run and joined operation attempts: public operation identity, execution/evidence outcome, diagnostics, timing, response size, and digest availability; never arguments or results."
   },
   "internalcot": {
     "package": "internalcot",
@@ -62,14 +62,14 @@
     "mcp_transport": "streamable-http",
     "mcp_host": "jacobian-remote-mcp",
     "mcp_authentication": "fresh anonymous loopback runtime per trial",
-    "capability_policy_profile": "COMPUTE_VERIFY_NO_RETRIEVAL",
+    "operation_policy_profile": "COMPUTE_VERIFY_NO_RETRIEVAL",
     "workspace_policy": "fresh copied public task workspace and fresh Jacobian state directory per trial",
     "container_runtime": "not required; exact task verifiers replay in the maintained clean child-process harness"
   },
   "common_prompt": "Read instruction.md, input.json, and submission_schema.json. Solve the task completely. Inspect and use an applicable Jacobian mathematical operation before finalizing; if no operation is applicable, solve manually without forcing an irrelevant call. Write submission.json and every required evidence file in this workspace. Do not use the network or inspect files outside this workspace.",
   "dataset": {
     "id": "jacobian/mathematical-benchmarks-v1",
-    "selection_rule": "Eight tasks from the four #1259 held-out families, selected before intervention labels to block on known task identity while spanning producer/checker use, execution failure and recovery opportunities, discrete constructions, and manual proof repair. Prior passive outcomes make this a controlled intervention corpus, not an unseen-task capability evaluation.",
+    "selection_rule": "Eight tasks from the four #1259 held-out families, selected before intervention labels to block on known task identity while spanning producer/checker use, execution failure and recovery opportunities, discrete constructions, and manual proof repair. Prior passive outcomes make this a controlled intervention corpus, not an unseen-task operation evaluation.",
     "tasks": [
       {"id": "hermite-normal-form", "family": "matrix-certificates", "digest": "sha256:19223f7d5ef1a502b0a857a8ed8c5f7c9d8dddf17d5fc4b3ebf720c294ed3d9a"},
       {"id": "matrix-square-zero-counterexample", "family": "matrix-certificates", "digest": "sha256:65887808b95ad5df89468c2141985a1949a0eae41e361d869a4ac9bbf8429c8a"},

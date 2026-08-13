@@ -4,7 +4,7 @@ Let G have vertices {0,1,2,3,4,5} and edges {03,04,14,24,34,35}. Let M be the ma
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. There is no dedicated set-eccentricity or dist_max-on-a-designated-set capability. A graph radius or diameter result must not be relabeled as either requested invariant.
+report the operation boundary honestly. There is no dedicated set-eccentricity or dist_max-on-a-designated-set operation. A graph radius or diameter result must not be relabeled as either requested invariant.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

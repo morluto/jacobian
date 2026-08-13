@@ -87,7 +87,7 @@ def test_research_status_overlay_readme_matches_task_metadata() -> None:
     """The README portfolio-status block must mirror task.toml exactly.
 
     Catches drift where a task bump introduces unsupported status vocabulary
-    (e.g. ``BOUNDED_CAPABILITY_AVAILABLE``) or drops the canonical
+    (e.g. ``BOUNDED_OPERATION_AVAILABLE``) or drops the canonical
     ``## Portfolio status`` section, even when the task.toml values are later
     repaired. Each status field must appear in the README under backticks so
     the maintainer view and the machine-readable metadata stay consistent.

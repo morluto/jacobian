@@ -1,4 +1,4 @@
-"""Graph construction, property, and composition capabilities."""
+"""Graph construction, property, and composition operations."""
 
 from jacobian.graphs.composition import (
     GraphCompositionInstallation,

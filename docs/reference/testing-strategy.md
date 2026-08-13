@@ -179,7 +179,7 @@ behavioral regression proof is infeasible, state the proof gap.
   is part of the supported environment;
 - public Python API documentation matches explicit `__all__` values;
 - links pass; and
-- capability membership remains sourced from the live catalog.
+- operation membership remains sourced from the live catalog.
 
 ## `jacobian.math` acceptance
 
@@ -190,7 +190,7 @@ For each public domain:
 - every public function has one canonical semantic input type;
 - provider conversion stays private and backend imports are lazy;
 - request parsing and result serialization each occur once;
-- no internal `CapabilityRequest` or `CapabilityResult` call remains;
+- no internal `OperationRequest` or `OperationResult` call remains;
 - constructor/backend and large-exact-value round trips are covered where the
   contract permits them; and
 - Import Linter prevents upward dependencies.

@@ -1,4 +1,4 @@
-"""Finite-set predicate capabilities."""
+"""Finite-set predicate operations."""
 
 from jacobian.contracts.finite_sets import (
     FiniteSetBooleanResult,
@@ -12,7 +12,7 @@ from jacobian.domains.finite_sets.operations import (
     decide_subset,
 )
 
-SET_PREDICATE_CAPABILITIES = (
+SET_PREDICATE_OPERATIONS = (
     finite_set_operation(
         "finite_set.decide.subset",
         "Decide subset relation",
@@ -22,7 +22,7 @@ SET_PREDICATE_CAPABILITIES = (
         decide_subset,
         "finite-set",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "subset_1_2_of_1_2_3",
                 "Check a finite-set subset relation.",
@@ -42,7 +42,7 @@ SET_PREDICATE_CAPABILITIES = (
         decide_proper_subset,
         "finite-set",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "proper_subset_1_2_of_1_2_3",
                 "Check a proper finite-set subset relation.",
@@ -62,7 +62,7 @@ SET_PREDICATE_CAPABILITIES = (
         decide_disjoint,
         "finite-set",
         "predicate",
-        invocation_examples=(
+        examples=(
             example(
                 "disjoint_1_2_and_3_4",
                 "Check whether two finite sets are disjoint.",

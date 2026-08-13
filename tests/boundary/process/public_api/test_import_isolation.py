@@ -114,8 +114,8 @@ def test_native_matrices_does_not_import_capabilities_or_provider_loading() -> N
         (
             "jacobian.adapters",
             "jacobian.artifact_repository",
-            "jacobian.capability_dispatch",
-            "jacobian.capability_service",
+            "jacobian.operation_dispatch",
+            "jacobian.operation_service",
             "jacobian.operation_installation",
             "jacobian.provider_runtime",
             "jacobian.providers",

@@ -62,7 +62,7 @@ Timeout, process failure, excessive output, a malformed worker response, or a
 runtime identity change produces no normalization artifact and no mathematical
 conclusion.
 
-The capability normalizes one concrete bounded expression. Any finite
+The operation normalizes one concrete bounded expression. Any finite
 collection of such results remains finite evidence and does not verify an
 identity parameterized over all exponents or orders. If the conservative
 expanded-term bound exceeds the hard limit, the diagnostic reports

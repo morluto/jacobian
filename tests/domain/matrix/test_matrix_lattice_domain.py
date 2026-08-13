@@ -11,10 +11,6 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiscoveryRequest,
-    CapabilityRequest,
-)
 from jacobian.contracts.matrices import (
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
@@ -32,12 +28,18 @@ from jacobian.contracts.matrix_operations import (
     RrefResult,
     SquareIntegerMatrixRequest,
 )
+from jacobian.contracts.operations import (
+    OperationDiscoveryRequest,
+    OperationRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.matrix_lattice.bundle import build_matrix_bundle
-from jacobian.domains.matrix_lattice.capabilities import matrix_operation
 from jacobian.domains.matrix_lattice.lattice import reduce_lattice_basis
 from jacobian.domains.matrix_lattice.lattice_bundle import build_lattice_bundle
-from jacobian.domains.matrix_lattice.operations import compute_smith_normal_form
+from jacobian.domains.matrix_lattice.operations import (
+    compute_smith_normal_form,
+    matrix_operation,
+)
 from jacobian.operations import OperationAbortError
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
@@ -229,9 +231,9 @@ def test_exact_matrix_domain_results_and_lineage(
         ),
     )
 
-    for capability_id, payload, expected in cases:
-        result = runtime.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload, expected in cases:
+        result = runtime.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.output["result"] == expected
@@ -241,8 +243,8 @@ def test_exact_matrix_domain_results_and_lineage(
 def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
     matrix_domain_services: DomainTestServices,
 ) -> None:
-    discovered = matrix_domain_services.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = matrix_domain_services.core.operations.discover(
+        OperationDiscoveryRequest(
             query=(
                 "all exact rational dependencies among named vectors and a "
                 "normalized relation basis"
@@ -251,20 +253,20 @@ def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
         )
     )
 
-    assert discovered.matches[0].capability_id == "matrix.nullspace.compute"
+    assert discovered.matches[0].operation_id == "matrix.nullspace.compute"
     assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
-        for descriptor in matrix_domain_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "matrix.nullspace.compute"
+        for descriptor in matrix_domain_services.core.operations.catalog().operations
+        if descriptor.operation_id == "matrix.nullspace.compute"
     )
     assert descriptor.version == "2"
-    assert descriptor.invocation_examples[0].name == ("rational_relation_among_columns")
+    assert descriptor.examples[0].name == ("rational_relation_among_columns")
 
-    result = matrix_domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
-            input=descriptor.invocation_examples[0].input,
+    result = matrix_domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
+            input=descriptor.examples[0].input,
         )
     )
 
@@ -282,8 +284,8 @@ def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
 def test_matrix_multiplication_intent_is_discoverable(
     matrix_domain_services: DomainTestServices,
 ) -> None:
-    discovered = matrix_domain_services.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = matrix_domain_services.core.operations.discover(
+        OperationDiscoveryRequest(
             query=(
                 "multiply an exact matrix by itself and inspect whether its square "
                 "is zero"
@@ -292,19 +294,19 @@ def test_matrix_multiplication_intent_is_discoverable(
         )
     )
 
-    assert discovered.matches[0].capability_id == "matrix.multiply.compute"
+    assert discovered.matches[0].operation_id == "matrix.multiply.compute"
     assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
-        for descriptor in matrix_domain_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "matrix.multiply.compute"
+        for descriptor in matrix_domain_services.core.operations.catalog().operations
+        if descriptor.operation_id == "matrix.multiply.compute"
     )
-    assert descriptor.invocation_examples[0].name == "multiply_rectangular_matrices"
+    assert descriptor.examples[0].name == "multiply_rectangular_matrices"
 
-    result = matrix_domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
-            input=descriptor.invocation_examples[0].input,
+    result = matrix_domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
+            input=descriptor.examples[0].input,
         )
     )
 
@@ -358,9 +360,9 @@ def test_invalid_matrix_request_fails_before_operation_artifacts(
     matrix_domain_services: DomainTestServices,
 ) -> None:
     runtime = matrix_domain_services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.characteristic_polynomial.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.characteristic_polynomial.compute",
             input={"matrix": _qq([[1, 2, 3], [4, 5, 6]])},
         )
     )
@@ -369,9 +371,9 @@ def test_invalid_matrix_request_fails_before_operation_artifacts(
     assert result.diagnostics[0].code == "INVALID_EXACT_MATRIX_REQUEST"
     assert result.artifact_uris == ()
 
-    incompatible_product = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.multiply.compute",
+    incompatible_product = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.multiply.compute",
             input={
                 "left": _qq([[1, 2]]),
                 "right": _qq([[1, 2]]),
@@ -388,9 +390,9 @@ def test_singular_matrix_inverse_is_not_applicable(
     matrix_domain_services: DomainTestServices,
 ) -> None:
     runtime = matrix_domain_services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.inverse.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.inverse.compute",
             input={
                 "matrix": {
                     "domain": "ZZ",
@@ -411,9 +413,9 @@ def test_inverse_accepts_exact_growth_from_maximum_size_input(
     runtime = matrix_domain_services
     diagonal = "9" * 256
     determinant = str(int(diagonal) ** 2 - 1)
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.inverse.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.inverse.compute",
             input={
                 "matrix": {
                     "domain": "ZZ",
@@ -509,9 +511,9 @@ def test_lattice_lll_returns_exact_left_transformation(
 ) -> None:
     runtime = matrix_domain_services
     source = [[4, 1], [1, 3]]
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lattice.basis.reduce",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lattice.basis.reduce",
             input={
                 "basis": {
                     "domain": "ZZ",
@@ -549,9 +551,9 @@ def test_lattice_lll_supports_advertised_one_row_basis(
 ) -> None:
     runtime = matrix_domain_services
     for entries, expected_rank in (([["1"]], 1), ([["3", "-4"]], 1)):
-        result = runtime.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="lattice.basis.reduce",
+        result = runtime.core.operations.invoke(
+            OperationRequest(
+                operation_id="lattice.basis.reduce",
                 input={"basis": {"domain": "ZZ", "entries": entries}},
             )
         )
@@ -583,9 +585,9 @@ def test_lattice_lll_timeout_retains_no_operation_artifacts(
             stderr_exceeded=False,
         ),
     )
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lattice.basis.reduce",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lattice.basis.reduce",
             input={
                 "basis": {"domain": "ZZ", "entries": [["1"]]},
                 "resource_budget": {"wall_seconds": 1},
@@ -603,9 +605,9 @@ def test_rref_result_feeds_product_request_without_artifact_uri(
 ) -> None:
     """RREF reduced_matrix is a RationalMatrix that composes directly into product."""
     runtime = matrix_domain_services
-    rref_result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.rref.compute",
+    rref_result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.rref.compute",
             input={"matrix": _qq([[1, 2], [2, 4]])},
         )
     )
@@ -633,10 +635,10 @@ def test_rref_result_feeds_product_request_without_artifact_uri(
     assert round_trip_request.left.entries == rref.reduced_matrix.entries
     assert round_trip_request.right.entries == rref.reduced_matrix.entries
 
-    # 3. The composition produces a correct product via the capability.
-    product_result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.multiply.compute",
+    # 3. The composition produces a correct product via the operation.
+    product_result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.multiply.compute",
             input={
                 "left": serialized["reduced_matrix"],
                 "right": serialized["reduced_matrix"],

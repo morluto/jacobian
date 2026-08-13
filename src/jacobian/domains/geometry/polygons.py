@@ -1,4 +1,4 @@
-"""Polygon-owned exact geometry capabilities."""
+"""Polygon-owned exact geometry operations."""
 
 from jacobian.contracts.geometry import (
     ConvexPolygonTriangulationRequest,
@@ -25,7 +25,7 @@ _UNIT_SQUARE = [
     {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
 ]
 
-POLYGON_CAPABILITIES = (
+POLYGON_OPERATIONS = (
     geometry_operation(
         "geometry.polygon.triangulation.minimum_weight.compute",
         "Compute an exact minimum-weight convex-polygon triangulation",
@@ -51,7 +51,7 @@ POLYGON_CAPABILITIES = (
         signed_area,
         "geometry",
         "polygon",
-        invocation_examples=(
+        examples=(
             example(
                 "unit_square_signed_area",
                 "Compute the signed area of a unit square.",
@@ -72,7 +72,7 @@ POLYGON_CAPABILITIES = (
         "geometry",
         "polygon",
         "decision",
-        invocation_examples=(
+        examples=(
             example(
                 "unit_square_is_simple",
                 "Check every edge pair of a unit-square ring.",
@@ -93,7 +93,7 @@ POLYGON_CAPABILITIES = (
         "geometry",
         "polygon",
         "classification",
-        invocation_examples=(
+        examples=(
             example(
                 "unit_square_center",
                 "Classify the center of a unit square.",

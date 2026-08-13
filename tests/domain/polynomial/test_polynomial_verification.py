@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-)
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
+from jacobian.contracts.operations import (
+    OperationRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import build_polynomial_bundle
 from tests.support.exact_domain import open_exact_domain_services
@@ -65,9 +65,9 @@ def _gcd_input() -> dict[str, object]:
 
 
 def _computed_gcd(polynomial_verification_services: DomainTestServices):
-    return polynomial_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.compute.gcd",
+    return polynomial_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.compute.gcd",
             input=_gcd_input(),
         )
     )
@@ -78,8 +78,8 @@ def test_public_seam_verifies_exact_producer_result(
 ) -> None:
     provider_runtime = next(
         descriptor.provider_runtime
-        for descriptor in polynomial_verification_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "polynomial.gcd.verify"
+        for descriptor in polynomial_verification_services.core.operations.catalog().operations
+        if descriptor.operation_id == "polynomial.gcd.verify"
     )
     assert provider_runtime is not None
     assert {
@@ -88,9 +88,9 @@ def test_public_seam_verifies_exact_producer_result(
     } == {"jacobian.exact-domain-checker-source", "python-flint"}
     computed = _computed_gcd(polynomial_verification_services)
 
-    verified = polynomial_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.gcd.verify",
+    verified = polynomial_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.gcd.verify",
             input={
                 "input": _gcd_input(),
                 "candidate": computed.output["result"],
@@ -126,9 +126,9 @@ def test_public_seam_rejects_validly_shaped_false_result(
         "normalization": "MONIC",
     }
 
-    rejected = polynomial_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.gcd.verify",
+    rejected = polynomial_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.gcd.verify",
             input={
                 "input": _gcd_input(),
                 "candidate": false_candidate,
@@ -150,16 +150,16 @@ def test_public_seam_reports_valid_multivariate_result_as_unsupported(
         "right": _poly_xy(((1, 0), 1), ((0, 0), 1)),
         "elimination_variable": "x",
     }
-    computed = polynomial_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.compute.resultant",
+    computed = polynomial_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.compute.resultant",
             input=resultant_input,
         )
     )
 
-    checked = polynomial_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.resultant.verify",
+    checked = polynomial_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.resultant.verify",
             input={
                 "input": resultant_input,
                 "candidate": computed.output["result"],

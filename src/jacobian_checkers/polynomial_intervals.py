@@ -1,7 +1,7 @@
 """Independent exact replay for univariate polynomial interval enclosures.
 
 This checker is the independent verification boundary for the
-``polynomial.interval.enclosure.verify`` capability. It re-derives the
+``polynomial.interval.enclosure.verify`` operation. It re-derives the
 Bernstein coefficients of one univariate rational polynomial on one closed
 rational interval using only ``fractions.Fraction`` arithmetic. It does not
 import SymPy and does not depend on the adapter that proposed the enclosure.

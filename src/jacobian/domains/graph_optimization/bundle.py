@@ -2,28 +2,28 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_SEARCH_EXACT_REPLAY_CHECKERS,
 )
 from jacobian.domains.graph_optimization.chromatic_number import (
-    CHROMATIC_NUMBER_CAPABILITY,
+    CHROMATIC_NUMBER_OPERATION,
 )
 from jacobian.domains.graph_optimization.finite_optimization import (
-    FINITE_GRAPH_OPTIMIZATION_CAPABILITIES,
+    FINITE_GRAPH_OPTIMIZATION_OPERATIONS,
 )
 from jacobian.domains.graph_optimization.hamiltonian_path import (
-    HAMILTONIAN_PATH_CAPABILITY,
+    HAMILTONIAN_PATH_OPERATION,
 )
 from jacobian.domains.graph_optimization.independence import (
-    INDEPENDENCE_NUMBER_CAPABILITY,
+    INDEPENDENCE_NUMBER_OPERATION,
 )
 from jacobian.domains.graph_optimization.invariants import (
-    CLIQUE_NUMBER_CAPABILITY,
+    CLIQUE_NUMBER_OPERATION,
 )
 from jacobian.domains.graph_optimization.minimum_spanning_tree import (
-    MINIMUM_SPANNING_TREE_CAPABILITY,
+    MINIMUM_SPANNING_TREE_OPERATION,
 )
 from jacobian.operations import (
     DomainDiagnostics,
@@ -121,16 +121,16 @@ def build_graph_optimization_bundle() -> DomainBundle:
             f"z3-solver-{Z3_SOLVER_VERSION};networkx-{NETWORKX_VERSION};"
             f"sympy-{SYMPY_VERSION}"
         ),
-        capabilities=(
-            CHROMATIC_NUMBER_CAPABILITY,
-            *FINITE_GRAPH_OPTIMIZATION_CAPABILITIES,
-            HAMILTONIAN_PATH_CAPABILITY,
-            MINIMUM_SPANNING_TREE_CAPABILITY,
-            CLIQUE_NUMBER_CAPABILITY,
-            INDEPENDENCE_NUMBER_CAPABILITY,
+        operations=(
+            CHROMATIC_NUMBER_OPERATION,
+            *FINITE_GRAPH_OPTIMIZATION_OPERATIONS,
+            HAMILTONIAN_PATH_OPERATION,
+            MINIMUM_SPANNING_TREE_OPERATION,
+            CLIQUE_NUMBER_OPERATION,
+            INDEPENDENCE_NUMBER_OPERATION,
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_CHROMATIC_NUMBER_REQUEST",
                 stage="request_validation",
                 message=(

@@ -17,7 +17,7 @@ engine: the agent owns decomposition, sequencing, checker choice, and stopping.
 | --- | --- | --- |
 | Search | `math.find` | Find or inspect math tools (IDs, schemas, examples). |
 | Execute | `math.run` | Run **one** tool → **mathematical value** (or checker **verdict**). |
-| Inventory | `capability://catalog` | Full catalog when needed. |
+| Inventory | `operation://catalog` | Full catalog when needed. |
 
 See [product model](docs/explanation/product-blueprint.md) and
 [Search and execute](docs/explanation/architecture.md#search-and-execute).
@@ -42,7 +42,7 @@ dual-mode tools.**
   efficiency—not a fixed tool-call sequence.
 
 **Naming.** Agent-facing: **math tool** / **operation**. Code/catalog often
-still say **capability** for the same thing. No parallel rename without a plan.
+still say **operation** for the same thing. No parallel rename without a plan.
 
 Tools stay atomic, searchable, and freely composable. No prescribed proof
 strategy, verification order, or stopping criteria in discovery, ranking,
@@ -68,7 +68,7 @@ explicit `__all__` values, and cover namespace and import isolation in the
 public-API tests. Do not re-export domain APIs from the root `jacobian`
 namespace. Native functions accept and return Python or maintained
 backend-native values and call typed mathematical kernels directly; they must
-not invoke `math.run`, construct a capability runtime, or expose MCP,
+not invoke `math.run`, construct a operation runtime, or expose MCP,
 artifact, provider-loading, or installation objects.
 
 ### Mathematical interoperability
@@ -95,13 +95,13 @@ results. Do not directly apply `int()` or `str()` to canonical components or
 change `sys.set_int_max_str_digits()` as a workaround. Keep backend coercion in
 thin adapters, and test above 4,300 digits whenever the contract permits it.
 
-Keep Pydantic models authoritative at capability, persistence, artifact, and
+Keep Pydantic models authoritative at operation, persistence, artifact, and
 wire boundaries. Domain implementations and operation factories must preserve
 their concrete request and result types: do not accept
 `Callable[[ContractModel], ContractModel]` or cast a validated request back to a
 domain model. A bounded operation records exact, incomplete, or unknown status
 in its domain result instead of adding generic completeness or obligation
-wrappers. When a native API and a capability expose the same outcome, share one
+wrappers. When a native API and a operation expose the same outcome, share one
 typed mathematical kernel and use explicit domain-owned conversions rather
 than duplicating the mathematics or introducing a generic conversion framework.
 
@@ -125,10 +125,10 @@ or return nested installation reports, provider bags, or phase-result mirrors
 that production immediately discards. Keep an installation result only when a
 later production phase consumes that exact typed fact.
 
-Construct wire envelopes only at the final capability or protocol projection.
+Construct wire envelopes only at the final operation or protocol projection.
 Mathematical functions, typed operation executors, artifact services, and
 checker services return their owned typed values or terminal states; they do
-not construct `CapabilityResult`. Do not hide artifact writes inside an
+not construct `OperationResult`. Do not hide artifact writes inside an
 `OperationSpec.execute` callable to satisfy this rule. When an operation needs
 a domain-specific durable schema or parent closure, keep that publication in a
 narrow named domain publisher and pass its typed projection to the one final
@@ -160,7 +160,7 @@ themselves.
 
 `DomainBundle` is a semantic declaration, not an installation escape hatch. It
 must not own installer callbacks, runtime services, storage collaborators, or
-dependency-resolution policy. A capability family that genuinely needs a
+dependency-resolution policy. A operation family that genuinely needs a
 special artifact/checker lifecycle is an explicitly named portfolio component
 at the composition root; do not add a generic knob to every ordinary bundle for
 one exceptional installer. An operation may bind a typed computational backend
@@ -199,7 +199,7 @@ checker authorization out of plugins and search code.
   branches, stage, commit, clean, or rewrite shared files until their work
   is integrated.
 - Jacobian is pre-stable. Current reference documents and the installed catalog
-  define the supported surface; they do not order capability research.
+  define the supported surface; they do not order operation research.
 - Validate the complete Pydantic request model before preflight, provider calls,
   computation, allocation, or artifact writes. This includes relationships among
   individually valid fields: parents, characteristics, presentations, axes,
@@ -232,7 +232,7 @@ checker authorization out of plugins and search code.
 
 ## Agent Workflow Entry Points
 
-Capability work remains agent-directed and is not coupled to a mandatory
+Operation work remains agent-directed and is not coupled to a mandatory
 development workflow. For Harbor task authoring and verifier changes, use the
 repository-local [`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md)
 skill and its exact task validation path. Control/treatment model evaluations
@@ -285,7 +285,7 @@ Non-obvious caveats:
   into a host-contention detector rather than useful failure evidence.
 - SQLite is one visible contention point, but not the sole cause: full-runtime
   construction also performs durable filesystem publication, subprocess
-  startup, schema registration, and CPU-heavy capability setup. A timeout
+  startup, schema registration, and CPU-heavy operation setup. A timeout
   observed in `PRAGMA`, `fsync`, `os.link`, or process startup under concurrent
   suites must be reproduced with the owning focused test before it is treated
   as a product defect.

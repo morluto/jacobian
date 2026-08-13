@@ -1,4 +1,4 @@
-"""Exact number-theory capabilities with structured, argument-bound results."""
+"""Exact number-theory operations with structured, argument-bound results."""
 
 from jacobian.contracts.number_theory import (
     FactorialValuationRequest,
@@ -16,7 +16,7 @@ from jacobian.domains.number_theory.derived_operations import (
     compute_legendre_symbol,
 )
 
-DERIVED_NUMBER_THEORY_CAPABILITIES = (
+DERIVED_NUMBER_THEORY_OPERATIONS = (
     number_theory_operation(
         "integer.compute.floor_square_root",
         "Compute an integer floor square root",
@@ -26,7 +26,7 @@ DERIVED_NUMBER_THEORY_CAPABILITIES = (
         compute_floor_square_root,
         "number-theory",
         "square",
-        invocation_examples=(
+        examples=(
             example("floor_sqrt_80", "Compute floor(sqrt(80)).", {"n": 80}),
         ),
     ),
@@ -39,7 +39,7 @@ DERIVED_NUMBER_THEORY_CAPABILITIES = (
         compute_legendre_symbol,
         "number-theory",
         "quadratic-residue",
-        invocation_examples=(
+        examples=(
             example(
                 "legendre_2_mod_7",
                 "Compute the Legendre symbol (2/7).",
@@ -56,7 +56,7 @@ DERIVED_NUMBER_THEORY_CAPABILITIES = (
         compute_factorial_valuation,
         "number-theory",
         "valuation",
-        invocation_examples=(
+        examples=(
             example(
                 "valuation_10_factorial_base_2",
                 "Compute the exponent of 2 in 10!.",

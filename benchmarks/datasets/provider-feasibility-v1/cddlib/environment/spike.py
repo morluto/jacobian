@@ -898,7 +898,7 @@ def run_spike(
                     "add adversarial omitted-facet, omitted-ray, sign, and rebinding cases",
                 ],
             },
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
             "limitations": [
                 "all four cases are answer-visible bounded reproductions",
                 "same-provider round trips do not independently establish completeness",
@@ -913,7 +913,7 @@ def run_spike(
             "status": exc.status,
             "conclusion": "NO_CONCLUSION",
             "diagnostic": {"code": exc.code, "detail": exc.detail},
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
         }
 
 

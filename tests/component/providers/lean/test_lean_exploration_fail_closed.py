@@ -6,16 +6,15 @@ from typing import cast
 
 import pytest
 
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateRequest
+from jacobian.contracts.operations import (
+    OperationRequest,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.lean_frontend.exploration import _resolve_typed_goal_helper, _Resources
 from jacobian.lean_frontend.premise_retrieval import LeanPremiseRetrievalAdapter
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
@@ -24,6 +23,7 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplCommandResponse,
     LeanReplProofStepResponse,
 )
+from jacobian.operation_errors import OperationInvocationError
 
 
 def test_typed_goal_helper_derives_default_elan_home_without_forwarding_home(
@@ -77,14 +77,14 @@ def test_typed_goal_helper_derives_default_elan_home_without_forwarding_home(
 def test_typed_goal_extraction_failure_is_a_structured_non_conclusion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = CapabilityProviderRuntime(
+    runtime = ProviderObservation(
         provider="jacobian.lean4",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1",
         digest="sha256:" + "a" * 64,
-        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        digest_kind=ProviderDigestKind.SOURCE_TREE,
         platform="any",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
     )
     installation = SimpleNamespace(
@@ -133,11 +133,11 @@ def test_typed_goal_extraction_failure_is_a_structured_non_conclusion(
     )
 
     adapter = LeanProofStateAdapter(resources)
-    with pytest.raises(CapabilityInvocationError) as error:
+    with pytest.raises(OperationInvocationError) as error:
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={"statement": "True", "tactic": "skip"},
                 )
             )
@@ -174,14 +174,14 @@ def test_single_proof_state_raises_with_lean_errors() -> None:
 def test_premise_retrieval_rejects_by_prefix_before_starting_lean(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = CapabilityProviderRuntime(
+    runtime = ProviderObservation(
         provider="jacobian.lean4",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="4.31.0",
         digest="sha256:" + "a" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="test",
-        install_tier=CapabilityInstallTier.T3,
+        install_tier=ProviderInstallTier.T3,
         license_id="Apache-2.0",
     )
     resources = cast(
@@ -198,17 +198,17 @@ def test_premise_retrieval_rejects_by_prefix_before_starting_lean(
     )
 
     adapter = LeanPremiseRetrievalAdapter(resources)
-    example = adapter.descriptor.invocation_examples[0].input
+    example = adapter.descriptor.examples[0].input
     assert example["proof_prefix"] == ["intro x"]
     assert adapter.descriptor.input_schema["properties"]["proof_prefix"][
         "description"
     ].endswith("Do not include `by`.")
 
-    with pytest.raises(CapabilityInvocationError) as error:
+    with pytest.raises(OperationInvocationError) as error:
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.retrieve.premises",
+                OperationRequest(
+                    operation_id="lean.retrieve.premises",
                     input={
                         "environment": "MATHLIB",
                         "statement": "∀ x : Real, x ^ 2 ≥ 0",
@@ -229,14 +229,14 @@ def test_premise_retrieval_rejects_by_prefix_before_starting_lean(
 def test_premise_retrieval_maps_repl_runtime_failure_to_domain_diagnostic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = CapabilityProviderRuntime(
+    runtime = ProviderObservation(
         provider="jacobian.lean4",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="4.31.0",
         digest="sha256:" + "a" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="test",
-        install_tier=CapabilityInstallTier.T3,
+        install_tier=ProviderInstallTier.T3,
         license_id="Apache-2.0",
     )
     resources = cast(
@@ -262,11 +262,11 @@ def test_premise_retrieval_maps_repl_runtime_failure_to_domain_diagnostic(
     )
 
     adapter = LeanPremiseRetrievalAdapter(resources)
-    with pytest.raises(CapabilityInvocationError) as error:
+    with pytest.raises(OperationInvocationError) as error:
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.retrieve.premises",
+                OperationRequest(
+                    operation_id="lean.retrieve.premises",
                     input={"statement": "True"},
                 )
             )

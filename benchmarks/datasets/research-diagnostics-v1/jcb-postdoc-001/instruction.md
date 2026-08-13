@@ -4,7 +4,7 @@ Over Q, define F=(F1,F2,F3) by F1=(1+2xy)^3 z+4y^2(1+2xy)(2+3xy), F2=y+3x(1+2xy)
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. A computed determinant and collision are decisive mathematical evidence, but they are not automatically operator-authorized VERIFIED evidence. The run must not conflate a producer result with an independent checker.
+report the operation boundary honestly. A computed determinant and collision are decisive mathematical evidence, but they are not automatically operator-authorized VERIFIED evidence. The run must not conflate a producer result with an independent checker.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

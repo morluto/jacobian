@@ -198,7 +198,7 @@ def test_persistence_spike_rehydrates_exact_values_and_defers_production(
     assert report["independent_replay"]["status"] == "MATCH"
     assert len(report["independent_replay"]["reduced_columns"]) == 11
     assert report["checker_feasibility"]["decision"] == "REVISE"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_absent_provider_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
@@ -215,7 +215,7 @@ def test_absent_provider_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
     assert report["status"] == "UNAVAILABLE"
     assert report["conclusion"] == "NO_CONCLUSION"
     assert report["diagnostic"]["code"] == "PROVIDER_FILE_UNAVAILABLE"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_source_and_wheel_mismatch_fail_before_execution(tmp_path: Path) -> None:

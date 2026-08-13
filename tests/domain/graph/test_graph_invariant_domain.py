@@ -6,9 +6,8 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
@@ -17,6 +16,7 @@ from jacobian.domains.graph_optimization import (
 )
 from jacobian.graphs import atlas_search, invariants
 from jacobian.graphs.artifacts import nx
+from jacobian.operation_errors import OperationInvocationError
 
 
 @pytest.fixture
@@ -65,15 +65,15 @@ def test_graph_invariant_family_boundaries_and_witnesses(
             {"spanning_tree_count": 3, "connected": True},
         ),
     ]
-    for capability_id, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=capability_id, input={"graph": _TRIANGLE_TAIL}
+    for operation_id, expected in cases:
+        result = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=operation_id, input={"graph": _TRIANGLE_TAIL}
             )
         )
-        assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
-        assert result.output["result"] == expected, capability_id
-        assert result.artifact_uris == (), capability_id
+        assert result.execution.status is ExecutionStatus.COMPLETED, operation_id
+        assert result.output["result"] == expected, operation_id
+        assert result.artifact_uris == (), operation_id
 
 
 def test_maximum_matching_and_star_conventions(domain_services) -> None:
@@ -82,9 +82,9 @@ def test_maximum_matching_and_star_conventions(domain_services) -> None:
         [["a", "b"], ["b", "c"], ["a", "c"], ["c", "d"]],
     )
 
-    matching = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.compute",
+    matching = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.compute",
             input={"graph": triangle_tail},
         )
     )
@@ -99,11 +99,11 @@ def test_maximum_matching_and_star_conventions(domain_services) -> None:
             "upper_bound": 2,
         },
     }
-    assert matching.capability_version == "3"
+    assert matching.operation_version == "3"
 
-    star = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.compute",
+    star = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.compute",
             input={
                 "graph": _graph(
                     ["center", "x", "y", "z"],
@@ -122,15 +122,15 @@ def test_maximum_matching_and_star_conventions(domain_services) -> None:
     }
 
 
-def test_maximum_matching_has_a_capability_specific_64_vertex_bound(
+def test_maximum_matching_has_a_operation_specific_64_vertex_bound(
     domain_services,
 ) -> None:
     vertices = [f"v{index:02d}" for index in range(64)]
     edges = [[vertices[index], vertices[index + 1]] for index in range(0, 64, 2)]
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.compute",
             input={"graph": _graph(vertices, edges)},
         )
     )
@@ -145,18 +145,18 @@ def test_maximum_matching_has_a_capability_specific_64_vertex_bound(
         "upper_bound": 32,
     }
 
-    too_large = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.compute",
+    too_large = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.compute",
             input={"graph": _graph([*vertices, "v64"], edges)},
         )
     )
     assert too_large.execution.status is ExecutionStatus.ERROR
     assert too_large.diagnostics[0].code == "INVALID_GRAPH_MAXIMUM_MATCHING_REQUEST"
 
-    unrelated_invariant = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.diameter.compute",
+    unrelated_invariant = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.diameter.compute",
             input={"graph": _graph(vertices[:33], edges[:16])},
         )
     )
@@ -166,21 +166,21 @@ def test_maximum_matching_has_a_capability_specific_64_vertex_bound(
 
 def test_disconnected_and_acyclic_graph_conventions(domain_services) -> None:
     graph = _graph(["a", "b", "c"], [["a", "b"]])
-    diameter = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.diameter.compute",
+    diameter = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.diameter.compute",
             input={"graph": graph},
         )
     )
-    girth = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.girth.compute",
+    girth = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.girth.compute",
             input={"graph": graph},
         )
     )
-    trees = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.spanning_tree_count.compute",
+    trees = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.spanning_tree_count.compute",
             input={"graph": graph},
         )
     )
@@ -203,21 +203,21 @@ def test_radius_uses_explicit_not_applicable_for_disconnected_graph(
     domain_services,
 ) -> None:
 
-    connected = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.radius.compute",
+    connected = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.radius.compute",
             input={"graph": _graph(["a", "b", "c"], [["a", "b"], ["b", "c"]])},
         )
     )
-    disconnected = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.radius.compute",
+    disconnected = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.radius.compute",
             input={"graph": _graph(["a", "b", "c"], [["a", "b"]])},
         )
     )
 
-    assert connected.capability_version == "2"
-    assert disconnected.capability_version == "2"
+    assert connected.operation_version == "2"
+    assert disconnected.operation_version == "2"
     assert connected.output["result"] == {
         "status": "COMPUTED",
         "radius": 1,
@@ -271,7 +271,7 @@ def test_graph_backends_with_inconsistent_independence_results_fail_closed(
     monkeypatch.setattr(invariants, "nx", lambda: backend)
     monkeypatch.setattr(atlas_search, "nx", lambda: backend)
 
-    with pytest.raises(CapabilityInvocationError) as caught:
+    with pytest.raises(OperationInvocationError) as caught:
         compute(nx().path_graph(2))
 
     assert caught.value.diagnostic.code == "INCONSISTENT_INDEPENDENCE_RESULT"
@@ -284,10 +284,10 @@ def test_np_hard_invariants_return_exact_typed_results(
         ("graph.invariant.clique_number.compute", 2),
         ("graph.invariant.independence_number.compute", 2),
     ]
-    for capability_id, optimum in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=capability_id,
+    for operation_id, optimum in cases:
+        result = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=operation_id,
                 input={
                     "graph": _CYCLE_5,
                     "resource_budget": {
@@ -298,12 +298,12 @@ def test_np_hard_invariants_return_exact_typed_results(
                 },
             )
         )
-        assert result.execution.status is ExecutionStatus.COMPLETED, capability_id
+        assert result.execution.status is ExecutionStatus.COMPLETED, operation_id
         output = result.output["result"]
-        assert output["status"] == "EXACT", capability_id
-        assert output["optimum_value"] == optimum, capability_id
-        assert len(output["witness_vertices"]) == optimum, capability_id
-        assert result.artifact_uris == (), capability_id
+        assert output["status"] == "EXACT", operation_id
+        assert output["optimum_value"] == optimum, operation_id
+        assert len(output["witness_vertices"]) == optimum, operation_id
+        assert result.artifact_uris == (), operation_id
 
 
 def test_graph_invariant_resource_atomics_are_exact_computed(
@@ -359,9 +359,9 @@ def test_graph_invariant_resource_atomics_are_exact_computed(
             {"k": 2, "vertices": ["a", "b", "c"]},
         ),
     )
-    for capability_id, payload, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload, expected in cases:
+        result = domain_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.output["result"] == expected

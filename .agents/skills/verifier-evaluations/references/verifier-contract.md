@@ -122,7 +122,7 @@ Separate these claims:
 - the exact Oracle produced full applicable reward;
 - the repository gate passed;
 - a benchmark observation is reproducible;
-- an evaluation supports a causal capability claim.
+- an evaluation supports a causal operation claim.
 
 The first four do not imply the last two. Record task digest, source revision,
 Harbor/runtime version, model and settings where applicable, exact command,

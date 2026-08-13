@@ -3,8 +3,8 @@ artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/recurrence-fibonacci"
 version = "1.0.0"
-description = "Select the most specific capability for a recurrence-series query."
-keywords = ["capability-discovery", "recurrence", "regression", "verification"]
+description = "Select the most specific operation for a recurrence-series query."
+keywords = ["operation-discovery", "recurrence", "regression", "verification"]
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
@@ -21,7 +21,7 @@ tags = ["discovery", "recurrence", "regression", "offline"]
 case_version = "public-reproductions-v1"
 contamination_class = "public-answer-visible-reproduction"
 fixture_digest = "sha256:fc43c498939df4bd10be94405d48a4d0c16bfa52d89db9a0ee0a1910cb29872b"
-derivation = "Discovery regression for 'compute the Fibonacci number at index n'; expected first capability combinatorics.compute.fibonacci."
+derivation = "Discovery regression for 'compute the Fibonacci number at index n'; expected first operation combinatorics.compute.fibonacci."
 [agent]
 timeout_sec = 600.0
 [verifier]

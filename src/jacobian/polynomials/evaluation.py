@@ -1,4 +1,4 @@
-"""Adapter implementations for sparse rational polynomial-map capabilities."""
+"""Adapter implementations for sparse rational polynomial-map operations."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ import time
 from typing import cast
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityInvocationExample,
-    CapabilityRequest,
-)
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationExample,
+    OperationRequest,
 )
 from jacobian.contracts.polynomials import (
     PolynomialEvaluationOutput,
@@ -57,8 +57,8 @@ class PolynomialMapEvaluationAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.evaluate",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.evaluate",
             version="1",
             title="Evaluate a rational polynomial map",
             description=(
@@ -73,7 +73,7 @@ class PolynomialMapEvaluationAdapter:
             input_schema=model_schema(PolynomialEvaluationRequest),
             output_schema=model_schema(PolynomialEvaluationOutput),
             tags=("polynomial", "map", "evaluation", "exact-computation"),
-            invocation_examples=(
+            examples=(
                 example(
                     "identity_at_zero",
                     "Evaluate x at zero.",
@@ -98,10 +98,10 @@ class PolynomialMapEvaluationAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialEvaluationRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialEvaluationRequest:
         return _validate_request(
             PolynomialEvaluationRequest,
             request.input,
@@ -141,8 +141,8 @@ class PolynomialJacobianAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.compute_jacobian",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.compute_jacobian",
             version="1",
             title="Compute a polynomial-map Jacobian",
             description=(
@@ -164,7 +164,7 @@ class PolynomialJacobianAdapter:
             input_schema=model_schema(PolynomialJacobianRequest),
             output_schema=model_schema(PolynomialJacobianOutput),
             tags=("polynomial", "jacobian", "determinant", "exact-computation"),
-            invocation_examples=(
+            examples=(
                 example(
                     "identity_jacobian",
                     "Compute the Jacobian of x.",
@@ -188,10 +188,10 @@ class PolynomialJacobianAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialJacobianRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialJacobianRequest:
         return _validate_request(
             PolynomialJacobianRequest,
             request.input,
@@ -324,8 +324,8 @@ class PolynomialKellerConditionVerifyAdapter:
         checker_id = resources.installation.keller_checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.keller_condition.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.keller_condition.verify",
             version="1",
             title="Verify a polynomial-map Keller condition",
             description=(
@@ -341,8 +341,8 @@ class PolynomialKellerConditionVerifyAdapter:
             input_schema=model_schema(PolynomialKellerConditionVerifyRequest),
             output_schema=model_schema(PolynomialKellerConditionVerifyOutput),
             tags=("polynomial", "map", "jacobian", "Keller", "verification"),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="identity_keller_condition",
                     description=(
                         "Verify the identity map's constant nonzero Jacobian "
@@ -373,11 +373,11 @@ class PolynomialKellerConditionVerifyAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialKellerConditionVerifyRequest:
         return _validate_request(
             PolynomialKellerConditionVerifyRequest,

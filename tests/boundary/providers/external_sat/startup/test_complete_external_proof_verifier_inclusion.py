@@ -40,9 +40,9 @@ def test_complete_portfolio_includes_authorized_external_proof_verifiers(
         tmp_path / "complete-state",
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as complete:
-        capability_ids = {
-            descriptor.capability_id
-            for descriptor in complete.core.capabilities.catalog().capabilities
+        operation_ids = {
+            descriptor.operation_id
+            for descriptor in complete.core.operations.catalog().operations
         }
 
-    assert {"sat.unsat_proof.verify", "smt.unsat_proof.verify"} <= capability_ids
+    assert {"sat.unsat_proof.verify", "smt.unsat_proof.verify"} <= operation_ids

@@ -1,15 +1,15 @@
 """Independent checker declarations owned by the number-theory domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
     IntegerPairRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
+)
+from jacobian.contracts.operations import (
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.math.finite_abelian_groups import FiniteAbelianGroupFactorizationRequest
 from jacobian.provider_runtime import source_provider_runtime
@@ -20,7 +20,7 @@ _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
 
 def _finite_abelian_group_checker_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Measure the exhaustive group checker only when installation requests it."""
 
     return source_provider_runtime(
@@ -30,7 +30,7 @@ def _finite_abelian_group_checker_runtime(
             "jacobian_checkers.finite_abelian_groups:"
             "check_finite_abelian_group_exact_factorization"
         ),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("exhaustive-finite-group-replay", "clean-process-checker"),
         checker_ids=checker_ids,
@@ -39,7 +39,7 @@ def _finite_abelian_group_checker_runtime(
 
 def _flint_exact_replay_runtime(
     *, checker_ids: tuple[str, ...] = (), refresh: bool = False
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.exact_domain_checker_provider_runtime(
         checker_ids=checker_ids,
         refresh=refresh,
@@ -48,12 +48,12 @@ def _flint_exact_replay_runtime(
 
 def _integer_lcm_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.integer-lcm-checker",
         version="1",
         entrypoint="jacobian_checkers.integer_lcm:check_integer_lcm",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("standard-library-integer-replay", "clean-process-checker"),
         checker_ids=checker_ids,
@@ -73,7 +73,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "normalizes both factors and replays every group sum"
         ),
         provider_runtime_factory=_finite_abelian_group_checker_runtime,
-        verification_capability_id="finite_abelian_group.exact_factorization.verify",
+        verification_operation_id="finite_abelian_group.exact_factorization.verify",
         verification_title="Verify a finite abelian group factorization",
         verification_description=(
             "Independently normalize both bounded factors, enumerate every sum "
@@ -116,7 +116,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "operator-authorized Python-FLINT checker independent of the "
             "isolated SymPy factorization producer"
         ),
-        verification_capability_id="integer.prime_factorization.verify",
+        verification_operation_id="integer.prime_factorization.verify",
         verification_title="Verify an integer prime factorization",
         verification_description=(
             "Independently verify the complete canonical prime-power "
@@ -143,7 +143,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "operator-authorized Python-FLINT checker independent of the "
             "isolated SymPy powerful-number producer"
         ),
-        verification_capability_id="integer.powerful.verify",
+        verification_operation_id="integer.powerful.verify",
         verification_title="Verify a powerful-number decision",
         verification_description=(
             "Independently verify one submitted powerful-number decision against "
@@ -172,7 +172,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "the declared Cartesian product and replays every modular-polynomial "
             "evaluation without importing the stdlib producer"
         ),
-        verification_capability_id="modular.polynomial_residue_image.verify",
+        verification_operation_id="modular.polynomial_residue_image.verify",
         verification_title="Verify a modular polynomial residue image",
         verification_description=(
             "Independently verify one complete bounded modular-polynomial residue "

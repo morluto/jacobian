@@ -1,4 +1,4 @@
-"""Segment-owned exact geometry capabilities."""
+"""Segment-owned exact geometry operations."""
 
 from jacobian.contracts.geometry import (
     GeometryPointResult,
@@ -10,7 +10,7 @@ from jacobian.domains._examples import example
 from jacobian.domains.geometry._support import geometry_operation
 from jacobian.domains.geometry.operations import midpoint, segment_intersection
 
-SEGMENT_CAPABILITIES = (
+SEGMENT_OPERATIONS = (
     geometry_operation(
         "geometry.segment.compute.midpoint",
         "Construct segment midpoint",
@@ -20,7 +20,7 @@ SEGMENT_CAPABILITIES = (
         midpoint,
         "geometry",
         "construction",
-        invocation_examples=(
+        examples=(
             example(
                 "segment_midpoint",
                 "Construct the midpoint of a unit segment.",
@@ -49,7 +49,7 @@ SEGMENT_CAPABILITIES = (
         segment_intersection,
         "geometry",
         "intersection",
-        invocation_examples=(
+        examples=(
             example(
                 "crossing_segments",
                 "Intersect two closed rational segments at one proper crossing.",

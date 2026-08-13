@@ -8,9 +8,9 @@ from typing import Any
 import pytest
 import sympy
 
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    ProviderAvailability,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -65,9 +65,9 @@ def test_matrix_determinant_compute_is_exact_and_unverified(
 ) -> None:
     runtime = matrix_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.compute",
             input={"matrix": _matrix(rows)},
         )
     )
@@ -88,15 +88,15 @@ def test_matrix_determinant_verify_independently_recomputes_exact_value(
             [4, 3, 2],
         ]
     )
-    computed = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.compute",
+    computed = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.compute",
             input={"matrix": matrix},
         )
     )
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.verify",
+    verified = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.verify",
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -116,15 +116,15 @@ def test_matrix_determinant_verify_rejects_wrong_bound_value(
 ) -> None:
     runtime = matrix_checker_services
     matrix = _matrix([[1, 2], [3, 4]])
-    computed = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.compute",
+    computed = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.compute",
             input={"matrix": matrix},
         )
     )
-    rejected = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.verify",
+    rejected = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.verify",
             input={
                 "input": {"matrix": matrix},
                 "candidate": {
@@ -147,9 +147,9 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
 ) -> None:
     runtime = matrix_checker_services
     matrix = _matrix([[1]])
-    computed = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.compute",
+    computed = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.compute",
             input={"matrix": matrix},
         )
     )
@@ -161,9 +161,9 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
         ),
     )
 
-    timed_out = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.verify",
+    timed_out = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.verify",
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -181,9 +181,9 @@ def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
 ) -> None:
     runtime = matrix_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.compute",
             input={
                 "matrix": _matrix(
                     [
@@ -206,13 +206,13 @@ def test_matrix_rank_verify_independently_recomputes_inline_candidate(
     matrix_checker_services: Any,
 ) -> None:
     matrix = _matrix([[1, 2, 3], [2, 4, 6], [0, 1, 1]])
-    computed = matrix_checker_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id="matrix.rank.compute", input={"matrix": matrix})
+    computed = matrix_checker_services.core.operations.invoke(
+        OperationRequest(operation_id="matrix.rank.compute", input={"matrix": matrix})
     )
 
-    verified = matrix_checker_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.verify",
+    verified = matrix_checker_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.verify",
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -228,9 +228,9 @@ def test_matrix_rank_verify_independently_recomputes_inline_candidate(
 def test_matrix_rank_rejects_authoritative_values_above_its_operation_budget(
     matrix_services: Any,
 ) -> None:
-    result = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.compute",
+    result = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.compute",
             input={
                 "matrix": {
                     "matrix_schema_version": "1",
@@ -250,9 +250,9 @@ def test_matrix_determinant_rejects_rectangular_input(
 ) -> None:
     runtime = matrix_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.determinant.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.determinant.compute",
             input={"matrix": _matrix([[1, 2, 3], [4, 5, 6]])},
         )
     )
@@ -276,9 +276,9 @@ def test_matrix_determinant_matches_independent_bounded_oracle(
                 ]
                 for _ in range(size)
             ]
-            result = runtime.core.capabilities.invoke(
-                CapabilityRequest(
-                    capability_id="matrix.determinant.compute",
+            result = runtime.core.operations.invoke(
+                OperationRequest(
+                    operation_id="matrix.determinant.compute",
                     input={"matrix": _matrix(rows)},
                 )
             )
@@ -293,16 +293,16 @@ def test_matrix_capabilities_report_sympy_provider_identity(
 ) -> None:
     runtime = matrix_services
     descriptors = {
-        descriptor.capability_id: descriptor
-        for descriptor in runtime.core.capabilities.catalog().capabilities
+        descriptor.operation_id: descriptor
+        for descriptor in runtime.core.operations.catalog().operations
     }
 
-    for capability_id in ("matrix.determinant.compute", "matrix.rank.compute"):
-        descriptor = descriptors[capability_id]
+    for operation_id in ("matrix.determinant.compute", "matrix.rank.compute"):
+        descriptor = descriptors[operation_id]
         assert descriptor.provider == "jacobian.sympy"
         assert descriptor.provider_runtime.provider == "jacobian.sympy"
         assert (
             descriptor.provider_runtime.availability
-            is CapabilityProviderAvailability.AVAILABLE
+            is ProviderAvailability.AVAILABLE
         )
         assert descriptor.provider_runtime.version == sympy.__version__

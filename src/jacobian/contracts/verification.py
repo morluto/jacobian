@@ -10,10 +10,10 @@ from jacobian.contracts._verification_rules import (
     validate_certified_relationship_endpoints,
     validate_decisive_replayable_evidence,
 )
-from jacobian.contracts.capabilities import CapabilityId
 from jacobian.contracts.checkers import CheckerManifest, EvidenceKind
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.evidence import EvidenceBindings
+from jacobian.contracts.operations import OperationId
 from jacobian.contracts.results import (
     Arithmetic,
     Conclusion,
@@ -37,7 +37,7 @@ class VerificationRecord(ContractModel):
     coverage: Coverage
     request_digest: Sha256Digest
     environment_digest: Sha256Digest
-    relation_id: CapabilityId | None = None
+    relation_id: OperationId | None = None
     relationship_source_artifact_uris: tuple[ArtifactUri, ...] = ()
     relationship_target_artifact_uris: tuple[ArtifactUri, ...] = ()
     obligation_uri: ArtifactUri | None = None

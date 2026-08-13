@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import build_geometry_bundle
 
@@ -42,14 +42,14 @@ def _segment(
 def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None:
     descriptor = next(
         descriptor
-        for descriptor in domain_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "geometry.segment.compute.midpoint"
+        for descriptor in domain_services.core.operations.catalog().operations
+        if descriptor.operation_id == "geometry.segment.compute.midpoint"
     )
-    example = descriptor.invocation_examples[0]
+    example = descriptor.examples[0]
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
             input=example.input,
         )
     )
@@ -70,24 +70,24 @@ def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None
 def test_geometry_capabilities_have_distinct_ids() -> None:
     ids = [
         operation.spec.operation_id
-        for operation in build_geometry_bundle().capabilities
+        for operation in build_geometry_bundle().operations
     ]
 
-    assert ids, "expected geometry capabilities"
+    assert ids, "expected geometry operations"
     assert len(ids) == len(set(ids))
 
 
 def test_geometry_exact_outputs_are_inline(domain_services) -> None:
 
-    distance = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.points.compute.squared_distance",
+    distance = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.points.compute.squared_distance",
             input={"first": P0, "second": PXY},
         )
     )
-    circle = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.triangle.compute.circumcircle",
+    circle = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.triangle.compute.circumcircle",
             input={"first": P0, "second": PX, "third": PY},
         )
     )
@@ -105,9 +105,9 @@ def test_squared_distance_accepts_contract_sized_coordinates(domain_services) ->
     coordinate = {"num": LARGE_CANONICAL_INTEGER, "den": "1"}
     point = {"x": coordinate, "y": ZERO}
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.points.compute.squared_distance",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.points.compute.squared_distance",
             input={"first": point, "second": point},
         )
     )
@@ -120,9 +120,9 @@ def test_convex_hull_returns_segment_endpoints_for_two_points(
     domain_services,
 ) -> None:
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.points.compute.convex_hull",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.points.compute.convex_hull",
             input={"points": [PXY, P0]},
         )
     )
@@ -136,9 +136,9 @@ def test_convex_hull_returns_extreme_endpoints_for_collinear_points(
 ) -> None:
     middle = {"x": ONE, "y": ONE}
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.points.compute.convex_hull",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.points.compute.convex_hull",
             input={"points": [middle, PXY, P0]},
         )
     )
@@ -149,18 +149,18 @@ def test_convex_hull_returns_extreme_endpoints_for_collinear_points(
 
 def test_degenerate_geometry_fails_before_artifact_writes(domain_services) -> None:
 
-    invalid_line = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.lines.compute.intersection",
+    invalid_line = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.lines.compute.intersection",
             input={
                 "first_line": {"first": P0, "second": P0},
                 "second_line": {"first": P0, "second": PX},
             },
         )
     )
-    collinear_circle = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.triangle.compute.circumcircle",
+    collinear_circle = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.triangle.compute.circumcircle",
             input={
                 "first": P0,
                 "second": {"x": ONE, "y": ONE},
@@ -233,9 +233,9 @@ def test_closed_segment_intersection_preserves_degenerate_classification(
         ),
     )
     for first, second, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.segments.intersection.compute",
+        result = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="geometry.segments.intersection.compute",
                 input={"first": first, "second": second},
             )
         )
@@ -266,9 +266,9 @@ def test_simple_polygon_decision_exposes_first_exact_violation(
         ),
     )
     for points, is_simple, witness_status in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.simple.decide",
+        result = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="geometry.polygon.simple.decide",
                 input={"points": points},
             )
         )
@@ -291,15 +291,15 @@ def test_simple_polygon_point_classification_is_exact_and_boundary_aware(
     )
     polygon = [_point(0, 0), _point(2, 0), _point(2, 2), _point(0, 2)]
     for point, classification in cases:
-        forward = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.point.classify",
+        forward = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="geometry.polygon.point.classify",
                 input={"polygon": {"points": polygon}, "point": point},
             )
         )
-        reverse = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.point.classify",
+        reverse = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="geometry.polygon.point.classify",
                 input={
                     "polygon": {"points": list(reversed(polygon))},
                     "point": point,
@@ -314,9 +314,9 @@ def test_simple_polygon_point_classification_is_exact_and_boundary_aware(
 def test_point_classification_rejects_non_simple_polygon_before_writes(
     domain_services,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.polygon.point.classify",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.polygon.point.classify",
             input={
                 "polygon": {
                     "points": [
@@ -344,9 +344,9 @@ def test_polygon_ring_rejects_repeated_closure_or_zero_edge_before_writes(
         [_point(0, 0), _point(2, 0), _point(2, 0), _point(0, 2)],
     )
     for points in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="geometry.polygon.simple.decide",
+        result = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="geometry.polygon.simple.decide",
                 input={"points": points},
             )
         )

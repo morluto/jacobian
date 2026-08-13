@@ -1,4 +1,4 @@
-"""Graph Atlas search capability."""
+"""Graph Atlas search operation."""
 
 from __future__ import annotations
 
@@ -8,19 +8,17 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.graph_invariants import (
     GraphAtlasCandidate,
     GraphAtlasConstraints,
     GraphAtlasProperties,
     GraphAtlasSearchOutput,
     GraphAtlasSearchRequest,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
 )
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import (
@@ -34,6 +32,8 @@ from jacobian.graphs.artifacts import (
 from jacobian.graphs.atlas import graph_atlas_order
 from jacobian.graphs.conversions import graph_contract_from_value
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -55,8 +55,8 @@ class GraphAtlasSearchAdapter:
 
     def __init__(self, resources: GraphAtlasSearchResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="graph.search.atlas",
+        self._descriptor = OperationDescriptor(
+            operation_id="graph.search.atlas",
             version="1",
             title="Search the Graph Atlas",
             description=(
@@ -71,7 +71,7 @@ class GraphAtlasSearchAdapter:
             input_schema=model_schema(GraphAtlasSearchRequest),
             output_schema=model_schema(GraphAtlasSearchOutput),
             tags=("graph", "construction", "bounded-search"),
-            invocation_examples=(
+            examples=(
                 example(
                     "empty_graph_search",
                     "Find the order-zero graph in the atlas.",
@@ -81,12 +81,12 @@ class GraphAtlasSearchAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> GraphAtlasSearchRequest:
+    def prepare(self, request: OperationRequest) -> GraphAtlasSearchRequest:
         try:
-            return parse_capability_input(GraphAtlasSearchRequest, request.input)
+            return parse_operation_input(GraphAtlasSearchRequest, request.input)
         except ValidationError as exc:
             error = exc.errors()[0]
             error_message = str(error.get("msg", ""))
@@ -96,8 +96,8 @@ class GraphAtlasSearchAdapter:
                 if "minimum_degree" in error_message
                 else "constraints/minimum_edges"
             )
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code=(
                         "INVALID_CONSTRAINT_RANGE"
                         if invalid_range
@@ -178,7 +178,7 @@ class GraphAtlasSearchAdapter:
             backend_version=nx().__version__,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -197,8 +197,8 @@ def _compute_all_properties(graph: nx_type.Graph[Any]) -> GraphAtlasProperties:
             weight=None,
         )
         if len(independent_set) != independence_number:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INCONSISTENT_INDEPENDENCE_RESULT",
                     stage="backend_execution",
                     message=(

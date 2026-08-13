@@ -44,9 +44,9 @@ async def _tool(client: Client, name: str, arguments: dict[str, Any]) -> dict[st
 
 
 async def _catalog(client: Client) -> set[str]:
-    result = await client.read_resource("capability://catalog")
+    result = await client.read_resource("operation://catalog")
     catalog = json.loads(result.contents[0].text)
-    return {descriptor["capability_id"] for descriptor in catalog["capabilities"]}
+    return {descriptor["operation_id"] for descriptor in catalog["operations"]}
 
 
 async def _artifact(client: Client, artifact_uri: str) -> dict[str, Any]:
@@ -62,11 +62,11 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
             tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
         )
         async with Client(server, raise_exceptions=True) as client:
-            capability_ids = await _catalog(client)
+            operation_ids = await _catalog(client)
             assert {
                 "polynomial.compute.gcd",
                 "polynomial.gcd.verify",
-            } <= capability_ids
+            } <= operation_ids
 
             gcd_input = {
                 "left": _polynomial(-1, 0, 1),
@@ -76,7 +76,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.compute.gcd",
+                    "operation_id": "polynomial.compute.gcd",
                     "payload": gcd_input,
                 },
             )
@@ -88,7 +88,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.gcd.verify",
+                    "operation_id": "polynomial.gcd.verify",
                     "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
@@ -113,7 +113,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.gcd.verify",
+                    "operation_id": "polynomial.gcd.verify",
                     "payload": {"input": gcd_input, "candidate": candidate},
                 },
             )
@@ -139,7 +139,7 @@ def test_polynomial_factor_result_verifies_through_mcp(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.factor.compute",
+                    "operation_id": "polynomial.factor.compute",
                     "payload": factor_input,
                 },
             )
@@ -148,7 +148,7 @@ def test_polynomial_factor_result_verifies_through_mcp(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.factor.verify",
+                    "operation_id": "polynomial.factor.verify",
                     "payload": {
                         "input": factor_input,
                         "candidate": computed["output"]["result"],
@@ -168,7 +168,7 @@ def test_polynomial_factor_result_verifies_through_mcp(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.factor.verify",
+                    "operation_id": "polynomial.factor.verify",
                     "payload": {
                         "input": factor_input,
                         "candidate": corrupted_candidate,
@@ -185,7 +185,7 @@ def test_polynomial_factor_result_verifies_through_mcp(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.factor.verify",
+                    "operation_id": "polynomial.factor.verify",
                     "payload": {
                         "input": {"polynomial": _polynomial(-1, *([0] * 127), 1)},
                         "candidate": computed["output"]["result"],
@@ -206,9 +206,9 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
     async def scenario() -> None:
         server = create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE)
         async with Client(server, raise_exceptions=True) as client:
-            capability_ids = await _catalog(client)
-            assert "polynomial.compute.gcd" in capability_ids
-            assert "polynomial.gcd.verify" not in capability_ids
+            operation_ids = await _catalog(client)
+            assert "polynomial.compute.gcd" in operation_ids
+            assert "polynomial.gcd.verify" not in operation_ids
 
             gcd_input = {
                 "left": _polynomial(-1, 0, 1),
@@ -218,7 +218,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.compute.gcd",
+                    "operation_id": "polynomial.compute.gcd",
                     "payload": gcd_input,
                 },
             )
@@ -229,7 +229,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 client,
                 "math.run",
                 {
-                    "capability_id": "polynomial.gcd.verify",
+                    "operation_id": "polynomial.gcd.verify",
                     "payload": {
                         "input": gcd_input,
                         "candidate": computed["output"]["result"],
@@ -237,7 +237,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
                 },
             )
             assert unavailable["execution"]["status"] == "ERROR"
-            assert unavailable["output"]["error"]["code"] == "UNKNOWN_CAPABILITY"
+            assert unavailable["output"]["error"]["code"] == "UNKNOWN_OPERATION"
             assert unavailable["verification_record_uri"] is None
             assert "conclusion" not in unavailable["output"]
 
@@ -252,13 +252,13 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
     tmp_path: Path,
 ) -> None:
     async def validate(client: Client) -> dict[str, Any]:
-        capability_ids = await _catalog(client)
-        assert "lean.proof_edit.validate" in capability_ids
+        operation_ids = await _catalog(client)
+        assert "lean.proof_edit.validate" in operation_ids
         return await _tool(
             client,
             "math.run",
             {
-                "capability_id": "lean.proof_edit.validate",
+                "operation_id": "lean.proof_edit.validate",
                 "payload": {
                     "environment": "CORE",
                     "statement": "True",

@@ -11,18 +11,16 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+)
 from jacobian.contracts.polynomial_systems import (
     PolynomialSystemSolutionClaim,
     PolynomialSystemSolutionOutput,
@@ -33,6 +31,8 @@ from jacobian.contracts.polynomial_systems import (
 )
 from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Conclusion, ExecutionStatus
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import PolynomialOperationResult
 from jacobian.provider_runtime import known_provider_runtime
@@ -60,7 +60,7 @@ class PolynomialSystemResources:
     installation: PolynomialSystemInstallation
 
 
-def install_polynomial_system_capabilities(
+def install_polynomial_system_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
@@ -156,8 +156,8 @@ class PolynomialSystemSolutionAdapter:
             raise RuntimeError(
                 "polynomial system solution adapter requires an authorized checker"
             )
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.system.solution.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.system.solution.verify",
             version="1",
             title="Verify an exact polynomial-system solution",
             description=(
@@ -176,17 +176,17 @@ class PolynomialSystemSolutionAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialSystemSolutionRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialSystemSolutionRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 PolynomialSystemSolutionRequest, request.input
             )
         except (ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_POLYNOMIAL_SYSTEM_SOLUTION_REQUEST",
                     stage="request_validation",
                     message=(
@@ -208,8 +208,8 @@ class PolynomialSystemSolutionAdapter:
         installation = self.resources.installation
         checker_id = installation.checker_id
         if checker_id is None:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="POLYNOMIAL_SYSTEM_CHECKER_UNAVAILABLE",
                     stage="solution_verification",
                     message=(

@@ -38,7 +38,7 @@ def test_managed_server_advertises_immutable_deployment_identity(
             assert {
                 (resource.name, str(resource.uri)) for resource in resources.resources
             } == {
-                ("capability-catalog", "capability://catalog"),
+                ("operation-catalog", "operation://catalog"),
                 ("deployment-identity", "deployment://identity"),
             }
             result = await client.read_resource("deployment://identity")
@@ -91,7 +91,7 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             request_schema = describe_schema["properties"]["request"]
             assert request_schema["discriminator"]["propertyName"] == "op"
             assert set(tools["math.run"].input_schema["properties"]) == {
-                "capability_id",
+                "operation_id",
                 "inputs",
                 "payload",
             }
@@ -108,8 +108,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             }
             assert resource_inventory == {
                 (
-                    "capability-catalog",
-                    "capability://catalog",
+                    "operation-catalog",
+                    "operation://catalog",
                     "application/json",
                 ),
             }
@@ -164,7 +164,7 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             assert isinstance(absent_result.structured_content, dict)
             absent = absent_result.structured_content
             assert absent["matches"] == []
-            assert absent["catalog_resource"] == "capability://catalog"
+            assert absent["catalog_resource"] == "operation://catalog"
 
             unknown_domain_result = await client.call_tool(
                 "math.find",
@@ -180,30 +180,30 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             unknown_domain = unknown_domain_result.structured_content
             assert unknown_domain["domain"] == "arithmetic"
             assert unknown_domain["matches"] == []
-            assert unknown_domain["catalog_resource"] == "capability://catalog"
+            assert unknown_domain["catalog_resource"] == "operation://catalog"
 
-            catalog_result = await client.read_resource("capability://catalog")
+            catalog_result = await client.read_resource("operation://catalog")
             catalog = json.loads(catalog_result.contents[0].text)
-            capability_ids = {
-                descriptor["capability_id"] for descriptor in catalog["capabilities"]
+            operation_ids = {
+                descriptor["operation_id"] for descriptor in catalog["operations"]
             }
             assert all(
                 descriptor["provider_runtime"]["availability"] == "AVAILABLE"
-                for descriptor in catalog["capabilities"]
+                for descriptor in catalog["operations"]
             )
-            if "lean.check" in capability_ids:
+            if "lean.check" in operation_ids:
                 lean_result = await client.call_tool(
                     "math.find",
                     {
                         "request": {
                             "op": "inspect",
-                            "capability_id": "lean.check",
+                            "operation_id": "lean.check",
                         }
                     },
                 )
                 assert isinstance(lean_result.structured_content, dict)
                 lean_contract = lean_result.structured_content
-                lean_runtime = lean_contract["capability"]["provider_runtime"]
+                lean_runtime = lean_contract["operation"]["provider_runtime"]
                 assert lean_runtime["install_tier"] == "T3"
                 assert (
                     lean_runtime["configuration"]["profiles"]["MATHLIB"][

@@ -8,17 +8,17 @@ import threading
 from typing import TYPE_CHECKING, Any, cast
 
 from jacobian.adapters.mcp.constants import (
-    CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
+    OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
 )
 from jacobian.bounded_process import bounded_process_cancellation
-from jacobian.capability_errors import CapabilityDiscoveryCursorError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiscoveryRequest,
-    CapabilityInputKind,
-    CapabilityRequest,
-    CapabilityResult,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiscoveryRequest,
+    OperationInputKind,
+    OperationRequest,
+    OperationResult,
 )
+from jacobian.operation_errors import OperationDiscoveryCursorError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,19 +31,19 @@ def _mcp_text_json_bytes(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
 
 
-def _invoke_capability_with_cancellation(
+def _invoke_operation_with_cancellation(
     runtime: Any,
-    request: CapabilityRequest,
+    request: OperationRequest,
     cancellation_event: threading.Event,
-) -> CapabilityResult:
+) -> OperationResult:
     with bounded_process_cancellation(cancellation_event):
-        result: CapabilityResult = runtime.core.capabilities.invoke(request)
+        result: OperationResult = runtime.core.operations.invoke(request)
         return result
 
 
 def _discovery_operation_card(
     match: dict[str, Any],
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
 ) -> dict[str, Any]:
     """Add installed availability and typed routing facts to lexical search."""
 
@@ -67,17 +67,17 @@ def _discovery_operation_card(
     }
 
 
-def _capability_discovery_response(
+def _operation_discovery_response(
     runtime: JacobianRuntime,
     *,
     query: str,
     domain: str | None,
-    input_kind: CapabilityInputKind | None,
+    input_kind: OperationInputKind | None,
     artifact_type: str | None,
     limit: int | None,
     cursor: str | None,
 ) -> dict[str, Any]:
-    discovery_request = CapabilityDiscoveryRequest(
+    discovery_request = OperationDiscoveryRequest(
         query=query,
         domain=domain,
         input_kind=input_kind,
@@ -86,13 +86,13 @@ def _capability_discovery_response(
         cursor=cursor,
     )
     try:
-        discovered = runtime.core.capabilities.discover(discovery_request)
-    except CapabilityDiscoveryCursorError:
+        discovered = runtime.core.operations.discover(discovery_request)
+    except OperationDiscoveryCursorError:
         return {
             "error": {
                 "code": "INVALID_CURSOR",
-                "stage": "capability_discovery",
-                "message": "The capability discovery cursor is not in this result set.",
+                "stage": "operation_discovery",
+                "message": "The operation discovery cursor is not in this result set.",
                 "hint": (
                     "Restart discovery without a cursor, or reuse the same query, "
                     "domain, input_kind, artifact_type, and limit that produced "
@@ -105,8 +105,8 @@ def _capability_discovery_response(
         _discovery_operation_card(
             match,
             cast(
-                CapabilityDescriptor,
-                runtime.core.capabilities.inspect(match["capability_id"]),
+                OperationDescriptor,
+                runtime.core.operations.inspect(match["operation_id"]),
             ),
         )
         for match in cast(list[dict[str, Any]], discovered_payload["matches"])
@@ -114,26 +114,26 @@ def _capability_discovery_response(
     response = {
         "kind": "discovery",
         **discovered_payload,
-        "catalog_resource": "capability://catalog",
-        "response_byte_limit": CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT,
+        "catalog_resource": "operation://catalog",
+        "response_byte_limit": OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
         "truncation_reason": None,
         "match_metadata_truncated": False,
     }
     matches = cast(list[dict[str, Any]], response["matches"])
     while (
-        len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+        len(_mcp_text_json_bytes(response)) > OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT
         and len(matches) > 1
     ):
         matches.pop()
         response["truncated"] = True
-        response["next_cursor"] = matches[-1]["capability_id"]
+        response["next_cursor"] = matches[-1]["operation_id"]
         response["truncation_reason"] = "BYTE_LIMIT"
     compact_fields = (
         "tags",
         "produced_artifact_types",
     )
     while (
-        len(_mcp_text_json_bytes(response)) > CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT
+        len(_mcp_text_json_bytes(response)) > OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT
     ):
         removed = False
         for match in matches:
@@ -149,6 +149,6 @@ def _capability_discovery_response(
                 break
         if not removed:
             raise RuntimeError(
-                "compact capability discovery response exceeds its hard byte limit"
+                "compact operation discovery response exceeds its hard byte limit"
             )
     return response

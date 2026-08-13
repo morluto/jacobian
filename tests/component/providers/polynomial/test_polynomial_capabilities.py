@@ -15,15 +15,15 @@ from tests.component.providers.polynomial.polynomial_capabilities_support import
     poly_payload as _poly_payload,
 )
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 
 
 def test_jacobian_descriptor_advertises_operation_budgets(
     authorized_polynomial_services,
 ) -> None:
     descriptors = {
-        item.capability_id: item
-        for item in authorized_polynomial_services.core.capabilities.catalog().capabilities
+        item.operation_id: item
+        for item in authorized_polynomial_services.core.operations.catalog().operations
     }
     descriptor = descriptors["polynomial.map.compute_jacobian"]
 
@@ -46,9 +46,9 @@ def test_jacobian_canonically_omits_zero_partial_derivatives(
         ],
     }
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.compute_jacobian",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.compute_jacobian",
             input={"map": polynomial_map},
         )
     )
@@ -80,9 +80,9 @@ def test_jacobian_represents_derived_exponents_above_the_source_limit(
         ],
     }
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.compute_jacobian",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.compute_jacobian",
             input={"map": polynomial_map},
         )
     )
@@ -104,9 +104,9 @@ def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
     runtime = authorized_polynomial_services
     polynomial_map = _jacobian_counterexample_map()
 
-    jacobian = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.compute_jacobian",
+    jacobian = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.compute_jacobian",
             input={"map": polynomial_map},
         )
     )
@@ -123,27 +123,27 @@ def test_polynomial_jacobian_and_collision_reproduce_public_counterexample(
     assert jacobian.output["certificate_uri"] in jacobian.artifact_uris
     assert "conclusion" not in jacobian.output
 
-    first_evaluation = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    first_evaluation = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={
                 "map": polynomial_map,
                 "point": _point(0, 0, Fraction(-1, 4)),
             },
         )
     )
-    second_evaluation = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    second_evaluation = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={
                 "map": polynomial_map,
                 "point": _point(1, Fraction(-3, 2), Fraction(13, 2)),
             },
         )
     )
-    collision = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.collision_witness",
+    collision = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.collision_witness",
             input={
                 "first_evaluation_uri": first_evaluation.output["evaluation_uri"],
                 "second_evaluation_uri": second_evaluation.output["evaluation_uri"],
@@ -179,9 +179,9 @@ def test_polynomial_map_evaluation_is_exact_and_materialized(
 ) -> None:
     polynomial_map = _jacobian_counterexample_map()
 
-    result = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.evaluate",
+    result = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.evaluate",
             input={
                 "map": polynomial_map,
                 "point": _point(-1, Fraction(3, 2), Fraction(13, 2)),
@@ -199,7 +199,7 @@ def test_polynomial_map_evaluation_is_exact_and_materialized(
 
 
 @pytest.mark.parametrize(
-    ("capability_id", "payload", "diagnostic_code"),
+    ("operation_id", "payload", "diagnostic_code"),
     [
         (
             "polynomial.map.evaluate",
@@ -277,7 +277,7 @@ def test_polynomial_map_evaluation_is_exact_and_materialized(
 def test_complete_request_validation_precedes_artifact_writes(
     polynomial_services,
     monkeypatch: pytest.MonkeyPatch,
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, Any],
     diagnostic_code: str,
 ) -> None:
@@ -291,8 +291,8 @@ def test_complete_request_validation_precedes_artifact_writes(
 
     monkeypatch.setattr(polynomial_services.core.artifacts, "put", recording_put)
 
-    result = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=capability_id, input=payload)
+    result = polynomial_services.core.operations.invoke(
+        OperationRequest(operation_id=operation_id, input=payload)
     )
 
     assert result.execution.status.value == "ERROR"

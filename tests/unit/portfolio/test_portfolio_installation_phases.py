@@ -9,11 +9,11 @@ from typing import Any, cast
 import pytest
 
 import jacobian.portfolio.foundation_installation as foundation_installation
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.installation.context import InstallationContext
 from jacobian.portfolio.checker_installation import CheckerPortfolioInstaller
@@ -29,26 +29,26 @@ from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
-def _unavailable_runtime(provider: str) -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _unavailable_runtime(provider: str) -> ProviderObservation:
+    return ProviderObservation(
         provider=provider,
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         platform="test-platform",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
         diagnostic=f"{provider} is unavailable",
     )
 
 
-def _available_runtime(provider: str) -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _available_runtime(provider: str) -> ProviderObservation:
+    return ProviderObservation(
         provider=provider,
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1",
         digest="sha256:" + "0" * 64,
-        digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+        digest_kind=ProviderDigestKind.SOURCE_TREE,
         platform="test-platform",
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="MIT",
     )
 
@@ -69,11 +69,11 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     registered: list[object] = []
-    context = SimpleNamespace(register_capability=registered.append)
+    context = SimpleNamespace(register_operation=registered.append)
     adapter = object()
     monkeypatch.setattr(
         foundation_installation,
-        "install_cvc5_capability",
+        "install_cvc5_operation",
         lambda _smt, _runtime: adapter,
     )
 
@@ -84,7 +84,7 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
 
     assert (
         _provider_plan_with_unavailable_external_solvers().cadical.availability
-        is CapabilityProviderAvailability.UNAVAILABLE
+        is ProviderAvailability.UNAVAILABLE
     )
     assert registered == [adapter]
 
@@ -106,7 +106,7 @@ class _UnauthorizedContext:
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE
     registered: list[object] = field(default_factory=list)
 
-    def register_capability(self, adapter: object) -> None:
+    def register_operation(self, adapter: object) -> None:
         self.registered.append(adapter)
 
 

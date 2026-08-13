@@ -295,7 +295,7 @@ def _single_proof_state(
 
 
 class LeanExplorationReplRuntime:
-    """Own bounded REPL sessions used only by exploratory capabilities."""
+    """Own bounded REPL sessions used only by exploratory operations."""
 
     def __init__(
         self,
@@ -377,7 +377,7 @@ class LeanExplorationReplRuntime:
         This backend candidate is intentionally not wired to an agent-facing
         operation.  It exists so evaluation can compare the same validated
         transition contract against clean-process replay without changing the
-        atomic capability surface.
+        atomic operation surface.
         """
 
         with self._lock:

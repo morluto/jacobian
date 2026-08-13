@@ -8,7 +8,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.arithmetic import build_arithmetic_bundle
 
@@ -40,18 +40,18 @@ def test_real_quadratic_order_computes_and_verifies(
     arithmetic_services: DomainTestServices,
 ) -> None:
     payload = _payload()
-    computed = arithmetic_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="arithmetic.real_quadratic.order.compute", input=payload
+    computed = arithmetic_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="arithmetic.real_quadratic.order.compute", input=payload
         )
     )
     result = computed.output["result"]
     assert computed.execution.status is ExecutionStatus.COMPLETED
     assert result["order"] == "GT"
     assert result["sign_certificate"]["magnitude_order"] == "LT"
-    verified = arithmetic_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="arithmetic.real_quadratic.order.verify",
+    verified = arithmetic_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="arithmetic.real_quadratic.order.verify",
             input={"input": payload, "candidate": result},
         )
     )
@@ -63,16 +63,16 @@ def test_real_quadratic_checker_rejects_forged_order(
     arithmetic_services: DomainTestServices,
 ) -> None:
     payload = _payload()
-    computed = arithmetic_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="arithmetic.real_quadratic.order.compute", input=payload
+    computed = arithmetic_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="arithmetic.real_quadratic.order.compute", input=payload
         )
     )
     forged = deepcopy(computed.output["result"])
     forged["order"] = "LT"
-    rejected = arithmetic_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="arithmetic.real_quadratic.order.verify",
+    rejected = arithmetic_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="arithmetic.real_quadratic.order.verify",
             input={"input": payload, "candidate": forged},
         )
     )

@@ -6,26 +6,26 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import (
     EvidenceBindings,
     WitnessEnvelope,
     WitnessRole,
 )
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+)
 from jacobian.contracts.polynomial_expressions import (
     PolynomialExpressionNormalizationVerificationOutput,
     PolynomialExpressionNormalizationVerificationRequest,
 )
 from jacobian.contracts.results import Conclusion, ExecutionStatus
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomial_expressions import (
     PolynomialExpressionArtifactError,
@@ -56,7 +56,7 @@ def install_polynomial_expression_checker(
     *,
     authorize_checker: bool,
 ) -> tuple[
-    CapabilityAdapter[Any] | None,
+    OperationAdapter[Any] | None,
     PolynomialExpressionCheckerInstallation,
 ]:
     """Install the witness schema and optionally authorize exact AST replay."""
@@ -95,7 +95,7 @@ def install_polynomial_expression_checker(
         witness_schema_uri=witness_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter[Any] | None = None
+    adapter: OperationAdapter[Any] | None = None
     if checker_id is not None:
         adapter = PolynomialExpressionNormalizationVerificationAdapter(
             store=store,
@@ -127,8 +127,8 @@ class PolynomialExpressionNormalizationVerificationAdapter:
         self.expressions = expressions
         self.verification = verification
         self.installation = installation
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.expression_normalization.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.expression_normalization.verify",
             version="1",
             title="Verify a typed polynomial normalization",
             description=(
@@ -164,13 +164,13 @@ class PolynomialExpressionNormalizationVerificationAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialExpressionNormalizationVerificationRequest:
-        return parse_capability_input(
+        return parse_operation_input(
             PolynomialExpressionNormalizationVerificationRequest,
             request.input,
         )
@@ -184,8 +184,8 @@ class PolynomialExpressionNormalizationVerificationAdapter:
             )
             semantics = self.store.get(self.expressions.installation.semantics_uri)
         except (PolynomialExpressionArtifactError, StorageError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_POLYNOMIAL_EXPRESSION_NORMALIZATION",
                     stage="artifact_resolution",
                     message=str(exc),
@@ -204,8 +204,8 @@ class PolynomialExpressionNormalizationVerificationAdapter:
 
         checker_id = self.installation.checker_id
         if checker_id is None:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="POLYNOMIAL_EXPRESSION_CHECKER_UNAVAILABLE",
                     stage="normalization_verification",
                     message=(

@@ -188,7 +188,7 @@ adherence to a preferred tool sequence.
 ### Held-out treatment readiness
 
 The protected held-out runner performs a bounded MCP initialization, catalog,
-and capability-description preflight before model execution. A held-out model
+and operation-description preflight before model execution. A held-out model
 run starts only when that record reports infrastructure status `READY`. An
 unreachable endpoint, timeout, malformed response, or catalog/policy mismatch
 records a classified diagnostic and aborts the treatment before the agent
@@ -197,7 +197,7 @@ held-out readiness contract.
 
 A successful preflight initially records routing status `AVAILABLE_UNUSED`.
 Normalization changes that status to `AVAILABLE_INVOKED` only when the trace
-contains a successful Jacobian capability invocation. Infrastructure and
+contains a successful Jacobian operation invocation. Infrastructure and
 routing are independent: an available service that the agent did not use is
 not an unavailable service.
 
@@ -269,7 +269,7 @@ uvx --from harbor==0.20.0 harbor view \
 ```
 
 For Jacobian treatment runs, inspect Harbor ATIF together with Jacobian
-telemetry. Check capability discovery and descriptions, invocation and
+telemetry. Check operation discovery and descriptions, invocation and
 parameter errors, artifact and verification-record flow, repeated or
 irrelevant calls, shell/file activity, tokens, time, and completion.
 The committed observation jobs explicitly collect Codex's ATIF trajectory from

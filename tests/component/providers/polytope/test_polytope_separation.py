@@ -18,11 +18,11 @@ from tests.support.services import (
 
 from jacobian.canonical import canonicalize_json
 from jacobian.checker_authorization import install_polytope_checkers
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.polytope import PolytopeSeparateRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_projection import project_operation_result
-from jacobian.polytope_capabilities import PolytopeSeparationAdapter
+from jacobian.polytope_operations import PolytopeSeparationAdapter
 from jacobian.runtime.config import CheckerAuthorityMode
 
 
@@ -114,8 +114,8 @@ def test_backend_failure_keeps_provider_detail_local(
     projected = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="polytope.separate",
+                OperationRequest(
+                    operation_id="polytope.separate",
                     input={
                         "point_uri": point_uri,
                         "generator_set_uri": generators_uri,

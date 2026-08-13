@@ -9,7 +9,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.projective_geometry.bundle import build_projective_geometry_bundle
 
@@ -46,9 +46,9 @@ def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
         (1, 1, 2),
         (2, -1, -2),
     )
-    result = projective_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.projective_line_arrangement.flats.materialize",
+    result = projective_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.projective_line_arrangement.flats.materialize",
             input={
                 "lines": [
                     {
@@ -79,9 +79,9 @@ def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
         {"multiplicity": 4, "flat_count": 1},
     ]
     assert payload["pair_count_total"] == 36
-    verified = projective_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.projective_line_arrangement.flats.verify",
+    verified = projective_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.projective_line_arrangement.flats.verify",
             input={"result_uri": result.output["result_uri"]},
         )
     )
@@ -92,9 +92,9 @@ def test_projective_arrangement_materializes_the_nine_line_flat_lattice(
 def test_projective_arrangement_rejects_projectively_duplicate_lines(
     projective_services: DomainTestServices,
 ) -> None:
-    result = projective_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.projective_line_arrangement.flats.materialize",
+    result = projective_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.projective_line_arrangement.flats.materialize",
             input={
                 "lines": [
                     {"label": "L1", "coefficients": [_q(1), _q(2), _q(3)]},
@@ -111,9 +111,9 @@ def test_projective_arrangement_rejects_projectively_duplicate_lines(
 def test_arrangement_checker_rejects_schema_valid_forged_normalization(
     projective_services: DomainTestServices,
 ) -> None:
-    computed = projective_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.projective_line_arrangement.flats.materialize",
+    computed = projective_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.projective_line_arrangement.flats.materialize",
             input={
                 "lines": [
                     {"label": "L1", "coefficients": [_q(1), _q(0), _q(0)]},
@@ -132,9 +132,9 @@ def test_arrangement_checker_rejects_schema_valid_forged_normalization(
         parents=(computed.output["input_uri"],),
         summary="schema-valid forged projective normalization",
     ).artifact_uri
-    checked = projective_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.projective_line_arrangement.flats.verify",
+    checked = projective_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.projective_line_arrangement.flats.verify",
             input={"result_uri": forged_uri},
         )
     )

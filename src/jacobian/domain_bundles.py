@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.operation_bindings import InstalledOperation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 
 
@@ -18,17 +19,27 @@ class DomainBundle:
     domain_id: str
     schema_namespace: str
     semantics: DomainSemantics
-    provider_runtime: CapabilityProviderRuntime
+    provider_runtime: ProviderObservation
     backend_version: str
-    capabilities: tuple[InstalledOperation[Any, Any], ...]
+    operations: tuple[
+        OperationDeclaration[Any, Any] | InstalledOperation[Any, Any],
+        ...,
+    ]
     diagnostics: DomainDiagnostics
     checker_declarations: tuple[ExactReplayCheckerDeclaration, ...] = ()
 
     @property
-    def capability_ids(self) -> tuple[str, ...]:
-        """Return the capability IDs declared by exactly one installation mode."""
+    def operation_ids(self) -> tuple[str, ...]:
+        """Return the operation IDs declared by this domain."""
 
-        return tuple(operation.spec.operation_id for operation in self.capabilities)
+        return tuple(
+            (
+                operation.operation_id
+                if isinstance(operation, OperationDeclaration)
+                else operation.spec.operation_id
+            )
+            for operation in self.operations
+        )
 
 
 __all__ = ["DomainBundle"]

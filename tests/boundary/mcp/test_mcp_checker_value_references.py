@@ -24,7 +24,7 @@ def test_mcp_keeps_two_tools_while_a_checker_consumes_a_typed_candidate(
                 {
                     "request": {
                         "op": "inspect",
-                        "capability_id": "matrix.normal_form.smith.compute",
+                        "operation_id": "matrix.normal_form.smith.compute",
                     }
                 },
             )
@@ -33,23 +33,23 @@ def test_mcp_keeps_two_tools_while_a_checker_consumes_a_typed_candidate(
                 {
                     "request": {
                         "op": "inspect",
-                        "capability_id": "matrix.normal_form.smith.verify",
+                        "operation_id": "matrix.normal_form.smith.verify",
                     }
                 },
             )
             assert producer_contract.structured_content is not None
             assert checker_contract.structured_content is not None
-            assert producer_contract.structured_content["capability"][
+            assert producer_contract.structured_content["operation"][
                 "output_ports"
             ] == [{"name": "smith_form", "value_type": "SmithNormalForm"}]
-            assert checker_contract.structured_content["capability"]["input_ports"] == [
+            assert checker_contract.structured_content["operation"]["input_ports"] == [
                 {"name": "candidate", "value_type": "SmithNormalForm"}
             ]
 
             computed = await client.call_tool(
                 "math.run",
                 {
-                    "capability_id": "matrix.normal_form.smith.compute",
+                    "operation_id": "matrix.normal_form.smith.compute",
                     "payload": {"matrix": {"entries": [["2", "4"], ["6", "8"]]}},
                 },
             )
@@ -61,7 +61,7 @@ def test_mcp_keeps_two_tools_while_a_checker_consumes_a_typed_candidate(
             verified = await client.call_tool(
                 "math.run",
                 {
-                    "capability_id": "matrix.normal_form.smith.verify",
+                    "operation_id": "matrix.normal_form.smith.verify",
                     "payload": {
                         "input": {"matrix": {"entries": [["2", "4"], ["6", "8"]]}}
                     },

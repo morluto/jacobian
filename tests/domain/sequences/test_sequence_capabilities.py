@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.sequences import build_sequence_bundle
 
@@ -18,9 +18,9 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 def test_prefix_gcds_return_each_prefix_result(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sequence.compute.prefix_gcds",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="sequence.compute.prefix_gcds",
             input={"values": ["18", "24", "15"]},
         )
     )
@@ -41,9 +41,9 @@ def test_geometric_sequence_handles_zero_terms_exactly(
         (["2", "4", "9"], False),
     )
     for values, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="sequence.decide.geometric",
+        result = domain_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="sequence.decide.geometric",
                 input={"values": values},
             )
         )
@@ -58,15 +58,15 @@ def test_sequence_products_format_results_beyond_python_digit_limit(
     factor = "1" + ("0" * 2_500)
     expected_product = "1" + ("0" * 5_000)
 
-    product = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sequence.compute.product",
+    product = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="sequence.compute.product",
             input={"values": [factor, factor]},
         )
     )
-    prefixes = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="sequence.compute.prefix_products",
+    prefixes = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="sequence.compute.prefix_products",
             input={"values": [factor, factor]},
         )
     )

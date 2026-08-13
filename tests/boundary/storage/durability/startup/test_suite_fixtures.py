@@ -128,4 +128,4 @@ def test_complete_portfolio_template_is_quiescent_and_copyable(
     with create_runtime(
         destination, checker_authority=CheckerAuthorityMode.NONE
     ) as runtime:
-        assert runtime.core.capabilities.catalog().capabilities
+        assert runtime.core.operations.catalog().operations

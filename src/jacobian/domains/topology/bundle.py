@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.topology.checkers import TOPOLOGY_EXACT_REPLAY_CHECKERS
-from jacobian.domains.topology.operations import TOPOLOGY_CAPABILITIES
+from jacobian.domains.topology.operations import TOPOLOGY_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import known_provider_runtime
 
@@ -49,9 +49,9 @@ def build_topology_bundle() -> DomainBundle:
             ),
         ),
         backend_version="jacobian.topology/1",
-        capabilities=TOPOLOGY_CAPABILITIES,
+        operations=TOPOLOGY_OPERATIONS,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_FINITE_SIMPLICIAL_TOPOLOGY_REQUEST",
                 stage="finite_simplicial_topology_input_validation",
                 message="Input does not satisfy the bounded simplicial-topology contract.",

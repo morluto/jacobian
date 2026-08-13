@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains._examples import example
 from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
@@ -10,9 +10,10 @@ from jacobian.math.graphs.independence import (
     independence_number,
 )
 from jacobian.operation_bindings import inline_operation
-from jacobian.operations import OperationRefusalError, OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operations import OperationRefusalError
 
-_INVALID_REQUEST = CapabilityDiagnostic(
+_INVALID_REQUEST = OperationDiagnostic(
     code="INVALID_GRAPH_INDEPENDENCE_NUMBER_REQUEST",
     stage="graph_independence_number_input_validation",
     message=(
@@ -27,7 +28,7 @@ def _execute(request: IndependenceNumberRequest) -> IndependenceNumberResult:
         return independence_number(request)
     except (ArithmeticError, RuntimeError, TypeError, ValueError) as exc:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="GRAPH_INDEPENDENCE_NUMBER_SEARCH_FAILED",
                 stage="graph_independence_number_computation",
                 message=str(exc),
@@ -36,8 +37,8 @@ def _execute(request: IndependenceNumberRequest) -> IndependenceNumberResult:
         ) from exc
 
 
-INDEPENDENCE_NUMBER_CAPABILITY = inline_operation(
-    OperationSpec(
+INDEPENDENCE_NUMBER_OPERATION = inline_operation(
+    OperationDeclaration(
         operation_id="graph.invariant.independence_number.compute",
         version="2",
         title="Independence number",
@@ -59,7 +60,7 @@ INDEPENDENCE_NUMBER_CAPABILITY = inline_operation(
             "z3",
         ),
         invalid_request=_INVALID_REQUEST,
-        invocation_examples=(
+        examples=(
             example(
                 "cycle_five",
                 "Compute the independence number of a five-cycle.",
@@ -81,4 +82,4 @@ INDEPENDENCE_NUMBER_CAPABILITY = inline_operation(
     )
 )
 
-__all__ = ["INDEPENDENCE_NUMBER_CAPABILITY"]
+__all__ = ["INDEPENDENCE_NUMBER_OPERATION"]

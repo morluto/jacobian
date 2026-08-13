@@ -19,10 +19,10 @@ from jacobian.contracts.projective_geometry import (
 from jacobian.domains._examples import example
 from jacobian.math.arithmetic import primitive_integer_vector
 from jacobian.operation_bindings import InstalledOperation, durable_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationFailure,
     OperationRefusalError,
-    OperationSpec,
 )
 
 _PREVIEW_FLAT_LIMIT = 32
@@ -171,11 +171,11 @@ def projective_line_arrangement_preview(
     )
 
 
-PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: InstalledOperation[
+PROJECTIVE_LINE_ARRANGEMENT_OPERATION: InstalledOperation[
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
 ] = durable_operation(
-    OperationSpec(
+    OperationDeclaration(
         operation_id="geometry.projective_line_arrangement.flats.materialize",
         version="4",
         title="Materialize projective line-arrangement flats",
@@ -195,7 +195,7 @@ PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: InstalledOperation[
             "flats",
             "exact",
         ),
-        invocation_examples=(
+        examples=(
             example(
                 "two_coordinate_lines",
                 "Materialize flats for two coordinate lines.",
@@ -233,7 +233,7 @@ PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY: InstalledOperation[
 
 
 __all__ = [
-    "PROJECTIVE_LINE_ARRANGEMENT_CAPABILITY",
+    "PROJECTIVE_LINE_ARRANGEMENT_OPERATION",
     "materialize_projective_line_flats",
     "projective_line_arrangement_preview",
 ]

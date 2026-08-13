@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityInstallTier
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.operations import ProviderInstallTier
 from jacobian.provider_runtime import source_provider_runtime
 
 
@@ -13,7 +13,7 @@ def _runtime():
         "jacobian.test-declaration-checker",
         version="1",
         entrypoint="jacobian_checkers.linear:check_rational_solution",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("clean-process-checker",),
     )
@@ -102,5 +102,5 @@ def test_exact_replay_declaration_rejects_wrong_runtime_factory_result() -> None
         provider_runtime_factory=lambda: object(),  # type: ignore[return-value]
     )
 
-    with pytest.raises(TypeError, match="must return CapabilityProviderRuntime"):
+    with pytest.raises(TypeError, match="must return ProviderObservation"):
         _ = declaration.provider_runtime

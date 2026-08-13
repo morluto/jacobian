@@ -3,7 +3,7 @@
 This phase authorizes the retained polytope and Lean checker families through
 the standalone :mod:`jacobian.checker_authorization` module and then installs
 the Lean declaration, exploration, proof-axiom, proof-edit, and proof-state
-inspection capabilities.
+inspection operations.
 """
 
 from __future__ import annotations
@@ -11,14 +11,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from jacobian.builtin_capabilities import LeanCheckAdapter
+from jacobian.builtin_operations import LeanCheckAdapter
 from jacobian.checker_authorization import (
     install_lean_checkers,
     install_polytope_checkers,
 )
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderObservation,
 )
 from jacobian.installation.context import InstallationContext
 from jacobian.lean_frontend.declaration_operations import (
@@ -29,8 +29,8 @@ from jacobian.lean_frontend.declarations import (
     installed_lean_declaration_service,
 )
 from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
-from jacobian.lean_frontend.proof_axioms import install_lean_proof_axioms_capability
-from jacobian.lean_frontend.proof_edit import install_lean_proof_edit_capability
+from jacobian.lean_frontend.proof_axioms import install_lean_proof_axioms_operation
+from jacobian.lean_frontend.proof_edit import install_lean_proof_edit_operation
 from jacobian.lean_frontend.proof_state_inspect import (
     install_lean_proof_state_inspect_only,
 )
@@ -107,8 +107,8 @@ class CheckerPortfolioInstaller:
                 features=("immutable-proof-state", "read-only-inspection"),
             ),
         )
-        ctx.register_capability(inspect_adapter)
-        if runtime.availability is not CapabilityProviderAvailability.AVAILABLE:
+        ctx.register_operation(inspect_adapter)
+        if runtime.availability is not ProviderAvailability.AVAILABLE:
             _LOGGER.warning("lean.check is not installed: %s", runtime.diagnostic)
             return
         if any(
@@ -130,15 +130,15 @@ class CheckerPortfolioInstaller:
             ctx.verification,
             lean_checkers,
         )
-        ctx.register_capability(LeanCheckAdapter(resources.lean, runtime))
-        proof_axioms_adapter, _ = install_lean_proof_axioms_capability(
+        ctx.register_operation(LeanCheckAdapter(resources.lean, runtime))
+        proof_axioms_adapter, _ = install_lean_proof_axioms_operation(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
             lean_checkers,
             runtime,
         )
-        ctx.register_capability(proof_axioms_adapter)
+        ctx.register_operation(proof_axioms_adapter)
         adapters, resources.lean_exploration = install_lean_exploration_capabilities(
             ctx.store,
             ctx.schemas,
@@ -147,22 +147,22 @@ class CheckerPortfolioInstaller:
             runtime,
         )
         for adapter in adapters:
-            if adapter.descriptor.capability_id == "lean.proof_state.inspect":
+            if adapter.descriptor.operation_id == "lean.proof_state.inspect":
                 continue
-            ctx.register_capability(adapter)
-        proof_edit_adapter, _ = install_lean_proof_edit_capability(
+            ctx.register_operation(adapter)
+        proof_edit_adapter, _ = install_lean_proof_edit_operation(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
             resources.lean,
             runtime,
         )
-        ctx.register_capability(proof_edit_adapter)
+        ctx.register_operation(proof_edit_adapter)
 
     def _install_lean_declaration_adapters(
         self,
         declarations: LeanDeclarationService | None,
-        runtime: CapabilityProviderRuntime,
+        runtime: ProviderObservation,
     ) -> None:
         if declarations is None:
             return
@@ -171,4 +171,4 @@ class CheckerPortfolioInstaller:
             build_lean_declaration_query_bundle(declarations, runtime)
         )
         for adapter in query_installation.adapters:
-            ctx.register_capability(adapter)
+            ctx.register_operation(adapter)

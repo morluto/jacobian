@@ -15,8 +15,8 @@ def _graphs() -> tuple[SimpleNamespace, SimpleNamespace, list[object]]:
         schemas=object(),
         artifacts=object(),
         values=object(),
-        operations=object(),
-        capabilities=SimpleNamespace(register=registered.append),
+        installer=object(),
+        operations=SimpleNamespace(register=registered.append),
         checkers=object(),
     )
     application = SimpleNamespace(core=core, verification=object())
@@ -30,15 +30,15 @@ def test_context_wires_application_verification_and_filters_excluded_adapters() 
         application,
         RuntimeOptions(
             checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-            capability_exclusions=frozenset({"excluded"}),
+            operation_exclusions=frozenset({"excluded"}),
         ),
     )
 
-    context.register_capability(
-        SimpleNamespace(descriptor=SimpleNamespace(capability_id="excluded"))
+    context.register_operation(
+        SimpleNamespace(descriptor=SimpleNamespace(operation_id="excluded"))
     )
-    included = SimpleNamespace(descriptor=SimpleNamespace(capability_id="included"))
-    context.register_capability(included)
+    included = SimpleNamespace(descriptor=SimpleNamespace(operation_id="included"))
+    context.register_operation(included)
 
     assert context.verification is application.verification
     assert context.values is core.values

@@ -1,11 +1,11 @@
-# Deferred product capability gaps
+# Deferred product operation gaps
 
-PR1 required no new Jacobian capability. The existing inverse verifier already
+PR1 required no new Jacobian operation. The existing inverse verifier already
 replays both ordered compositions, and the benchmark's clean-room verifier owns
 its independent terminal check.
 
 One product-surface gap remains intentionally deferred: Jacobian has no
-standalone typed polynomial-map composition capability that exposes a composed
+standalone typed polynomial-map composition operation that exposes a composed
 map or residual family as a reusable agent-visible artifact. Adding one is not
 necessary to author or verify this pilot, so it is outside PR1.
 

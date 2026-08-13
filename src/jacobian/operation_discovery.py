@@ -1,19 +1,19 @@
-"""Deterministic capability discovery and routing projection."""
+"""Deterministic operation discovery and routing projection."""
 
 from __future__ import annotations
 
 import re
 from typing import Literal, Protocol
 
-from jacobian.capability_errors import CapabilityDiscoveryCursorError
-from jacobian.contracts.capabilities import (
-    CapabilityCatalog,
-    CapabilityDescriptor,
-    CapabilityDiscoveryMatch,
-    CapabilityDiscoveryRequest,
-    CapabilityDiscoveryResult,
-    CapabilityInputKind,
+from jacobian.contracts.operations import (
+    OperationCatalogSnapshot,
+    OperationDescriptor,
+    OperationDiscoveryMatch,
+    OperationDiscoveryRequest,
+    OperationDiscoveryResult,
+    OperationInputKind,
 )
+from jacobian.operation_errors import OperationDiscoveryCursorError
 
 _DISCOVERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _DISCOVERY_STOP_WORDS = frozenset(
@@ -22,21 +22,21 @@ _DISCOVERY_STOP_WORDS = frozenset(
 
 
 class DiscoveryOwner(Protocol):
-    def catalog(self) -> CapabilityCatalog: ...
+    def catalog(self) -> OperationCatalogSnapshot: ...
 
 
-class CapabilityDiscoveryMixin:
+class OperationDiscoveryMixin:
     """Provide the installed-portfolio discovery state machine."""
 
     def discover(
         self: DiscoveryOwner,
-        request: CapabilityDiscoveryRequest,
-    ) -> CapabilityDiscoveryResult:
-        descriptors = self.catalog().capabilities
+        request: OperationDiscoveryRequest,
+    ) -> OperationDiscoveryResult:
+        descriptors = self.catalog().operations
         normalized_domain = (
             normalize_domain(request.domain) if request.domain is not None else None
         )
-        ranked: list[tuple[int, CapabilityDiscoveryMatch]] = []
+        ranked: list[tuple[int, OperationDiscoveryMatch]] = []
         for descriptor in descriptors:
             if normalized_domain is not None and not matches_domain(
                 descriptor,
@@ -49,8 +49,8 @@ class CapabilityDiscoveryMixin:
                 request.artifact_type,
             )
             score = discovery_relevance(descriptor, request.query)
-            match = CapabilityDiscoveryMatch(
-                capability_id=descriptor.capability_id,
+            match = OperationDiscoveryMatch(
+                operation_id=descriptor.operation_id,
                 title=descriptor.title,
                 description=descriptor.description,
                 tags=descriptor.tags,
@@ -60,7 +60,7 @@ class CapabilityDiscoveryMixin:
             )
             if score > 0:
                 ranked.append((score, match))
-        ranked.sort(key=lambda item: (-item[0], item[1].capability_id))
+        ranked.sort(key=lambda item: (-item[0], item[1].operation_id))
         total_matches = len(ranked)
         start = 0
         if request.cursor is not None:
@@ -69,21 +69,21 @@ class CapabilityDiscoveryMixin:
                     next(
                         index
                         for index, (_, match) in enumerate(ranked)
-                        if match.capability_id == request.cursor
+                        if match.operation_id == request.cursor
                     )
                     + 1
                 )
             except StopIteration:
-                raise CapabilityDiscoveryCursorError(
+                raise OperationDiscoveryCursorError(
                     "cursor is not present in the filtered discovery result"
                 ) from None
         page = ranked[start : start + request.limit]
         next_cursor = (
-            page[-1][1].capability_id
+            page[-1][1].operation_id
             if page and start + len(page) < total_matches
             else None
         )
-        return CapabilityDiscoveryResult(
+        return OperationDiscoveryResult(
             query=request.query,
             domain=normalized_domain,
             input_kind=request.input_kind,
@@ -108,8 +108,8 @@ def discovery_terms(query: str) -> frozenset[str]:
 
 
 def discovery_applicability(
-    descriptor: CapabilityDescriptor,
-    input_kind: CapabilityInputKind | None,
+    descriptor: OperationDescriptor,
+    input_kind: OperationInputKind | None,
     artifact_type: str | None,
 ) -> tuple[
     Literal["INCOMPATIBLE", "NEEDS_MORE_TYPED_REQUIREMENTS"],
@@ -136,13 +136,13 @@ def token_set(value: str) -> frozenset[str]:
 
 
 def discovery_relevance(
-    descriptor: CapabilityDescriptor,
+    descriptor: OperationDescriptor,
     query: str,
 ) -> int:
     query_terms = discovery_terms(query)
     if not query_terms:
         return 0
-    identifier_terms = token_set(descriptor.capability_id)
+    identifier_terms = token_set(descriptor.operation_id)
     tag_terms = frozenset(term for tag in descriptor.tags for term in token_set(tag))
     title_terms = token_set(descriptor.title)
     description_terms = token_set(descriptor.description)
@@ -158,7 +158,7 @@ def discovery_relevance(
             score += weight * len(overlap)
     normalized_query = normalize_discovery_text(query)
     normalized_text = normalize_discovery_text(
-        f"{descriptor.capability_id} {descriptor.title} {descriptor.description}"
+        f"{descriptor.operation_id} {descriptor.title} {descriptor.description}"
     )
     if normalized_query and f"-{normalized_query}-" in f"-{normalized_text}-":
         score += 20
@@ -169,23 +169,23 @@ def normalize_domain(value: str) -> str:
     return "_".join(_DISCOVERY_TOKEN_PATTERN.findall(value.casefold()))
 
 
-def capability_domain(descriptor: CapabilityDescriptor) -> str:
-    return descriptor.capability_id.partition(".")[0]
+def operation_domain(descriptor: OperationDescriptor) -> str:
+    return descriptor.operation_id.partition(".")[0]
 
 
-def matches_domain(descriptor: CapabilityDescriptor, normalized_domain: str) -> bool:
+def matches_domain(descriptor: OperationDescriptor, normalized_domain: str) -> bool:
     normalized_tags = {normalize_domain(tag) for tag in descriptor.tags}
     return (
-        normalized_domain == normalize_domain(capability_domain(descriptor))
+        normalized_domain == normalize_domain(operation_domain(descriptor))
         or normalized_domain in normalized_tags
     )
 
 
 __all__ = [
-    "CapabilityDiscoveryMixin",
-    "capability_domain",
+    "OperationDiscoveryMixin",
     "discovery_applicability",
     "discovery_relevance",
     "matches_domain",
     "normalize_domain",
+    "operation_domain",
 ]

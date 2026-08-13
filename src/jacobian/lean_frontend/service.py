@@ -69,7 +69,7 @@ class LeanService:
         if installation is None or installation.checker_id is None:
             raise ValueError(
                 f"Lean environment {environment.value} is not installed. Call "
-                "math.find with capability_id='lean.check' to list "
+                "math.find with operation_id='lean.check' to list "
                 "installed environments."
             )
         claim_payload = LeanClaim(

@@ -3,12 +3,12 @@
 [Documentation home](../../../index.md)
 
 - Status: Experimental contract
-- Capability: `probability.gaussian_polynomial.moment.compute`
+- Operation: `probability.gaussian_polynomial.moment.compute`
 - Verification: `probability.gaussian_polynomial.moment.verify`
 - Producer: pinned Python-FLINT exact rational arithmetic
 - Checker: isolated Python standard-library `Fraction` coefficient contraction
 
-This capability computes one fixed-order moment
+This operation computes one fixed-order moment
 
 \[
   \mathbb E[P(X_1,\ldots,X_n)^m]

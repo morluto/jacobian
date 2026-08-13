@@ -10,7 +10,7 @@ from jacobian.canonical import (
     canonicalize_json,
     loads_strict_json,
 )
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.validated_analysis import (
     RationalLinearProgramRequest,
@@ -23,7 +23,8 @@ from jacobian.domains.optimization.protocol import (
     parse_optimization_worker_response,
 )
 from jacobian.operation_bindings import inline_operation
-from jacobian.operations import OperationAbortError, OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operations import OperationAbortError
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessTermination,
@@ -78,7 +79,7 @@ def _linear_program(
         )
         raise OperationAbortError(
             ExecutionStatus.TIMEOUT,
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="RATIONAL_LINEAR_PROGRAM_TIMEOUT",
                 stage="rational_optimization_backend",
                 message=detail,
@@ -91,7 +92,7 @@ def _linear_program(
         )
         raise OperationAbortError(
             ExecutionStatus.ERROR,
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="RATIONAL_LINEAR_PROGRAM_BACKEND_ERROR",
                 stage="rational_optimization_backend",
                 message=detail,
@@ -100,9 +101,9 @@ def _linear_program(
     return result
 
 
-RATIONAL_LINEAR_CAPABILITIES = (
+RATIONAL_LINEAR_OPERATIONS = (
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="optimization.linear.rational_optimum.compute",
             version="1",
             title="Produce a rational linear-program optimum certificate",
@@ -120,7 +121,7 @@ RATIONAL_LINEAR_CAPABILITIES = (
                 "certificate",
                 "bounded",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "one_variable_unit_lp",
                     "Optimize x subject to x=1 and x>=0.",
@@ -139,4 +140,4 @@ RATIONAL_LINEAR_CAPABILITIES = (
     ),
 )
 
-__all__ = ["RATIONAL_LINEAR_CAPABILITIES"]
+__all__ = ["RATIONAL_LINEAR_OPERATIONS"]

@@ -6,7 +6,7 @@
 `graph.invariant.radius.compute` version `2` retain their existing producer
 contracts and `COMPUTED` assurance. Operator-authorized
 `graph.invariant.diameter.verify` and `graph.invariant.radius.verify`
-capabilities can promote one exact submitted `{input, candidate}` claim to `VERIFIED` after
+operations can promote one exact submitted `{input, candidate}` claim to `VERIFIED` after
 independent all-sources breadth-first replay.
 
 ## Exact claims and conventions

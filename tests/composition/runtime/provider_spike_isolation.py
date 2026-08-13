@@ -10,12 +10,12 @@ def assert_unavailable_spike_preserves_catalog(
     runtime: Any,
     run_spike: Callable[[], Mapping[str, object]],
 ) -> None:
-    """Prove that an unavailable spike neither registers nor removes capabilities."""
+    """Prove that an unavailable spike neither registers nor removes operations."""
 
-    before = runtime.core.capabilities.catalog().model_dump(mode="json")
+    before = runtime.core.operations.catalog().model_dump(mode="json")
     report = run_spike()
-    after = runtime.core.capabilities.catalog().model_dump(mode="json")
+    after = runtime.core.operations.catalog().model_dump(mode="json")
 
     assert report["status"] == "UNAVAILABLE"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
     assert after == before

@@ -1,7 +1,7 @@
 """Independent checker declarations owned by the topology domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.topology import (
     ChainComplexRequest,
     IntegralSimplicialHomologyRequest,
@@ -19,7 +19,7 @@ _REASON = (
 
 def _topology_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.topology_exact_checker_provider_runtime(
         checker_ids=checker_ids
     )
@@ -71,7 +71,7 @@ TOPOLOGY_EXACT_REPLAY_CHECKERS = (
             "boundary, validates both Smith certificates per dimension, and binds "
             "free and torsion generators to the canonical simplex bases"
         ),
-        verification_capability_id="topology.simplicial_homology.integral.verify",
+        verification_operation_id="topology.simplicial_homology.integral.verify",
         verification_title="Verify integral simplicial homology",
         verification_description=(
             "Independently verify every free rank, torsion factor, cycle generator, "

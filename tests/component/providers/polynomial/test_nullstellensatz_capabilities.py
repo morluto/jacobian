@@ -12,12 +12,11 @@ from tests.support.nullstellensatz import (
 )
 from tests.support.services import DomainTestServices
 
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-    CapabilityResult,
-)
 from jacobian.contracts.nullstellensatz import NullstellensatzCertificateBundle
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
+)
 from jacobian.contracts.results import (
     Conclusion,
     Execution,
@@ -27,10 +26,11 @@ from jacobian.contracts.results import (
     VerificationResult,
 )
 from jacobian.domains.polynomial_nullstellensatz.core import (
-    MATERIALIZE_CAPABILITY_ID,
-    VERIFY_CAPABILITY_ID,
+    MATERIALIZE_OPERATION_ID,
+    VERIFY_OPERATION_ID,
     _failure_details,
 )
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.runtime.config import CheckerAuthorityMode
 
 
@@ -58,11 +58,11 @@ def test_invalid_request_uri_values_are_summarized_without_echoing(
         tmp_path,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
-        adapter = services.core.capabilities._adapters[VERIFY_CAPABILITY_ID]
-        with pytest.raises(CapabilityInvocationError) as caught:
+        adapter = services.core.operations._adapters[VERIFY_OPERATION_ID]
+        with pytest.raises(OperationInvocationError) as caught:
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id=VERIFY_CAPABILITY_ID,
+                OperationRequest(
+                    operation_id=VERIFY_OPERATION_ID,
                     input={
                         "system_uri": oversized_uri,
                         "certificate_bundle_uri": oversized_uri,
@@ -80,12 +80,12 @@ def test_invalid_request_uri_values_are_summarized_without_echoing(
 
 def _invoke(
     services: DomainTestServices,
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, Any],
-) -> CapabilityResult:
-    return services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
+) -> OperationResult:
+    return services.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation_id,
             input=payload,
         )
     )
@@ -93,14 +93,14 @@ def _invoke(
 
 def _persist_certificate(
     services: DomainTestServices,
-    materialized: CapabilityResult,
+    materialized: OperationResult,
     *,
     mutate: Callable[[dict[str, Any]], None] | None = None,
 ) -> str:
     system_uri = materialized.output["system_uri"]
     system_artifact = services.core.store.get(system_uri)
-    verify_descriptor = services.core.capabilities._adapters[
-        VERIFY_CAPABILITY_ID
+    verify_descriptor = services.core.operations._adapters[
+        VERIFY_OPERATION_ID
     ].descriptor
     bundle = NullstellensatzCertificateBundle(
         system_uri=system_uri,
@@ -130,14 +130,14 @@ def test_authorized_checker_verifies_complete_bundle(tmp_path: Path) -> None:
     ) as services:
         materialized = _invoke(
             services,
-            MATERIALIZE_CAPABILITY_ID,
+            MATERIALIZE_OPERATION_ID,
             {},
         )
         certificate_uri = _persist_certificate(services, materialized)
 
         result = _invoke(
             services,
-            VERIFY_CAPABILITY_ID,
+            VERIFY_OPERATION_ID,
             {
                 "system_uri": materialized.output["system_uri"],
                 "certificate_bundle_uri": certificate_uri,
@@ -157,14 +157,14 @@ def test_unavailable_checker_never_false_certifies(tmp_path: Path) -> None:
     ) as services:
         materialized = _invoke(
             services,
-            MATERIALIZE_CAPABILITY_ID,
+            MATERIALIZE_OPERATION_ID,
             {},
         )
         certificate_uri = _persist_certificate(services, materialized)
 
         result = _invoke(
             services,
-            VERIFY_CAPABILITY_ID,
+            VERIFY_OPERATION_ID,
             {
                 "system_uri": materialized.output["system_uri"],
                 "certificate_bundle_uri": certificate_uri,
@@ -182,7 +182,7 @@ def test_mutated_certificate_cannot_return_verified(tmp_path: Path) -> None:
     ) as services:
         materialized = _invoke(
             services,
-            MATERIALIZE_CAPABILITY_ID,
+            MATERIALIZE_OPERATION_ID,
             {},
         )
 
@@ -201,7 +201,7 @@ def test_mutated_certificate_cannot_return_verified(tmp_path: Path) -> None:
         )
         result = _invoke(
             services,
-            VERIFY_CAPABILITY_ID,
+            VERIFY_OPERATION_ID,
             {
                 "system_uri": materialized.output["system_uri"],
                 "certificate_bundle_uri": certificate_uri,
@@ -219,12 +219,12 @@ def test_stale_artifact_binding_is_rejected_before_checker(tmp_path: Path) -> No
     ) as services:
         materialized = _invoke(
             services,
-            MATERIALIZE_CAPABILITY_ID,
+            MATERIALIZE_OPERATION_ID,
             {},
         )
         certificate_uri = _persist_certificate(services, materialized)
-        wrong_schema = services.core.capabilities._adapters[
-            VERIFY_CAPABILITY_ID
+        wrong_schema = services.core.operations._adapters[
+            VERIFY_OPERATION_ID
         ].descriptor.accepted_artifact_types[0]
         reordered_payload = dict(
             services.core.store.get(materialized.output["system_uri"]).payload
@@ -242,7 +242,7 @@ def test_stale_artifact_binding_is_rejected_before_checker(tmp_path: Path) -> No
 
         result = _invoke(
             services,
-            VERIFY_CAPABILITY_ID,
+            VERIFY_OPERATION_ID,
             {
                 "system_uri": wrong_system.artifact_uri,
                 "certificate_bundle_uri": certificate_uri,
@@ -273,14 +273,14 @@ def test_wrong_bundle_schema_reports_actionable_artifact_diagnostics(
     ) as services:
         materialized = _invoke(
             services,
-            MATERIALIZE_CAPABILITY_ID,
+            MATERIALIZE_OPERATION_ID,
             {},
         )
         system_uri = materialized.output["system_uri"]
 
         result = _invoke(
             services,
-            VERIFY_CAPABILITY_ID,
+            VERIFY_OPERATION_ID,
             {
                 "system_uri": system_uri,
                 "certificate_bundle_uri": system_uri,
@@ -301,8 +301,8 @@ def test_wrong_bundle_schema_reports_actionable_artifact_diagnostics(
         }
         assert diagnostic.expected is not None
         assert (
-            services.core.capabilities._adapters[
-                VERIFY_CAPABILITY_ID
+            services.core.operations._adapters[
+                VERIFY_OPERATION_ID
             ].descriptor.accepted_artifact_types[1]
             in diagnostic.expected
         )
@@ -318,7 +318,7 @@ def test_checker_timeout_never_verifies(
     ) as services:
         materialized = _invoke(
             services,
-            MATERIALIZE_CAPABILITY_ID,
+            MATERIALIZE_OPERATION_ID,
             {},
         )
         certificate_uri = _persist_certificate(services, materialized)
@@ -334,7 +334,7 @@ def test_checker_timeout_never_verifies(
 
         result = _invoke(
             services,
-            VERIFY_CAPABILITY_ID,
+            VERIFY_OPERATION_ID,
             {
                 "system_uri": materialized.output["system_uri"],
                 "certificate_bundle_uri": certificate_uri,

@@ -25,7 +25,7 @@ derivation = "The public universal counterexample is paired with independently r
 historical_fit = "MISSING"
 current_status = "PARTIAL"
 evaluation_status = "RUNNABLE_PUBLIC_REPRODUCTION"
-next_action = "Run public Oracle validation, then evaluate capability discovery on protected transformed fixed-order cases."
+next_action = "Run public Oracle validation, then evaluate operation discovery on protected transformed fixed-order cases."
 
 [agent]
 timeout_sec = 600.0

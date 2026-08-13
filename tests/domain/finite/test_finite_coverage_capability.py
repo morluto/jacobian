@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tests.support.core_capability_harnesses import FiniteCoverageTestServices
+from tests.support.core_operation_harnesses import FiniteCoverageTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 
 
@@ -11,9 +11,9 @@ def _request(
     pages: list[list[str | int]],
     *,
     canonicalizer_id: str = "finite.string.nfc@1",
-) -> CapabilityRequest:
-    return CapabilityRequest(
-        capability_id="finite.coverage.verify",
+) -> OperationRequest:
+    return OperationRequest(
+        operation_id="finite.coverage.verify",
         input={
             "canonicalizer_id": canonicalizer_id,
             "scope_items": scope,
@@ -26,7 +26,7 @@ def test_finite_coverage_verifies_exactly_once_across_pages(
     finite_coverage_services: FiniteCoverageTestServices,
 ) -> None:
     runtime = finite_coverage_services.services
-    result = runtime.core.capabilities.invoke(
+    result = runtime.core.operations.invoke(
         _request(["alpha", "beta", "gamma"], [["alpha"], ["beta", "gamma"]])
     )
 
@@ -51,7 +51,7 @@ def test_finite_coverage_reports_omission_and_duplicate(
     finite_coverage_services: FiniteCoverageTestServices,
 ) -> None:
     runtime = finite_coverage_services.services
-    result = runtime.core.capabilities.invoke(
+    result = runtime.core.operations.invoke(
         _request(["alpha", "beta", "gamma"], [["alpha", "beta"], ["beta"]])
     )
 
@@ -68,7 +68,7 @@ def test_finite_coverage_reports_items_outside_scope(
     finite_coverage_services: FiniteCoverageTestServices,
 ) -> None:
     runtime = finite_coverage_services.services
-    result = runtime.core.capabilities.invoke(
+    result = runtime.core.operations.invoke(
         _request(["alpha", "beta"], [["alpha", "beta", "gamma"]])
     )
 
@@ -81,7 +81,7 @@ def test_finite_coverage_supports_registered_integer_canonicalizer(
     finite_coverage_services: FiniteCoverageTestServices,
 ) -> None:
     runtime = finite_coverage_services.services
-    result = runtime.core.capabilities.invoke(
+    result = runtime.core.operations.invoke(
         _request(
             [1, 2, 3],
             [[3], [1, 2]],
@@ -97,7 +97,7 @@ def test_finite_coverage_unknown_canonicalizer_reports_precise_schema_error(
     finite_coverage_services: FiniteCoverageTestServices,
 ) -> None:
     runtime = finite_coverage_services.services
-    result = runtime.core.capabilities.invoke(
+    result = runtime.core.operations.invoke(
         _request(
             ["alpha"],
             [["alpha"]],
@@ -118,7 +118,7 @@ def test_finite_coverage_rejects_nfc_collisions_in_scope(
     finite_coverage_services: FiniteCoverageTestServices,
 ) -> None:
     runtime = finite_coverage_services.services
-    result = runtime.core.capabilities.invoke(_request(["é", "e\u0301"], [["é"]]))
+    result = runtime.core.operations.invoke(_request(["é", "e\u0301"], [["é"]]))
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output["error"]["code"] == "DUPLICATE_FINITE_SCOPE_KEY"
@@ -127,9 +127,9 @@ def test_finite_coverage_rejects_nfc_collisions_in_scope(
 def test_finite_coverage_is_unavailable_without_authorized_checker(
     unauthorized_finite_coverage_services: FiniteCoverageTestServices,
 ) -> None:
-    result = unauthorized_finite_coverage_services.services.core.capabilities.invoke(
+    result = unauthorized_finite_coverage_services.services.core.operations.invoke(
         _request(["alpha"], [["alpha"]])
     )
 
     assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output["error"]["code"] == "UNKNOWN_CAPABILITY"
+    assert result.output["error"]["code"] == "UNKNOWN_OPERATION"

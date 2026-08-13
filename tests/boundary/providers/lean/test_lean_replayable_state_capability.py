@@ -6,11 +6,10 @@ from pathlib import Path
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_authorization import LeanCheckerInstallation
-from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.lean_exploration import LeanProofStateRequest, LeanTypedGoal
+from jacobian.contracts.operations import OperationRequest
 from jacobian.lean_frontend.exploration import (
     _Resources,
     install_lean_exploration_capabilities,
@@ -23,6 +22,7 @@ from jacobian.lean_frontend.repl_protocol import (
     LeanReplProofStepResponse,
     LeanReplValidatedExecution,
 )
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import project_operation_result
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.schema_registry import SchemaRegistry
@@ -174,8 +174,8 @@ def test_apply_tactic_materializes_and_reuses_replayable_state(
     first = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "(P Q : Prop) → P ∧ Q",
@@ -190,8 +190,8 @@ def test_apply_tactic_materializes_and_reuses_replayable_state(
     second = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "state_uri": successor_uri,
@@ -236,8 +236,8 @@ def test_apply_tactic_returns_rejection_without_successor(
     result = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "(P Q : Prop) → P → Q",
@@ -295,8 +295,8 @@ def test_rejected_transition_persists_all_protocol_diagnostics(
     result = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -328,8 +328,8 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
     opened = project_operation_result(
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "statement": "True",
@@ -349,11 +349,11 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
         summary="fixture with stale environment binding",
     )
 
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "state_uri": stale.artifact_uri,
@@ -368,7 +368,7 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
 
 def test_apply_tactic_preserves_cross_field_validation_evidence(tmp_path: Path) -> None:
     adapter = _adapter(tmp_path)
-    continuation = adapter.descriptor.invocation_examples[1].input
+    continuation = adapter.descriptor.examples[1].input
     assert set(continuation) == {
         "environment",
         "state_uri",
@@ -380,11 +380,11 @@ def test_apply_tactic_preserves_cross_field_validation_evidence(tmp_path: Path) 
     assert "statement" not in continuation
     assert "proof_prefix" not in continuation
 
-    with pytest.raises(CapabilityInvocationError) as raised:
+    with pytest.raises(OperationInvocationError) as raised:
         adapter.invoke(
             adapter.prepare(
-                CapabilityRequest(
-                    capability_id="lean.proof_state.apply_tactic",
+                OperationRequest(
+                    operation_id="lean.proof_state.apply_tactic",
                     input={
                         "environment": "CORE",
                         "state_uri": "artifact://sha256/" + "a" * 64,

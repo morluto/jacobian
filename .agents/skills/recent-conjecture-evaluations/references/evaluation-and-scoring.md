@@ -43,7 +43,7 @@ Score each arm independently:
 
 - A producer result is not independently verified.
 - A local calculation can be correct without being Jacobian-verified.
-- A checker record must bind the input, result, capability version, and checker authority.
+- A checker record must bind the input, result, operation version, and checker authority.
 - A correct scalar with a missing required certificate is incomplete.
 - Failure to find evidence is not evidence of nonexistence.
 - Infrastructure-invalid runs do not count as mathematical evidence.

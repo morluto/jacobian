@@ -33,11 +33,11 @@ written.
 
 ## Scope and composition
 
-This capability exposes the distance matrix as one inspectable mathematical
+This operation exposes the distance matrix as one inspectable mathematical
 outcome. It does not compute a diameter, radius, vertex eccentricity, distance
 between derived vertex sets, or a conjecture-specific inequality. An agent can
 derive such quantities by composing this artifact with independently obtained
-sets or other capabilities.
+sets or other operations.
 
 The producer is capped at `COMPUTED`. That assurance means the bounded
 operation completed and produced a typed artifact; it is not independent
@@ -66,7 +66,7 @@ checker error remains `UNKNOWN` and cannot produce `VERIFIED`.
 ## Public composition evidence
 
 The frozen public matched evaluation in
-[Capability workflow evaluations](../../evaluations/benchmark-contracts.md#task-and-verifier-validation)
+[Operation workflow evaluations](../../evaluations/benchmark-contracts.md#task-and-verifier-validation)
 used three control/treatment pairs. All treatments autonomously discovered the
 producer and verifier, preserved independently replayable matrix evidence, and
 correctly derived a restricted-set distance profile without substituting
@@ -75,4 +75,4 @@ verification record; the derived profile did not.
 
 This public answer-visible result is regression evidence for composition, not
 a broad portfolio-value claim. It does not justify adding a restricted-set
-distance capability by itself.
+distance operation by itself.

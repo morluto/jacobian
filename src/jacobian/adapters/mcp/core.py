@@ -23,7 +23,7 @@ from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
 from jacobian.adapters.mcp.tooling import AgentRecoveryError, _tool_annotations
 from jacobian.adapters.mcp.tools import math_find, math_run
-from jacobian.contracts.capabilities import CapabilityCatalog
+from jacobian.contracts.operations import OperationCatalogSnapshot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -153,15 +153,15 @@ def register_core_projection(
         structured_output=True,
     )
 
-    async def capability_catalog() -> CapabilityCatalog:
+    async def operation_catalog() -> OperationCatalogSnapshot:
         with _static_resource_runtime(state) as active_runtime:
-            return active_runtime.core.capabilities.catalog()
+            return active_runtime.core.operations.catalog()
 
     server.add_resource(
         FunctionResource.from_function(
-            capability_catalog,
-            uri="capability://catalog",
-            name="capability-catalog",
+            operation_catalog,
+            uri="operation://catalog",
+            name="operation-catalog",
             description=(
                 "Installed model-facing operations, supported lanes, and compact schemas."
             ),

@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic, CapabilityRequest
+from jacobian.contracts.operations import OperationDiagnostic, OperationRequest
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import inline_operation
 from jacobian.operation_ports import InputPort, OutputPort
-from jacobian.operations import DomainDiagnostics, DomainSemantics, OperationSpec
+from jacobian.operations import DomainDiagnostics, DomainSemantics, OperationDeclaration
 from jacobian.provider_runtime import known_provider_runtime
 
 
@@ -50,7 +50,7 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
         return _ExactValue(value=request.source.value + request.increment)
 
     producer = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="typed_identity.compute.produce",
             version="1",
             title="Produce an exact typed value",
@@ -62,7 +62,7 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
         output_ports=(OutputPort(name="value", value_type=_ExactValue),),
     )
     consumer = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="typed_identity.compute.consume",
             version="1",
             title="Consume an exact typed value",
@@ -92,9 +92,9 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
             features=("deterministic",),
         ),
         backend_version="typed-identity-1",
-        capabilities=(producer, consumer),
+        operations=(producer, consumer),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_TYPED_IDENTITY_REQUEST",
                 stage="typed_identity_input_validation",
                 message="Input does not satisfy the typed identity contract.",
@@ -103,20 +103,20 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
     )
     installation = typed_value_services.core.operations.install(bundle)
     for adapter in installation.adapters:
-        typed_value_services.core.capabilities.register(adapter)
+        typed_value_services.core.operations.register(adapter)
 
-    produced = typed_value_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer.spec.operation_id,
+    produced = typed_value_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=producer.spec.operation_id,
             input={"value": 12},
         )
     )
     assert produced.execution.status is ExecutionStatus.COMPLETED
     value_ref = produced.output["value_refs"]["value"]
 
-    stringly = typed_value_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=consumer.spec.operation_id,
+    stringly = typed_value_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=consumer.spec.operation_id,
             input={"increment": "1"},
             inputs={"source": value_ref},
         )
@@ -124,9 +124,9 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
     assert stringly.execution.status is ExecutionStatus.ERROR
     assert consumed_values == []
 
-    consumed = typed_value_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=consumer.spec.operation_id,
+    consumed = typed_value_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=consumer.spec.operation_id,
             input={"increment": 1},
             inputs={"source": value_ref},
         )

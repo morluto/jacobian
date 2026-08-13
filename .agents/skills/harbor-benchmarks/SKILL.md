@@ -24,10 +24,10 @@ Classify the work before editing a task:
   deliberate failure cases. This is harness evidence.
 - **Regression or public reproduction:** replay a known or public case to
   detect breakage. This is not held-out evidence and must not support a causal
-  capability claim.
+  operation claim.
 - **Assurance or contract conformance:** test assurance calibration, scope,
   schemas, artifacts, discovery, or parameterization. These cases may measure
-  workflow quality without measuring mathematical capability value.
+  workflow quality without measuring mathematical operation value.
 - **Jacobian workflow observation:** use the committed Harbor observation job,
   its direct local MCP service, and Harbor ATIF plus Jacobian telemetry. This is
   workflow evidence, not comparative performance.
@@ -63,7 +63,7 @@ metadata, concise provenance, an agent-visible
 `environment/submission_schema.json`, hidden Oracle solution material, and a
 separate clean-room verifier. Instructions must
 be agent-agnostic: describe the mathematical outcome and evidence, never
-capability IDs, tool sequences, preferred decompositions, or Jacobian details.
+operation IDs, tool sequences, preferred decompositions, or Jacobian details.
 
 Treat the agent-visible schema and instructions as the task's public protocol.
 They must state the required output shape and types, allowed enum values,
@@ -366,7 +366,7 @@ job without the sidecar or MCP configuration. Keep the task filter, model,
 prompt, budget, and environment fixed when comparing the two modes. The
 external MCP configuration belongs to the treatment job, not task TOMLs.
 
-Inspect Harbor ATIF together with Jacobian telemetry for capability discovery
+Inspect Harbor ATIF together with Jacobian telemetry for operation discovery
 and descriptions, invocation and parameter errors, artifact and verification
 record flow, repeated or irrelevant calls, shell/file activity, tokens, time,
 cost, and completion. Record the git tree, task digests, provider/runtime,

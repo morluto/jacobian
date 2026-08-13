@@ -30,7 +30,7 @@ algebra
 - environment_mode: separate
 
 The task is self-contained and offline. The instruction names no tool,
-capability, or invocation order. The clean-room verifier independently checks
+operation, or invocation order. The clean-room verifier independently checks
 the complete operation table, every valuation of the premise, the submitted
 target refutation, and every smaller declared carrier order. A wrong result or
 an unsupported `VERIFIED` claim forces reward to zero.

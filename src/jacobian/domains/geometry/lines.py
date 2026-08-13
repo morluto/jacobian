@@ -1,4 +1,4 @@
-"""Line-owned exact geometry capabilities."""
+"""Line-owned exact geometry operations."""
 
 from jacobian.contracts.geometry import (
     GeometryBooleanResult,
@@ -15,7 +15,7 @@ from jacobian.domains.geometry.operations import (
     projection,
 )
 
-LINE_CAPABILITIES = (
+LINE_OPERATIONS = (
     geometry_operation(
         "geometry.lines.decide.parallel",
         "Decide parallel lines",
@@ -25,7 +25,7 @@ LINE_CAPABILITIES = (
         line_predicate(lambda first, second: bool(first.is_parallel(second))),
         "geometry",
         "line",
-        invocation_examples=(
+        examples=(
             example(
                 "parallel_horizontal_lines",
                 "Check two horizontal parallel lines.",
@@ -63,7 +63,7 @@ LINE_CAPABILITIES = (
         line_predicate(lambda first, second: bool(first.is_perpendicular(second))),
         "geometry",
         "line",
-        invocation_examples=(
+        examples=(
             example(
                 "perpendicular_axes",
                 "Check perpendicular coordinate axes.",
@@ -101,7 +101,7 @@ LINE_CAPABILITIES = (
         line_intersection,
         "geometry",
         "intersection",
-        invocation_examples=(
+        examples=(
             example(
                 "crossing_diagonals",
                 "Intersect two crossing lines.",
@@ -139,7 +139,7 @@ LINE_CAPABILITIES = (
         projection,
         "geometry",
         "construction",
-        invocation_examples=(
+        examples=(
             example(
                 "projection_to_x_axis",
                 "Project (1,2) onto the x-axis.",

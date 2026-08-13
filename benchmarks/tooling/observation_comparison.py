@@ -248,7 +248,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines = [
         "# Jacobian workflow comparison",
         "",
-        f"Status: **{report['status']}**. This report remains evaluation evidence; it does not itself authorize a causal capability claim.",
+        f"Status: **{report['status']}**. This report remains evaluation evidence; it does not itself authorize a causal operation claim.",
         "",
         "| Metric | Pairs | Control | Treatment | Paired delta | Interpretation |",
         "| --- | ---: | ---: | ---: | ---: | --- |",

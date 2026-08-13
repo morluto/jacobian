@@ -1,4 +1,4 @@
-"""Bounded graph-optimization capabilities."""
+"""Bounded graph-optimization operations."""
 
 from jacobian.domains.graph_optimization.bundle import build_graph_optimization_bundle
 from jacobian.domains.graph_optimization.invariant_bundle import (

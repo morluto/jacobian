@@ -15,13 +15,13 @@ from pydantic import (
 )
 
 from jacobian.canonical import sha256_digest
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.contracts.results import ContractModel
 
 SmtLogic = Literal["QF_UF", "QF_LIA", "QF_LRA"]
@@ -313,7 +313,7 @@ class SmtAletheProofArtifact(ContractModel):
     proof_digest: Sha256Digest
     alethe_hole_count: StrictInt = Field(ge=0, le=1_000_000)
     contains_holes: StrictBool
-    producer: CapabilityProviderRuntime
+    producer: ProviderObservation
     resource_budget: SmtResourceBudget
 
     @model_validator(mode="after")
@@ -330,11 +330,11 @@ class SmtAletheProofArtifact(ContractModel):
             self.producer.provider != "cvc5"
             or self.producer.version != "1.3.4"
             or self.producer.availability
-            is not CapabilityProviderAvailability.AVAILABLE
+            is not ProviderAvailability.AVAILABLE
             or self.producer.digest is None
             or self.producer.digest_kind
-            is not CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
-            or self.producer.install_tier is not CapabilityInstallTier.T1
+            is not ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
+            or self.producer.install_tier is not ProviderInstallTier.T1
             or "alethe-proof-production" not in self.producer.features
             or self.producer.configuration.get("profile") != _PROFILE
             or self.producer.configuration.get("proof_format") != _PROOF_FORMAT_VERSION
@@ -348,7 +348,7 @@ class SmtAletheProofArtifact(ContractModel):
         *,
         problem: SmtProblemBinding,
         proof: bytes,
-        producer: CapabilityProviderRuntime,
+        producer: ProviderObservation,
         resource_budget: SmtResourceBudget,
     ) -> SmtAletheProofArtifact:
         holes = proof.count(_ALETHE_HOLE_MARKER)

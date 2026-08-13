@@ -1,4 +1,4 @@
-"""Sequence aggregate capabilities over finite integer sequences."""
+"""Sequence aggregate operations over finite integer sequences."""
 
 from jacobian.contracts.sequences import (
     IntegerSequenceRequest,
@@ -17,7 +17,7 @@ from jacobian.domains.sequences.operations import (
     sequence_sum,
 )
 
-SEQUENCE_AGGREGATE_CAPABILITIES = (
+SEQUENCE_AGGREGATE_OPERATIONS = (
     sequence_operation(
         "sequence.compute.sum",
         "Sum integer sequence",
@@ -27,7 +27,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_sum,
         "sequence",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "sum_1_2_3",
                 "Sum the sequence 1, 2, and 3.",
@@ -44,7 +44,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_product,
         "sequence",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "product_2_3_4",
                 "Multiply the sequence 2, 3, and 4.",
@@ -61,7 +61,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_gcd,
         "sequence",
         "divisibility",
-        invocation_examples=(
+        examples=(
             example(
                 "gcd_12_18", "Compute the gcd of 12 and 18.", {"values": ["12", "18"]}
             ),
@@ -76,7 +76,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_lcm,
         "sequence",
         "divisibility",
-        invocation_examples=(
+        examples=(
             example("lcm_4_6", "Compute the lcm of 4 and 6.", {"values": ["4", "6"]}),
         ),
     ),
@@ -89,7 +89,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_minimum,
         "sequence",
         "order",
-        invocation_examples=(
+        examples=(
             example(
                 "minimum_3_1_2",
                 "Find the minimum of 3, 1, and 2.",
@@ -106,7 +106,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_maximum,
         "sequence",
         "order",
-        invocation_examples=(
+        examples=(
             example(
                 "maximum_1_3_2",
                 "Find the maximum of 1, 3, and 2.",
@@ -123,7 +123,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_range,
         "sequence",
         "statistic",
-        invocation_examples=(
+        examples=(
             example(
                 "range_1_4_2",
                 "Compute the range of 1, 4, and 2.",
@@ -140,7 +140,7 @@ SEQUENCE_AGGREGATE_CAPABILITIES = (
         sequence_distinct_count,
         "sequence",
         "counting",
-        invocation_examples=(
+        examples=(
             example(
                 "distinct_count_1_2_1",
                 "Count distinct values in 1, 2, and 1.",

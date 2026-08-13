@@ -1,9 +1,9 @@
 """Independent checker declarations owned by rational optimization."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.validated_analysis import RationalLinearProgramRequest
 from jacobian.provider_runtime import source_provider_runtime
@@ -11,12 +11,12 @@ from jacobian.provider_runtime import source_provider_runtime
 
 def _rational_lp_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.rational-lp-checker",
         version="1",
         entrypoint="jacobian_checkers.rational_lp:check_rational_linear_optimum",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("standard-library-rational-replay", "clean-process-checker"),
         checker_ids=checker_ids,

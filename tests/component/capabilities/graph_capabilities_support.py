@@ -44,7 +44,7 @@ def open_graph_services(
                 authorize_checker=services.installation.authorizes_bundled_checkers,
             )
             for adapter in adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield GraphTestServices(
             core=services.core,
             application=services.application,

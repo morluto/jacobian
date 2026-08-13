@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiscoveryRequest,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDiscoveryRequest,
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
@@ -23,9 +23,9 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 def test_bernoulli_number_has_exact_rational_value(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.compute.bernoulli",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.compute.bernoulli",
             input={"n": 4},
         )
     )
@@ -37,20 +37,20 @@ def test_bernoulli_number_has_exact_rational_value(
 def test_binomial_is_discoverable_from_number_theory_language(
     domain_services: DomainTestServices,
 ) -> None:
-    discovered = domain_services.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = domain_services.core.operations.discover(
+        OperationDiscoveryRequest(
             query="compute exact binomial coefficients for large integers",
             domain="number_theory",
             limit=5,
         )
     )
 
-    assert discovered.matches[0].capability_id == "combinatorics.compute.binomial"
+    assert discovered.matches[0].operation_id == "combinatorics.compute.binomial"
     assert discovered.matches[0].relevance_score > 0
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.compute.binomial",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.compute.binomial",
             input={"n": 1912, "k": 16},
         )
     )
@@ -75,9 +75,9 @@ def test_combinatorics_resource_atomics_are_exact_computed(
             {"value": "12"},
         ),
     )
-    for capability_id, payload, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload, expected in cases:
+        result = domain_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.output["result"] == expected

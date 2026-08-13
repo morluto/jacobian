@@ -1,7 +1,7 @@
 """Contracts for atomic Lean statement proposal and comparison.
 
 Each contract exposes exactly one inspectable artifact. None of these
-capabilities certify that a formal statement matches an informal claim,
+operations certify that a formal statement matches an informal claim,
 or that two statements are semantically equivalent. These results create no
 verification record; theorem verification remains the responsibility of ``lean.check``.
 """

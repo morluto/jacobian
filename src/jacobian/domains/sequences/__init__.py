@@ -1,4 +1,4 @@
-"""Exact finite integer-sequence capabilities."""
+"""Exact finite integer-sequence operations."""
 
 from jacobian.domains.sequences.bundle import build_sequence_bundle
 

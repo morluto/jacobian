@@ -13,14 +13,14 @@ from jacobian.contracts._verification_rules import (
     validate_certified_relationship_endpoints,
     validate_decisive_replayable_evidence,
 )
-from jacobian.contracts.capabilities import (
-    CapabilityId,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.evidence import FormatIdentifier
+from jacobian.contracts.operations import (
+    OperationId,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderObservation,
+)
 from jacobian.contracts.results import (
     Arithmetic,
     Conclusion,
@@ -109,7 +109,7 @@ class CheckerManifest(ContractModel):
     worker_source_modules: tuple[CheckerSourceModule, ...]
     python_runtime: CheckerPythonRuntime
     python_distributions: tuple[CheckerPythonDistribution, ...]
-    provider_runtime: CapabilityProviderRuntime | None = None
+    provider_runtime: ProviderObservation | None = None
     passive_contract_uris: tuple[ArtifactUri, ...]
     sandbox: CheckerSandboxPolicy
 
@@ -248,7 +248,7 @@ class CheckerRegistration(ContractModel):
 
 
 def _require_exact_external_runtime(
-    runtime: CapabilityProviderRuntime | None,
+    runtime: ProviderObservation | None,
     entrypoint: str,
 ) -> None:
     """Reject a provider identity that cannot be remeasured by the worker."""
@@ -256,13 +256,13 @@ def _require_exact_external_runtime(
     if runtime is None:
         return
     if (
-        runtime.availability is not CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is not ProviderAvailability.AVAILABLE
         or runtime.digest_kind
         not in {
-            CapabilityProviderDigestKind.EXECUTABLE,
-            CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
-            CapabilityProviderDigestKind.SOURCE_TREE,
-            CapabilityProviderDigestKind.COMPOSITE,
+            ProviderDigestKind.EXECUTABLE,
+            ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+            ProviderDigestKind.SOURCE_TREE,
+            ProviderDigestKind.COMPOSITE,
         }
         or runtime.digest is None
     ):
@@ -271,18 +271,18 @@ def _require_exact_external_runtime(
             "Python distribution, remeasurable source tree, or fully bound composite"
         )
     if (
-        runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE
+        runtime.digest_kind is ProviderDigestKind.EXECUTABLE
         and not isinstance(runtime.configuration.get("executable"), str)
     ):
         raise ValueError("checker executable runtime must name its executable")
-    if runtime.digest_kind is CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD:
+    if runtime.digest_kind is ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD:
         distribution = runtime.configuration.get("distribution")
         import_name = runtime.configuration.get("import_name")
         if not isinstance(distribution, str) or not isinstance(import_name, str):
             raise ValueError(
                 "checker Python distribution runtime must name its distribution and import"
             )
-    if runtime.digest_kind is CapabilityProviderDigestKind.SOURCE_TREE:
+    if runtime.digest_kind is ProviderDigestKind.SOURCE_TREE:
         runtime_entrypoint = runtime.configuration.get("entrypoint")
         if not isinstance(runtime_entrypoint, str):
             raise ValueError("checker source runtime must name its entrypoint")
@@ -307,7 +307,7 @@ class CheckerAuditEvent(ContractModel):
 def _validate_rejected_checker_evidence(
     accepted: bool,
     conclusion: Conclusion,
-    relation_id: CapabilityId | None,
+    relation_id: OperationId | None,
     relationship_source_artifact_uris: tuple[ArtifactUri, ...],
     relationship_target_artifact_uris: tuple[ArtifactUri, ...],
     obligation_uri: ArtifactUri | None,
@@ -333,7 +333,7 @@ class CheckerDecision(ContractModel):
     method: Method
     coverage: Coverage
     detail: str = ""
-    relation_id: CapabilityId | None = None
+    relation_id: OperationId | None = None
     relationship_source_artifact_uris: tuple[ArtifactUri, ...] = ()
     relationship_target_artifact_uris: tuple[ArtifactUri, ...] = ()
     obligation_uri: ArtifactUri | None = None

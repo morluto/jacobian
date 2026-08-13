@@ -14,24 +14,24 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityInvocationExample,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.lean import LeanDiagnosticPhase, LeanDiagnosticSource
 from jacobian.contracts.lean_exploration import LeanProofStateRequest
 from jacobian.contracts.lean_term_apply import (
     LeanTermApplyOutput,
     LeanTermApplyRequest,
 )
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationInputKind,
+    OperationRequest,
+    ProviderObservation,
+)
 from jacobian.lean_frontend.exploration import _FORBIDDEN
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -43,11 +43,11 @@ class LeanTermApplyAdapter:
     def __init__(
         self,
         proof_state_adapter: LeanProofStateAdapter,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
     ) -> None:
         self._proof_state = proof_state_adapter
-        self._descriptor = CapabilityDescriptor(
-            capability_id="lean.term.apply",
+        self._descriptor = OperationDescriptor(
+            operation_id="lean.term.apply",
             version="2",
             title="Elaborate one Lean proof term against a proof state",
             description=(
@@ -75,12 +75,12 @@ class LeanTermApplyAdapter:
                 "source-span",
             ),
             accepted_input_kinds=(
-                CapabilityInputKind.STRUCTURED_REQUEST,
-                CapabilityInputKind.TYPED_ARTIFACT,
+                OperationInputKind.STRUCTURED_REQUEST,
+                OperationInputKind.TYPED_ARTIFACT,
             ),
             accepted_artifact_types=(proof_state_adapter.resources.state_schema_uri,),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="close_true_with_exact_true_intro",
                     description=(
                         "Apply the term `True.intro` to a replayable proof "
@@ -99,15 +99,15 @@ class LeanTermApplyAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> LeanTermApplyRequest:
+    def prepare(self, request: OperationRequest) -> LeanTermApplyRequest:
         try:
-            validated = parse_capability_input(LeanTermApplyRequest, request.input)
+            validated = parse_operation_input(LeanTermApplyRequest, request.input)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_TERM_APPLY_REQUEST",
                     stage="request_validation",
                     message="The Lean term-application request is invalid.",
@@ -118,8 +118,8 @@ class LeanTermApplyAdapter:
                 )
             ) from exc
         if _FORBIDDEN.search(validated.term):
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_LEAN_TERM_APPLY_REQUEST",
                     stage="request_validation",
                     message=("The term contains a forbidden Lean command or syntax."),
@@ -156,8 +156,8 @@ class LeanTermApplyAdapter:
                 }
             )
         except (KeyError, TypeError, ValidationError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="LEAN_TERM_APPLY_OUTPUT_INVALID",
                     stage="term_application",
                     message=(
@@ -168,7 +168,7 @@ class LeanTermApplyAdapter:
                 )
             ) from exc
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -182,11 +182,11 @@ class LeanTermApplyAdapter:
         )
 
 
-def install_lean_term_apply_capability(
+def install_lean_term_apply_operation(
     proof_state_adapter: LeanProofStateAdapter,
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> LeanTermApplyAdapter:
     return LeanTermApplyAdapter(proof_state_adapter, provider_runtime)
 
 
-__all__ = ["LeanTermApplyAdapter", "install_lean_term_apply_capability"]
+__all__ = ["LeanTermApplyAdapter", "install_lean_term_apply_operation"]

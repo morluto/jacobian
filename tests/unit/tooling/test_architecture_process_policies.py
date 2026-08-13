@@ -288,13 +288,13 @@ def test_run_bounded_process_in_test_is_allowed(tmp_path: Path) -> None:
 def test_shutil_which_in_product_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/capability_service.py",
+        "src/jacobian/operation_service.py",
         "import shutil\n\nshutil.which('lean')\n",
     )
     report = check_architecture(tmp_path)
     which = [v for v in report.violations if v.code == "shutil-which-resolver"]
     assert len(which) == 1
-    assert which[0].path == "src/jacobian/capability_service.py"
+    assert which[0].path == "src/jacobian/operation_service.py"
 
 
 def test_shutil_which_in_process_policy_is_allowed(tmp_path: Path) -> None:

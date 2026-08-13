@@ -89,5 +89,5 @@ def test_task_gap_records_preserve_only_historical_provenance() -> None:
     for path in paths:
         record = json.loads(path.read_text(encoding="utf-8"))
         assert record["provenance_status"] == "historical"
-        assert record["historical_provenance_id"].endswith(".capability-gap-analysis")
+        assert record["historical_provenance_id"].endswith(".operation-gap-analysis")
         assert "ledger_id" not in record

@@ -10,19 +10,21 @@ from pydantic import ValidationError
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.number_theory import (
     DiscreteLogarithmRequest,
     DiscreteLogarithmResult,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
+from jacobian.domains.number_theory._support import number_theory_operation
 from jacobian.domains.number_theory.discrete_logarithm_protocol import (
     DiscreteLogarithmWorkerRequest,
     DiscreteLogarithmWorkerResult,
 )
-from jacobian.operation_bindings import inline_operation
-from jacobian.operations import OperationAbortError, OperationSpec
+from jacobian.operation_declarations import (
+    OperationAbortError,
+)
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
 
@@ -37,7 +39,7 @@ def _failure(
 ) -> Never:
     raise OperationAbortError(
         status,
-        CapabilityDiagnostic(
+        OperationDiagnostic(
             code=code,
             stage="discrete_logarithm_computation",
             message=message,
@@ -111,30 +113,32 @@ def _compute(
     return result
 
 
-DISCRETE_LOGARITHM_CAPABILITY = inline_operation(
-    OperationSpec(
-        operation_id="modular.compute.discrete_logarithm",
-        version="1",
-        title="Compute a bounded discrete logarithm",
-        description=(
-            "Compute a modular discrete logarithm with SymPy in an isolated "
-            "wall-bounded worker. Timeout and worker failure are non-conclusions."
+DISCRETE_LOGARITHM_OPERATION = number_theory_operation(
+    "modular.compute.discrete_logarithm",
+    "Compute a bounded discrete logarithm",
+    (
+        "Compute a modular discrete logarithm with SymPy in an isolated "
+        "wall-bounded worker. Timeout and worker failure are non-conclusions."
+    ),
+    DiscreteLogarithmRequest,
+    DiscreteLogarithmResult,
+    _compute,
+    "number-theory",
+    "modular",
+    "discrete-logarithm",
+    "bounded",
+    "sympy",
+    version="1",
+    examples=(
+        example(
+            "two_to_one_mod_three",
+            "Solve 2^x = 1 modulo 3.",
+            {
+                "base": 2,
+                "target": 1,
+                "modulus": 3,
+                "resource_budget": {"wall_seconds": 5},
+            },
         ),
-        request_type=DiscreteLogarithmRequest,
-        result_type=DiscreteLogarithmResult,
-        execute=_compute,
-        tags=("number-theory", "modular", "discrete-logarithm", "bounded", "sympy"),
-        invocation_examples=(
-            example(
-                "two_to_one_mod_three",
-                "Solve 2^x = 1 modulo 3.",
-                {
-                    "base": 2,
-                    "target": 1,
-                    "modulus": 3,
-                    "resource_budget": {"wall_seconds": 5},
-                },
-            ),
-        ),
-    )
+    ),
 )

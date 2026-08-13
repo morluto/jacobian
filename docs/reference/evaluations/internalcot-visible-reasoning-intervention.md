@@ -74,7 +74,7 @@ as contamination.
 
 The tasks were used in prior passive work. Pairing and complete-family holdout
 control known task identity within this intervention, but do not turn the study
-into an unseen-task capability evaluation.
+into an unseen-task operation evaluation.
 
 ## Results
 

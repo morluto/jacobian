@@ -8,9 +8,9 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices
 
-from jacobian.checker_operations import derive_verification_capability_id
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.checker_operations import derive_verification_operation_id
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
@@ -73,47 +73,47 @@ def test_recurrence_and_series_results_are_verified_and_forgery_rejected(
     combinatorics_services,
 ) -> None:
     runtime = combinatorics_services
-    for capability_id, payload in _CASES:
-        computed = runtime.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload in _CASES:
+        computed = runtime.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
-        verifier_id = derive_verification_capability_id(capability_id)
-        verified = runtime.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=verifier_id,
+        verifier_id = derive_verification_operation_id(operation_id)
+        verified = runtime.core.operations.invoke(
+            OperationRequest(
+                operation_id=verifier_id,
                 input={
                     "input": payload,
                     "candidate": computed.output["result"],
                 },
             )
         )
-        assert verified.execution.status is ExecutionStatus.COMPLETED, capability_id
-        assert verified.output["status"] == "VERIFIED", capability_id
-        assert verified.output["operation_id"] == capability_id, capability_id
+        assert verified.execution.status is ExecutionStatus.COMPLETED, operation_id
+        assert verified.output["status"] == "VERIFIED", operation_id
+        assert verified.output["operation_id"] == operation_id, operation_id
         assert verified.output["verification_record_uri"] in verified.artifact_uris, (
-            capability_id
+            operation_id
         )
-        assert verified.verification_record_uri is not None, capability_id
+        assert verified.verification_record_uri is not None, operation_id
 
         forged_candidate = deepcopy(computed.output["result"])
-        if capability_id == "combinatorics.recurrence.linear.evaluate":
+        if operation_id == "combinatorics.recurrence.linear.evaluate":
             forged_candidate["replay_prefix"][7] = _q(14)
             forged_candidate["values"][7]["value"] = _q(14)
-        elif capability_id == "combinatorics.recurrence.p_recursive.evaluate":
+        elif operation_id == "combinatorics.recurrence.p_recursive.evaluate":
             forged_candidate["replay_prefix"][7] = _q(5039)
             forged_candidate["values"][7]["value"] = _q(5039)
         else:
             forged_candidate["coefficients"][7] = _q(22)
-        rejected = runtime.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=verifier_id,
+        rejected = runtime.core.operations.invoke(
+            OperationRequest(
+                operation_id=verifier_id,
                 input={"input": payload, "candidate": forged_candidate},
             )
         )
-        assert rejected.execution.status is ExecutionStatus.COMPLETED, capability_id
-        assert rejected.output["status"] == "REJECTED", capability_id
-        assert rejected.output["conclusion"] == "UNKNOWN", capability_id
-        assert rejected.output["verification_record_uri"] is None, capability_id
+        assert rejected.execution.status is ExecutionStatus.COMPLETED, operation_id
+        assert rejected.output["status"] == "REJECTED", operation_id
+        assert rejected.output["conclusion"] == "UNKNOWN", operation_id
+        assert rejected.output["verification_record_uri"] is None, operation_id
 
 
 def test_checker_runtime_binds_only_independent_source(
@@ -121,8 +121,8 @@ def test_checker_runtime_binds_only_independent_source(
 ) -> None:
     descriptor = next(
         item
-        for item in combinatorics_services.core.capabilities.catalog().capabilities
-        if item.capability_id == "combinatorics.recurrence.linear.verify"
+        for item in combinatorics_services.core.operations.catalog().operations
+        if item.operation_id == "combinatorics.recurrence.linear.verify"
     )
     assert descriptor.provider_runtime is not None
     assert {
@@ -146,15 +146,15 @@ def test_checker_replays_a_result_above_python_default_integer_digit_limit(
         "term_count": None,
         "indices": [68],
     }
-    computed = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.recurrence.linear.evaluate",
+    computed = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.recurrence.linear.evaluate",
             input=recurrence_input,
         )
     )
-    verified = combinatorics_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.recurrence.linear.verify",
+    verified = combinatorics_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.recurrence.linear.verify",
             input={
                 "input": recurrence_input,
                 "candidate": computed.output["result"],

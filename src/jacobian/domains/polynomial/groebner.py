@@ -1,4 +1,4 @@
-"""Bounded isolated Gröbner-basis capability."""
+"""Bounded isolated Gröbner-basis operation."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.polynomial_operations import (
     PolynomialGroebnerBasisRequest,
     PolynomialGroebnerBasisResult,
@@ -23,7 +23,8 @@ from jacobian.domains.polynomial.groebner_protocol import (
     parse_groebner_worker_response,
 )
 from jacobian.operation_bindings import durable_operation
-from jacobian.operations import OperationAbortError, OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operations import OperationAbortError
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment
 
@@ -38,7 +39,7 @@ def _failure(
 ) -> Never:
     raise OperationAbortError(
         status,
-        CapabilityDiagnostic(
+        OperationDiagnostic(
             code=code,
             stage="polynomial_groebner_computation",
             message=message,
@@ -117,8 +118,8 @@ def _compute(
     return result
 
 
-POLYNOMIAL_GROEBNER_CAPABILITY = durable_operation(
-    OperationSpec(
+POLYNOMIAL_GROEBNER_OPERATION = durable_operation(
+    OperationDeclaration(
         operation_id="polynomial.groebner_basis.compute",
         version="1",
         title="Compute a bounded Gröbner basis",
@@ -132,7 +133,7 @@ POLYNOMIAL_GROEBNER_CAPABILITY = durable_operation(
         result_type=PolynomialGroebnerBasisResult,
         execute=_compute,
         tags=("polynomial", "groebner", "ideal", "bounded", "exact"),
-        invocation_examples=(
+        examples=(
             example(
                 "unit_ideal",
                 "Compute a Groebner basis for the unit ideal in one variable.",
@@ -159,4 +160,4 @@ POLYNOMIAL_GROEBNER_CAPABILITY = durable_operation(
     resource_reason="a Gröbner basis may exceed the bounded inline response budget",
 )
 
-__all__ = ["POLYNOMIAL_GROEBNER_CAPABILITY"]
+__all__ = ["POLYNOMIAL_GROEBNER_OPERATION"]

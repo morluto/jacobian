@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import time
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ContractModel
+from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import (
+    PreflightStatus as DeclarationPreflightStatus,
+)
 from jacobian.operations import (
     Completed,
     Failed,
     NonConclusion,
     OperationAbortError,
     OperationRefusalError,
-    OperationSpec,
     PreflightStatus,
 )
 
@@ -25,16 +28,19 @@ def execute_operation[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    spec: OperationSpec[RequestT, ResultT],
+    spec: OperationDeclaration[RequestT, ResultT] | OperationDeclaration[RequestT, ResultT],
     request: RequestT,
 ) -> OperationTerminal[ResultT]:
     """Run preflight, execution, result parsing, and postcondition exactly once."""
 
     if spec.preflight is not None:
         preflight = spec.preflight(request)
-        if preflight.status is not PreflightStatus.SUPPORTED:
+        if preflight.status not in {
+            PreflightStatus.SUPPORTED,
+            DeclarationPreflightStatus.SUPPORTED,
+        }:
             return NonConclusion(
-                CapabilityDiagnostic(
+                OperationDiagnostic(
                     code=preflight.status.value,
                     stage="operation_preflight",
                     message=preflight.reason or "Operation preflight rejected.",

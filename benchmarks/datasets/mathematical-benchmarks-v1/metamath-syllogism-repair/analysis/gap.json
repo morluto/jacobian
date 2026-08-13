@@ -7,7 +7,7 @@
   "difficulty": "hard",
   "difficulty_status": "provisional",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "portfolio_contribution": "Typed Metamath-style substitution replay with a corrupted reverse-Polish trace.",
   "shortcut_audit": "A final target, two labels, or copied compressed proof cannot pass without an exact alpha-renamed stack and substitution transcript.",
   "discrimination_estimate": {"weaker_models": "Often identify the swapped labels but produce inconsistent substitutions or stack depths.", "stronger_models": "Should reconstruct and replay all eleven applications.", "tool_less_agents": "Can solve with careful symbolic bookkeeping, but cannot bypass the exact checker."},

@@ -1,7 +1,6 @@
 """Independent checker declarations owned by exact combinatorics."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.combinatorics import (
     BinomialRequest,
     CyclicDifferenceSetExtensionRequest,
@@ -11,6 +10,7 @@ from jacobian.contracts.combinatorics import (
     PolynomialCoefficientRecurrenceEvaluationRequest,
     RationalGeneratingFunctionCoefficientsRequest,
 )
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.math.combinatorics import PolynomialCoefficientRecurrenceTableRequest
 from jacobian.providers import flint_runtime
 
@@ -23,7 +23,7 @@ _REASON = (
 
 def _combinatorics_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.combinatorics_exact_checker_provider_runtime(
         checker_ids=checker_ids
     )

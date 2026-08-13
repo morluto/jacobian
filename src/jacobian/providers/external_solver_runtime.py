@@ -7,11 +7,11 @@ import shutil
 from pathlib import Path
 
 from jacobian.canonical import loads_strict_json
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.process_policy import (
     ProcessRequest,
@@ -40,14 +40,14 @@ DRAT_TRIM_SOURCE_REPOSITORY = "https://github.com/marijnheule/drat-trim"
 
 def cadical_provider_runtime(
     executable: str | Path = "cadical",
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Inspect the exact pinned CaDiCaL competition CLI runtime."""
 
     resolved_name = shutil.which(os.fspath(executable))
     if resolved_name is None:
         return _unavailable_runtime(
             provider="cadical",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="MIT",
             diagnostic=(
                 f"The pinned CaDiCaL {CADICAL_VERSION} executable is unavailable."
@@ -82,20 +82,20 @@ def cadical_provider_runtime(
     except (OSError, UnicodeDecodeError, ProviderRuntimeError):
         return _unavailable_runtime(
             provider="cadical",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="MIT",
             diagnostic=(
                 f"The pinned CaDiCaL {CADICAL_VERSION} executable is unavailable."
             ),
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider="cadical",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=CADICAL_VERSION,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform=_platform_tag(),
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
         features=("competition-cli", "total-model", "drat-text-proof"),
         configuration={
@@ -106,7 +106,7 @@ def cadical_provider_runtime(
     )
 
 
-def cvc5_provider_runtime() -> CapabilityProviderRuntime:
+def cvc5_provider_runtime() -> ProviderObservation:
     """Inspect the exact packaged cvc5 Python distribution used for Alethe."""
 
     runtime = python_distribution_provider_runtime(
@@ -119,7 +119,7 @@ def cvc5_provider_runtime() -> CapabilityProviderRuntime:
             "ProofFormat",
             "Solver",
         ),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="BSD-3-Clause",
         features=("smt-lib-2.6", "alethe-proof-production"),
         configuration={
@@ -128,12 +128,12 @@ def cvc5_provider_runtime() -> CapabilityProviderRuntime:
         },
     )
     if (
-        runtime.availability is not CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is not ProviderAvailability.AVAILABLE
         or runtime.version != CVC5_VERSION
     ):
         return _unavailable_runtime(
             provider="cvc5",
-            install_tier=CapabilityInstallTier.T1,
+            install_tier=ProviderInstallTier.T1,
             license_id="BSD-3-Clause",
             diagnostic=(
                 f"The pinned cvc5 {CVC5_VERSION} Python distribution is unavailable."
@@ -146,14 +146,14 @@ def drat_trim_provider_runtime(
     executable: str | Path = "drat-trim",
     *,
     provenance_file: str | Path | None = None,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Inspect an operator-provenanced pinned DRAT-trim runtime."""
 
     resolved_name = shutil.which(os.fspath(executable))
     if resolved_name is None:
         return _unavailable_runtime(
             provider="drat-trim",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="MIT",
             diagnostic=(
                 f"The pinned DRAT-trim {DRAT_TRIM_RELEASE_TAG} runtime is unavailable."
@@ -218,21 +218,21 @@ def drat_trim_provider_runtime(
     except (OSError, ProviderRuntimeError, ValueError):
         return _unavailable_runtime(
             provider="drat-trim",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="MIT",
             diagnostic=(
                 f"The pinned DRAT-trim {DRAT_TRIM_RELEASE_TAG} runtime and "
                 "operator provenance are unavailable."
             ),
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider="drat-trim",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=DRAT_TRIM_RELEASE_TAG,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform=_platform_tag(),
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
         features=("drat-text/v1", "unsat-proof-replay"),
         configuration={
@@ -248,14 +248,14 @@ def carcara_provider_runtime(
     executable: str | Path = "carcara",
     *,
     provenance_file: str | Path | None = None,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Inspect the exact operator-provenanced Carcara Alethe checker runtime."""
 
     resolved_name = shutil.which(os.fspath(executable))
     if resolved_name is None:
         return _unavailable_runtime(
             provider="carcara",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="Apache-2.0",
             diagnostic=(
                 f"The pinned Carcara {CARCARA_VERSION} runtime is unavailable."
@@ -348,21 +348,21 @@ def carcara_provider_runtime(
     except (OSError, ProviderRuntimeError, ValueError):
         return _unavailable_runtime(
             provider="carcara",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="Apache-2.0",
             diagnostic=(
                 f"The pinned Carcara {CARCARA_VERSION} runtime and operator "
                 "provenance are unavailable."
             ),
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider="carcara",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=CARCARA_VERSION,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform=_platform_tag(),
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="Apache-2.0",
         features=(
             "alethe-proof-replay",

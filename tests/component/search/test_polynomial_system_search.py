@@ -2,20 +2,20 @@ from pathlib import Path
 
 from tests.support.services import open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-    CapabilityResult,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
 )
-from jacobian.polynomial_system_capabilities import (
-    install_polynomial_system_capabilities,
+from jacobian.polynomial_system_operations import (
+    install_polynomial_system_operations,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
 from jacobian.runtime.config import CheckerAuthorityMode
 
 
-def _request(constant: int) -> CapabilityRequest:
-    return CapabilityRequest(
-        capability_id="polynomial.system.rational_solution.search",
+def _request(constant: int) -> OperationRequest:
+    return OperationRequest(
+        operation_id="polynomial.system.rational_solution.search",
         input={
             "system": {
                 "variables": ["x"],
@@ -42,12 +42,12 @@ def _invoke_search(
     *,
     checker_authority: CheckerAuthorityMode,
     constant: int,
-) -> CapabilityResult:
+) -> OperationResult:
     with open_domain_services(
         root,
         checker_authority=checker_authority,
     ) as services:
-        checker, installation = install_polynomial_system_capabilities(
+        checker, installation = install_polynomial_system_operations(
             services.core.store,
             services.core.schemas,
             services.core.artifacts,
@@ -56,14 +56,14 @@ def _invoke_search(
             authorize_checker=services.installation.authorizes_bundled_checkers,
         )
         if checker is not None:
-            services.installation.register_capability(checker)
-        services.installation.register_capability(
+            services.installation.register_operation(checker)
+        services.installation.register_operation(
             PolynomialSystemRationalSearchAdapter(
                 services.core.artifacts,
                 installation,
             )
         )
-        return services.core.capabilities.invoke(_request(constant))
+        return services.core.operations.invoke(_request(constant))
 
 
 def test_rational_solution_search_returns_first_exact_candidate(tmp_path: Path) -> None:

@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -29,9 +29,9 @@ def _result_payload(poset_services, result) -> dict[str, Any]:
 
 
 def _materialize(poset_services, presentation: dict[str, Any]) -> dict[str, Any]:
-    result = poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.finite.compute",
+    result = poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.finite.compute",
             input=presentation,
         )
     )
@@ -39,10 +39,10 @@ def _materialize(poset_services, presentation: dict[str, Any]) -> dict[str, Any]
     return _result_payload(poset_services, result)["poset"]
 
 
-def _invoke(poset_services, capability_id: str, poset: dict[str, Any], **extra: Any):
-    return poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=capability_id,
+def _invoke(poset_services, operation_id: str, poset: dict[str, Any], **extra: Any):
+    return poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation_id,
             input={"poset": poset, **extra},
         )
     )
@@ -51,9 +51,9 @@ def _invoke(poset_services, capability_id: str, poset: dict[str, Any], **extra: 
 def test_materialization_is_canonical_complete_and_inline(
     poset_services,
 ) -> None:
-    result = poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.finite.compute",
+    result = poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.finite.compute",
             input=_DIAMOND,
         )
     )
@@ -76,15 +76,15 @@ def test_materialization_is_canonical_complete_and_inline(
 def test_canonical_poset_is_directly_consumable_by_width(
     poset_services,
 ) -> None:
-    materialized = poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.finite.compute",
+    materialized = poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.finite.compute",
             input=_DIAMOND,
         )
     )
-    result = poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.width.compute",
+    result = poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.width.compute",
             input={"poset": _result_payload(poset_services, materialized)["poset"]},
         )
     )
@@ -93,8 +93,8 @@ def test_canonical_poset_is_directly_consumable_by_width(
     assert result.output["result"]["width"] == 2
     assert result.artifact_uris == ()
     descriptors = {
-        descriptor.capability_id: descriptor
-        for descriptor in poset_services.core.capabilities.catalog().capabilities
+        descriptor.operation_id: descriptor
+        for descriptor in poset_services.core.operations.catalog().operations
     }
     assert descriptors["poset.width.compute"].accepted_artifact_types == ()
 
@@ -102,9 +102,9 @@ def test_canonical_poset_is_directly_consumable_by_width(
 def test_width_rejects_artifact_uri_input_at_the_contract_boundary(
     poset_services,
 ) -> None:
-    result = poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.width.compute",
+    result = poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.width.compute",
             input={"poset_artifact_uri": "artifact://sha256/" + "a" * 64},
         )
     )
@@ -360,9 +360,9 @@ def test_relabeling_preserves_scalar_poset_outcomes(poset_services) -> None:
 def test_invalid_poset_request_fails_before_artifact_writes(
     poset_services,
 ) -> None:
-    result = poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.finite.compute",
+    result = poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.finite.compute",
             input={
                 "elements": ["a", "b"],
                 "relation": [

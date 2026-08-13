@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jacobian.contracts.universal_algebra import MagmaTerm
-from jacobian.universal_algebra_capabilities import (
+from jacobian.universal_algebra_operations import (
     _evaluate_term,
     _z3_evaluate_term,
 )

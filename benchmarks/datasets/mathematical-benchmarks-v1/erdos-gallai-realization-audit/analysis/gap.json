@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "erdos-gallai-realization-audit",
   "analysis": {
     "mathematical_moves": [
@@ -10,12 +10,12 @@
     ],
     "current_capabilities": [
       {
-        "capability_id": "graph.realize.degree_sequence",
+        "operation_id": "graph.realize.degree_sequence",
         "availability": "AVAILABLE",
         "boundary": "Directly constructs a realization or returns an exact Erdős–Gallai obstruction; the task additionally asks for every violating index."
       },
       {
-        "capability_id": "graph.compute.properties",
+        "operation_id": "graph.compute.properties",
         "availability": "AVAILABLE",
         "boundary": "Replays properties of a supplied graph."
       }
@@ -25,7 +25,7 @@
     ],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],
-    "disposition": "NO_NEW_CAPABILITY",
+    "disposition": "NO_NEW_OPERATION",
     "next_action": "Use graph.realize.degree_sequence for the realization or obstruction, with agent-owned enumeration only for the task's all-violations requirement."
   }
 }

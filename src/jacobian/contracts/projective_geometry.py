@@ -195,7 +195,7 @@ class ProjectiveLineArrangementResult(ContractModel):
     pair_count_total: int = Field(ge=1, le=2016, strict=True)
     completion: Literal["COMPLETE"] = "COMPLETE"
     arithmetic: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
-    verification_capability_id: Literal[
+    verification_operation_id: Literal[
         "geometry.projective_line_arrangement.flats.verify"
     ] = "geometry.projective_line_arrangement.flats.verify"
     verification_input_field: Literal["result_uri"] = "result_uri"

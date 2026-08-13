@@ -8,13 +8,13 @@ from typing import Any, Protocol, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from jacobian.canonical import CanonicalizationError, encode_strict_json
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
 )
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 
 PreparedT = TypeVar("PreparedT")
@@ -100,7 +100,7 @@ def _validate_strict_json_model[ModelT: BaseModel](
     return parsed
 
 
-def parse_capability_input[ModelT: BaseModel](
+def parse_operation_input[ModelT: BaseModel](
     model: type[ModelT], payload: dict[str, Any]
 ) -> ModelT:
     """Parse one bounded request into its owning model.
@@ -127,11 +127,11 @@ def parse_capability_input[ModelT: BaseModel](
         }
         encoded = encode_strict_json(wire_payload)
     except CanonicalizationError as exc:
-        raise CapabilityInvocationError(
-            CapabilityDiagnostic(
+        raise OperationInvocationError(
+            OperationDiagnostic(
                 code="INVALID_REQUEST",
-                stage="capability_input_validation",
-                message="The capability request is not valid bounded JSON.",
+                stage="operation_input_validation",
+                message="The operation request is not valid bounded JSON.",
                 hint=(
                     "Use only JSON objects, arrays, strings, booleans, null, "
                     "and supported finite numbers within the configured limits."
@@ -148,15 +148,15 @@ def parse_capability_input[ModelT: BaseModel](
     return parsed
 
 
-class CapabilityAdapter(Protocol[PreparedT]):
+class OperationAdapter(Protocol[PreparedT]):
     """Installed typed adapter; registration requires no MCP changes."""
 
     @property
-    def descriptor(self) -> CapabilityDescriptor: ...
+    def descriptor(self) -> OperationDescriptor: ...
 
-    def prepare(self, request: CapabilityRequest) -> PreparedT: ...
+    def prepare(self, request: OperationRequest) -> PreparedT: ...
 
     def invoke(self, prepared: PreparedT) -> OperationProjection: ...
 
 
-__all__ = ["CapabilityAdapter", "parse_capability_input"]
+__all__ = ["OperationAdapter", "parse_operation_input"]

@@ -1,19 +1,19 @@
 ---
 name: Feature request
-about: Propose or improve a mathematical capability
+about: Propose or improve a mathematical operation
 title: "[Feature]: "
 labels: ["feature"]
 assignees: []
 ---
 
 **Area**
-<!-- Which mathematical domain, capability family, adapter, or shared surface is affected? -->
+<!-- Which mathematical domain, operation family, adapter, or shared surface is affected? -->
 
 **Observed need**
 <!-- Which agent trace, evaluation, dataset, research case, or user workflow exposes the gap? -->
 
 **Mathematical outcome**
-<!-- What single agent-visible result should the capability produce? Include representative inputs and outputs when possible. -->
+<!-- What single agent-visible result should the operation produce? Include representative inputs and outputs when possible. -->
 
 **Existing tools and backends**
 <!-- Which current Jacobian capabilities, maintained libraries, proof assistants, CASs, solvers, or databases were considered? -->

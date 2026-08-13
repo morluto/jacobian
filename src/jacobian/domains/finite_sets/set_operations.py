@@ -1,4 +1,4 @@
-"""Binary set-operation capabilities over finite integer sets."""
+"""Binary set-operation operations over finite integer sets."""
 
 from jacobian.contracts.finite_sets import (
     FiniteSetElementListResult,
@@ -13,7 +13,7 @@ from jacobian.domains.finite_sets.operations import (
     set_union,
 )
 
-SET_OPERATION_CAPABILITIES = (
+SET_OPERATION_OPERATIONS = (
     finite_set_operation(
         "finite_set.compute.union",
         "Compute finite-set union",
@@ -23,7 +23,7 @@ SET_OPERATION_CAPABILITIES = (
         set_union,
         "finite-set",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "union_1_2_and_2_3",
                 "Union two overlapping finite sets.",
@@ -40,7 +40,7 @@ SET_OPERATION_CAPABILITIES = (
         set_intersection,
         "finite-set",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "intersection_1_2_and_2_3",
                 "Intersect two finite sets.",
@@ -57,7 +57,7 @@ SET_OPERATION_CAPABILITIES = (
         set_difference,
         "finite-set",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "difference_1_2_minus_2_3",
                 "Subtract one finite set from another.",
@@ -74,7 +74,7 @@ SET_OPERATION_CAPABILITIES = (
         set_symmetric_difference,
         "finite-set",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "symmetric_difference",
                 "Compute the symmetric difference of two finite sets.",

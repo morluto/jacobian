@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from tests.component.capabilities.graph_capabilities_support import (
+from tests.component.operations.graph_capabilities_support import (
     GraphTestServices,
     open_graph_services,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import Conclusion
 
@@ -23,9 +23,9 @@ def authorized_graph_services(tmp_path) -> Iterator[GraphTestServices]:
 def test_degree_sequence_realization_materializes_replayable_graph(
     authorized_graph_services: GraphTestServices,
 ) -> None:
-    result = authorized_graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.realize.degree_sequence",
+    result = authorized_graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.realize.degree_sequence",
             input={"degree_sequence": [2, 2, 1, 1]},
         )
     )
@@ -33,9 +33,9 @@ def test_degree_sequence_realization_materializes_replayable_graph(
     assert result.output["conclusion"] == "GRAPHICAL"
     assert result.output["graph_uri"] in result.artifact_uris
     assert result.output["certificate_uri"] in result.artifact_uris
-    verified = authorized_graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.degree_sequence.verify",
+    verified = authorized_graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.degree_sequence.verify",
             input={
                 "certificate_uri": result.output["certificate_uri"],
             },
@@ -48,9 +48,9 @@ def test_degree_sequence_realization_materializes_replayable_graph(
 def test_degree_sequence_non_graphical_result_has_replayable_obstruction(
     authorized_graph_services: GraphTestServices,
 ) -> None:
-    result = authorized_graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.realize.degree_sequence",
+    result = authorized_graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.realize.degree_sequence",
             input={"degree_sequence": [3, 3, 1, 1]},
         )
     )
@@ -63,9 +63,9 @@ def test_degree_sequence_non_graphical_result_has_replayable_obstruction(
         "lhs": 6,
         "rhs": 4,
     }
-    verified = authorized_graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.degree_sequence.verify",
+    verified = authorized_graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.degree_sequence.verify",
             input={
                 "certificate_uri": result.output["certificate_uri"],
             },
@@ -78,14 +78,14 @@ def test_degree_sequence_non_graphical_result_has_replayable_obstruction(
 def test_degree_sequence_replay_rejects_a_malformed_request(
     authorized_graph_services: GraphTestServices,
 ) -> None:
-    result = authorized_graph_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.degree_sequence.verify",
+    result = authorized_graph_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.degree_sequence.verify",
             input={},
         )
     )
 
     assert result.execution.status.value == "ERROR"
     assert result.diagnostics[0].code == "INVALID_REQUEST"
-    assert result.diagnostics[0].stage == "capability_input_validation"
+    assert result.diagnostics[0].stage == "operation_input_validation"
     assert result.diagnostics[0].path == "certificate_uri"

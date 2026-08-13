@@ -8,7 +8,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
 
@@ -41,9 +41,9 @@ _TRANSVERSAL = {
 def test_finite_abelian_factorization_normalizes_and_verifies_transversal(
     number_theory_services: DomainTestServices,
 ) -> None:
-    computed = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_abelian_group.exact_factorization.compute",
+    computed = number_theory_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_abelian_group.exact_factorization.compute",
             input=_TRANSVERSAL,
         )
     )
@@ -73,9 +73,9 @@ def test_finite_abelian_factorization_normalizes_and_verifies_transversal(
     assert result["first_duplicate"] is None
     assert computed.artifact_uris == ()
 
-    verified = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_abelian_group.exact_factorization.verify",
+    verified = number_theory_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_abelian_group.exact_factorization.verify",
             input={"input": _TRANSVERSAL, "candidate": result},
         )
     )
@@ -93,9 +93,9 @@ def test_finite_abelian_factorization_reports_and_checks_first_duplicate(
         "left": [[0], [1]],
         "right": [[0], [1]],
     }
-    computed = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_abelian_group.exact_factorization.compute",
+    computed = number_theory_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_abelian_group.exact_factorization.compute",
             input=payload,
         )
     )
@@ -117,9 +117,9 @@ def test_finite_abelian_factorization_reports_and_checks_first_duplicate(
 
     forged = deepcopy(result)
     forged["is_exact_factorization"] = True
-    rejected = number_theory_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_abelian_group.exact_factorization.verify",
+    rejected = number_theory_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_abelian_group.exact_factorization.verify",
             input={"input": payload, "candidate": forged},
         )
     )

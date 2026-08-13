@@ -1,12 +1,12 @@
 """Installation bundle for domain-owned rational-linear operations."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.linear import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalInconsistencyResult,
     LinearRationalSolutionFindRequest,
     LinearRationalSolutionResult,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains._examples import example
 from jacobian.domains.rational_linear.checkers import (
@@ -18,19 +18,19 @@ from jacobian.domains.rational_linear.operations import (
     compute_rational_solution,
 )
 from jacobian.operation_bindings import inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
-    OperationSpec,
 )
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION, known_provider_runtime
 
 
 def build_rational_linear_bundle() -> DomainBundle:
     producer_runtime = RUNTIME
-    capabilities = (
+    operations = (
         inline_operation(
-            OperationSpec(
+            OperationDeclaration(
                 operation_id="linear.rational_solution.compute",
                 version="2",
                 title="Compute an exact rational solution",
@@ -39,7 +39,7 @@ def build_rational_linear_bundle() -> DomainBundle:
                 result_type=LinearRationalSolutionResult,
                 execute=compute_rational_solution,
                 tags=("linear-algebra", "rational", "solution", "exact"),
-                invocation_examples=(
+                examples=(
                     example(
                         "identity_solution",
                         "Solve a one-variable identity system.",
@@ -58,7 +58,7 @@ def build_rational_linear_bundle() -> DomainBundle:
             provider_runtime=producer_runtime,
         ),
         inline_operation(
-            OperationSpec(
+            OperationDeclaration(
                 operation_id="linear.rational_inconsistency.compute",
                 version="2",
                 title="Compute an exact rational inconsistency witness",
@@ -88,9 +88,9 @@ def build_rational_linear_bundle() -> DomainBundle:
             features=("rational-linear-contracts", "inline-exact-candidates"),
         ),
         backend_version=f"python-flint-{PYTHON_FLINT_VERSION}",
-        capabilities=capabilities,
+        operations=operations,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_RATIONAL_LINEAR_REQUEST",
                 stage="rational_linear_input_validation",
                 message="Input does not satisfy the exact rational-linear contract.",

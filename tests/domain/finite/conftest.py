@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from tests.support.core_capability_harnesses import (
+from tests.support.core_operation_harnesses import (
     FiniteCoverageTestServices,
     open_finite_coverage_services,
 )

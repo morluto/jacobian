@@ -1,4 +1,4 @@
-# Number theory capability references
+# Number theory operation references
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

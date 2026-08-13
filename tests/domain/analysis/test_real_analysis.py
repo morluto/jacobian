@@ -7,8 +7,8 @@ import pytest
 from tests.support.rationals import rational_payload
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.analysis import build_real_analysis_bundle
@@ -27,9 +27,9 @@ def test_arb_point_enclosure_returns_exact_dyadics(
 ) -> None:
     runtime = domain_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="analysis.real_function.point_enclosure.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="analysis.real_function.point_enclosure.compute",
             input={
                 "function": "EXP",
                 "argument": rational_payload(1, 3),
@@ -53,9 +53,9 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runtime = domain_services
-    nonfinite = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="analysis.real_function.point_enclosure.compute",
+    nonfinite = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="analysis.real_function.point_enclosure.compute",
             input={
                 "function": "LOG",
                 "argument": rational_payload(-1),
@@ -75,9 +75,9 @@ def test_arb_nonfinite_and_timeout_are_non_conclusions(
         raise TimeoutError
 
     monkeypatch.setattr(operations, "_run_worker", timeout)
-    timed_out = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="analysis.real_function.point_enclosure.compute",
+    timed_out = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="analysis.real_function.point_enclosure.compute",
             input={
                 "function": "SIN",
                 "argument": rational_payload(1),

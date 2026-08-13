@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial.bundle import build_polynomial_bundle
 from tests.support.exact_domain import open_exact_domain_services
@@ -60,17 +60,17 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
 ) -> None:
     descriptor = next(
         item
-        for item in polynomial_services.core.capabilities.catalog().capabilities
-        if item.capability_id == "polynomial.jacobian_syzygy.minimum_degree.compute"
+        for item in polynomial_services.core.operations.catalog().operations
+        if item.operation_id == "polynomial.jacobian_syzygy.minimum_degree.compute"
     )
     sparse_example = next(
         item
-        for item in descriptor.invocation_examples
+        for item in descriptor.examples
         if item.name == "sparse-homogeneous-polynomial"
     )
-    example_result = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
+    example_result = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
             input=sparse_example.input,
         )
     )
@@ -79,9 +79,9 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
         descriptor.description
     )
 
-    computed = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),
+    computed = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),
             input={
                 "polynomial": _polynomial([(1, (1, 1, 1))]),
                 "max_degree": 3,
@@ -101,9 +101,9 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
     assert result["coefficient_map_detail"] == "CERTIFICATES"
     assert all(not item["sparse_entries"] for item in result["degree_maps"])
 
-    verified = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
+    verified = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
             input={
                 "input": {
                     "polynomial": _polynomial([(1, (1, 1, 1))]),
@@ -118,8 +118,8 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
 
     verifier = next(
         descriptor
-        for descriptor in polynomial_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id
+        for descriptor in polynomial_services.core.operations.catalog().operations
+        if descriptor.operation_id
         == "polynomial.jacobian_syzygy.minimum_degree.verify"
     )
     assert "complete, unmodified producer output.result object" in (
@@ -134,9 +134,9 @@ def test_graded_jacobian_syzygy_handles_a_zero_partial_derivative(
         "polynomial": _polynomial([(1, (2, 0, 1))]),
         "max_degree": 0,
     }
-    computed = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+    computed = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.jacobian_syzygy.minimum_degree.compute",
             input=input_payload,
         )
     )
@@ -154,9 +154,9 @@ def test_graded_jacobian_syzygy_handles_a_zero_partial_derivative(
         "0",
     ]
 
-    verified = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.jacobian_syzygy.minimum_degree.verify",
+    verified = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.jacobian_syzygy.minimum_degree.verify",
             input={"input": input_payload, "candidate": result},
         )
     )
@@ -172,9 +172,9 @@ def test_syzygy_checker_rejects_schema_valid_forged_evidence(
     polynomial_services: DomainTestServices,
     forgery: str,
 ) -> None:
-    computed = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),
+    computed = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),
             input={
                 "polynomial": _polynomial([(1, (1, 1, 1))]),
                 "max_degree": 1,
@@ -197,9 +197,9 @@ def test_syzygy_checker_rejects_schema_valid_forged_evidence(
         forged["partial_derivatives"][0]["polynomial"]["terms"][0]["coefficient"] = _q(
             2
         )
-    checked = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
+    checked = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
             input={"input": input_payload, "candidate": forged},
         )
     )
@@ -211,9 +211,9 @@ def test_syzygy_checker_rejects_schema_valid_forged_evidence(
 def test_sparse_map_detail_is_explicitly_opt_in(
     polynomial_services: DomainTestServices,
 ) -> None:
-    computed = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.coefficients.materialize"),
+    computed = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("polynomial.jacobian_syzygy.coefficients.materialize"),
             input={
                 "polynomial": _polynomial([(1, (1, 1, 1))]),
                 "max_degree": 0,
@@ -267,9 +267,9 @@ def test_nine_line_challenge_mdr_values_are_end_to_end_verified(
     factors: tuple[tuple[int, int, int], ...],
     expected_degree: int,
 ) -> None:
-    computed = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),
+    computed = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("polynomial.jacobian_syzygy.minimum_degree.compute"),
             input={
                 "linear_factors": [
                     {
@@ -288,9 +288,9 @@ def test_nine_line_challenge_mdr_values_are_end_to_end_verified(
         _result_payload(polynomial_services, computed)["first_syzygy_degree"]
         == expected_degree
     )
-    verified = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
+    verified = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
             input={
                 "input": {
                     "linear_factors": [

@@ -7,7 +7,7 @@ import pytest
 from tests.support.rationals import rational_payload as _rational
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.probability import build_finite_probability_bundle
 
@@ -49,9 +49,9 @@ def test_finite_raw_moment_preserves_exact_contributions(
 ) -> None:
     runtime = domain_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.raw_moment.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.raw_moment.compute",
             input={
                 "atoms": [
                     {"value": _rational(-1), "probability": _rational(1, 2)},
@@ -75,9 +75,9 @@ def test_invalid_finite_distribution_fails_before_artifact_writes(
 ) -> None:
     runtime = domain_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.raw_moment.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.raw_moment.compute",
             input={
                 "atoms": [
                     {"value": _rational(0), "probability": _rational(1, 3)},
@@ -96,9 +96,9 @@ def test_invalid_finite_distribution_fails_before_artifact_writes(
 def test_finite_event_probability_preserves_selected_atom_contributions(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=("probability.finite_distribution.event_probability.compute"),
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=("probability.finite_distribution.event_probability.compute"),
             input={
                 "distribution": _distribution(
                     (-1, 1, 4),
@@ -128,9 +128,9 @@ def test_finite_event_probability_preserves_selected_atom_contributions(
 def test_finite_conditioning_returns_one_normalized_distribution(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.condition.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.condition.compute",
             input={
                 "distribution": _distribution(
                     (-1, 1, 6),
@@ -157,9 +157,9 @@ def test_finite_conditioning_returns_one_normalized_distribution(
 def test_zero_mass_conditioning_is_a_non_conclusion_without_artifacts(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.condition.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.condition.compute",
             input={
                 "distribution": _distribution(
                     (0, 0, 1),
@@ -178,9 +178,9 @@ def test_zero_mass_conditioning_is_a_non_conclusion_without_artifacts(
 def test_finite_pushforward_collapses_equal_target_atoms(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.pushforward.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.pushforward.compute",
             input={
                 "distribution": _distribution(
                     (-1, 1, 4),
@@ -208,9 +208,9 @@ def test_finite_convolution_aggregates_all_independent_pairs(
     domain_services: DomainTestServices,
 ) -> None:
     fair_bit = _distribution((0, 1, 2), (1, 1, 2))
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.convolution.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.convolution.compute",
             input={"left": fair_bit, "right": fair_bit},
         )
     )
@@ -229,9 +229,9 @@ def test_finite_convolution_rejects_distinct_support_above_result_bound(
 ) -> None:
     left_values = tuple(range(17))
     right_values = tuple(value * 100 for value in range(16))
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.convolution.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.convolution.compute",
             input={
                 "left": _distribution(
                     *((value, 1, 17) for value in left_values),
@@ -251,9 +251,9 @@ def test_finite_convolution_rejects_distinct_support_above_result_bound(
 def test_incomplete_pushforward_mapping_fails_before_artifact_writes(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.finite_distribution.pushforward.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.finite_distribution.pushforward.compute",
             input={
                 "distribution": _distribution((0, 1, 2), (1, 1, 2)),
                 "mapping": [
@@ -271,9 +271,9 @@ def test_incomplete_pushforward_mapping_fails_before_artifact_writes(
 def test_gaussian_polynomial_moment_preserves_complete_complex_contraction(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 1,
@@ -313,9 +313,9 @@ def test_gaussian_polynomial_moment_preserves_complete_complex_contraction(
 def test_multivariate_gaussian_polynomial_moment_uses_independence(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 2,
@@ -338,9 +338,9 @@ def test_multivariate_gaussian_polynomial_moment_uses_independence(
 def test_gaussian_polynomial_canonicalizes_nonlexicographic_terms(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 2,
@@ -364,9 +364,9 @@ def test_gaussian_polynomial_canonicalizes_nonlexicographic_terms(
 def test_gaussian_polynomial_zero_order_is_the_constant_one(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 1,
@@ -385,9 +385,9 @@ def test_gaussian_polynomial_zero_order_is_the_constant_one(
 def test_gaussian_expansion_above_bound_fails_before_artifact_writes(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 1,
@@ -413,9 +413,9 @@ def test_gaussian_expansion_at_raised_bound_succeeds(
     domain_services: DomainTestServices,
 ) -> None:
     """4 terms at order 8 = 65536 paths, exactly the raised bound."""
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 1,
@@ -453,9 +453,9 @@ def test_gaussian_complex_coefficient_ledger_matches_stdlib_replay(
             result *= factor
         return result
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 2,
@@ -546,9 +546,9 @@ def test_gaussian_denominator_growth_fails_before_artifact_writes(
     exponents = [
         [(index >> bit) & 1 for bit in reversed(range(4))] for index in range(16)
     ]
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.gaussian_polynomial.moment.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.gaussian_polynomial.moment.compute",
             input={
                 "polynomial": {
                     "variable_count": 4,
@@ -578,9 +578,9 @@ def test_gaussian_denominator_growth_fails_before_artifact_writes(
 def test_graph_reliability_exhausts_all_edge_states_exactly(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "probability.graph_reliability.connection_probability.compute"
             ),
             input={
@@ -608,9 +608,9 @@ def test_graph_reliability_exhausts_all_edge_states_exactly(
 def test_graph_reliability_disconnected_terminals_have_zero_probability(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "probability.graph_reliability.connection_probability.compute"
             ),
             input={
@@ -629,9 +629,9 @@ def test_graph_reliability_disconnected_terminals_have_zero_probability(
 def test_graph_reliability_rejects_incomplete_edge_probability_binding(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "probability.graph_reliability.connection_probability.compute"
             ),
             input={
@@ -663,9 +663,9 @@ def test_graph_reliability_rejects_ledger_above_artifact_budget(
         for left in range(6)
         for right in range(left + 1, 6)
     ][:12]
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=(
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=(
                 "probability.graph_reliability.connection_probability.compute"
             ),
             input={

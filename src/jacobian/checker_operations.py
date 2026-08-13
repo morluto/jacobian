@@ -6,14 +6,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import EvidenceKind
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.results import ContractModel
 
-ProviderRuntimeFactory = Callable[[], CapabilityProviderRuntime]
+ProviderRuntimeFactory = Callable[[], ProviderObservation]
 
-# Producer operation verb segments stripped when deriving a verifier capability
-# ID. Each producer capability ID contains exactly one of these segments; the
+# Producer operation verb segments stripped when deriving a verifier operation
+# ID. Each producer operation ID contains exactly one of these segments; the
 # derived verifier ID removes it and appends ``.verify``.
 _VERB_SEGMENTS: tuple[str, ...] = (
     "compute",
@@ -26,77 +26,77 @@ _VERB_SEGMENTS: tuple[str, ...] = (
 )
 
 
-def derive_verification_capability_id(producer_capability_id: str) -> str:
+def derive_verification_operation_id(producer_operation_id: str) -> str:
     """Derive a per-producer verifier ID by stripping the verb and appending ``.verify``.
 
     The producer operation verb (``compute``, ``decide``, ``materialize``,
     ``canonicalize``, ``evaluate``, or ``count``) is removed from wherever it appears in the
-    producer capability ID, and ``.verify`` is appended. For example
+    producer operation ID, and ``.verify`` is appended. For example
     ``polynomial.compute.gcd`` becomes ``polynomial.gcd.verify`` and
     ``integer.decide.powerful`` becomes ``integer.powerful.verify``.
     """
 
-    segments = producer_capability_id.split(".")
+    segments = producer_operation_id.split(".")
     verb_indices = [
         index for index, segment in enumerate(segments) if segment in _VERB_SEGMENTS
     ]
     if len(verb_indices) != 1:
         raise ValueError(
-            "producer capability ID must contain exactly one operation verb "
-            f"segment {_VERB_SEGMENTS}: {producer_capability_id!r}"
+            "producer operation ID must contain exactly one operation verb "
+            f"segment {_VERB_SEGMENTS}: {producer_operation_id!r}"
         )
     remaining = [
         segment for index, segment in enumerate(segments) if index != verb_indices[0]
     ]
     if not remaining:
         raise ValueError(
-            "producer capability ID must have a non-empty stem after removing "
-            f"the operation verb: {producer_capability_id!r}"
+            "producer operation ID must have a non-empty stem after removing "
+            f"the operation verb: {producer_operation_id!r}"
         )
     return ".".join(remaining) + ".verify"
 
 
-def _domain_label(producer_capability_id: str) -> str:
-    return producer_capability_id.split(".", 1)[0]
+def _domain_label(producer_operation_id: str) -> str:
+    return producer_operation_id.split(".", 1)[0]
 
 
-def derive_verification_title(producer_capability_id: str) -> str:
-    """Strictly construct a verifier title from the producer capability ID."""
+def derive_verification_title(producer_operation_id: str) -> str:
+    """Strictly construct a verifier title from the producer operation ID."""
 
-    return f"Verify an exact {producer_capability_id} result"
+    return f"Verify an exact {producer_operation_id} result"
 
 
-def derive_verification_description(producer_capability_id: str) -> str:
-    """Strictly construct a verifier description from the producer capability ID."""
+def derive_verification_description(producer_operation_id: str) -> str:
+    """Strictly construct a verifier description from the producer operation ID."""
 
     return (
-        f"Independently replay the exact {producer_capability_id} relation "
+        f"Independently replay the exact {producer_operation_id} relation "
         "against its inline input and candidate, binding their canonical "
         "digests in the accepted verification record through the "
         "operator-authorized independent checker."
     )
 
 
-def derive_verification_tags(producer_capability_id: str) -> tuple[str, ...]:
-    """Strictly construct verifier tags from the producer capability ID."""
+def derive_verification_tags(producer_operation_id: str) -> tuple[str, ...]:
+    """Strictly construct verifier tags from the producer operation ID."""
 
-    return ("verification", "exact", _domain_label(producer_capability_id))
+    return ("verification", "exact", _domain_label(producer_operation_id))
 
 
 @dataclass(frozen=True, slots=True)
 class ExactReplayCheckerDeclaration:
     """Domain-owned declaration of an independently replayable exact result.
 
-    Every declaration carries complete verification capability metadata after
+    Every declaration carries complete verification operation metadata after
     construction. If the domain provides explicit metadata, the
-    ``verification_capability_id`` must equal the derived form (see
-    :func:`derive_verification_capability_id`) and the title, description, and
+    ``verification_operation_id`` must equal the derived form (see
+    :func:`derive_verification_operation_id`) and the title, description, and
     tags are used as written. If the domain omits the metadata, all four fields
-    are strictly constructed from the producer capability ID so that no
+    are strictly constructed from the producer operation ID so that no
     verifier metadata is absent at installation.
     """
 
-    capability_id: str
+    operation_id: str
     request_model: type[ContractModel]
     function: str
     format_id: str
@@ -106,11 +106,11 @@ class ExactReplayCheckerDeclaration:
         "operator-authorized Python-FLINT exact replay independent of the "
         "SymPy producer"
     )
-    verification_capability_id: str | None = None
+    verification_operation_id: str | None = None
     verification_title: str | None = None
     verification_description: str | None = None
     verification_tags: tuple[str, ...] = ()
-    provider_runtime: CapabilityProviderRuntime | None = field(
+    provider_runtime: ProviderObservation | None = field(
         default=None,
         repr=False,
         compare=False,
@@ -125,7 +125,7 @@ class ExactReplayCheckerDeclaration:
 
     def __post_init__(self) -> None:
         for field_name, value in {
-            "capability_id": self.capability_id,
+            "operation_id": self.operation_id,
             "function": self.function,
             "format_id": self.format_id,
             "entrypoint_module": self.entrypoint_module,
@@ -147,50 +147,50 @@ class ExactReplayCheckerDeclaration:
             raise ValueError(
                 "declaration-owned provider runtime must not pre-authorize checker IDs"
             )
-        derived_id = derive_verification_capability_id(self.capability_id)
+        derived_id = derive_verification_operation_id(self.operation_id)
         explicit_text = (
             self.verification_title,
             self.verification_description,
         )
-        if self.verification_capability_id is None:
+        if self.verification_operation_id is None:
             if any(value is not None for value in explicit_text):
                 raise ValueError(
                     "verification title or description require a verification "
-                    "capability ID"
+                    "operation ID"
                 )
-            object.__setattr__(self, "verification_capability_id", derived_id)
+            object.__setattr__(self, "verification_operation_id", derived_id)
             object.__setattr__(
                 self,
                 "verification_title",
-                derive_verification_title(self.capability_id),
+                derive_verification_title(self.operation_id),
             )
             object.__setattr__(
                 self,
                 "verification_description",
-                derive_verification_description(self.capability_id),
+                derive_verification_description(self.operation_id),
             )
             object.__setattr__(
                 self,
                 "verification_tags",
-                derive_verification_tags(self.capability_id),
+                derive_verification_tags(self.operation_id),
             )
             return
-        if self.verification_capability_id != derived_id:
+        if self.verification_operation_id != derived_id:
             raise ValueError(
-                "verification capability ID must equal the derived form "
+                "verification operation ID must equal the derived form "
                 f"{derived_id!r} (strip the producer verb and append '.verify'): "
-                f"{self.verification_capability_id!r}"
+                f"{self.verification_operation_id!r}"
             )
         if not all(isinstance(value, str) and value.strip() for value in explicit_text):
             raise ValueError(
-                "verification capability ID, title, and description must be "
+                "verification operation ID, title, and description must be "
                 "declared together"
             )
         if not self.verification_tags:
             object.__setattr__(
                 self,
                 "verification_tags",
-                derive_verification_tags(self.capability_id),
+                derive_verification_tags(self.operation_id),
             )
 
     def __getattribute__(self, name: str) -> Any:
@@ -203,10 +203,10 @@ class ExactReplayCheckerDeclaration:
         if factory is None:
             return None
         realized = factory()
-        if not isinstance(realized, CapabilityProviderRuntime):
+        if not isinstance(realized, ProviderObservation):
             raise TypeError(
                 "declaration-owned provider runtime factory must return "
-                "CapabilityProviderRuntime"
+                "ProviderObservation"
             )
         if realized.checker_ids:
             raise ValueError(
@@ -231,7 +231,7 @@ class CheckerOperation:
     reason: str
     target_schema_uris: tuple[str, ...] = ()
     target_semantics_uris: tuple[str, ...] = ()
-    provider_runtime: CapabilityProviderRuntime | None = None
+    provider_runtime: ProviderObservation | None = None
 
     def __post_init__(self) -> None:
         required_text = {

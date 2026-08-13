@@ -1,4 +1,4 @@
-"""Tests for Lean capability projection: verified result and repairable diagnostics."""
+"""Tests for Lean operation projection: verified result and repairable diagnostics."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from tests.support.provider_lean import (
     skip_unless_pinned_lean_core_runtime,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.runtime.model import JacobianRuntime
 
@@ -18,14 +18,14 @@ from jacobian.runtime.model import JacobianRuntime
     skip_unless_pinned_lean_core_runtime(),
     reason=PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
 )
-def test_lean_capability_returns_bound_verified_result(
+def test_lean_operation_returns_bound_verified_result(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:
     runtime = authorized_complete_runtime
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.check",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.check",
             input={
                 "statement": "1 + 1 = 2",
                 "proof": "rfl",
@@ -43,14 +43,14 @@ def test_lean_capability_returns_bound_verified_result(
     skip_unless_pinned_lean_core_runtime(),
     reason=PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
 )
-def test_lean_capability_projects_repairable_checker_diagnostics(
+def test_lean_operation_projects_repairable_checker_diagnostics(
     authorized_complete_runtime: JacobianRuntime,
 ) -> None:
     runtime = authorized_complete_runtime
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="lean.check",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="lean.check",
             input={
                 "statement": "1 + 1 = 2",
                 "proof": "sorry",

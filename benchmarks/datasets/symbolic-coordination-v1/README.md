@@ -56,4 +56,4 @@ make harbor-check
 
 PR1 contains no comparison job, model run, post-solution audit, or training
 contract. Product-surface observations that did not block
-the pilot are recorded in [deferred capability gaps](CAPABILITY_GAPS.md).
+the pilot are recorded in [deferred operation gaps](OPERATION_GAPS.md).

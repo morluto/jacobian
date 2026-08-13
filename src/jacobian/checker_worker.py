@@ -25,11 +25,11 @@ from jacobian.checker_identity import (
     require_manifest_material_unchanged,
     require_manifest_unchanged,
 )
-from jacobian.contracts.capabilities import (
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.checkers import CheckerManifest
+from jacobian.contracts.operations import (
+    ProviderDigestKind,
+    ProviderObservation,
+)
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
     ProviderRuntimeErrorCode,
@@ -62,8 +62,8 @@ def _resolve(entrypoint: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
 
 
 def _measure_runtime(
-    runtime: CapabilityProviderRuntime | None,
-) -> tuple[CapabilityProviderRuntime | None, str | None]:
+    runtime: ProviderObservation | None,
+) -> tuple[ProviderObservation | None, str | None]:
     os.environ.pop("JACOBIAN_CHECKER_EXECUTABLE", None)
     os.environ.pop("JACOBIAN_CHECKER_RUNTIME_DIGEST", None)
     os.environ.pop("JACOBIAN_CHECKER_LAKE_DIGEST", None)
@@ -81,7 +81,7 @@ def _measure_runtime(
         raise _CheckerWorkerFailureError(code) from exc
     except (OSError, ValueError) as exc:
         raise _CheckerWorkerFailureError("MALFORMED_RUNTIME") from exc
-    if runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE:
+    if runtime.digest_kind is ProviderDigestKind.EXECUTABLE:
         executable = runtime.configuration.get("executable")
         if not isinstance(executable, str):
             raise ValueError("checker executable identity is incomplete")
@@ -97,7 +97,7 @@ def _measure_runtime(
     return runtime, runtime.digest
 
 
-def _bind_lean_semantic_environment(runtime: CapabilityProviderRuntime) -> None:
+def _bind_lean_semantic_environment(runtime: ProviderObservation) -> None:
     if runtime.provider != "jacobian.lean4":
         return
     semantic_runtime = runtime.configuration.get("semantic_runtime")
@@ -115,7 +115,7 @@ def _bind_lean_semantic_environment(runtime: CapabilityProviderRuntime) -> None:
         os.environ["JACOBIAN_CHECKER_LEAN_PROJECT_ROOT"] = project["root"]
 
 
-def _bind_lake_launcher(runtime: CapabilityProviderRuntime) -> None:
+def _bind_lake_launcher(runtime: ProviderObservation) -> None:
     """Bind an optional sibling Lake launcher into the measured runtime identity.
 
     The Lean runtime carries the Lake launcher path and digest in its

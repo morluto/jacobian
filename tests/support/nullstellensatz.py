@@ -63,7 +63,7 @@ def open_nullstellensatz_services(
         with atomic_installation(services.core):
             installed = install_nullstellensatz_core(services.installation, runtime)
             for adapter in installed.adapters:
-                services.installation.register_capability(adapter)
+                services.installation.register_operation(adapter)
         yield services
 
 

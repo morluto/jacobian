@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.capability_service import CapabilityPolicy
+from jacobian.operation_service import OperationPolicy
 from jacobian.runtime import CheckerAuthorityMode
 
 
@@ -17,28 +17,28 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
     async def scenario() -> None:
         from mcp import Client
 
-        policy = CapabilityPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
+        policy = OperationPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
         async with Client(
             create_server(
                 tmp_path,
                 checker_authority=CheckerAuthorityMode.NONE,
-                capability_policy=policy,
+                operation_policy=policy,
             ),
             raise_exceptions=True,
         ) as client:
-            resource = await client.read_resource("capability://catalog")
+            resource = await client.read_resource("operation://catalog")
             catalog = json.loads(resource.contents[0].text)
             assert catalog["policy_profile"] == "COMPUTE_VERIFY_NO_RETRIEVAL"
             assert catalog["policy_digest"] == policy.digest
             assert all(
                 "retrieval" not in descriptor["tags"]
-                for descriptor in catalog["capabilities"]
+                for descriptor in catalog["operations"]
             )
 
     asyncio.run(scenario())
 
 
-def test_mcp_compact_capability_index_is_searchable_and_paginated(
+def test_mcp_compact_operation_index_is_searchable_and_paginated(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
@@ -48,15 +48,15 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
             raise_exceptions=True,
         ) as client:
-            resource_result = await client.read_resource("capability://catalog")
+            resource_result = await client.read_resource("operation://catalog")
             full_catalog = json.loads(resource_result.contents[0].text)
             all_ids = {
-                descriptor["capability_id"]
-                for descriptor in full_catalog["capabilities"]
+                descriptor["operation_id"]
+                for descriptor in full_catalog["operations"]
             }
             discoverable_ids = {
-                descriptor["capability_id"]
-                for descriptor in full_catalog["capabilities"]
+                descriptor["operation_id"]
+                for descriptor in full_catalog["operations"]
             }
 
             listed = await client.call_tool(
@@ -72,7 +72,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             assert index["response_byte_limit"] == 16 * 1024
             assert len(index["matches"]) <= 20
             indexed_ids = {
-                descriptor["capability_id"] for descriptor in index["matches"]
+                descriptor["operation_id"] for descriptor in index["matches"]
             }
             assert all(
                 "input_schema" not in descriptor for descriptor in index["matches"]
@@ -94,7 +94,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                 page = next_page.structured_content
                 assert len(next_page.content[0].text.encode("utf-8")) <= 16 * 1024
                 indexed_ids.update(
-                    descriptor["capability_id"] for descriptor in page["matches"]
+                    descriptor["operation_id"] for descriptor in page["matches"]
                 )
                 cursor = page["next_cursor"]
             assert len(indexed_ids) == index["total_matches"]
@@ -114,7 +114,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             assert isinstance(searched.structured_content, dict)
             search_index = searched.structured_content
             search_ids = {
-                descriptor["capability_id"] for descriptor in search_index["matches"]
+                descriptor["operation_id"] for descriptor in search_index["matches"]
             }
             expected_sat_ids = {
                 "sat.cnf.materialize",
@@ -138,7 +138,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             )
             assert isinstance(coloring_search.structured_content, dict)
             coloring_ids = {
-                descriptor["capability_id"]
+                descriptor["operation_id"]
                 for descriptor in coloring_search.structured_content["matches"]
             }
             assert expected_sat_ids.issubset(coloring_ids)
@@ -148,14 +148,14 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                 {
                     "request": {
                         "op": "inspect",
-                        "capability_id": "sat.cnf.materialize",
+                        "operation_id": "sat.cnf.materialize",
                     }
                 },
             )
             assert isinstance(materialize_description.structured_content, dict)
             materialize = materialize_description.structured_content
             assert (
-                materialize["capability"]["invocation_examples"][0]["name"]
+                materialize["operation"]["examples"][0]["name"]
                 == "finite-coloring-cnf"
             )
 
@@ -181,9 +181,9 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
             assert isinstance(second_page.structured_content, dict)
             second = second_page.structured_content
             assert {
-                descriptor["capability_id"] for descriptor in first["matches"]
+                descriptor["operation_id"] for descriptor in first["matches"]
             }.isdisjoint(
-                descriptor["capability_id"] for descriptor in second["matches"]
+                descriptor["operation_id"] for descriptor in second["matches"]
             )
 
             invalid_cursor = await client.call_tool(
@@ -191,7 +191,7 @@ def test_mcp_compact_capability_index_is_searchable_and_paginated(
                 {
                     "request": {
                         "op": "search",
-                        "query": "definitely-no-matching-capability",
+                        "query": "definitely-no-matching-operation",
                         "cursor": first["next_cursor"],
                         "limit": 20,
                     }
@@ -224,7 +224,7 @@ def test_mcp_text_projection_preserves_produced_artifact_types(
             producing = [m for m in text["matches"] if "produced_artifact_types" in m]
             assert producing, (
                 "text projection must preserve produced_artifact_types for at "
-                "least one poset capability so agents can connect producers to "
+                "least one poset operation so agents can connect producers to "
                 "consumers without structured_content"
             )
 

@@ -3,8 +3,8 @@ artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/recurrence-lucas"
 version = "1.0.0"
-description = "Select the most specific capability for a recurrence-series query."
-keywords = ["capability-discovery", "recurrence", "regression", "verification"]
+description = "Select the most specific operation for a recurrence-series query."
+keywords = ["operation-discovery", "recurrence", "regression", "verification"]
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
@@ -21,7 +21,7 @@ tags = ["discovery", "recurrence", "regression", "offline"]
 case_version = "public-reproductions-v1"
 contamination_class = "public-answer-visible-reproduction"
 fixture_digest = "sha256:41ba2451e1a5ae962372938297a4acc9c1557acaccb08d3bdc52e4d9ecb8d0c6"
-derivation = "Discovery regression for 'compute the Lucas number at index n'; expected first capability combinatorics.compute.lucas."
+derivation = "Discovery regression for 'compute the Lucas number at index n'; expected first operation combinatorics.compute.lucas."
 [agent]
 timeout_sec = 600.0
 [verifier]

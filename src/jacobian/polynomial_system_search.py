@@ -9,14 +9,12 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import format_canonical_integer
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.exact import CanonicalRational, bounded_rational_scalars
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+)
 from jacobian.contracts.polynomial_systems import (
     PolynomialSystemRationalSearchOutput,
     PolynomialSystemRationalSearchRequest,
@@ -24,10 +22,12 @@ from jacobian.contracts.polynomial_systems import (
     RationalPolynomialAssignment,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
-from jacobian.polynomial_system_capabilities import (
+from jacobian.polynomial_system_operations import (
     PolynomialSystemInstallation,
     _evaluate_request,
 )
@@ -39,8 +39,8 @@ class PolynomialSystemRationalSearchAdapter:
         self, artifacts: ArtifactService, installation: PolynomialSystemInstallation
     ) -> None:
         self.artifacts, self.installation = artifacts, installation
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.system.rational_solution.search",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.system.rational_solution.search",
             version="1",
             title="Search a bounded rational grid for a polynomial-system solution",
             description="Return the first exact satisfying assignment in one declared finite grid.",
@@ -52,7 +52,7 @@ class PolynomialSystemRationalSearchAdapter:
             input_schema=PolynomialSystemRationalSearchRequest.model_json_schema(),
             output_schema=PolynomialSystemRationalSearchOutput.model_json_schema(),
             tags=("polynomial", "system", "solution", "bounded-search"),
-            invocation_examples=(
+            examples=(
                 example(
                     "zero_system",
                     "Find zero for x=0 on the smallest grid.",
@@ -78,19 +78,19 @@ class PolynomialSystemRationalSearchAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialSystemRationalSearchRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 PolynomialSystemRationalSearchRequest, request.input
             )
         except (ValidationError, ValueError) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_POLYNOMIAL_SYSTEM_SEARCH_REQUEST",
                     stage="request_validation",
                     message="The bounded rational solution search request is invalid.",
@@ -153,7 +153,7 @@ class PolynomialSystemRationalSearchAdapter:
             (assignment_uri,) if assignment_uri is not None else ()
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,

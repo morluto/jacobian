@@ -1,19 +1,19 @@
 """Installation bundle for exact rational polynomial operations."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
 from jacobian.domains.polynomial.elementary import (
-    INTEGER_POLYNOMIAL_CAPABILITIES,
-    RATIONAL_POLYNOMIAL_CAPABILITIES,
+    INTEGER_POLYNOMIAL_OPERATIONS,
+    RATIONAL_POLYNOMIAL_OPERATIONS,
 )
-from jacobian.domains.polynomial.groebner import POLYNOMIAL_GROEBNER_CAPABILITY
+from jacobian.domains.polynomial.groebner import POLYNOMIAL_GROEBNER_OPERATION
 from jacobian.domains.polynomial.invariants import (
-    POLYNOMIAL_INVARIANT_CAPABILITIES,
+    POLYNOMIAL_INVARIANT_OPERATIONS,
 )
 from jacobian.domains.polynomial.jacobian_syzygy import (
-    GRADED_JACOBIAN_SYZYGY_CAPABILITY,
-    JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY,
+    GRADED_JACOBIAN_SYZYGY_OPERATION,
+    JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
 )
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
@@ -58,16 +58,16 @@ def build_polynomial_bundle() -> DomainBundle:
             features=("exact-rational-polynomial-operations",),
         ),
         backend_version=SYMPY_VERSION,
-        capabilities=(
-            *POLYNOMIAL_INVARIANT_CAPABILITIES,
-            POLYNOMIAL_GROEBNER_CAPABILITY,
-            GRADED_JACOBIAN_SYZYGY_CAPABILITY,
-            JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_CAPABILITY,
-            *INTEGER_POLYNOMIAL_CAPABILITIES,
-            *RATIONAL_POLYNOMIAL_CAPABILITIES,
+        operations=(
+            *POLYNOMIAL_INVARIANT_OPERATIONS,
+            POLYNOMIAL_GROEBNER_OPERATION,
+            GRADED_JACOBIAN_SYZYGY_OPERATION,
+            JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
+            *INTEGER_POLYNOMIAL_OPERATIONS,
+            *RATIONAL_POLYNOMIAL_OPERATIONS,
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_POLYNOMIAL_REQUEST",
                 stage="polynomial_input_validation",
                 message="Input does not satisfy the bounded rational-polynomial contract.",

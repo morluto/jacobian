@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "symbolic-block-determinant-decomposition",
   "analysis": {
     "mathematical_moves": [
@@ -11,12 +11,12 @@
     ],
     "current_capabilities": [
       {
-        "capability_id": "matrix.determinant.compute",
+        "operation_id": "matrix.determinant.compute",
         "availability": "AVAILABLE",
         "boundary": "Computes one exact determinant but does not synthesize or certify a symbolic invariant-subspace decomposition."
       },
       {
-        "capability_id": "polynomial.identity.verify",
+        "operation_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",
         "boundary": "Can replay scalar polynomial identities, while the benchmark composes a structured matrix similarity certificate."
       }
@@ -26,7 +26,7 @@
     ],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],
-    "disposition": "NO_NEW_CAPABILITY",
+    "disposition": "NO_NEW_OPERATION",
     "next_action": "Use as a symbolic construction diagnostic; do not add a block-matrix-specific alias without repeated independent workflows."
   }
 }

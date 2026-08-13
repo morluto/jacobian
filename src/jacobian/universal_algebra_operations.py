@@ -1,4 +1,4 @@
-"""Exact finite universal-algebra capabilities."""
+"""Exact finite universal-algebra operations."""
 
 from __future__ import annotations
 
@@ -13,20 +13,18 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderObservation,
+)
 from jacobian.contracts.universal_algebra import (
     CountermodelSearchStatus,
     FiniteMagma,
@@ -50,6 +48,8 @@ from jacobian.contracts.universal_algebra import (
     UniversalAlgebraEvaluationRequest,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
@@ -58,7 +58,7 @@ from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
-from jacobian.verification_capabilities import certificate_verification_adapter
+from jacobian.verification_operations import certificate_verification_adapter
 
 _COUNTERMODEL_TIMEOUT_MS = 10_000
 
@@ -83,7 +83,7 @@ class UniversalAlgebraResources:
     installation: UniversalAlgebraInstallation
 
 
-def install_universal_algebra_capabilities(
+def install_universal_algebra_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
@@ -92,7 +92,7 @@ def install_universal_algebra_capabilities(
     *,
     authorize_checker: bool,
 ) -> tuple[
-    tuple[CapabilityAdapter[Any], ...],
+    tuple[OperationAdapter[Any], ...],
     UniversalAlgebraInstallation,
 ]:
     """Install exact bounded finite-magma law evaluation."""
@@ -188,14 +188,14 @@ def install_universal_algebra_capabilities(
         "jacobian.z3",
         features=("finite-magma-countermodel-search",),
     )
-    adapters: tuple[CapabilityAdapter[Any], ...] = (evaluation,)
-    if search_runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+    adapters: tuple[OperationAdapter[Any], ...] = (evaluation,)
+    if search_runtime.availability is ProviderAvailability.AVAILABLE:
         adapters += (
             UniversalAlgebraSearchCountermodelAdapter(resources, search_runtime),
         )
     adapters += (FiniteMagmaTableEnumerateAdapter(resources),)
     verify = certificate_verification_adapter(
-        capability_id="universal_algebra.law_evaluation.verify",
+        operation_id="universal_algebra.law_evaluation.verify",
         title="Verify a finite-magma law evaluation",
         description=(
             "Independently replay one exhaustive finite-magma law evaluation "
@@ -215,8 +215,8 @@ class UniversalAlgebraEvaluateLawsAdapter:
 
     def __init__(self, resources: UniversalAlgebraResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="universal_algebra.evaluate_laws",
+        self._descriptor = OperationDescriptor(
+            operation_id="universal_algebra.evaluate_laws",
             version="1",
             title="Evaluate laws on a finite magma",
             description=(
@@ -242,7 +242,7 @@ class UniversalAlgebraEvaluateLawsAdapter:
                 "law-evaluation",
                 "counterexample",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "one_element_idempotence",
                     "Evaluate x*x=x on the one-element magma.",
@@ -268,18 +268,18 @@ class UniversalAlgebraEvaluateLawsAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> UniversalAlgebraEvaluationRequest:
+    def prepare(self, request: OperationRequest) -> UniversalAlgebraEvaluationRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 UniversalAlgebraEvaluationRequest,
                 request.input,
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_FINITE_MAGMA_LAW_REQUEST",
                     stage="request_validation",
                     message="The complete finite-magma law request is invalid.",
@@ -359,7 +359,7 @@ class UniversalAlgebraEvaluateLawsAdapter:
             records=records,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -383,11 +383,11 @@ class UniversalAlgebraSearchCountermodelAdapter:
     def __init__(
         self,
         resources: UniversalAlgebraResources,
-        provider_runtime: CapabilityProviderRuntime | None = None,
+        provider_runtime: ProviderObservation | None = None,
     ) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="universal_algebra.search.countermodel",
+        self._descriptor = OperationDescriptor(
+            operation_id="universal_algebra.search.countermodel",
             version="1",
             title="Search for a fixed-order finite magma countermodel",
             description=(
@@ -409,8 +409,8 @@ class UniversalAlgebraSearchCountermodelAdapter:
                 "counterexample",
                 "bounded-search",
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="commutative_nonassociative_magma",
                     description=(
                         "Search order-two commutative magmas for a counterexample "
@@ -494,20 +494,20 @@ class UniversalAlgebraSearchCountermodelAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> UniversalAlgebraCountermodelSearchRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 UniversalAlgebraCountermodelSearchRequest,
                 request.input,
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_FINITE_MAGMA_COUNTERMODEL_REQUEST",
                     stage="request_validation",
                     message="The complete finite-magma countermodel request is invalid.",
@@ -521,8 +521,8 @@ class UniversalAlgebraSearchCountermodelAdapter:
         try:
             search = _search_countermodel(validated)
         except ImportError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="FINITE_MAGMA_COUNTERMODEL_PROVIDER_UNAVAILABLE",
                     stage="provider_runtime",
                     message="The optional Z3 countermodel provider is unavailable.",
@@ -542,7 +542,7 @@ class UniversalAlgebraSearchCountermodelAdapter:
             target_record=search.target_record,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -560,8 +560,8 @@ class FiniteMagmaTableEnumerateAdapter:
 
     def __init__(self, resources: UniversalAlgebraResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="finite_magma.table.enumerate",
+        self._descriptor = OperationDescriptor(
+            operation_id="finite_magma.table.enumerate",
             version="1",
             title="Enumerate finite magma tables",
             description=(
@@ -576,7 +576,7 @@ class FiniteMagmaTableEnumerateAdapter:
             input_schema=model_schema(FiniteMagmaTableEnumerationRequest),
             output_schema=model_schema(FiniteMagmaTableEnumerationOutput),
             tags=("universal-algebra", "finite-model", "enumeration"),
-            invocation_examples=(
+            examples=(
                 example(
                     "order_one",
                     "Enumerate the unique binary table of order one.",
@@ -586,18 +586,18 @@ class FiniteMagmaTableEnumerateAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> FiniteMagmaTableEnumerationRequest:
+    def prepare(self, request: OperationRequest) -> FiniteMagmaTableEnumerationRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 FiniteMagmaTableEnumerationRequest,
                 request.input,
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_FINITE_MAGMA_TABLE_ENUMERATION_REQUEST",
                     stage="request_validation",
                     message=(
@@ -650,7 +650,7 @@ class FiniteMagmaTableEnumerateAdapter:
             total_count=total_count,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,

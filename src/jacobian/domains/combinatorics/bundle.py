@@ -1,16 +1,16 @@
-"""Installation bundle for exact combinatorics capabilities."""
+"""Installation bundle for exact combinatorics operations."""
 
 from __future__ import annotations
 
 import platform
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.combinatorics.checkers import COMBINATORICS_EXACT_REPLAY_CHECKERS
-from jacobian.domains.combinatorics.counting import COUNTING_CAPABILITIES
-from jacobian.domains.combinatorics.difference_sets import DIFFERENCE_SET_CAPABILITIES
-from jacobian.domains.combinatorics.partitions import PARTITION_CAPABILITIES
-from jacobian.domains.combinatorics.recurrence import RECURRENCE_CAPABILITIES
+from jacobian.domains.combinatorics.counting import COUNTING_OPERATIONS
+from jacobian.domains.combinatorics.difference_sets import DIFFERENCE_SET_OPERATIONS
+from jacobian.domains.combinatorics.partitions import PARTITION_OPERATIONS
+from jacobian.domains.combinatorics.recurrence import RECURRENCE_OPERATIONS
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
@@ -39,14 +39,14 @@ def build_combinatorics_bundle() -> DomainBundle:
             features=("exact-combinatorics",),
         ),
         backend_version=f"python-{platform.python_version()};sympy-{SYMPY_VERSION}",
-        capabilities=(
-            *COUNTING_CAPABILITIES,
-            *PARTITION_CAPABILITIES,
-            *RECURRENCE_CAPABILITIES,
-            *DIFFERENCE_SET_CAPABILITIES,
+        operations=(
+            *COUNTING_OPERATIONS,
+            *PARTITION_OPERATIONS,
+            *RECURRENCE_OPERATIONS,
+            *DIFFERENCE_SET_OPERATIONS,
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_COMBINATORICS_REQUEST",
                 stage="combinatorics_input_validation",
                 message="Input does not satisfy the exact combinatorics contract.",

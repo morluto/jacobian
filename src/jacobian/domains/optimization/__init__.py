@@ -1,4 +1,4 @@
-"""Exact optimization capabilities."""
+"""Exact optimization operations."""
 
 from jacobian.domains.optimization.bundle import build_rational_optimization_bundle
 

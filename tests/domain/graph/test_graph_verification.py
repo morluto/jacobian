@@ -13,8 +13,8 @@ from tests.support.graph_distance_cases import (
 )
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
@@ -54,18 +54,18 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
             "max_order": 16,
         },
     }
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.induced_tree.maximum.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.induced_tree.maximum.compute",
             input=producer_input,
         )
     )
     candidate = computed.output["result"]
     assert candidate["optimum_value"] == 3
 
-    verified = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.induced_tree.maximum.verify",
+    verified = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.induced_tree.maximum.verify",
             input={"input": producer_input, "candidate": candidate},
         )
     )
@@ -90,9 +90,9 @@ def test_induced_tree_result_is_domain_bound_and_independently_replayed(
             "witness_vertices": ["a", "b", "c", "d"],
         }
     )
-    rejected = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.induced_tree.maximum.verify",
+    rejected = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.induced_tree.maximum.verify",
             input={"input": producer_input, "candidate": false_payload},
         )
     )
@@ -115,21 +115,21 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
             ],
         }
     }
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.compute",
             input=producer_input,
         )
     )
 
-    verified = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.verify",
+    verified = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.verify",
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
 
-    assert computed.capability_version == "3"
+    assert computed.operation_version == "3"
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
     assert verified.output["operation_id"] == (
@@ -142,8 +142,8 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     )
     provider_runtime = next(
         descriptor.provider_runtime
-        for descriptor in graph_verification_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "graph.invariant.maximum_matching.verify"
+        for descriptor in graph_verification_services.core.operations.catalog().operations
+        if descriptor.operation_id == "graph.invariant.maximum_matching.verify"
     )
     assert provider_runtime is not None
     assert provider_runtime.provider == "jacobian.graph-exact-checkers"
@@ -163,9 +163,9 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
             },
         }
     )
-    rejected = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.verify",
+    rejected = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.verify",
             input={"input": producer_input, "candidate": false_candidate},
         )
     )
@@ -188,16 +188,16 @@ def test_maximum_matching_verifier_replays_a_64_vertex_certificate(
             ],
         }
     }
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.compute",
             input=producer_input,
         )
     )
 
-    verified = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.maximum_matching.verify",
+    verified = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.maximum_matching.verify",
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -230,16 +230,16 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
         }
     }
     for producer_id, verifier_id, result_field, expected in cases:
-        computed = graph_verification_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=producer_id,
+        computed = graph_verification_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=producer_id,
                 input=producer_input,
             )
         )
 
-        verified = graph_verification_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=verifier_id,
+        verified = graph_verification_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=verifier_id,
                 input={
                     "input": producer_input,
                     "candidate": computed.output["result"],
@@ -257,17 +257,17 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
         )
         provider_runtime = next(
             descriptor.provider_runtime
-            for descriptor in graph_verification_services.core.capabilities.catalog().capabilities
-            if descriptor.capability_id == verifier_id
+            for descriptor in graph_verification_services.core.operations.catalog().operations
+            if descriptor.operation_id == verifier_id
         )
         assert provider_runtime is not None, producer_id
         assert provider_runtime.provider == "jacobian.graph-exact-checkers", producer_id
 
         false_candidate = deepcopy(computed.output["result"])
         false_candidate[result_field] = 0
-        rejected = graph_verification_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=verifier_id,
+        rejected = graph_verification_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=verifier_id,
                 input={"input": producer_input, "candidate": false_candidate},
             )
         )
@@ -293,15 +293,15 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
         ],
     }
     producer_input = {"graph": graph}
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.compute",
             input=producer_input,
         )
     )
-    verified = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.verify",
+    verified = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.verify",
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -351,9 +351,9 @@ def test_distance_matrix_result_uses_independent_all_sources_bfs_replay(
         [0 if source == target else 1 for target in range(order)]
         for source in range(order)
     ]
-    rejected = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.verify",
+    rejected = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.verify",
             input={"input": producer_input, "candidate": false_candidate},
         )
     )
@@ -374,15 +374,15 @@ def test_distance_matrix_checker_verifies_proof_critical_large_cases(
     graph_factory,
 ) -> None:
     producer_input = {"graph": graph_factory()}
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.compute",
             input=producer_input,
         )
     )
-    verified = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.verify",
+    verified = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.verify",
             input={"input": producer_input, "candidate": computed.output["result"]},
         )
     )
@@ -398,9 +398,9 @@ def test_distance_matrix_checker_rejects_one_wrong_edge_distance(
     graph_verification_services: DomainTestServices,
 ) -> None:
     producer_input = {"graph": hoffman_singleton_graph()}
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.compute",
             input=producer_input,
         )
     )
@@ -411,9 +411,9 @@ def test_distance_matrix_checker_rejects_one_wrong_edge_distance(
     candidate["distances"][left_index][right_index] = 2
     candidate["distances"][right_index][left_index] = 2
 
-    rejected = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.verify",
+    rejected = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.verify",
             input={"input": producer_input, "candidate": candidate},
         )
     )
@@ -428,18 +428,18 @@ def test_distance_matrix_checker_rejects_candidate_rebound_to_changed_graph(
     graph_verification_services: DomainTestServices,
 ) -> None:
     original_graph = c7_strong_c7_graph()
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.compute",
             input={"graph": original_graph},
         )
     )
     changed_graph = deepcopy(original_graph)
     changed_graph["edges"].pop(0)
 
-    rejected = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.verify",
+    rejected = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.verify",
             input={
                 "input": {"graph": changed_graph},
                 "candidate": computed.output["result"],
@@ -473,18 +473,18 @@ def test_distance_matrix_verifier_fails_closed_on_malformed_label_binding(
             "edges": [["a", "b"], ["b", "c"]],
         }
     }
-    computed = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.compute",
+    computed = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.compute",
             input=producer_input,
         )
     )
     candidate = deepcopy(computed.output["result"])
     mutate(candidate)
 
-    rejected = graph_verification_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.distance_matrix.verify",
+    rejected = graph_verification_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.distance_matrix.verify",
             input={"input": producer_input, "candidate": candidate},
         )
     )

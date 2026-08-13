@@ -4,7 +4,7 @@ Let T be a finite tree with integer vertex weights w. Let L(T) be the free abeli
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. There is no domain-owned weighted-tree lattice artifact, irreducibility predicate, decomposition search, or general proof-producing checker. Generic matrix calculations do not expose the theorem's semantic objects.
+report the operation boundary honestly. There is no domain-owned weighted-tree lattice artifact, irreducibility predicate, decomposition search, or general proof-producing checker. Generic matrix calculations do not expose the theorem's semantic objects.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

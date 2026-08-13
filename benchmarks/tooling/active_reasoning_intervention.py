@@ -58,7 +58,7 @@ _LEXICON = (
 _SUMMARY_MAX_BYTES = 512
 _SUMMARY_MAX_MESSAGES = 32
 _SUMMARY_TOTAL_MAX_BYTES = 8192
-_SERVER_EVENT_MARKER = re.compile(r"\bMCP (?:tool call|capability attempt)\b")
+_SERVER_EVENT_MARKER = re.compile(r"\bMCP (?:tool call|operation attempt)\b")
 _TOOL_CALL = re.compile(
     r"\bMCP tool call tool=(math\.(?:find|run))\b"
     r".{0,512}?\bstatus=(success|error)\b"
@@ -70,12 +70,12 @@ _TOOL_CALL = re.compile(
     r".{0,512}?\bargument_digest=(sha256:(?:[0-9a-f]\s*){64})",
     re.DOTALL,
 )
-_CAPABILITY_ATTEMPT_WITH_ASSURANCE = re.compile(
-    r"\bMCP capability attempt request_digest=([0-9a-f]{16}|none)\b"
+_OPERATION_ATTEMPT_WITH_ASSURANCE = re.compile(
+    r"\bMCP operation attempt request_digest=([0-9a-f]{16}|none)\b"
     r".{0,512}?\btrace_digest=([0-9a-f]{8}|none)\b"
     r".{0,512}?\btrace_source=([^\s]+)\b"
-    r".{0,512}?\bcapability_id=([^\s]+)\b"
-    r".{0,512}?\bcapability_version=([^\s]+)\b"
+    r".{0,512}?\boperation_id=([^\s]+)\b"
+    r".{0,512}?\boperation_version=([^\s]+)\b"
     r".{0,512}?\bexecution_status=([A-Z_]+)\b"
     r".{0,512}?\bassurance=([^\s]+)\b"
     r".{0,512}?\bdiagnostic_codes=([^\s]+)\b"
@@ -85,12 +85,12 @@ _CAPABILITY_ATTEMPT_WITH_ASSURANCE = re.compile(
     r".{0,512}?\bargument_digest=(sha256:(?:[0-9a-f]\s*){64})",
     re.DOTALL,
 )
-_CAPABILITY_ATTEMPT_WITH_EVIDENCE = re.compile(
-    r"\bMCP capability attempt request_digest=([0-9a-f]{16}|none)\b"
+_OPERATION_ATTEMPT_WITH_EVIDENCE = re.compile(
+    r"\bMCP operation attempt request_digest=([0-9a-f]{16}|none)\b"
     r".{0,512}?\btrace_digest=([0-9a-f]{8}|none)\b"
     r".{0,512}?\btrace_source=([^\s]+)\b"
-    r".{0,512}?\bcapability_id=([^\s]+)\b"
-    r".{0,512}?\bcapability_version=([^\s]+)\b"
+    r".{0,512}?\boperation_id=([^\s]+)\b"
+    r".{0,512}?\boperation_version=([^\s]+)\b"
     r".{0,512}?\bexecution_status=([A-Z_]+)\b"
     r".{0,512}?\bverification_record_uri_present=(True|False)\b"
     r".{0,512}?\bdiagnostic_codes=([^\s]+)\b"
@@ -124,7 +124,7 @@ _TARGETS = (
 _HELDOUT_TARGETS = _TARGETS
 _TAU_FIELD_GROUPS = (
     "call_structure",
-    "capability_identity",
+    "operation_identity",
     "outcome",
     "cost",
     "binding",
@@ -276,7 +276,7 @@ def _server_command(*, state_dir: Path, port: int, trial_id: str) -> tuple[str, 
         "--allow-anonymous",
         "--anonymous-tenant-id",
         trial_id,
-        "--capability-policy-profile",
+        "--operation-policy-profile",
         "COMPUTE_VERIFY_NO_RETRIEVAL",
         "--state-dir",
         str(state_dir),
@@ -817,16 +817,16 @@ def _server_events(payload: str) -> tuple[list[dict[str, object]], dict[str, int
             )
         )
     for pattern, outcome_kind in (
-        (_CAPABILITY_ATTEMPT_WITH_ASSURANCE, "assurance"),
-        (_CAPABILITY_ATTEMPT_WITH_EVIDENCE, "evidence"),
+        (_OPERATION_ATTEMPT_WITH_ASSURANCE, "assurance"),
+        (_OPERATION_ATTEMPT_WITH_EVIDENCE, "evidence"),
     ):
         for match in pattern.finditer(payload):
             (
                 request_digest,
                 trace_digest,
                 trace_source,
-                capability_id,
-                capability_version,
+                operation_id,
+                operation_version,
                 execution_status,
                 outcome,
                 diagnostic_codes,
@@ -839,12 +839,12 @@ def _server_events(payload: str) -> tuple[list[dict[str, object]], dict[str, int
                 (
                     match.start(),
                     {
-                        "kind": "CAPABILITY_ATTEMPT",
+                        "kind": "OPERATION_ATTEMPT",
                         "request_digest": request_digest,
                         "trace_digest": trace_digest,
                         "trace_source": trace_source,
-                        "capability_id": capability_id,
-                        "capability_version": capability_version,
+                        "operation_id": operation_id,
+                        "operation_version": operation_version,
                         "execution_status": execution_status,
                         "assurance": outcome if outcome_kind == "assurance" else None,
                         "verification_record_uri_present": (
@@ -945,12 +945,12 @@ def _tool_action(
     if event.get("tool") == "math.find":
         return "FIND"
     attempt = attempts.get(str(event.get("request_digest")))
-    capability_id = (
-        attempt.get("capability_id") if isinstance(attempt, Mapping) else None
+    operation_id = (
+        attempt.get("operation_id") if isinstance(attempt, Mapping) else None
     )
     return (
         "RUN_CHECKER"
-        if isinstance(capability_id, str) and capability_id.endswith(".verify")
+        if isinstance(operation_id, str) and operation_id.endswith(".verify")
         else "RUN_PRODUCER"
     )
 
@@ -959,7 +959,7 @@ def _tau_features(events: Sequence[Mapping[str, object]]) -> dict[str, float]:
     attempts = {
         str(event["request_digest"]): event
         for event in events
-        if event.get("kind") == "CAPABILITY_ATTEMPT"
+        if event.get("kind") == "OPERATION_ATTEMPT"
     }
     tools = [event for event in events if event.get("kind") == "TOOL_CALL"]
     actions = [_tool_action(event, attempts) for event in tools]
@@ -1004,18 +1004,18 @@ def _tau_features(events: Sequence[Mapping[str, object]]) -> dict[str, float]:
         features[f"tau:bigram:{left}>{right}"] = (
             features.get(f"tau:bigram:{left}>{right}", 0.0) + 1.0
         )
-    capability_ids = [str(event["capability_id"]) for event in attempts.values()]
-    features["tau:unique_capability_count"] = float(len(set(capability_ids)))
+    operation_ids = [str(event["operation_id"]) for event in attempts.values()]
+    features["tau:unique_operation_count"] = float(len(set(operation_ids)))
     features["tau:unique_domain_count"] = float(
-        len({value.split(".", 1)[0] for value in capability_ids})
+        len({value.split(".", 1)[0] for value in operation_ids})
     )
     features["tau:checker_attempt_count"] = float(
-        sum(value.endswith(".verify") for value in capability_ids)
+        sum(value.endswith(".verify") for value in operation_ids)
     )
-    for capability_id, count in Counter(capability_ids).items():
-        features[f"tau:capability:{capability_id}"] = float(count)
+    for operation_id, count in Counter(operation_ids).items():
+        features[f"tau:operation:{operation_id}"] = float(count)
     for domain, count in Counter(
-        value.split(".", 1)[0] for value in capability_ids
+        value.split(".", 1)[0] for value in operation_ids
     ).items():
         features[f"tau:domain:{domain}"] = float(count)
     for event in attempts.values():
@@ -1051,8 +1051,8 @@ def _checker_label(events: Sequence[Mapping[str, object]]) -> str:
     checkers = [
         event
         for event in events
-        if event.get("kind") == "CAPABILITY_ATTEMPT"
-        and str(event.get("capability_id", "")).endswith(".verify")
+        if event.get("kind") == "OPERATION_ATTEMPT"
+        and str(event.get("operation_id", "")).endswith(".verify")
     ]
     if not checkers:
         return "NO_CHECKER"
@@ -1062,8 +1062,8 @@ def _checker_label(events: Sequence[Mapping[str, object]]) -> str:
     last_rejection = max(events.index(event) for event in rejected)
     recovered = any(
         index > last_rejection
-        and event.get("kind") == "CAPABILITY_ATTEMPT"
-        and str(event.get("capability_id", "")).endswith(".verify")
+        and event.get("kind") == "OPERATION_ATTEMPT"
+        and str(event.get("operation_id", "")).endswith(".verify")
         and _checker_attempt_accepted(event)
         for index, event in enumerate(events)
     )
@@ -1087,7 +1087,7 @@ def _failure_label(events: Sequence[Mapping[str, object]]) -> str:
     if not runs:
         return "DISCOVERY_ONLY"
     failures = [event for event in runs if event.get("status") != "success"]
-    attempts = [event for event in events if event.get("kind") == "CAPABILITY_ATTEMPT"]
+    attempts = [event for event in events if event.get("kind") == "OPERATION_ATTEMPT"]
     failures.extend(
         event for event in attempts if event.get("execution_status") != "COMPLETED"
     )
@@ -1206,7 +1206,7 @@ def _project_trial(
     attempts = {
         str(event["request_digest"]): event
         for event in events
-        if event.get("kind") == "CAPABILITY_ATTEMPT"
+        if event.get("kind") == "OPERATION_ATTEMPT"
     }
     tool_events = [event for event in events if event.get("kind") == "TOOL_CALL"]
     for index in range(len(tool_events) + 1):
@@ -1228,7 +1228,7 @@ def _project_trial(
             for event in events
             if (event.get("kind") == "TOOL_CALL" and event in tool_events[:index])
             or (
-                event.get("kind") == "CAPABILITY_ATTEMPT"
+                event.get("kind") == "OPERATION_ATTEMPT"
                 and str(event.get("request_digest")) in prior_request_digests
             )
         ]
@@ -1296,8 +1296,8 @@ def _project_trial(
             "tool_call_count": sum(
                 event.get("kind") == "TOOL_CALL" for event in events
             ),
-            "capability_attempt_count": sum(
-                event.get("kind") == "CAPABILITY_ATTEMPT" for event in events
+            "operation_attempt_count": sum(
+                event.get("kind") == "OPERATION_ATTEMPT" for event in events
             ),
             "successful_producer_checker_chain": _successful_producer_checker_chain(
                 events
@@ -1372,12 +1372,12 @@ def _tau_field_group(name: str) -> str:
         "tau:attempt_count",
     }:
         return "call_structure"
-    if name.startswith(("tau:capability:", "tau:domain:")) or name in {
-        "tau:unique_capability_count",
+    if name.startswith(("tau:operation:", "tau:domain:")) or name in {
+        "tau:unique_operation_count",
         "tau:unique_domain_count",
         "tau:checker_attempt_count",
     }:
-        return "capability_identity"
+        return "operation_identity"
     if name.startswith(
         ("tau:execution:", "tau:assurance:", "tau:evidence:")
     ) or name in {
@@ -1768,15 +1768,15 @@ def _successful_producer_checker_chain(events: Sequence[Mapping[str, object]]) -
     producer_positions = [
         index
         for index, event in enumerate(events)
-        if event.get("kind") == "CAPABILITY_ATTEMPT"
-        and not str(event.get("capability_id", "")).endswith(".verify")
+        if event.get("kind") == "OPERATION_ATTEMPT"
+        and not str(event.get("operation_id", "")).endswith(".verify")
         and event.get("execution_status") == "COMPLETED"
     ]
     checker_positions = [
         index
         for index, event in enumerate(events)
-        if event.get("kind") == "CAPABILITY_ATTEMPT"
-        and str(event.get("capability_id", "")).endswith(".verify")
+        if event.get("kind") == "OPERATION_ATTEMPT"
+        and str(event.get("operation_id", "")).endswith(".verify")
         and _checker_attempt_accepted(event)
     ]
     return any(
@@ -2214,7 +2214,7 @@ def _analyze_intervention(
         ],
         "retention": config["retention"],
         "limitations": [
-            "The selected tasks were previously observed in passive #1259 work; blocking controls task identity but this is not an unseen-task capability evaluation.",
+            "The selected tasks were previously observed in passive #1259 work; blocking controls task identity but this is not an unseen-task operation evaluation.",
             "The paired contrast identifies the bundled prompt, skill, and CLI intervention, not internalcot notes in isolation.",
             "Conditional b and b_star gains are held-out predictive associations; paired behavior effects are a separate estimand.",
             "Thirty-two non-deterministic weak-model trials provide limited uncertainty resolution.",

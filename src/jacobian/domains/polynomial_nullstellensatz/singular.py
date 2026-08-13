@@ -11,15 +11,6 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.nullstellensatz import (
     BoundedRationalPolynomial,
@@ -33,12 +24,21 @@ from jacobian.contracts.nullstellensatz import (
     NullstellensatzMultiplier,
     NullstellensatzResourceBudget,
 )
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationInputKind,
+    OperationRequest,
+    ProviderObservation,
+)
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.polynomial_nullstellensatz.core import MATERIALIZE_CAPABILITY_ID
+from jacobian.domains.polynomial_nullstellensatz.core import MATERIALIZE_OPERATION_ID
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
 from jacobian.installation.context import InstallationContext
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -55,14 +55,14 @@ from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 from jacobian.storage.models import StoredArtifact
 from jacobian.worker_environment import worker_environment
 
-PRODUCE_CAPABILITY_ID = "polynomial.nullstellensatz.infeasibility_certificate.compute"
+PRODUCE_OPERATION_ID = "polynomial.nullstellensatz.infeasibility_certificate.compute"
 DOMAIN_ID = "polynomial_nullstellensatz_singular"
 _INTEGER_OR_RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$")
 _STDERR_LIMIT = 64_000
 
 
-def _diagnostic(code: str, message: str) -> CapabilityDiagnostic:
-    return CapabilityDiagnostic(
+def _diagnostic(code: str, message: str) -> OperationDiagnostic:
+    return OperationDiagnostic(
         code=code,
         stage="nullstellensatz_certificate_production",
         message=message,
@@ -268,7 +268,7 @@ def _within_declared_budget(
 
 def _process_failure(
     completed: ProcessResult,
-) -> tuple[ExecutionStatus, CapabilityDiagnostic] | None:
+) -> tuple[ExecutionStatus, OperationDiagnostic] | None:
     if completed.termination is ProcessTermination.TIMED_OUT:
         return ExecutionStatus.TIMEOUT, _diagnostic(
             "SINGULAR_TIMEOUT",
@@ -300,7 +300,7 @@ def _process_failure(
 def _certificate_payload(
     charts: tuple[NullstellensatzChartCertificate, ...],
     system_artifact: StoredArtifact,
-    runtime: CapabilityProviderRuntime,
+    runtime: ProviderObservation,
     budget: NullstellensatzResourceBudget,
 ) -> dict[str, Any]:
     if not _within_declared_budget(charts, budget):
@@ -325,19 +325,19 @@ class SingularNullstellensatzCertificateAdapter:
         self,
         context: InstallationContext,
         dependency: InstalledDomainBundle,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
     ) -> None:
         self.context = context
         self.dependency = dependency
         self.provider_runtime = provider_runtime
         self.system_schema_uri = dependency.result_schema_uris[
-            MATERIALIZE_CAPABILITY_ID
+            MATERIALIZE_OPERATION_ID
         ]
         self.bundle_schema_uri = dependency.named_schema_uris[
             "nullstellensatz_certificate_bundle"
         ]
-        self._descriptor = CapabilityDescriptor(
-            capability_id=PRODUCE_CAPABILITY_ID,
+        self._descriptor = OperationDescriptor(
+            operation_id=PRODUCE_OPERATION_ID,
             version="1",
             title="Compute a bounded Nullstellensatz infeasibility certificate",
             description=(
@@ -355,23 +355,23 @@ class SingularNullstellensatzCertificateAdapter:
                 "certificate",
                 "bounded",
             ),
-            accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
+            accepted_input_kinds=(OperationInputKind.TYPED_ARTIFACT,),
             accepted_artifact_types=(self.system_schema_uri,),
             produced_artifact_types=(self.bundle_schema_uri,),
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def _failure(
         self,
         status: ExecutionStatus,
-        diagnostic: CapabilityDiagnostic,
+        diagnostic: OperationDiagnostic,
         started: float,
     ) -> OperationProjection:
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Failed(
                 status=status,
@@ -380,19 +380,19 @@ class SingularNullstellensatzCertificateAdapter:
             ),
         )
 
-    def prepare(self, request: CapabilityRequest) -> NullstellensatzCertificateRequest:
+    def prepare(self, request: OperationRequest) -> NullstellensatzCertificateRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 NullstellensatzCertificateRequest,
                 request.input,
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_NULLSTELLENSATZ_CERTIFICATE_REQUEST",
                     stage="artifact_resolution",
                     message="The request does not name the frozen producer-owned system artifact.",
-                    hint="Invoke the materialization capability and pass its system_uri.",
+                    hint="Invoke the materialization operation and pass its system_uri.",
                 )
             ) from exc
 
@@ -424,12 +424,12 @@ class SingularNullstellensatzCertificateAdapter:
             ArtifactNotFoundError,
             StorageError,
         ) as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_NULLSTELLENSATZ_CERTIFICATE_REQUEST",
                     stage="artifact_resolution",
                     message="The request does not name the frozen producer-owned system artifact.",
-                    hint="Invoke the materialization capability and pass its system_uri.",
+                    hint="Invoke the materialization operation and pass its system_uri.",
                 )
             ) from exc
 
@@ -508,7 +508,7 @@ class SingularNullstellensatzCertificateAdapter:
             producer_version=self.provider_runtime.version or "unknown",
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -524,7 +524,7 @@ class SingularNullstellensatzCertificateAdapter:
 def install_singular_producer(
     context: InstallationContext,
     dependency: InstalledDomainBundle,
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> InstalledDomainBundle:
     adapter = SingularNullstellensatzCertificateAdapter(
         context,
@@ -537,14 +537,14 @@ def install_singular_producer(
         input_schema_uris={
             NullstellensatzCertificateRequest: adapter.system_schema_uri
         },
-        result_schema_uris={PRODUCE_CAPABILITY_ID: adapter.bundle_schema_uri},
+        result_schema_uris={PRODUCE_OPERATION_ID: adapter.bundle_schema_uri},
         named_schema_uris={},
     )
 
 
 __all__ = [
     "DOMAIN_ID",
-    "PRODUCE_CAPABILITY_ID",
+    "PRODUCE_OPERATION_ID",
     "SingularNullstellensatzCertificateAdapter",
     "install_singular_producer",
 ]

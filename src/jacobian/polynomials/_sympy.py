@@ -1,4 +1,4 @@
-"""Lazy SymPy backend for polynomial-map capabilities."""
+"""Lazy SymPy backend for polynomial-map operations."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from jacobian.providers import LazyLoader
 
 
 class _SympyBackend(NamedTuple):
-    """Heavy SymPy implementation symbols loaded on first capability invocation."""
+    """Heavy SymPy implementation symbols loaded on first operation invocation."""
 
     QQ: Any
     Matrix: Any

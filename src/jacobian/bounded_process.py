@@ -193,7 +193,7 @@ def bounded_process_cancellation(
 
 
 def bounded_process_cancelled() -> bool:
-    """Report whether the current capability worker has lost its client."""
+    """Report whether the current operation worker has lost its client."""
 
     event = _CANCELLATION_EVENT.get()
     return event is not None and event.is_set()

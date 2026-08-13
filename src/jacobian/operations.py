@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 
@@ -18,7 +16,7 @@ from jacobian.contracts.results import ContractModel, ExecutionStatus
 class NonConclusion:
     """Expected refusal or interruption carrying no mathematical conclusion."""
 
-    diagnostic: CapabilityDiagnostic
+    diagnostic: OperationDiagnostic
     status: ExecutionStatus = ExecutionStatus.ERROR
     runtime_ms: int | None = None
 
@@ -32,7 +30,7 @@ class Failed:
     """Operational failure that carries no mathematical conclusion."""
 
     status: ExecutionStatus
-    diagnostic: CapabilityDiagnostic
+    diagnostic: OperationDiagnostic
     runtime_ms: int | None = None
 
     def __post_init__(self) -> None:
@@ -89,28 +87,6 @@ SUPPORTED = PreflightResult(PreflightStatus.SUPPORTED)
 
 
 @dataclass(frozen=True, slots=True)
-class OperationSpec[
-    RequestT: ContractModel,
-    ResultT: ContractModel,
-]:
-    """Semantic declaration for one deterministic mathematical operation."""
-
-    operation_id: str
-    version: str
-    request_type: type[RequestT]
-    result_type: type[ResultT]
-    execute: Callable[[RequestT], ResultT]
-    title: str
-    description: str
-    tags: tuple[str, ...] = ()
-    invalid_request: CapabilityDiagnostic | None = None
-    invocation_examples: tuple[CapabilityInvocationExample, ...] = ()
-    preflight: Callable[[RequestT], PreflightResult] | None = None
-    postcondition: Callable[[RequestT, ResultT], None] | None = None
-    effect: Effect = Effect.READ_ONLY
-
-
-@dataclass(frozen=True, slots=True)
 class OperationFailure:
     """Fail-closed mapping for expected mathematical-domain errors."""
 
@@ -119,8 +95,8 @@ class OperationFailure:
     hint: str
     exceptions: tuple[type[Exception], ...] = (TypeError, ValueError)
 
-    def diagnostic(self, error: Exception) -> CapabilityDiagnostic:
-        return CapabilityDiagnostic(
+    def diagnostic(self, error: Exception) -> OperationDiagnostic:
+        return OperationDiagnostic(
             code=self.code,
             stage=self.stage,
             message=str(error),
@@ -131,7 +107,7 @@ class OperationFailure:
 class OperationRefusalError(Exception):
     """Signal an expected domain refusal without returning terminal state."""
 
-    def __init__(self, diagnostic: CapabilityDiagnostic) -> None:
+    def __init__(self, diagnostic: OperationDiagnostic) -> None:
         super().__init__(diagnostic.message)
         self.diagnostic = diagnostic
 
@@ -142,7 +118,7 @@ class OperationAbortError(Exception):
     def __init__(
         self,
         status: ExecutionStatus,
-        diagnostic: CapabilityDiagnostic,
+        diagnostic: OperationDiagnostic,
     ) -> None:
         if status not in {
             ExecutionStatus.ERROR,
@@ -168,4 +144,4 @@ class DomainSemantics:
 class DomainDiagnostics:
     """Domain wording for request-boundary failures."""
 
-    invalid_request: CapabilityDiagnostic
+    invalid_request: OperationDiagnostic

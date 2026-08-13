@@ -1,9 +1,9 @@
 """Explicit bundle for bounded exact finite posets."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.posets.checkers import FINITE_POSET_EXACT_REPLAY_CHECKERS
-from jacobian.domains.posets.operations import FINITE_POSET_CAPABILITIES
+from jacobian.domains.posets.operations import FINITE_POSET_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import NETWORKX_VERSION, known_provider_runtime
 
@@ -44,9 +44,9 @@ def build_finite_poset_bundle() -> DomainBundle:
             ),
         ),
         backend_version=f"networkx-{NETWORKX_VERSION}",
-        capabilities=FINITE_POSET_CAPABILITIES,
+        operations=FINITE_POSET_OPERATIONS,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_FINITE_POSET_REQUEST",
                 stage="finite_poset_input_validation",
                 message="Input does not satisfy the bounded finite-poset contract.",

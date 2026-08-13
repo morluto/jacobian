@@ -82,8 +82,8 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             {
                 "kind": "discovery",
                 "matches": [
-                    {"capability_id": "graph.search.atlas"},
-                    {"capability_id": "graph.compute.properties"},
+                    {"operation_id": "graph.search.atlas"},
+                    {"operation_id": "graph.compute.properties"},
                 ],
             },
         ),
@@ -92,22 +92,22 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             {
                 "request": {
                     "op": "inspect",
-                    "capability_id": "graph.search.atlas",
+                    "operation_id": "graph.search.atlas",
                 }
             },
             {
-                "kind": "capability",
-                "capability": {"capability_id": "graph.search.atlas"},
+                "kind": "operation",
+                "operation": {"operation_id": "graph.search.atlas"},
             },
         ),
         _tool_event(
             "math.run",
             {
-                "capability_id": "graph.search.atlas",
+                "operation_id": "graph.search.atlas",
                 "payload": {"order": 7},
             },
             {
-                "capability_id": "graph.search.atlas",
+                "operation_id": "graph.search.atlas",
                 "execution": {"status": "COMPLETED"},
                 "output": {"status": "FOUND"},
                 "artifact_uris": [],
@@ -123,34 +123,34 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
 
     telemetry = parse_agent_transcript(transcript)
 
-    assert telemetry["capability_descriptions"] == [
+    assert telemetry["operation_descriptions"] == [
         {
             "kind": "discovery",
             "query": "find a graph counterexample",
             "domain": "graph",
-            "capability_id": None,
+            "operation_id": None,
             "match_ids": [
                 "graph.search.atlas",
                 "graph.compute.properties",
             ],
         },
         {
-            "kind": "capability",
+            "kind": "operation",
             "query": None,
             "domain": None,
-            "capability_id": "graph.search.atlas",
+            "operation_id": "graph.search.atlas",
             "match_ids": [],
         },
     ]
-    assert telemetry["capability_attempt_ids"] == ["graph.search.atlas"]
-    assert telemetry["capability_attempts"] == [
+    assert telemetry["operation_attempt_ids"] == ["graph.search.atlas"]
+    assert telemetry["operation_attempts"] == [
         {
-            "capability_id": "graph.search.atlas",
+            "operation_id": "graph.search.atlas",
             "input": {"order": 7},
             "successful": True,
         }
     ]
-    assert telemetry["capability_ids"] == ["graph.search.atlas"]
+    assert telemetry["operation_ids"] == ["graph.search.atlas"]
 
 
 def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> None:
@@ -167,9 +167,9 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
     }
     succeeded = _tool_event(
         "math.run",
-        {"capability_id": "lean.check", "payload": {"statement": "True"}},
+        {"operation_id": "lean.check", "payload": {"statement": "True"}},
         {
-            "capability_id": "lean.check",
+            "operation_id": "lean.check",
             "execution": {"status": "COMPLETED"},
             "output": {"conclusion": "UNKNOWN"},
         },
@@ -177,11 +177,11 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
     domain_failure = _tool_event(
         "math.run",
         {
-            "capability_id": "lean.retrieve.premises",
+            "operation_id": "lean.retrieve.premises",
             "payload": {"statement": "True", "proof_prefix": ["by"]},
         },
         {
-            "capability_id": "lean.retrieve.premises",
+            "operation_id": "lean.retrieve.premises",
             "execution": {"status": "ERROR"},
             "output": {
                 "error": {
@@ -208,9 +208,9 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
 
     telemetry = parse_agent_transcript(transcript)
 
-    assert telemetry["capability_attempts"] == [
+    assert telemetry["operation_attempts"] == [
         {
-            "capability_id": None,
+            "operation_id": None,
             "input": {"malformed": True},
             "successful": False,
             "terminal_status": "failed",
@@ -228,7 +228,7 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
             "request_validation_failure": False,
         },
         {
-            "capability_id": "lean.retrieve.premises",
+            "operation_id": "lean.retrieve.premises",
             "input": {"statement": "True", "proof_prefix": ["by"]},
             "successful": False,
             "terminal_status": "ERROR",
@@ -263,23 +263,23 @@ def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> Non
             ],
         },
         {
-            "capability_id": "lean.check",
+            "operation_id": "lean.check",
             "input": {"statement": "True"},
             "successful": True,
         },
     ]
-    assert telemetry["capability_attempt_ids"] == [
+    assert telemetry["operation_attempt_ids"] == [
         "lean.retrieve.premises",
         "lean.check",
     ]
-    assert telemetry["capability_ids"] == ["lean.check"]
+    assert telemetry["operation_ids"] == ["lean.check"]
 
 
 def test_agent_telemetry_records_empty_payload_and_exact_repeated_errors(
     tmp_path: Path,
 ) -> None:
     invalid = {
-        "capability_id": "lean.check",
+        "operation_id": "lean.check",
         "execution": {"status": "ERROR"},
         "output": {
             "error": {
@@ -291,19 +291,19 @@ def test_agent_telemetry_records_empty_payload_and_exact_repeated_errors(
     }
     events = [
         _tool_event(
-            "math.run", {"capability_id": "lean.check", "payload": {}}, invalid
+            "math.run", {"operation_id": "lean.check", "payload": {}}, invalid
         ),
         _tool_event(
-            "math.run", {"capability_id": "lean.check", "payload": {}}, invalid
+            "math.run", {"operation_id": "lean.check", "payload": {}}, invalid
         ),
         _tool_event(
             "math.run",
             {
-                "capability_id": "lean.retrieve.premises",
+                "operation_id": "lean.retrieve.premises",
                 "payload": {"statement": "True", "proof_prefix": ["by"]},
             },
             {
-                "capability_id": "lean.retrieve.premises",
+                "operation_id": "lean.retrieve.premises",
                 "execution": {"status": "ERROR"},
                 "output": {
                     "error": {
@@ -332,9 +332,9 @@ def test_agent_telemetry_does_not_count_successful_empty_payload_as_probe(
 ) -> None:
     event = _tool_event(
         "math.run",
-        {"capability_id": "example.all_defaults", "payload": {}},
+        {"operation_id": "example.all_defaults", "payload": {}},
         {
-            "capability_id": "example.all_defaults",
+            "operation_id": "example.all_defaults",
             "execution": {"status": "COMPLETED"},
             "output": {"value": 1},
         },
@@ -359,9 +359,9 @@ def test_agent_telemetry_distinguishes_terminal_failure_identity(
         events.append(
             _tool_event(
                 "math.run",
-                {"capability_id": "lean.check", "payload": {"statement": "True"}},
+                {"operation_id": "lean.check", "payload": {"statement": "True"}},
                 {
-                    "capability_id": "lean.check",
+                    "operation_id": "lean.check",
                     "execution": {"status": status},
                     "output": {"error": {"code": status, "message": message}},
                 },
@@ -386,22 +386,22 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
         _tool_event(
             "math.find",
             {"request": {"op": "search", "query": "SAT materialization"}},
-            {"matches": [{"capability_id": "sat.cnf.materialize"}]},
+            {"matches": [{"operation_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
             "math.find",
             {"request": {"op": "search", "query": "SAT materialization"}},
-            {"matches": [{"capability_id": "sat.cnf.materialize"}]},
+            {"matches": [{"operation_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
             "math.find",
             {
                 "request": {
                     "op": "inspect",
-                    "capability_id": "sat.cnf.materialize",
+                    "operation_id": "sat.cnf.materialize",
                 }
             },
-            {"capability": {"capability_id": "sat.cnf.materialize"}},
+            {"operation": {"operation_id": "sat.cnf.materialize"}},
         ),
     ]
     transcript = tmp_path / "transcript.jsonl"
@@ -419,8 +419,8 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
     assert telemetry["repeated_mcp_call_count"] == 1
     assert telemetry["repeated_mcp_calls"][0]["tool"] == "math.find"
     assert telemetry["repeated_mcp_calls"][0]["count"] == 2
-    assert telemetry["capability_describe_index_calls"] == 2
-    assert telemetry["capability_describe_exact_calls"] == 1
+    assert telemetry["operation_describe_index_calls"] == 2
+    assert telemetry["operation_describe_exact_calls"] == 1
     assert telemetry["mcp_model_visible_bytes"] > 0
     assert telemetry["mcp_logical_payload_observed_calls"] == 3
 
@@ -470,7 +470,7 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
     tmp_path: Path,
 ) -> None:
     canonical = {
-        "capability_id": "graph.search.atlas",
+        "operation_id": "graph.search.atlas",
         "execution": {"status": "COMPLETED"},
         "output": {"status": "FOUND", "graphs": [{"edges": [[0, 1]]}]},
         "artifact_uris": ["artifact://sha256/" + ("a" * 64)],
@@ -482,7 +482,7 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
             "type": "mcp_tool_call",
             "tool": "math.run",
             "arguments": {
-                "capability_id": "graph.search.atlas",
+                "operation_id": "graph.search.atlas",
                 "payload": {"order": 2},
             },
             "status": "completed",
@@ -505,7 +505,7 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
     )
     assert telemetry["mcp_logical_payload_observed_calls"] == 1
     assert telemetry["mcp_wire_bytes"] > telemetry["mcp_model_visible_bytes"]
-    assert telemetry["capability_invocations"][0]["output"] == canonical["output"]
+    assert telemetry["operation_invocations"][0]["output"] == canonical["output"]
 
 
 def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
@@ -547,7 +547,7 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
             "item": {
                 "type": "mcp_tool_call",
                 "tool": "math.run",
-                "arguments": {"capability_id": "graph.search.atlas"},
+                "arguments": {"operation_id": "graph.search.atlas"},
                 "status": "completed",
                 "result": {
                     "isError": False,

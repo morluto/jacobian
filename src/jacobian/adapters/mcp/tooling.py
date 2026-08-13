@@ -1,4 +1,4 @@
-"""MCP tool invocation helpers: annotations, logging, and capability attempts."""
+"""MCP tool invocation helpers: annotations, logging, and operation attempts."""
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ from typing import Any
 from mcp_types import ToolAnnotations
 
 from jacobian.adapters.mcp.projections import (
-    _invoke_capability_with_cancellation,
+    _invoke_operation_with_cancellation,
 )
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-    CapabilityResult,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -358,42 +358,42 @@ def _response_size(value: Any) -> int:
         return -1
 
 
-def _log_capability_attempt(
+def _log_operation_attempt(
     *,
-    capability_id: str,
+    operation_id: str,
     started: float,
     argument_digest: str,
     request_digest: str,
     trace_digest: str,
     trace_source: str,
-    result: CapabilityResult | None = None,
+    result: OperationResult | None = None,
     execution_status: str | None = None,
     diagnostic_codes: tuple[str, ...] = (),
 ) -> None:
     if result is not None:
         execution_status = result.execution.status.value
         diagnostic_codes = tuple(item.code for item in result.diagnostics)
-        capability_version = result.capability_version
+        operation_version = result.operation_version
         verification_record_uri_present = result.verification_record_uri is not None
         operation_runtime_ms = result.execution.runtime_ms
         response_bytes = _response_size(result)
     else:
-        capability_version = "unknown"
+        operation_version = "unknown"
         verification_record_uri_present = False
         operation_runtime_ms = None
         response_bytes = 0
     codes = ",".join(diagnostic_codes[:8]) or "none"
     _LOGGER.info(
-        "MCP capability attempt request_digest=%s trace_digest=%s trace_source=%s "
-        "capability_id=%s capability_version=%s "
+        "MCP operation attempt request_digest=%s trace_digest=%s trace_source=%s "
+        "operation_id=%s operation_version=%s "
         "execution_status=%s verification_record_uri_present=%s diagnostic_codes=%s "
         "attempt_duration_ms=%.3f operation_runtime_ms=%s "
         "response_bytes=%d argument_digest=%s",
         request_digest,
         trace_digest,
         trace_source,
-        capability_id,
-        capability_version,
+        operation_id,
+        operation_version,
         execution_status or "ERROR",
         verification_record_uri_present,
         codes,
@@ -404,18 +404,18 @@ def _log_capability_attempt(
     )
 
 
-async def _invoke_capability_attempt(
+async def _invoke_operation_attempt(
     runtime: Any,
     *,
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, Any],
     inputs: dict[str, str] | None = None,
     ctx: Any | None,
-) -> CapabilityResult:
+) -> OperationResult:
     started = time.monotonic()
     argument_digest = _argument_digest(
         {
-            "capability_id": capability_id,
+            "operation_id": operation_id,
             "payload": payload,
             "inputs": inputs or {},
         }
@@ -423,14 +423,14 @@ async def _invoke_capability_attempt(
     trace_digest, trace_source = _request_trace_digest(ctx)
     request_digest = _request_id_digest(ctx)
     cancellation_event = threading.Event()
-    request = CapabilityRequest(
-        capability_id=capability_id,
+    request = OperationRequest(
+        operation_id=operation_id,
         input=payload,
         inputs=inputs or {},
     )
     try:
         result = await _run_blocking(
-            _invoke_capability_with_cancellation,
+            _invoke_operation_with_cancellation,
             runtime,
             request,
             cancellation_event,
@@ -438,9 +438,9 @@ async def _invoke_capability_attempt(
         )
     except asyncio.CancelledError as exc:
         drained = getattr(exc, "drained_result", None)
-        if isinstance(drained, CapabilityResult):
-            _log_capability_attempt(
-                capability_id=capability_id,
+        if isinstance(drained, OperationResult):
+            _log_operation_attempt(
+                operation_id=operation_id,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -449,8 +449,8 @@ async def _invoke_capability_attempt(
                 result=drained,
             )
         else:
-            _log_capability_attempt(
-                capability_id=capability_id,
+            _log_operation_attempt(
+                operation_id=operation_id,
                 started=started,
                 argument_digest=argument_digest,
                 request_digest=request_digest,
@@ -461,8 +461,8 @@ async def _invoke_capability_attempt(
             )
         raise
     except Exception:
-        _log_capability_attempt(
-            capability_id=capability_id,
+        _log_operation_attempt(
+            operation_id=operation_id,
             started=started,
             argument_digest=argument_digest,
             request_digest=request_digest,
@@ -472,8 +472,8 @@ async def _invoke_capability_attempt(
             diagnostic_codes=("INVOCATION_EXCEPTION",),
         )
         raise
-    _log_capability_attempt(
-        capability_id=capability_id,
+    _log_operation_attempt(
+        operation_id=operation_id,
         started=started,
         argument_digest=argument_digest,
         request_digest=request_digest,

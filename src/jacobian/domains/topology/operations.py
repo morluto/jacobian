@@ -42,7 +42,7 @@ from jacobian.domains._certified_snf import (
 from jacobian.domains._examples import example
 from jacobian.math import prime_field_linear_algebra as prime_field
 from jacobian.operation_bindings import InstalledOperation, inline_operation
-from jacobian.operations import OperationSpec
+from jacobian.operation_declarations import OperationDeclaration
 
 
 def _canonical_complex(
@@ -532,9 +532,9 @@ type TopologyOperation = (
 )
 
 
-TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
+TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="topology.simplicial_complex.canonicalize",
             title="Canonicalize a finite simplicial complex",
             description=(
@@ -553,7 +553,7 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
                 "f-vector",
                 "exact",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "triangle_boundary",
                     "Canonicalize the three-edge simplicial model of a circle.",
@@ -564,7 +564,7 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="topology.simplicial_complex.chain_complex.compute",
             title="Compute an oriented simplicial chain complex",
             description=(
@@ -581,7 +581,7 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
                 "boundary-matrix",
                 "exact",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "circle_integer_chain_complex",
                     "Construct the oriented integer boundary matrices of a circle.",
@@ -596,7 +596,7 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="topology.simplicial_homology.compute",
             title="Compute finite-field simplicial homology",
             description=(
@@ -614,7 +614,7 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
                 "prime-field",
                 "exact",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "circle_homology_mod_two",
                     "Compute H_0 and H_1 over F_2 for a triangle boundary.",
@@ -629,7 +629,7 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="topology.simplicial_homology.integral.compute",
             title="Compute transformation-certified integral simplicial homology",
             description=(
@@ -651,7 +651,7 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
                 "certificate",
                 "exact",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "integral_circle_homology",
                     "Compute H_0 and H_1 over the integers for a triangle boundary.",
@@ -694,4 +694,4 @@ TOPOLOGY_CAPABILITIES: tuple[TopologyOperation, ...] = (
     ),
 )
 
-__all__ = ["TOPOLOGY_CAPABILITIES"]
+__all__ = ["TOPOLOGY_OPERATIONS"]

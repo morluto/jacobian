@@ -1,4 +1,4 @@
-# SAT and SMT capability references
+# SAT and SMT operation references
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

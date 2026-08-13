@@ -29,7 +29,7 @@ from jacobian.adapters.mcp.lifecycle import (
 )
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
-from jacobian.capability_service import CapabilityPolicy
+from jacobian.operation_service import OperationPolicy
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
@@ -137,7 +137,7 @@ class TenantRuntimeRouter:
         checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
         allow_anonymous: bool = False,
         anonymous_tenant_id: str = "anonymous",
-        capability_policy: CapabilityPolicy | None = None,
+        operation_policy: OperationPolicy | None = None,
         max_tenant_runtimes: int = DEFAULT_MAX_TENANT_RUNTIMES,
         idle_timeout_seconds: float = DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
         clock: Callable[[], float] = time.monotonic,
@@ -156,7 +156,7 @@ class TenantRuntimeRouter:
         self.checker_authority = checker_authority
         self.allow_anonymous = allow_anonymous
         self.anonymous_tenant_id = anonymous_tenant_id
-        self.capability_policy = capability_policy
+        self.operation_policy = operation_policy
         self.max_tenant_runtimes = max_tenant_runtimes
         self.idle_timeout_seconds = idle_timeout_seconds
         self._clock = clock
@@ -204,7 +204,7 @@ class TenantRuntimeRouter:
             runtime = self._runtime_factory(
                 self.root / "tenants" / tenant_key,
                 checker_authority=self.checker_authority,
-                capability_policy=self.capability_policy,
+                operation_policy=self.operation_policy,
             )
         except BaseException:
             with self._condition:
@@ -457,7 +457,7 @@ def create_remote_server(
     anonymous_tenant_id: str = "anonymous",
     token_verifier: Any | None = None,
     auth: Any | None = None,
-    capability_policy: CapabilityPolicy | None = None,
+    operation_policy: OperationPolicy | None = None,
     max_tenant_runtimes: int | None = None,
     tenant_idle_timeout_seconds: float | None = None,
     runtime_factory: Callable[..., JacobianRuntime] | None = None,
@@ -471,7 +471,7 @@ def create_remote_server(
         checker_authority=selected_checker_authority(checker_authority),
         allow_anonymous=allow_anonymous,
         anonymous_tenant_id=anonymous_tenant_id,
-        capability_policy=capability_policy,
+        operation_policy=operation_policy,
         max_tenant_runtimes=(
             DEFAULT_MAX_TENANT_RUNTIMES
             if max_tenant_runtimes is None

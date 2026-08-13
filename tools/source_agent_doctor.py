@@ -20,13 +20,13 @@ from benchmarks.tooling.command_runner import (  # noqa: E402
     ToolCommandStatus,
     run_operator_command,
 )
+from jacobian.contracts.capabilities import (  # noqa: E402
+    OperationCatalog,
+    OperationProviderAvailability,
+)
 
 import jacobian  # noqa: E402
 from jacobian.canonical import canonicalize_json  # noqa: E402
-from jacobian.contracts.capabilities import (  # noqa: E402
-    CapabilityCatalog,
-    CapabilityProviderAvailability,
-)
 from jacobian.persistence.migrations import (  # noqa: E402
     CURRENT_STATE_FORMAT_REVISION,
     STATE_MIGRATIONS,
@@ -47,7 +47,7 @@ from tools.development_profiles import PROFILE_NAMES, PROFILES  # noqa: E402
 _PROFILE_PROVIDERS = {name: selected.providers for name, selected in PROFILES.items()}
 
 
-def _catalog_digest(catalog: CapabilityCatalog) -> str:
+def _catalog_digest(catalog: OperationCatalog) -> str:
     payload = {
         "catalog_version": catalog.catalog_version,
         "capabilities": [
@@ -226,7 +226,7 @@ def inspect_installation(
         provider
         for provider in _PROFILE_PROVIDERS[profile]
         if providers.get(provider, {}).get("availability")
-        != CapabilityProviderAvailability.AVAILABLE.value
+        != OperationProviderAvailability.AVAILABLE.value
     ]
     effective_provider_path = os.environ.get("PATH", "")
     effective_project_environment = os.environ.get("UV_PROJECT_ENVIRONMENT", "")

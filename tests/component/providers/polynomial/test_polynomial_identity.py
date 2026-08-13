@@ -1,4 +1,4 @@
-"""Rational-function and polynomial identity capability tests."""
+"""Rational-function and polynomial identity operation tests."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from tests.component.providers.polynomial.polynomial_capabilities_support import
     rational_function_identity_input as _rational_function_identity_input,
 )
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import Conclusion, InputStatus
 
 
@@ -17,9 +17,9 @@ def test_rational_function_identity_cross_multiplies_exactly(
     authorized_polynomial_services,
 ) -> None:
     runtime = authorized_polynomial_services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.rational_function.identity.verify",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.rational_function.identity.verify",
             input=_rational_function_identity_input(),
         )
     )
@@ -42,9 +42,9 @@ def test_rational_function_identity_cross_multiplies_exactly(
 def test_rational_function_identity_reports_exact_difference(
     authorized_polynomial_services,
 ) -> None:
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.rational_function.identity.verify",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.rational_function.identity.verify",
             input=_rational_function_identity_input(equal=False),
         )
     )
@@ -59,9 +59,9 @@ def test_rational_function_identity_rejects_zero_denominator(
 ) -> None:
     request = _rational_function_identity_input()
     request["left"]["denominator"] = {"terms": []}
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.rational_function.identity.verify",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.rational_function.identity.verify",
             input=request,
         )
     )
@@ -77,9 +77,9 @@ def test_rational_function_identity_preserves_checker_rejection_as_unknown(
     checker_id = runtime.polynomial.rational_function_identity_checker_id
     assert checker_id is not None
     runtime.core.checkers.revoke(checker_id, reason="exercise fail-closed projection")
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.rational_function.identity.verify",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.rational_function.identity.verify",
             input=_rational_function_identity_input(),
         )
     )
@@ -94,15 +94,15 @@ def test_polynomial_identity_descriptor_example_is_directly_invocable(
 ) -> None:
     runtime = authorized_polynomial_services
     descriptors = {
-        descriptor.capability_id: descriptor
-        for descriptor in runtime.core.capabilities.catalog().capabilities
+        descriptor.operation_id: descriptor
+        for descriptor in runtime.core.operations.catalog().operations
     }
     descriptor = descriptors["polynomial.identity.verify"]
-    example = descriptor.invocation_examples[0]
+    example = descriptor.examples[0]
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=descriptor.capability_id,
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id=descriptor.operation_id,
             input=example.input,
         )
     )
@@ -114,9 +114,9 @@ def test_polynomial_identity_verifies_equal_coefficients(
     authorized_polynomial_services,
 ) -> None:
     runtime = authorized_polynomial_services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.identity.verify",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.identity.verify",
             input=_identity_input(),
         )
     )
@@ -162,9 +162,9 @@ def test_polynomial_identity_verifies_a_difference(
     authorized_polynomial_services,
 ) -> None:
     runtime = authorized_polynomial_services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.identity.verify",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.identity.verify",
             input=_identity_input(right_coefficient=3),
         )
     )
@@ -187,9 +187,9 @@ def test_polynomial_identity_canonicalizes_duplicate_terms(
     authorized_polynomial_services,
 ) -> None:
     runtime = authorized_polynomial_services
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.identity.verify",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.identity.verify",
             input={
                 "variables": ["x"],
                 "left": {
@@ -220,9 +220,9 @@ def test_polynomial_identity_preserves_checker_rejection_as_unknown(
     assert checker_id is not None
     runtime.core.checkers.revoke(checker_id, reason="exercise fail-closed projection")
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.identity.verify",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.identity.verify",
             input=_identity_input(),
         )
     )

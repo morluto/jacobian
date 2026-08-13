@@ -21,7 +21,7 @@ math.find   search or inspect an installed operation
 math.run    run one installed operation and return a value or checker verdict
 ```
 
-The full installed inventory is available at `capability://catalog`. Adding a
+The full installed inventory is available at `operation://catalog`. Adding a
 mathematical operation does not add an MCP tool.
 
 An ordinary operation has one mathematical outcome: compute a determinant,

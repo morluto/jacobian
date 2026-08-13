@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -38,9 +38,9 @@ def test_public_small_graph_reliability_reaches_checker_bound_results(
     probability_services,
 ) -> None:
     for case in _suite():
-        computed = probability_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=(
+        computed = probability_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=(
                     "probability.graph_reliability.connection_probability.compute"
                 ),
                 input=case["request"],
@@ -53,9 +53,9 @@ def test_public_small_graph_reliability_reaches_checker_bound_results(
         )
         assert computed.output["result"]["visited_states"] == case["expected_states"]
 
-        verified = probability_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=(
+        verified = probability_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=(
                     "probability.graph_reliability.connection_probability.verify"
                 ),
                 input={

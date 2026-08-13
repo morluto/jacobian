@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.finite_sets import build_finite_set_bundle
 
@@ -20,9 +20,9 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 def test_symmetric_difference_is_canonicalized(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="finite_set.compute.symmetric_difference",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="finite_set.compute.symmetric_difference",
             input={
                 "left": {"elements": ["3", "1"]},
                 "right": {"elements": ["2", "3"]},

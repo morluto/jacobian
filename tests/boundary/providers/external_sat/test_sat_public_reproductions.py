@@ -10,8 +10,8 @@ from tests.boundary.providers.external_sat.external_sat_support import (
 )
 from tests.support.provider_external_sat import external_sat_toolchain_available
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -72,9 +72,9 @@ def test_sat_public_reproductions_reach_checker_bound_results(
                 verify_id = "sat.unsat_proof.verify"
                 evidence_field = "proof_uri"
 
-            found = runtime.core.capabilities.invoke(
-                CapabilityRequest(
-                    capability_id=find_id,
+            found = runtime.core.operations.invoke(
+                OperationRequest(
+                    operation_id=find_id,
                     input={
                         "cnf_uri": cnf.artifact_uri,
                         "resource_budget": {"wall_seconds": 5},
@@ -88,9 +88,9 @@ def test_sat_public_reproductions_reach_checker_bound_results(
             if case["expected_status"] == "SATISFIABLE":
                 assert found.output["assignment"] is not None
 
-            verified = runtime.core.capabilities.invoke(
-                CapabilityRequest(
-                    capability_id=verify_id,
+            verified = runtime.core.operations.invoke(
+                OperationRequest(
+                    operation_id=verify_id,
                     input={evidence_field: evidence_uri},
                 )
             )

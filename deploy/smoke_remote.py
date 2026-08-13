@@ -54,15 +54,15 @@ def _parser() -> argparse.ArgumentParser:
         help="required full Git revision from deployment://identity",
     )
     parser.add_argument(
-        "--require-capability",
+        "--require-operation",
         action="append",
         default=[],
-        help="capability ID that must be installed; repeatable",
+        help="operation ID that must be installed; repeatable",
     )
     parser.add_argument(
         "--query",
         default="exact finite graph invariant",
-        help="read-only capability discovery query",
+        help="read-only operation discovery query",
     )
     parser.add_argument("--timeout-seconds", type=float, default=120)
     return parser
@@ -175,10 +175,10 @@ async def inspect(
         listed = await client.list_tools()
         tool_names = _validate_tool_surface(listed, failures)
 
-        catalog_result = await client.read_resource("capability://catalog")
+        catalog_result = await client.read_resource("operation://catalog")
         catalog_content = catalog_result.contents[0]
         if not isinstance(catalog_content, TextResourceContents):
-            raise RuntimeError("deployed capability catalog is not text")
+            raise RuntimeError("deployed operation catalog is not text")
         catalog_text = catalog_content.text
         catalog = json.loads(catalog_text)
         catalog_digest = (
@@ -192,10 +192,10 @@ async def inspect(
                 )
             ).hexdigest()
         )
-        capability_ids = {
-            capability["capability_id"] for capability in catalog["capabilities"]
+        operation_ids = {
+            operation["operation_id"] for operation in catalog["capabilities"]
         }
-        missing = sorted(required_capabilities - capability_ids)
+        missing = sorted(required_capabilities - operation_ids)
         if missing:
             failures.append(
                 f"deployed catalog is missing required capabilities: {missing!r}"
@@ -203,7 +203,7 @@ async def inspect(
         policy_profile = catalog["policy_profile"]
         if policy_profile != expected_policy_profile:
             failures.append(
-                "deployed capability policy mismatch: "
+                "deployed operation policy mismatch: "
                 f"expected {expected_policy_profile!r}, got {policy_profile!r}"
             )
 
@@ -212,13 +212,13 @@ async def inspect(
             {"request": {"op": "search", "query": query, "limit": 5}},
         )
         if discovery_result.is_error:
-            failures.append("deployed capability discovery returned an MCP error")
+            failures.append("deployed operation discovery returned an MCP error")
         discovery_content = discovery_result.content[0]
         if not isinstance(discovery_content, TextContent):
-            raise RuntimeError("deployed capability discovery is not text")
+            raise RuntimeError("deployed operation discovery is not text")
         discovery_text = discovery_content.text
         if not isinstance(discovery_result.structured_content, dict):
-            raise RuntimeError("deployed capability discovery is not structured")
+            raise RuntimeError("deployed operation discovery is not structured")
         discovery = discovery_result.structured_content
         discovery_bytes = len(
             json.dumps(discovery, ensure_ascii=False, indent=2).encode("utf-8")
@@ -239,7 +239,7 @@ async def inspect(
             "tool_names": sorted(tool_names),
             "catalog": {
                 "catalog_version": catalog["catalog_version"],
-                "capabilities": len(capability_ids),
+                "capabilities": len(operation_ids),
                 "policy_profile": policy_profile,
                 "catalog_digest": catalog_digest,
                 "policy_digest": catalog["policy_digest"],
@@ -248,7 +248,7 @@ async def inspect(
             "discovery": {
                 "bytes": discovery_bytes,
                 "model_visible_bytes": discovery_model_visible_bytes,
-                "matches": [match["capability_id"] for match in discovery["matches"]],
+                "matches": [match["operation_id"] for match in discovery["matches"]],
             },
         }
     if failures:
@@ -265,7 +265,7 @@ async def _main() -> None:
         expected_version=args.expect_version,
         expected_revision=args.expect_revision,
         expected_policy_profile=args.expect_policy_profile,
-        required_capabilities=set(args.require_capability),
+        required_capabilities=set(args.require_operation),
         query=args.query,
         timeout_seconds=args.timeout_seconds,
     )

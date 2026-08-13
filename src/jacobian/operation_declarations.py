@@ -1,0 +1,310 @@
+"""Pure declarations for explicitly built-in mathematical operations.
+
+Importing this module or a domain bundle must not inspect providers, open
+state, register schemas, or construct runtime services.  A declaration names
+what execution requires; operator lifecycle code measures and binds those
+requirements later.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
+
+from jacobian.contracts.base import ContractModel
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    OperationExample,
+)
+from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_ports import InputPort, OutputPort, validate_ports
+
+
+class Effect(StrEnum):
+    """Semantic effect of execution, independent of result publication."""
+
+    READ_ONLY = "READ_ONLY"
+    STATEFUL = "STATEFUL"
+
+
+class PreflightStatus(StrEnum):
+    """Bounded admission result evaluated before mathematical execution."""
+
+    SUPPORTED = "SUPPORTED"
+    UNSUPPORTED = "UNSUPPORTED"
+    PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+    RESOURCE_LIMIT_EXCEEDED = "RESOURCE_LIMIT_EXCEEDED"
+
+
+@dataclass(frozen=True, slots=True)
+class PreflightResult:
+    """Small typed preflight decision with an optional stable reason."""
+
+    status: PreflightStatus
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status is PreflightStatus.SUPPORTED and self.reason is not None:
+            raise ValueError("supported preflight cannot carry a rejection reason")
+        if self.status is not PreflightStatus.SUPPORTED and not (
+            self.reason and self.reason.strip()
+        ):
+            raise ValueError("rejected preflight requires a reason")
+
+
+SUPPORTED = PreflightResult(PreflightStatus.SUPPORTED)
+
+
+@dataclass(frozen=True, slots=True)
+class OperationFailure:
+    """Fail-closed mapping for expected mathematical-domain errors."""
+
+    code: str
+    stage: str
+    hint: str
+    exceptions: tuple[type[Exception], ...] = (TypeError, ValueError)
+
+    def diagnostic(self, error: Exception) -> OperationDiagnostic:
+        return OperationDiagnostic(
+            code=self.code,
+            stage=self.stage,
+            message=str(error),
+            hint=self.hint,
+        )
+
+
+class OperationRefusalError(Exception):
+    """Signal an expected domain refusal without returning terminal state."""
+
+    def __init__(self, diagnostic: OperationDiagnostic) -> None:
+        super().__init__(diagnostic.message)
+        self.diagnostic = diagnostic
+
+
+class OperationAbortError(Exception):
+    """Signal an operational interruption without returning terminal state."""
+
+    def __init__(
+        self,
+        status: ExecutionStatus,
+        diagnostic: OperationDiagnostic,
+    ) -> None:
+        if status not in {
+            ExecutionStatus.ERROR,
+            ExecutionStatus.TIMEOUT,
+            ExecutionStatus.CANCELLED,
+        }:
+            raise ValueError("aborted operation must use an operational failure status")
+        super().__init__(diagnostic.message)
+        self.status = status
+        self.diagnostic = diagnostic
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedWorker:
+    """A bounded worker selected by an immutable built-in locator."""
+
+    locator: str
+
+    def __post_init__(self) -> None:
+        if not self.locator.strip():
+            raise ValueError("worker locator must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedChecker:
+    """An operation whose checker identity is bound by operator state."""
+
+    checker_id: str
+
+    def __post_init__(self) -> None:
+        if not self.checker_id.strip():
+            raise ValueError("checker ID must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
+class InlinePublication:
+    """Publish one bounded mathematical value inline."""
+
+    maximum_bytes: int = 10 * 1024 * 1024
+
+    def __post_init__(self) -> None:
+        if self.maximum_bytes < 1:
+            raise ValueError("inline publication byte limit must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class DurablePublication[ResultT: ContractModel, PreviewT: ContractModel]:
+    """Publish a durable result with an optional typed bounded preview."""
+
+    resource_reason: str
+    preview_type: type[PreviewT] | None = None
+    preview: Callable[[ResultT], PreviewT] | None = None
+    preview_complete: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.resource_reason.strip():
+            raise ValueError("durable publication requires an explicit reason")
+        if self.preview_complete and self.preview is None:
+            raise ValueError("a complete durable preview requires a preview")
+
+
+type PublicationPolicy[ResultT: ContractModel] = (
+    InlinePublication | DurablePublication[ResultT, ContractModel]
+)
+
+
+@dataclass(frozen=True, slots=True)
+class OperationDeclaration[RequestT: ContractModel, ResultT: ContractModel]:
+    """Immutable declaration for one built-in mathematical operation."""
+
+    operation_id: str
+    version: str
+    title: str
+    description: str
+    request_type: type[RequestT]
+    result_type: type[ResultT]
+    execute: Callable[[RequestT], ResultT]
+    tags: tuple[str, ...] = ()
+    publication: PublicationPolicy[ResultT] = InlinePublication()
+    input_ports: tuple[InputPort[Any], ...] = ()
+    output_ports: tuple[OutputPort[Any], ...] = ()
+    examples: tuple[OperationExample, ...] = ()
+    invalid_request: OperationDiagnostic | None = None
+    preflight: Callable[[RequestT], PreflightResult] | None = None
+    postcondition: Callable[[RequestT, ResultT], None] | None = None
+    effect: Effect = Effect.READ_ONLY
+
+    def __post_init__(self) -> None:
+        if not self.operation_id.strip() or not self.version.strip():
+            raise ValueError("operation declarations require an ID and version")
+        if not self.title.strip() or not self.description.strip():
+            raise ValueError("operation declarations require title and description")
+        if len(set(self.tags)) != len(self.tags):
+            raise ValueError("operation tags must be unique")
+        if any(not tag.strip() for tag in self.tags):
+            raise ValueError("operation tags must not be empty")
+        if len({example.name for example in self.examples}) != len(self.examples):
+            raise ValueError("operation example names must be unique")
+        if isinstance(self.publication, DurablePublication) and self.output_ports:
+            raise ValueError(
+                "durable operations cannot publish request-local output references"
+            )
+        validate_ports(
+            self.request_type,
+            self.result_type,
+            self.input_ports,
+            self.output_ports,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InlineOperationFactory:
+    """Declare inline operations with one provider and domain error policy."""
+
+    failure: OperationFailure
+
+    def __call__[
+        RequestT: ContractModel,
+        ResultT: ContractModel,
+    ](
+        self,
+        operation_id: str,
+        title: str,
+        description: str,
+        request_type: type[RequestT],
+        result_type: type[ResultT],
+        operation: Callable[[RequestT], ResultT],
+        *tags: str,
+        examples: tuple[OperationExample, ...] = (),
+        version: str = "2",
+    ) -> OperationDeclaration[RequestT, ResultT]:
+        def execute(request: RequestT) -> ResultT:
+            try:
+                return operation(request)
+            except self.failure.exceptions as exc:
+                raise OperationRefusalError(self.failure.diagnostic(exc)) from exc
+
+        return OperationDeclaration(
+            operation_id=operation_id,
+            version=version,
+            title=title,
+            description=description,
+            tags=tags,
+            request_type=request_type,
+            result_type=result_type,
+            execute=execute,
+            publication=InlinePublication(),
+            examples=examples,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DurableOperationFactory:
+    """Declare durable operations with one provider and domain error policy."""
+
+    failure: OperationFailure
+
+    def __call__[
+        RequestT: ContractModel,
+        ResultT: ContractModel,
+    ](
+        self,
+        operation_id: str,
+        title: str,
+        description: str,
+        request_type: type[RequestT],
+        result_type: type[ResultT],
+        operation: Callable[[RequestT], ResultT],
+        *tags: str,
+        resource_reason: str,
+        examples: tuple[OperationExample, ...] = (),
+        preview: Callable[[ResultT], ResultT] | None = None,
+        preview_complete: bool = False,
+        version: str = "2",
+    ) -> OperationDeclaration[RequestT, ResultT]:
+        def execute(request: RequestT) -> ResultT:
+            try:
+                return operation(request)
+            except self.failure.exceptions as exc:
+                raise OperationRefusalError(self.failure.diagnostic(exc)) from exc
+
+        return OperationDeclaration(
+            operation_id=operation_id,
+            version=version,
+            title=title,
+            description=description,
+            tags=tags,
+            request_type=request_type,
+            result_type=result_type,
+            execute=execute,
+            publication=DurablePublication(
+                resource_reason=resource_reason,
+                preview_type=result_type,
+                preview=preview,
+                preview_complete=preview_complete,
+            ),
+            examples=examples,
+        )
+
+
+__all__ = [
+    "SUPPORTED",
+    "AuthorizedChecker",
+    "BoundedWorker",
+    "DurableOperationFactory",
+    "DurablePublication",
+    "Effect",
+    "InlineOperationFactory",
+    "InlinePublication",
+    "OperationAbortError",
+    "OperationDeclaration",
+    "OperationExample",
+    "OperationFailure",
+    "OperationRefusalError",
+    "PreflightResult",
+    "PreflightStatus",
+    "PublicationPolicy",
+]

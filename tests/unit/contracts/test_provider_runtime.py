@@ -10,12 +10,12 @@ from pydantic import ValidationError
 import jacobian.provider_runtime as provider_runtime
 import jacobian.providers.external_solver_runtime as external_solver_runtime
 import jacobian.providers.flint_runtime as flint_runtime
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.provider_measurements import (
     ProviderMeasurementSample,
@@ -72,22 +72,22 @@ def test_lean_mathlib_git_config_authorizes_only_manifest_checkouts(
     }
 
 
-def _runtime(**updates: object) -> CapabilityProviderRuntime:
+def _runtime(**updates: object) -> ProviderObservation:
     values: dict[str, object] = {
         "provider": "tests.fixture",
-        "availability": CapabilityProviderAvailability.AVAILABLE,
+        "availability": ProviderAvailability.AVAILABLE,
         "version": "1.2.3",
         "digest": "sha256:" + "a" * 64,
-        "digest_kind": CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+        "digest_kind": ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
         "platform": "linux-x86_64",
-        "install_tier": CapabilityInstallTier.T1,
+        "install_tier": ProviderInstallTier.T1,
         "license_id": "MIT",
         "license_files": ("fixture.dist-info/licenses/LICENSE",),
         "features": ("exact-arithmetic",),
         "checker_ids": ("checker://sha256/" + "b" * 64,),
     }
     values.update(updates)
-    return CapabilityProviderRuntime(**values)
+    return ProviderObservation(**values)
 
 
 def _lean_runtime_layout(
@@ -146,7 +146,7 @@ def test_unavailable_provider_requires_a_public_diagnostic() -> None:
         match="unavailable provider runtime requires a diagnostic",
     ):
         _runtime(
-            availability=CapabilityProviderAvailability.UNAVAILABLE,
+            availability=ProviderAvailability.UNAVAILABLE,
             version=None,
             digest=None,
             digest_kind=None,
@@ -155,8 +155,8 @@ def test_unavailable_provider_requires_a_public_diagnostic() -> None:
 
 def test_descriptor_provider_must_match_runtime_identity() -> None:
     with pytest.raises(ValidationError, match="descriptor provider must match"):
-        CapabilityDescriptor(
-            capability_id="fixture.increment",
+        OperationDescriptor(
+            operation_id="fixture.increment",
             version="1",
             title="Increment",
             description="Increment one integer.",
@@ -181,8 +181,8 @@ def test_composite_provider_binds_all_component_identities() -> None:
         features=("two-backends",),
     )
 
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
-    assert runtime.digest_kind is CapabilityProviderDigestKind.COMPOSITE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
+    assert runtime.digest_kind is ProviderDigestKind.COMPOSITE
     assert runtime.digest is not None
     assert tuple(
         component["provider"] for component in runtime.configuration["components"]
@@ -198,7 +198,7 @@ def test_composite_provider_binds_all_component_identities() -> None:
 def test_composite_provider_fails_closed_when_one_component_is_unavailable() -> None:
     unavailable = _runtime(
         provider="tests.missing",
-        availability=CapabilityProviderAvailability.UNAVAILABLE,
+        availability=ProviderAvailability.UNAVAILABLE,
         version=None,
         digest=None,
         digest_kind=None,
@@ -210,7 +210,7 @@ def test_composite_provider_fails_closed_when_one_component_is_unavailable() -> 
         components=(_runtime(provider="tests.present"), unavailable),
     )
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.digest is None
     assert runtime.diagnostic is not None
     assert "tests.missing" in runtime.diagnostic
@@ -256,7 +256,7 @@ def test_exact_checker_runtime_defers_rational_polynomial_api_probe(
 
     runtime = python_flint_exact_checker_provider_runtime(refresh=True)
 
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     assert runtime.distribution_required_attributes == (
         "fmpq",
         "fmpq_mat",
@@ -271,7 +271,7 @@ def test_exact_checker_runtime_rejects_different_linked_flint_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     available = python_flint_exact_checker_provider_runtime()
-    assert available.availability is CapabilityProviderAvailability.AVAILABLE
+    assert available.availability is ProviderAvailability.AVAILABLE
     monkeypatch.setattr(
         flint_runtime,
         "python_distribution_provider_runtime",
@@ -285,7 +285,7 @@ def test_exact_checker_runtime_rejects_different_linked_flint_version(
 
     runtime = python_flint_exact_checker_provider_runtime(refresh=True)
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.digest is None
     assert runtime.diagnostic is not None
     assert "linked FLINT library" in runtime.diagnostic
@@ -313,11 +313,11 @@ def test_python_distribution_unchanged_check_does_not_import_implementation(
         distribution_name="pydantic",
         import_name="pydantic",
         required_attributes=("BaseModel",),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         refresh=True,
     )
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     assert runtime.distribution_import_name == "pydantic"
     assert runtime.distribution_required_attributes == ("BaseModel",)
 
@@ -336,11 +336,11 @@ def test_python_provider_readiness_checks_required_attributes(
         distribution_name="pydantic",
         import_name="pydantic",
         required_attributes=("missing_required_attribute",),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         refresh=True,
     )
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     monkeypatch.setattr(
         provider_runtime.importlib,
         "import_module",
@@ -387,7 +387,7 @@ def test_python_provider_readiness_checks_required_attributes(
 def test_required_python_provider_rejects_version_skew(
     monkeypatch: pytest.MonkeyPatch,
     module: ModuleType,
-    resolve: Callable[[], CapabilityProviderRuntime],
+    resolve: Callable[[], ProviderObservation],
     diagnostic: str,
 ) -> None:
     mismatched = _runtime(version="0.0.0")
@@ -399,7 +399,7 @@ def test_required_python_provider_rejects_version_skew(
 
     runtime = resolve()
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.version is None
     assert runtime.digest is None
     assert runtime.diagnostic is not None
@@ -408,7 +408,7 @@ def test_required_python_provider_rejects_version_skew(
 
 def test_disappeared_executable_is_unavailable(tmp_path: Path) -> None:
     runtime = _runtime(
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         configuration={"executable": str(tmp_path / "gone")},
     )
 
@@ -438,8 +438,8 @@ def test_lean_frontend_runtime_binds_the_pinned_executable(
 
     runtime = lean_frontend_provider_runtime()
 
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
-    assert runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
+    assert runtime.digest_kind is ProviderDigestKind.EXECUTABLE
     assert runtime.features == ("CORE", "elaboration", "lean-statement")
     assert runtime.configuration["executable"] == str(executable)
     assert runtime.configuration["profiles"]["CORE"]["import_name"] == "Init.Prelude"
@@ -467,7 +467,7 @@ def test_lean_frontend_runtime_preserves_actionable_probe_diagnostic(
 
     runtime = lean_frontend_provider_runtime()
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.diagnostic is not None
     assert "TOOLCHAIN_RESOLUTION" in runtime.diagnostic
     assert "executable is unavailable" in runtime.diagnostic
@@ -486,7 +486,7 @@ def test_lean_frontend_runtime_bounds_probe_diagnostic(
 
     runtime = lean_frontend_provider_runtime()
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
     assert runtime.diagnostic is not None
     assert len(runtime.diagnostic) == 512
 
@@ -515,8 +515,8 @@ def test_lean_mathlib_runtime_binds_the_lake_launcher(
         checker_ids=(),
     )
 
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
-    assert runtime.digest_kind is CapabilityProviderDigestKind.EXECUTABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
+    assert runtime.digest_kind is ProviderDigestKind.EXECUTABLE
     assert runtime.configuration["executable"] == str(executable)
     assert runtime.configuration["lake_executable"] == str(lake)
     assert runtime.configuration["lake_digest"] == provider_runtime._sha256_file(lake)
@@ -658,7 +658,7 @@ def test_lean_mathlib_runtime_is_unavailable_without_a_lake_sibling(
         checker_ids=(),
     )
 
-    assert runtime.availability is CapabilityProviderAvailability.UNAVAILABLE
+    assert runtime.availability is ProviderAvailability.UNAVAILABLE
 
 
 def test_lean_core_runtime_does_not_bind_a_lake_launcher(
@@ -683,6 +683,6 @@ def test_lean_core_runtime_does_not_bind_a_lake_launcher(
         checker_ids=(),
     )
 
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     assert "lake_executable" not in runtime.configuration
     assert "lake_digest" not in runtime.configuration

@@ -12,13 +12,13 @@ from tests.support.artifacts import sha256_file as _sha256_file
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.contracts.smt import SmtResourceBudget
 from jacobian.sat_smt.smt import install_smt_artifacts
 from jacobian.schema_registry import SchemaRegistry
@@ -39,15 +39,15 @@ _QF_UF_PROOF = (_FIXTURES / "qf_uf_equality_unsat.alethe").read_bytes()
 ProofRequestFactory = Callable[..., dict[str, Any]]
 
 
-def _producer() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _producer() -> ProviderObservation:
+    return ProviderObservation(
         provider="cvc5",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1.3.4",
         digest="sha256:" + "d" * 64,
-        digest_kind=CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+        digest_kind=ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="BSD-3-Clause",
         features=("alethe-proof-production",),
         configuration={

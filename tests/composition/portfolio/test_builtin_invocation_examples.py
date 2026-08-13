@@ -19,7 +19,7 @@ _CORE_OPERATIONS = tuple(
         build_number_theory_bundle(),
         build_sequence_bundle(),
     )
-    for operation in bundle.capabilities
+    for operation in bundle.operations
 )
 
 
@@ -30,7 +30,7 @@ _CORE_OPERATIONS = tuple(
 )
 def test_advertised_invocation_example_executes_successfully(operation) -> None:
     operation_id = operation.spec.operation_id
-    examples = operation.spec.invocation_examples
+    examples = operation.spec.examples
     assert examples, f"{operation_id} must advertise one executable example"
     request = operation.spec.request_type.model_validate(examples[0].input)
     outcome = operation.spec.execute(request)

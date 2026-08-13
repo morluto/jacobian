@@ -1,4 +1,4 @@
-"""Installation and composition for the core graph capabilities."""
+"""Installation and composition for the core graph operations."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
@@ -43,11 +42,12 @@ from jacobian.graphs.neighborhood_independence import (
     GraphNeighborhoodIndependenceAdapter,
     GraphNeighborhoodIndependenceResources,
 )
+from jacobian.operation_adapters import OperationAdapter
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
-from jacobian.verification_capabilities import certificate_verification_adapter
+from jacobian.verification_operations import certificate_verification_adapter
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +74,7 @@ def install_graph_capabilities(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[tuple[CapabilityAdapter[Any], ...], GraphInstallation]:
+) -> tuple[tuple[OperationAdapter[Any], ...], GraphInstallation]:
     """Register graph artifact contracts and return the bundled adapters."""
 
     semantics_uri = store.register_descriptor(
@@ -239,7 +239,7 @@ def install_graph_capabilities(
         certificate_schema_uri=certificate_schema_uri,
         neighborhood_checker_id=neighborhood_checker_id,
     )
-    adapters: tuple[CapabilityAdapter[Any], ...] = (
+    adapters: tuple[OperationAdapter[Any], ...] = (
         GraphExplicitConstructionAdapter(construction_resources),
         GraphAtlasSearchAdapter(atlas_resources),
         GraphPropertyAdapter(invariant_resources),
@@ -248,7 +248,7 @@ def install_graph_capabilities(
     )
     for adapter in (
         certificate_verification_adapter(
-            capability_id="graph.degree_sequence.verify",
+            operation_id="graph.degree_sequence.verify",
             title="Verify a graph degree-sequence realization",
             description=(
                 "Independently replay one exact realization or Erdos-Gallai "
@@ -259,7 +259,7 @@ def install_graph_capabilities(
             verification=verification,
         ),
         certificate_verification_adapter(
-            capability_id="graph.neighborhood_independence.verify",
+            operation_id="graph.neighborhood_independence.verify",
             title="Verify graph neighborhood independence values",
             description=(
                 "Independently replay one exact neighborhood-independence ledger."

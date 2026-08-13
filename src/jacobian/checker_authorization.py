@@ -18,13 +18,13 @@ from typing import Any
 
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope
 from jacobian.contracts.lean import LeanCandidate, LeanClaim, LeanEnvironment
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderObservation,
+)
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
@@ -70,7 +70,7 @@ def authorize_checker(
     claim_schema: str,
     semantics: str,
     candidate_schema: str,
-    provider_runtime: CapabilityProviderRuntime | None = None,
+    provider_runtime: ProviderObservation | None = None,
 ) -> str | None:
     """Authorize one checker through the operator-owned registry."""
 
@@ -136,9 +136,9 @@ def install_lean_checkers(
     checkers: CheckerRegistry,
     *,
     resolve_provider_runtime: Callable[
-        [dict[str, dict[str, Any]]], CapabilityProviderRuntime
+        [dict[str, dict[str, Any]]], ProviderObservation
     ],
-) -> tuple[dict[LeanEnvironment, LeanCheckerInstallation], CapabilityProviderRuntime]:
+) -> tuple[dict[LeanEnvironment, LeanCheckerInstallation], ProviderObservation]:
     """Authorize Lean checkers bound to their measured provider runtime."""
 
     mathlib_commit = "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
@@ -221,7 +221,7 @@ def install_lean_checkers(
         semantics_uri = profiles[environment.value]["semantics_uri"]
         assert isinstance(semantics_uri, str)
         checker_id = None
-        if provider_runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+        if provider_runtime.availability is ProviderAvailability.AVAILABLE:
             checker_id = authorize_checker(
                 checkers,
                 name=f"pinned {environment.value} Lean kernel checker",

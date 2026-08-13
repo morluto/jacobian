@@ -8,8 +8,8 @@ from pydantic import ValidationError
 from tests.support.rationals import rational_payload as _rational
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.validated_analysis import RationalLinearProgramObligation
@@ -29,9 +29,9 @@ def test_rational_lp_produces_inspectable_primal_dual_certificate(
 ) -> None:
     runtime = domain_services
 
-    result = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="optimization.linear.rational_optimum.compute",
+    result = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="optimization.linear.rational_optimum.compute",
             input={
                 "program": {
                     "variables": ["x", "y"],
@@ -58,9 +58,9 @@ def test_rational_lp_produces_inspectable_primal_dual_certificate(
 def test_rational_lp_dual_variables_are_unrestricted_and_dimension_bound(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="optimization.linear.rational_optimum.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="optimization.linear.rational_optimum.compute",
             input={
                 "program": {
                     "variables": ["x", "y"],
@@ -124,9 +124,9 @@ def test_invalid_rational_lp_never_reaches_backend_worker(
         raise AssertionError("worker unexpectedly called")
 
     monkeypatch.setattr(operations, "_run_worker", unexpected_worker)
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="optimization.linear.rational_optimum.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="optimization.linear.rational_optimum.compute",
             input={
                 "program": {
                     "variables": ["x", "y"],

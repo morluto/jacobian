@@ -22,7 +22,6 @@ from pathlib import Path
 from types import FrameType, ModuleType
 from typing import Any, cast
 
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import (
     CheckerManifest,
     CheckerPythonDistribution,
@@ -30,6 +29,7 @@ from jacobian.contracts.checkers import (
     CheckerSandboxPolicy,
     CheckerSourceModule,
 )
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.implementation import split_entrypoint
 
 _CHECKER_WORKER_MODULE = "jacobian.checker_worker"
@@ -172,7 +172,7 @@ def default_checker_sandbox_policy() -> CheckerSandboxPolicy:
 def build_checker_manifest(
     entrypoint: str,
     *,
-    provider_runtime: CapabilityProviderRuntime | None,
+    provider_runtime: ProviderObservation | None,
     passive_contract_uris: Iterable[str],
     sandbox: CheckerSandboxPolicy | None = None,
 ) -> CheckerManifest:

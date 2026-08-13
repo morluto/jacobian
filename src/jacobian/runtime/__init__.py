@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 
 if TYPE_CHECKING:
-    from jacobian.capability_service import CapabilityPolicy
+    from jacobian.operation_service import OperationPolicy
     from jacobian.runtime.model import JacobianRuntime
 
 
@@ -16,8 +16,8 @@ def create_runtime(
     root: str | Path,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
-    capability_exclusions: frozenset[str] = frozenset(),
-    capability_policy: CapabilityPolicy | None = None,
+    operation_exclusions: frozenset[str] = frozenset(),
+    operation_policy: OperationPolicy | None = None,
 ) -> JacobianRuntime:
     """Create the single owned runtime for ``root``."""
 
@@ -27,8 +27,8 @@ def create_runtime(
         root,
         RuntimeOptions(
             checker_authority=checker_authority,
-            capability_exclusions=capability_exclusions,
-            capability_policy=capability_policy,
+            operation_exclusions=operation_exclusions,
+            operation_policy=operation_policy,
         ),
     )
 

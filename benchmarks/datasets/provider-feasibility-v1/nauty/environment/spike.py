@@ -449,7 +449,7 @@ def _success_report(
                 ],
             },
         },
-        "capability_ids_registered": [],
+        "operation_ids_registered": [],
         "limitations": [
             "the spike observes exact bounded outputs but does not establish mathematical verification",
             "the executable digests are measured but not cryptographically derived from the source archive",
@@ -555,7 +555,7 @@ def run_spike(
                 "code": exc.code,
                 "detail": exc.detail,
             },
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
         }
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import build_graph_optimization_bundle
 
@@ -47,9 +47,9 @@ def test_independence_number_reproduces_biggs_smith_alpha_43(
     domain_services: DomainTestServices,
 ) -> None:
     graph = _biggs_smith_graph()
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.independence_number.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.independence_number.compute",
             input={
                 "graph": graph,
                 "resource_budget": {"wall_seconds": 120, "max_order": 128},
@@ -74,9 +74,9 @@ def test_independence_number_reproduces_biggs_smith_alpha_43(
 def test_independence_number_rejects_order_above_128_without_artifacts(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="graph.invariant.independence_number.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="graph.invariant.independence_number.compute",
             input={
                 "graph": {
                     "vertices": [f"v{index:03d}" for index in range(129)],

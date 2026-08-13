@@ -1,4 +1,4 @@
-"""Integer-owned exact arithmetic capabilities.
+"""Integer-owned exact arithmetic operations.
 
 The arithmetic domain owns only integer absolute value, sign, decimal digit
 sum/count, base expansion, and integer nth root.  Number-theory integer
@@ -26,7 +26,7 @@ from jacobian.domains.arithmetic.operations import (
     sign,
 )
 
-INTEGER_CAPABILITIES = (
+INTEGER_OPERATIONS = (
     arithmetic_operation(
         "integer.compute.absolute_value",
         "Compute integer absolute value",
@@ -36,7 +36,7 @@ INTEGER_CAPABILITIES = (
         absolute_value,
         "integer",
         "exact",
-        invocation_examples=(
+        examples=(
             example(
                 "absolute_value_negative_42",
                 "Compute the absolute value of -42.",
@@ -53,7 +53,7 @@ INTEGER_CAPABILITIES = (
         sign,
         "integer",
         "exact",
-        invocation_examples=(
+        examples=(
             example("sign_negative_42", "Compute the sign of -42.", {"value": "-42"}),
         ),
     ),
@@ -66,7 +66,7 @@ INTEGER_CAPABILITIES = (
         decimal_digit_sum,
         "integer",
         "representation",
-        invocation_examples=(
+        examples=(
             example(
                 "decimal_digit_sum_12345",
                 "Sum the decimal digits of 12345.",
@@ -83,7 +83,7 @@ INTEGER_CAPABILITIES = (
         decimal_digit_count,
         "integer",
         "representation",
-        invocation_examples=(
+        examples=(
             example(
                 "decimal_digit_count_12345",
                 "Count the decimal digits of 12345.",
@@ -100,7 +100,7 @@ INTEGER_CAPABILITIES = (
         base_digits,
         "integer",
         "representation",
-        invocation_examples=(
+        examples=(
             example(
                 "negative_binary",
                 "Expand negative ten in base two.",
@@ -117,7 +117,7 @@ INTEGER_CAPABILITIES = (
         nth_root,
         "number-theory",
         "root",
-        invocation_examples=(
+        examples=(
             example(
                 "non_exact_cube_root",
                 "Floor cube root of 65.",

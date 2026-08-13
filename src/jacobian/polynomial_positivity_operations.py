@@ -1,6 +1,6 @@
 """SymPy-backed exact rational univariate polynomial strict positivity.
 
-This module installs two domain-atomic capabilities over one mathematical
+This module installs two domain-atomic operations over one mathematical
 outcome: an exact decision whether one univariate rational polynomial is
 strictly positive on one closed rational interval, using Sturm's theorem.
 
@@ -29,16 +29,15 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+)
 from jacobian.contracts.polynomial_intervals import (
     RationalInterval,
     UnivariateRationalPolynomial,
@@ -61,6 +60,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
     PolynomialOperationResult,
@@ -80,7 +80,7 @@ if TYPE_CHECKING:
 
 
 class _SympyBackend(NamedTuple):
-    """Heavy SymPy implementation symbols loaded on first capability invocation."""
+    """Heavy SymPy implementation symbols loaded on first operation invocation."""
 
     QQ: Any
     Poly: Any
@@ -121,7 +121,7 @@ class PolynomialPositivityResources:
     installation: PolynomialPositivityInstallation
 
 
-def install_polynomial_positivity_capabilities(
+def install_polynomial_positivity_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
@@ -246,8 +246,8 @@ class PolynomialIntervalPositivityDecideAdapter:
             if resources.installation.checker_id is not None
             else ()
         )
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.interval.positivity.decide",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.interval.positivity.decide",
             version="1",
             title="Decide strict positivity on a rational interval",
             description=(
@@ -282,7 +282,7 @@ class PolynomialIntervalPositivityDecideAdapter:
                 "exceeds-bound",
                 "rational-derivative-bound",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "constant_one_positive",
                     "Decide positivity of 1 on [0,1].",
@@ -308,11 +308,11 @@ class PolynomialIntervalPositivityDecideAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialIntervalPositivityRequest:
         return _validate_request(
             PolynomialIntervalPositivityRequest,
@@ -406,8 +406,8 @@ class PolynomialIntervalPositivityVerifyAdapter:
             raise RuntimeError(
                 "polynomial positivity verify adapter requires an authorized checker"
             )
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.interval.positivity.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.interval.positivity.verify",
             version="1",
             title="Verify a polynomial interval positivity decision",
             description=(
@@ -445,11 +445,11 @@ class PolynomialIntervalPositivityVerifyAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialIntervalPositivityVerifyRequest:
         return _validate_request(
             PolynomialIntervalPositivityVerifyRequest,
@@ -713,9 +713,9 @@ def _positivity_error(
     code: str,
     stage: str,
     message: str,
-) -> CapabilityInvocationError:
-    return CapabilityInvocationError(
-        CapabilityDiagnostic(
+) -> OperationInvocationError:
+    return OperationInvocationError(
+        OperationDiagnostic(
             code=code,
             stage=stage,
             message=message,
@@ -733,5 +733,5 @@ __all__ = (
     "PolynomialIntervalPositivityVerifyAdapter",
     "PolynomialPositivityInstallation",
     "PolynomialPositivityResources",
-    "install_polynomial_positivity_capabilities",
+    "install_polynomial_positivity_operations",
 )

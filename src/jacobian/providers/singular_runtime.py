@@ -7,11 +7,11 @@ import re
 import shutil
 from pathlib import Path
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.process_policy import (
     ProcessRequest,
@@ -35,14 +35,14 @@ _VERSION_PATTERN = re.compile(
 
 def singular_provider_runtime(
     executable: str | Path = "Singular",
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Inspect the exact pinned Singular command-line producer."""
 
     resolved_name = shutil.which(os.fspath(executable))
     if resolved_name is None:
         return _unavailable_runtime(
             provider="singular",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="GPL-2.0-or-later",
             diagnostic=f"The pinned Singular {SINGULAR_VERSION} executable is unavailable.",
         )
@@ -76,18 +76,18 @@ def singular_provider_runtime(
     except (OSError, UnicodeDecodeError, ProviderRuntimeError):
         return _unavailable_runtime(
             provider="singular",
-            install_tier=CapabilityInstallTier.T2,
+            install_tier=ProviderInstallTier.T2,
             license_id="GPL-2.0-or-later",
             diagnostic=f"The pinned Singular {SINGULAR_VERSION} executable is unavailable.",
         )
-    return CapabilityProviderRuntime(
+    return ProviderObservation(
         provider="singular",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version=SINGULAR_VERSION,
         digest=digest,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform=_platform_tag(),
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="GPL-2.0-or-later",
         features=("lift", "groebner-basis", "nullstellensatz-certificate"),
         configuration={

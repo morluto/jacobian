@@ -1,4 +1,4 @@
-"""Shared adapter stubs and runtime constants for capability-service tests.
+"""Shared adapter stubs and runtime constants for operation-service tests.
 
 Each stub is minimal: it only exercises the boundary relevant to the test cluster
 that registers it.
@@ -10,42 +10,42 @@ from dataclasses import dataclass
 
 from pydantic import ConfigDict
 
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.results import (
     ContractModel,
 )
+from jacobian.operation_adapters import parse_operation_input
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
 from jacobian.schema_registry import model_schema
 
-TEST_RUNTIME = CapabilityProviderRuntime(
+TEST_RUNTIME = ProviderObservation(
     provider="tests",
-    availability=CapabilityProviderAvailability.AVAILABLE,
+    availability=ProviderAvailability.AVAILABLE,
     version="1",
     digest="sha256:" + "a" * 64,
-    digest_kind=CapabilityProviderDigestKind.SOURCE_TREE,
+    digest_kind=ProviderDigestKind.SOURCE_TREE,
     platform="any",
-    install_tier=CapabilityInstallTier.T0,
+    install_tier=ProviderInstallTier.T0,
     license_id="MIT",
 )
 
-NOT_READY_RUNTIME = CapabilityProviderRuntime(
+NOT_READY_RUNTIME = ProviderObservation(
     provider="tests-python",
-    availability=CapabilityProviderAvailability.AVAILABLE,
+    availability=ProviderAvailability.AVAILABLE,
     version="1",
     digest="sha256:" + "b" * 64,
-    digest_kind=CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+    digest_kind=ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
     platform="any",
-    install_tier=CapabilityInstallTier.T0,
+    install_tier=ProviderInstallTier.T0,
     license_id="MIT",
     configuration={"distribution": "tests-fixture"},
     distribution_import_name="tests.support.process_entrypoints",
@@ -89,8 +89,8 @@ class _WrongValue(ContractModel):
 
 @dataclass(frozen=True)
 class ComputedAdapter:
-    descriptor = CapabilityDescriptor(
-        capability_id="example.double",
+    descriptor = OperationDescriptor(
+        operation_id="example.double",
         version="1",
         title="Double an integer",
         description="Small adapter used to prove no MCP or runtime edit is required.",
@@ -101,13 +101,13 @@ class ComputedAdapter:
         tags=("test",),
     )
 
-    def prepare(self, request: CapabilityRequest) -> _ValueRequest:
-        return parse_capability_input(_ValueRequest, request.input)
+    def prepare(self, request: OperationRequest) -> _ValueRequest:
+        return parse_operation_input(_ValueRequest, request.input)
 
     def invoke(self, parsed: _ValueRequest) -> OperationProjection:
         value = _Value(value=parsed.value * 2)
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=value),
             publication=PublishedOperation(output=value),
@@ -116,8 +116,8 @@ class ComputedAdapter:
 
 @dataclass(frozen=True)
 class NotReadyProviderAdapter:
-    descriptor = CapabilityDescriptor(
-        capability_id="example.not-ready-provider",
+    descriptor = OperationDescriptor(
+        operation_id="example.not-ready-provider",
         version="1",
         title="Provider readiness fixture",
         description="Fixture for the first-use provider readiness boundary.",
@@ -127,8 +127,8 @@ class NotReadyProviderAdapter:
         output_schema={"type": "object"},
     )
 
-    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
-        return parse_capability_input(_EmptyRequest, request.input)
+    def prepare(self, request: OperationRequest) -> _EmptyRequest:
+        return parse_operation_input(_EmptyRequest, request.input)
 
     def invoke(self, _request: _EmptyRequest) -> OperationProjection:
         raise AssertionError("provider must be rejected before adapter invocation")
@@ -136,8 +136,8 @@ class NotReadyProviderAdapter:
 
 @dataclass(frozen=True)
 class MismatchedOutputAdapter:
-    descriptor = CapabilityDescriptor(
-        capability_id="example.mismatched-output",
+    descriptor = OperationDescriptor(
+        operation_id="example.mismatched-output",
         version="1",
         title="Return the wrong typed value",
         description="Fixture for the installed output-model boundary.",
@@ -147,13 +147,13 @@ class MismatchedOutputAdapter:
         output_schema=model_schema(_Value),
     )
 
-    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
-        return parse_capability_input(_EmptyRequest, request.input)
+    def prepare(self, request: OperationRequest) -> _EmptyRequest:
+        return parse_operation_input(_EmptyRequest, request.input)
 
     def invoke(self, _request: _EmptyRequest) -> OperationProjection:
         value = _WrongValue(value="not-an-integer")
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=value),
             publication=PublishedOperation(output=value),
@@ -162,8 +162,8 @@ class MismatchedOutputAdapter:
 
 @dataclass(frozen=True)
 class InvalidOutputValueAdapter:
-    descriptor = CapabilityDescriptor(
-        capability_id="example.invalid-output-value",
+    descriptor = OperationDescriptor(
+        operation_id="example.invalid-output-value",
         version="1",
         title="Return an invalid typed value",
         description="Fixture for unchecked model construction at publication.",
@@ -173,13 +173,13 @@ class InvalidOutputValueAdapter:
         output_schema=model_schema(_Value),
     )
 
-    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
-        return parse_capability_input(_EmptyRequest, request.input)
+    def prepare(self, request: OperationRequest) -> _EmptyRequest:
+        return parse_operation_input(_EmptyRequest, request.input)
 
     def invoke(self, _request: _EmptyRequest) -> OperationProjection:
         value = _Value.model_construct(value="not-an-integer")
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=value),
             publication=PublishedOperation(output=value),
@@ -188,15 +188,15 @@ class InvalidOutputValueAdapter:
 
 @dataclass(frozen=True)
 class DiscoveryAdapter:
-    descriptor: CapabilityDescriptor
+    descriptor: OperationDescriptor
 
-    def prepare(self, request: CapabilityRequest) -> _ValueRequest:
-        return parse_capability_input(_ValueRequest, request.input)
+    def prepare(self, request: OperationRequest) -> _ValueRequest:
+        return parse_operation_input(_ValueRequest, request.input)
 
     def invoke(self, request: _ValueRequest) -> OperationProjection:
         value = _Value(value=request.value)
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=value),
             publication=PublishedOperation(output=value),
@@ -205,8 +205,8 @@ class DiscoveryAdapter:
 
 @dataclass(frozen=True)
 class CrashingAdapter:
-    descriptor = CapabilityDescriptor(
-        capability_id="example.crash",
+    descriptor = OperationDescriptor(
+        operation_id="example.crash",
         version="1",
         title="Crash during execution",
         description="Fixture for testing public adapter-failure diagnostics.",
@@ -216,8 +216,8 @@ class CrashingAdapter:
         output_schema={"type": "object"},
     )
 
-    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
-        return parse_capability_input(_EmptyRequest, request.input)
+    def prepare(self, request: OperationRequest) -> _EmptyRequest:
+        return parse_operation_input(_EmptyRequest, request.input)
 
     def invoke(self, _request: _EmptyRequest) -> OperationProjection:
         raise RuntimeError("provider=fixture internal-adapter-id=secret")
@@ -225,8 +225,8 @@ class CrashingAdapter:
 
 @dataclass(frozen=True)
 class ForgedVerifiedAdapter:
-    descriptor = CapabilityDescriptor(
-        capability_id="example.forged",
+    descriptor = OperationDescriptor(
+        operation_id="example.forged",
         version="1",
         title="Forge a result",
         description="Adversarial adapter used to test the verification boundary.",
@@ -236,15 +236,15 @@ class ForgedVerifiedAdapter:
         output_schema=model_schema(_Value),
     )
 
-    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
-        return parse_capability_input(_EmptyRequest, request.input)
+    def prepare(self, request: OperationRequest) -> _EmptyRequest:
+        return parse_operation_input(_EmptyRequest, request.input)
 
     def invoke(self, request: _EmptyRequest) -> OperationProjection:
         del request
         record_uri = "artifact://sha256/" + "f" * 64
         value = _Value(value=0)
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(value=value),
             publication=PublishedOperation(

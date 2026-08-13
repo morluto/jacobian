@@ -24,8 +24,8 @@ _MCP_TOOL_CALL = re.compile(
     r".{0,512}?\brequest_digest=([0-9a-f]{16}|none)\b",
     re.DOTALL,
 )
-_MCP_CAPABILITY_ATTEMPT = re.compile(
-    r"\bMCP capability attempt request_digest=([0-9a-f]{16}|none)\b"
+_MCP_OPERATION_ATTEMPT = re.compile(
+    r"\bMCP operation attempt request_digest=([0-9a-f]{16}|none)\b"
     r".{0,2048}?\bexecution_status=([A-Z_]+)\b",
     re.DOTALL,
 )
@@ -45,7 +45,7 @@ def _read_mcp_runtime_log(path: Path, calls: Counter[str]) -> int:
     text = path.read_text(encoding="utf-8")
     failed_attempts: Counter[str] = Counter()
     transport_errors: Counter[str] = Counter()
-    for match in _MCP_CAPABILITY_ATTEMPT.finditer(text):
+    for match in _MCP_OPERATION_ATTEMPT.finditer(text):
         request_digest, execution_status = match.groups()
         if execution_status != "COMPLETED":
             failed_attempts[request_digest] += 1

@@ -7,12 +7,12 @@
 - Domain: finite systems `A x = b` over `QQ`
 - Maximum shape: 32 equations by 32 declared variables
 
-## Capability boundary
+## Operation boundary
 
 Solution vectors and inconsistency certificates are separate mathematical
 outcomes. Their producers and verifiers are also separate operations:
 
-| Capability | Observable outcome | Assurance |
+| Operation | Observable outcome | Assurance |
 | --- | --- | --- |
 | `linear.rational_solution.compute` | One exact vector for the supplied rational system, or no vector | `COMPUTED` when the bounded provider attempt completes; never self-verified |
 | `linear.rational_solution.verify` | Independent replay of every equation for one inline vector | `VERIFIED` only after the operator-authorized checker creates a durable verification record |

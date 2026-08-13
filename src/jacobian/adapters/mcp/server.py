@@ -32,7 +32,7 @@ from jacobian.adapters.mcp.lifecycle import (
 )
 from jacobian.adapters.mcp.resources import register_resources
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
-from jacobian.capability_service import CapabilityPolicy
+from jacobian.operation_service import OperationPolicy
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
@@ -41,16 +41,16 @@ def create_server(
     state_dir: str | Path | None = None,
     *,
     checker_authority: CheckerAuthorityMode | None = None,
-    capability_exclusions: frozenset[str] = frozenset(),
-    capability_policy: CapabilityPolicy | None = None,
+    operation_exclusions: frozenset[str] = frozenset(),
+    operation_policy: OperationPolicy | None = None,
 ) -> MCPServer[AppState]:
     """Create one local server owning one mathematical runtime."""
 
     runtime = create_runtime(
         _configured_root(state_dir),
         checker_authority=selected_checker_authority(checker_authority),
-        capability_exclusions=capability_exclusions,
-        capability_policy=capability_policy,
+        operation_exclusions=operation_exclusions,
+        operation_policy=operation_policy,
     )
     return create_server_from_runtime(
         runtime,

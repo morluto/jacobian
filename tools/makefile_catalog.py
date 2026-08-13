@@ -6,7 +6,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-
 _INCLUDE = re.compile(r"^(?:-?include)\s+([^\s#]+)\s*(?:#.*)?$")
 _DYNAMIC_MARKERS = ("$", "*", "?", "[", "~")
 

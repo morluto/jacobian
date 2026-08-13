@@ -18,7 +18,7 @@ def projection_catalog(tmp_path: Path) -> Iterator[DomainTestServices]:
 
 
 def _as_runtime(services: DomainTestServices) -> JacobianRuntime:
-    """Projection helpers only require ``.core.capabilities``."""
+    """Projection helpers only require ``.core.operations``."""
 
     return cast(JacobianRuntime, services)
 
@@ -37,24 +37,24 @@ def test_math_find_compacts_ranked_matches_deterministically(
         "limit": 5,
         "cursor": None,
     }
-    baseline = projections._capability_discovery_response(
+    baseline = projections._operation_discovery_response(
         _as_runtime(projection_catalog), **arguments
     )
-    single = projections._capability_discovery_response(
+    single = projections._operation_discovery_response(
         _as_runtime(projection_catalog), **{**arguments, "limit": 1}
     )
     byte_limit = len(projections._mcp_text_json_bytes(single)) + 64
     assert len(projections._mcp_text_json_bytes(baseline)) > byte_limit
     monkeypatch.setattr(
         projections,
-        "CAPABILITY_DISCOVERY_RESPONSE_BYTE_LIMIT",
+        "OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT",
         byte_limit,
     )
 
-    first = projections._capability_discovery_response(
+    first = projections._operation_discovery_response(
         _as_runtime(projection_catalog), **arguments
     )
-    second = projections._capability_discovery_response(
+    second = projections._operation_discovery_response(
         _as_runtime(projection_catalog), **arguments
     )
 
@@ -62,4 +62,4 @@ def test_math_find_compacts_ranked_matches_deterministically(
     assert len(projections._mcp_text_json_bytes(first)) <= byte_limit
     assert first["truncated"] is True
     assert first["truncation_reason"] == "BYTE_LIMIT"
-    assert first["next_cursor"] == first["matches"][-1]["capability_id"]
+    assert first["next_cursor"] == first["matches"][-1]["operation_id"]

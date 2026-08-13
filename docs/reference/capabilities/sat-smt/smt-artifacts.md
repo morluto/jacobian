@@ -129,7 +129,7 @@ an `smt.unsat-proof@1` `CertificateEnvelope`. The certificate binds the
 problem claim, proof candidate, SMT semantics, exact artifact URIs, payload
 digests, and required lineage.
 
-The capability is installed only when bundled references are enabled and the
+The operation is installed only when bundled references are enabled and the
 operator authorizes an available Carcara runtime. The pinned checker is
 Carcara `1.1.0` at source commit
 `394edbb15ba95c47893f1d821fddde7e016af178`, the revision selected by cvc5

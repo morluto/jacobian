@@ -8,8 +8,8 @@ from jacobian.operation_bindings import (
     InlinePublication,
     InstalledOperation,
 )
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_ports import InputPort, OutputPort
-from jacobian.operations import OperationSpec
 
 
 class MatrixValue(ContractModel):
@@ -29,8 +29,8 @@ class RankResult(ContractModel):
     matrix: MatrixValue
 
 
-def _spec() -> OperationSpec[RankRequest, RankResult]:
-    return OperationSpec(
+def _spec() -> OperationDeclaration[RankRequest, RankResult]:
+    return OperationDeclaration(
         operation_id="test.matrix.rank",
         version="1",
         request_type=RankRequest,

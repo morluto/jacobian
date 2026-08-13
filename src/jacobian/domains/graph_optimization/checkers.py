@@ -3,7 +3,6 @@
 from collections.abc import Callable
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.graph_distance_matrix import GraphDistanceMatrixRequest
 from jacobian.contracts.graph_invariant_operations import (
     GraphInvariantRequest,
@@ -14,12 +13,13 @@ from jacobian.contracts.graph_optimization import (
     GraphMinimumSpanningTreeRequest,
     GraphOptimizationRequest,
 )
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.providers import flint_runtime
 
 _GRAPH_ENTRYPOINT = "jacobian_checkers.graph_exact_operations"
 
 
-def _graph_runtime(*, checker_ids: tuple[str, ...] = ()) -> CapabilityProviderRuntime:
+def _graph_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.graph_exact_checker_provider_runtime(checker_ids=checker_ids)
 
 
@@ -48,7 +48,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library checker independent of the "
             "producer's dynamic-programming implementation"
         ),
-        verification_capability_id="graph.hamiltonian_path.verify",
+        verification_operation_id="graph.hamiltonian_path.verify",
         verification_title="Verify a Hamiltonian-path decision",
         verification_description=(
             "Independently verify a spanning path witness or exhaust the bounded "
@@ -74,7 +74,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized finite exhaustive checker independent of the "
             "Z3 producer"
         ),
-        verification_capability_id="graph.induced_tree.maximum.verify",
+        verification_operation_id="graph.induced_tree.maximum.verify",
         verification_title="Verify a maximum induced tree result",
         verification_description=(
             "Independently exhaust bounded vertex subsets to verify one submitted "
@@ -95,7 +95,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library exact-rational checker "
             "independent of the NetworkX Kruskal producer"
         ),
-        verification_capability_id="graph.spanning_tree.minimum.verify",
+        verification_operation_id="graph.spanning_tree.minimum.verify",
         verification_title="Verify a weighted minimum spanning tree",
         verification_description=(
             "Independently verify source connectivity, spanning-tree feasibility, "
@@ -123,7 +123,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library BFS checker independent of "
             "the NetworkX producer"
         ),
-        verification_capability_id="graph.invariant.diameter.verify",
+        verification_operation_id="graph.invariant.diameter.verify",
         verification_title="Verify an exact graph diameter",
         verification_description=(
             "Independently replay all-source shortest paths to verify one submitted "
@@ -149,7 +149,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library BFS checker independent of "
             "the NetworkX producer"
         ),
-        verification_capability_id="graph.invariant.radius.verify",
+        verification_operation_id="graph.invariant.radius.verify",
         verification_title="Verify an exact graph radius",
         verification_description=(
             "Independently replay all-source shortest paths to verify one submitted "
@@ -175,7 +175,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library BFS checker independent of "
             "the NetworkX producer"
         ),
-        verification_capability_id="graph.distance_matrix.verify",
+        verification_operation_id="graph.distance_matrix.verify",
         verification_title="Verify an exact graph distance matrix",
         verification_description=(
             "Independently replay every source shortest-path traversal to verify "
@@ -202,7 +202,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library Tutte-Berge checker independent "
             "of the NetworkX producer"
         ),
-        verification_capability_id="graph.invariant.maximum_matching.verify",
+        verification_operation_id="graph.invariant.maximum_matching.verify",
         verification_title="Verify a maximum matching result",
         verification_description=(
             "Independently verify matching feasibility and a Tutte-Berge upper-bound "

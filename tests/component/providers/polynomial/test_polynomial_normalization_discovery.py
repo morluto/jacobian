@@ -13,8 +13,8 @@ def test_polynomial_normalizer_advertises_expansion_vocabulary(
     with open_polynomial_normalization_services(tmp_path) as services:
         descriptor = next(
             item
-            for item in services.core.capabilities.catalog().capabilities
-            if item.capability_id == "polynomial.expression.normalize"
+            for item in services.core.operations.catalog().operations
+            if item.operation_id == "polynomial.expression.normalize"
         )
 
     assert {

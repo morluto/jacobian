@@ -6,8 +6,8 @@ thread-safe, deterministic, and owns the lifecycle of the implementation it
 constructs: implementations that expose a ``close()`` method are released
 exactly once when the loader is closed or reset.
 
-The loader caches both successful and failed loads so that capability
-discovery and capability execution do not hammer the import system on every
+The loader caches both successful and failed loads so that operation
+discovery and operation execution do not hammer the import system on every
 call. A failed load is always cached; to re-attempt after an operator has
 installed a missing dependency in a long-lived process, call
 :meth:`reset` explicitly and then :meth:`get` again. This keeps the policy

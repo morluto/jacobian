@@ -11,15 +11,8 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.graph_isomorphism import (
@@ -33,8 +26,15 @@ from jacobian.contracts.graph_isomorphism import (
     GraphVertexMapping,
     SimpleUndirectedGraph,
 )
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationRequest,
+)
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.graphs.installation import GraphInstallation
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -164,8 +164,8 @@ class GraphIsomorphismAdapter:
             raise RuntimeError(
                 "graph isomorphism verify adapter requires an authorized checker"
             )
-        self._descriptor = CapabilityDescriptor(
-            capability_id="graph.isomorphism.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="graph.isomorphism.verify",
             version="2",
             title="Verify an explicit graph-isomorphism mapping",
             description=(
@@ -194,17 +194,17 @@ class GraphIsomorphismAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> GraphIsomorphismVerifyRequest:
-        return parse_capability_input(GraphIsomorphismVerifyRequest, request.input)
+    def prepare(self, request: OperationRequest) -> GraphIsomorphismVerifyRequest:
+        return parse_operation_input(GraphIsomorphismVerifyRequest, request.input)
 
     def invoke(self, validated: GraphIsomorphismVerifyRequest) -> OperationProjection:
         checker_id = self.installation.checker_id
         if checker_id is None:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="GRAPH_ISOMORPHISM_CHECKER_UNAVAILABLE",
                     stage="isomorphism_verification",
                     message=(
@@ -349,7 +349,7 @@ class GraphIsomorphismAdapter:
             else Failed(
                 status=checked.execution.status,
                 runtime_ms=checked.execution.runtime_ms,
-                diagnostic=CapabilityDiagnostic(
+                diagnostic=OperationDiagnostic(
                     code="GRAPH_ISOMORPHISM_VERIFICATION_FAILED",
                     stage="isomorphism_verification",
                     message=(
@@ -360,7 +360,7 @@ class GraphIsomorphismAdapter:
             )
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
@@ -379,15 +379,15 @@ class GraphIsomorphismAdapter:
         try:
             artifact = self.store.get(graph_uri)
         except StorageError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="GRAPH_ARTIFACT_NOT_FOUND",
                     stage="graph_resolution",
                     message=f"The graph artifact at {path} is unavailable.",
                     path=path,
                     hint=(
                         "Use a graph URI returned by graph.search.atlas or another "
-                        "installed graph capability."
+                        "installed graph operation."
                     ),
                 )
             ) from exc
@@ -396,8 +396,8 @@ class GraphIsomorphismAdapter:
             or artifact.manifest.semantics_uri
             != self.installation.source_graph_semantics_uri
         ):
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INCOMPATIBLE_GRAPH_ARTIFACT",
                     stage="graph_validation",
                     message=(
@@ -408,21 +408,21 @@ class GraphIsomorphismAdapter:
                     schema_uri=self.installation.source_graph_schema_uri,
                     hint=(
                         "Use a graph URI returned by graph.search.atlas or another "
-                        "installed graph capability."
+                        "installed graph operation."
                     ),
                 )
             )
         try:
             graph = SimpleUndirectedGraph.model_validate(artifact.payload)
         except ValidationError as exc:
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INCOMPATIBLE_GRAPH_ARTIFACT",
                     stage="graph_validation",
                     message=f"The graph artifact at {path} has a malformed payload.",
                     path=path,
                     schema_uri=self.installation.source_graph_schema_uri,
-                    hint="Recreate the graph through its owning capability.",
+                    hint="Recreate the graph through its owning operation.",
                 )
             ) from exc
         return _SourceGraph(

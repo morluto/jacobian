@@ -19,7 +19,7 @@ def _graph_payload(graph: nx.Graph[str]) -> dict[str, object]:
 def _assert_gallai_edmonds_certificate(graphs: list[nx.Graph[int]]) -> None:
     operation = next(
         operation
-        for operation in build_graph_invariant_bundle().capabilities
+        for operation in build_graph_invariant_bundle().operations
         if operation.spec.operation_id == "graph.invariant.maximum_matching.compute"
     )
     for indexed_graph in graphs:

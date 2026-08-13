@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_optimization.checkers import (
     GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS,
@@ -11,11 +11,11 @@ from jacobian.domains.graph_optimization.distance_matrix import (
     DISTANCE_MATRIX_OPERATION,
 )
 from jacobian.domains.graph_optimization.graph6 import (
-    GRAPH6_CAPABILITIES,
     GRAPH6_CHECKER_DECLARATIONS,
+    GRAPH6_OPERATIONS,
 )
 from jacobian.domains.graph_optimization.invariants import (
-    EXACT_GRAPH_INVARIANT_CAPABILITIES,
+    EXACT_GRAPH_INVARIANT_OPERATIONS,
 )
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import (
@@ -76,13 +76,13 @@ def build_graph_invariant_bundle() -> DomainBundle:
             ),
         ),
         backend_version=f"networkx-{NETWORKX_VERSION};sympy-{SYMPY_VERSION}",
-        capabilities=(
-            *GRAPH6_CAPABILITIES,
+        operations=(
+            *GRAPH6_OPERATIONS,
             DISTANCE_MATRIX_OPERATION,
-            *EXACT_GRAPH_INVARIANT_CAPABILITIES,
+            *EXACT_GRAPH_INVARIANT_OPERATIONS,
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_GRAPH_INVARIANT_REQUEST",
                 stage="graph_invariant_input_validation",
                 message="Input does not satisfy the bounded graph invariant contract.",

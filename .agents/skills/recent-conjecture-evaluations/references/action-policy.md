@@ -10,7 +10,7 @@ evaluations, and copied implementation lineages.
 - **No action:** product behaved correctly or failure is model-local.
 - **Existing issue evidence:** independent evidence strengthens an owned root cause.
 - **Documentation clarification:** factual guidance is missing but behavior is sound.
-- **Maintainer issue:** strong architectural question, cross-family capability gap, or policy choice.
+- **Maintainer issue:** strong architectural question, cross-family operation gap, or policy choice.
 - **Localized draft PR:** small reproducible defect with an unambiguous safe correction.
 
 ## Draft-PR gate
@@ -27,7 +27,7 @@ Open a draft PR only when:
 Use an isolated branch or worktree, commit only scoped files, describe source
 independence and overlap, and never merge.
 
-## Capability-gap threshold
+## Operation-gap threshold
 
 Require independent evidence from at least two mathematical families unless
 the missing primitive is already accepted repository architecture. Do not

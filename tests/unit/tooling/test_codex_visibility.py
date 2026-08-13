@@ -42,7 +42,7 @@ def _case(*, verified: bool = False) -> VisibilityCase:
         case_id="exact-determinant",
         cue_level=CueLevel.LATENT,
         prompt="Compute an exact determinant.",
-        expected_capability_ids=("matrix.determinant.compute",),
+        expected_operation_ids=("matrix.determinant.compute",),
         require_verified=verified,
     )
 
@@ -78,13 +78,13 @@ def test_load_suite_rejects_duplicate_case_ids(tmp_path: Path) -> None:
                 "case_id": "same-case",
                 "cue_level": "LATENT",
                 "prompt": "first",
-                "expected_capability_ids": ["integer.compute.gcd"],
+                "expected_operation_ids": ["integer.compute.gcd"],
             },
             {
                 "case_id": "same-case",
                 "cue_level": "EXPLICIT",
                 "prompt": "second",
-                "expected_capability_ids": ["integer.compute.gcd"],
+                "expected_operation_ids": ["integer.compute.gcd"],
             },
         ],
     }
@@ -110,10 +110,10 @@ def test_committed_visibility_v2_suite_covers_domains_and_abstention() -> None:
     suite = load_suite(_ROOT / "benchmarks/config/codex-visibility-v2.json")
 
     tracked_ids = {
-        capability_id
+        operation_id
         for case in suite.cases
-        for capability_id in (
-            case.expected_capability_ids + case.diagnostic_capability_ids
+        for operation_id in (
+            case.expected_operation_ids + case.diagnostic_operation_ids
         )
     }
     assert suite.schema_version == "2"
@@ -133,10 +133,10 @@ def test_committed_visibility_v2_suite_covers_domains_and_abstention() -> None:
 def test_committed_lean_usability_suite_covers_atomic_formal_tools() -> None:
     suite = load_suite(_ROOT / "benchmarks/config/lean-usability-v1.json")
     tracked_ids = {
-        capability_id
+        operation_id
         for case in suite.cases
-        for capability_id in (
-            case.expected_capability_ids + case.diagnostic_capability_ids
+        for operation_id in (
+            case.expected_operation_ids + case.diagnostic_operation_ids
         )
     }
 
@@ -303,7 +303,7 @@ def test_visibility_classification_records_adoption_without_grading_shell(
             },
             {
                 "kind": "discovery",
-                "matches": [{"capability_id": "matrix.determinant.compute"}],
+                "matches": [{"operation_id": "matrix.determinant.compute"}],
             },
         ),
         _mcp_event(
@@ -311,19 +311,19 @@ def test_visibility_classification_records_adoption_without_grading_shell(
             {
                 "request": {
                     "op": "inspect",
-                    "capability_id": "matrix.determinant.compute",
+                    "operation_id": "matrix.determinant.compute",
                 }
             },
-            {"kind": "capability"},
+            {"kind": "operation"},
         ),
         _mcp_event(
             "math.run",
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "payload": {},
             },
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "execution": {"status": "COMPLETED"},
                 "output": {"determinant": "7"},
                 "verification_record_uri": None,
@@ -363,11 +363,11 @@ def test_visibility_classification_records_discovery_free_invocation(
         _mcp_event(
             "math.run",
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "payload": {},
             },
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "execution": {"status": "COMPLETED"},
                 "verification_record_uri": None,
             },
@@ -413,25 +413,25 @@ def test_visibility_classification_requires_abstention_for_negative_case(
 def test_visibility_case_rejects_inconsistent_expectations() -> None:
     with pytest.raises(ValidationError, match="USE cases require"):
         VisibilityCase(
-            case_id="missing-capability",
+            case_id="missing-operation",
             cue_level=CueLevel.LATENT,
             prompt="Compute something.",
         )
     with pytest.raises(ValidationError, match="ABSTAIN cases cannot declare"):
         VisibilityCase(
-            case_id="negative-with-capability",
+            case_id="negative-with-operation",
             cue_level=CueLevel.LATENT,
             expectation=AdoptionExpectation.ABSTAIN,
             prompt="Define a matrix.",
-            expected_capability_ids=("matrix.rank.compute",),
+            expected_operation_ids=("matrix.rank.compute",),
         )
     with pytest.raises(ValidationError, match="cannot declare operations or outcomes"):
         VisibilityCase(
-            case_id="negative-with-diagnostic-capability",
+            case_id="negative-with-diagnostic-operation",
             cue_level=CueLevel.LATENT,
             expectation=AdoptionExpectation.ABSTAIN,
             prompt="Define a matrix.",
-            diagnostic_capability_ids=("matrix.rank.compute",),
+            diagnostic_operation_ids=("matrix.rank.compute",),
         )
     with pytest.raises(ValidationError, match="must be tracked"):
         VisibilityCase(
@@ -440,18 +440,18 @@ def test_visibility_case_rejects_inconsistent_expectations() -> None:
             prompt="Find a declaration.",
             acceptable_output_outcomes=(
                 VisibilityOutputOutcome(
-                    capability_id="lean.declaration.search",
+                    operation_id="lean.declaration.search",
                     required_output_fields=("declarations.0.name",),
                 ),
             ),
         )
     with pytest.raises(ValidationError, match="must be disjoint"):
         VisibilityCase(
-            case_id="overlapping-capabilities",
+            case_id="overlapping-operations",
             cue_level=CueLevel.LATENT,
             prompt="Compute a rank.",
-            expected_capability_ids=("matrix.rank.compute",),
-            diagnostic_capability_ids=("matrix.rank.compute",),
+            expected_operation_ids=("matrix.rank.compute",),
+            diagnostic_operation_ids=("matrix.rank.compute",),
         )
 
 
@@ -460,16 +460,16 @@ def test_diagnostic_operation_observation_does_not_gate_outcome_contract() -> No
         case_id="verified-proof-with-optional-term-transition",
         cue_level=CueLevel.AFFORDANCE,
         prompt="Prove and verify a theorem.",
-        expected_capability_ids=("lean.check",),
-        diagnostic_capability_ids=("lean.term.apply",),
+        expected_operation_ids=("lean.check",),
+        diagnostic_operation_ids=("lean.term.apply",),
         require_verified=True,
     )
     telemetry = {
-        "capability_attempt_ids": ["lean.check"],
-        "capability_ids": ["lean.check"],
-        "capability_invocations": [
+        "operation_attempt_ids": ["lean.check"],
+        "operation_ids": ["lean.check"],
+        "operation_invocations": [
             {
-                "capability_id": "lean.check",
+                "operation_id": "lean.check",
                 "verification_record_uri": "artifact://sha256/record",
             }
         ],
@@ -518,11 +518,11 @@ def test_declaration_outcome_accepts_native_inline_search_without_inspect() -> N
         .model_dump(mode="json")
     )
     telemetry = {
-        "capability_attempt_ids": ["lean.declaration.search"],
-        "capability_ids": ["lean.declaration.search"],
-        "capability_invocations": [
+        "operation_attempt_ids": ["lean.declaration.search"],
+        "operation_ids": ["lean.declaration.search"],
+        "operation_invocations": [
             {
-                "capability_id": "lean.declaration.search",
+                "operation_id": "lean.declaration.search",
                 "output": native_output,
             }
         ],
@@ -538,7 +538,7 @@ def test_declaration_outcome_accepts_native_inline_search_without_inspect() -> N
     assert result["output_outcomes"] == {
         "required": True,
         "satisfied": True,
-        "matched_capability_ids": ["lean.declaration.search"],
+        "matched_operation_ids": ["lean.declaration.search"],
     }
 
 
@@ -547,11 +547,11 @@ def test_declaration_outcome_rejects_incomplete_structured_output() -> None:
     result = classify_visibility(
         case,
         {
-            "capability_attempt_ids": ["lean.declaration.search"],
-            "capability_ids": ["lean.declaration.search"],
-            "capability_invocations": [
+            "operation_attempt_ids": ["lean.declaration.search"],
+            "operation_ids": ["lean.declaration.search"],
+            "operation_invocations": [
                 {
-                    "capability_id": "lean.declaration.search",
+                    "operation_id": "lean.declaration.search",
                     "output": {
                         "result": {
                             "environment_digest": "sha256:" + "a" * 64,
@@ -579,11 +579,11 @@ def test_visibility_classification_requires_bound_verified_evidence(
         _mcp_event(
             "math.run",
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "payload": {},
             },
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "execution": {"status": "COMPLETED"},
                 "verification_record_uri": None,
             },
@@ -598,11 +598,11 @@ def test_visibility_classification_requires_bound_verified_evidence(
 
 def test_visibility_classification_rejects_unrelated_verified_invocation() -> None:
     telemetry = {
-        "capability_ids": ["matrix.determinant.compute"],
-        "capability_attempt_ids": ["matrix.determinant.compute"],
-        "capability_invocations": [
+        "operation_ids": ["matrix.determinant.compute"],
+        "operation_attempt_ids": ["matrix.determinant.compute"],
+        "operation_invocations": [
             {
-                "capability_id": "integer.gcd.verify",
+                "operation_id": "integer.gcd.verify",
                 "verification_record_uri": "artifact://sha256/record",
             }
         ],
@@ -622,11 +622,11 @@ def test_visibility_classification_treats_timeout_as_non_completion(
         _mcp_event(
             "math.run",
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "payload": {},
             },
             {
-                "capability_id": "matrix.determinant.compute",
+                "operation_id": "matrix.determinant.compute",
                 "execution": {"status": "TIMEOUT"},
             },
         ),

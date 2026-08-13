@@ -6,8 +6,8 @@ from fractions import Fraction
 from typing import Any
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.probability import (
     ExactComplexRational,
     FiniteConditionalContribution,
@@ -39,9 +39,9 @@ from jacobian.domains.probability.gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
 from jacobian.operation_bindings import inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationRefusalError,
-    OperationSpec,
 )
 
 
@@ -161,7 +161,7 @@ def _condition(
         event_probability += _fmpq(atom.probability)
     if event_probability == 0:
         raise OperationRefusalError(
-            CapabilityDiagnostic(
+            OperationDiagnostic(
                 code="FINITE_CONDITIONING_ZERO_MASS",
                 stage="finite_probability_conditioning",
                 message="The selected finite event has exact probability zero.",
@@ -441,9 +441,9 @@ _FAIR_BIT = {
 }
 
 
-FINITE_PROBABILITY_CAPABILITIES = (
+FINITE_PROBABILITY_OPERATIONS = (
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="probability.finite_distribution.raw_moment.compute",
             version="2",
             title="Exact finite-distribution raw moment",
@@ -465,7 +465,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
                 "exact",
                 "python-flint",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "fair_bit_second_moment",
                     "Compute the second raw moment of a fair distribution on 0 and 1.",
@@ -478,7 +478,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="probability.finite_distribution.event_probability.compute",
             version="2",
             title="Exact finite-event probability",
@@ -490,7 +490,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
             result_type=FiniteEventProbabilityResult,
             execute=_event_probability,
             tags=("probability", "event", "finite", "exact", "python-flint"),
-            invocation_examples=(
+            examples=(
                 example(
                     "fair_bit_is_one",
                     "Compute the exact probability that a fair bit equals one.",
@@ -503,7 +503,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="probability.finite_distribution.condition.compute",
             version="2",
             title="Condition an exact finite distribution",
@@ -515,7 +515,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
             result_type=FiniteConditionResult,
             execute=_condition,
             tags=("probability", "conditioning", "finite", "exact", "python-flint"),
-            invocation_examples=(
+            examples=(
                 example(
                     "fair_bit_given_one",
                     "Condition a fair bit on the positive-mass event that it equals one.",
@@ -528,7 +528,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="probability.finite_distribution.pushforward.compute",
             version="2",
             title="Push forward an exact finite distribution",
@@ -540,7 +540,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
             result_type=FinitePushforwardResult,
             execute=_pushforward,
             tags=("probability", "pushforward", "finite", "exact", "python-flint"),
-            invocation_examples=(
+            examples=(
                 example(
                     "collapse_fair_bit",
                     "Map both atoms of a fair bit to one exact target.",
@@ -562,7 +562,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="probability.finite_distribution.convolution.compute",
             version="2",
             title="Convolve two exact finite distributions",
@@ -581,7 +581,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
                 "exact",
                 "python-flint",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "two_fair_bits",
                     "Compute the exact distribution of the sum of two fair bits.",
@@ -591,7 +591,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="probability.gaussian_polynomial.moment.compute",
             version="2",
             title="Exact bounded Gaussian polynomial moment",
@@ -615,7 +615,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
                 "bounded",
                 "python-flint",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "sum_of_two_gaussians_second_moment",
                     "Compute E[(X_1 + X_2)^2] for independent standard real Gaussians.",
@@ -646,7 +646,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
         )
     ),
     inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="probability.graph_reliability.connection_probability.compute",
             version="2",
             title="Exact small-graph terminal connection probability",
@@ -669,7 +669,7 @@ FINITE_PROBABILITY_CAPABILITIES = (
                 "bounded",
                 "python-flint",
             ),
-            invocation_examples=(
+            examples=(
                 example(
                     "triangle_terminal_reliability",
                     "Compute the exact terminal connection probability in a fair-edge triangle.",
@@ -700,4 +700,4 @@ FINITE_PROBABILITY_CAPABILITIES = (
     ),
 )
 
-__all__ = ["FINITE_PROBABILITY_CAPABILITIES"]
+__all__ = ["FINITE_PROBABILITY_OPERATIONS"]

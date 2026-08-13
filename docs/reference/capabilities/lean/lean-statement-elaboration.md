@@ -21,7 +21,7 @@ supports only the `CORE` environment, and the published request schema exposes
 only that value. `MATHLIB` proof replay remains the separate, independently
 registered `lean.check` boundary when its pinned project is installed.
 
-Both statement capabilities are advertised only after Jacobian resolves and
+Both statement operations are advertised only after Jacobian resolves and
 health-checks the pinned Lean executable. If the executable is absent, has the
 wrong version or commit, or cannot be resolved through the configured
 toolchain, `lean.statement.propose` and `lean.statement.compare` are absent
@@ -54,4 +54,4 @@ of type `Prop` in the bound environment. The artifact therefore always reports:
 
 It does not show that the proposition is true, provable, equivalent to an
 informal claim, or appropriate for a proof task. No proof-state or session
-identity is created by this capability.
+identity is created by this operation.

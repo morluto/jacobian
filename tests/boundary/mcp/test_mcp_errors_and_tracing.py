@@ -17,7 +17,7 @@ from jacobian.runtime import CheckerAuthorityMode
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 
-def test_mcp_logs_bounded_capability_metrics_without_arguments(
+def test_mcp_logs_bounded_operation_metrics_without_arguments(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -43,7 +43,7 @@ def test_mcp_logs_bounded_capability_metrics_without_arguments(
                 failed = await client.call_tool(
                     "math.run",
                     {
-                        "capability_id": "missing.capability",
+                        "operation_id": "missing.operation",
                         "payload": {"private": "private-payload-marker"},
                     },
                 )
@@ -56,11 +56,11 @@ def test_mcp_logs_bounded_capability_metrics_without_arguments(
     attempt = next(
         message
         for message in messages
-        if "MCP capability attempt" in message
-        and "capability_id=missing.capability" in message
+        if "MCP operation attempt" in message
+        and "operation_id=missing.operation" in message
     )
     assert "execution_status=ERROR" in attempt
-    assert "diagnostic_codes=UNKNOWN_CAPABILITY" in attempt
+    assert "diagnostic_codes=UNKNOWN_OPERATION" in attempt
     assert "trace_digest=" in attempt
     assert "request_digest=" in attempt
     assert "argument_digest=sha256:" in attempt
@@ -74,25 +74,25 @@ def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None
 
         with open_focused_mcp_server(tmp_path) as server:
             async with Client(server, raise_exceptions=False) as client:
-                unknown_capability = await client.call_tool(
+                unknown_operation = await client.call_tool(
                     "math.find",
                     {
                         "request": {
                             "op": "inspect",
-                            "capability_id": "missing.capability",
+                            "operation_id": "missing.operation",
                         }
                     },
                 )
-                response = json.loads(unknown_capability.content[0].text)
-                assert response["error"]["code"] == "UNKNOWN_CAPABILITY"
-                assert "search installed capabilities" in response["error"]["hint"]
-                assert "available_capability_ids" not in response["error"]
-                assert isinstance(unknown_capability.structured_content, dict)
-                error = unknown_capability.structured_content["error"]
-                assert len(error["nearby_capability_ids"]) <= 5
+                response = json.loads(unknown_operation.content[0].text)
+                assert response["error"]["code"] == "UNKNOWN_OPERATION"
+                assert "search installed operations" in response["error"]["hint"]
+                assert "available_operation_ids" not in response["error"]
+                assert isinstance(unknown_operation.structured_content, dict)
+                error = unknown_operation.structured_content["error"]
+                assert len(error["nearby_operation_ids"]) <= 5
                 assert error["available_recovery_paths"][-1] == {
                     "action": "inspect_catalog",
-                    "resource_uri": "capability://catalog",
+                    "resource_uri": "operation://catalog",
                 }
                 assert len(json.dumps(error).encode("utf-8")) < 2_048
 

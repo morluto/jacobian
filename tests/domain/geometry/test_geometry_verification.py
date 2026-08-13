@@ -6,9 +6,9 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.checker_operations import derive_verification_capability_id
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.checker_operations import derive_verification_operation_id
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import build_geometry_bundle
@@ -45,8 +45,8 @@ def test_geometry_checker_availability_does_not_grant_authority(
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         catalog_ids = {
-            item.capability_id
-            for item in services.core.capabilities.catalog().capabilities
+            item.operation_id
+            for item in services.core.operations.catalog().operations
         }
         assert any(
             item.endswith(".compute") or ".decide" in item for item in catalog_ids
@@ -70,9 +70,9 @@ def test_minimum_weight_triangulation_charges_one_diagonal_once(
     geometry_services: DomainTestServices,
 ) -> None:
     payload = _weighted_square()
-    computed = geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.polygon.triangulation.minimum_weight.compute",
+    computed = geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.polygon.triangulation.minimum_weight.compute",
             input=payload,
         )
     )
@@ -86,9 +86,9 @@ def test_minimum_weight_triangulation_charges_one_diagonal_once(
         {"vertices": [0, 2, 3]},
     ]
 
-    verified = geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.polygon.triangulation.minimum_weight.verify",
+    verified = geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.polygon.triangulation.minimum_weight.verify",
             input={"input": payload, "candidate": computed.output["result"]},
         )
     )
@@ -101,18 +101,18 @@ def test_triangulation_checker_rejects_double_counted_cost(
     geometry_services: DomainTestServices,
 ) -> None:
     payload = _weighted_square()
-    computed = geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.polygon.triangulation.minimum_weight.compute",
+    computed = geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.polygon.triangulation.minimum_weight.compute",
             input=payload,
         )
     )
     forged = dict(computed.output["result"])
     forged["optimum"] = TWO
 
-    rejected = geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.polygon.triangulation.minimum_weight.verify",
+    rejected = geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.polygon.triangulation.minimum_weight.verify",
             input={"input": payload, "candidate": forged},
         )
     )
@@ -166,12 +166,12 @@ def test_selected_geometry_results_verify_through_public_dispatch(
     geometry_services: DomainTestServices,
 ) -> None:
     for operation_id, payload in _GEOMETRY_CASES:
-        computed = geometry_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=operation_id, input=payload)
+        computed = geometry_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
-        verified = geometry_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=derive_verification_capability_id(operation_id),
+        verified = geometry_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=derive_verification_operation_id(operation_id),
                 input={"input": payload, "candidate": computed.output["result"]},
             )
         )
@@ -185,15 +185,15 @@ def test_selected_geometry_results_verify_through_public_dispatch(
 def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
     geometry_services: DomainTestServices,
 ) -> None:
-    geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.points.compute.squared_distance",
+    geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.points.compute.squared_distance",
             input={"first": P0, "second": PXY},
         )
     )
-    rejected = geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.points.squared_distance.verify",
+    rejected = geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.points.squared_distance.verify",
             input={
                 "input": {"first": P0, "second": PXY},
                 "candidate": {"value": {"num": "7", "den": "1"}},
@@ -210,15 +210,15 @@ def test_mutated_geometry_candidate_is_rejected_without_false_conclusion(
 def test_schema_valid_false_simple_polygon_decision_is_rejected(
     geometry_services: DomainTestServices,
 ) -> None:
-    geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.polygon.simple.decide",
+    geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.polygon.simple.decide",
             input={"points": [P0, PXY, PY, PX]},
         )
     )
-    rejected = geometry_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.polygon.simple.verify",
+    rejected = geometry_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.polygon.simple.verify",
             input={
                 "input": {"points": [P0, PXY, PY, PX]},
                 "candidate": {

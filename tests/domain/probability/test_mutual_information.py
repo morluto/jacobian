@@ -6,7 +6,7 @@ from fractions import Fraction
 import pytest
 from tests.support.rationals import rational_payload as _q
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.math.probability import FiniteJointTable, mutual_information
 from jacobian.math.probability.mutual_information import (
@@ -27,9 +27,9 @@ _PAYLOAD = {
 
 
 def _verify(probability_services, payload, candidate):
-    return probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.joint.mutual_information.verify",
+    return probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.joint.mutual_information.verify",
             input={"input": payload, "candidate": candidate},
         )
     )
@@ -91,9 +91,9 @@ def test_native_result_rejects_support_that_does_not_reconstruct_marginals() -> 
 def test_finite_joint_mutual_information_is_exact_and_verified(
     probability_services,
 ) -> None:
-    computed = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.joint.mutual_information.compute",
+    computed = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.joint.mutual_information.compute",
             input=_PAYLOAD,
         )
     )
@@ -125,9 +125,9 @@ def test_composite_log_base_preserves_available_exact_value(
     probability_services,
 ) -> None:
     payload = {**_PAYLOAD, "log_base": 16}
-    computed = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.joint.mutual_information.compute",
+    computed = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.joint.mutual_information.compute",
             input=payload,
         )
     )
@@ -155,9 +155,9 @@ def test_checker_formats_large_valid_log_product_without_decimal_limit_failure(
         ],
         "log_base": 2,
     }
-    computed = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.joint.mutual_information.compute",
+    computed = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.joint.mutual_information.compute",
             input=payload,
         )
     )
@@ -183,9 +183,9 @@ def test_unit_likelihood_ratios_do_not_consume_power_cost_budget(
         "probabilities": [[_q(1, 100_000)], [_q(99_999, 100_000)]],
         "log_base": 2,
     }
-    computed = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.joint.mutual_information.compute",
+    computed = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.joint.mutual_information.compute",
             input=payload,
         )
     )
@@ -205,9 +205,9 @@ def test_unit_likelihood_ratios_do_not_consume_power_cost_budget(
 def test_mutual_information_checker_rejects_tampered_ratio(
     probability_services,
 ) -> None:
-    computed = probability_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="probability.joint.mutual_information.compute",
+    computed = probability_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="probability.joint.mutual_information.compute",
             input=_PAYLOAD,
         )
     )

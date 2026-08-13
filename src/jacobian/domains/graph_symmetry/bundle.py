@@ -1,11 +1,11 @@
 """Explicit bundle for exact declared graph-symmetry actions."""
 
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_symmetry.checkers import (
     GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS,
 )
-from jacobian.domains.graph_symmetry.operations import GRAPH_SYMMETRY_CAPABILITIES
+from jacobian.domains.graph_symmetry.operations import GRAPH_SYMMETRY_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import NETWORKX_VERSION, known_provider_runtime
 
@@ -45,9 +45,9 @@ def build_graph_symmetry_bundle() -> DomainBundle:
             ),
         ),
         backend_version=NETWORKX_VERSION,
-        capabilities=GRAPH_SYMMETRY_CAPABILITIES,
+        operations=GRAPH_SYMMETRY_OPERATIONS,
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_GRAPH_SYMMETRY_REQUEST",
                 stage="graph_symmetry_input_validation",
                 message="Input does not satisfy the bounded declared-symmetry contract.",

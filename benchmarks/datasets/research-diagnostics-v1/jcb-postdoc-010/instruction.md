@@ -4,7 +4,7 @@ For positive semidefinite matrices A1,...,An of the same size, determine whether
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. The portfolio lacks exact PSD-cone certificates, spectral-norm inequality semantics, large sparse certificate artifacts, and an operator-authorized checker binding a rational separation witness to this exact claim.
+report the operation boundary honestly. The portfolio lacks exact PSD-cone certificates, spectral-norm inequality semantics, large sparse certificate artifacts, and an operator-authorized checker binding a rational separation witness to this exact claim.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

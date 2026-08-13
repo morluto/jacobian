@@ -3,8 +3,8 @@ artifacts = ["/app/submission.json", "/app/evidence"]
 [task]
 name = "jacobian/recurrence-linear-eval"
 version = "1.0.0"
-description = "Select the most specific capability for a recurrence-series query."
-keywords = ["capability-discovery", "recurrence", "regression", "verification"]
+description = "Select the most specific operation for a recurrence-series query."
+keywords = ["operation-discovery", "recurrence", "regression", "verification"]
 [metadata]
 evaluation_kind = "public-reproduction"
 domain = "mathematical-sciences"
@@ -21,7 +21,7 @@ tags = ["discovery", "recurrence", "regression", "offline"]
 case_version = "public-reproductions-v1"
 contamination_class = "public-answer-visible-reproduction"
 fixture_digest = "sha256:ffe8545f6e89d41a944855d150fe52d1187d438a9fe0381781f7c2b113892bbe"
-derivation = "Discovery regression for 'evaluate requested indices of a constant coefficient linear recurrence'; expected first capability combinatorics.recurrence.linear.evaluate."
+derivation = "Discovery regression for 'evaluate requested indices of a constant coefficient linear recurrence'; expected first operation combinatorics.recurrence.linear.evaluate."
 [agent]
 timeout_sec = 600.0
 [verifier]

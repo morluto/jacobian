@@ -5,9 +5,9 @@ from copy import deepcopy
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
-    CapabilityResult,
+from jacobian.contracts.operations import (
+    OperationRequest,
+    OperationResult,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -24,10 +24,10 @@ def _square_input() -> dict[str, object]:
     return {"left": matrix, "right": matrix}
 
 
-def _compute_square(matrix_services: DomainTestServices) -> CapabilityResult:
-    return matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.multiply.compute",
+def _compute_square(matrix_services: DomainTestServices) -> OperationResult:
+    return matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.multiply.compute",
             input=_square_input(),
         )
     )
@@ -40,9 +40,9 @@ def test_square_zero_product_is_computed_then_independently_verified(
 
     assert computed.execution.status is ExecutionStatus.COMPLETED
 
-    verified = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.multiply.verify",
+    verified = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.multiply.verify",
             input={
                 "input": _square_input(),
                 "candidate": computed.output["result"],
@@ -64,9 +64,9 @@ def test_matrix_product_verifier_rejects_a_false_product_without_a_record(
     false_candidate = deepcopy(computed.output["result"])
     false_candidate["product"] = _qq([[1, 0], [0, 0]])
 
-    rejected = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.multiply.verify",
+    rejected = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.multiply.verify",
             input={
                 "input": _square_input(),
                 "candidate": false_candidate,

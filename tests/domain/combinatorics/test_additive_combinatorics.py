@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.combinatorics import (
     MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH,
     MAX_ADDITIVE_INTEGER_LENGTH,
 )
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.combinatorics import build_combinatorics_bundle
 
@@ -28,9 +28,9 @@ def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 def test_integer_sidon_materializes_every_ordered_difference(
     domain_services: DomainTestServices,
 ) -> None:
-    computed = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.integer_set.sidon.decide",
+    computed = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.integer_set.sidon.decide",
             input={"elements": _BASE},
         )
     )
@@ -44,9 +44,9 @@ def test_integer_sidon_materializes_every_ordered_difference(
 def test_perfect_difference_set_reports_complete_residue_profile(
     domain_services: DomainTestServices,
 ) -> None:
-    computed = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.cyclic_difference_set.perfect.decide",
+    computed = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.cyclic_difference_set.perfect.decide",
             input={"modulus": 7, "residues": [0, 1, 3]},
         )
     )
@@ -67,9 +67,9 @@ def test_fixed_order_extension_returns_complete_negative_decisions(
     order: int,
     candidate_count: int,
 ) -> None:
-    computed = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.cyclic_difference_set.extension.decide",
+    computed = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.cyclic_difference_set.extension.decide",
             input={"base_elements": _BASE, "target_order": order},
         )
     )
@@ -84,9 +84,9 @@ def test_fixed_order_extension_returns_complete_negative_decisions(
 def test_fixed_order_extension_returns_a_complete_positive_witness(
     domain_services: DomainTestServices,
 ) -> None:
-    computed = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.cyclic_difference_set.extension.decide",
+    computed = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.cyclic_difference_set.extension.decide",
             input={"base_elements": ["0", "1"], "target_order": 3},
         )
     )
@@ -114,9 +114,9 @@ def test_integer_sidon_accepts_the_widest_canonical_difference(
     assert len(largest_positive) == MAX_ADDITIVE_INTEGER_LENGTH
     assert len(most_negative) == MAX_ADDITIVE_INTEGER_LENGTH
 
-    computed = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="combinatorics.integer_set.sidon.decide",
+    computed = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="combinatorics.integer_set.sidon.decide",
             input={"elements": [largest_positive, most_negative]},
         )
     )

@@ -1,4 +1,4 @@
-"""Focused capability installation support shared by owning test lanes."""
+"""Focused operation installation support shared by owning test lanes."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ from jacobian.verification.service import VerificationService
 
 
 @contextmanager
-def install_capability_bundle(
+def install_operation_bundle(
     tmp_path: Path,
     installer: Callable[..., tuple[Any, Any]],
 ) -> Iterator[tuple[Any, Any, ArtifactRepository]]:
-    """Build and close a minimal store around one installed capability bundle."""
+    """Build and close a minimal store around one installed operation bundle."""
 
     store = ArtifactRepository(tmp_path / "store")
     schemas = SchemaRegistry(store)

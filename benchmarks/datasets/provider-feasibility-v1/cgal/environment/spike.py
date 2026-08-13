@@ -367,10 +367,10 @@ def run_spike(
                     "verify triangle orientation, edge incidence, non-crossing, and hull coverage independently",
                     "replay exact empty-circumcircle predicates for every triangle and site",
                     "reject cocircular input under REQUIRE_UNIQUE or specify a canonical tie-break",
-                    "keep any Voronoi outcome in a separate capability and artifact",
+                    "keep any Voronoi outcome in a separate operation and artifact",
                 ],
             },
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
             "limitations": limitations,
         }
     except CgalSpikeError as exc:
@@ -379,7 +379,7 @@ def run_spike(
             "status": exc.status,
             "conclusion": "NO_CONCLUSION",
             "diagnostic": {"code": exc.code, "detail": exc.detail},
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
         }
 
 

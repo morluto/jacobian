@@ -3,9 +3,9 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from jacobian.checker_operations import derive_verification_capability_id
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.checker_operations import derive_verification_operation_id
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -28,31 +28,31 @@ def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
 
 
 def _computed_cases(verified_poset_services) -> list[tuple[str, dict, Any]]:
-    materialized = verified_poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.finite.compute",
+    materialized = verified_poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.finite.compute",
             input=_PRESENTATION,
         )
     )
     poset = _result_payload(verified_poset_services, materialized)["poset"]
     width_input = {"poset": poset}
-    width = verified_poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.width.compute",
+    width = verified_poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.width.compute",
             input=width_input,
         )
     )
     linear_input = {"poset": poset}
-    linear = verified_poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.linear_extensions.count",
+    linear = verified_poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.linear_extensions.count",
             input=linear_input,
         )
     )
     mobius_input = {"poset": poset, "scope": "COMPLETE_MATRIX", "intervals": []}
-    mobius = verified_poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="poset.mobius_function.compute",
+    mobius = verified_poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="poset.mobius_function.compute",
             input=mobius_input,
         )
     )
@@ -70,9 +70,9 @@ def test_poset_results_are_independently_verified(
     for producer_id, producer_input, computed in _computed_cases(
         verified_poset_services
     ):
-        verified = verified_poset_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=derive_verification_capability_id(producer_id),
+        verified = verified_poset_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=derive_verification_operation_id(producer_id),
                 input=(
                     {"input": producer_input, "candidate": computed.output["result"]}
                     if producer_id
@@ -99,21 +99,21 @@ def test_poset_results_are_independently_verified(
 def test_poset_checker_rejects_forged_width_certificate(
     verified_poset_services,
 ) -> None:
-    materialized = verified_poset_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id="poset.finite.compute", input=_PRESENTATION)
+    materialized = verified_poset_services.core.operations.invoke(
+        OperationRequest(operation_id="poset.finite.compute", input=_PRESENTATION)
     )
     producer_id = "poset.width.compute"
     producer_input = {
         "poset": _result_payload(verified_poset_services, materialized)["poset"]
     }
-    width = verified_poset_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id=producer_id, input=producer_input)
+    width = verified_poset_services.core.operations.invoke(
+        OperationRequest(operation_id=producer_id, input=producer_input)
     )
     forged_candidate = deepcopy(width.output["result"])
     forged_candidate["maximum_antichain"] = ["0", "1"]
-    rejected = verified_poset_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=derive_verification_capability_id(producer_id),
+    rejected = verified_poset_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=derive_verification_operation_id(producer_id),
             input={"input": producer_input, "candidate": forged_candidate},
         )
     )
@@ -128,8 +128,8 @@ def test_poset_checker_runtime_binds_only_independent_source(
 ) -> None:
     descriptor = next(
         item
-        for item in verified_poset_services.core.capabilities.catalog().capabilities
-        if item.capability_id == "poset.width.verify"
+        for item in verified_poset_services.core.operations.catalog().operations
+        if item.operation_id == "poset.width.verify"
     )
     assert descriptor.provider_runtime is not None
     assert {

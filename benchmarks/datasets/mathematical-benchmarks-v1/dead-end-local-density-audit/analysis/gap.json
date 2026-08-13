@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "dead-end-local-density-audit",
   "analysis": {
     "mathematical_moves": [
@@ -11,7 +11,7 @@
     ],
     "current_capabilities": [
       {
-        "capability_id": "modular.enumerate.quadratic_residues",
+        "operation_id": "modular.enumerate.quadratic_residues",
         "availability": "AVAILABLE",
         "boundary": "Enumerates quadratic residues, not affine divisibility obstructions across valuation branches."
       }
@@ -21,7 +21,7 @@
     ],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],
-    "disposition": "NO_NEW_CAPABILITY",
+    "disposition": "NO_NEW_OPERATION",
     "next_action": "Keep branch selection, collision analysis, and local-factor reconstruction as agent-owned composition; do not add a problem-specific square-free-density solver."
   }
 }

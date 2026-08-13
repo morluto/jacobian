@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.lean import (
     LeanDeclarationInspectOutput,
     LeanDeclarationInspectRequest,
@@ -15,23 +10,28 @@ from jacobian.contracts.lean import (
     LeanDependencyGraphArtifact,
     LeanDependencyGraphRequest,
 )
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    OperationExample,
+    ProviderObservation,
+)
 from jacobian.domain_bundles import DomainBundle
 from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
     LeanDeclarationService,
 )
 from jacobian.operation_bindings import durable_operation, inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
     OperationRefusalError,
-    OperationSpec,
 )
 
 
 def _refusal(error: LeanDeclarationBackendError) -> OperationRefusalError:
     return OperationRefusalError(
-        CapabilityDiagnostic(
+        OperationDiagnostic(
             code=error.code,
             stage="lean_declaration_query",
             message=error.message,
@@ -45,7 +45,7 @@ def _refusal(error: LeanDeclarationBackendError) -> OperationRefusalError:
 
 def build_lean_declaration_query_bundle(
     declarations: LeanDeclarationService,
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> DomainBundle:
     """Bind search and inspection to one declaration service instance."""
 
@@ -88,9 +88,9 @@ def build_lean_declaration_query_bundle(
         ),
         provider_runtime=provider_runtime,
         backend_version=provider_runtime.version or "unknown",
-        capabilities=(
+        operations=(
             inline_operation(
-                OperationSpec(
+                OperationDeclaration(
                     operation_id="lean.declaration.search",
                     version="2",
                     request_type=LeanDeclarationSearchRequest,
@@ -115,8 +115,8 @@ def build_lean_declaration_query_bundle(
                         "retrieval",
                         "premise-discovery",
                     ),
-                    invocation_examples=(
-                        CapabilityInvocationExample(
+                    examples=(
+                        OperationExample(
                             name="find_sqrt_two_irrationality",
                             description=(
                                 "Find the exact square-root-of-two irrationality "
@@ -135,7 +135,7 @@ def build_lean_declaration_query_bundle(
                 )
             ),
             inline_operation(
-                OperationSpec(
+                OperationDeclaration(
                     operation_id="lean.declaration.inspect",
                     version="2",
                     request_type=LeanDeclarationInspectRequest,
@@ -158,8 +158,8 @@ def build_lean_declaration_query_bundle(
                         "retrieval",
                         "inspection",
                     ),
-                    invocation_examples=(
-                        CapabilityInvocationExample(
+                    examples=(
+                        OperationExample(
                             name="inspect_sqrt_two_irrationality",
                             description=(
                                 "Inspect the exact Mathlib declaration returned by "
@@ -176,7 +176,7 @@ def build_lean_declaration_query_bundle(
                 )
             ),
             durable_operation(
-                OperationSpec(
+                OperationDeclaration(
                     operation_id="lean.declaration.dependencies",
                     version="2",
                     request_type=LeanDependencyGraphRequest,
@@ -204,7 +204,7 @@ def build_lean_declaration_query_bundle(
             ),
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_LEAN_DECLARATION_QUERY",
                 stage="request_validation",
                 message="The Lean declaration query is invalid.",

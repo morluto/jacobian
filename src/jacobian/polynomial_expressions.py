@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.artifacts import ArtifactPutResult
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.polynomial_expressions import (
     PolynomialExpressionArtifact,
     PolynomialExpressionBinding,
@@ -134,7 +134,7 @@ class PolynomialExpressionArtifactService:
         *,
         expression_uri: str,
         normalized: SparseRationalPolynomial | dict[str, Any],
-        producer: CapabilityProviderRuntime,
+        producer: ProviderObservation,
         resource_budget: PolynomialExpressionResourceBudget | dict[str, Any],
     ) -> ArtifactPutResult:
         resolved = self.resolve_expression(expression_uri)

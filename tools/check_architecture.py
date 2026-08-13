@@ -37,7 +37,7 @@ runtime.  It enforces eighteen focused invariants:
    runtime, providers, persistence, artifacts, or MCP projections.
 
 9. **native-math-boundary**: the public ``jacobian.math`` namespace must not
-   import runtime, MCP, artifact, provider, or capability-installation layers.
+   import runtime, MCP, artifact, provider, or operation-installation layers.
 
 10. **checker-producer-isolation**: independent checkers must not import a
     producer domain's conversion or kernel module.
@@ -55,10 +55,10 @@ runtime.  It enforces eighteen focused invariants:
 14. **unsupported-surface**: removed experimental memory/search identifiers must
     not appear in supported product source, tests, schemas, catalog, or docs.
 
-15. **internal-capability-request**: only CLI and MCP boundaries may construct
-    the generic capability request envelope; in-process composition stays typed.
+15. **internal-operation-request**: only CLI and MCP boundaries may construct
+    the generic operation request envelope; in-process composition stays typed.
 
-16. **capability-result-projection**: only the final operation projection may
+16. **operation-result-projection**: only the final operation projection may
     construct the generic public result envelope.
 
 17. **legacy-adapter-mode**: built-in adapters may not restore marker-selected
@@ -266,14 +266,14 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
 # os.environ spreading: product source only.
 _ENVIRON_SPREAD_ROOTS = (PurePosixPath("src"),)
 
-_CAPABILITY_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
+_OPERATION_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
     {
         PurePosixPath("src/jacobian/cli.py"),
         PurePosixPath("src/jacobian/adapters/mcp/tooling.py"),
     }
 )
 
-_CAPABILITY_RESULT_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
+_OPERATION_RESULT_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
     {PurePosixPath("src/jacobian/operation_projection.py")}
 )
 
@@ -491,30 +491,30 @@ def _attribute_path(node: ast.AST) -> str | None:
     return None
 
 
-def _internal_capability_request_violations(
+def _internal_operation_request_violations(
     relative: PurePosixPath,
     tree: ast.AST,
 ) -> tuple[Violation, ...]:
     if not str(relative).startswith("src/jacobian/"):
         return ()
-    if relative in _CAPABILITY_REQUEST_ALLOWED_EXACT:
+    if relative in _OPERATION_REQUEST_ALLOWED_EXACT:
         return ()
     return tuple(
         Violation(
             str(relative),
-            "internal-capability-request",
+            "internal-operation-request",
             "in-process composition must pass typed values instead of constructing "
-            "CapabilityRequest",
+            "OperationRequest",
             node.lineno,
         )
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id == "CapabilityRequest"
+        and node.func.id == "OperationRequest"
     )
 
 
-def _capability_result_from_import_from(
+def _operation_result_from_import_from(
     relative: PurePosixPath, node: ast.ImportFrom
 ) -> tuple[set[str], set[str]]:
     pairs = zip(node.names, _import_references(relative, node), strict=True)
@@ -524,60 +524,60 @@ def _capability_result_from_import_from(
         for alias, reference in pairs
         if reference
         in {
-            "jacobian.contracts.capabilities.CapabilityResult",
-            "contracts.capabilities.CapabilityResult",
+            "jacobian.contracts.operations.OperationResult",
+            "contracts.operations.OperationResult",
         }
     }
     module_names = {
         alias.asname or alias.name
         for alias, reference in pairs
-        if reference in {"jacobian.contracts.capabilities", "contracts.capabilities"}
+        if reference in {"jacobian.contracts.operations", "contracts.operations"}
     }
     module_names.update(
         alias.asname or alias.name
         for alias, reference in pairs
         if reference in {"jacobian.contracts", "contracts"}
-        and alias.name == "capabilities"
+        and alias.name == "operations"
     )
     module_names.update(
-        f"{alias.asname or alias.name}.capabilities"
+        f"{alias.asname or alias.name}.operations"
         for alias, reference in pairs
         if reference == "jacobian" and alias.name == "contracts"
     )
     return constructor_names, module_names
 
 
-def _capability_result_from_import(
+def _operation_result_from_import(
     node: ast.Import,
 ) -> tuple[set[str], set[str]]:
     module_names = {
         alias.asname or alias.name
         for alias in node.names
-        if alias.name == "jacobian.contracts.capabilities"
+        if alias.name == "jacobian.contracts.operations"
     }
     module_names.update(
-        f"{alias.asname or alias.name}.capabilities"
+        f"{alias.asname or alias.name}.operations"
         for alias in node.names
         if alias.name == "jacobian.contracts"
     )
     module_names.update(
-        f"{alias.asname or alias.name}.contracts.capabilities"
+        f"{alias.asname or alias.name}.contracts.operations"
         for alias in node.names
         if alias.name == "jacobian"
     )
     return set(), module_names
 
 
-def _capability_result_bindings(
+def _operation_result_bindings(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[set[str], set[str]]:
     constructor_names: set[str] = set()
     module_names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            constructors, modules = _capability_result_from_import_from(relative, node)
+            constructors, modules = _operation_result_from_import_from(relative, node)
         elif isinstance(node, ast.Import):
-            constructors, modules = _capability_result_from_import(node)
+            constructors, modules = _operation_result_from_import(node)
         else:
             continue
         constructor_names.update(constructors)
@@ -585,15 +585,15 @@ def _capability_result_bindings(
     return constructor_names, module_names
 
 
-def _capability_result_projection_violations(
+def _operation_result_projection_violations(
     relative: PurePosixPath,
     tree: ast.AST,
 ) -> tuple[Violation, ...]:
     if not str(relative).startswith("src/jacobian/"):
         return ()
-    if relative in _CAPABILITY_RESULT_ALLOWED_EXACT:
+    if relative in _OPERATION_RESULT_ALLOWED_EXACT:
         return ()
-    constructor_names, module_names = _capability_result_bindings(relative, tree)
+    constructor_names, module_names = _operation_result_bindings(relative, tree)
 
     def is_result_constructor(call: ast.Call) -> bool:
         if isinstance(call.func, ast.Name):
@@ -602,15 +602,15 @@ def _capability_result_projection_violations(
             return False
         path = _attribute_path(call.func)
         return path is not None and any(
-            path == f"{module}.CapabilityResult" for module in module_names
+            path == f"{module}.OperationResult" for module in module_names
         )
 
     return tuple(
         Violation(
             str(relative),
-            "capability-result-projection",
+            "operation-result-projection",
             "only operation_projection.py may construct the public "
-            "CapabilityResult envelope",
+            "OperationResult envelope",
             node.lineno,
         )
         for node in ast.walk(tree)
@@ -1021,7 +1021,7 @@ _CONTRACT_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.persistence",
     "jacobian.artifacts",
     "jacobian.adapters.mcp",
-    "jacobian.capability_service",
+    "jacobian.operation_service",
     "jacobian.operation_installation",
     "jacobian.installation",
 )
@@ -1031,7 +1031,7 @@ _NATIVE_MATH_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.persistence",
     "jacobian.artifacts",
     "jacobian.adapters.mcp",
-    "jacobian.capability_service",
+    "jacobian.operation_service",
     "jacobian.operation_installation",
     "jacobian.installation",
 )
@@ -1123,7 +1123,7 @@ def _native_math_boundary_violations(
                         str(relative),
                         "native-math-boundary",
                         "jacobian.math must call domain kernels directly without "
-                        "loading runtime, MCP, artifact, provider, or capability layers",
+                        "loading runtime, MCP, artifact, provider, or operation layers",
                         node.lineno,
                     )
                 )
@@ -1724,8 +1724,8 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return (Violation(rel_str, "parse-error", f"cannot parse file: {exc}"),)
 
     violations: list[Violation] = []
-    violations.extend(_internal_capability_request_violations(relative, tree))
-    violations.extend(_capability_result_projection_violations(relative, tree))
+    violations.extend(_internal_operation_request_violations(relative, tree))
+    violations.extend(_operation_result_projection_violations(relative, tree))
     violations.extend(_legacy_adapter_mode_violations(relative, tree))
     violations.extend(_subprocess_violations(relative, tree))
     violations.extend(_run_bounded_process_violations(relative, tree))

@@ -4,7 +4,7 @@ Let N={1,2,3,4,5}. Elements cover E1={A,B}, E2={A,B,C,D}, E3={C,D}, E4={A,C}, E5
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the capability boundary honestly. Generic LP evidence still needs an inspectable encoding that binds variables and constraints to the coverage-function and pairwise-independence semantics. Solver status alone is not VERIFIED.
+report the operation boundary honestly. Generic LP evidence still needs an inspectable encoding that binds variables and constraints to the coverage-function and pairwise-independence semantics. Solver status alone is not VERIFIED.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

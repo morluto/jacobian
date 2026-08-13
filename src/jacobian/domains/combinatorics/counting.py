@@ -1,4 +1,4 @@
-"""Counting-owned exact combinatorics capabilities."""
+"""Counting-owned exact combinatorics operations."""
 
 from jacobian.contracts.combinatorics import (
     BinomialRequest,
@@ -24,7 +24,7 @@ from jacobian.domains.combinatorics.operations import (
     permutations,
 )
 
-COUNTING_CAPABILITIES = (
+COUNTING_OPERATIONS = (
     combinatorics_operation(
         "combinatorics.compute.factorial",
         "Compute factorial",
@@ -34,7 +34,7 @@ COUNTING_CAPABILITIES = (
         factorial,
         "combinatorics",
         "counting",
-        invocation_examples=(example("factorial_5", "Compute 5 factorial.", {"n": 5}),),
+        examples=(example("factorial_5", "Compute 5 factorial.", {"n": 5}),),
     ),
     combinatorics_operation(
         "combinatorics.compute.double_factorial",
@@ -45,7 +45,7 @@ COUNTING_CAPABILITIES = (
         double_factorial,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example("double_factorial_7", "Compute 7 double factorial.", {"n": 7}),
         ),
     ),
@@ -58,7 +58,7 @@ COUNTING_CAPABILITIES = (
         derangements,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example("derangements_4", "Count derangements of 4 objects.", {"n": 4}),
         ),
     ),
@@ -73,7 +73,7 @@ COUNTING_CAPABILITIES = (
         "combinatorics",
         "counting",
         "number-theory",
-        invocation_examples=(
+        examples=(
             example("binomial_5_choose_2", "Compute 5 choose 2.", {"n": 5, "k": 2}),
         ),
     ),
@@ -86,7 +86,7 @@ COUNTING_CAPABILITIES = (
         multinomial,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example(
                 "multinomial_2_1_2",
                 "Compute a multinomial coefficient for parts 2, 1, and 2.",
@@ -103,7 +103,7 @@ COUNTING_CAPABILITIES = (
         permutations,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example(
                 "permutations_5_2",
                 "Count ordered selections of 2 from 5.",
@@ -120,7 +120,7 @@ COUNTING_CAPABILITIES = (
         catalan,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example("catalan_4", "Compute the fourth Catalan number.", {"n": 4}),
         ),
     ),
@@ -133,7 +133,7 @@ COUNTING_CAPABILITIES = (
         motzkin,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example("motzkin_5", "Compute the fifth Motzkin number.", {"n": 5}),
         ),
     ),
@@ -146,7 +146,7 @@ COUNTING_CAPABILITIES = (
         central_binomial,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example(
                 "central_binomial_4",
                 "Compute the central binomial coefficient for n=4.",
@@ -163,7 +163,7 @@ COUNTING_CAPABILITIES = (
         compositions,
         "combinatorics",
         "counting",
-        invocation_examples=(
+        examples=(
             example(
                 "compositions_5_2",
                 "Count positive compositions of 5 into 2 parts.",

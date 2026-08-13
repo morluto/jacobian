@@ -804,7 +804,7 @@ def run_spike(
                     ),
                 },
             },
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
             "limitations": [
                 "the PyPI wheel metadata has no bundled dist-info license file",
                 "the wheel distribution is 7.4.1 while the engine reports major.minor 7.4",
@@ -818,7 +818,7 @@ def run_spike(
             "status": exc.status,
             "conclusion": "NO_CONCLUSION",
             "diagnostic": {"code": exc.code, "detail": exc.detail},
-            "capability_ids_registered": [],
+            "operation_ids_registered": [],
         }
 
 

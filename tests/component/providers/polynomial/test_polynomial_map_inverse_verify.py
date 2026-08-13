@@ -7,8 +7,8 @@ from tests.component.providers.polynomial.polynomial_capabilities_support import
     PolynomialTestServices,
 )
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian_checkers.polynomial_maps import check_map_inverse
@@ -44,9 +44,9 @@ def _triangular_maps() -> tuple[dict[str, Any], dict[str, Any]]:
     )
 
 
-def _request(forward: dict[str, Any], inverse: dict[str, Any]) -> CapabilityRequest:
-    return CapabilityRequest(
-        capability_id="polynomial.map.inverse.verify",
+def _request(forward: dict[str, Any], inverse: dict[str, Any]) -> OperationRequest:
+    return OperationRequest(
+        operation_id="polynomial.map.inverse.verify",
         input={
             "forward_map": forward,
             "inverse_map": inverse,
@@ -89,7 +89,7 @@ def test_two_sided_triangular_inverse_is_verified(
 ) -> None:
     forward, inverse = _triangular_maps()
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
+    result = authorized_polynomial_services.core.operations.invoke(
         _request(forward, inverse)
     )
 
@@ -139,10 +139,10 @@ def test_noncanonical_sparse_maps_are_normalized_before_verification(
         _term(0, [0, 0]),
     ]
 
-    normalized = authorized_polynomial_services.core.capabilities.invoke(
+    normalized = authorized_polynomial_services.core.operations.invoke(
         _request(forward, inverse)
     )
-    canonical = authorized_polynomial_services.core.capabilities.invoke(
+    canonical = authorized_polynomial_services.core.operations.invoke(
         _request(canonical_forward, canonical_inverse)
     )
 
@@ -170,7 +170,7 @@ def test_sparse_input_normalization_rejects_malformed_terms_before_artifacts(
     forward, inverse = _triangular_maps()
     forward["coordinates"][0]["terms"][0]["unexpected"] = True
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
+    result = authorized_polynomial_services.core.operations.invoke(
         _request(forward, inverse)
     )
 
@@ -190,7 +190,7 @@ def test_duplicate_accumulation_rejects_oversized_coefficients(
         _term(1, [1, 0]),
     ]
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
+    result = authorized_polynomial_services.core.operations.invoke(
         _request(forward, inverse)
     )
 
@@ -205,7 +205,7 @@ def test_duplicate_accumulation_rejects_oversized_groups(
     forward, inverse = _triangular_maps()
     forward["coordinates"][0]["terms"] = [_term(1, [1, 0]) for _ in range(1_000)]
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
+    result = authorized_polynomial_services.core.operations.invoke(
         _request(forward, inverse)
     )
 
@@ -238,9 +238,9 @@ def test_cancelled_high_degree_terms_do_not_apply_operation_budget(
         "coordinates": [{"terms": [_term(1, [1])]}],
     }
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.inverse.verify",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.inverse.verify",
             input={
                 "forward_map": forward,
                 "inverse_map": inverse,
@@ -276,9 +276,9 @@ def test_overlapping_variable_names_use_simultaneous_composition(
         ],
     }
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.inverse.verify",
+    result = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.inverse.verify",
             input={
                 "forward_map": forward,
                 "inverse_map": inverse,
@@ -302,8 +302,8 @@ def test_unrepresentable_composition_is_rejected_before_artifacts(
         "variables": ["x"],
         "coordinates": [{"terms": [_term(1, [32])]}],
     }
-    request = CapabilityRequest(
-        capability_id="polynomial.map.inverse.verify",
+    request = OperationRequest(
+        operation_id="polynomial.map.inverse.verify",
         input={
             "forward_map": high_degree,
             "inverse_map": deepcopy(high_degree),
@@ -312,7 +312,7 @@ def test_unrepresentable_composition_is_rejected_before_artifacts(
         },
     )
 
-    result = authorized_polynomial_services.core.capabilities.invoke(request)
+    result = authorized_polynomial_services.core.operations.invoke(request)
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.output["error"]["code"] == "INVALID_POLYNOMIAL_MAP_INVERSE_REQUEST"
@@ -325,7 +325,7 @@ def test_perturbed_inverse_coefficient_is_verified_false(
     forward, inverse = _triangular_maps()
     inverse["coordinates"][0]["terms"][1]["coefficient"]["num"] = "-2"
 
-    result = authorized_polynomial_services.core.capabilities.invoke(
+    result = authorized_polynomial_services.core.operations.invoke(
         _request(forward, inverse)
     )
 
@@ -343,7 +343,7 @@ def test_checker_rejects_every_bound_map_and_residual_substitution(
     authorized_polynomial_services,
 ) -> None:
     forward, inverse = _triangular_maps()
-    result = authorized_polynomial_services.core.capabilities.invoke(
+    result = authorized_polynomial_services.core.operations.invoke(
         _request(forward, inverse)
     )
     base = _checker_request(authorized_polynomial_services, result.output)

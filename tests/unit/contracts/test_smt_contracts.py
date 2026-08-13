@@ -6,11 +6,11 @@ import hashlib
 import pytest
 from pydantic import ValidationError
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.smt import (
     SmtAletheProofArtifact,
@@ -37,15 +37,15 @@ def _sha256(value: bytes) -> str:
     return f"sha256:{hashlib.sha256(value).hexdigest()}"
 
 
-def _runtime() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _runtime() -> ProviderObservation:
+    return ProviderObservation(
         provider="cvc5",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1.3.4",
         digest=_DIGEST,
-        digest_kind=CapabilityProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
+        digest_kind=ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="BSD-3-Clause",
         license_files=("cvc5.dist-info/licenses/COPYING",),
         features=("alethe-proof-production",),

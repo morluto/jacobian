@@ -1,14 +1,10 @@
-"""Exact matrix capability declarations."""
+"""Exact matrix operation declarations."""
 
 from collections.abc import Callable
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-)
 from jacobian.contracts.matrix_operations import (
     CharacteristicPolynomialResult,
     IntegerMatrixRequest,
@@ -29,6 +25,10 @@ from jacobian.contracts.matrix_operations import (
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    OperationExample,
+)
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains._examples import example
 from jacobian.domains.matrix_lattice.operations import (
@@ -46,11 +46,11 @@ from jacobian.domains.matrix_lattice.operations import (
 )
 from jacobian.math.matrices.values import SmithNormalForm
 from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_ports import OutputPort
 from jacobian.operations import (
     OperationAbortError,
     OperationRefusalError,
-    OperationSpec,
 )
 
 
@@ -58,14 +58,14 @@ def matrix_operation[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    capability_id: str,
+    operation_id: str,
     title: str,
     description: str,
     request_model: type[RequestT],
     result_model: type[ResultT],
     operation: Callable[[RequestT], ResultT],
     *tags: str,
-    invocation_examples: tuple[CapabilityInvocationExample, ...] = (),
+    examples: tuple[OperationExample, ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
     version: str = "1",
 ) -> InstalledOperation[RequestT, ResultT]:
@@ -75,7 +75,7 @@ def matrix_operation[
         except ValidationError as exc:
             raise OperationAbortError(
                 ExecutionStatus.ERROR,
-                CapabilityDiagnostic(
+                OperationDiagnostic(
                     code="MATRIX_OUTPUT_LIMIT_EXCEEDED",
                     stage="matrix_result_validation",
                     message=(
@@ -90,7 +90,7 @@ def matrix_operation[
             ) from exc
         except (ArithmeticError, TypeError, ValueError) as exc:
             raise OperationRefusalError(
-                CapabilityDiagnostic(
+                OperationDiagnostic(
                     code="MATRIX_OPERATION_NOT_APPLICABLE",
                     stage="matrix_computation",
                     message=str(exc),
@@ -99,8 +99,8 @@ def matrix_operation[
             ) from exc
 
     return inline_operation(
-        OperationSpec(
-            operation_id=capability_id,
+        OperationDeclaration(
+            operation_id=operation_id,
             version=version,
             title=title,
             description=description,
@@ -108,13 +108,13 @@ def matrix_operation[
             result_type=result_model,
             execute=implementation,
             tags=tags,
-            invocation_examples=invocation_examples,
+            examples=examples,
         ),
         output_ports=output_ports,
     )
 
 
-MATRIX_CAPABILITIES = (
+MATRIX_OPERATIONS = (
     matrix_operation(
         "matrix.determinant.compute",
         "Compute an exact rational matrix determinant",
@@ -125,7 +125,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "determinant",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "determinant_minus_six",
                 "Compute the determinant of [[0, 2], [3, 4]].",
@@ -157,7 +157,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "rank",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "rank_three_by_four",
                 "Compute rank and pivots of a rectangular rational matrix.",
@@ -199,7 +199,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "linear-system",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "solve_identity_system",
                 "Solve a 2x2 identity linear system.",
@@ -225,7 +225,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "adjugate",
         "exact-integer",
-        invocation_examples=(
+        examples=(
             example(
                 "adjugate_two_by_two",
                 "Compute the adjugate of a 2x2 integer matrix.",
@@ -243,7 +243,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "inverse",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "inverse_two_by_two",
                 "Compute the inverse of a nonsingular 2x2 integer matrix.",
@@ -261,7 +261,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "trace",
         "exact-integer",
-        invocation_examples=(
+        examples=(
             example(
                 "trace_two_by_two",
                 "Compute the trace of a 2x2 integer matrix.",
@@ -288,7 +288,7 @@ MATRIX_CAPABILITIES = (
         "zero-matrix",
         "matrix-identity",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "multiply_rectangular_matrices",
                 "Multiply a 2x3 matrix by a 3x2 matrix over QQ.",
@@ -337,7 +337,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "rref",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "rref_two_by_two",
                 "Compute RREF of a rational matrix.",
@@ -369,7 +369,7 @@ MATRIX_CAPABILITIES = (
         "linear-dependence",
         "rational-relations",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "rational_relation_among_columns",
                 ("Compute every rational relation among three ordered column vectors."),
@@ -403,7 +403,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "characteristic-polynomial",
         "exact-rational",
-        invocation_examples=(
+        examples=(
             example(
                 "characteristic_two_by_two",
                 "Compute the characteristic polynomial of a 2x2 matrix.",
@@ -431,7 +431,7 @@ MATRIX_CAPABILITIES = (
         "matrix",
         "smith-normal-form",
         "exact-integer",
-        invocation_examples=(
+        examples=(
             example(
                 "smith_two_by_two",
                 "Compute the Smith normal form of a 2x2 integer matrix.",

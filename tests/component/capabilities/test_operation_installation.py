@@ -7,9 +7,9 @@ import pytest
 from pydantic import ConfigDict, Field, model_validator
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityDiagnostic,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDiagnostic,
+    OperationRequest,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
@@ -26,7 +26,7 @@ from jacobian.operations import (
     Failed,
     OperationAbortError,
     OperationRefusalError,
-    OperationSpec,
+    OperationDeclaration,
     PreflightResult,
     PreflightStatus,
 )
@@ -79,7 +79,7 @@ class _SchemaDiscoveryOnlyRequest(ContractModel):
 
 
 def _synthetic_bundle() -> DomainBundle:
-    not_applicable = CapabilityDiagnostic(
+    not_applicable = OperationDiagnostic(
         code="SYNTHETIC_NOT_APPLICABLE",
         stage="synthetic_computation",
         message="Thirteen is excluded from this synthetic operation.",
@@ -98,16 +98,16 @@ def _synthetic_bundle() -> DomainBundle:
         semantics=DomainSemantics(
             name="jacobian.synthetic",
             version="1",
-            definition={"description": "synthetic capability test semantics"},
+            definition={"description": "synthetic operation test semantics"},
         ),
         provider_runtime=known_provider_runtime(
             "jacobian.synthetic",
             features=("deterministic",),
         ),
         backend_version="synthetic-1",
-        capabilities=(
+        operations=(
             inline_operation(
-                OperationSpec(
+                OperationDeclaration(
                     operation_id="synthetic.compute.double",
                     version="2",
                     title="Double a bounded integer",
@@ -120,7 +120,7 @@ def _synthetic_bundle() -> DomainBundle:
             ),
         ),
         diagnostics=DomainDiagnostics(
-            invalid_request=CapabilityDiagnostic(
+            invalid_request=OperationDiagnostic(
                 code="INVALID_SYNTHETIC_REQUEST",
                 stage="synthetic_input_validation",
                 message="Input does not satisfy the synthetic contract.",
@@ -132,7 +132,7 @@ def _synthetic_bundle() -> DomainBundle:
 def _install(runtime: DomainTestServices, bundle: DomainBundle) -> None:
     installation = runtime.core.operations.install(bundle)
     for adapter in installation.adapters:
-        runtime.core.capabilities.register(adapter)
+        runtime.core.operations.register(adapter)
 
 
 def test_synthetic_bundle_returns_an_inline_typed_result(
@@ -142,8 +142,8 @@ def test_synthetic_bundle_returns_an_inline_typed_result(
 
     descriptor = next(
         descriptor
-        for descriptor in operation_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "synthetic.compute.double"
+        for descriptor in operation_services.core.operations.catalog().operations
+        if descriptor.operation_id == "synthetic.compute.double"
     )
     assert descriptor.provider == "jacobian.synthetic"
     assert descriptor.input_schema["additionalProperties"] is False
@@ -151,9 +151,9 @@ def test_synthetic_bundle_returns_an_inline_typed_result(
     assert result_schema == {"$ref": "#/$defs/_SyntheticResult"}
     assert "value_refs" not in descriptor.output_schema["properties"]
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.compute.double",
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="synthetic.compute.double",
             input={"value": 6},
         )
     )
@@ -169,13 +169,13 @@ def test_declared_ports_publish_and_resolve_one_opaque_typed_value(
     bundle = _synthetic_bundle()
     producer = inline_operation(
         replace(
-            bundle.capabilities[0].spec,
+            bundle.operations[0].spec,
             operation_id="synthetic.compute.produce_double",
         ),
         output_ports=(OutputPort(name="value", value_type=_SyntheticResult),),
     )
     consumer = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.compute.increment",
             version="2",
             title="Increment a typed synthetic value",
@@ -196,12 +196,12 @@ def test_declared_ports_publish_and_resolve_one_opaque_typed_value(
     )
     _install(
         operation_services,
-        replace(bundle, capabilities=(producer, consumer)),
+        replace(bundle, operations=(producer, consumer)),
     )
 
     descriptors = {
-        descriptor.capability_id: descriptor
-        for descriptor in operation_services.core.capabilities.catalog().capabilities
+        descriptor.operation_id: descriptor
+        for descriptor in operation_services.core.operations.catalog().operations
     }
     assert descriptors[producer.spec.operation_id].output_ports[0].model_dump() == {
         "name": "value",
@@ -212,9 +212,9 @@ def test_declared_ports_publish_and_resolve_one_opaque_typed_value(
         "value_type": "_SyntheticResult",
     }
 
-    produced = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer.spec.operation_id,
+    produced = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=producer.spec.operation_id,
             input={"value": 6},
         )
     )
@@ -225,9 +225,9 @@ def test_declared_ports_publish_and_resolve_one_opaque_typed_value(
     assert stored.source_port == "value"
     assert stored.digest.startswith("sha256:")
 
-    consumed = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=consumer.spec.operation_id,
+    consumed = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=consumer.spec.operation_id,
             input={},
             inputs={"source": value_ref},
         )
@@ -243,9 +243,9 @@ def test_operation_without_input_ports_rejects_value_references(
     bundle = _synthetic_bundle()
     _install(operation_services, bundle)
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=bundle.capabilities[0].spec.operation_id,
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=bundle.operations[0].spec.operation_id,
             input={"value": 2},
             inputs={"undeclared": "value://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
         )
@@ -263,13 +263,13 @@ def test_value_reference_binding_rejects_unknown_ports_and_payload_conflicts(
     bundle = _synthetic_bundle()
     producer = inline_operation(
         replace(
-            bundle.capabilities[0].spec,
+            bundle.operations[0].spec,
             operation_id="synthetic.compute.produce_for_rejection",
         ),
         output_ports=(OutputPort(name="value", value_type=_SyntheticResult),),
     )
     consumer = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.compute.consume_for_rejection",
             version="2",
             title="Consume a synthetic value",
@@ -288,28 +288,28 @@ def test_value_reference_binding_rejects_unknown_ports_and_payload_conflicts(
     )
     _install(
         operation_services,
-        replace(bundle, capabilities=(producer, consumer)),
+        replace(bundle, operations=(producer, consumer)),
     )
-    produced = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=producer.spec.operation_id,
+    produced = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=producer.spec.operation_id,
             input={"value": 2},
         )
     )
     value_ref = produced.output["value_refs"]["value"]
 
-    unknown_port = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=consumer.spec.operation_id,
+    unknown_port = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=consumer.spec.operation_id,
             input={},
             inputs={"other": value_ref},
         )
     )
     assert unknown_port.diagnostics[0].code == "UNKNOWN_INPUT_PORT"
 
-    conflicting_payload = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=consumer.spec.operation_id,
+    conflicting_payload = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=consumer.spec.operation_id,
             input={"source": {"doubled": 99}},
             inputs={"source": value_ref},
         )
@@ -322,7 +322,7 @@ def test_operation_uses_one_typed_parse_not_its_discovery_schema(
 ) -> None:
     bundle = _synthetic_bundle()
     operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.compute.schema_discovery_only",
             version="2",
             request_type=_SchemaDiscoveryOnlyRequest,
@@ -332,11 +332,11 @@ def test_operation_uses_one_typed_parse_not_its_discovery_schema(
             description="Prove JSON Schema is discovery metadata, not execution.",
         )
     )
-    _install(operation_services, replace(bundle, capabilities=(operation,)))
+    _install(operation_services, replace(bundle, operations=(operation,)))
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=operation.spec.operation_id,
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation.spec.operation_id,
             input={"value": 7},
         )
     )
@@ -354,7 +354,7 @@ def test_preflight_refusal_runs_before_execution_or_publication(
         raise AssertionError("execution ran after preflight refusal")
 
     operation = durable_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.compute.preflight_refused",
             version="2",
             request_type=_SyntheticRequest,
@@ -369,11 +369,11 @@ def test_preflight_refusal_runs_before_execution_or_publication(
         ),
         resource_reason="the test exercises preflight before durable publication",
     )
-    _install(operation_services, replace(bundle, capabilities=(operation,)))
+    _install(operation_services, replace(bundle, operations=(operation,)))
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=operation.spec.operation_id,
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation.spec.operation_id,
             input={"value": 4},
         )
     )
@@ -393,7 +393,7 @@ def test_postcondition_failure_publishes_no_artifacts(operation_services) -> Non
         raise ValueError("synthetic postcondition failed")
 
     operation = durable_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.compute.postcondition_failed",
             version="2",
             request_type=_SyntheticRequest,
@@ -405,11 +405,11 @@ def test_postcondition_failure_publishes_no_artifacts(operation_services) -> Non
         ),
         resource_reason="the test exercises postcondition before publication",
     )
-    _install(operation_services, replace(bundle, capabilities=(operation,)))
+    _install(operation_services, replace(bundle, operations=(operation,)))
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id=operation.spec.operation_id,
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id=operation.spec.operation_id,
             input={"value": 4},
         )
     )
@@ -424,7 +424,7 @@ def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
 ) -> None:
     bundle = _synthetic_bundle()
     materialized = durable_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.materialize.double",
             version="2",
             title="Materialize a doubled integer",
@@ -439,12 +439,12 @@ def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
         preview=lambda result: _SyntheticPreview(summary=f"doubled={result.doubled}"),
         preview_complete=True,
     )
-    _install(operation_services, replace(bundle, capabilities=(materialized,)))
+    _install(operation_services, replace(bundle, operations=(materialized,)))
 
     descriptor = next(
         descriptor
-        for descriptor in operation_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == "synthetic.materialize.double"
+        for descriptor in operation_services.core.operations.catalog().operations
+        if descriptor.operation_id == "synthetic.materialize.double"
     )
     assert descriptor.read_only is True
     assert set(descriptor.output_schema["properties"]) == {
@@ -455,9 +455,9 @@ def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
         "backend_version",
     }
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.materialize.double",
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="synthetic.materialize.double",
             input={"value": 6},
         )
     )
@@ -482,7 +482,7 @@ def test_catalog_effect_comes_from_operation_spec(
 ) -> None:
     bundle = _synthetic_bundle()
     stateful = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.stateful.double",
             version="2",
             title="Stateful double",
@@ -493,12 +493,12 @@ def test_catalog_effect_comes_from_operation_spec(
             effect=Effect.STATEFUL,
         )
     )
-    _install(operation_services, replace(bundle, capabilities=(stateful,)))
+    _install(operation_services, replace(bundle, operations=(stateful,)))
 
     descriptor = next(
         descriptor
-        for descriptor in operation_services.core.capabilities.catalog().capabilities
-        if descriptor.capability_id == stateful.spec.operation_id
+        for descriptor in operation_services.core.operations.catalog().operations
+        if descriptor.operation_id == stateful.spec.operation_id
     )
 
     assert descriptor.read_only is False
@@ -509,7 +509,7 @@ def test_materialized_operation_omits_preview_without_projection(
 ) -> None:
     bundle = _synthetic_bundle()
     materialized = durable_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.materialize.no_preview",
             version="2",
             title="Materialize a doubled integer without preview",
@@ -521,11 +521,11 @@ def test_materialized_operation_omits_preview_without_projection(
         ),
         resource_reason="the test exercises durable lineage without a preview",
     )
-    _install(operation_services, replace(bundle, capabilities=(materialized,)))
+    _install(operation_services, replace(bundle, operations=(materialized,)))
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.materialize.no_preview",
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="synthetic.materialize.no_preview",
             input={"value": 4},
         )
     )
@@ -544,7 +544,7 @@ def test_materialized_operation_fails_closed_before_artifact_writes(
     operation_services,
 ) -> None:
     bundle = _synthetic_bundle()
-    not_applicable = CapabilityDiagnostic(
+    not_applicable = OperationDiagnostic(
         code="SYNTHETIC_NOT_APPLICABLE",
         stage="synthetic_computation",
         message="Thirteen is excluded from this synthetic operation.",
@@ -554,7 +554,7 @@ def test_materialized_operation_fails_closed_before_artifact_writes(
         raise OperationRefusalError(not_applicable)
 
     materialized = durable_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.materialize.excluded",
             version="2",
             title="Materialize a doubled integer that excludes thirteen",
@@ -569,11 +569,11 @@ def test_materialized_operation_fails_closed_before_artifact_writes(
         preview=lambda result: _SyntheticPreview(summary=f"doubled={result.doubled}"),
         preview_complete=True,
     )
-    _install(operation_services, replace(bundle, capabilities=(materialized,)))
+    _install(operation_services, replace(bundle, operations=(materialized,)))
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.materialize.excluded",
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="synthetic.materialize.excluded",
             input={"value": 13},
         )
     )
@@ -588,9 +588,9 @@ def test_synthetic_bundle_fails_closed_before_artifact_writes(
 ) -> None:
     _install(operation_services, _synthetic_bundle())
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.compute.double",
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="synthetic.compute.double",
             input={"value": 13},
         )
     )
@@ -604,7 +604,7 @@ def test_computed_adapter_preserves_operational_failure_status(
     operation_services,
 ) -> None:
     bundle = _synthetic_bundle()
-    diagnostic = CapabilityDiagnostic(
+    diagnostic = OperationDiagnostic(
         code="SYNTHETIC_OPERATION_FAILED",
         stage="synthetic_computation",
         message="The synthetic operation did not complete.",
@@ -625,21 +625,21 @@ def test_computed_adapter_preserves_operational_failure_status(
 
     failed_operations = tuple(
         replace(
-            bundle.capabilities[0],
+            bundle.operations[0],
             spec=replace(
-                bundle.capabilities[0].spec,
+                bundle.operations[0].spec,
                 operation_id=f"synthetic.compute.failure.{status.value.lower()}",
                 execute=abort(status),
             ),
         )
         for status in statuses
     )
-    _install(operation_services, replace(bundle, capabilities=failed_operations))
+    _install(operation_services, replace(bundle, operations=failed_operations))
 
     for status, operation in zip(statuses, failed_operations, strict=True):
-        result = operation_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=operation.spec.operation_id,
+        result = operation_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=operation.spec.operation_id,
                 input={"value": 2},
             )
         )
@@ -650,7 +650,7 @@ def test_computed_adapter_preserves_operational_failure_status(
 
 
 def test_computed_failure_rejects_conclusive_status() -> None:
-    diagnostic = CapabilityDiagnostic(
+    diagnostic = OperationDiagnostic(
         code="SYNTHETIC_OPERATION_FAILED",
         stage="synthetic_computation",
         message="The synthetic operation did not complete.",
@@ -664,9 +664,9 @@ def test_computed_adapter_rejects_invalid_implementation_result(
     operation_services,
 ) -> None:
     bundle = _synthetic_bundle()
-    original = bundle.capabilities[0]
+    original = bundle.operations[0]
     invalid = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.compute.invalid",
             version="2",
             title=original.spec.title,
@@ -684,13 +684,13 @@ def test_computed_adapter_rejects_invalid_implementation_result(
             semantics=bundle.semantics,
             provider_runtime=bundle.provider_runtime,
             backend_version=bundle.backend_version,
-            capabilities=(invalid,),
+            operations=(invalid,),
             diagnostics=bundle.diagnostics,
         ),
     )
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.compute.invalid",
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="synthetic.compute.invalid",
             input={"value": 2},
         )
     )
@@ -712,7 +712,7 @@ def test_operation_specific_invalid_request_is_not_enriched(
     """
 
     bundle = _synthetic_bundle()
-    operation_diagnostic = CapabilityDiagnostic(
+    operation_diagnostic = OperationDiagnostic(
         code="SYNTHETIC_OPERATION_INVALID_REQUEST",
         stage="synthetic_operation_validation",
         message="This operation-specific diagnostic must be preserved verbatim.",
@@ -720,7 +720,7 @@ def test_operation_specific_invalid_request_is_not_enriched(
         path="value",
     )
     operation = inline_operation(
-        OperationSpec(
+        OperationDeclaration(
             operation_id="synthetic.compute.operation_diagnostic",
             version="2",
             title="Cross-field validated synthetic operation",
@@ -732,11 +732,11 @@ def test_operation_specific_invalid_request_is_not_enriched(
             invalid_request=operation_diagnostic,
         )
     )
-    _install(operation_services, replace(bundle, capabilities=(operation,)))
+    _install(operation_services, replace(bundle, operations=(operation,)))
 
-    result = operation_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="synthetic.compute.operation_diagnostic",
+    result = operation_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="synthetic.compute.operation_diagnostic",
             input={"value": 50, "limit": 10},
         )
     )
@@ -757,6 +757,6 @@ def test_installer_rejects_empty_and_duplicate_domain_bundles(
     bundle = _synthetic_bundle()
 
     with pytest.raises(ValueError, match="must not be empty"):
-        installer.install(replace(bundle, capabilities=()))
-    with pytest.raises(ValueError, match="duplicate capability ID"):
-        installer.install(replace(bundle, capabilities=(bundle.capabilities[0],) * 2))
+        installer.install(replace(bundle, operations=()))
+    with pytest.raises(ValueError, match="duplicate operation ID"):
+        installer.install(replace(bundle, operations=(bundle.operations[0],) * 2))

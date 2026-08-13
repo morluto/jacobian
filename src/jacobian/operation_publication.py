@@ -18,6 +18,13 @@ from jacobian.operation_bindings import (
     InlinePublication,
     InstalledOperation,
 )
+from jacobian.operation_declarations import (
+    DurablePublication as DeclaredDurablePublication,
+)
+from jacobian.operation_declarations import (
+    InlinePublication as DeclaredInlinePublication,
+)
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 
 
@@ -49,7 +56,8 @@ def publish_operation[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    operation: InstalledOperation[RequestT, ResultT],
+    operation: InstalledOperation[RequestT, ResultT]
+    | OperationDeclaration[RequestT, ResultT],
     request: RequestT,
     result: ResultT,
     context: PublicationContext,
@@ -57,7 +65,22 @@ def publish_operation[
     """Apply only the installed operation's transport publication policy."""
 
     policy = operation.publication
-    if isinstance(policy, InlinePublication):
+    operation_id = (
+        operation.operation_id
+        if isinstance(operation, OperationDeclaration)
+        else operation.spec.operation_id
+    )
+    operation_version = (
+        operation.version
+        if isinstance(operation, OperationDeclaration)
+        else operation.spec.version
+    )
+    result_type = (
+        operation.result_type
+        if isinstance(operation, OperationDeclaration)
+        else operation.spec.result_type
+    )
+    if isinstance(policy, (InlinePublication, DeclaredInlinePublication)):
         projected_payload = {
             "result": result.model_dump(mode="json"),
             "backend_version": context.backend_version,
@@ -75,8 +98,8 @@ def publish_operation[
                 value = port.extract_from_result(result)
                 value_refs[port.name] = context.values.put(
                     value,
-                    operation_id=operation.spec.operation_id,
-                    operation_version=operation.spec.version,
+                    operation_id=operation_id,
+                    operation_version=operation_version,
                     output_port=port.name,
                 )
         except ValueReferenceError as exc:
@@ -86,7 +109,7 @@ def publish_operation[
             if operation.output_ports
             else InlineOperationOutput
         )
-        output_type = cast(Any, output_contract[operation.spec.result_type])
+        output_type = cast(Any, output_contract[result_type])
         output_payload = {
             "result": result,
             "backend_version": context.backend_version,
@@ -100,23 +123,23 @@ def publish_operation[
         return PublishedOperation(
             output=output,
         )
-    if not isinstance(policy, DurablePublication):
+    if not isinstance(policy, (DurablePublication, DeclaredDurablePublication)):
         raise TypeError(f"unsupported publication policy: {type(policy).__name__}")
 
     input_uri = context.artifacts.put(
         schema_uri=context.input_schema_uri,
         semantics_uri=context.semantics_uri,
         payload=request.model_dump(mode="json"),
-        summary=f"{operation.spec.operation_id} materialized input",
+        summary=f"{operation_id} materialized input",
     ).artifact_uri
     result_uri = context.artifacts.put(
         schema_uri=context.result_schema_uri,
         semantics_uri=context.semantics_uri,
         payload=result.model_dump(mode="json"),
         parents=(input_uri,),
-        summary=f"{operation.spec.operation_id} materialized result",
+        summary=f"{operation_id} materialized result",
     ).artifact_uri
-    preview_type = policy.preview_type or operation.spec.result_type
+    preview_type = policy.preview_type or result_type
     preview = (
         preview_type.model_validate(policy.preview(result))
         if policy.preview is not None

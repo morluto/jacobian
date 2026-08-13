@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.checkers import EvidenceKind
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.provider_runtime import python_distribution_provider_runtime
 from jacobian.registry import (
     CheckerCompatibilityError,
@@ -270,14 +270,14 @@ def test_checker_selection_uses_authorized_external_runtime_identity(
     executable = tmp_path / "external-checker"
     executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o755)
-    runtime = CapabilityProviderRuntime(
+    runtime = ProviderObservation(
         provider="external-checker",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="1",
         digest="sha256:" + hashlib.sha256(executable.read_bytes()).hexdigest(),
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
         configuration={"executable": str(executable.resolve())},
     )
@@ -322,11 +322,11 @@ def test_checker_registry_authorizes_python_distribution_runtime(
         distribution_name="pydantic",
         import_name="pydantic",
         required_attributes=("BaseModel",),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         configuration={"import_name": "pydantic"},
     )
-    assert runtime.availability is CapabilityProviderAvailability.AVAILABLE
+    assert runtime.availability is ProviderAvailability.AVAILABLE
     store = ArtifactRepository(tmp_path)
     registry = CheckerRegistry(store)
 

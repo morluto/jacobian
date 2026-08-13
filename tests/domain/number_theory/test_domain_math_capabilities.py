@@ -7,13 +7,13 @@ from pydantic import ValidationError
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts import number_theory as number_theory_contracts
-from jacobian.contracts.capabilities import (
-    CapabilityDiscoveryRequest,
-    CapabilityRequest,
-)
 from jacobian.contracts.number_theory import (
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
+)
+from jacobian.contracts.operations import (
+    OperationDiscoveryRequest,
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import build_number_theory_bundle
@@ -40,9 +40,9 @@ def _stored_modular_residue_result(
 def test_quadratic_residues_are_complete_for_the_modulus(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.enumerate.quadratic_residues",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.enumerate.quadratic_residues",
             input={"modulus": 10},
         )
     )
@@ -54,9 +54,9 @@ def test_quadratic_residues_are_complete_for_the_modulus(
 def test_extended_gcd_returns_a_valid_bezout_identity(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="integer.compute.extended_gcd",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="integer.compute.extended_gcd",
             input={"left": "84", "right": "30"},
         )
     )
@@ -70,9 +70,9 @@ def test_extended_gcd_returns_a_valid_bezout_identity(
 
 
 def test_domain_error_fails_before_artifact_writes(domain_services) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.compute.inverse",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.compute.inverse",
             input={"value": "6", "modulus": 9},
         )
     )
@@ -89,20 +89,20 @@ def test_number_theory_boundary_results(domain_services) -> None:
         ("integer.compute.prime_factorization", {"value": "1"}, {"factors": []}),
         ("integer.compute.prime_factorization", {"value": "-1"}, {"factors": []}),
     )
-    for capability_id, payload, expected in empty_cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload, expected in empty_cases:
+        result = domain_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.output["result"] == expected
 
-    for capability_id, payload in (
+    for operation_id, payload in (
         ("integer.compute.divisors", {"value": "0"}),
         ("integer.compute.prime_factorization", {"value": "0"}),
         ("integer.compute.previous_prime", {"n": 2}),
     ):
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+        result = domain_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.ERROR
         assert result.artifact_uris == ()
@@ -121,9 +121,9 @@ def _cubic_residue_payload() -> dict[str, object]:
 def test_modular_polynomial_residue_image_is_complete_and_materialized(
     domain_services,
 ) -> None:
-    inline = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+    inline = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.polynomial_residue_image.compute",
             input=_cubic_residue_payload(),
         )
     )
@@ -131,9 +131,9 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
     assert inline.artifact_uris == ()
     assert inline.output["result"]["table"] is None
 
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.assignments.materialize",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.polynomial_residue_image.assignments.materialize",
             input=_cubic_residue_payload(),
         )
     )
@@ -178,9 +178,9 @@ def test_modular_polynomial_residue_image_is_complete_and_materialized(
 def test_modular_polynomial_residue_image_handles_multivariate_domains(
     domain_services,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.assignments.materialize",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.polynomial_residue_image.assignments.materialize",
             input={
                 "modulus": 5,
                 "variables": [
@@ -216,9 +216,9 @@ def test_modular_polynomial_residue_image_handles_multivariate_domains(
 def test_modular_polynomial_residue_result_rejects_an_incomplete_table(
     domain_services,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.assignments.materialize",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.polynomial_residue_image.assignments.materialize",
             input=_cubic_residue_payload(),
         )
     )
@@ -259,9 +259,9 @@ def test_modular_polynomial_residue_result_rejects_oversized_domains_before_prod
 def test_modular_polynomial_residue_image_reproduces_divisibility_polynomial(
     domain_services,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.assignments.materialize",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.polynomial_residue_image.assignments.materialize",
             input={
                 "modulus": 7**7,
                 "variables": [
@@ -317,9 +317,9 @@ def test_modular_polynomial_residue_image_rejects_invalid_scope_before_writes(
     domain_services,
     payload: dict[str, object],
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="modular.polynomial_residue_image.compute",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="modular.polynomial_residue_image.compute",
             input=payload,
         )
     )
@@ -349,8 +349,8 @@ def test_modular_polynomial_residue_image_assignment_bound_is_exact() -> None:
 def test_modular_polynomial_residue_image_is_discoverable_by_intent(
     domain_services,
 ) -> None:
-    discovered = domain_services.core.capabilities.discover(
-        CapabilityDiscoveryRequest(
+    discovered = domain_services.core.operations.discover(
+        OperationDiscoveryRequest(
             query=(
                 "complete sparse polynomial residue image modulo an integer "
                 "with witnesses and an exhaustive table"
@@ -360,7 +360,7 @@ def test_modular_polynomial_residue_image_is_discoverable_by_intent(
         )
     )
 
-    assert discovered.matches[0].capability_id == (
+    assert discovered.matches[0].operation_id == (
         "modular.polynomial_residue_image.compute"
     )
     assert discovered.matches[0].relevance_score > 0
@@ -396,9 +396,9 @@ def test_number_theory_resource_atomics_are_exact_computed(
             {"n": 10, "base": 12, "valuation": 4},
         ),
     )
-    for capability_id, payload, expected in cases:
-        result = domain_services.core.capabilities.invoke(
-            CapabilityRequest(capability_id=capability_id, input=payload)
+    for operation_id, payload, expected in cases:
+        result = domain_services.core.operations.invoke(
+            OperationRequest(operation_id=operation_id, input=payload)
         )
         assert result.execution.status is ExecutionStatus.COMPLETED
         assert result.output["result"] == expected
@@ -407,9 +407,9 @@ def test_number_theory_resource_atomics_are_exact_computed(
 def test_legendre_symbol_rejects_non_prime_before_conclusion(
     domain_services: DomainTestServices,
 ) -> None:
-    result = domain_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="number_theory.compute.legendre_symbol",
+    result = domain_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="number_theory.compute.legendre_symbol",
             input={"a": 2, "prime": 9},
         )
     )

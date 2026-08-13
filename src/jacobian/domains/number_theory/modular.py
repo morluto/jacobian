@@ -1,4 +1,4 @@
-"""Modular-owned exact number-theory capabilities."""
+"""Modular-owned exact number-theory operations."""
 
 from jacobian.contracts.number_theory import (
     ChineseRemainderRequest,
@@ -18,7 +18,7 @@ from jacobian.domains.number_theory._support import (
     number_theory_operation,
 )
 from jacobian.domains.number_theory.discrete_logarithm import (
-    DISCRETE_LOGARITHM_CAPABILITY,
+    DISCRETE_LOGARITHM_OPERATION,
 )
 from jacobian.domains.number_theory.modular_operations import (
     compute_jacobi_symbol,
@@ -30,7 +30,7 @@ from jacobian.domains.number_theory.modular_operations import (
     solve_chinese_remainder,
 )
 
-MODULAR_CAPABILITIES = (
+MODULAR_OPERATIONS = (
     number_theory_operation(
         "number_theory.compute.jacobi_symbol",
         "Compute Jacobi symbol",
@@ -41,7 +41,7 @@ MODULAR_CAPABILITIES = (
         "number-theory",
         "modular",
         "jacobi-symbol",
-        invocation_examples=(
+        examples=(
             example(
                 "jacobi_10_21",
                 "Compute the Jacobi symbol (10/21).",
@@ -58,7 +58,7 @@ MODULAR_CAPABILITIES = (
         compute_modular_inverse,
         "number-theory",
         "modular",
-        invocation_examples=(
+        examples=(
             example(
                 "inverse_3_mod_11",
                 "Compute the inverse of 3 modulo 11.",
@@ -75,7 +75,7 @@ MODULAR_CAPABILITIES = (
         compute_multiplicative_order,
         "number-theory",
         "modular",
-        invocation_examples=(
+        examples=(
             example(
                 "multiplicative_order_2_mod_7",
                 "Compute the multiplicative order of 2 modulo 7.",
@@ -93,7 +93,7 @@ MODULAR_CAPABILITIES = (
         "number-theory",
         "modular",
         "enumeration",
-        invocation_examples=(
+        examples=(
             example(
                 "quadratic_residues_mod_10",
                 "Enumerate quadratic residues modulo 10.",
@@ -119,7 +119,7 @@ MODULAR_CAPABILITIES = (
         "residue",
         "enumeration",
         "obstruction",
-        invocation_examples=(
+        examples=(
             example(
                 "cubic_residue_image_mod_7",
                 "Enumerate the complete image of four times x cubed modulo 7.",
@@ -156,7 +156,7 @@ MODULAR_CAPABILITIES = (
             "the complete assignment-to-residue ledger is retained as explicit "
             "bulk evidence for independent replay"
         ),
-        invocation_examples=(
+        examples=(
             example(
                 "cubic_assignment_ledger_mod_7",
                 "Materialize the assignment ledger for four times x cubed modulo 7.",
@@ -182,7 +182,7 @@ MODULAR_CAPABILITIES = (
         solve_chinese_remainder,
         "number-theory",
         "modular",
-        invocation_examples=(
+        examples=(
             example(
                 "crt_2_mod_3_3_mod_5",
                 "Solve x=2 mod 3 and x=3 mod 5.",
@@ -190,5 +190,5 @@ MODULAR_CAPABILITIES = (
             ),
         ),
     ),
-    DISCRETE_LOGARITHM_CAPABILITY,
+    DISCRETE_LOGARITHM_OPERATION,
 )

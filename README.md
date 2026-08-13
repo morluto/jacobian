@@ -116,7 +116,7 @@ maintained portfolio covers work in:
 Some operations require optional native or formal backends. Catalog membership
 means an operation is installed and invocable; it does not grant verification
 authority.
-Read `capability://catalog` or use `math.find` to inspect the current
+Read `operation://catalog` or use `math.find` to inspect the current
 environment. Use `math.run` to invoke a selected operation.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
@@ -146,8 +146,8 @@ complete trust boundary.
 
 ## Status
 
-Jacobian 0.11.0 is a pre-stable release. Its published package, capability, and
-artifact contracts describe the current supported surface; ongoing capability
+Jacobian 0.11.0 is a pre-stable release. Its published package, operation, and
+artifact contracts describe the current supported surface; ongoing operation
 research may change experimental contracts between releases.
 
 ## Documentation
@@ -158,7 +158,7 @@ research may change experimental contracts between releases.
   runnable example
 - [Architecture](docs/explanation/architecture.md) — runtime structure and
   trust boundaries
-- [Product model](docs/explanation/product-blueprint.md) — capability contracts,
+- [Product model](docs/explanation/product-blueprint.md) — operation contracts,
   ownership, and project boundaries
 - [Tool reference](docs/reference/tools.md) — MCP resources and invocation
   contracts

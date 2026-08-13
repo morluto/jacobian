@@ -7,7 +7,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.projective_geometry.bundle import (
     build_projective_geometry_bundle,
@@ -31,9 +31,9 @@ def _invoke(
     services: DomainTestServices,
     lines: list[tuple[str, tuple[int, int, int]]],
 ):
-    return services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="geometry.projective_line_arrangement.flats.materialize",
+    return services.core.operations.invoke(
+        OperationRequest(
+            operation_id="geometry.projective_line_arrangement.flats.materialize",
             input={
                 "lines": [
                     {

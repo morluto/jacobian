@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from jacobian.contracts.capabilities import CapabilityRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomials import _support as polynomial_support
 
@@ -51,9 +51,9 @@ def _request(
     timeout_ms: int = 10_000,
     max_unknowns: int = 64,
     explicit_support: list[list[list[int]]] | None = None,
-) -> CapabilityRequest:
-    return CapabilityRequest(
-        capability_id="polynomial.map.inverse.candidate_synthesize",
+) -> OperationRequest:
+    return OperationRequest(
+        operation_id="polynomial.map.inverse.candidate_synthesize",
         input={
             "forward_map": _triangular_forward(),
             "source_variables": ["x", "y"],
@@ -79,7 +79,7 @@ def _request(
 def test_triangular_automorphism_is_found_and_verified(
     authorized_polynomial_services,
 ) -> None:
-    result = authorized_polynomial_services.core.capabilities.invoke(_request(degree=2))
+    result = authorized_polynomial_services.core.operations.invoke(_request(degree=2))
 
     assert result.execution.status is ExecutionStatus.COMPLETED
     assert result.output["status"] == "FOUND"
@@ -103,7 +103,7 @@ def test_triangular_automorphism_is_found_and_verified(
 def test_degree_below_required_returns_bounded_no_candidate(
     polynomial_services,
 ) -> None:
-    result = polynomial_services.core.capabilities.invoke(_request(degree=1))
+    result = polynomial_services.core.operations.invoke(_request(degree=1))
 
     assert result.output["status"] == "NO_CANDIDATE_WITHIN_ANSATZ"
     assert result.output["candidate_inverse_map"] is None
@@ -119,8 +119,8 @@ def test_redundant_explicit_ansatz_is_underdetermined(
         "variables": ["x"],
         "coordinates": [{"terms": [_term(1, [1])]}],
     }
-    request = CapabilityRequest(
-        capability_id="polynomial.map.inverse.candidate_synthesize",
+    request = OperationRequest(
+        operation_id="polynomial.map.inverse.candidate_synthesize",
         input={
             "forward_map": identity,
             "source_variables": ["x"],
@@ -140,7 +140,7 @@ def test_redundant_explicit_ansatz_is_underdetermined(
         },
     )
 
-    result = polynomial_services.core.capabilities.invoke(request)
+    result = polynomial_services.core.operations.invoke(request)
 
     assert result.output["status"] == "UNDERDETERMINED"
     assert result.output["candidate_inverse_map"] is None
@@ -151,10 +151,10 @@ def test_zero_timeout_and_unknown_budget_are_explicit(
     polynomial_services,
 ) -> None:
 
-    timeout = polynomial_services.core.capabilities.invoke(
+    timeout = polynomial_services.core.operations.invoke(
         _request(degree=2, timeout_ms=0)
     )
-    exhausted = polynomial_services.core.capabilities.invoke(
+    exhausted = polynomial_services.core.operations.invoke(
         _request(degree=2, max_unknowns=1)
     )
 
@@ -217,7 +217,7 @@ def test_timeout_kills_stubborn_solver_without_unbounded_wait(
     process = _StubbornProcess()
     _install_stubborn_solver(monkeypatch, process)
 
-    result = polynomial_services.core.capabilities.invoke(_request(degree=2))
+    result = polynomial_services.core.operations.invoke(_request(degree=2))
 
     assert result.execution.status is ExecutionStatus.TIMEOUT
     assert result.output == {}
@@ -240,9 +240,9 @@ def test_unknown_solver_is_unsupported_without_truth_claim(
     payload = deepcopy(_request(degree=2).input)
     payload["solver"] = "unknown.exact_solver"
 
-    result = polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.inverse.candidate_synthesize",
+    result = polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.inverse.candidate_synthesize",
             input=payload,
         )
     )
@@ -255,8 +255,8 @@ def test_unknown_solver_is_unsupported_without_truth_claim(
 def test_full_support_and_coefficient_order_are_deterministic(
     polynomial_services,
 ) -> None:
-    first = polynomial_services.core.capabilities.invoke(_request(degree=2))
-    second = polynomial_services.core.capabilities.invoke(_request(degree=2))
+    first = polynomial_services.core.operations.invoke(_request(degree=2))
+    second = polynomial_services.core.operations.invoke(_request(degree=2))
 
     assert first.output["ansatz"] == second.output["ansatz"]
     assert (
@@ -289,9 +289,9 @@ def test_ring_mismatches_fail_closed(polynomial_services) -> None:
         else:
             payload["forward_map"]["domain"] = "RR"
 
-        result = polynomial_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="polynomial.map.inverse.candidate_synthesize",
+        result = polynomial_services.core.operations.invoke(
+            OperationRequest(
+                operation_id="polynomial.map.inverse.candidate_synthesize",
                 input=payload,
             )
         )
@@ -306,9 +306,9 @@ def test_corrupted_found_candidate_does_not_verify(
 ) -> None:
     corrupted = _triangular_inverse()
     corrupted["coordinates"][0]["terms"][1]["coefficient"]["num"] = "-2"
-    checked = authorized_polynomial_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="polynomial.map.inverse.verify",
+    checked = authorized_polynomial_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="polynomial.map.inverse.verify",
             input={
                 "forward_map": _triangular_forward(),
                 "inverse_map": corrupted,

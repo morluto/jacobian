@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "closed-one-form-polynomial-classification",
   "analysis": {
     "mathematical_moves": [
@@ -11,7 +11,7 @@
     "gap_classes": ["PROOF_REPAIR", "SYMBOLIC_CLASSIFICATION"],
     "contamination": "PUBLIC_ANSWER_VISIBLE_BUT_INCORRECT",
     "candidate_ids": [],
-    "disposition": "NO_NEW_CAPABILITY",
+    "disposition": "NO_NEW_OPERATION",
     "next_action": "Replay row-space, nullspace, and differentiated-potential certificates independently of the published answer."
   }
 }

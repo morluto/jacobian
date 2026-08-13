@@ -15,14 +15,14 @@ from jacobian.checker_identity import (
     build_checker_manifest,
     checker_implementation_digest,
 )
-from jacobian.contracts.capabilities import (
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.checkers import (
     CheckerAuditEvent,
     CheckerRegistration,
     EvidenceKind,
+)
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderObservation,
 )
 from jacobian.persistence import (
     PersistenceCorruptionError,
@@ -78,7 +78,7 @@ def _checker_registration(
     candidate_schema_uris: tuple[str, ...],
     target_schema_uris: tuple[str, ...],
     target_semantics_uris: tuple[str, ...],
-    provider_runtime: CapabilityProviderRuntime | None,
+    provider_runtime: ProviderObservation | None,
 ) -> CheckerRegistration:
     """Build one complete registration from the checker-owned identity inputs."""
 
@@ -132,7 +132,7 @@ def _checker_registration(
     )
 
 
-def _require_runtime_unchanged(runtime: CapabilityProviderRuntime | None) -> None:
+def _require_runtime_unchanged(runtime: ProviderObservation | None) -> None:
     if runtime is None:
         return
     try:
@@ -223,7 +223,7 @@ class CheckerRegistry:
         candidate_schema_uris: tuple[str, ...],
         target_schema_uris: tuple[str, ...] = (),
         target_semantics_uris: tuple[str, ...] = (),
-        provider_runtime: CapabilityProviderRuntime | None = None,
+        provider_runtime: ProviderObservation | None = None,
         reason: str = "operator authorization",
     ) -> CheckerRegistration:
         """Authorize one measured checker for explicit evidence compatibility."""
@@ -321,7 +321,7 @@ class CheckerRegistry:
         candidate_schema_uris: tuple[str, ...],
         target_schema_uris: tuple[str, ...] = (),
         target_semantics_uris: tuple[str, ...] = (),
-        provider_runtime: CapabilityProviderRuntime | None = None,
+        provider_runtime: ProviderObservation | None = None,
     ) -> str | None:
         """Return an already-authorized checker_id without writing authorization.
 
@@ -343,7 +343,7 @@ class CheckerRegistry:
             raise CheckerRegistryError(scope_error)
         if provider_runtime is not None and (
             provider_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
+            is not ProviderAvailability.AVAILABLE
             or provider_runtime.digest is None
             or provider_runtime.digest_kind is None
         ):

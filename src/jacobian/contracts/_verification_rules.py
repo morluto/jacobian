@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.capabilities import CapabilityId
 from jacobian.contracts.common import ArtifactUri
+from jacobian.contracts.operations import OperationId
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 
 
@@ -26,7 +26,7 @@ def validate_decisive_replayable_evidence(
 
 
 def validate_certified_relationship_endpoints(
-    relation_id: CapabilityId | None,
+    relation_id: OperationId | None,
     source_artifact_uris: tuple[ArtifactUri, ...],
     target_artifact_uris: tuple[ArtifactUri, ...],
 ) -> None:

@@ -11,15 +11,13 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
-from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInvocationExample,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationExample,
+    OperationRequest,
+    ProviderAvailability,
+    ProviderObservation,
 )
 from jacobian.contracts.polynomial_expressions import (
     POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES,
@@ -30,6 +28,8 @@ from jacobian.contracts.polynomial_expressions import (
 )
 from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.polynomials._support import (
@@ -69,14 +69,14 @@ class _SympyNormalizationRun:
     detail: str | None = None
 
 
-def install_sympy_polynomial_normalization_capability(
+def install_sympy_polynomial_normalization_operation(
     expressions: PolynomialExpressionArtifactService,
-    runtime: CapabilityProviderRuntime,
-) -> CapabilityAdapter[Any]:
+    runtime: ProviderObservation,
+) -> OperationAdapter[Any]:
     """Install the producer only for the exact supported SymPy profile."""
 
     if (
-        runtime.availability is not CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is not ProviderAvailability.AVAILABLE
         or runtime.provider != "jacobian.sympy"
         or runtime.version != SYMPY_VERSION
         or runtime.configuration != SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION
@@ -89,7 +89,7 @@ def install_sympy_polynomial_normalization_capability(
 
 
 class _SympyPolynomialNormalizationBackend:
-    def __init__(self, runtime: CapabilityProviderRuntime) -> None:
+    def __init__(self, runtime: ProviderObservation) -> None:
         self.runtime = runtime
 
     def run(
@@ -105,7 +105,7 @@ class _SympyPolynomialNormalizationBackend:
                 started,
                 ExecutionStatus.ERROR,
                 (
-                    "The installed SymPy runtime no longer matches the capability "
+                    "The installed SymPy runtime no longer matches the operation "
                     "descriptor; no normalization evidence was retained."
                 ),
             )
@@ -175,12 +175,12 @@ class SympyPolynomialExpressionNormalizeAdapter:
         self,
         *,
         expressions: PolynomialExpressionArtifactService,
-        runtime: CapabilityProviderRuntime,
+        runtime: ProviderObservation,
     ) -> None:
         self.expressions = expressions
         self.backend = _SympyPolynomialNormalizationBackend(runtime)
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.expression.normalize",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.expression.normalize",
             version="1",
             title="Normalize a typed rational polynomial expression",
             description=(
@@ -207,8 +207,8 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 "exact-rational",
                 "sympy",
             ),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="combine_like_terms",
                     description=(
                         "Normalize x + x to canonical sparse coefficients over QQ."
@@ -232,23 +232,23 @@ class SympyPolynomialExpressionNormalizeAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
         self,
-        request: CapabilityRequest,
+        request: OperationRequest,
     ) -> PolynomialExpressionNormalizeRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 PolynomialExpressionNormalizeRequest,
                 request.input,
             )
         except (ValidationError, ValueError) as exc:
             budget_error = _expansion_budget_error(exc)
             if budget_error is not None:
-                raise CapabilityInvocationError(
-                    CapabilityDiagnostic(
+                raise OperationInvocationError(
+                    OperationDiagnostic(
                         code="EXPANSION_TERM_BUDGET_EXCEEDED",
                         stage="bounded_normalization",
                         message=(
@@ -286,7 +286,7 @@ class SympyPolynomialExpressionNormalizeAdapter:
                             "alternatives": [
                                 "use a factored symbolic operation",
                                 "split the expression before normalization",
-                                "use a domain capability with bounded coefficient access",
+                                "use a domain operation with bounded coefficient access",
                             ],
                             "normalization_uri": None,
                             "checker_input_available": False,
@@ -294,8 +294,8 @@ class SympyPolynomialExpressionNormalizeAdapter:
                     )
                 ) from exc
             validation_errors, validation_error_count = _validation_errors(exc)
-            raise CapabilityInvocationError(
-                CapabilityDiagnostic(
+            raise OperationInvocationError(
+                OperationDiagnostic(
                     code="INVALID_TYPED_POLYNOMIAL_EXPRESSION",
                     stage="input_validation",
                     message=(

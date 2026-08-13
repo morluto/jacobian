@@ -3,8 +3,8 @@
 from collections.abc import Callable
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.jacobian_syzygy import GradedJacobianSyzygyRequest
+from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.polynomial_operations import (
     PolynomialDiscriminantRequest,
     PolynomialFactorRequest,
@@ -34,7 +34,7 @@ def _rational_decimal_digits(value: object) -> int | None:
 
 def _flint_exact_replay_runtime(
     *, checker_ids: tuple[str, ...] = (), refresh: bool = False
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.exact_domain_checker_provider_runtime(
         checker_ids=checker_ids,
         refresh=refresh,
@@ -43,7 +43,7 @@ def _flint_exact_replay_runtime(
 
 def _graded_syzygy_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.graded_syzygy_checker_provider_runtime(checker_ids=checker_ids)
 
 
@@ -175,7 +175,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
             "operator-authorized exact rational checker independently reconstructs "
             "the homogeneous coefficient maps without importing the SymPy producer"
         ),
-        verification_capability_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
+        verification_operation_id=("polynomial.jacobian_syzygy.minimum_degree.verify"),
         verification_title="Verify a first graded Jacobian syzygy degree",
         verification_description=(
             "Independently reconstruct every bounded homogeneous coefficient map, "
@@ -204,7 +204,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
             "the stored homogeneous coefficient ledger without importing the "
             "SymPy producer"
         ),
-        verification_capability_id=("polynomial.jacobian_syzygy.coefficients.verify"),
+        verification_operation_id=("polynomial.jacobian_syzygy.coefficients.verify"),
         verification_title="Verify a materialized Jacobian syzygy coefficient ledger",
         verification_description=(
             "Independently reconstruct every bounded homogeneous coefficient map, "

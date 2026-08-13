@@ -9,7 +9,7 @@ freely chosen epsilon witnesses. The verifier reconstructs every point and dista
 the quantitative zero-infimum witnesses, and distinguishes the valid separation conclusion from the
 unsupported metric strengthening.
 
-This case is intentionally not a hidden-answer capability measurement; its canonical family is
+This case is intentionally not a hidden-answer operation measurement; its canonical family is
 published in the instruction and solution for reproducible contract and verifier checks.
 
 Quality score: **89/100**. Difficulty is provisional pending baseline calibration. Assurance remains

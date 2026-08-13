@@ -5,10 +5,10 @@ from typing import Any
 import pytest
 from tests.support.services import DomainTestServices
 
-from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
 from jacobian.contracts.matrix_operations import MatrixRankResult
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
 from jacobian.math.matrices.values import SmithNormalForm
 
@@ -42,17 +42,17 @@ def test_smith_checker_consumes_the_producers_typed_candidate_reference(
     matrix_services: DomainTestServices,
 ) -> None:
     runtime = matrix_services
-    computed = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.compute",
+    computed = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.compute",
             input={"matrix": _integer_matrix()},
         )
     )
 
     value_ref = computed.output["value_refs"]["smith_form"]
     descriptors = {
-        item.capability_id: item
-        for item in runtime.core.capabilities.catalog().capabilities
+        item.operation_id: item
+        for item in runtime.core.operations.catalog().operations
     }
     assert [
         port.model_dump(mode="json")
@@ -63,9 +63,9 @@ def test_smith_checker_consumes_the_producers_typed_candidate_reference(
         for port in descriptors["matrix.normal_form.smith.verify"].input_ports
     ] == [{"name": "candidate", "value_type": "SmithNormalForm"}]
 
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.verify",
+    verified = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.verify",
             input={"input": {"matrix": _integer_matrix()}},
             inputs={"candidate": value_ref},
         )
@@ -87,9 +87,9 @@ def test_candidate_reference_does_not_transfer_producer_authority(
         output_port="candidate",
     )
 
-    rejected = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.verify",
+    rejected = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.verify",
             input={"input": {"matrix": _integer_matrix()}},
             inputs={"candidate": value_ref},
         )
@@ -111,9 +111,9 @@ def test_smith_checker_rejects_a_reference_with_the_wrong_value_type(
         output_port="rank",
     )
 
-    failed = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.verify",
+    failed = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.verify",
             input={"input": {"matrix": _integer_matrix()}},
             inputs={"candidate": value_ref},
         )
@@ -158,9 +158,9 @@ def test_smith_candidate_reference_binding_fails_closed(
                 output_port="candidate",
             )
         }
-    failed = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.normal_form.smith.verify",
+    failed = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.normal_form.smith.verify",
             input=input_payload,
             inputs=inputs,
         )
@@ -177,9 +177,9 @@ def test_inline_exact_replay_persists_only_its_bound_record(
     """Ordinary values must not be materialized merely for checker replay."""
 
     runtime = matrix_services
-    computed = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.compute", input={"matrix": _matrix()}
+    computed = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.compute", input={"matrix": _matrix()}
         )
     )
 
@@ -187,9 +187,9 @@ def test_inline_exact_replay_persists_only_its_bound_record(
         raise AssertionError("inline exact replay must not materialize an artifact")
 
     monkeypatch.setattr(runtime.core.artifacts, "put", unexpected_artifact_put)
-    verified = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.verify",
+    verified = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.verify",
             input={
                 "input": {"matrix": _matrix()},
                 "candidate": computed.output["result"],
@@ -220,9 +220,9 @@ def test_inline_exact_validation_does_not_echo_a_rejected_candidate(
     matrix_services: DomainTestServices,
 ) -> None:
     marker = "private_inline_candidate_marker"
-    checked = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.verify",
+    checked = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.verify",
             input={
                 "input": {"matrix": _matrix()},
                 "candidate": {"rank": marker, "pivot_columns": []},
@@ -258,14 +258,14 @@ def test_inline_exact_rejects_bounded_accepted_checker_decisions(
         accept_with_bounded_coverage,
     )
 
-    computed = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.compute", input={"matrix": _matrix()}
+    computed = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.compute", input={"matrix": _matrix()}
         )
     )
-    checked = runtime.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.verify",
+    checked = runtime.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.verify",
             input={
                 "input": {"matrix": _matrix()},
                 "candidate": computed.output["result"],

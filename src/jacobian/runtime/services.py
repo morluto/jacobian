@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_service import CapabilityService
 from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_service import OperationService
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
@@ -26,12 +26,12 @@ class CoreServices:
     schemas: SchemaRegistry
     artifacts: ArtifactService
     values: ValueReferenceStore
-    operations: OperationInstaller
+    installer: OperationInstaller
     sat: SatArtifactService
     smt: SmtArtifactService
     polynomial_expressions: PolynomialExpressionArtifactService
     checkers: CheckerRegistry
-    capabilities: CapabilityService
+    operations: OperationService
 
     def close(self) -> None:
         self.values.close()

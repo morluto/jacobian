@@ -1,7 +1,10 @@
 """Number-theory operation declarations."""
 
-from jacobian.operation_bindings import DurableOperationFactory, InlineOperationFactory
-from jacobian.operations import OperationFailure
+from jacobian.operation_declarations import (
+    DurableOperationFactory,
+    InlineOperationFactory,
+    OperationFailure,
+)
 
 _NUMBER_THEORY_FAILURE = OperationFailure(
     code="NUMBER_THEORY_OPERATION_NOT_APPLICABLE",

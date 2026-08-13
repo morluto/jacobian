@@ -27,7 +27,7 @@ Select by mathematical outcome and domain tags, then inspect the exact ID:
 {
   "request": {
     "op": "inspect",
-    "capability_id": "polynomial.compute.gcd"
+    "operation_id": "polynomial.compute.gcd"
   }
 }
 ```
@@ -103,17 +103,17 @@ async def main() -> None:
             {
                 "request": {
                     "op": "inspect",
-                    "capability_id": "polynomial.compute.gcd",
+                    "operation_id": "polynomial.compute.gcd",
                 }
             },
         )
-        assert described["capability"]["capability_id"] == "polynomial.compute.gcd"
+        assert described["operation"]["operation_id"] == "polynomial.compute.gcd"
 
         computed = await tool(
             client,
             "math.run",
             {
-                "capability_id": "polynomial.compute.gcd",
+                "operation_id": "polynomial.compute.gcd",
                 "payload": {
                     "left": polynomial(-1, 0, 1),
                     "right": polynomial(0, 1, 1),
@@ -129,12 +129,12 @@ async def main() -> None:
             {
                 "request": {
                     "op": "inspect",
-                    "capability_id": "polynomial.gcd.verify",
+                    "operation_id": "polynomial.gcd.verify",
                 }
             },
         )
         assert (
-            verification_descriptor["capability"]["capability_id"]
+            verification_descriptor["operation"]["operation_id"]
             == "polynomial.gcd.verify"
         )
 
@@ -142,7 +142,7 @@ async def main() -> None:
             client,
             "math.run",
             {
-                "capability_id": "polynomial.gcd.verify",
+                "operation_id": "polynomial.gcd.verify",
                 "payload": {
                     "input": {
                         "left": polynomial(-1, 0, 1),
@@ -162,7 +162,7 @@ asyncio.run(main())
 Run it from the repository root:
 
 ```sh
-uv run python domain_capability.py
+uv run python domain_operation.py
 ```
 
 The producer's exact arithmetic and successful completion yield `COMPUTED`,
@@ -193,7 +193,7 @@ create an obligation lifecycle.
 
 ## When verification is unavailable
 
-If describing the expected verifier returns `UNKNOWN_CAPABILITY`, do not guess
+If describing the expected verifier returns `UNKNOWN_OPERATION`, do not guess
 another ID or treat computed evidence as verified. Re-read the catalog. The
 usual causes are disabled bundled references, an unavailable checker backend,
 failed runtime measurement, configured exclusions, or a producer relation for

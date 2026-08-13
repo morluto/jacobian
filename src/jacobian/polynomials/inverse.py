@@ -1,4 +1,4 @@
-"""Adapter implementations for sparse rational polynomial-map capabilities."""
+"""Adapter implementations for sparse rational polynomial-map operations."""
 
 from __future__ import annotations
 
@@ -7,15 +7,14 @@ import time
 from typing import Any
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_errors import CapabilityInvocationError
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityInvocationExample,
-    CapabilityRequest,
-)
 from jacobian.contracts.evidence import (
     CertificateEnvelope,
     EvidenceBindings,
+)
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationExample,
+    OperationRequest,
 )
 from jacobian.contracts.polynomials import (
     PolynomialIdentityRequest,
@@ -35,6 +34,7 @@ from jacobian.contracts.polynomials import (
     SparseRationalPolynomial,
 )
 from jacobian.contracts.results import Conclusion, Execution, ExecutionStatus
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
     PolynomialOperationResult,
@@ -59,8 +59,8 @@ class PolynomialMapInverseSynthesizeAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.inverse.candidate_synthesize",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.inverse.candidate_synthesize",
             version="1",
             title="Synthesize a bounded polynomial-map inverse candidate",
             description=(
@@ -76,8 +76,8 @@ class PolynomialMapInverseSynthesizeAdapter:
             input_schema=model_schema(PolynomialMapInverseSynthesisRequest),
             output_schema=model_schema(PolynomialMapInverseSynthesisOutput),
             tags=("polynomial", "map", "inverse", "synthesis", "exact-rational"),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="triangular_inverse",
                     description=(
                         "Synthesize and independently check the degree-two "
@@ -139,7 +139,7 @@ class PolynomialMapInverseSynthesizeAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def _run_synthesis(
@@ -413,7 +413,7 @@ class PolynomialMapInverseSynthesizeAdapter:
                         "the independent two-sided verifier rejected "
                         "the synthesized candidate"
                     )
-            except CapabilityInvocationError as exc:
+            except OperationInvocationError as exc:
                 verification_failure = exc.diagnostic.message
 
         return (
@@ -427,7 +427,7 @@ class PolynomialMapInverseSynthesizeAdapter:
         )
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> PolynomialMapInverseSynthesisRequest:
         return _validate_request(
             PolynomialMapInverseSynthesisRequest,
@@ -558,8 +558,8 @@ class PolynomialMapInverseVerifyAdapter:
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
         checker_id = resources.installation.inverse_checker_id
-        self._descriptor = CapabilityDescriptor(
-            capability_id="polynomial.map.inverse.verify",
+        self._descriptor = OperationDescriptor(
+            operation_id="polynomial.map.inverse.verify",
             version="1",
             title="Verify a two-sided polynomial-map inverse",
             description=(
@@ -575,8 +575,8 @@ class PolynomialMapInverseVerifyAdapter:
             input_schema=model_schema(PolynomialMapInverseVerifyRequest),
             output_schema=model_schema(PolynomialMapInverseVerifyOutput),
             tags=("polynomial", "map", "inverse", "verification", "exact-rational"),
-            invocation_examples=(
-                CapabilityInvocationExample(
+            examples=(
+                OperationExample(
                     name="identity_map_inverse",
                     description=(
                         "Independently verify the identity map as its own "
@@ -625,10 +625,10 @@ class PolynomialMapInverseVerifyAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> PolynomialMapInverseVerifyRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialMapInverseVerifyRequest:
         return _validate_request(
             PolynomialMapInverseVerifyRequest,
             request.input,

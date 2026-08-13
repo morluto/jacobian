@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.topology import build_topology_bundle
@@ -27,13 +27,13 @@ def test_every_topology_operation_advertises_an_executable_example(
 ) -> None:
     bundle = build_topology_bundle()
 
-    for operation in bundle.capabilities:
+    for operation in bundle.operations:
         spec = operation.spec
-        assert spec.invocation_examples, spec.operation_id
-        example = spec.invocation_examples[0]
-        result = topology_services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id=spec.operation_id,
+        assert spec.examples, spec.operation_id
+        example = spec.examples[0]
+        result = topology_services.core.operations.invoke(
+            OperationRequest(
+                operation_id=spec.operation_id,
                 input=example.input,
             )
         )
@@ -70,9 +70,9 @@ def _result_payload(_runtime, result) -> dict[str, Any]:
 
 
 def _canonicalize(topology_services, presentation: dict[str, Any]) -> dict[str, Any]:
-    result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.canonicalize",
+    result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.canonicalize",
             input=presentation,
         )
     )
@@ -88,9 +88,9 @@ def _betti(
     convention: str = "UNREDUCED",
 ) -> tuple[int, ...]:
     complex_ = _canonicalize(topology_services, presentation)
-    result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.compute",
+    result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.compute",
             input={
                 "complex": complex_,
                 "prime": prime,
@@ -109,9 +109,9 @@ def _betti(
 def test_canonicalization_is_canonical_complete_inline_and_composable(
     topology_services,
 ) -> None:
-    result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.canonicalize",
+    result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.canonicalize",
             input={
                 "vertices": ["c", "a", "b"],
                 "facets": [["b", "a"], ["c", "b"], ["c", "a"]],
@@ -142,9 +142,9 @@ def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
         topology_services,
         {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]},
     )
-    integer_result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.chain_complex.compute",
+    integer_result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.chain_complex.compute",
             input={
                 "complex": triangle,
                 "coefficient_ring": "INTEGER",
@@ -153,9 +153,9 @@ def test_chain_complex_exposes_oriented_sparse_boundaries_and_augmentation(
         )
     )
     integer = _result_payload(topology_services, integer_result)
-    mod_two_reduced_result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.chain_complex.compute",
+    mod_two_reduced_result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.chain_complex.compute",
             input={
                 "complex": triangle,
                 "coefficient_ring": "PRIME_FIELD",
@@ -300,15 +300,15 @@ def test_integral_homology_exposes_free_and_torsion_generators(
         },
     )
 
-    circle_result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.compute",
+    circle_result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.compute",
             input={"complex": circle, "convention": "UNREDUCED"},
         )
     )
-    projective_result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.compute",
+    projective_result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.compute",
             input={"complex": projective_plane, "convention": "UNREDUCED"},
         )
     )
@@ -351,9 +351,9 @@ def test_reduced_integral_homology_uses_the_augmentation_kernel(
             "facets": [["a"], ["b"], ["c"]],
         },
     )
-    result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.compute",
+    result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.compute",
             input={"complex": points, "convention": "REDUCED"},
         )
     )
@@ -398,9 +398,9 @@ def test_vertex_relabeling_and_input_orientation_preserve_betti_numbers(
 def test_invalid_topology_request_fails_before_artifact_writes(
     topology_services,
 ) -> None:
-    result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.canonicalize",
+    result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.canonicalize",
             input={
                 "vertices": ["a", "b"],
                 "facets": [["a"], ["a", "b"]],
@@ -421,9 +421,9 @@ def test_stale_complex_digest_surfaces_precise_field_in_diagnostic(
     field path in ``path`` — not just the generic bundle wording.
     """
 
-    result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_homology.integral.compute",
+    result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_homology.integral.compute",
             input={
                 "complex": {
                     "complex_format": "jacobian.finite-simplicial-complex/v1",
@@ -469,9 +469,9 @@ def test_enriched_diagnostic_still_fails_closed_for_non_digest_error(
     ``hint`` surfaces the specific validator message.
     """
 
-    result = topology_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="topology.simplicial_complex.canonicalize",
+    result = topology_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="topology.simplicial_complex.canonicalize",
             input={
                 "vertices": ["a", "b"],
                 "facets": [["a"], ["a", "b"]],

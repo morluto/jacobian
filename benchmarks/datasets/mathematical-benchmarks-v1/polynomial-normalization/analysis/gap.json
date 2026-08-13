@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "provenance_status": "historical",
-  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.capability-gap-analysis",
+  "historical_provenance_id": "jacobian.mathematical-benchmarks-v1.operation-gap-analysis",
   "task_id": "polynomial-normalization",
   "analysis": {
     "mathematical_moves": [
@@ -9,12 +9,12 @@
     ],
     "current_capabilities": [
       {
-        "capability_id": "polynomial.expression.normalize",
+        "operation_id": "polynomial.expression.normalize",
         "availability": "AVAILABLE",
         "boundary": "Returns the required canonical sparse expression."
       },
       {
-        "capability_id": "polynomial.expression_normalization.verify",
+        "operation_id": "polynomial.expression_normalization.verify",
         "availability": "AVAILABLE",
         "boundary": "Replays normalization independently."
       }

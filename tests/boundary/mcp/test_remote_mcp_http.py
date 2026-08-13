@@ -217,12 +217,12 @@ async def _remote_tenant_scenario(port: int) -> None:
                 raise_exceptions=True,
             ) as client,
         ):
-            catalog = await client.read_resource("capability://catalog")
+            catalog = await client.read_resource("operation://catalog")
             assert "matrix.determinant.compute" in catalog.contents[0].text
             result = await client.call_tool(
                 "math.run",
                 {
-                    "capability_id": "matrix.determinant.compute",
+                    "operation_id": "matrix.determinant.compute",
                     "payload": {
                         "matrix": {
                             "matrix_schema_version": "1",

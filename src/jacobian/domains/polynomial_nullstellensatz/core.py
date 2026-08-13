@@ -9,17 +9,8 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import parse_capability_input
-from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
-from jacobian.contracts.capabilities import (
-    CapabilityDescriptor,
-    CapabilityDiagnostic,
-    CapabilityInputKind,
-    CapabilityProviderRuntime,
-    CapabilityRequest,
-)
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.nullstellensatz import (
@@ -30,11 +21,20 @@ from jacobian.contracts.nullstellensatz import (
     NullstellensatzVerificationOutput,
     NullstellensatzVerificationRequest,
 )
+from jacobian.contracts.operations import (
+    OperationDescriptor,
+    OperationDiagnostic,
+    OperationInputKind,
+    OperationRequest,
+    ProviderObservation,
+)
 from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
 from jacobian.installation.context import InstallationContext
+from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -42,8 +42,8 @@ from jacobian.operations import Completed, Failed
 from jacobian.schema_registry import model_schema
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 
-MATERIALIZE_CAPABILITY_ID = "polynomial.jacobian_degree_slice.system.materialize"
-VERIFY_CAPABILITY_ID = "polynomial.nullstellensatz.infeasibility_certificate.verify"
+MATERIALIZE_OPERATION_ID = "polynomial.jacobian_degree_slice.system.materialize"
+VERIFY_OPERATION_ID = "polynomial.nullstellensatz.infeasibility_certificate.verify"
 DOMAIN_ID = "polynomial_nullstellensatz"
 CERTIFICATE_FORMAT = "polynomial.nullstellensatz.chart-cover"
 _MAX_DIAGNOSTIC_REASON_CHARS = 512
@@ -67,8 +67,8 @@ def _diagnostic(
     expected: str | None = None,
     actual_type: str | None = None,
     details: dict[str, str] | None = None,
-) -> CapabilityDiagnostic:
-    return CapabilityDiagnostic(
+) -> OperationDiagnostic:
+    return OperationDiagnostic(
         code=code,
         stage=stage,
         message=message,
@@ -108,12 +108,12 @@ class JacobianDegreeSliceMaterializeAdapter:
         self,
         context: InstallationContext,
         installation: NullstellensatzCoreInstallation,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
     ) -> None:
         self.context = context
         self.installation = installation
-        self._descriptor = CapabilityDescriptor(
-            capability_id=MATERIALIZE_CAPABILITY_ID,
+        self._descriptor = OperationDescriptor(
+            operation_id=MATERIALIZE_OPERATION_ID,
             version="1",
             title="Materialize the normalized Jacobian degree-(2,3) slice",
             description=(
@@ -129,19 +129,19 @@ class JacobianDegreeSliceMaterializeAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
     def prepare(
-        self, request: CapabilityRequest
+        self, request: OperationRequest
     ) -> JacobianDegreeSliceMaterializeRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 JacobianDegreeSliceMaterializeRequest,
                 request.input,
             )
         except ValidationError as exc:
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 _diagnostic(
                     "INVALID_JACOBIAN_DEGREE_SLICE_REQUEST",
                     "request_validation",
@@ -167,7 +167,7 @@ class JacobianDegreeSliceMaterializeAdapter:
             system_digest=stored.object_digest,
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=Completed(
                 value=output,
@@ -185,12 +185,12 @@ class NullstellensatzVerificationAdapter:
         self,
         context: InstallationContext,
         installation: NullstellensatzCoreInstallation,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
     ) -> None:
         self.context = context
         self.installation = installation
-        self._descriptor = CapabilityDescriptor(
-            capability_id=VERIFY_CAPABILITY_ID,
+        self._descriptor = OperationDescriptor(
+            operation_id=VERIFY_OPERATION_ID,
             version="1",
             title="Verify a chart-cover Nullstellensatz certificate",
             description=(
@@ -208,7 +208,7 @@ class NullstellensatzVerificationAdapter:
                 "verification",
                 "exact",
             ),
-            accepted_input_kinds=(CapabilityInputKind.TYPED_ARTIFACT,),
+            accepted_input_kinds=(OperationInputKind.TYPED_ARTIFACT,),
             accepted_artifact_types=(
                 installation.system_schema_uri,
                 installation.certificate_bundle_schema_uri,
@@ -216,12 +216,12 @@ class NullstellensatzVerificationAdapter:
         )
 
     @property
-    def descriptor(self) -> CapabilityDescriptor:
+    def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(self, request: CapabilityRequest) -> NullstellensatzVerificationRequest:
+    def prepare(self, request: OperationRequest) -> NullstellensatzVerificationRequest:
         try:
-            return parse_capability_input(
+            return parse_operation_input(
                 NullstellensatzVerificationRequest,
                 request.input,
             )
@@ -232,7 +232,7 @@ class NullstellensatzVerificationAdapter:
             requested_bundle_uri = _request_value_summary(
                 request.input.get("certificate_bundle_uri")
             )
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 _diagnostic(
                     "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST",
                     "artifact_resolution",
@@ -308,7 +308,7 @@ class NullstellensatzVerificationAdapter:
             requested_bundle_uri = _request_value_summary(
                 validated.certificate_bundle_uri
             )
-            raise CapabilityInvocationError(
+            raise OperationInvocationError(
                 _diagnostic(
                     "INVALID_NULLSTELLENSATZ_VERIFICATION_REQUEST",
                     "artifact_resolution",
@@ -407,7 +407,7 @@ class NullstellensatzVerificationAdapter:
             else Failed(
                 status=execution.status,
                 runtime_ms=execution.runtime_ms,
-                diagnostic=CapabilityDiagnostic(
+                diagnostic=OperationDiagnostic(
                     code="NULLSTELLENSATZ_CHECKER_NOT_COMPLETED",
                     stage="checker_replay",
                     message=(
@@ -418,7 +418,7 @@ class NullstellensatzVerificationAdapter:
             )
         )
         return OperationProjection(
-            operation_id=self.descriptor.capability_id,
+            operation_id=self.descriptor.operation_id,
             version=self.descriptor.version,
             terminal=terminal,
             publication=PublishedOperation(
@@ -431,7 +431,7 @@ class NullstellensatzVerificationAdapter:
 
 def install_nullstellensatz_core(
     context: InstallationContext,
-    provider_runtime: CapabilityProviderRuntime,
+    provider_runtime: ProviderObservation,
 ) -> InstalledDomainBundle:
     semantics_uri = context.store.register_descriptor(
         kind="semantics",
@@ -499,7 +499,7 @@ def install_nullstellensatz_core(
             JacobianDegreeSliceMaterializeRequest: system_schema_uri,
             NullstellensatzVerificationRequest: envelope_schema_uri,
         },
-        result_schema_uris={MATERIALIZE_CAPABILITY_ID: system_schema_uri},
+        result_schema_uris={MATERIALIZE_OPERATION_ID: system_schema_uri},
         named_schema_uris={
             "nullstellensatz_certificate_bundle": bundle_schema_uri,
             "certificate_envelope": envelope_schema_uri,
@@ -510,8 +510,8 @@ def install_nullstellensatz_core(
 __all__ = [
     "CERTIFICATE_FORMAT",
     "DOMAIN_ID",
-    "MATERIALIZE_CAPABILITY_ID",
-    "VERIFY_CAPABILITY_ID",
+    "MATERIALIZE_OPERATION_ID",
+    "VERIFY_OPERATION_ID",
     "NullstellensatzCoreInstallation",
     "install_nullstellensatz_core",
 ]

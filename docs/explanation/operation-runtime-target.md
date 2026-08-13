@@ -14,9 +14,9 @@ below. The current supported behavior remains defined by the [product model](pro
 
 The public vocabulary is `operation` / `math operation`. The existing
 `math.find` and `math.run` tool names remain. In the next breaking release,
-`capability_id` becomes `operation_id`, `capability_version` becomes
+`operation_id` becomes `operation_id`, `operation_version` becomes
 `operation_version`, and the complete inventory moves from
-`capability://catalog` to `operation://catalog`. There is no compatibility URI,
+`operation://catalog` to `operation://catalog`. There is no compatibility URI,
 field alias, or parallel contract. Operation ID values themselves do not
 change.
 

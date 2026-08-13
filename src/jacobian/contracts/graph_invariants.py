@@ -1,4 +1,4 @@
-"""Typed contracts for exact finite-graph invariant capabilities."""
+"""Typed contracts for exact finite-graph invariant operations."""
 
 from __future__ import annotations
 

@@ -1,13 +1,13 @@
 """Independent checker declarations for inline rational-linear candidates."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.linear import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalSolutionFindRequest,
+)
+from jacobian.contracts.operations import (
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.provider_runtime import source_provider_runtime
 
@@ -16,12 +16,12 @@ _ENTRYPOINT = "jacobian_checkers.linear"
 
 def _linear_solution_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.rational-linear-checker",
         version="1",
         entrypoint="jacobian_checkers.linear:check_rational_solution",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("standard-library-rational-replay", "clean-process-checker"),
         checker_ids=checker_ids,
@@ -30,12 +30,12 @@ def _linear_solution_runtime(
 
 def _linear_inconsistency_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.rational-linear-inconsistency-checker",
         version="1",
         entrypoint="jacobian_checkers.linear:check_rational_inconsistency",
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("standard-library-rational-replay", "clean-process-checker"),
         checker_ids=checker_ids,

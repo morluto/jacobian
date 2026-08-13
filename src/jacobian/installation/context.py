@@ -1,4 +1,4 @@
-"""Narrow foundational dependencies shared by capability installers."""
+"""Narrow foundational dependencies shared by operation installers."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_installation import OperationInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -33,7 +33,7 @@ class InstallationContext:
     verification: VerificationService
     operations: OperationInstaller
     checker_authority: CheckerAuthorityMode
-    register_capability: Callable[[CapabilityAdapter[Any]], None]
+    register_operation: Callable[[OperationAdapter[Any]], None]
 
     @property
     def authorizes_bundled_checkers(self) -> bool:
@@ -51,10 +51,10 @@ def create_installation_context(
 
     Installation contexts are deliberately derived from the explicit core and
     runtime graphs.  Keeping this wiring here gives domain and composition
-    callers one production seam while preserving capability exclusions and the
+    callers one production seam while preserving operation exclusions and the
     operator-owned checker authority configured on ``RuntimeOptions``.
 
-    The registrar is the only place where capability exclusions are applied;
+    The registrar is the only place where operation exclusions are applied;
     installers can therefore remain independent of runtime configuration while
     every built-in adapter follows the same policy.
     """
@@ -62,11 +62,11 @@ def create_installation_context(
     if services.core is not core:
         raise ValueError("runtime services must be built from the supplied core")
 
-    excluded = options.capability_exclusions
+    excluded = options.operation_exclusions
 
-    def register(adapter: CapabilityAdapter[Any]) -> None:
-        if adapter.descriptor.capability_id not in excluded:
-            core.capabilities.register(adapter)
+    def register(adapter: OperationAdapter[Any]) -> None:
+        if adapter.descriptor.operation_id not in excluded:
+            core.operations.register(adapter)
 
     return InstallationContext(
         store=core.store,
@@ -75,7 +75,7 @@ def create_installation_context(
         values=core.values,
         checkers=core.checkers,
         verification=services.verification,
-        operations=core.operations,
+        operations=core.installer,
         checker_authority=options.checker_authority,
-        register_capability=register,
+        register_operation=register,
     )

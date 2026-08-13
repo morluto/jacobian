@@ -11,9 +11,9 @@ last-deployed notes outside source control; do not install configuration from
 operator scratch space or treat it as current.
 
 The server exposes `math.find` and `math.run`.
-Clients may read installed descriptors from `capability://catalog` and inspect
+Clients may read installed descriptors from `operation://catalog` and inspect
 exact contracts before invoking mathematical operations, which remain behind
-namespaced capability IDs.
+namespaced operation IDs.
 
 The tool names and schemas do not vary with deployment configuration.
 Evaluation harnesses may observe MCP traffic, but they do not add fields to
@@ -288,7 +288,7 @@ baseline for the localhost ports used by the hosted test service. It deletes
 authorization, cookie, OpenAI session/subject, and Tailscale identity headers
 from both log paths. `Traceparent` is reduced to Caddy's eight-hex-character
 SHA-256 correlation digest; Jacobian emits the same digest in its bounded
-`MCP capability attempt` record.
+`MCP operation attempt` record.
 
 Validate and reload a copied configuration before changing live traffic:
 
@@ -335,13 +335,13 @@ Python distribution version:
 uv run python deploy/smoke_remote.py \
   https://math-tools.example.org/mcp \
   --expect-policy-profile DEFAULT \
-  --require-capability graph.construct.explicit
+  --require-operation graph.construct.explicit
 ```
 
 For a token-protected endpoint, set `JACOBIAN_MCP_BEARER_TOKEN` in the smoke
 process environment without placing it on the command line. The script does
 not print the token and disables ambient proxy settings. It performs no state
-writes or capability invocations.
+writes or operation invocations.
 
 Confirm the ingress route independently:
 
@@ -359,8 +359,8 @@ sudo journalctl -u jacobian-caddy.service --since "10 minutes ago" --no-pager
 ```
 
 Do not report a deployment complete until the service version, two-tool
-surface, catalog policy, required capabilities, and bounded discovery response
-all pass. Run deeper capability-specific smoke checks only for providers
+surface, catalog policy, required operations, and bounded discovery response
+all pass. Run deeper operation-specific smoke checks only for providers
 changed by the release.
 
 `--with-lean` adds `lean.check`, `lean.proof_state.apply_tactic`,
@@ -460,7 +460,7 @@ subject to the same tenant-routing interface.
   larger searches instead of holding one HTTP request open.
 - Do not interpret HTTP success, solver completion, or an MCP response as a
   verified mathematical result.
-- Use the one-line `MCP capability attempt` records for operational counts.
+- Use the one-line `MCP operation attempt` records for operational counts.
   The attempt record distinguishes `COMPLETED`, `TIMEOUT`, `CANCELLED`, and
   `ERROR` and retains only bounded status/provenance fields and argument
   digests.

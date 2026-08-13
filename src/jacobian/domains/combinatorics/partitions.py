@@ -1,4 +1,4 @@
-"""Partition-owned exact combinatorics capabilities."""
+"""Partition-owned exact combinatorics operations."""
 
 from jacobian.contracts.combinatorics import (
     IntegerPartitionEnumerationRequest,
@@ -19,7 +19,7 @@ from jacobian.domains.combinatorics.operations import (
     stirling_second,
 )
 
-PARTITION_CAPABILITIES = (
+PARTITION_OPERATIONS = (
     combinatorics_operation(
         "combinatorics.compute.stirling_first",
         "Compute Stirling number of first kind",
@@ -29,7 +29,7 @@ PARTITION_CAPABILITIES = (
         stirling_first,
         "combinatorics",
         "partition",
-        invocation_examples=(
+        examples=(
             example(
                 "stirling_first_5_2",
                 "Compute the unsigned Stirling number for n=5, k=2.",
@@ -46,7 +46,7 @@ PARTITION_CAPABILITIES = (
         stirling_second,
         "combinatorics",
         "partition",
-        invocation_examples=(
+        examples=(
             example(
                 "stirling_second_5_2",
                 "Compute the Stirling number for n=5, k=2.",
@@ -63,7 +63,7 @@ PARTITION_CAPABILITIES = (
         bell,
         "combinatorics",
         "partition",
-        invocation_examples=(
+        examples=(
             example("bell_5", "Compute the fifth Bell number.", {"n": 5}),
         ),
     ),
@@ -76,7 +76,7 @@ PARTITION_CAPABILITIES = (
         partition_number,
         "combinatorics",
         "partition",
-        invocation_examples=(
+        examples=(
             example(
                 "partition_number_6", "Count the additive partitions of 6.", {"n": 6}
             ),
@@ -95,7 +95,7 @@ PARTITION_CAPABILITIES = (
         "combinatorics",
         "partition",
         "enumeration",
-        invocation_examples=(
+        examples=(
             example(
                 "partitions_of_5_with_two_parts",
                 "Enumerate partitions of 5 using at most two parts.",

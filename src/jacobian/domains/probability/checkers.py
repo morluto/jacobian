@@ -1,9 +1,9 @@
 """Independent checker declarations owned by the probability domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.probability import (
     FiniteConvolutionRequest,
@@ -30,7 +30,7 @@ _REASON = (
 
 def _mutual_information_checker_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Measure the checker source only when authorization installs it."""
 
     return source_provider_runtime(
@@ -39,7 +39,7 @@ def _mutual_information_checker_runtime(
         entrypoint=(
             "jacobian_checkers.mutual_information:check_finite_joint_mutual_information"
         ),
-        install_tier=CapabilityInstallTier.T1,
+        install_tier=ProviderInstallTier.T1,
         license_id="MIT",
         features=("standard-library-fraction-replay", "clean-process-checker"),
         checker_ids=checker_ids,
@@ -48,7 +48,7 @@ def _mutual_information_checker_runtime(
 
 def _probability_runtime(
     *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     return flint_runtime.probability_exact_checker_provider_runtime(
         checker_ids=checker_ids
     )
@@ -67,7 +67,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
             "reconstructs marginals, likelihood ratios, and the scaled log product"
         ),
         provider_runtime_factory=_mutual_information_checker_runtime,
-        verification_capability_id="probability.joint.mutual_information.verify",
+        verification_operation_id="probability.joint.mutual_information.verify",
         verification_title="Verify a finite-table mutual-information certificate",
         verification_description=(
             "Independently reconstruct ordered marginals, positive-support "
@@ -151,7 +151,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
         provider_runtime_factory=_probability_runtime,
         replay_method="independent exhaustive edge-subset replay",
         reason=_REASON,
-        verification_capability_id=(
+        verification_operation_id=(
             "probability.graph_reliability.connection_probability.verify"
         ),
         verification_title="Verify an exact terminal connection probability",

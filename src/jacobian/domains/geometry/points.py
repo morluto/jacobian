@@ -1,4 +1,4 @@
-"""Point-owned exact geometry capabilities."""
+"""Point-owned exact geometry operations."""
 
 from jacobian.contracts.geometry import (
     GeometryBooleanResult,
@@ -18,7 +18,7 @@ from jacobian.domains.geometry.operations import (
     squared_distance,
 )
 
-POINT_CAPABILITIES = (
+POINT_OPERATIONS = (
     geometry_operation(
         "geometry.points.compute.squared_distance",
         "Compute squared distance",
@@ -28,7 +28,7 @@ POINT_CAPABILITIES = (
         squared_distance,
         "geometry",
         "distance",
-        invocation_examples=(
+        examples=(
             example(
                 "diagonal_squared_distance",
                 "Compute the squared distance from (0,0) to (2,2).",
@@ -54,7 +54,7 @@ POINT_CAPABILITIES = (
         collinear,
         "geometry",
         "incidence",
-        invocation_examples=(
+        examples=(
             example(
                 "collinear_x_axis",
                 "Check three points on the x-axis.",
@@ -84,7 +84,7 @@ POINT_CAPABILITIES = (
         concyclic,
         "geometry",
         "circle",
-        invocation_examples=(
+        examples=(
             example(
                 "unit_circle_points",
                 "Check four points on the unit circle.",
@@ -118,7 +118,7 @@ POINT_CAPABILITIES = (
         convex_hull_points,
         "geometry",
         "convexity",
-        invocation_examples=(
+        examples=(
             example(
                 "square_convex_hull",
                 "Construct the hull of a rational square.",

@@ -6,13 +6,13 @@ from typing import Any
 import pytest
 from tests.support.artifacts import canonical_digest as _digest
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.contracts.sat import (
     SatAssignmentArtifact,
     SatCnfBinding,
@@ -31,15 +31,15 @@ _ASSIGNMENT_OBJECT_DIGEST = "sha256:" + "b" * 64
 _SEMANTICS_DIGEST = "sha256:" + "c" * 64
 
 
-def _producer() -> CapabilityProviderRuntime:
-    return CapabilityProviderRuntime(
+def _producer() -> ProviderObservation:
+    return ProviderObservation(
         provider="cadical",
-        availability=CapabilityProviderAvailability.AVAILABLE,
+        availability=ProviderAvailability.AVAILABLE,
         version="2.1.3",
         digest="sha256:" + "d" * 64,
-        digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+        digest_kind=ProviderDigestKind.EXECUTABLE,
         platform="linux-x86_64",
-        install_tier=CapabilityInstallTier.T2,
+        install_tier=ProviderInstallTier.T2,
         license_id="MIT",
     )
 

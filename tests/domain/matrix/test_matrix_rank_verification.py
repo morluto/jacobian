@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from tests.support.rationals import rational_payload
 
-from jacobian.contracts.capabilities import (
-    CapabilityRequest,
+from jacobian.contracts.operations import (
+    OperationRequest,
 )
 
 
@@ -23,12 +23,12 @@ def test_matrix_rank_verify_independently_recomputes_rank(
     matrix_services,
 ) -> None:
     matrix = _matrix()
-    computed = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(capability_id="matrix.rank.compute", input={"matrix": matrix})
+    computed = matrix_services.core.operations.invoke(
+        OperationRequest(operation_id="matrix.rank.compute", input={"matrix": matrix})
     )
-    verified = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.verify",
+    verified = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.verify",
             input={
                 "input": {"matrix": matrix},
                 "candidate": computed.output["result"],
@@ -42,9 +42,9 @@ def test_matrix_rank_verify_independently_recomputes_rank(
 
 def test_matrix_rank_verify_rejects_wrong_rank(matrix_services) -> None:
     matrix = _matrix()
-    rejected = matrix_services.core.capabilities.invoke(
-        CapabilityRequest(
-            capability_id="matrix.rank.verify",
+    rejected = matrix_services.core.operations.invoke(
+        OperationRequest(
+            operation_id="matrix.rank.verify",
             input={
                 "input": {"matrix": matrix},
                 "candidate": {

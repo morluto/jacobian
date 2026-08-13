@@ -15,7 +15,7 @@ backend execution or artifact writes.
 
 ## Operations
 
-| Capability | Atomic outcome | Inspectable ledger |
+| Operation | Atomic outcome | Inspectable ledger |
 | --- | --- | --- |
 | `probability.finite_distribution.raw_moment.compute` | One exact raw moment of order 0 through 128 | Per-atom power and weighted contribution |
 | `probability.finite_distribution.event_probability.compute` | Exact mass of an explicit support subset | Every selected source atom |

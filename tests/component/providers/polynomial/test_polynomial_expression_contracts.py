@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.support.capabilities import invoke_capability as _invoke
+from tests.support.operations import invoke_operation as _invoke
 from tests.support.rationals import rational_payload as _q
 
 from jacobian.contracts.results import ExecutionStatus
@@ -85,7 +85,7 @@ def test_expansion_term_budget_failure_is_specific_and_non_retryable(
         "alternatives": [
             "use a factored symbolic operation",
             "split the expression before normalization",
-            "use a domain capability with bounded coefficient access",
+            "use a domain operation with bounded coefficient access",
         ],
         "normalization_uri": None,
         "checker_input_available": False,
@@ -228,7 +228,7 @@ def test_normalization_rejects_inputs_outside_typed_ast_contract(
         )
         assert result.execution.status is ExecutionStatus.ERROR, case
         assert result.output["error"]["stage"] in {
-            "capability_input_validation",
+            "operation_input_validation",
             "input_validation",
             "bounded_normalization",
         }, case

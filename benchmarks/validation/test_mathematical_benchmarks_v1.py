@@ -82,7 +82,7 @@ def test_mathematical_benchmarks_v1_has_flat_tasks_and_authoritative_members() -
         assert input_data["task_id"] == config["task"]["name"]
         assert len(metadata["fixture_digest"]) == len("sha256:") + 64
         instruction = (task / "instruction.md").read_text().lower()
-        assert "capability_id" not in instruction
+        assert "operation_id" not in instruction
         assert "toolbox" not in instruction
         assert "jacobian" not in instruction
         for path in task.rglob("*"):

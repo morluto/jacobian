@@ -179,7 +179,7 @@ def _expected(source: dict[str, Any]) -> dict[str, Any]:
         "pair_count_total": line_count * (line_count - 1) // 2,
         "completion": "COMPLETE",
         "arithmetic": "EXACT_INTEGER",
-        "verification_capability_id": (
+        "verification_operation_id": (
             "geometry.projective_line_arrangement.flats.verify"
         ),
         "verification_input_field": "result_uri",

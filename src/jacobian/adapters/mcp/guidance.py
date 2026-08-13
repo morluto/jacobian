@@ -13,8 +13,8 @@ SERVER_INSTRUCTIONS = (
     "or independent checking, even when the user does not name Jacobian or shell code "
     "could also calculate the result. math.find is the authoritative local search and "
     "exact-inspection interface; internet search cannot show which operations are "
-    "available in this runtime. Read capability://catalog when the complete installed "
-    "inventory is required. Unless an exact installed capability ID and its typed "
+    "available in this runtime. Read operation://catalog when the complete installed "
+    "inventory is required. Unless an exact installed operation ID and its typed "
     "contract are already available, call math.find with a plain-language desired local "
     "mathematical outcome. math.run may execute a known contract directly. "
     "For declaration queries explicitly targeting Jacobian's pinned CORE or MATHLIB "
@@ -37,7 +37,7 @@ SERVER_INSTRUCTIONS = (
 MATH_FIND_DESCRIPTION = """\
 Search or inspect locally installed Jacobian math tools by desired outcome or exact ID.
 This is authoritative for local search and exact operation inspection; internet search
-is not. Read `capability://catalog` when the complete installed inventory is needed. Use
+is not. Read `operation://catalog` when the complete installed inventory is needed. Use
 math.find when a task may benefit from exact computation, search, structural analysis,
 or a separate checker tool—even if shell code could also calculate the answer.
 
@@ -54,7 +54,7 @@ Examples:
 - `{"request":{"op":"search","query":"exact matrix determinant","domain":"matrix","limit":3}}`
 - `{"request":{"op":"search","query":"counterexample to associativity"}}`
 - `{"request":{"op":"search","query":"find a theorem declaration in pinned Mathlib","domain":"lean"}}`
-- `{"request":{"op":"inspect","capability_id":"polynomial.compute.gcd"}}`
+- `{"request":{"op":"inspect","operation_id":"polynomial.compute.gcd"}}`
 """
 
 MATH_RUN_DESCRIPTION = """\
@@ -62,7 +62,7 @@ Run one installed math tool by ID with its typed `payload`. Check execution stat
 before treating `output` as mathematical evidence. For a completed run, interpret the
 operation-owned result fields and any `verification_record_uri` to determine exactly
 what the run established. If the payload shape is unknown, inspect the exact operation
-with math.find, select one item from `invocation_examples`, and copy and adapt that
+with math.find, select one item from `examples`, and copy and adapt that
 item's `input` object as the `payload`. Do not call math.run with an empty `payload`
 merely to discover required fields; the inspect result is the authoritative contract.
 
@@ -77,6 +77,6 @@ tool ID (for example `polynomial.identity.verify`), not a switch on the producer
 Failed, cancelled, timed-out, or incomplete runs are not mathematical conclusions.
 
 Examples:
-- `{"capability_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}`
-- `{"capability_id":"polynomial.identity.verify","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
+- `{"operation_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}`
+- `{"operation_id":"polynomial.identity.verify","payload":{"variables":["x"],"left":{"terms":[]},"right":{"terms":[]}}}`
 """

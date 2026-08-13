@@ -196,7 +196,7 @@ def test_regina_spike_replays_partial_evidence_and_defers_production(
         "REVISE",
         "RESEARCH_ONLY",
     }
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_absent_regina_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
@@ -213,7 +213,7 @@ def test_absent_regina_is_an_explicit_non_conclusion(tmp_path: Path) -> None:
     assert report["status"] == "UNAVAILABLE"
     assert report["conclusion"] == "NO_CONCLUSION"
     assert report["diagnostic"]["code"] == "PROVIDER_FILE_UNAVAILABLE"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []
 
 
 def test_source_and_wheel_mismatch_fail_before_execution(tmp_path: Path) -> None:
@@ -281,8 +281,8 @@ def test_malformed_source_and_wheel_are_typed_non_conclusions(
         "REJECTED",
         "WHEEL_MALFORMED",
     )
-    assert source_report["capability_ids_registered"] == []
-    assert wheel_report["capability_ids_registered"] == []
+    assert source_report["operation_ids_registered"] == []
+    assert wheel_report["operation_ids_registered"] == []
 
 
 def test_runtime_malformed_output_timeout_and_crash_fail_closed(
@@ -440,4 +440,4 @@ def test_runtime_must_bind_to_the_pinned_wheel(tmp_path: Path) -> None:
 
     assert report["status"] == "REJECTED"
     assert report["diagnostic"]["code"] == "PROVIDER_RUNTIME_MISMATCH"
-    assert report["capability_ids_registered"] == []
+    assert report["operation_ids_registered"] == []

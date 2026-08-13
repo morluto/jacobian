@@ -1,4 +1,4 @@
-"""Exact integer and rational arithmetic capabilities."""
+"""Exact integer and rational arithmetic operations."""
 
 from jacobian.domains.arithmetic.bundle import build_arithmetic_bundle
 

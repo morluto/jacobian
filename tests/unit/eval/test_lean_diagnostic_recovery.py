@@ -32,12 +32,12 @@ def _classify(
     telemetry: dict[str, object],
 ) -> dict[str, Any]:
     retained = dict(telemetry)
-    invocations = telemetry.get("capability_invocations", [])
+    invocations = telemetry.get("operation_invocations", [])
     retained.setdefault(
-        "capability_attempts",
+        "operation_attempts",
         [
             {
-                "capability_id": invocation["capability_id"],
+                "operation_id": invocation["operation_id"],
                 "input": invocation["input"],
                 "successful": True,
             }
@@ -94,7 +94,7 @@ def _surface(seed: str, deployed_revision: str) -> dict[str, object]:
             "catalog_digest": "sha256:" + seed * 64,
             "policy_profile": "default",
             "policy_digest": "sha256:" + "9" * 64,
-            "capability_count": 1,
+            "operation_count": 1,
             "content_sha256": "sha256:" + seed * 64,
         },
         "deployment": {
@@ -154,14 +154,14 @@ def _comparison_run(
 
 
 def _tool_event(
-    capability_id: str,
+    operation_id: str,
     payload: dict[str, object],
     *,
     output: dict[str, object],
     verification_record_uri: str | None = None,
 ) -> dict[str, object]:
     response = {
-        "capability_id": capability_id,
+        "operation_id": operation_id,
         "execution": {"status": "COMPLETED"},
         "output": output,
         "artifact_uris": [],
@@ -172,7 +172,7 @@ def _tool_event(
         "item": {
             "type": "mcp_tool_call",
             "tool": "math.run",
-            "arguments": {"capability_id": capability_id, "payload": payload},
+            "arguments": {"operation_id": operation_id, "payload": payload},
             "status": "completed",
             "result": {
                 "isError": False,
@@ -188,7 +188,7 @@ def _comparison_evidence(
     case = load_suite(SUITE).cases[0]
     enriched = condition == "enriched-diagnostics"
     rejection = _tool_event(
-        case.injected_capability_id,
+        case.injected_operation_id,
         case.injected_payload,
         output={
             "conclusion": "UNKNOWN",
@@ -201,7 +201,7 @@ def _comparison_evidence(
     )
     if enriched:
         second = _tool_event(
-            case.terminal_capability_id,
+            case.terminal_operation_id,
             {
                 "statement": case.injected_payload["statement"],
                 "proof": "by\n  trivial",
@@ -392,7 +392,7 @@ def test_recovery_suite_freezes_control_treatment_and_injected_cases() -> None:
     )
     premise_probe = suite.cases[3].diagnostic_probe
     assert premise_probe is not None
-    assert premise_probe.capability_id == "lean.retrieve.premises"
+    assert premise_probe.operation_id == "lean.retrieve.premises"
     assert premise_probe.expected_diagnostic_evidence.path == "proof_prefix.0"
     assert suite.cases[4].expected_diagnostic_evidence is not None
     assert suite.cases[4].expected_diagnostic_evidence.path == "$"
@@ -412,9 +412,9 @@ def test_recovery_classifies_failed_request_diagnostic_before_verified_repair() 
     result = classify_recovery(
         case,
         {
-            "capability_attempts": [
+            "operation_attempts": [
                 {
-                    "capability_id": probe.capability_id,
+                    "operation_id": probe.operation_id,
                     "input": probe.payload,
                     "successful": False,
                     "diagnostic_codes": ["INVALID_LEAN_RETRIEVAL_REQUEST"],
@@ -435,19 +435,19 @@ def test_recovery_classifies_failed_request_diagnostic_before_verified_repair() 
                     ],
                 },
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "successful": True,
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "successful": True,
                 },
             ],
-            "capability_invocations": [
+            "operation_invocations": [
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "output": {
                         "conclusion": "UNKNOWN",
@@ -460,7 +460,7 @@ def test_recovery_classifies_failed_request_diagnostic_before_verified_repair() 
                     },
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "output": {"conclusion": "TRUE"},
                     "verification_record_uri": ("artifact://sha256/" + "a" * 64),
@@ -488,27 +488,27 @@ def test_premise_probe_does_not_bias_control_repair_classification() -> None:
     result = classify_recovery(
         case,
         {
-            "capability_attempts": [
+            "operation_attempts": [
                 {
-                    "capability_id": probe.capability_id,
+                    "operation_id": probe.operation_id,
                     "input": probe.payload,
                     "successful": False,
                     "diagnostic_codes": ["LEAN_RETRIEVAL_FAILED"],
                 },
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "successful": True,
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "successful": True,
                 },
             ],
-            "capability_invocations": [
+            "operation_invocations": [
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "output": {
                         "conclusion": "UNKNOWN",
@@ -516,7 +516,7 @@ def test_premise_probe_does_not_bias_control_repair_classification() -> None:
                     },
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "output": {"conclusion": "TRUE"},
                     "verification_record_uri": "artifact://sha256/" + "b" * 64,
@@ -532,7 +532,7 @@ def test_premise_probe_does_not_bias_control_repair_classification() -> None:
 
 @pytest.mark.parametrize(
     "generic_code",
-    ("UNKNOWN_CAPABILITY", "INVALID_REQUEST", "ADAPTER_EXECUTION_FAILED"),
+    ("UNKNOWN_OPERATION", "INVALID_REQUEST", "ADAPTER_EXECUTION_FAILED"),
 )
 def test_recovery_does_not_credit_generic_failed_injection(
     generic_code: str,
@@ -546,22 +546,22 @@ def test_recovery_does_not_credit_generic_failed_injection(
     result = classify_recovery(
         case,
         {
-            "capability_attempts": [
+            "operation_attempts": [
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "successful": False,
                     "diagnostic_codes": [generic_code],
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "successful": True,
                 },
             ],
-            "capability_invocations": [
+            "operation_invocations": [
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "output": {"conclusion": "TRUE"},
                     "verification_record_uri": "artifact://sha256/" + "a" * 64,
@@ -583,7 +583,7 @@ def test_recovery_uses_later_exact_retry_after_operational_failure() -> None:
         "environment": case.injected_payload["environment"],
     }
     rejected = {
-        "capability_id": case.injected_capability_id,
+        "operation_id": case.injected_operation_id,
         "input": case.injected_payload,
         "output": {
             "conclusion": "UNKNOWN",
@@ -591,7 +591,7 @@ def test_recovery_uses_later_exact_retry_after_operational_failure() -> None:
         },
     }
     repaired = {
-        "capability_id": case.terminal_capability_id,
+        "operation_id": case.terminal_operation_id,
         "input": repaired_input,
         "output": {"conclusion": "TRUE", "diagnostics": []},
         "verification_record_uri": "artifact://sha256/" + "b" * 64,
@@ -599,25 +599,25 @@ def test_recovery_uses_later_exact_retry_after_operational_failure() -> None:
     result = classify_recovery(
         case,
         {
-            "capability_attempts": [
+            "operation_attempts": [
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "successful": False,
                     "diagnostic_codes": ["LEAN_CHECKER_TIMEOUT"],
                 },
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "successful": True,
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": repaired_input,
                     "successful": True,
                 },
             ],
-            "capability_invocations": [rejected, repaired],
+            "operation_invocations": [rejected, repaired],
         },
     )
 
@@ -640,7 +640,7 @@ def test_recovery_does_not_shift_invocations_after_malformed_success() -> None:
         "environment": case.injected_payload["environment"],
     }
     unrelated_rejection = {
-        "capability_id": case.injected_capability_id,
+        "operation_id": case.injected_operation_id,
         "input": unrelated_input,
         "output": {
             "conclusion": "UNKNOWN",
@@ -648,7 +648,7 @@ def test_recovery_does_not_shift_invocations_after_malformed_success() -> None:
         },
     }
     repaired = {
-        "capability_id": case.terminal_capability_id,
+        "operation_id": case.terminal_operation_id,
         "input": repaired_input,
         "output": {"conclusion": "TRUE", "diagnostics": []},
         "verification_record_uri": "artifact://sha256/" + "d" * 64,
@@ -656,26 +656,26 @@ def test_recovery_does_not_shift_invocations_after_malformed_success() -> None:
     result = classify_recovery(
         case,
         {
-            "capability_attempts": [
+            "operation_attempts": [
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "successful": True,
                 },
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": unrelated_input,
                     "successful": True,
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": repaired_input,
                     "successful": True,
                 },
             ],
             # The first response was malformed, so telemetry retained no
             # completed invocation for it. Later invocations must not shift.
-            "capability_invocations": [unrelated_rejection, repaired],
+            "operation_invocations": [unrelated_rejection, repaired],
         },
     )
 
@@ -695,9 +695,9 @@ def test_enrichment_requires_expected_field_level_evidence() -> None:
     result = classify_recovery(
         case,
         {
-            "capability_attempts": [
+            "operation_attempts": [
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": case.injected_payload,
                     "successful": False,
                     "diagnostic_codes": ["INVALID_LEAN_TRANSITION_REQUEST"],
@@ -709,14 +709,14 @@ def test_enrichment_requires_expected_field_level_evidence() -> None:
                     ],
                 },
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "successful": True,
                 },
             ],
-            "capability_invocations": [
+            "operation_invocations": [
                 {
-                    "capability_id": case.terminal_capability_id,
+                    "operation_id": case.terminal_operation_id,
                     "input": terminal_input,
                     "output": {"conclusion": "TRUE"},
                     "verification_record_uri": "artifact://sha256/" + "c" * 64,
@@ -797,9 +797,9 @@ def test_recovery_classification_separates_diagnostic_from_terminal_success() ->
         "repeated_mcp_call_count": 0,
         "tool_error_count": 0,
         "usage": {"input_tokens": 100, "output_tokens": 20},
-        "capability_invocations": [
+        "operation_invocations": [
             {
-                "capability_id": "lean.check",
+                "operation_id": "lean.check",
                 "input": case.injected_payload,
                 "output": {
                     "conclusion": "UNKNOWN",
@@ -809,7 +809,7 @@ def test_recovery_classification_separates_diagnostic_from_terminal_success() ->
                 },
             },
             {
-                "capability_id": "lean.check",
+                "operation_id": "lean.check",
                 "input": {
                     "statement": case.injected_payload["statement"],
                     "proof": "by\n  trivial",
@@ -835,9 +835,9 @@ def test_recovery_classification_separates_diagnostic_from_terminal_success() ->
 def test_recovery_does_not_count_verification_of_a_different_claim() -> None:
     case = load_suite(SUITE).cases[1]
     telemetry = {
-        "capability_invocations": [
+        "operation_invocations": [
             {
-                "capability_id": case.injected_capability_id,
+                "operation_id": case.injected_operation_id,
                 "input": case.injected_payload,
                 "output": {
                     "conclusion": "UNKNOWN",
@@ -850,7 +850,7 @@ def test_recovery_does_not_count_verification_of_a_different_claim() -> None:
                 },
             },
             {
-                "capability_id": case.terminal_capability_id,
+                "operation_id": case.terminal_operation_id,
                 "input": {
                     "statement": "True",
                     "proof": "by trivial",
@@ -897,9 +897,9 @@ def test_recovery_excludes_operational_failures_from_repairs(
 ) -> None:
     case = load_suite(SUITE).cases[0]
     telemetry = {
-        "capability_invocations": [
+        "operation_invocations": [
             {
-                "capability_id": case.injected_capability_id,
+                "operation_id": case.injected_operation_id,
                 "input": case.injected_payload,
                 "output": {
                     "conclusion": "UNKNOWN",
@@ -908,7 +908,7 @@ def test_recovery_excludes_operational_failures_from_repairs(
                 },
             },
             {
-                "capability_id": case.terminal_capability_id,
+                "operation_id": case.terminal_operation_id,
                 "input": {
                     "statement": case.injected_payload["statement"],
                     "proof": "by\n  trivial",
@@ -953,9 +953,9 @@ def test_repeated_error_identity_is_condition_independent() -> None:
             ),
         )
         return {
-            "capability_invocations": [
+            "operation_invocations": [
                 {
-                    "capability_id": case.injected_capability_id,
+                    "operation_id": case.injected_operation_id,
                     "input": payload,
                     "output": {
                         "conclusion": "UNKNOWN",
@@ -977,9 +977,9 @@ def test_recovery_keeps_legacy_proof_edit_control_observable() -> None:
     case = load_suite(SUITE).cases[2]
     corrected = {**case.injected_payload, "edited_proof": "by\n  trivial"}
     telemetry = {
-        "capability_invocations": [
+        "operation_invocations": [
             {
-                "capability_id": case.injected_capability_id,
+                "operation_id": case.injected_operation_id,
                 "input": case.injected_payload,
                 "output": {
                     "accepted": False,
@@ -989,7 +989,7 @@ def test_recovery_keeps_legacy_proof_edit_control_observable() -> None:
                 },
             },
             {
-                "capability_id": case.terminal_capability_id,
+                "operation_id": case.terminal_operation_id,
                 "input": corrected,
                 "output": {"accepted": True},
                 "verification_record_uri": "artifact://sha256/" + "d" * 64,
@@ -1042,15 +1042,15 @@ def test_recovery_summary_and_comparison_keep_efficiency_metrics_separate(
 def test_recovery_does_not_count_a_repaired_call_before_exact_injection() -> None:
     case = load_suite(SUITE).cases[0]
     telemetry = {
-        "capability_invocations": [
+        "operation_invocations": [
             {
-                "capability_id": "lean.check",
+                "operation_id": "lean.check",
                 "input": {"statement": "True", "proof": "by trivial"},
                 "output": {"conclusion": "TRUE"},
                 "verification_record_uri": "artifact://sha256/" + "a" * 64,
             },
             {
-                "capability_id": "lean.check",
+                "operation_id": "lean.check",
                 "input": case.injected_payload,
                 "output": {
                     "conclusion": "UNKNOWN",
@@ -1074,7 +1074,7 @@ def test_recovery_does_not_count_a_repaired_call_before_exact_injection() -> Non
 def test_recovery_protocol_includes_failed_math_run_attempts() -> None:
     case = load_suite(SUITE).cases[0]
     rejected = {
-        "capability_id": case.injected_capability_id,
+        "operation_id": case.injected_operation_id,
         "input": case.injected_payload,
         "output": {
             "conclusion": "UNKNOWN",
@@ -1082,7 +1082,7 @@ def test_recovery_protocol_includes_failed_math_run_attempts() -> None:
         },
     }
     repaired = {
-        "capability_id": case.terminal_capability_id,
+        "operation_id": case.terminal_operation_id,
         "input": {
             "statement": case.injected_payload["statement"],
             "proof": "by\n  trivial",
@@ -1092,24 +1092,24 @@ def test_recovery_protocol_includes_failed_math_run_attempts() -> None:
         "verification_record_uri": "artifact://sha256/" + "e" * 64,
     }
     telemetry = {
-        "capability_attempts": [
+        "operation_attempts": [
             {
-                "capability_id": None,
+                "operation_id": None,
                 "input": {"malformed": True},
                 "successful": False,
             },
             {
-                "capability_id": case.injected_capability_id,
+                "operation_id": case.injected_operation_id,
                 "input": case.injected_payload,
                 "successful": True,
             },
             {
-                "capability_id": case.terminal_capability_id,
+                "operation_id": case.terminal_operation_id,
                 "input": repaired["input"],
                 "successful": True,
             },
         ],
-        "capability_invocations": [rejected, repaired],
+        "operation_invocations": [rejected, repaired],
     }
 
     result = classify_recovery(case, telemetry)
@@ -1124,7 +1124,7 @@ def test_recovery_protocol_includes_failed_math_run_attempts() -> None:
 def test_recovery_success_allows_an_atomic_operation_before_injection() -> None:
     case = load_suite(SUITE).cases[0]
     rejected = {
-        "capability_id": case.injected_capability_id,
+        "operation_id": case.injected_operation_id,
         "input": case.injected_payload,
         "output": {
             "conclusion": "UNKNOWN",
@@ -1137,35 +1137,35 @@ def test_recovery_success_allows_an_atomic_operation_before_injection() -> None:
         "environment": case.injected_payload["environment"],
     }
     repaired = {
-        "capability_id": case.terminal_capability_id,
+        "operation_id": case.terminal_operation_id,
         "input": repaired_input,
         "output": {"conclusion": "TRUE", "diagnostics": []},
         "verification_record_uri": "artifact://sha256/" + "f" * 64,
     }
     unrelated = {
-        "capability_id": "arithmetic.gcd",
+        "operation_id": "arithmetic.gcd",
         "input": {"values": [12, 18]},
         "output": {"gcd": "6"},
     }
     telemetry = {
-        "capability_attempts": [
+        "operation_attempts": [
             {
-                "capability_id": unrelated["capability_id"],
+                "operation_id": unrelated["operation_id"],
                 "input": unrelated["input"],
                 "successful": True,
             },
             {
-                "capability_id": case.injected_capability_id,
+                "operation_id": case.injected_operation_id,
                 "input": case.injected_payload,
                 "successful": True,
             },
             {
-                "capability_id": case.terminal_capability_id,
+                "operation_id": case.terminal_operation_id,
                 "input": repaired_input,
                 "successful": True,
             },
         ],
-        "capability_invocations": [unrelated, rejected, repaired],
+        "operation_invocations": [unrelated, rejected, repaired],
     }
 
     result = classify_recovery(case, telemetry)

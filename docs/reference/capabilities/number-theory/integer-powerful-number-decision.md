@@ -4,7 +4,7 @@
 
 `integer.decide.powerful` decides whether one positive integer is powerful and
 preserves the complete prime factorization used for the decision. The
-capability is an atomic predicate, not a range search or a proof of a statement
+operation is an atomic predicate, not a range search or a proof of a statement
 about consecutive powerful numbers.
 
 ## Contract and semantics
@@ -37,7 +37,7 @@ exactly when that list is empty.
 
 ## Execution and assurance
 
-The capability extends the explicit number-theory factorization bundle and
+The operation extends the explicit number-theory factorization bundle and
 runs SymPy `factorint` inside the existing isolated, resource-bounded worker.
 A timeout, resource exhaustion, malformed worker response, cancellation, or
 worker error is a non-conclusion and never becomes `false`.
@@ -47,7 +47,7 @@ Successful execution has `COMPLETE` completeness for the single input and
 
 ## Independent verification
 
-The operator-authorized `integer.powerful.verify` capability accepts the exact
+The operator-authorized `integer.powerful.verify` operation accepts the exact
 producer input plus the complete typed candidate inline and independently replays
 the claim with Python-FLINT.
 The checker imports neither SymPy nor the producer or worker modules. A

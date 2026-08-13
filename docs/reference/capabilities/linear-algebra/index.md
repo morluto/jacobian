@@ -1,4 +1,4 @@
-# Linear algebra capability references
+# Linear algebra operation references
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

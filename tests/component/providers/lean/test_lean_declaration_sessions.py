@@ -14,13 +14,13 @@ from typing import Any
 
 import pytest
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderDigestKind,
-    CapabilityProviderRuntime,
-)
 from jacobian.contracts.lean import LeanDeclarationSearchStopReason, LeanEnvironment
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderDigestKind,
+    ProviderInstallTier,
+    ProviderObservation,
+)
 from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationBackendResult,
     LeanDeclarationInspectPayload,
@@ -44,14 +44,14 @@ from jacobian.providers.lean_runtime import (
     lean_semantic_runtime_digest,
 )
 
-_RUNTIME = CapabilityProviderRuntime(
+_RUNTIME = ProviderObservation(
     provider="jacobian.lean4",
-    availability=CapabilityProviderAvailability.AVAILABLE,
+    availability=ProviderAvailability.AVAILABLE,
     version="4.31.0",
     digest="sha256:" + "b" * 64,
-    digest_kind=CapabilityProviderDigestKind.EXECUTABLE,
+    digest_kind=ProviderDigestKind.EXECUTABLE,
     platform="test",
-    install_tier=CapabilityInstallTier.T3,
+    install_tier=ProviderInstallTier.T3,
     license_id="Apache-2.0",
     features=("CORE", "MATHLIB"),
     configuration={
@@ -161,7 +161,7 @@ class RecordingSubprocessBackend(LeanSubprocessDeclarationBackend):
         self,
         *,
         lean_executable: Path,
-        provider_runtime: CapabilityProviderRuntime,
+        provider_runtime: ProviderObservation,
         sessions: list[RecordingSession],
     ) -> None:
         super().__init__(

@@ -1,9 +1,9 @@
 """Provider-owned runtime declaration for typed SymPy normalization."""
 
-from jacobian.contracts.capabilities import (
-    CapabilityInstallTier,
-    CapabilityProviderAvailability,
-    CapabilityProviderRuntime,
+from jacobian.contracts.operations import (
+    ProviderAvailability,
+    ProviderInstallTier,
+    ProviderObservation,
 )
 from jacobian.contracts.polynomial_expressions import (
     SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION,
@@ -18,7 +18,7 @@ from jacobian.provider_runtime import (
 def sympy_polynomial_normalization_provider_runtime(
     *,
     refresh: bool = False,
-) -> CapabilityProviderRuntime:
+) -> ProviderObservation:
     """Identify the pinned typed polynomial-normalization profile."""
 
     runtime = python_distribution_provider_runtime(
@@ -26,7 +26,7 @@ def sympy_polynomial_normalization_provider_runtime(
         distribution_name="sympy",
         import_name="sympy",
         required_attributes=("Add", "Mul", "Poly", "Pow", "QQ", "Rational", "Symbol"),
-        install_tier=CapabilityInstallTier.T0,
+        install_tier=ProviderInstallTier.T0,
         license_id="BSD-3-Clause",
         features=(
             "typed-polynomial-expression",
@@ -37,12 +37,12 @@ def sympy_polynomial_normalization_provider_runtime(
         refresh=refresh,
     )
     if (
-        runtime.availability is CapabilityProviderAvailability.AVAILABLE
+        runtime.availability is ProviderAvailability.AVAILABLE
         and runtime.version != SYMPY_VERSION
     ):
         return _unavailable_runtime(
             provider="jacobian.sympy",
-            install_tier=CapabilityInstallTier.T0,
+            install_tier=ProviderInstallTier.T0,
             license_id="BSD-3-Clause",
             diagnostic=(
                 "SymPy is installed but does not match the pinned "

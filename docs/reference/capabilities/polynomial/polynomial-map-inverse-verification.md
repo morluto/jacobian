@@ -26,7 +26,7 @@ creates no verification record; every found candidate is submitted to
 verifier's certificate/output or an explicit verification failure.
 
 `polynomial.map.inverse.verify` verifies a proposed inverse of a square sparse
-polynomial map over `QQ`. It is a verification capability, not an inverse
+polynomial map over `QQ`. It is a verification operation, not an inverse
 search or synthesis operation.
 
 The request supplies:

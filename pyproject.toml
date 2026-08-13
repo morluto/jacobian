@@ -153,7 +153,7 @@ type = "forbidden"
 source_modules = ["jacobian.contracts"]
 forbidden_modules = [
     "jacobian.adapters",
-    "jacobian.capability_service",
+    "jacobian.operation_service",
     "jacobian.domains",
     "jacobian.installation",
     "jacobian.math",
@@ -176,7 +176,7 @@ type = "forbidden"
 source_modules = ["jacobian.math"]
 forbidden_modules = [
     "jacobian.adapters",
-    "jacobian.capability_service",
+    "jacobian.operation_service",
     "jacobian.checker_authorization",
     "jacobian.checker_operations",
     "jacobian.checker_worker",

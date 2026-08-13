@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
@@ -106,6 +107,8 @@ class ExactReplayCheckerDeclaration:
     verification_title: str | None = None
     verification_description: str | None = None
     verification_tags: tuple[str, ...] = ()
+    provider_runtime_factory: Callable[..., CapabilityProviderRuntime] | None = None
+    supports_input: Callable[[object], bool] | None = None
 
     def __post_init__(self) -> None:
         for field, value in {
@@ -120,6 +123,10 @@ class ExactReplayCheckerDeclaration:
                 raise ValueError(
                     f"exact replay checker declaration {field} must not be empty"
                 )
+        if self.provider_runtime_factory is None:
+            raise ValueError(
+                "exact replay checker declaration requires a provider runtime factory"
+            )
         derived_id = derive_verification_capability_id(self.capability_id)
         explicit_text = (
             self.verification_title,

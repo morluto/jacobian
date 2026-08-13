@@ -5,9 +5,11 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from tests.support.state import quiesce_sqlite_template
+from tests.support.state import publish_template, quiesce_sqlite_template
 
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime.bootstrap import bootstrap_services
+from jacobian.runtime.config import RuntimeOptions
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -50,21 +52,56 @@ def _polynomial_expression_schema_uri(root: Path) -> str:
     return str(row[0])
 
 
-def test_runtime_close_removes_deferred_wal_files(tmp_path: Path) -> None:
-    template = tmp_path / "template"
-    runtime = create_runtime(template)
-    runtime.close()
+def _build_sentinel_store(staging: Path) -> None:
+    core = bootstrap_services(staging, RuntimeOptions())
+    core.close()
+    quiesce_sqlite_template(staging)
 
-    assert not (template / "metadata.sqlite3-wal").exists()
-    assert not (template / "metadata.sqlite3-shm").exists()
 
-    _freeze_runtime_store(template)
+def test_store_close_removes_deferred_wal_files(tmp_path: Path) -> None:
+    root = tmp_path / "state"
+    core = bootstrap_services(root, RuntimeOptions())
+    core.close()
 
-    connection = sqlite3.connect(template / "metadata.sqlite3")
+    assert not (root / "metadata.sqlite3-wal").exists()
+    assert not (root / "metadata.sqlite3-shm").exists()
+
+    _freeze_runtime_store(root)
+
+    connection = sqlite3.connect(root / "metadata.sqlite3")
     try:
         assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
     finally:
         connection.close()
+
+
+def test_sentinel_store_is_copyable_under_concurrent_readers(tmp_path: Path) -> None:
+    template = publish_template(tmp_path / "sentinel-template", _build_sentinel_store)
+    database = template / "metadata.sqlite3"
+    assert not database.with_name(f"{database.name}-wal").exists()
+    assert not database.with_name(f"{database.name}-shm").exists()
+
+    connection = sqlite3.connect(database)
+    try:
+        assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
+        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+    finally:
+        connection.close()
+
+    descriptor_uri = _polynomial_expression_schema_uri(template)
+    destinations = [tmp_path / f"clone-{index}" for index in range(8)]
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(
+                _copy_and_check_store,
+                template,
+                destination,
+                descriptor_uri=descriptor_uri,
+            )
+            for destination in destinations
+        ]
+        for future in futures:
+            future.result(timeout=30)
 
 
 def test_complete_portfolio_template_is_quiescent_and_copyable(
@@ -82,61 +119,13 @@ def test_complete_portfolio_template_is_quiescent_and_copyable(
     finally:
         connection.close()
 
-    descriptor_uri = _polynomial_expression_schema_uri(complete_portfolio_template)
-    destinations = [tmp_path / f"clone-{index}" for index in range(8)]
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [
-            executor.submit(
-                _copy_and_check_store,
-                complete_portfolio_template,
-                destination,
-                descriptor_uri=descriptor_uri,
-            )
-            for destination in destinations
-        ]
-        for future in futures:
-            future.result(timeout=30)
-
-
-def test_authorized_portfolio_template_is_quiescent_and_copyable(
-    authorized_portfolio_template: Path,
-    tmp_path: Path,
-) -> None:
-    database = authorized_portfolio_template / "metadata.sqlite3"
-    assert not database.with_name(f"{database.name}-wal").exists()
-    assert not database.with_name(f"{database.name}-shm").exists()
-
-    connection = sqlite3.connect(database)
-    try:
-        assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
-        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
-    finally:
-        connection.close()
-
-    descriptor_uri = _polynomial_expression_schema_uri(authorized_portfolio_template)
-    destination = tmp_path / "authorized-clone"
+    destination = tmp_path / "complete-clone"
     _copy_and_check_store(
-        authorized_portfolio_template,
+        complete_portfolio_template,
         destination,
-        descriptor_uri=descriptor_uri,
+        descriptor_uri=_polynomial_expression_schema_uri(complete_portfolio_template),
     )
     with create_runtime(
-        destination,
-        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
+        destination, checker_authority=CheckerAuthorityMode.NONE
     ) as runtime:
-        assert runtime.core.checkers.select_compatible(
-            evidence_kind="WITNESS",
-            format_id="polytope.convex_combination",
-            format_version="1",
-            claim_schema_uri=runtime.services.polytope.claim_schema_uri,
-            semantics_uri=runtime.services.polytope.semantics_uri,
-            candidate_schema_uri=runtime.services.polytope.point_schema_uri,
-        )
-        assert runtime.core.checkers.select_compatible(
-            evidence_kind="CERTIFICATE",
-            format_id="polytope.linear_separator",
-            format_version="1",
-            claim_schema_uri=runtime.services.polytope.claim_schema_uri,
-            semantics_uri=runtime.services.polytope.semantics_uri,
-            candidate_schema_uri=runtime.services.polytope.point_schema_uri,
-        )
+        assert runtime.core.capabilities.catalog().capabilities

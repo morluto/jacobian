@@ -21,7 +21,7 @@ from jacobian.graphs.isomorphism import (
     GraphIsomorphismInstallation,
     install_graph_isomorphism,
 )
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @dataclass(frozen=True, slots=True)

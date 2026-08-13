@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from tools.benchmark_plan.validation import (
     MAX_MATRIX_JOBS,
     BenchmarkPlanValidationError,

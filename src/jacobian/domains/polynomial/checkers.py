@@ -97,6 +97,7 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
             "syzygy",
             "coefficient-ledger",
         ),
+        provider_runtime_factory=_graded_syzygy_runtime,
     ),
     ExactReplayCheckerDeclaration(
         "polynomial.compute.gcd",

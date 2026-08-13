@@ -90,12 +90,17 @@ def _result_item_ok(item, case):
         and (
             not ("zero" in reason_text or "divisor" in reason_text)
             or re.search(
-                r"(?:division|divisor|zero)[^.;\n]{0,60}"
+                r"\b(?:division|divisor|zero)\b[^.;\n]{0,60}"
                 r"(?:impossible|not possible|cannot|can['']?t|safe|never)\b",
                 reason_text,
             )
             or re.search(
-                r"\b(?:no|not)\b[^.;\n]{0,40}\bdivision\s+by\s+zero\b",
+                r"\b(?:no|not)\b(?:\s+\w+){0,4}\s+"
+                r"\bdivision\s+by\s+zero\b",
+                reason_text,
+            )
+            or re.search(
+                r"\b(?:no|not)\b(?:\s+\w+){0,4}\s+\bzero\s+divisor\b",
                 reason_text,
             )
         )

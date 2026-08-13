@@ -52,3 +52,23 @@ def test_rejects_reason_that_denies_division_by_zero() -> None:
     }
 
     assert not module._result_item_ok(item, _allzero_bad_guard_case())
+
+
+def test_rejects_zero_divisor_denial_but_accepts_nonzero_divisor_wording() -> None:
+    module = _module()
+    denied = {
+        "id": "allzero_bad_lt_guard",
+        "findings": ["DIVISION_BY_ZERO"],
+        "reason": "There is no zero divisor because the guard is safe.",
+    }
+    valid = {
+        "id": "allzero_bad_lt_guard",
+        "findings": ["DIVISION_BY_ZERO"],
+        "reason": (
+            "The guard does not supply a nonzero divisor fact, so division by zero "
+            "remains possible."
+        ),
+    }
+
+    assert not module._result_item_ok(denied, _allzero_bad_guard_case())
+    assert module._result_item_ok(valid, _allzero_bad_guard_case())

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from jacobian.contracts.base import ContractModel
-from jacobian.operation_bindings import (
+from jacobian.operation_declarations import (
     DurablePublication,
     InlinePublication,
-    InstalledOperation,
+    OperationDeclaration,
 )
-from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_ports import InputPort, OutputPort
 
 
@@ -51,8 +52,8 @@ def test_ports_bind_and_extract_exact_typed_fields() -> None:
         name="rank",
         value_type=RankResult,
     )
-    InstalledOperation(
-        spec=_spec(),
+    replace(
+        _spec(),
         publication=InlinePublication(),
         input_ports=(input_port,),
         output_ports=(output_port,),
@@ -81,8 +82,8 @@ def test_ports_reject_conflicts_and_same_shape_wrong_types() -> None:
 
 def test_installation_rejects_ports_that_disagree_with_model_fields() -> None:
     with pytest.raises(ValueError, match="does not match"):
-        InstalledOperation(
-            spec=_spec(),
+        replace(
+            _spec(),
             publication=InlinePublication(),
             input_ports=(
                 InputPort[OtherValue](
@@ -93,8 +94,8 @@ def test_installation_rejects_ports_that_disagree_with_model_fields() -> None:
             ),
         )
     with pytest.raises(ValueError, match="does not match"):
-        InstalledOperation(
-            spec=_spec(),
+        replace(
+            _spec(),
             publication=InlinePublication(),
             output_ports=(
                 OutputPort[MatrixValue](
@@ -107,8 +108,8 @@ def test_installation_rejects_ports_that_disagree_with_model_fields() -> None:
 
 def test_installation_rejects_multiple_whole_result_output_ports() -> None:
     with pytest.raises(ValueError, match="at most one output port"):
-        InstalledOperation(
-            spec=_spec(),
+        replace(
+            _spec(),
             publication=InlinePublication(),
             output_ports=(
                 OutputPort[RankResult](name="first", value_type=RankResult),
@@ -119,8 +120,8 @@ def test_installation_rejects_multiple_whole_result_output_ports() -> None:
 
 def test_durable_publication_rejects_request_local_output_references() -> None:
     with pytest.raises(ValueError, match="durable operations cannot publish"):
-        InstalledOperation(
-            spec=_spec(),
+        replace(
+            _spec(),
             publication=DurablePublication(resource_reason="large result"),
             output_ports=(OutputPort[RankResult](name="rank", value_type=RankResult),),
         )

@@ -31,7 +31,6 @@ from jacobian.contracts.posets import (
 )
 from jacobian.domains._examples import example
 from jacobian.operation_bindings import (
-    InstalledOperation,
     durable_operation,
     inline_operation,
 )
@@ -337,7 +336,7 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
-FINITE_POSET_OPERATIONS: tuple[InstalledOperation[Any, Any], ...] = (
+FINITE_POSET_OPERATIONS: tuple[OperationDeclaration[Any, Any], ...] = (
     inline_operation(
         OperationDeclaration(
             operation_id="poset.finite.compute",

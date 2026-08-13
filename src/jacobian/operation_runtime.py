@@ -9,11 +9,10 @@ from jacobian.artifacts import ArtifactService
 from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.results import ContractModel
 from jacobian.domain_bundles import DomainBundle
-from jacobian.operation_bindings import InstalledOperation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.value_references import ValueReferenceStore
 
-type DomainOperation = OperationDeclaration[Any, Any] | InstalledOperation[Any, Any]
+type DomainOperation = OperationDeclaration[Any, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,9 +30,7 @@ def operation_runtime(
 ) -> ProviderObservation:
     """Resolve provider identity at operation granularity."""
 
-    if isinstance(operation, OperationDeclaration):
-        return bundle.provider_runtime
-    return operation.provider_binding.runtime or bundle.provider_runtime
+    return bundle.provider_runtime
 
 
 __all__ = [

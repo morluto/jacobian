@@ -20,18 +20,18 @@ def _assert_gallai_edmonds_certificate(graphs: list[nx.Graph[int]]) -> None:
     operation = next(
         operation
         for operation in build_graph_invariant_bundle().operations
-        if operation.spec.operation_id == "graph.invariant.maximum_matching.compute"
+        if operation.operation_id == "graph.invariant.maximum_matching.compute"
     )
     for indexed_graph in graphs:
         graph = nx.relabel_nodes(
             indexed_graph,
             {vertex: str(vertex) for vertex in indexed_graph},
         )
-        request = operation.spec.request_type.model_validate(
+        request = operation.request_type.model_validate(
             {"graph": _graph_payload(graph)}
         )
-        result = operation.spec.execute(request)
-        assert isinstance(result, operation.spec.result_type)
+        result = operation.execute(request)
+        assert isinstance(result, operation.result_type)
         barrier = set(result.certificate.barrier_vertices)
         reduced = graph.subgraph(set(graph) - barrier)
         odd_component_count = sum(

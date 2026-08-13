@@ -59,7 +59,6 @@ from jacobian.operations import (
     OperationRefusalError,
 )
 from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
-from jacobian.providers.flint_runtime import python_flint_finite_field_provider_runtime
 
 _MAX_PROJECTIVE_POINTS = 4096
 _MAX_FINITE_MAP_ELEMENTS = 4096
@@ -256,7 +255,6 @@ def build_finite_field_bundle() -> DomainBundle:
             "projective-enumeration",
         ),
     )
-    flint_provider = python_flint_finite_field_provider_runtime()
     projective_line_operation = inline_operation(
         OperationDeclaration(
             operation_id="finite_field.projective_line.enumerate",
@@ -290,7 +288,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Construct the exact prime-field map B -> B^T b.",
             tags=("finite-field", "linear-map", "restriction-of-scalars"),
         ),
-        provider_runtime=flint_provider,
         input_ports=(
             InputPort(
                 name="subspace",
@@ -316,7 +313,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Return the exact rank bound to its direction and map.",
             tags=("finite-field", "linear-map", "rank", "exact"),
         ),
-        provider_runtime=flint_provider,
         input_ports=(
             InputPort(
                 name="direction",
@@ -343,7 +339,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Return every direction with its restricted map and rank.",
             tags=("finite-field", "rank"),
         ),
-        provider_runtime=flint_provider,
         input_ports=(
             InputPort(
                 name="subspace",
@@ -370,7 +365,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Return exact orbit-size counts bound to the full ledger.",
             tags=("finite-field", "orbit"),
         ),
-        provider_runtime=flint_provider,
         input_ports=(
             InputPort(
                 name="ledger",
@@ -392,7 +386,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Return the exact domain-bound map table in canonical order.",
             tags=("finite-field", "polynomial", "map-table", "exact"),
         ),
-        provider_runtime=flint_provider,
         input_ports=(
             InputPort(
                 name="polynomial_map",
@@ -414,7 +407,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Return every nonempty fiber bound to the exact map table.",
             tags=("finite-field", "polynomial", "fibers", "exact"),
         ),
-        provider_runtime=provider,
         input_ports=(
             InputPort(name="table", value_type=FiniteMapTable, request_field="table"),
         ),
@@ -432,7 +424,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Return two distinct inputs with the same exact table image.",
             tags=("finite-field", "polynomial", "collision", "certificate"),
         ),
-        provider_runtime=provider,
         input_ports=(
             InputPort(name="table", value_type=FiniteMapTable, request_field="table"),
         ),
@@ -450,7 +441,6 @@ def build_finite_field_bundle() -> DomainBundle:
             description="Return the exact inverse table of an injective finite map.",
             tags=("finite-field", "polynomial", "permutation", "certificate"),
         ),
-        provider_runtime=provider,
         input_ports=(
             InputPort(name="table", value_type=FiniteMapTable, request_field="table"),
         ),

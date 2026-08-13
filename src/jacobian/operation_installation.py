@@ -20,16 +20,13 @@ from jacobian.contracts.operations import (
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
-from jacobian.operation_bindings import (
-    InlinePublication,
-)
 from jacobian.operation_declarations import (
     Effect as DeclarationEffect,
 )
 from jacobian.operation_declarations import (
-    InlinePublication as DeclaredInlinePublication,
+    InlinePublication,
+    OperationDeclaration,
 )
-from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_errors import (
     OperationInvocationError,
     enriched_invalid_request,
@@ -65,8 +62,8 @@ class InstalledDomainBundle:
 
 def _spec(
     operation: DomainOperation,
-) -> OperationDeclaration[Any, Any] | OperationDeclaration[Any, Any]:
-    return operation if isinstance(operation, OperationDeclaration) else operation.spec
+) -> OperationDeclaration[Any, Any]:
+    return operation
 
 
 def _operation_id(operation: DomainOperation) -> str:
@@ -186,7 +183,7 @@ class InstalledOperationAdapter:
         self.bundle = bundle
         self.resources = resources
         publication = operation.publication
-        if isinstance(publication, (InlinePublication, DeclaredInlinePublication)):
+        if isinstance(publication, InlinePublication):
             from jacobian.contracts.domain_operations import (
                 InlineOperationOutput,
                 ReferencedInlineOperationOutput,
@@ -242,17 +239,13 @@ class InstalledOperationAdapter:
                 )
                 for port in operation.output_ports
             ),
-            examples=(
-                tuple(
-                    OperationExample(
-                        name=example.name,
-                        description=example.description,
-                        input=dict(example.input),
-                    )
-                    for example in self.spec.examples
+            examples=tuple(
+                OperationExample(
+                    name=example.name,
+                    description=example.description,
+                    input=dict(example.input),
                 )
-                if isinstance(self.spec, OperationDeclaration)
-                else self.spec.examples
+                for example in self.spec.examples
             ),
         )
 
@@ -297,11 +290,7 @@ class InstalledOperationAdapter:
                 parse_operation_input(self.spec.request_type, assembled_input),
             )
         except ValidationError as exc:
-            invalid_request = (
-                None
-                if isinstance(self.spec, OperationDeclaration)
-                else self.spec.invalid_request
-            )
+            invalid_request = self.spec.invalid_request
             base = invalid_request or self.bundle.diagnostics.invalid_request
             raise OperationInvocationError(
                 base
@@ -326,16 +315,7 @@ class InstalledOperationAdapter:
             ) from exc
         publication = None
         if isinstance(terminal, Completed):
-            runtime = (
-                None
-                if isinstance(self.operation, OperationDeclaration)
-                else self.operation.provider_binding.runtime
-            )
-            backend_version = (
-                runtime.version
-                if runtime is not None and runtime.version is not None
-                else self.bundle.backend_version
-            )
+            backend_version = self.bundle.backend_version
             try:
                 publication = publish_operation(
                     self.operation,

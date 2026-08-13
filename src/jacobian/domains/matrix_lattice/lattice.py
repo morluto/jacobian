@@ -23,7 +23,7 @@ from jacobian.domains.matrix_lattice.lll_protocol import (
     LllWorkerRequest,
     parse_lll_worker_response,
 )
-from jacobian.operation_bindings import InstalledOperation, durable_operation
+from jacobian.operation_bindings import durable_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationAbortError,
@@ -135,7 +135,7 @@ def reduce_lattice_basis(
     return result
 
 
-LATTICE_OPERATIONS: tuple[InstalledOperation[Any, Any], ...] = (
+LATTICE_OPERATIONS: tuple[OperationDeclaration[Any, Any], ...] = (
     durable_operation(
         OperationDeclaration(
             operation_id="lattice.basis.reduce",

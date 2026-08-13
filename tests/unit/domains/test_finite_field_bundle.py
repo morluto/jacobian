@@ -83,9 +83,8 @@ def test_bundle_declares_atomic_port_bound_operations() -> None:
     assert collision.output_ports[0].value_type is CollisionCertificate
     assert permutation.output_ports[0].value_type is PermutationCertificate
     for consumer in (fibers, collision, permutation):
-        assert consumer.spec.preflight is not None
-        assert consumer.provider_binding.runtime is not None
-        assert "finite-map-replay" in consumer.provider_binding.runtime.features
+        assert consumer.preflight is not None
+        assert not hasattr(consumer, "provider_binding")
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:
@@ -98,7 +97,7 @@ def test_projective_enumeration_refuses_large_output_before_allocation() -> None
         axis=Axis(name="large", labels=tuple(f"x{index}" for index in range(7))),
     )
 
-    terminal = execute_operation(operation.spec, request)
+    terminal = execute_operation(operation, request)
 
     assert isinstance(terminal, NonConclusion)
     assert terminal.diagnostic.code == "RESOURCE_LIMIT_EXCEEDED"
@@ -114,7 +113,7 @@ def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
         )
     )
 
-    terminal = execute_operation(operation.spec, request)
+    terminal = execute_operation(operation, request)
 
     assert isinstance(terminal, NonConclusion)
     assert terminal.diagnostic.code == "RESOURCE_LIMIT_EXCEEDED"
@@ -155,7 +154,7 @@ def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
         directions=projective_line(presentation, row_axis),
     )
 
-    terminal = execute_operation(operation.spec, request)
+    terminal = execute_operation(operation, request)
 
     assert isinstance(terminal, NonConclusion)
     assert terminal.diagnostic.code == "RESOURCE_LIMIT_EXCEEDED"

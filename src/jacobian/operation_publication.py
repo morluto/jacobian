@@ -13,18 +13,11 @@ from jacobian.contracts.domain_operations import (
     ReferencedInlineOperationOutput,
 )
 from jacobian.contracts.results import ContractModel
-from jacobian.operation_bindings import (
+from jacobian.operation_declarations import (
     DurablePublication,
     InlinePublication,
-    InstalledOperation,
+    OperationDeclaration,
 )
-from jacobian.operation_declarations import (
-    DurablePublication as DeclaredDurablePublication,
-)
-from jacobian.operation_declarations import (
-    InlinePublication as DeclaredInlinePublication,
-)
-from jacobian.operation_declarations import OperationDeclaration
 from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 
 
@@ -56,8 +49,7 @@ def publish_operation[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    operation: InstalledOperation[RequestT, ResultT]
-    | OperationDeclaration[RequestT, ResultT],
+    operation: OperationDeclaration[RequestT, ResultT],
     request: RequestT,
     result: ResultT,
     context: PublicationContext,
@@ -65,22 +57,10 @@ def publish_operation[
     """Apply only the installed operation's transport publication policy."""
 
     policy = operation.publication
-    operation_id = (
-        operation.operation_id
-        if isinstance(operation, OperationDeclaration)
-        else operation.spec.operation_id
-    )
-    operation_version = (
-        operation.version
-        if isinstance(operation, OperationDeclaration)
-        else operation.spec.version
-    )
-    result_type = (
-        operation.result_type
-        if isinstance(operation, OperationDeclaration)
-        else operation.spec.result_type
-    )
-    if isinstance(policy, (InlinePublication, DeclaredInlinePublication)):
+    operation_id = operation.operation_id
+    operation_version = operation.version
+    result_type = operation.result_type
+    if isinstance(policy, InlinePublication):
         projected_payload = {
             "result": result.model_dump(mode="json"),
             "backend_version": context.backend_version,
@@ -123,7 +103,7 @@ def publish_operation[
         return PublishedOperation(
             output=output,
         )
-    if not isinstance(policy, (DurablePublication, DeclaredDurablePublication)):
+    if not isinstance(policy, DurablePublication):
         raise TypeError(f"unsupported publication policy: {type(policy).__name__}")
 
     input_uri = context.artifacts.put(

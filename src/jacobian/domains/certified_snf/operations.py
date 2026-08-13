@@ -10,7 +10,7 @@ from jacobian.contracts.certified_snf import (
 )
 from jacobian.domains._certified_snf import certificate_from_reduction, smith_reduce
 from jacobian.domains._examples import example
-from jacobian.operation_bindings import InstalledOperation, durable_operation
+from jacobian.operation_bindings import durable_operation
 from jacobian.operation_declarations import OperationDeclaration
 
 
@@ -28,7 +28,7 @@ def _certified_smith(
     )
 
 
-CERTIFIED_SNF_OPERATIONS: tuple[InstalledOperation[Any, Any], ...] = (
+CERTIFIED_SNF_OPERATIONS: tuple[OperationDeclaration[Any, Any], ...] = (
     durable_operation(
         OperationDeclaration(
             operation_id="matrix.normal_form.smith.certified.compute",

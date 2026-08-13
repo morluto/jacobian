@@ -13,7 +13,6 @@ from jacobian.domains.rational_linear.checkers import (
     RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS,
 )
 from jacobian.domains.rational_linear.operations import (
-    RUNTIME,
     compute_rational_inconsistency,
     compute_rational_solution,
 )
@@ -27,7 +26,6 @@ from jacobian.provider_runtime import PYTHON_FLINT_VERSION, known_provider_runti
 
 
 def build_rational_linear_bundle() -> DomainBundle:
-    producer_runtime = RUNTIME
     operations = (
         inline_operation(
             OperationDeclaration(
@@ -55,7 +53,6 @@ def build_rational_linear_bundle() -> DomainBundle:
                     ),
                 ),
             ),
-            provider_runtime=producer_runtime,
         ),
         inline_operation(
             OperationDeclaration(
@@ -68,7 +65,6 @@ def build_rational_linear_bundle() -> DomainBundle:
                 execute=compute_rational_inconsistency,
                 tags=("linear-algebra", "rational", "inconsistency", "exact"),
             ),
-            provider_runtime=producer_runtime,
         ),
     )
     return DomainBundle(

@@ -69,7 +69,7 @@ def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None
 
 def test_geometry_capabilities_have_distinct_ids() -> None:
     ids = [
-        operation.spec.operation_id
+        operation.operation_id
         for operation in build_geometry_bundle().operations
     ]
 

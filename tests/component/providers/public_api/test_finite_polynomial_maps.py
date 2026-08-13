@@ -134,20 +134,20 @@ def test_slice_b_reuses_the_same_ports_for_table_and_certificate_handoff() -> No
     )
 
     table_payload = table_operation.input_ports[0].bind_to_request({}, polynomial_map)
-    table = table_operation.spec.execute(
-        table_operation.spec.request_type.model_validate(table_payload)
+    table = table_operation.execute(
+        table_operation.request_type.model_validate(table_payload)
     )
     carried_table = table_operation.output_ports[0].extract_from_result(table)
 
     fiber_payload = fiber_operation.input_ports[0].bind_to_request({}, carried_table)
-    partition = fiber_operation.spec.execute(
-        fiber_operation.spec.request_type.model_validate(fiber_payload)
+    partition = fiber_operation.execute(
+        fiber_operation.request_type.model_validate(fiber_payload)
     )
     collision_payload = collision_operation.input_ports[0].bind_to_request(
         {}, carried_table
     )
-    collision = collision_operation.spec.execute(
-        collision_operation.spec.request_type.model_validate(collision_payload)
+    collision = collision_operation.execute(
+        collision_operation.request_type.model_validate(collision_payload)
     )
 
     assert partition.table is carried_table

@@ -13,7 +13,7 @@ from jacobian.contracts.graph_symmetry import (
 )
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import nx
-from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
 
 
@@ -107,7 +107,7 @@ def _generator_orbits(
     )
 
 
-GRAPH_SYMMETRY_OPERATIONS: tuple[InstalledOperation[Any, Any], ...] = (
+GRAPH_SYMMETRY_OPERATIONS: tuple[OperationDeclaration[Any, Any], ...] = (
     inline_operation(
         OperationDeclaration(
             operation_id="graph.symmetry.generator_orbits.compute",

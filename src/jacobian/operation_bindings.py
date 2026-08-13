@@ -8,95 +8,22 @@ making either concern part of the mathematical function contract.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from jacobian.contracts.operations import (
-    OperationExample,
-    ProviderObservation,
-)
+from jacobian.contracts.operations import OperationExample
 from jacobian.contracts.results import ContractModel
-from jacobian.operation_declarations import OperationDeclaration
-from jacobian.operation_ports import InputPort, OutputPort, validate_ports
+from jacobian.operation_declarations import (
+    DurablePublication,
+    InlinePublication,
+    OperationDeclaration,
+    PublicationPolicy,
+)
+from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
     OperationFailure,
     OperationRefusalError,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class ProviderBinding:
-    """Optional operation-specific provider override.
-
-    A missing runtime means that installation binds the operation to its
-    owning domain bundle's declared provider.  The resolved provider is still
-    recorded on the installed descriptor and invocation provenance.
-    """
-
-    runtime: ProviderObservation | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class InlinePublication:
-    """Publish one small bounded mathematical value inline."""
-
-    maximum_bytes: int = 10 * 1024 * 1024
-
-    def __post_init__(self) -> None:
-        if self.maximum_bytes < 1:
-            raise ValueError("inline publication byte limit must be positive")
-
-
-@dataclass(frozen=True, slots=True)
-class DurablePublication[
-    RequestT: ContractModel,
-    ResultT: ContractModel,
-    PreviewT: ContractModel,
-]:
-    """Publish an input/result artifact pair with an optional typed preview."""
-
-    resource_reason: str
-    preview_type: type[PreviewT] | None = None
-    preview: Callable[[ResultT], PreviewT] | None = None
-    preview_complete: bool = False
-
-    def __post_init__(self) -> None:
-        if not self.resource_reason.strip():
-            raise ValueError("durable publication requires an explicit resource reason")
-        if self.preview_complete and self.preview is None:
-            raise ValueError("a complete durable preview requires a preview")
-
-
-type PublicationPolicy[
-    RequestT: ContractModel,
-    ResultT: ContractModel,
-] = InlinePublication | DurablePublication[RequestT, ResultT, ContractModel]
-
-
-@dataclass(frozen=True, slots=True)
-class InstalledOperation[
-    RequestT: ContractModel,
-    ResultT: ContractModel,
-]:
-    """One semantic operation bound to publication and provider selection."""
-
-    spec: OperationDeclaration[RequestT, ResultT]
-    publication: PublicationPolicy[RequestT, ResultT]
-    provider_binding: ProviderBinding = ProviderBinding()
-    input_ports: tuple[InputPort[Any], ...] = ()
-    output_ports: tuple[OutputPort[Any], ...] = ()
-
-    def __post_init__(self) -> None:
-        if isinstance(self.publication, DurablePublication) and self.output_ports:
-            raise ValueError(
-                "durable operations cannot publish request-local output references"
-            )
-        validate_ports(
-            self.spec.request_type,
-            self.spec.result_type,
-            self.input_ports,
-            self.output_ports,
-        )
 
 
 def inline_operation[
@@ -105,16 +32,14 @@ def inline_operation[
 ](
     spec: OperationDeclaration[RequestT, ResultT],
     *,
-    provider_runtime: ProviderObservation | None = None,
     input_ports: tuple[InputPort[Any], ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
-) -> InstalledOperation[RequestT, ResultT]:
+) -> OperationDeclaration[RequestT, ResultT]:
     """Bind a semantic operation to inline publication."""
 
-    return InstalledOperation(
-        spec=spec,
+    return replace(
+        spec,
         publication=InlinePublication(),
-        provider_binding=ProviderBinding(provider_runtime),
         input_ports=input_ports,
         output_ports=output_ports,
     )
@@ -131,21 +56,19 @@ def durable_operation[
     preview_type: type[PreviewT] | None = None,
     preview: Callable[[ResultT], PreviewT] | None = None,
     preview_complete: bool = False,
-    provider_runtime: ProviderObservation | None = None,
     input_ports: tuple[InputPort[Any], ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
-) -> InstalledOperation[RequestT, ResultT]:
+) -> OperationDeclaration[RequestT, ResultT]:
     """Bind a semantic operation to durable artifact publication."""
 
-    return InstalledOperation(
-        spec=spec,
+    return replace(
+        spec,
         publication=DurablePublication(
             resource_reason=resource_reason,
             preview_type=preview_type,
             preview=preview,
             preview_complete=preview_complete,
         ),
-        provider_binding=ProviderBinding(provider_runtime),
         input_ports=input_ports,
         output_ports=output_ports,
     )
@@ -170,9 +93,8 @@ class InlineOperationFactory:
         operation: Callable[[RequestT], ResultT],
         *tags: str,
         examples: tuple[OperationExample, ...] = (),
-        provider_runtime: ProviderObservation | None = None,
         version: str = "2",
-    ) -> InstalledOperation[RequestT, ResultT]:
+    ) -> OperationDeclaration[RequestT, ResultT]:
         def execute(request: RequestT) -> ResultT:
             try:
                 return operation(request)
@@ -191,7 +113,6 @@ class InlineOperationFactory:
                 tags=tags,
                 examples=examples,
             ),
-            provider_runtime=provider_runtime,
         )
 
 
@@ -215,11 +136,10 @@ class DurableOperationFactory:
         *tags: str,
         examples: tuple[OperationExample, ...] = (),
         resource_reason: str,
-        provider_runtime: ProviderObservation | None = None,
         preview: Callable[[ResultT], ResultT] | None = None,
         preview_complete: bool = False,
         version: str = "2",
-    ) -> InstalledOperation[RequestT, ResultT]:
+    ) -> OperationDeclaration[RequestT, ResultT]:
         def execute(request: RequestT) -> ResultT:
             try:
                 return operation(request)
@@ -239,7 +159,6 @@ class DurableOperationFactory:
                 examples=examples,
             ),
             resource_reason=resource_reason,
-            provider_runtime=provider_runtime,
             preview_type=result_type,
             preview=preview,
             preview_complete=preview_complete,
@@ -251,8 +170,6 @@ __all__ = [
     "DurablePublication",
     "InlineOperationFactory",
     "InlinePublication",
-    "InstalledOperation",
-    "ProviderBinding",
     "PublicationPolicy",
     "durable_operation",
     "inline_operation",

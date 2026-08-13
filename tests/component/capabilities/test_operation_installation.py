@@ -17,18 +17,20 @@ from jacobian.operation_bindings import (
     durable_operation,
     inline_operation,
 )
+from jacobian.operation_declarations import (
+    Effect,
+    OperationAbortError,
+    OperationDeclaration,
+    OperationRefusalError,
+    PreflightResult,
+    PreflightStatus,
+)
 from jacobian.operation_installation import OperationInstaller
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
-    Effect,
     Failed,
-    OperationAbortError,
-    OperationRefusalError,
-    OperationDeclaration,
-    PreflightResult,
-    PreflightStatus,
 )
 from jacobian.provider_runtime import known_provider_runtime
 
@@ -169,7 +171,7 @@ def test_declared_ports_publish_and_resolve_one_opaque_typed_value(
     bundle = _synthetic_bundle()
     producer = inline_operation(
         replace(
-            bundle.operations[0].spec,
+            bundle.operations[0],
             operation_id="synthetic.compute.produce_double",
         ),
         output_ports=(OutputPort(name="value", value_type=_SyntheticResult),),
@@ -203,31 +205,31 @@ def test_declared_ports_publish_and_resolve_one_opaque_typed_value(
         descriptor.operation_id: descriptor
         for descriptor in operation_services.core.operations.catalog().operations
     }
-    assert descriptors[producer.spec.operation_id].output_ports[0].model_dump() == {
+    assert descriptors[producer.operation_id].output_ports[0].model_dump() == {
         "name": "value",
         "value_type": "_SyntheticResult",
     }
-    assert descriptors[consumer.spec.operation_id].input_ports[0].model_dump() == {
+    assert descriptors[consumer.operation_id].input_ports[0].model_dump() == {
         "name": "source",
         "value_type": "_SyntheticResult",
     }
 
     produced = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=producer.spec.operation_id,
+            operation_id=producer.operation_id,
             input={"value": 6},
         )
     )
     value_ref = produced.output["value_refs"]["value"]
     stored = operation_services.core.values.inspect(value_ref)
-    assert stored.source_operation_id == producer.spec.operation_id
-    assert stored.source_operation_version == producer.spec.version
+    assert stored.source_operation_id == producer.operation_id
+    assert stored.source_operation_version == producer.version
     assert stored.source_port == "value"
     assert stored.digest.startswith("sha256:")
 
     consumed = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=consumer.spec.operation_id,
+            operation_id=consumer.operation_id,
             input={},
             inputs={"source": value_ref},
         )
@@ -245,7 +247,7 @@ def test_operation_without_input_ports_rejects_value_references(
 
     result = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=bundle.operations[0].spec.operation_id,
+            operation_id=bundle.operations[0].operation_id,
             input={"value": 2},
             inputs={"undeclared": "value://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
         )
@@ -263,7 +265,7 @@ def test_value_reference_binding_rejects_unknown_ports_and_payload_conflicts(
     bundle = _synthetic_bundle()
     producer = inline_operation(
         replace(
-            bundle.operations[0].spec,
+            bundle.operations[0],
             operation_id="synthetic.compute.produce_for_rejection",
         ),
         output_ports=(OutputPort(name="value", value_type=_SyntheticResult),),
@@ -292,7 +294,7 @@ def test_value_reference_binding_rejects_unknown_ports_and_payload_conflicts(
     )
     produced = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=producer.spec.operation_id,
+            operation_id=producer.operation_id,
             input={"value": 2},
         )
     )
@@ -300,7 +302,7 @@ def test_value_reference_binding_rejects_unknown_ports_and_payload_conflicts(
 
     unknown_port = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=consumer.spec.operation_id,
+            operation_id=consumer.operation_id,
             input={},
             inputs={"other": value_ref},
         )
@@ -309,7 +311,7 @@ def test_value_reference_binding_rejects_unknown_ports_and_payload_conflicts(
 
     conflicting_payload = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=consumer.spec.operation_id,
+            operation_id=consumer.operation_id,
             input={"source": {"doubled": 99}},
             inputs={"source": value_ref},
         )
@@ -336,7 +338,7 @@ def test_operation_uses_one_typed_parse_not_its_discovery_schema(
 
     result = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=operation.spec.operation_id,
+            operation_id=operation.operation_id,
             input={"value": 7},
         )
     )
@@ -373,7 +375,7 @@ def test_preflight_refusal_runs_before_execution_or_publication(
 
     result = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=operation.spec.operation_id,
+            operation_id=operation.operation_id,
             input={"value": 4},
         )
     )
@@ -409,7 +411,7 @@ def test_postcondition_failure_publishes_no_artifacts(operation_services) -> Non
 
     result = operation_services.core.operations.invoke(
         OperationRequest(
-            operation_id=operation.spec.operation_id,
+            operation_id=operation.operation_id,
             input={"value": 4},
         )
     )
@@ -498,7 +500,7 @@ def test_catalog_effect_comes_from_operation_spec(
     descriptor = next(
         descriptor
         for descriptor in operation_services.core.operations.catalog().operations
-        if descriptor.operation_id == stateful.spec.operation_id
+        if descriptor.operation_id == stateful.operation_id
     )
 
     assert descriptor.read_only is False
@@ -626,11 +628,8 @@ def test_computed_adapter_preserves_operational_failure_status(
     failed_operations = tuple(
         replace(
             bundle.operations[0],
-            spec=replace(
-                bundle.operations[0].spec,
-                operation_id=f"synthetic.compute.failure.{status.value.lower()}",
-                execute=abort(status),
-            ),
+            operation_id=f"synthetic.compute.failure.{status.value.lower()}",
+            execute=abort(status),
         )
         for status in statuses
     )
@@ -639,7 +638,7 @@ def test_computed_adapter_preserves_operational_failure_status(
     for status, operation in zip(statuses, failed_operations, strict=True):
         result = operation_services.core.operations.invoke(
             OperationRequest(
-                operation_id=operation.spec.operation_id,
+                operation_id=operation.operation_id,
                 input={"value": 2},
             )
         )
@@ -669,8 +668,8 @@ def test_computed_adapter_rejects_invalid_implementation_result(
         OperationDeclaration(
             operation_id="synthetic.compute.invalid",
             version="2",
-            title=original.spec.title,
-            description=original.spec.description,
+            title=original.title,
+            description=original.description,
             request_type=_SyntheticRequest,
             result_type=_SyntheticResult,
             execute=lambda _request: cast(Any, {"doubled": "not-an-integer"}),

@@ -10,8 +10,9 @@ from jacobian.contracts.operations import OperationDiagnostic, OperationRequest
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_ports import InputPort, OutputPort
-from jacobian.operations import DomainDiagnostics, DomainSemantics, OperationDeclaration
+from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import known_provider_runtime
 
 
@@ -107,7 +108,7 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
 
     produced = typed_value_services.core.operations.invoke(
         OperationRequest(
-            operation_id=producer.spec.operation_id,
+            operation_id=producer.operation_id,
             input={"value": 12},
         )
     )
@@ -116,7 +117,7 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
 
     stringly = typed_value_services.core.operations.invoke(
         OperationRequest(
-            operation_id=consumer.spec.operation_id,
+            operation_id=consumer.operation_id,
             input={"increment": "1"},
             inputs={"source": value_ref},
         )
@@ -126,7 +127,7 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
 
     consumed = typed_value_services.core.operations.invoke(
         OperationRequest(
-            operation_id=consumer.spec.operation_id,
+            operation_id=consumer.operation_id,
             input={"increment": 1},
             inputs={"source": value_ref},
         )

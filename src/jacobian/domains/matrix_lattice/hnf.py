@@ -24,7 +24,7 @@ from jacobian.domains.matrix_lattice.hnf_protocol import (
     HermiteNormalFormWorkerRequest,
     parse_hnf_worker_response,
 )
-from jacobian.operation_bindings import InstalledOperation, durable_operation
+from jacobian.operation_bindings import durable_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationAbortError,
@@ -136,7 +136,7 @@ def compute_hermite_normal_form(
     return result
 
 
-HERMITE_NORMAL_FORM_OPERATION: InstalledOperation[
+HERMITE_NORMAL_FORM_OPERATION: OperationDeclaration[
     HermiteNormalFormRequest,
     HermiteNormalFormResult,
 ] = durable_operation(
@@ -170,7 +170,6 @@ HERMITE_NORMAL_FORM_OPERATION: InstalledOperation[
         "the complete H and U basis-transformation certificate exceeds reliable "
         "inline transport and is retained for independent replay"
     ),
-    provider_runtime=HNF_RUNTIME,
 )
 
 __all__ = ["HERMITE_NORMAL_FORM_OPERATION", "compute_hermite_normal_form"]

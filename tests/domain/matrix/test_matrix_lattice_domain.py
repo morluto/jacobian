@@ -450,7 +450,7 @@ def test_matrix_output_contract_failure_is_operational_error() -> None:
     )
 
     with raises(OperationAbortError) as exc_info:
-        operation.spec.execute(request)
+        operation.execute(request)
 
     assert exc_info.value.status is ExecutionStatus.ERROR
     assert exc_info.value.diagnostic.code == "MATRIX_OUTPUT_LIMIT_EXCEEDED"

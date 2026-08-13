@@ -28,7 +28,7 @@ def test_every_topology_operation_advertises_an_executable_example(
     bundle = build_topology_bundle()
 
     for operation in bundle.operations:
-        spec = operation.spec
+        spec = operation
         assert spec.examples, spec.operation_id
         example = spec.examples[0]
         result = topology_services.core.operations.invoke(

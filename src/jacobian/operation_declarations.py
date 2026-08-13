@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
 
 from jacobian.contracts.base import ContractModel
@@ -18,88 +17,16 @@ from jacobian.contracts.operations import (
     OperationDiagnostic,
     OperationExample,
 )
-from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_ports import InputPort, OutputPort, validate_ports
-
-
-class Effect(StrEnum):
-    """Semantic effect of execution, independent of result publication."""
-
-    READ_ONLY = "READ_ONLY"
-    STATEFUL = "STATEFUL"
-
-
-class PreflightStatus(StrEnum):
-    """Bounded admission result evaluated before mathematical execution."""
-
-    SUPPORTED = "SUPPORTED"
-    UNSUPPORTED = "UNSUPPORTED"
-    PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
-    RESOURCE_LIMIT_EXCEEDED = "RESOURCE_LIMIT_EXCEEDED"
-
-
-@dataclass(frozen=True, slots=True)
-class PreflightResult:
-    """Small typed preflight decision with an optional stable reason."""
-
-    status: PreflightStatus
-    reason: str | None = None
-
-    def __post_init__(self) -> None:
-        if self.status is PreflightStatus.SUPPORTED and self.reason is not None:
-            raise ValueError("supported preflight cannot carry a rejection reason")
-        if self.status is not PreflightStatus.SUPPORTED and not (
-            self.reason and self.reason.strip()
-        ):
-            raise ValueError("rejected preflight requires a reason")
-
-
-SUPPORTED = PreflightResult(PreflightStatus.SUPPORTED)
-
-
-@dataclass(frozen=True, slots=True)
-class OperationFailure:
-    """Fail-closed mapping for expected mathematical-domain errors."""
-
-    code: str
-    stage: str
-    hint: str
-    exceptions: tuple[type[Exception], ...] = (TypeError, ValueError)
-
-    def diagnostic(self, error: Exception) -> OperationDiagnostic:
-        return OperationDiagnostic(
-            code=self.code,
-            stage=self.stage,
-            message=str(error),
-            hint=self.hint,
-        )
-
-
-class OperationRefusalError(Exception):
-    """Signal an expected domain refusal without returning terminal state."""
-
-    def __init__(self, diagnostic: OperationDiagnostic) -> None:
-        super().__init__(diagnostic.message)
-        self.diagnostic = diagnostic
-
-
-class OperationAbortError(Exception):
-    """Signal an operational interruption without returning terminal state."""
-
-    def __init__(
-        self,
-        status: ExecutionStatus,
-        diagnostic: OperationDiagnostic,
-    ) -> None:
-        if status not in {
-            ExecutionStatus.ERROR,
-            ExecutionStatus.TIMEOUT,
-            ExecutionStatus.CANCELLED,
-        }:
-            raise ValueError("aborted operation must use an operational failure status")
-        super().__init__(diagnostic.message)
-        self.status = status
-        self.diagnostic = diagnostic
+from jacobian.operations import (
+    SUPPORTED,
+    Effect,
+    OperationAbortError,
+    OperationFailure,
+    OperationRefusalError,
+    PreflightResult,
+    PreflightStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)

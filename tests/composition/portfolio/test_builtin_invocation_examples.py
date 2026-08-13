@@ -26,12 +26,12 @@ _CORE_OPERATIONS = tuple(
 @pytest.mark.parametrize(
     "operation",
     _CORE_OPERATIONS,
-    ids=lambda operation: operation.spec.operation_id,
+    ids=lambda operation: operation.operation_id,
 )
 def test_advertised_invocation_example_executes_successfully(operation) -> None:
-    operation_id = operation.spec.operation_id
-    examples = operation.spec.examples
+    operation_id = operation.operation_id
+    examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
-    request = operation.spec.request_type.model_validate(examples[0].input)
-    outcome = operation.spec.execute(request)
-    assert isinstance(outcome, operation.spec.result_type), (operation_id, outcome)
+    request = operation.request_type.model_validate(examples[0].input)
+    outcome = operation.execute(request)
+    assert isinstance(outcome, operation.result_type), (operation_id, outcome)

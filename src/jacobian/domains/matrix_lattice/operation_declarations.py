@@ -45,7 +45,7 @@ from jacobian.domains.matrix_lattice.operations import (
     compute_trace,
 )
 from jacobian.math.matrices.values import SmithNormalForm
-from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_ports import OutputPort
 from jacobian.operations import (
@@ -68,7 +68,7 @@ def matrix_operation[
     examples: tuple[OperationExample, ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
     version: str = "1",
-) -> InstalledOperation[RequestT, ResultT]:
+) -> OperationDeclaration[RequestT, ResultT]:
     def implementation(request: RequestT) -> ResultT:
         try:
             return operation(request)

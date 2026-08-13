@@ -18,7 +18,7 @@ from jacobian.contracts.operations import (
     OperationDiagnostic,
     OperationExample,
 )
-from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationRefusalError,
@@ -181,7 +181,7 @@ def _execute(
         ) from exc
 
 
-MINIMUM_SPANNING_TREE_OPERATION: InstalledOperation[
+MINIMUM_SPANNING_TREE_OPERATION: OperationDeclaration[
     GraphMinimumSpanningTreeRequest,
     GraphMinimumSpanningTreeResult,
 ] = inline_operation(

@@ -34,7 +34,6 @@ from jacobian.math.probability.values import (
 from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import OperationRefusalError
-from jacobian.provider_runtime import jacobian_provider_runtime
 
 FiniteJointLabel = Annotated[
     str,
@@ -478,10 +477,6 @@ MUTUAL_INFORMATION_OPERATION = inline_operation(
                 },
             ),
         ),
-    ),
-    provider_runtime=jacobian_provider_runtime(
-        "jacobian.probability.mutual-information",
-        features=("standard-library-exact-rational",),
     ),
 )
 

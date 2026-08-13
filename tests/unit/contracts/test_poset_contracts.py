@@ -15,16 +15,16 @@ def _materialize(elements: list[str], relation: list[tuple[str, str]]):
     operation = next(
         operation
         for operation in build_finite_poset_bundle().operations
-        if operation.spec.operation_id == "poset.finite.compute"
+        if operation.operation_id == "poset.finite.compute"
     )
-    outcome = operation.spec.execute(
+    outcome = operation.execute(
         FinitePosetRequest(
             elements=elements,
             relation=[{"lower": lower, "upper": upper} for lower, upper in relation],
             interpretation="COVER_EDGES",
         )
     )
-    assert isinstance(outcome, operation.spec.result_type)
+    assert isinstance(outcome, operation.result_type)
     return outcome.poset
 
 

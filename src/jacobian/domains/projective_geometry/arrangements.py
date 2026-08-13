@@ -18,7 +18,7 @@ from jacobian.contracts.projective_geometry import (
 )
 from jacobian.domains._examples import example
 from jacobian.math.arithmetic import primitive_integer_vector
-from jacobian.operation_bindings import InstalledOperation, durable_operation
+from jacobian.operation_bindings import durable_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationFailure,
@@ -171,7 +171,7 @@ def projective_line_arrangement_preview(
     )
 
 
-PROJECTIVE_LINE_ARRANGEMENT_OPERATION: InstalledOperation[
+PROJECTIVE_LINE_ARRANGEMENT_OPERATION: OperationDeclaration[
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
 ] = durable_operation(

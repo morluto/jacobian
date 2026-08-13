@@ -34,7 +34,7 @@ def _all_operation_ids() -> set[str]:
     ids: set[str] = set()
     for bundle in ALL_BUNDLES:
         for operation in bundle.operations:
-            ids.add(operation.spec.operation_id)
+            ids.add(operation.operation_id)
     return ids
 
 
@@ -46,7 +46,7 @@ def test_installed_bundles_expose_operations() -> None:
 
 def test_unique_ids_within_each_bundle() -> None:
     for bundle in ALL_BUNDLES:
-        ids = [op.spec.operation_id for op in bundle.operations]
+        ids = [op.operation_id for op in bundle.operations]
         assert len(ids) == len(set(ids)), (
             f"{bundle.domain_id}: duplicates {[i for i in ids if ids.count(i) > 1]}"
         )
@@ -56,7 +56,7 @@ def test_no_id_in_two_bundles() -> None:
     seen: dict[str, str] = {}
     for bundle in ALL_BUNDLES:
         for operation in bundle.operations:
-            cap_id = operation.spec.operation_id
+            cap_id = operation.operation_id
             assert cap_id not in seen, (
                 f"{cap_id!r} in both {seen[cap_id]!r} and {bundle.domain_id!r}"
             )
@@ -96,9 +96,9 @@ def test_catalog_matches_installed_operations(service: OperationService) -> None
     }
     for bundle in ALL_BUNDLES:
         for operation in bundle.operations:
-            desc = by_id[operation.spec.operation_id]
-            assert desc.version == operation.spec.version
-            assert desc.title == operation.spec.title
-            assert desc.description == operation.spec.description
+            desc = by_id[operation.operation_id]
+            assert desc.version == operation.version
+            assert desc.title == operation.title
+            assert desc.description == operation.description
             assert desc.provider == bundle.provider_runtime.provider
-            assert desc.tags == operation.spec.tags
+            assert desc.tags == operation.tags

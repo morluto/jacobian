@@ -127,7 +127,7 @@ def test_producer_and_checker_share_the_canonical_request_owner() -> None:
     producer = next(
         operation
         for operation in bundle.operations
-        if operation.spec.operation_id
+        if operation.operation_id
         == "probability.gaussian_polynomial.moment.compute"
     )
     checker = next(
@@ -135,5 +135,5 @@ def test_producer_and_checker_share_the_canonical_request_owner() -> None:
         for declaration in bundle.checker_declarations
         if declaration.operation_id == "probability.gaussian_polynomial.moment.compute"
     )
-    assert producer.spec.request_type is CanonicalGaussianPolynomialMomentRequest
+    assert producer.request_type is CanonicalGaussianPolynomialMomentRequest
     assert checker.request_model is CanonicalGaussianPolynomialMomentRequest

@@ -5,7 +5,7 @@ from jacobian.domains.polynomial.groebner import POLYNOMIAL_GROEBNER_OPERATION
 
 
 def test_arb_example_and_vocabulary_match_supported_functions() -> None:
-    spec = POINT_ENCLOSURE_OPERATIONS[0].spec
+    spec = POINT_ENCLOSURE_OPERATIONS[0]
     assert spec.examples[0].input["wall_seconds"] == 10
     assert {
         "square-root",
@@ -24,7 +24,7 @@ def test_arb_example_and_vocabulary_match_supported_functions() -> None:
 
 def test_groebner_example_preserves_cold_worker_startup_budget() -> None:
     assert (
-        POLYNOMIAL_GROEBNER_OPERATION.spec.examples[0].input[
+        POLYNOMIAL_GROEBNER_OPERATION.examples[0].input[
             "resource_budget"
         ]["wall_seconds"]
         == 10

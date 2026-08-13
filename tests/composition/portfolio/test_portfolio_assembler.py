@@ -26,12 +26,12 @@ from jacobian.contracts.operations import (
 from jacobian.contracts.results import ContractModel
 from jacobian.domain_bundles import DomainBundle
 from jacobian.installation.context import InstallationContext
-from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_bindings import inline_operation
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_installation import OperationInstaller
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
-    OperationDeclaration,
 )
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
@@ -77,7 +77,7 @@ def _synthetic_bundle(
     *,
     domain_id: str = "synthetic",
     runtime: ProviderObservation | None = None,
-    operations: tuple[InstalledOperation[Any, Any], ...] | None = None,
+    operations: tuple[OperationDeclaration[Any, Any], ...] | None = None,
 ) -> DomainBundle:
     def compute(request: _SyntheticRequest) -> _SyntheticResult:
         return _SyntheticResult(doubled=request.value * 2)

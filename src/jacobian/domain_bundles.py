@@ -7,7 +7,6 @@ from typing import Any
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.operations import ProviderObservation
-from jacobian.operation_bindings import InstalledOperation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 
@@ -21,10 +20,7 @@ class DomainBundle:
     semantics: DomainSemantics
     provider_runtime: ProviderObservation
     backend_version: str
-    operations: tuple[
-        OperationDeclaration[Any, Any] | InstalledOperation[Any, Any],
-        ...,
-    ]
+    operations: tuple[OperationDeclaration[Any, Any], ...]
     diagnostics: DomainDiagnostics
     checker_declarations: tuple[ExactReplayCheckerDeclaration, ...] = ()
 
@@ -32,14 +28,7 @@ class DomainBundle:
     def operation_ids(self) -> tuple[str, ...]:
         """Return the operation IDs declared by this domain."""
 
-        return tuple(
-            (
-                operation.operation_id
-                if isinstance(operation, OperationDeclaration)
-                else operation.spec.operation_id
-            )
-            for operation in self.operations
-        )
+        return tuple(operation.operation_id for operation in self.operations)
 
 
 __all__ = ["DomainBundle"]

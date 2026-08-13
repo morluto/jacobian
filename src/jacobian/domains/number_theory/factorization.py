@@ -44,7 +44,7 @@ from jacobian.domains.number_theory.factorization_protocol import (
     SquarefreeWorkerResponse,
     parse_factorization_worker_response,
 )
-from jacobian.operation_bindings import InstalledOperation, inline_operation
+from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import (
     OperationAbortError,
@@ -296,7 +296,7 @@ def _operation[RequestT: ContractModel, ResultT: ContractModel](
     implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
     examples: tuple[OperationExample, ...] = (),
-) -> InstalledOperation[RequestT, ResultT]:
+) -> OperationDeclaration[RequestT, ResultT]:
     return inline_operation(
         OperationDeclaration(
             operation_id=operation_id,

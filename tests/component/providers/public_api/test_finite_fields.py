@@ -194,10 +194,10 @@ def test_slice_a_ports_compose_restriction_into_rank_without_wire_conversion() -
         strict=True,
     ):
         restrict_payload = port.bind_to_request(restrict_payload, value)
-    restrict_request = restrict_operation.spec.request_type.model_validate(
+    restrict_request = restrict_operation.request_type.model_validate(
         restrict_payload
     )
-    linear_map = restrict_operation.spec.execute(restrict_request)
+    linear_map = restrict_operation.execute(restrict_request)
     carried_map = restrict_operation.output_ports[0].extract_from_result(linear_map)
 
     rank_payload: dict[str, object] = {}
@@ -207,8 +207,8 @@ def test_slice_a_ports_compose_restriction_into_rank_without_wire_conversion() -
         strict=True,
     ):
         rank_payload = port.bind_to_request(rank_payload, value)
-    rank_request = rank_operation.spec.request_type.model_validate(rank_payload)
-    result = rank_operation.spec.execute(rank_request)
+    rank_request = rank_operation.request_type.model_validate(rank_payload)
+    result = rank_operation.execute(rank_request)
 
     assert result.rank == 3
     assert result.direction is direction
@@ -228,8 +228,8 @@ def test_slice_a_ports_compose_projective_line_into_orbit_distribution() -> None
         strict=True,
     ):
         projective_payload = port.bind_to_request(projective_payload, value)
-    line = projective.spec.execute(
-        projective.spec.request_type.model_validate(projective_payload)
+    line = projective.execute(
+        projective.request_type.model_validate(projective_payload)
     )
 
     ledger_payload: dict[str, object] = {}
@@ -239,13 +239,13 @@ def test_slice_a_ports_compose_projective_line_into_orbit_distribution() -> None
         strict=True,
     ):
         ledger_payload = port.bind_to_request(ledger_payload, value)
-    ledger = ledger_operation.spec.execute(
-        ledger_operation.spec.request_type.model_validate(ledger_payload)
+    ledger = ledger_operation.execute(
+        ledger_operation.request_type.model_validate(ledger_payload)
     )
 
     orbit_payload = orbit_operation.input_ports[0].bind_to_request({}, ledger)
-    distribution = orbit_operation.spec.execute(
-        orbit_operation.spec.request_type.model_validate(orbit_payload)
+    distribution = orbit_operation.execute(
+        orbit_operation.request_type.model_validate(orbit_payload)
     )
 
     assert len(line.points) == 9

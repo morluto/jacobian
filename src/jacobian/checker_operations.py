@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import EvidenceKind
@@ -194,7 +195,7 @@ class ExactReplayCheckerDeclaration:
                 derive_verification_tags(self.capability_id),
             )
 
-    def __getattribute__(self, name: str):
+    def __getattribute__(self, name: str) -> Any:
         if name != "provider_runtime":
             return object.__getattribute__(self, name)
         runtime = object.__getattribute__(self, "provider_runtime")

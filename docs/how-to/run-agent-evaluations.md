@@ -36,9 +36,10 @@ make harbor-check-task DATASET=mathematical-benchmarks-v1 TASKS="graph-counterex
 make harbor-oracle-task DATASET=mathematical-benchmarks-v1 TASKS="graph-counterexample"
 ```
 
-Use the full `make harbor-check` and explicitly scoped `make harbor-oracle`
-paths only for shared Harbor tooling, schemas, registry, suite policy, or
-other control-plane changes. Pass `TASKS="..."` for a bounded dataset Oracle;
+Use `make harbor-check` and explicitly scoped `make harbor-oracle` paths for
+shared Harbor contracts, schemas, registry, suite policy, or other control-plane
+changes. Use `make harbor-check-all` only for shared verifier-harness changes or
+an intentional portfolio-wide reproduction. Pass `TASKS="..."` for a bounded dataset Oracle;
 pass `FULL=1` only when a complete dataset sweep is intentional.
 
 Oracle attempts are serialized on a shared Docker host and receive a unique

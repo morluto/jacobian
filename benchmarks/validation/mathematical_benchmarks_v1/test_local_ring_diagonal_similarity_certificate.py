@@ -195,6 +195,22 @@ def test_equivalent_explanation_paraphrase_is_accepted(tmp_path: Path) -> None:
     assert reward.reward == 1.0
 
 
+def test_diagonal_entries_match_paraphrase_is_accepted(tmp_path: Path) -> None:
+    """Accept the natural subject-before-verb wording observed in evaluation."""
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    _set_evidence(
+        app,
+        submission,
+        "Direct modular multiplication gives PA = BP. The determinant of P is a "
+        "unit modulo 125, and along the selected unit permutation the diagonal "
+        "entries match as b[row] = a[column].\n",
+    )
+    reward = support._run_verifier(task, app, logs)
+    assert reward.details["evidence_validity"] == 1.0
+    assert reward.reward == 1.0
+
+
 def test_contradictory_explanation_is_rejected(tmp_path: Path) -> None:
     """Text that negates the certified relationships is rejected."""
     task, app, logs = _prepare(tmp_path)

@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces fifteen PR10 invariants:
+runtime.  It enforces sixteen PR10 invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -57,6 +57,10 @@ runtime.  It enforces fifteen PR10 invariants:
 
 15. **internal-capability-request**: only CLI and MCP boundaries may construct
     the generic capability request envelope; in-process composition stays typed.
+
+16. **test-ownership**: tests are organized by semantic owner rather than
+    historical rollout buckets, and focused suites cannot acquire complete or
+    multi-domain runtime fixtures by convenience.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
@@ -150,8 +154,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
         # Untrusted plugin entrypoints manage their own process lifecycle.
         PurePosixPath("tests/support/process_entrypoints.py"),
-        # Architecture policy test uses subprocess in a synthetic import probe.
-        PurePosixPath("tests/unit/tooling/test_architecture_policy.py"),
         # This checker's own test file uses subprocess in synthetic probes.
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
@@ -1350,6 +1352,108 @@ def _unsupported_surface_text_violations(
     return tuple(violations)
 
 
+_HISTORICAL_TEST_BUCKET_WORDS = frozenset(
+    {"frontier", "migration", "regression", "release"}
+)
+_COMPOSITION_OWNERS = frozenset(
+    {"authority", "cli", "interoperability", "portfolio", "runtime"}
+)
+
+
+def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
+    return any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "tests.support.complete_runtime_fixtures"
+        for node in ast.walk(tree)
+    )
+
+
+def _imports_jacobian_runtime(tree: ast.AST) -> bool:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(alias.name == "jacobian.runtime" for alias in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            if node.module == "jacobian.runtime":
+                return True
+            if node.module == "jacobian" and any(
+                alias.name == "runtime" for alias in node.names
+            ):
+                return True
+    return False
+
+
+def _test_ownership_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    parts = relative.parts
+    if not parts or parts[0] != "tests":
+        return ()
+
+    violations: list[Violation] = []
+    focused_suite = len(parts) >= 2 and parts[1] in {"component", "domain", "unit"}
+    imports_complete_runtime = _imports_complete_runtime_fixtures(tree)
+    imports_runtime = _imports_jacobian_runtime(tree)
+    if focused_suite and (imports_runtime or imports_complete_runtime):
+        violations.append(
+            Violation(
+                str(relative),
+                "test-ownership",
+                "focused tests must use their owning seam instead of the complete runtime",
+            )
+        )
+
+    if (
+        not focused_suite
+        and relative.name == "conftest.py"
+        and (imports_runtime or imports_complete_runtime)
+    ):
+        owning_complete_runtime = len(parts) >= 2 and parts[1] in {
+            "boundary",
+            "composition",
+            "e2e",
+        }
+        if not owning_complete_runtime:
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "complete-runtime fixtures belong only to their boundary, "
+                    "composition, or e2e subtree",
+                )
+            )
+
+    if len(parts) >= 2 and parts[1] == "composition":
+        lowered = {
+            word.lower()
+            for part in parts[2:]
+            for word in part.replace(".", "_").split("_")
+        }
+        historical = sorted(lowered & _HISTORICAL_TEST_BUCKET_WORDS)
+        if historical:
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "composition tests must be named for semantic ownership, not "
+                    f"historical status ({', '.join(historical)})",
+                )
+            )
+        if relative.name not in {"__init__.py", "conftest.py"} and (
+            len(parts) < 4 or parts[2] not in _COMPOSITION_OWNERS
+        ):
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "composition tests must declare portfolio, runtime, authority, "
+                    "interoperability, or CLI ownership in their directory",
+                )
+            )
+
+    return tuple(violations)
+
+
 # ---------------------------------------------------------------------------
 # Scan orchestration
 # ---------------------------------------------------------------------------
@@ -1406,6 +1510,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_output_only_contract_violations(relative, tree))
     violations.extend(_materialization_reason_violations(relative, tree))
     violations.extend(_unsupported_surface_ast_violations(relative, tree))
+    violations.extend(_test_ownership_violations(relative, tree))
     return tuple(violations)
 
 

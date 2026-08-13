@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import pytest
 
+import jacobian.portfolio.foundation_installation as foundation_installation
 from jacobian.contracts.capabilities import (
     CapabilityInstallTier,
     CapabilityProviderAvailability,
@@ -15,7 +16,6 @@ from jacobian.contracts.capabilities import (
     CapabilityProviderRuntime,
 )
 from jacobian.installation.context import InstallationContext
-from jacobian.portfolio import foundation_installation
 from jacobian.portfolio.checker_installation import CheckerPortfolioInstaller
 from jacobian.portfolio.core_installation import CoreApplicationInstaller
 from jacobian.portfolio.foundation_installation import FoundationInstaller

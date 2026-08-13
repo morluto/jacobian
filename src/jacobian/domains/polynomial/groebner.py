@@ -151,7 +151,7 @@ POLYNOMIAL_GROEBNER_CAPABILITY = durable_operation(
                         }
                     ],
                     "monomial_order": "lex",
-                    "resource_budget": {"wall_seconds": 1},
+                    "resource_budget": {"wall_seconds": 10},
                 },
             ),
         ),

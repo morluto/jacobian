@@ -73,6 +73,7 @@ make benchmark-snapshot-validate LOCK=benchmarks/snapshots/mathematical-benchmar
 make benchmark-publish LOCK=benchmarks/snapshots/mathematical-benchmarks-v1/<digest>.lock.json
 make harbor-oracle-task DATASET=mathematical-benchmarks-v1 TASKS="task-id"
 make harbor-check
+make harbor-check-all  # explicit full host-verifier reproduction
 make harbor-oracle DATASET=mathematical-benchmarks-v1 FULL=1
 make harbor-oracle-all
 make provider-eval PROVIDER=cgal

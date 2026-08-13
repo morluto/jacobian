@@ -63,6 +63,9 @@ CONTROL_PLANE_HOST_TESTS = {
     "benchmarks/tooling/benchmark_validation.py": (
         "benchmarks/validation/test_benchmark_validation.py",
     ),
+    "benchmarks/tooling/benchmark_contracts.py": (
+        "benchmarks/validation/test_benchmark_contracts.py",
+    ),
     "benchmarks/tooling/host_validation.py": (
         "benchmarks/validation/test_host_validation.py",
     ),

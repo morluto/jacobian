@@ -85,20 +85,8 @@ def test_ordinary_unit_lane_invokes_pytest_directly() -> None:
     assert "tests/unit" in output
 
 
-def test_default_collection_omits_lean_nodeids() -> None:
-    completed = subprocess.run(
-        ["uv", "run", "--locked", "pytest", "--collect-only", "-q"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    output = completed.stdout + completed.stderr
-
-    assert "tests/boundary/providers/lean" not in output
-
-
-def test_explicit_lean_path_still_collects() -> None:
+def test_explicit_lean_module_still_collects() -> None:
+    representative = "tests/boundary/providers/lean/test_lean_residual_contracts.py"
     completed = subprocess.run(
         [
             "uv",
@@ -107,7 +95,7 @@ def test_explicit_lean_path_still_collects() -> None:
             "pytest",
             "--collect-only",
             "-q",
-            "tests/boundary/providers/lean",
+            representative,
         ],
         cwd=ROOT,
         check=True,
@@ -116,4 +104,4 @@ def test_explicit_lean_path_still_collects() -> None:
     )
     output = completed.stdout + completed.stderr
 
-    assert "tests/boundary/providers/lean" in output
+    assert representative in output

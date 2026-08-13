@@ -64,7 +64,11 @@ REAL_QUADRATIC_CHECKERS = (
             "magnitudes, and resulting order using exact rational arithmetic."
         ),
         verification_tags=(
-            "verification", "exact", "arithmetic", "real-quadratic", "order"
+            "verification",
+            "exact",
+            "arithmetic",
+            "real-quadratic",
+            "order",
         ),
     ),
 )

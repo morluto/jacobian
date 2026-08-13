@@ -90,7 +90,10 @@ class RealQuadraticOrderValue(ContractModel):
 
     @model_validator(mode="after")
     def bind_exact_order(self) -> Self:
-        a = self.left.rational_part.as_fraction() - self.right.rational_part.as_fraction()
+        a = (
+            self.left.rational_part.as_fraction()
+            - self.right.rational_part.as_fraction()
+        )
         b = (
             self.left.radical_coefficient.as_fraction()
             - self.right.radical_coefficient.as_fraction()
@@ -101,13 +104,22 @@ class RealQuadraticOrderValue(ContractModel):
             or self.difference.radical_coefficient.as_fraction() != b
         ):
             raise ValueError("difference must equal left minus right")
-        expected_order = "LT" if _sign(a, b, self.left.radicand) < 0 else "GT" if _sign(a, b, self.left.radicand) > 0 else "EQ"
+        expected_order = (
+            "LT"
+            if _sign(a, b, self.left.radicand) < 0
+            else "GT"
+            if _sign(a, b, self.left.radicand) > 0
+            else "EQ"
+        )
         if self.order != expected_order:
             raise ValueError("order must match exact quadratic sign")
         expected_basis = (
-            "RATIONAL_ONLY" if b == 0
-            else "RADICAL_ONLY" if a == 0
-            else "SAME_SIGN" if (a > 0) == (b > 0)
+            "RATIONAL_ONLY"
+            if b == 0
+            else "RADICAL_ONLY"
+            if a == 0
+            else "SAME_SIGN"
+            if (a > 0) == (b > 0)
             else "OPPOSING_SIGNS_SQUARED_MAGNITUDES"
         )
         if self.sign_basis != expected_basis:
@@ -116,8 +128,10 @@ class RealQuadraticOrderValue(ContractModel):
         radical_square = b * b * self.left.radicand
         if (
             self.sign_certificate.rational_part_squared.as_fraction() != rational_square
-            or self.sign_certificate.radical_part_squared.as_fraction() != radical_square
-            or self.sign_certificate.magnitude_order != _order(rational_square, radical_square)
+            or self.sign_certificate.radical_part_squared.as_fraction()
+            != radical_square
+            or self.sign_certificate.magnitude_order
+            != _order(rational_square, radical_square)
         ):
             raise ValueError("sign certificate does not match squared magnitudes")
         return self
@@ -126,7 +140,10 @@ class RealQuadraticOrderValue(ContractModel):
 def real_quadratic_order(
     request: RealQuadraticOrderRequest,
 ) -> RealQuadraticOrderValue:
-    a = request.left.rational_part.as_fraction() - request.right.rational_part.as_fraction()
+    a = (
+        request.left.rational_part.as_fraction()
+        - request.right.rational_part.as_fraction()
+    )
     b = (
         request.left.radical_coefficient.as_fraction()
         - request.right.radical_coefficient.as_fraction()
@@ -134,9 +151,12 @@ def real_quadratic_order(
     d = request.left.radicand
     sign = _sign(a, b, d)
     basis = (
-        "RATIONAL_ONLY" if b == 0
-        else "RADICAL_ONLY" if a == 0
-        else "SAME_SIGN" if (a > 0) == (b > 0)
+        "RATIONAL_ONLY"
+        if b == 0
+        else "RADICAL_ONLY"
+        if a == 0
+        else "SAME_SIGN"
+        if (a > 0) == (b > 0)
         else "OPPOSING_SIGNS_SQUARED_MAGNITUDES"
     )
     rational_square = a * a

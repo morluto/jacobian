@@ -76,5 +76,6 @@ def test_real_quadratic_checker_rejects_forged_order(
             input={"input": payload, "candidate": forged},
         )
     )
-    assert rejected.output["status"] == "REJECTED"
+    assert rejected.execution.status is ExecutionStatus.ERROR
+    assert rejected.output["error"]["code"] == "INVALID_EXACT_DOMAIN_INPUT"
     assert rejected.verification_record_uri is None

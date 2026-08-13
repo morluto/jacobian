@@ -16,8 +16,15 @@ from jacobian.adapters.mcp.context import (
     _configured_root,
     _start_lean_warmup,
 )
-from jacobian.adapters.mcp.core import JacobianCoreExtension, JacobianMCPServer
-from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
+from jacobian.adapters.mcp.core import (
+    JacobianMCPServer,
+    register_core_projection,
+    tool_runtime_scope,
+)
+from jacobian.adapters.mcp.deployment_identity import (
+    DeploymentIdentity,
+    load_deployment_identity,
+)
 from jacobian.adapters.mcp.guidance import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS
 from jacobian.adapters.mcp.lifecycle import (
     runtime_lifespan,
@@ -82,7 +89,7 @@ def _build_server(
     state: AppState,
     close_owner: Callable[[], None],
     start_owner: Callable[[], None] | None = None,
-    deployment_identity: Any | None = None,
+    deployment_identity: DeploymentIdentity | None = None,
     token_verifier: Any | None = None,
     auth: Any | None = None,
 ) -> MCPServer[AppState]:
@@ -107,8 +114,9 @@ def _build_server(
         lifespan=lifespan,
         token_verifier=token_verifier,
         auth=auth,
-        extensions=[JacobianCoreExtension(state, deployment_identity)],
+        middleware=[tool_runtime_scope],
     )
+    register_core_projection(server, state, deployment_identity)
     register_resources(server)
     return server
 

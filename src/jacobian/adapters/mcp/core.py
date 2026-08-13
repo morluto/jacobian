@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from mcp.server import MCPServer
-from mcp.server.extension import Extension, ResourceBinding, ToolBinding
+from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.resources import FunctionResource
 from mcp.shared.exceptions import MCPError
@@ -111,109 +111,81 @@ def _schema_accepts_container(
     )
 
 
-class JacobianCoreExtension(Extension):
-    """Advertised, versioned contract for Jacobian's fixed MCP surface.
+async def tool_runtime_scope(
+    ctx: ServerRequestContext[AppState, Any],
+    call_next: CallNext,
+) -> HandlerResult:
+    """Retain the selected runtime and worker scope for one tool call."""
 
-    This remains an SDK extension deliberately: clients can identify the
-    two-tool Jacobian protocol contract through ``io.jacobian/core``.
-    """
-
-    identifier = "io.jacobian/core"
-
-    def __init__(
-        self,
-        state: AppState,
-        deployment_identity: DeploymentIdentity | None = None,
-    ) -> None:
-        self._state = state
-        self._deployment_identity = deployment_identity
-
-    def settings(self) -> dict[str, Any]:
-        return {"version": "2"}
-
-    def tools(self) -> tuple[ToolBinding, ...]:
-        return (
-            ToolBinding(
-                capability_describe,
-                kwargs={
-                    "name": "math.find",
-                    "title": "Search installed Jacobian math tools",
-                    "description": MATH_FIND_DESCRIPTION,
-                    "annotations": _tool_annotations(read_only=True, idempotent=True),
-                    "structured_output": True,
-                },
-            ),
-            ToolBinding(
-                capability_invoke,
-                kwargs={
-                    "name": "math.run",
-                    "title": "Run one installed Jacobian math tool",
-                    "description": MATH_RUN_DESCRIPTION,
-                    "annotations": _tool_annotations(),
-                    "structured_output": True,
-                },
-            ),
+    if ctx.method != "tools/call":
+        return await call_next(ctx)
+    state = ctx.lifespan_context
+    if not isinstance(state, AppState):
+        raise AgentRecoveryError(
+            "Jacobian is unavailable for this request. Retry once; if it "
+            "fails again, inspect the local Jacobian log."
         )
+    with _runtime_scope(state):
+        return await call_next(ctx)
 
-    def resources(self) -> tuple[ResourceBinding, ...]:
-        bindings = [
-            ResourceBinding(
-                FunctionResource.from_function(
-                    self._capability_catalog,
-                    uri="capability://catalog",
-                    name="capability-catalog",
-                    description=(
-                        "Installed model-facing operations, supported lanes, and "
-                        "compact schemas."
-                    ),
-                    mime_type="application/json",
-                )
-            ),
-        ]
-        if self._deployment_identity is not None:
-            bindings.append(
-                ResourceBinding(
-                    FunctionResource.from_function(
-                        self._managed_deployment_identity,
-                        uri="deployment://identity",
-                        name="deployment-identity",
-                        description=(
-                            "Immutable Git revision and package version for this "
-                            "managed Jacobian release."
-                        ),
-                        mime_type="application/json",
-                    )
-                )
-            )
-        return tuple(bindings)
 
-    async def _capability_catalog(self) -> CapabilityCatalog:
-        with _static_resource_runtime(self._state) as active_runtime:
+def register_core_projection(
+    server: MCPServer[AppState],
+    state: AppState,
+    deployment_identity: DeploymentIdentity | None = None,
+) -> None:
+    """Register Jacobian's fixed tools and static resources directly with the SDK."""
+
+    server.add_tool(
+        capability_describe,
+        name="math.find",
+        title="Search installed Jacobian math tools",
+        description=MATH_FIND_DESCRIPTION,
+        annotations=_tool_annotations(read_only=True, idempotent=True),
+        structured_output=True,
+    )
+    server.add_tool(
+        capability_invoke,
+        name="math.run",
+        title="Run one installed Jacobian math tool",
+        description=MATH_RUN_DESCRIPTION,
+        annotations=_tool_annotations(),
+        structured_output=True,
+    )
+
+    async def capability_catalog() -> CapabilityCatalog:
+        with _static_resource_runtime(state) as active_runtime:
             return active_runtime.core.capabilities.catalog()
 
-    async def _managed_deployment_identity(self) -> DeploymentIdentity:
-        identity = self._deployment_identity
-        if identity is None:
-            raise RuntimeError("managed deployment identity is unavailable")
-        return identity
+    server.add_resource(
+        FunctionResource.from_function(
+            capability_catalog,
+            uri="capability://catalog",
+            name="capability-catalog",
+            description=(
+                "Installed model-facing operations, supported lanes, and compact schemas."
+            ),
+            mime_type="application/json",
+        )
+    )
 
-    async def intercept_tool_call(
-        self,
-        _params: Any,
-        ctx: Any,
-        call_next: Any,
-    ) -> Any:
-        state = ctx.lifespan_context
-        if not isinstance(state, AppState):
-            raise AgentRecoveryError(
-                "Jacobian is unavailable for this request. Retry once; if it "
-                "fails again, inspect the local Jacobian log."
+    if deployment_identity is not None:
+
+        async def managed_deployment_identity() -> DeploymentIdentity:
+            return deployment_identity
+
+        server.add_resource(
+            FunctionResource.from_function(
+                managed_deployment_identity,
+                uri="deployment://identity",
+                name="deployment-identity",
+                description=(
+                    "Immutable Git revision and package version for this managed "
+                    "Jacobian release."
+                ),
+                mime_type="application/json",
             )
-        # The SDK's OpenTelemetry middleware owns protocol tracing, duration,
-        # status, and trace propagation. This interceptor owns only Jacobian's
-        # runtime lease and blocking-worker request scope.
-        with _runtime_scope(state):
-            return await call_next(ctx)
+        )
 
 
-__all__ = ["JacobianCoreExtension", "JacobianMCPServer"]
+__all__ = ["JacobianMCPServer", "register_core_projection", "tool_runtime_scope"]

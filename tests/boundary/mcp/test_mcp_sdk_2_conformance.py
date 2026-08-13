@@ -7,13 +7,10 @@ import importlib.metadata
 from pathlib import Path
 
 import pytest
-from mcp.server.extension import Extension, ResourceBinding, ToolBinding
 from mcp_types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
-from jacobian.adapters.mcp.context import AppState
-from jacobian.adapters.mcp.server import JacobianCoreExtension, create_server
-from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
+from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.capabilities import CapabilityResult
 from jacobian.runtime import CheckerAuthorityMode
 
@@ -21,21 +18,6 @@ from jacobian.runtime import CheckerAuthorityMode
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
     assert importlib.metadata.version("mcp") == "2.0.0"
     assert importlib.metadata.version("mcp-types") == "2.0.0"
-
-    extension = JacobianCoreExtension(
-        AppState(lambda: None, MCPBlockingWorkerRegistry())  # type: ignore[arg-type]
-    )
-    assert isinstance(extension, Extension)
-    assert extension.identifier == "io.jacobian/core"
-    assert extension.settings() == {"version": "2"}
-    assert all(isinstance(binding, ToolBinding) for binding in extension.tools())
-    assert all(
-        isinstance(binding, ResourceBinding) for binding in extension.resources()
-    )
-    assert tuple(binding.kwargs["name"] for binding in extension.tools()) == (
-        "math.find",
-        "math.run",
-    )
 
 
 def test_mcp_v2_static_validation_context_errors_and_structured_resources(

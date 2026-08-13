@@ -342,12 +342,11 @@ deliberate text projection requires an explicit MCP result. The two fixed tools
 are statically registered; dynamic operation tools and compatibility aliases
 are not supported.
 
-The server advertises `io.jacobian/core` version 2 as the stable identity of
-that fixed two-tool contract. It deliberately uses the SDK extension mechanism
-for capability negotiation and shared interception; it is not a second tool
-registry. The SDK owns protocol tracing and typed boundary validation, while
-the extension retains only Jacobian runtime-lease ownership and its fixed
-tool/resource declarations.
+The fixed tools and resources are registered directly through the SDK. Jacobian
+does not advertise an MCP extension: it has no optional protocol methods,
+client-side extension, or negotiated result type. SDK middleware retains the
+runtime lease around tool calls, while the SDK owns protocol tracing and typed
+boundary validation.
 
 Hosting has two constructors with separate ownership: `server.create_server`
 owns one concrete local runtime, while `remote.create_remote_server` owns

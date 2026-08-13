@@ -241,12 +241,14 @@ def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
     assert "Plan receipt: \\\\`$(python" not in workflow
 
 
-def test_required_ci_gates_fail_when_a_needed_job_is_cancelled() -> None:
+def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     required = workflow.split("  required:", 1)[1].split("  python-test:", 1)[0]
+    aggregate_tail = workflow.split("  required:", 1)[1]
 
     assert "treating gate as non-failure" not in workflow
-    assert "if: ${{ always() }}" in workflow
+    assert "if: ${{ always() }}" not in aggregate_tail
+    assert aggregate_tail.count("if: ${{ always() && !cancelled() }}") == 4
     assert "name: required" in workflow
     assert "name: Python Tests" in workflow
     assert "name: Lean Tests" in workflow

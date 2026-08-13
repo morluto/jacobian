@@ -82,11 +82,17 @@ def check_rational_linear_optimum(request: object) -> dict[str, Any]:
         )
         if set(source) != {"program", "wall_seconds"}:
             raise ValueError("LP source fields are malformed")
-        if type(source["wall_seconds"]) is not int or not 1 <= source["wall_seconds"] <= 60:
+        if (
+            type(source["wall_seconds"]) is not int
+            or not 1 <= source["wall_seconds"] <= 60
+        ):
             raise ValueError("LP wall-clock budget is malformed")
         program = source["program"]
         if not isinstance(program, dict) or set(program) != {
-            "variables", "objective", "coefficients", "rhs"
+            "variables",
+            "objective",
+            "coefficients",
+            "rhs",
         }:
             raise ValueError("LP program is malformed")
         variables = program["variables"]
@@ -110,8 +116,14 @@ def check_rational_linear_optimum(request: object) -> dict[str, Any]:
             for row in rows
         ]
         expected_fields = {
-            "status", "primal_candidate", "dual_candidate", "primal_objective",
-            "dual_objective", "primal_residuals", "dual_slacks", "detail"
+            "status",
+            "primal_candidate",
+            "dual_candidate",
+            "primal_objective",
+            "dual_objective",
+            "primal_residuals",
+            "dual_slacks",
+            "detail",
         }
         if set(result) != expected_fields or result["status"] != "CERTIFICATE_PRODUCED":
             return _reject("candidate does not contain a complete optimum certificate")
@@ -148,18 +160,18 @@ def check_rational_linear_optimum(request: object) -> dict[str, Any]:
                 result["primal_residuals"],
                 length=height,
                 maximum_digits=_MAX_CANDIDATE_DIGITS,
-            ) != primal_residuals
+            )
+            != primal_residuals
             or _vector(
                 result["dual_slacks"],
                 length=width,
                 maximum_digits=_MAX_CANDIDATE_DIGITS,
-            ) != dual_slacks
-            or _q(
-                result["primal_objective"], maximum_digits=_MAX_CANDIDATE_DIGITS
-            ) != primal_objective
-            or _q(
-                result["dual_objective"], maximum_digits=_MAX_CANDIDATE_DIGITS
-            ) != dual_objective
+            )
+            != dual_slacks
+            or _q(result["primal_objective"], maximum_digits=_MAX_CANDIDATE_DIGITS)
+            != primal_objective
+            or _q(result["dual_objective"], maximum_digits=_MAX_CANDIDATE_DIGITS)
+            != dual_objective
         ):
             return _reject("candidate does not establish exact primal/dual equality")
         return _accept("independent exact rational primal/dual replay accepted optimum")

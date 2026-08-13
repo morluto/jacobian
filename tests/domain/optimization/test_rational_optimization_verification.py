@@ -52,7 +52,10 @@ def test_rational_lp_result_uses_independent_exact_replay(
     assert computed.execution.status is ExecutionStatus.COMPLETED
     assert verified.execution.status is ExecutionStatus.COMPLETED
     assert verified.output["status"] == "VERIFIED"
-    assert verified.output["operation_id"] == "optimization.linear.rational_optimum.compute"
+    assert (
+        verified.output["operation_id"]
+        == "optimization.linear.rational_optimum.compute"
+    )
     assert verified.verification_record_uri is not None
     assert verified.output["verification_record_uri"] in verified.artifact_uris
 

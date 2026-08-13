@@ -19,6 +19,17 @@ def _runtime():
     )
 
 
+def _declaration(**kwargs):
+    return ExactReplayCheckerDeclaration(
+        "test.compute.value",
+        CanonicalRational,
+        "check_rational_solution",
+        "test.value.replay",
+        entrypoint_module="jacobian_checkers.linear",
+        **kwargs,
+    )
+
+
 def test_exact_replay_declaration_defers_and_caches_provider_runtime() -> None:
     calls = 0
 
@@ -27,14 +38,7 @@ def test_exact_replay_declaration_defers_and_caches_provider_runtime() -> None:
         calls += 1
         return _runtime()
 
-    declaration = ExactReplayCheckerDeclaration(
-        "test.compute.value",
-        CanonicalRational,
-        "check_rational_solution",
-        "test.value.replay",
-        entrypoint_module="jacobian_checkers.linear",
-        provider_runtime_factory=factory,
-    )
+    declaration = _declaration(provider_runtime_factory=factory)
 
     assert calls == 0
     runtime = declaration.provider_runtime
@@ -45,28 +49,40 @@ def test_exact_replay_declaration_defers_and_caches_provider_runtime() -> None:
     assert calls == 1
 
 
+def test_exact_replay_declaration_keeps_direct_runtime_compatibility() -> None:
+    runtime = _runtime()
+    declaration = _declaration(provider_runtime=runtime)
+
+    assert declaration.provider_runtime is runtime
+
+
+def test_exact_replay_declaration_rejects_two_runtime_owners() -> None:
+    runtime = _runtime()
+
+    with pytest.raises(ValueError, match="either provider_runtime"):
+        _declaration(
+            provider_runtime=runtime,
+            provider_runtime_factory=lambda: runtime,
+        )
+
+
+def test_exact_replay_declaration_rejects_preauthorized_direct_runtime() -> None:
+    runtime = _runtime().model_copy(update={"checker_ids": ("checker:test",)})
+
+    with pytest.raises(ValueError, match="must not pre-authorize checker IDs"):
+        _declaration(provider_runtime=runtime)
+
+
 def test_exact_replay_declaration_rejects_preauthorized_realized_runtime() -> None:
     runtime = _runtime().model_copy(update={"checker_ids": ("checker:test",)})
-    declaration = ExactReplayCheckerDeclaration(
-        "test.compute.value",
-        CanonicalRational,
-        "check_rational_solution",
-        "test.value.replay",
-        entrypoint_module="jacobian_checkers.linear",
-        provider_runtime_factory=lambda: runtime,
-    )
+    declaration = _declaration(provider_runtime_factory=lambda: runtime)
 
     with pytest.raises(ValueError, match="must not pre-authorize checker IDs"):
         _ = declaration.provider_runtime
 
 
 def test_exact_replay_declaration_rejects_wrong_runtime_factory_result() -> None:
-    declaration = ExactReplayCheckerDeclaration(
-        "test.compute.value",
-        CanonicalRational,
-        "check_rational_solution",
-        "test.value.replay",
-        entrypoint_module="jacobian_checkers.linear",
+    declaration = _declaration(
         provider_runtime_factory=lambda: object(),  # type: ignore[return-value]
     )
 

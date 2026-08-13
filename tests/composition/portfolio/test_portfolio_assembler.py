@@ -139,7 +139,7 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
         operations = OperationInstaller(store, schemas, artifacts)
         capabilities = CapabilityService(store)
         checkers = CheckerRegistry(store)
-        verification = VerificationService(store, checkers)
+        verification = VerificationService(store, checkers, schemas)
         registered: list[str] = []
 
         def register_capability(adapter: Any) -> None:

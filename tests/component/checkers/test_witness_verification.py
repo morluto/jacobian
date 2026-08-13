@@ -18,6 +18,7 @@ from jacobian.contracts.results import (
 )
 from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.registry import CheckerRegistry
+from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.executor import BoundedCheckerExecutor
 from jacobian.verification.service import VerificationService
@@ -39,6 +40,7 @@ def _graph_case(
     str,
 ]:
     store = ArtifactRepository(tmp_path)
+    schemas = SchemaRegistry(store)
     claim_schema = store.register_descriptor(
         kind="schema",
         name="graph.path-closure.claim",
@@ -122,7 +124,12 @@ def _graph_case(
     )
     return (
         store,
-        VerificationService(store, registry, checker_executor=checker_executor),
+        VerificationService(
+            store,
+            registry,
+            schemas,
+            checker_executor=checker_executor,
+        ),
         checker.checker_id,
         claim.artifact_uri,
         candidate.artifact_uri,

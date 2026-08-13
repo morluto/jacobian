@@ -66,23 +66,20 @@ def open_domain_services(
     core = bootstrap_services(root, resolved_options)
     try:
         application = build_runtime_services(core)
-        try:
-            installation = create_installation_context(
-                core,
-                application,
-                resolved_options,
-            )
-            if bundles:
-                with atomic_installation(core):
-                    DomainBundleInstaller(installation).install(
-                        PortfolioPlan(components=tuple(bundles))
-                    )
-            yield DomainTestServices(
-                core=core,
-                application=application,
-                installation=installation,
-            )
-        finally:
-            application.close()
+        installation = create_installation_context(
+            core,
+            application,
+            resolved_options,
+        )
+        if bundles:
+            with atomic_installation(core):
+                DomainBundleInstaller(installation).install(
+                    PortfolioPlan(components=tuple(bundles))
+                )
+        yield DomainTestServices(
+            core=core,
+            application=application,
+            installation=installation,
+        )
     finally:
         core.close()

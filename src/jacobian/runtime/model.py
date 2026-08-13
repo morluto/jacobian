@@ -42,7 +42,6 @@ class JacobianRuntime:
             return
         failures: list[BaseException] = []
         for close in (
-            self.services.close,
             self.portfolio_resources.close,
             self.core.close,
         ):

@@ -8,6 +8,7 @@ from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.registry import CheckerRegistry
+from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
 
@@ -18,6 +19,7 @@ def _certificate_case(
     checker_entrypoint: str = "jacobian_checkers.graph_paths:check_path_enumeration",
 ) -> tuple[ArtifactRepository, VerificationService, str]:
     store = ArtifactRepository(tmp_path)
+    schemas = SchemaRegistry(store)
     claim_schema = store.register_descriptor(
         kind="schema",
         name="graph.path-closure.claim",
@@ -126,7 +128,7 @@ def _certificate_case(
 
     return (
         store,
-        VerificationService(store, registry),
+        VerificationService(store, registry, schemas),
         certificate_artifact.artifact_uri,
     )
 

@@ -424,15 +424,6 @@ def _clique_execute(
     )
 
 
-def _independence_execute(
-    request: GraphOptimizationRequest,
-) -> GraphIndependenceNumberResult:
-    return cast(
-        GraphIndependenceNumberResult,
-        _maximum_cardinality(request, independent=True),
-    )
-
-
 CLIQUE_NUMBER_CAPABILITY = inline_operation(
     OperationSpec(
         operation_id="graph.invariant.clique_number.compute",
@@ -445,27 +436,6 @@ CLIQUE_NUMBER_CAPABILITY = inline_operation(
         tags=("graph", "invariant", "clique", "maximum", "bounded", "z3"),
         invalid_request=_INVALID_REQUEST,
     )
-)
-
-INDEPENDENCE_NUMBER_CAPABILITY = inline_operation(
-    OperationSpec(
-        operation_id="graph.invariant.independence_number.compute",
-        version="1",
-        title="Independence number",
-        description=(
-            "Compute a maximum independent set under explicit finite search budgets."
-        ),
-        request_type=GraphOptimizationRequest,
-        result_type=GraphIndependenceNumberResult,
-        execute=_independence_execute,
-        tags=("graph", "invariant", "independent-set", "maximum", "bounded", "z3"),
-        invalid_request=_INVALID_REQUEST,
-    )
-)
-
-BOUNDED_GRAPH_INVARIANT_CAPABILITIES = (
-    CLIQUE_NUMBER_CAPABILITY,
-    INDEPENDENCE_NUMBER_CAPABILITY,
 )
 
 EXACT_GRAPH_INVARIANT_CAPABILITIES = (
@@ -701,9 +671,4 @@ EXACT_GRAPH_INVARIANT_CAPABILITIES = (
             ),
         )
     ),
-)
-
-GRAPH_INVARIANT_CAPABILITIES = (
-    *BOUNDED_GRAPH_INVARIANT_CAPABILITIES,
-    *EXACT_GRAPH_INVARIANT_CAPABILITIES,
 )

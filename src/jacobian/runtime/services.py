@@ -46,9 +46,6 @@ class RuntimeServices:
     polytope: PolytopeService
     verification: VerificationService
 
-    def close(self) -> None:
-        """Runtime services own no workers beyond portfolio and core owners."""
-
 
 def build_runtime_services(core: CoreServices) -> RuntimeServices:
     """Construct only services owned by the surviving mathematical product."""
@@ -59,6 +56,7 @@ def build_runtime_services(core: CoreServices) -> RuntimeServices:
         verification=VerificationService(
             core.store,
             core.checkers,
+            core.schemas,
             checker_timeout_seconds=105,
         ),
     )

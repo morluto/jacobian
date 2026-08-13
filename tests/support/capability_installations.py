@@ -25,7 +25,7 @@ def install_capability_bundle(
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
     checkers = CheckerRegistry(store)
-    verification = VerificationService(store, checkers)
+    verification = VerificationService(store, checkers, schemas)
     adapters, installed = installer(
         store,
         schemas,

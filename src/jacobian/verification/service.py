@@ -81,6 +81,7 @@ class VerificationService:
         self,
         store: ArtifactRepository,
         checker_registry: CheckerRegistry,
+        schemas: SchemaRegistry,
         *,
         checker_timeout_seconds: float = 30,
         max_checker_output_bytes: int = 1024 * 1024,
@@ -88,7 +89,9 @@ class VerificationService:
         checker_executor: BoundedCheckerExecutor | None = None,
     ) -> None:
         self.store = store
-        self.schemas = SchemaRegistry(store)
+        if schemas.store is not store:
+            raise ValueError("verification schemas must belong to the supplied store")
+        self.schemas = schemas
         self.checker_registry = checker_registry
         self._checker_executor = checker_executor or BoundedCheckerExecutor(
             checker_timeout_seconds=checker_timeout_seconds,

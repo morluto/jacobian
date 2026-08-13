@@ -28,7 +28,6 @@ def create_selected_runtime(
 
     options = RuntimeOptions(checker_authority=checker_authority)
     core = bootstrap_services(root, options)
-    services = None
     try:
         services = build_runtime_services(core)
         installation = create_installation_context(core, services, options)
@@ -45,11 +44,6 @@ def create_selected_runtime(
         )
     except BaseException as error:
         cleanup_failures: list[BaseException] = []
-        if services is not None:
-            try:
-                services.close()
-            except BaseException as cleanup_error:
-                cleanup_failures.append(cleanup_error)
         try:
             core.close()
         except BaseException as cleanup_error:

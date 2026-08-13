@@ -17,7 +17,6 @@ def compose_runtime(root: str | Path, options: RuntimeOptions) -> JacobianRuntim
     """Construct one owned runtime and close partial state on failure."""
 
     core = bootstrap_services(root, options)
-    services = None
     try:
         services = build_runtime_services(core)
         installation = create_installation_context(core, services, options)
@@ -30,11 +29,6 @@ def compose_runtime(root: str | Path, options: RuntimeOptions) -> JacobianRuntim
         )
     except BaseException as error:
         cleanup_failures: list[BaseException] = []
-        if services is not None:
-            try:
-                services.close()
-            except BaseException as cleanup_error:
-                cleanup_failures.append(cleanup_error)
         try:
             core.close()
         except BaseException as cleanup_error:

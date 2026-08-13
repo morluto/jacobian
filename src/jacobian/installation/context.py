@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 from jacobian.artifacts import ArtifactService
 from jacobian.capability_adapters import CapabilityAdapter
-from jacobian.capability_service import CapabilityService
 from jacobian.operation_installation import OperationInstaller
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -30,7 +29,6 @@ class InstallationContext:
     schemas: SchemaRegistry
     artifacts: ArtifactService
     values: ValueReferenceStore
-    capabilities: CapabilityService
     checkers: CheckerRegistry
     verification: VerificationService
     operations: OperationInstaller
@@ -75,7 +73,6 @@ def create_installation_context(
         schemas=core.schemas,
         artifacts=core.artifacts,
         values=core.values,
-        capabilities=core.capabilities,
         checkers=core.checkers,
         verification=services.verification,
         operations=core.operations,

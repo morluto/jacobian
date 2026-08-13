@@ -69,7 +69,7 @@ def test_second_exhaustive_run_is_rejected_while_lease_is_held(
             "--",
             sys.executable,
             "-c",
-                    "open('held', 'w').write('1'); import time; time.sleep(2)",
+            "open('held', 'w').write('1'); import time; time.sleep(2)",
         ],
         cwd=tmp_path,
     )

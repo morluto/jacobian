@@ -4,8 +4,10 @@
 
 `graph.distance_matrix.compute` returns one complete matrix of exact
 unweighted shortest-path distances for a bounded finite simple undirected
-graph. The producer uses the existing `GraphInvariantRequest` graph contract,
-so inputs retain the established limit of 32 vertices and 496 edges.
+graph. The producer has a distance-matrix-owned polynomial-time contract with
+a limit of 64 vertices and 2,016 edges. This dedicated boundary does not widen
+the shared 32-vertex graph contract used by NP-hard coloring and optimization
+operations or the 18-vertex Hamiltonian-path search boundary.
 
 ## Result semantics
 
@@ -43,8 +45,8 @@ verification of the distance claim.
 
 ## Independent verification
 
-`graph.distance_matrix.verify` consumes one stored producer result and can
-promote that exact matrix to `VERIFIED`. The operator-authorized checker uses
+`graph.distance_matrix.verify` consumes the exact producer input plus one complete
+typed candidate inline and can promote that matrix to `VERIFIED`. The operator-authorized checker uses
 only Python standard-library adjacency sets, queues, and integer distances. It
 does not import NetworkX or the producer package.
 
@@ -55,9 +57,9 @@ checks. Acceptance still requires an exhaustive breadth-first traversal from
 every source and exact comparison of every finite distance and unreachable
 `null`.
 
-The verification record is bound to the exact graph input artifact, matrix
-result artifact, schemas, semantics, checker source digest, witness format, and
-provider runtime. Rejection, timeout, cancellation, unavailable runtime, or
+The verification record is bound to the canonical graph input and matrix
+candidate digests, semantics, checker source digest, and provider runtime.
+Rejection, timeout, cancellation, unavailable runtime, or
 checker error remains `UNKNOWN` and cannot produce `VERIFIED`.
 
 ## Public composition evidence

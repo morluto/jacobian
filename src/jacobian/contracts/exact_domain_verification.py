@@ -22,7 +22,7 @@ from pydantic import model_validator
 
 from jacobian.canonical import canonicalize_json, sha256_digest
 from jacobian.contracts.capabilities import CapabilityId
-from jacobian.contracts.checkers import CheckerDecision, EvidenceKind
+from jacobian.contracts.checkers import CheckerDecision, CheckerManifest, EvidenceKind
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest
 from jacobian.contracts.evidence import EvidenceBindings
 from jacobian.contracts.results import ContractModel
@@ -115,13 +115,14 @@ class InlineExactVerificationRecord(ContractModel):
     being promoted into artifacts merely to support verification.
     """
 
-    record_schema_version: Literal["3"] = "3"
+    record_schema_version: Literal["4"] = "4"
     evidence_kind: Literal[EvidenceKind.WITNESS] = EvidenceKind.WITNESS
     witness_format: str
     operation_id: CapabilityId
     format_version: Literal["1"] = "1"
     checker_id: CheckerUri
     implementation_digest: Sha256Digest
+    checker_manifest: CheckerManifest
     runtime_digest: Sha256Digest | None = None
     environment_digest: Sha256Digest
     input_schema_uri: ArtifactUri
@@ -133,6 +134,10 @@ class InlineExactVerificationRecord(ContractModel):
 
     @model_validator(mode="after")
     def accepted_inline_replay_is_fully_bound(self) -> Self:
+        if self.implementation_digest != self.checker_manifest.implementation_digest():
+            raise ValueError(
+                "inline verification record digest must match its checker manifest"
+            )
         if (
             not self.decision.accepted
             or self.bindings.candidate_digest is None

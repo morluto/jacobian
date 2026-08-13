@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jacobian.domain_bundles import DomainBundle
-from jacobian.exact_domain_checkers import install_exact_domain_verification
 from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.portfolio.core_installation import CoreApplicationInstaller
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -31,12 +31,7 @@ def install_verified_domain_bundles(
     services: DomainTestServices,
     *bundles: DomainBundle,
 ) -> dict[str, InstalledDomainBundle]:
-    """Install selected bundles and register their exact verification adapters.
-
-    Uses the real ``DomainBundleInstaller`` and
-    ``install_exact_domain_verification`` production paths. Checker authorization
-    follows ``services.installation.authorizes_bundled_checkers``.
-    """
+    """Install selected bundles through the production portfolio path."""
 
     if not bundles:
         raise ValueError("at least one verified domain bundle is required")
@@ -53,22 +48,10 @@ def install_verified_domain_bundles(
             raise ValueError(
                 "verified domain installation omitted bundle(s): " + ", ".join(missing)
             )
-        installed_bundles = {
-            bundle.domain_id: (bundle, installed.installed[bundle.domain_id])
-            for bundle in bundles
-        }
-        adapters, _ = install_exact_domain_verification(
-            services.core.store,
-            services.core.schemas,
-            services.core.artifacts,
-            services.core.values,
-            services.application.verification,
-            services.core.checkers,
-            bundles=installed_bundles,
-            authorize=services.installation.authorizes_bundled_checkers,
+        CoreApplicationInstaller(services.installation).install_domain_verification(
+            installed,
+            PortfolioPlan(components=bundles),
         )
-        for adapter in adapters:
-            services.installation.register_capability(adapter)
     return installed.installed
 
 

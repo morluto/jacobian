@@ -9,6 +9,7 @@ from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, WitnessEnvelope
 from jacobian.contracts.polynomials import (
+    MAX_POLYNOMIAL_VARIABLES,
     PolynomialIdentityClaim,
     PolynomialInjectivityClaim,
     PolynomialJacobian,
@@ -71,7 +72,7 @@ def install_polynomial_capabilities(
             ),
             "domain": "QQ",
             "map_shape": "square",
-            "maximum_dimension": 4,
+            "maximum_dimension": MAX_POLYNOMIAL_VARIABLES,
             "maximum_terms_per_coordinate": 1024,
             "maximum_exponent": 32,
             "maximum_derived_exponent": 127,

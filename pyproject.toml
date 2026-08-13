@@ -23,6 +23,7 @@ dependencies = [
     "mcp-types==2.0.0",
     "networkx==3.6.1",
     "pydantic>=2.12,<3",
+    "pydantic-core>=2.41,<3",
     "python-flint==0.9.0",
     "rfc8785==0.1.4",
     "sympy==1.14.0",
@@ -92,6 +93,7 @@ markers = [
     "requires_provider(name): test requires a production provider readiness probe",
     "performance: benchmark or timing evidence excluded from correctness lanes",
     "property: property-based invariant tests",
+    "exhaustive: broad finite reference sweeps run by scheduled validation",
     "destructive_process: test requires child-process isolation and group termination",
 ]
 
@@ -276,7 +278,6 @@ forbidden_modules = ["jacobian.portfolio"]
 
 [tool.coverage.run]
 branch = true
-patch = ["subprocess"]
 source = ["jacobian", "jacobian_checkers"]
 
 [tool.coverage.report]

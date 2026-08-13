@@ -1,6 +1,10 @@
 """Independent checker declarations for finite-field operations."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.capabilities import (
+    CapabilityInstallTier,
+    CapabilityProviderRuntime,
+)
 from jacobian.domains.finite_fields.contracts import (
     CollisionCertificateRequest,
     FiberPartitionRequest,
@@ -9,6 +13,60 @@ from jacobian.domains.finite_fields.contracts import (
     PermutationCertificateRequest,
     RestrictScalarsRequest,
 )
+from jacobian.provider_runtime import (
+    composite_provider_runtime,
+    known_provider_runtime,
+    source_provider_runtime,
+)
+
+
+def _finite_field_rank_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
+    source = source_provider_runtime(
+        "jacobian.finite-field-rank-checker-source",
+        version="1",
+        entrypoint=(
+            "jacobian_checkers.finite_field_rank:check_finite_field_linear_map_rank"
+        ),
+        install_tier=CapabilityInstallTier.T0,
+        license_id="MIT",
+        features=("clean-process-checker",),
+    )
+    sympy = known_provider_runtime(
+        "jacobian.sympy",
+        features=("prime-field-rank-replay",),
+    )
+    return composite_provider_runtime(
+        "jacobian.finite-field-rank-checker",
+        components=(source, sympy),
+        features=("independent-prime-field-rank-replay",),
+        checker_ids=checker_ids,
+    )
+
+
+def _finite_field_polynomial_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
+    source = source_provider_runtime(
+        "jacobian.finite-field-polynomial-checker-source",
+        version="1",
+        entrypoint="jacobian_checkers.finite_field_polynomial:check_finite_map_table",
+        install_tier=CapabilityInstallTier.T0,
+        license_id="MIT",
+        features=("clean-process-checker",),
+    )
+    sympy = known_provider_runtime(
+        "jacobian.sympy",
+        features=("finite-field-polynomial-replay",),
+    )
+    return composite_provider_runtime(
+        "jacobian.finite-field-polynomial-checker",
+        components=(source, sympy),
+        features=("independent-finite-field-polynomial-replay",),
+        checker_ids=checker_ids,
+    )
+
 
 FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
@@ -17,6 +75,7 @@ FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
         "check_finite_field_restriction",
         "finite-field.restriction.sympy-replay",
         entrypoint_module="jacobian_checkers.finite_field_rank",
+        provider_runtime_factory=_finite_field_rank_runtime,
         replay_method="SymPy polynomial-quotient replay",
         reason=(
             "operator-authorized SymPy replay independent of the Python-FLINT producer"
@@ -28,6 +87,7 @@ FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
         "check_finite_field_linear_map_rank",
         "finite-field.linear-map-rank.sympy-replay",
         entrypoint_module="jacobian_checkers.finite_field_rank",
+        provider_runtime_factory=_finite_field_rank_runtime,
         replay_method="SymPy prime-field rank replay",
         reason=(
             "operator-authorized SymPy replay independent of the Python-FLINT producer"
@@ -39,6 +99,7 @@ FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
         "check_finite_map_table",
         "finite-field.polynomial-map-table.sympy-replay",
         entrypoint_module="jacobian_checkers.finite_field_polynomial",
+        provider_runtime_factory=_finite_field_polynomial_runtime,
         replay_method="SymPy finite-field polynomial replay",
         reason="operator-authorized SymPy replay independent of the FLINT producer",
     ),
@@ -48,6 +109,7 @@ FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
         "check_finite_map_fibers",
         "finite-field.polynomial-map-fibers.sympy-replay",
         entrypoint_module="jacobian_checkers.finite_field_polynomial",
+        provider_runtime_factory=_finite_field_polynomial_runtime,
         replay_method="SymPy finite-map fiber replay",
         reason="operator-authorized SymPy replay of the exact map and its fibers",
     ),
@@ -57,6 +119,7 @@ FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
         "check_finite_map_collision",
         "finite-field.polynomial-map-collision.sympy-replay",
         entrypoint_module="jacobian_checkers.finite_field_polynomial",
+        provider_runtime_factory=_finite_field_polynomial_runtime,
         replay_method="SymPy finite-map collision replay",
         reason="operator-authorized SymPy replay of the exact map and collision",
     ),
@@ -66,6 +129,7 @@ FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
         "check_finite_map_permutation",
         "finite-field.polynomial-map-permutation.sympy-replay",
         entrypoint_module="jacobian_checkers.finite_field_polynomial",
+        provider_runtime_factory=_finite_field_polynomial_runtime,
         replay_method="SymPy finite-map permutation replay",
         reason="operator-authorized SymPy replay of the exact map and inverse",
     ),

@@ -1,7 +1,10 @@
 """Independent checker declarations owned by the number-theory domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityInstallTier
+from jacobian.contracts.capabilities import (
+    CapabilityInstallTier,
+    CapabilityProviderRuntime,
+)
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
     ModularPolynomialResidueImageRequest,
@@ -11,11 +14,14 @@ from jacobian.math.finite_abelian_groups import (
     FiniteAbelianGroupFactorizationRequest,
 )
 from jacobian.provider_runtime import source_provider_runtime
+from jacobian.providers import flint_runtime
 
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
 
 
-def _finite_abelian_group_checker_runtime():
+def _finite_abelian_group_checker_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
     """Measure the exhaustive group checker only when installation requests it."""
 
     return source_provider_runtime(
@@ -28,6 +34,16 @@ def _finite_abelian_group_checker_runtime():
         install_tier=CapabilityInstallTier.T1,
         license_id="MIT",
         features=("exhaustive-finite-group-replay", "clean-process-checker"),
+        checker_ids=checker_ids,
+    )
+
+
+def _flint_exact_replay_runtime(
+    *, checker_ids: tuple[str, ...] = (), refresh: bool = False
+) -> CapabilityProviderRuntime:
+    return flint_runtime.exact_domain_checker_provider_runtime(
+        checker_ids=checker_ids,
+        refresh=refresh,
     )
 
 
@@ -66,6 +82,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "check_integer_prime_factorization",
         "integer.prime-factorization.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        provider_runtime_factory=_flint_exact_replay_runtime,
         replay_method="Python-FLINT prime-factorization replay",
         reason=(
             "operator-authorized Python-FLINT checker independent of the "
@@ -91,6 +108,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "check_integer_powerful_number",
         "integer.powerful.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        provider_runtime_factory=_flint_exact_replay_runtime,
         replay_method="Python-FLINT powerful-number replay",
         reason=(
             "operator-authorized Python-FLINT checker independent of the "
@@ -117,6 +135,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "check_modular_polynomial_residue_image",
         "modular.polynomial-residue-image.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        provider_runtime_factory=_flint_exact_replay_runtime,
         replay_method="Python-FLINT exhaustive modular-polynomial replay",
         reason=(
             "operator-authorized Python-FLINT checker independently reconstructs "

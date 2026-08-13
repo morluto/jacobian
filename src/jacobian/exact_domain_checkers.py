@@ -14,7 +14,6 @@ from jacobian.artifacts import ArtifactService
 from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import CapabilityError, CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
-from jacobian.checker_identity import batch_checker_manifest_measurement
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation, ExactReplayCheckerDeclaration
 from jacobian.contracts.capabilities import (
@@ -160,6 +159,8 @@ class _InstalledDeclaration:
 
 
 def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
+    if declaration.provider_runtime is not None:
+        return f"declaration:{declaration.capability_id}"
     if declaration.entrypoint_module == "jacobian_checkers.linear":
         return {
             "check_rational_solution": "linear-solution",
@@ -234,9 +235,22 @@ def install_exact_domain_checkers(
             features=("standard-library-rational-replay", "clean-process-checker"),
         ),
     }
+    available_declarations = _available_declaration_bundles(bundles)
     provider_runtimes = {
         runtime_key: factory() for runtime_key, factory in runtime_factories.items()
     }
+    for _installed, declaration in available_declarations:
+        if declaration.provider_runtime is None:
+            continue
+        runtime_key = _provider_runtime_key(declaration)
+        previous = provider_runtimes.setdefault(
+            runtime_key,
+            declaration.provider_runtime,
+        )
+        if previous != declaration.provider_runtime:
+            raise ValueError(
+                "exact replay declarations disagree on their owned provider runtime"
+            )
     checker_ids: dict[str, str | None] = {}
     declarations_by_id: dict[str, ExactReplayCheckerDeclaration] = {}
     diagnostics: list[CapabilityDiagnostic] = []
@@ -244,66 +258,63 @@ def install_exact_domain_checkers(
         exact_domain_checker_source_provider_runtime().availability
         is CapabilityProviderAvailability.AVAILABLE
     )
-    with batch_checker_manifest_measurement():
-        for installed, declaration in _available_declaration_bundles(bundles):
-            declarations_by_id[declaration.capability_id] = declaration
-            runtime_key = _provider_runtime_key(declaration)
-            provider_runtime = provider_runtimes[runtime_key]
-            operation = CheckerOperation(
-                name=f"{declaration.capability_id} independent {declaration.replay_method}",
-                entrypoint=(f"{declaration.entrypoint_module}:{declaration.function}"),
-                evidence_kind=EvidenceKind.WITNESS,
-                format_id=declaration.format_id,
-                format_version="1",
-                claim_schema_uris=(
-                    installed.input_schema_uris[declaration.request_model],
-                ),
-                semantics_uris=(installed.semantics_uri,),
-                candidate_schema_uris=(
-                    installed.result_schema_uris[declaration.capability_id],
-                ),
-                reason=declaration.reason,
-                provider_runtime=provider_runtime,
+    for installed, declaration in available_declarations:
+        declarations_by_id[declaration.capability_id] = declaration
+        runtime_key = _provider_runtime_key(declaration)
+        provider_runtime = provider_runtimes[runtime_key]
+        operation = CheckerOperation(
+            name=f"{declaration.capability_id} independent {declaration.replay_method}",
+            entrypoint=(f"{declaration.entrypoint_module}:{declaration.function}"),
+            evidence_kind=EvidenceKind.WITNESS,
+            format_id=declaration.format_id,
+            format_version="1",
+            claim_schema_uris=(installed.input_schema_uris[declaration.request_model],),
+            semantics_uris=(installed.semantics_uri,),
+            candidate_schema_uris=(
+                installed.result_schema_uris[declaration.capability_id],
+            ),
+            reason=declaration.reason,
+            provider_runtime=provider_runtime,
+        )
+        if (
+            provider_runtime.availability
+            is not CapabilityProviderAvailability.AVAILABLE
+        ):
+            can_omit = (
+                runtime_key in _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS
+                and exact_checker_source_available
             )
-            if (
-                provider_runtime.availability
-                is not CapabilityProviderAvailability.AVAILABLE
-            ):
-                can_omit = (
-                    runtime_key in _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS
-                    and exact_checker_source_available
-                )
-                if not can_omit:
-                    checker_ids[declaration.capability_id] = installer.install(
-                        operation,
-                        authorize=authorize,
-                    ).checker_id
-                    continue
-                diagnostic = CapabilityDiagnostic(
-                    code="EXACT_REPLAY_PROVIDER_UNAVAILABLE",
-                    stage="provider_availability",
-                    message=(
-                        f"Independent replay for {declaration.capability_id!r} is "
-                        "not installed: "
-                        f"{provider_runtime.diagnostic or 'the provider is unavailable.'}"
-                    ),
-                    hint=(
-                        "Install or repair the optional python-flint backend, then retry."
-                    ),
-                    details={
-                        "capability_id": declaration.capability_id,
-                        "provider": provider_runtime.provider,
-                        "checker_authorization_affected": True,
-                    },
-                )
-                diagnostics.append(diagnostic)
-                _LOGGER.warning("%s", diagnostic.message)
-                checker_ids[declaration.capability_id] = None
+            if not can_omit:
+                checker_ids[declaration.capability_id] = installer.install(
+                    operation,
+                    authorize=authorize,
+                ).checker_id
                 continue
-            checker_ids[declaration.capability_id] = installer.install(
-                operation,
-                authorize=authorize,
-            ).checker_id
+            diagnostic = CapabilityDiagnostic(
+                code="EXACT_REPLAY_PROVIDER_UNAVAILABLE",
+                stage="provider_availability",
+                message=(
+                    f"Independent replay for {declaration.capability_id!r} is "
+                    "not installed: "
+                    f"{provider_runtime.diagnostic or 'the provider is unavailable.'}"
+                ),
+                hint=(
+                    "Install or repair the optional python-flint backend, then retry."
+                ),
+                details={
+                    "capability_id": declaration.capability_id,
+                    "provider": provider_runtime.provider,
+                    "checker_authorization_affected": True,
+                },
+            )
+            diagnostics.append(diagnostic)
+            _LOGGER.warning("%s", diagnostic.message)
+            checker_ids[declaration.capability_id] = None
+            continue
+        checker_ids[declaration.capability_id] = installer.install(
+            operation,
+            authorize=authorize,
+        ).checker_id
     authorized_ids = {
         runtime_key: tuple(
             checker_id
@@ -313,13 +324,21 @@ def install_exact_domain_checkers(
         )
         for runtime_key in provider_runtimes
     }
+    resolved_provider_runtimes: dict[str, CapabilityProviderRuntime] = {}
+    for runtime_key, provider_runtime in provider_runtimes.items():
+        checker_ids_for_runtime = authorized_ids[runtime_key]
+        factory = runtime_factories.get(runtime_key)
+        resolved_provider_runtimes[runtime_key] = (
+            factory(checker_ids=checker_ids_for_runtime)
+            if factory is not None
+            else provider_runtime.model_copy(
+                update={"checker_ids": checker_ids_for_runtime}
+            )
+        )
     return ExactDomainCheckerInstallation(
         checker_ids=checker_ids,
         diagnostics=tuple(diagnostics),
-        provider_runtimes={
-            runtime_key: factory(checker_ids=authorized_ids[runtime_key])
-            for runtime_key, factory in runtime_factories.items()
-        },
+        provider_runtimes=resolved_provider_runtimes,
     )
 
 

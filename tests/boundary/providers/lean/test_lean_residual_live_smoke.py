@@ -20,6 +20,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
+from jacobian.operation_projection import project_operation_result
 from jacobian.providers.lean_runtime import lean_provider_runtime
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -91,8 +92,8 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
 
     # 1. lean.term.apply: open a state for `True` and apply the term `True.intro`.
     #    `exact True.intro` closes the goal `⊢ True` via the constructor term.
-    opened = term_apply.invoke(
-        term_apply.prepare(
+    opened = project_operation_result(
+        term_apply.invoke(
             CapabilityRequest(
                 capability_id="lean.term.apply",
                 input={
@@ -110,8 +111,8 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
 
     # 2. lean.proof_state.inspect: read the input state without replay.
     #    Reopen a non-completed state for inspection.
-    reopened = proof_state.invoke(
-        proof_state.prepare(
+    reopened = project_operation_result(
+        proof_state.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.apply_tactic",
                 input={
@@ -124,8 +125,8 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
         )
     )
     open_state_uri = reopened.output["successor_states"][0]["state_uri"]
-    inspected = inspect.invoke(
-        inspect.prepare(
+    inspected = project_operation_result(
+        inspect.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.inspect",
                 input={"environment": "CORE", "state_uri": open_state_uri},
@@ -137,8 +138,8 @@ def test_live_term_apply_and_inspect_and_metavariable_round_trip(
     assert "⊢ P" in inspected.output["normalized_goals"][0]
 
     # 3. lean.proof_state.metavariable_fields: structured fields via the helper.
-    fields = metavariable.invoke(
-        metavariable.prepare(
+    fields = project_operation_result(
+        metavariable.invoke(
             CapabilityRequest(
                 capability_id="lean.proof_state.metavariable_fields",
                 input={"environment": "CORE", "state_uri": open_state_uri},

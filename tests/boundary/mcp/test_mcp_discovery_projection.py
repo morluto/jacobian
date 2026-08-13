@@ -120,6 +120,6 @@ def test_math_find_exact_inspection_returns_one_authoritative_descriptor(
         assert not validator.is_valid({})
         text = json.loads(result.content[0].text)
         assert text["operation"]["operation_id"] == descriptor.operation_id
-        assert "input_schema" not in text["operation"]
+        assert text == structured
 
     asyncio.run(scenario())

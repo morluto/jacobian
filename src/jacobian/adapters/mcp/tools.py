@@ -136,7 +136,7 @@ class _OperationDiscoveryError(_MCPOutputModel):
     error: _OperationDiscoveryErrorDetail
 
 
-class OperationDiscoveryResponse(
+class OperationFindResponse(
     RootModel[
         Annotated[
             _OperationDiscoveryResult
@@ -154,10 +154,6 @@ class OperationDiscoveryResponse(
     model_config = ConfigDict(json_schema_extra={"type": "object"})
 
 
-OperationDiscoveryToolResult = Annotated[
-    CallToolResult,
-    OperationDiscoveryResponse,
-]
 OperationRunToolResult = Annotated[CallToolResult, OperationResult]
 
 
@@ -193,75 +189,10 @@ def _text_result(
     )
 
 
-def _find_text_projection(response: dict[str, Any]) -> dict[str, Any]:
-    if "error" in response:
-        error = response["error"]
-        return {
-            "error": {
-                key: error[key]
-                for key in ("code", "stage", "message", "hint")
-                if key in error
-            }
-        }
-    if response.get("kind") == "discovery":
-        return {
-            "kind": "discovery",
-            "matches": [
-                {
-                    key: match[key]
-                    for key in (
-                        "operation_id",
-                        "title",
-                        "description",
-                        "accepted_input_kinds",
-                        "accepted_artifact_types",
-                        "produced_artifact_types",
-                        "input_ports",
-                        "output_ports",
-                        "provider_availability",
-                        "relevance_score",
-                        "applicability",
-                        "applicability_code",
-                    )
-                    if key in match
-                }
-                for match in response.get("matches", [])
-            ],
-            "total_matches": response.get("total_matches"),
-            "truncated": response.get("truncated"),
-            "truncation_reason": response.get("truncation_reason"),
-            "next_cursor": response.get("next_cursor"),
-            "catalog_resource": response.get("catalog_resource"),
-        }
-    operation = response.get("operation", {})
-    operation_projection: dict[str, Any] = {
-        key: operation[key]
-        for key in (
-            "operation_id",
-            "title",
-            "description",
-            "accepted_input_kinds",
-            "accepted_artifact_types",
-            "produced_artifact_types",
-            "input_ports",
-            "output_ports",
-        )
-        if key in operation
-    }
-    projection: dict[str, Any] = {
-        "kind": response.get("kind"),
-        "operation": operation_projection,
-    }
-    return projection
-
-
-def _find_result(response: dict[str, Any]) -> CallToolResult:
+def _find_result(response: dict[str, Any]) -> OperationFindResponse:
     if "error" in response and response.get("kind") != "error":
         response = {"kind": "error", **response}
-    return _text_result(
-        response,
-        _find_text_projection(response),
-    )
+    return OperationFindResponse.model_validate(response)
 
 
 def _unknown_operation_context(
@@ -329,11 +260,11 @@ def _run_text_projection(result: OperationResult) -> dict[str, Any]:
     return projection
 
 
-async def math_find(
+def math_find(
     request: OperationFindRequest,
     *,
     ctx: Context[AppState, Any],
-) -> OperationDiscoveryToolResult:
+) -> OperationFindResponse:
     with _runtime(ctx) as active_runtime:
         if isinstance(request, _OperationSearchRequest):
             discovery_response = _operation_discovery_response(

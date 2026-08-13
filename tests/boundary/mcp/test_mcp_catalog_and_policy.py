@@ -66,9 +66,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
             assert isinstance(listed.structured_content, dict)
             index = listed.structured_content
             assert len(listed.content[0].text.encode("utf-8")) <= 16 * 1024
-            assert len(listed.content[0].text) < len(
-                json.dumps(index, separators=(",", ":"))
-            )
+            assert json.loads(listed.content[0].text) == index
             assert index["response_byte_limit"] == 16 * 1024
             assert len(index["matches"]) <= 20
             indexed_ids = {

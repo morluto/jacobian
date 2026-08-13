@@ -187,13 +187,13 @@ async def inspect(
                 canonicalize_json(
                     {
                         "catalog_version": catalog["catalog_version"],
-                        "capabilities": catalog["capabilities"],
+                        "operations": catalog["operations"],
                     }
                 )
             ).hexdigest()
         )
         operation_ids = {
-            operation["operation_id"] for operation in catalog["capabilities"]
+            operation["operation_id"] for operation in catalog["operations"]
         }
         missing = sorted(required_capabilities - operation_ids)
         if missing:
@@ -239,7 +239,7 @@ async def inspect(
             "tool_names": sorted(tool_names),
             "catalog": {
                 "catalog_version": catalog["catalog_version"],
-                "capabilities": len(operation_ids),
+                "operations": len(operation_ids),
                 "policy_profile": policy_profile,
                 "catalog_digest": catalog_digest,
                 "policy_digest": catalog["policy_digest"],

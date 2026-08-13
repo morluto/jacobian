@@ -788,7 +788,11 @@ class ExactComputedVerificationAdapter:
     ) -> tuple[dict[str, object], dict[str, object]]:
         declaration = self.declaration
         try:
-            validated = self.input_model.model_validate(request.input)
+            validated = (
+                request
+                if isinstance(request, self.input_model)
+                else self.input_model.model_validate(request.input)
+            )
             normalized_input = self.schemas.validate(
                 declaration.input_schema_uri,
                 validated.input.model_dump(mode="json"),
@@ -818,9 +822,12 @@ class ExactComputedVerificationAdapter:
 
         declaration = self.declaration
         try:
-            result_uri = ExactDomainResultVerificationRequest.model_validate(
-                request.input
-            ).result_uri
+            validated = (
+                request
+                if isinstance(request, ExactDomainResultVerificationRequest)
+                else ExactDomainResultVerificationRequest.model_validate(request.input)
+            )
+            result_uri = validated.result_uri
             result_artifact = self.store.get(result_uri)
             if (
                 result_artifact.manifest.schema_uri != declaration.result_schema_uri

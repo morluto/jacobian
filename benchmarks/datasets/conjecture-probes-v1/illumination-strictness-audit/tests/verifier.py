@@ -186,7 +186,16 @@ def main():
         "correctness": mathematics_score,
         "mathematics": mathematics_score,
         "evidence": float(evidence_ok),
+        "evidence_validity": float(evidence_ok),
         "scope": float(
+            bool(
+                isinstance(raw, dict)
+                and raw.get("scope") == SCOPE
+                and raw.get("completeness") == "COMPLETE"
+                and raw.get("limitations") == LIMITATIONS
+            )
+        ),
+        "scope_accuracy": float(
             bool(
                 isinstance(raw, dict)
                 and raw.get("scope") == SCOPE
@@ -203,6 +212,7 @@ def main():
             )
         ),
     }
+    values["assurance_calibration"] = values["assurance"]
     reward = float(all(values.values()))
     values.update(
         {
@@ -227,8 +237,11 @@ if __name__ == "__main__":
                 "mathematics": 0.0,
                 "correctness": 0.0,
                 "evidence": 0.0,
+                "evidence_validity": 0.0,
                 "scope": 0.0,
+                "scope_accuracy": 0.0,
                 "assurance": 0.0,
+                "assurance_calibration": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "false_certification": False,

@@ -278,7 +278,6 @@ forbidden_modules = ["jacobian.portfolio"]
 
 [tool.coverage.run]
 branch = true
-patch = ["subprocess"]
 source = ["jacobian", "jacobian_checkers"]
 
 [tool.coverage.report]

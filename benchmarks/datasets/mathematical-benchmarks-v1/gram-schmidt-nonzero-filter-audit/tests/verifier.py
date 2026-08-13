@@ -101,11 +101,15 @@ def result_ok(result):
             return False
         parsed.append(p)
     zeros = [i for i, v in enumerate(actual) if not any(v)]
+    submitted_zeros = result["zero_residual_indices"]
     return (
         parsed == actual
         and rank(vs) == 4
         and result["rank"] == 4
-        and result["zero_residual_indices"] == zeros == [4, 5]
+        and isinstance(submitted_zeros, list)
+        and all(type(index) is int for index in submitted_zeros)
+        and len(submitted_zeros) == len(zeros)
+        and set(submitted_zeros) == set(zeros) == {4, 5}
         and result["formal_selected_indices"] == list(range(6))
         and result["intended_selected_indices"] == [0, 1, 2, 3]
     )

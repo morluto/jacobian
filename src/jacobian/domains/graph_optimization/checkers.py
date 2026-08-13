@@ -1,6 +1,9 @@
 """Independent checker declarations owned by the graph-optimization domain."""
 
+from collections.abc import Callable
+
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.graph_distance_matrix import GraphDistanceMatrixRequest
 from jacobian.contracts.graph_invariant_operations import (
     GraphInvariantRequest,
@@ -11,8 +14,26 @@ from jacobian.contracts.graph_optimization import (
     GraphMinimumSpanningTreeRequest,
     GraphOptimizationRequest,
 )
+from jacobian.providers import flint_runtime
 
 _GRAPH_ENTRYPOINT = "jacobian_checkers.graph_exact_operations"
+
+
+def _graph_runtime(*, checker_ids: tuple[str, ...] = ()) -> CapabilityProviderRuntime:
+    return flint_runtime.graph_exact_checker_provider_runtime(checker_ids=checker_ids)
+
+
+def _graph_order_at_most(maximum: int) -> Callable[[object], bool]:
+    def supports(payload: object) -> bool:
+        return (
+            isinstance(payload, dict)
+            and isinstance(payload.get("graph"), dict)
+            and isinstance(payload["graph"].get("vertices"), list)
+            and len(payload["graph"]["vertices"]) <= maximum
+        )
+
+    return supports
+
 
 GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
@@ -21,6 +42,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "check_graph_hamiltonian_path",
         "graph.hamiltonian-path.exhaustive-replay",
         entrypoint_module=_GRAPH_ENTRYPOINT,
+        provider_runtime_factory=_graph_runtime,
         replay_method="finite Hamiltonian-path exhaustive replay",
         reason=(
             "operator-authorized standard-library checker independent of the "
@@ -38,6 +60,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "graph",
             "hamiltonian-path",
         ),
+        supports_input=_graph_order_at_most(18),
     ),
     ExactReplayCheckerDeclaration(
         "graph.induced_tree.maximum.compute",
@@ -45,6 +68,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "check_graph_induced_tree_maximum",
         "graph.induced-tree.maximum.exhaustive-replay",
         entrypoint_module=_GRAPH_ENTRYPOINT,
+        provider_runtime_factory=_graph_runtime,
         replay_method="finite-subset exhaustive replay",
         reason=(
             "operator-authorized finite exhaustive checker independent of the "
@@ -57,6 +81,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "exact maximum induced-tree result against its exact graph input."
         ),
         verification_tags=("verification", "exact", "graph", "induced-tree"),
+        supports_input=_graph_order_at_most(16),
     ),
     ExactReplayCheckerDeclaration(
         "graph.spanning_tree.minimum.compute",
@@ -64,6 +89,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "check_graph_minimum_spanning_tree",
         "graph.minimum-spanning-tree.cycle-certificate-v1",
         entrypoint_module=_GRAPH_ENTRYPOINT,
+        provider_runtime_factory=_graph_runtime,
         replay_method="fundamental-cycle optimality certificate replay",
         reason=(
             "operator-authorized standard-library exact-rational checker "
@@ -91,6 +117,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "check_graph_diameter",
         "graph.diameter.all-sources-bfs-v1",
         entrypoint_module=_GRAPH_ENTRYPOINT,
+        provider_runtime_factory=_graph_runtime,
         replay_method="all-sources breadth-first replay",
         reason=(
             "operator-authorized standard-library BFS checker independent of "
@@ -116,6 +143,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "check_graph_radius",
         "graph.radius.all-sources-bfs-v1",
         entrypoint_module=_GRAPH_ENTRYPOINT,
+        provider_runtime_factory=_graph_runtime,
         replay_method="all-sources breadth-first replay",
         reason=(
             "operator-authorized standard-library BFS checker independent of "
@@ -141,6 +169,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "check_graph_distance_matrix",
         "graph.distance-matrix.all-sources-bfs-v1",
         entrypoint_module=_GRAPH_ENTRYPOINT,
+        provider_runtime_factory=_graph_runtime,
         replay_method="all-sources breadth-first distance-matrix replay",
         reason=(
             "operator-authorized standard-library BFS checker independent of "
@@ -167,6 +196,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
         "check_graph_maximum_matching",
         "graph.maximum-matching.tutte-berge-v1",
         entrypoint_module=_GRAPH_ENTRYPOINT,
+        provider_runtime_factory=_graph_runtime,
         replay_method="Tutte-Berge barrier replay",
         reason=(
             "operator-authorized standard-library Tutte-Berge checker independent "

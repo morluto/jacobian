@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,9 +7,9 @@ from typing import Any, Never
 
 import pytest
 from tests.boundary.providers.external_sat.external_sat_support import (
+    fake_carcara,
     open_smt_proof_verifier_services,
 )
-from tests.support.artifacts import sha256_file as _sha256_file
 from tests.support.services import DomainTestServices
 
 import jacobian_checkers.smt
@@ -27,49 +26,12 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.smt import SmtResourceBudget
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.providers.external_solver_runtime import carcara_provider_runtime
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
 from jacobian.verification.errors import CheckerExecutionError
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _PROBLEM = (_FIXTURES / "qf_uf_equality_unsat.smt2").read_text(encoding="ascii")
 _PROOF = (_FIXTURES / "qf_uf_equality_unsat.alethe").read_bytes()
-
-
-def _fake_carcara(tmp_path: Path, body: str) -> Path:
-    executable = tmp_path / "carcara"
-    executable.write_text(
-        (
-            f"#!{sys.executable}\n"
-            "import sys\n"
-            "if '--version' in sys.argv:\n"
-            "    print('carcara 1.1.0 [git master 394edbb]')\n"
-            "    raise SystemExit(0)\n"
-            "if sys.argv[1:] == ['check', '--help']:\n"
-            "    print('--strict-parsing --parse-hole-args '\n"
-            "          '--allow-int-real-subtyping --expand-let-bindings')\n"
-            "    raise SystemExit(0)\n"
-            f"{body}\n"
-        ),
-        encoding="utf-8",
-    )
-    executable.chmod(0o755)
-    manifest = executable.with_name(executable.name + ".jacobian-runtime.json")
-    manifest.write_text(
-        (
-            "{\n"
-            '  "runtime_manifest_version": "1",\n'
-            '  "provider": "carcara",\n'
-            '  "version": "1.1.0",\n'
-            '  "source_repository": "https://github.com/ufmg-smite/carcara",\n'
-            '  "source_commit": '
-            '"394edbb15ba95c47893f1d821fddde7e016af178",\n'
-            '  "compatible_cvc5_version": "1.3.4",\n'
-            f'  "executable_sha256": "{_sha256_file(executable)}"\n'
-            "}\n"
-        ),
-        encoding="utf-8",
-    )
-    return executable
 
 
 def _producer() -> CapabilityProviderRuntime:
@@ -115,7 +77,7 @@ def test_carcara_runtime_requires_exact_operator_provenance(
     tmp_path: Path,
     attack: str,
 ) -> None:
-    executable = _fake_carcara(
+    executable = fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
@@ -142,30 +104,6 @@ def test_carcara_runtime_requires_exact_operator_provenance(
     assert runtime.diagnostic is not None
 
 
-def test_complete_portfolio_includes_authorized_smt_proof_verifier(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    executable = _fake_carcara(
-        tmp_path,
-        "print('valid')\nraise SystemExit(0)",
-    )
-    runtime = carcara_provider_runtime(executable)
-    monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.carcara_provider_runtime",
-        lambda *_args, **_kwargs: runtime,
-    )
-
-    with create_runtime(
-        tmp_path / "complete-state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-    ) as complete:
-        assert "smt.unsat_proof.verify" in {
-            descriptor.capability_id
-            for descriptor in complete.core.capabilities.catalog().capabilities
-        }
-
-
 def _proof(runtime: DomainTestServices) -> tuple[str, str]:
     problem = runtime.core.smt.put_problem(logic="QF_UF", smtlib_text=_PROBLEM)
     proof = runtime.core.smt.put_proof(
@@ -189,7 +127,7 @@ def _verify(runtime: DomainTestServices, proof_uri: str) -> CapabilityResult:
 def test_invalid_proof_diagnostic_routes_through_public_capabilities(
     tmp_path: Path,
 ) -> None:
-    executable = _fake_carcara(
+    executable = fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
@@ -209,7 +147,7 @@ def test_unsat_proof_is_verified_by_authorized_strict_carcara(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _fake_carcara(
+    executable = fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
@@ -266,7 +204,7 @@ def test_unsat_proof_is_verified_by_authorized_strict_carcara(
 def test_holey_checker_report_never_establishes_sat_or_unsat(
     tmp_path: Path,
 ) -> None:
-    executable = _fake_carcara(
+    executable = fake_carcara(
         tmp_path,
         "print('holey')\nraise SystemExit(0)",
     )
@@ -283,7 +221,7 @@ def test_holey_checker_report_never_establishes_sat_or_unsat(
 def test_proof_verify_requires_runtime_and_operator_authorization(
     tmp_path: Path,
 ) -> None:
-    executable = _fake_carcara(
+    executable = fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
@@ -330,7 +268,7 @@ def test_checker_operational_failure_never_creates_a_conclusion(
     expected_status: ExecutionStatus,
     expected_output_status: str,
 ) -> None:
-    executable = _fake_carcara(
+    executable = fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )
@@ -354,7 +292,7 @@ def test_checker_operational_failure_never_creates_a_conclusion(
 def test_runtime_replacement_after_authorization_fails_closed(
     tmp_path: Path,
 ) -> None:
-    executable = _fake_carcara(
+    executable = fake_carcara(
         tmp_path,
         "print('valid')\nraise SystemExit(0)",
     )

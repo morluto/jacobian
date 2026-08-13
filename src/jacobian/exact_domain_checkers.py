@@ -532,8 +532,6 @@ class ExactComputedVerificationAdapter:
             ),
         )
 
-    typed_input: Literal[True] = True
-
     @property
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor

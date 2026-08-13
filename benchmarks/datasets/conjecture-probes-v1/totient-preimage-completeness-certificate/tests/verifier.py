@@ -17,6 +17,8 @@ from verifier_support import (
     workspace_input_is_bound,
 )
 
+MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
+
 TASK_ID = "jacobian/totient-preimage-completeness-certificate"
 SCOPE = "phi-48-complete-preimage-classification-v1"
 LIMITATIONS = [
@@ -199,11 +201,15 @@ def main() -> None:
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     evidence_ok = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+        and evidence_list_is_bound(
+            raw.get("evidence"), max_bytes=MAX_EVIDENCE_BYTES
+        )
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
+            raw["evidence"][0],
+            expected_path="evidence/answer.json",
+            max_bytes=MAX_EVIDENCE_BYTES,
         )
         if evidence_ok
         else None

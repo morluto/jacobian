@@ -34,7 +34,7 @@ case "$$docker_build_mode" in \
 esac;
 endef
 
-.PHONY: harbor-plan harbor-prepare-task harbor-validate-task harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-host-validation harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke
+.PHONY: harbor-plan harbor-prepare-task harbor-validate-task harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-host-validation harbor-validate harbor-check harbor-check-all harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke
 
 harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 	@set -eu; \
@@ -130,9 +130,11 @@ harbor-host-validation: ## Run the full host suite in timing-balanced local shar
 	$(UV_RUN) python -m benchmarks.tooling.host_validation run-full \
 		--total-workers $(HARBOR_VALIDATION_TOTAL_WORKERS) --max-parallel 4
 
-harbor-validate: harbor-contracts harbor-adapter-checks harbor-host-validation ## Run all repository-owned Harbor checks under the pinned Harbor runtime.
+harbor-check: harbor-execution-check harbor-adapter-checks ## Check Harbor contracts and control-plane behavior.
 
-harbor-check: harbor-validate ## Run Harbor topology, digest, provenance, and host-side validation checks.
+harbor-check-all: harbor-check harbor-host-validation ## Explicitly run every repository-owned Harbor host regression.
+
+harbor-validate: harbor-check-all ## Backward-compatible exhaustive Harbor validation alias.
 
 harbor-check-task: ## Validate selected Harbor leaf tasks (DATASET=..., TASKS="task-a task-b").
 	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
@@ -230,7 +232,7 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 		--result "benchmarks/results/$(DATASET)-oracle/$$job_name/result.json" \
 		$(if $(TASKS),--tasks $(TASKS),)
 
-harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with tasks.
+harbor-oracle-all: harbor-check-all ## Run every registered dataset Oracle with tasks.
 	@set -e; for dataset in mathematical-benchmarks-v1 symbolic-coordination-v1 public-reproductions-v1 conjecture-probes-v1 research-diagnostics-v1 provider-feasibility-v1; do \
 		$(MAKE) --no-print-directory harbor-oracle-run DATASET=$$dataset FULL=1 EVAL_ARGS="$(EVAL_ARGS)"; \
 	done

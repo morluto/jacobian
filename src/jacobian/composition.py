@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from jacobian.installation.context import create_installation_context
-from jacobian.portfolio import install_portfolio
+from jacobian.portfolio.assembler import install_portfolio
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime

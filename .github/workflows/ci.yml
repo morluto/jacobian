@@ -35,7 +35,6 @@ jobs:
           package-manager-cache: false
       - run: make lint-full
       - run: make typecheck
-      - run: make test-architecture
       - run: make architecture
       - run: make todo-check
       - run: make import-contracts
@@ -62,12 +61,12 @@ jobs:
             timeout-minutes: 15
           - lane: domain
             timeout-minutes: 15
+          - lane: provider
+            timeout-minutes: 25
           - lane: composition
             timeout-minutes: 25
           - lane: e2e
             timeout-minutes: 15
-          - lane: provider
-            timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,6 +135,24 @@ jobs:
           path: .coverage.${{ matrix.lane }}
           include-hidden-files: true
 
+  subprocess_coverage:
+    name: checker subprocess coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - run: make test-checker-subprocess-coverage
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-data-checker-subprocess
+          path: .coverage.checker-subprocess
+          include-hidden-files: true
+
   wheel:
     name: wheel (Python ${{ matrix.python-version }})
     needs: [static]
@@ -196,27 +213,10 @@ jobs:
         uses: ./.github/actions/setup-lean
       - run: make test-lean
 
-  optional-providers:
-    name: Optional providers
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:provider') ||
-      contains(github.event.pull_request.labels.*.name, 'ci:full')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - run: make test-provider
-
   coverage:
     name: Coverage
     if: ${{ always() && !cancelled() }}
-    needs: [python, boundaries]
+    needs: [python, boundaries, subprocess_coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -227,9 +227,11 @@ jobs:
         env:
           PYTHON_RESULT: ${{ needs.python.result }}
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
+          SUBPROCESS_COVERAGE_RESULT: ${{ needs.subprocess_coverage.result }}
         run: |
           test "$PYTHON_RESULT" = success
           test "$BOUNDARIES_RESULT" = success
+          test "$SUBPROCESS_COVERAGE_RESULT" = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -296,8 +298,8 @@ jobs:
 
   required:
     name: required
-    if: ${{ always() }}
-    needs: [static, python, boundaries, wheel, coverage, lean, optional-providers]
+    if: ${{ always() && !cancelled() }}
+    needs: [static, python, boundaries, wheel, coverage, lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -309,7 +311,6 @@ jobs:
           WHEEL_RESULT: ${{ needs.wheel.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
           LEAN_RESULT: ${{ needs.lean.result }}
-          PROVIDERS_RESULT: ${{ needs.optional-providers.result }}
         run: |
           test "$STATIC_RESULT" = success
           test "$PYTHON_RESULT" = success
@@ -320,14 +321,10 @@ jobs:
             success|skipped) ;;
             *) exit 1 ;;
           esac
-          case "$PROVIDERS_RESULT" in
-            success|skipped) ;;
-            *) exit 1 ;;
-          esac
 
   python-test:
     name: Python Tests
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
     needs: [required]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -339,7 +336,7 @@ jobs:
 
   lean-test:
     name: Lean Tests
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
     needs: [lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -355,7 +352,7 @@ jobs:
 
   deployment-test:
     name: Deployment Tests
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
     needs: [static]
     runs-on: ubuntu-latest
     timeout-minutes: 5

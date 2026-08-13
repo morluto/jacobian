@@ -5,9 +5,6 @@ from __future__ import annotations
 from jacobian.contracts.capabilities import CapabilityDiscoveryRequest
 from jacobian.runtime.model import JacobianRuntime
 
-# Composition-lane admission category for architecture ratchets.
-COMPOSITION_ADMISSION = "DISCOVERY"
-
 
 def test_catalog_keeps_chromatic_number_without_unused_encoding_workflow(
     attached_complete_runtime_read_only: JacobianRuntime,

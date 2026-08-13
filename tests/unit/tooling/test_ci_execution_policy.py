@@ -314,7 +314,8 @@ def test_required_pr_workflows_do_not_cancel_inflight_evidence() -> None:
     assert "cancel-in-progress: false" in ci
     assert "cancel-in-progress: false" in benchmarks
     validation = benchmarks.split("  validation:", 1)[1].split("  timings:", 1)[0]
-    assert "if: ${{ always() && !cancelled() }}" in validation
+    assert "if: ${{ always() }}" in validation
+    assert "if: ${{ always() && !cancelled() }}" not in validation
 
 
 def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:

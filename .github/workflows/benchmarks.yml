@@ -319,7 +319,10 @@ jobs:
 
   validation:
     name: Benchmark Validation
-    if: ${{ always() && !cancelled() }}
+    # This required aggregate must run after cancellation so the validator can
+    # turn cancelled dependencies into a failing check instead of a skipped,
+    # branch-protection-passing job.
+    if: ${{ always() }}
     needs: [plan, static, contracts, host_validation, inventory, oracle]
     runs-on: ubuntu-latest
     timeout-minutes: 5

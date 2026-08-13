@@ -118,7 +118,8 @@ def test_lean_job_is_required_on_every_event_and_builds_semantic_targets() -> No
 def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "ci:full" in workflow
+    assert "ci:full" not in workflow
+    assert "ci:lean" not in workflow
     assert "run: make deploy-check" in workflow
     assert "name: Deployment Tests" in workflow
     assert "name: required" in workflow

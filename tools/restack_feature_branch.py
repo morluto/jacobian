@@ -52,6 +52,8 @@ def restack(
     print(f"parent: {parent} ({parent_sha[:12]})")
     print(f"feature: {feature} ({feature_sha[:12]})")
     print(f"unique commits: {len(unique)}")
+    for sha, subject in unique:
+        print(f"  {sha[:12]} {subject}")
     if duplicates:
         print("duplicate-subject patches already on parent:")
         for sha, subject in duplicates:

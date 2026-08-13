@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from itertools import pairwise
+from math import factorial
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, field_validator, model_validator
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
+from jacobian.contracts.exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalInteger,
+    CanonicalRational,
+)
 from jacobian.contracts.matrices import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
@@ -32,6 +37,20 @@ def _check_integer_digits(
 ) -> None:
     if len(value.lstrip("-")) > maximum:
         raise ValueError(f"matrix scalars are limited to {maximum} decimal digits")
+
+
+def _determinant_input_scalar_digits(order: int) -> int:
+    """Return a shape-aware scalar budget that keeps the inline determinant bounded.
+
+    A determinant can be put over the product of all ``order**2`` input
+    denominators.  The Leibniz sum adds at most one decimal digit for each
+    factor of ``order!``.  This conservative bound applies before computation,
+    so a valid request cannot later fail only when its inline result is built.
+    """
+
+    factorial_overhead = 0 if order <= 1 else len(str(factorial(order)))
+    available = MAX_CANONICAL_RATIONAL_DIGITS - factorial_overhead
+    return min(MAX_INPUT_SCALAR_DIGITS, available // (order * order))
 
 
 class RationalMatrixRequest(ContractModel):
@@ -100,7 +119,9 @@ class DeterminantRationalMatrix(ContractModel):
             raise ValueError("determinant matrix rows must all have the same length")
         require_matrix_scalar_digits(
             self.entries,
-            maximum=MAX_INPUT_SCALAR_DIGITS,
+            maximum=_determinant_input_scalar_digits(
+                max(len(self.entries), column_count)
+            ),
             label="determinant input",
         )
         return self

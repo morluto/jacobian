@@ -7,17 +7,20 @@ separate trust boundaries.
 
 ## Input and result contracts
 
-The producer accepts one [`RationalMatrix`](index.md#shared-matrix-values)
-from `jacobian.contracts.matrices`: a nonempty square matrix with at most 32
-rows and columns. Every entry is a canonical reduced rational:
+The producer accepts one `DeterminantRationalMatrix`: a nonempty square matrix
+with order 1 through 64. Every entry is a canonical reduced rational:
 
 ```json
 {"num": "-3", "den": "7"}
 ```
 
-The shared `RationalMatrix` model permits up to 32,768 canonical digits per
-scalar component; the determinant request model tightens this to 256 decimal
-digits via its own `require_matrix_scalar_digits` validator.
+The determinant request applies a shape-aware scalar budget before computation.
+It is at most 256 decimal digits for small matrices and decreases as the
+matrix order grows; order 64 permits 7 digits per numerator or denominator.
+This conservative bound accounts for the product of all input denominators and
+the Leibniz sum, and keeps every accepted inline determinant within the
+32,768-digit `CanonicalRational` result limit. A request that exceeds the
+shape-specific budget is rejected before provider execution.
 
 `matrix.determinant.compute` uses SymPy's exact matrix determinant API with the
 fraction-free Bareiss method. It returns the bounded canonical determinant

@@ -123,8 +123,10 @@ POLYNOMIAL_GROEBNER_CAPABILITY = durable_operation(
         version="1",
         title="Compute a bounded Gröbner basis",
         description=(
-            "Compute a complete reduced monic Gröbner basis over QQ in an isolated "
-            "SymPy worker under declared input, output, and wall-clock limits."
+            "Compute a complete reduced monic Gröbner basis in the commutative "
+            "polynomial ring QQ[x_1,...,x_n] in an isolated SymPy worker under "
+            "declared input, output, and wall-clock limits. Free-associative and "
+            "other noncommutative polynomial algebras are not supported."
         ),
         request_type=PolynomialGroebnerBasisRequest,
         result_type=PolynomialGroebnerBasisResult,

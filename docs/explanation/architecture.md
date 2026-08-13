@@ -228,6 +228,11 @@ compatibility reads do not repeat that filesystem scan. A producer or unrelated
 checker edit therefore cannot change the identity, while a changed executable
 dependency cannot retain it.
 
+Verification record v4 snapshots that complete manifest and binds its canonical
+digest, so interpreting the checker identity never depends on a mutable
+authorization row. Record v3 belongs to state revision 10 and remains readable
+with the matching older checkout; the current runtime has no dual record shape.
+
 `VerificationResult` is the internal typed outcome of that checker execution,
 not a generic mathematical result envelope. Capability adapters project it
 once into the ordinary operation response. Ordinary producers do not use it,

@@ -98,6 +98,33 @@ def test_result_envelope_ratchet_resolves_import_aliases(tmp_path: Path) -> None
     }
 
 
+def test_result_envelope_ratchet_resolves_relative_imports(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/domains/example/adapter.py",
+        "from ...contracts.capabilities import CapabilityResult\n"
+        "result = CapabilityResult(capability_id='x', capability_version='1', "
+        "execution={}, output={})\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/domains/example/qualified_adapter.py",
+        "from ...contracts import capabilities as caps\n"
+        "result = caps.CapabilityResult(capability_id='x', "
+        "capability_version='1', execution={}, output={})\n",
+    )
+
+    violations = [
+        item
+        for item in check_architecture(tmp_path).violations
+        if item.code == "capability-result-projection"
+    ]
+    assert {item.path for item in violations} == {
+        "src/jacobian/domains/example/adapter.py",
+        "src/jacobian/domains/example/qualified_adapter.py",
+    }
+
+
 def test_final_projection_may_construct_public_result_envelopes(
     tmp_path: Path,
 ) -> None:

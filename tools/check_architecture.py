@@ -510,45 +510,74 @@ def _internal_capability_request_violations(
     )
 
 
-def _capability_result_bindings(tree: ast.AST) -> tuple[set[str], set[str]]:
+def _capability_result_from_import_from(
+    relative: PurePosixPath, node: ast.ImportFrom
+) -> tuple[set[str], set[str]]:
+    pairs = zip(node.names, _import_references(relative, node), strict=True)
+    pairs = tuple(pairs)
+    constructor_names = {
+        alias.asname or alias.name
+        for alias, reference in pairs
+        if reference
+        in {
+            "jacobian.contracts.capabilities.CapabilityResult",
+            "contracts.capabilities.CapabilityResult",
+        }
+    }
+    module_names = {
+        alias.asname or alias.name
+        for alias, reference in pairs
+        if reference in {"jacobian.contracts.capabilities", "contracts.capabilities"}
+    }
+    module_names.update(
+        alias.asname or alias.name
+        for alias, reference in pairs
+        if reference in {"jacobian.contracts", "contracts"}
+        and alias.name == "capabilities"
+    )
+    module_names.update(
+        f"{alias.asname or alias.name}.capabilities"
+        for alias, reference in pairs
+        if reference == "jacobian" and alias.name == "contracts"
+    )
+    return constructor_names, module_names
+
+
+def _capability_result_from_import(
+    node: ast.Import,
+) -> tuple[set[str], set[str]]:
+    module_names = {
+        alias.asname or alias.name
+        for alias in node.names
+        if alias.name == "jacobian.contracts.capabilities"
+    }
+    module_names.update(
+        f"{alias.asname or alias.name}.capabilities"
+        for alias in node.names
+        if alias.name == "jacobian.contracts"
+    )
+    module_names.update(
+        f"{alias.asname or alias.name}.contracts.capabilities"
+        for alias in node.names
+        if alias.name == "jacobian"
+    )
+    return set(), module_names
+
+
+def _capability_result_bindings(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[set[str], set[str]]:
     constructor_names: set[str] = set()
     module_names: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module in {
-            "jacobian.contracts.capabilities",
-            "contracts.capabilities",
-        }:
-            constructor_names.update(
-                alias.asname or alias.name
-                for alias in node.names
-                if alias.name == "CapabilityResult"
-            )
+        if isinstance(node, ast.ImportFrom):
+            constructors, modules = _capability_result_from_import_from(relative, node)
         elif isinstance(node, ast.Import):
-            for alias in node.names:
-                bound = alias.asname or alias.name
-                if alias.name == "jacobian.contracts.capabilities":
-                    module_names.add(bound)
-                elif alias.name == "jacobian.contracts":
-                    module_names.add(f"{bound}.capabilities")
-                elif alias.name == "jacobian":
-                    module_names.add(f"{bound}.contracts.capabilities")
-        elif isinstance(node, ast.ImportFrom) and node.module in {
-            "jacobian.contracts",
-            "contracts",
-        }:
-            module_names.update(
-                alias.asname or alias.name
-                for alias in node.names
-                if alias.name == "capabilities"
-            )
-        elif isinstance(node, ast.ImportFrom) and node.module in {
-            "jacobian",
-        }:
-            module_names.update(
-                f"{alias.asname or alias.name}.capabilities"
-                for alias in node.names
-                if alias.name == "contracts"
-            )
+            constructors, modules = _capability_result_from_import(node)
+        else:
+            continue
+        constructor_names.update(constructors)
+        module_names.update(modules)
     return constructor_names, module_names
 
 
@@ -560,7 +589,7 @@ def _capability_result_projection_violations(
         return ()
     if relative in _CAPABILITY_RESULT_ALLOWED_EXACT:
         return ()
-    constructor_names, module_names = _capability_result_bindings(tree)
+    constructor_names, module_names = _capability_result_bindings(relative, tree)
 
     def is_result_constructor(call: ast.Call) -> bool:
         if isinstance(call.func, ast.Name):

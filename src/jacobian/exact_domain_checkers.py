@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import ValidationError
 
@@ -281,7 +281,7 @@ def install_exact_domain_verification(
     *,
     bundles: Mapping[str, tuple[DomainBundle, InstalledDomainBundle]],
     authorize: bool,
-) -> tuple[tuple[CapabilityAdapter, ...], ExactDomainCheckerInstallation]:
+) -> tuple[tuple[CapabilityAdapter[Any], ...], ExactDomainCheckerInstallation]:
     """Authorize exact replay and expose per-producer verification capabilities.
 
     Each authorized exact replay declaration becomes one
@@ -313,7 +313,7 @@ def install_exact_domain_verification(
         checker_id is not None for checker_id in installation.checker_ids.values()
     ):
         return (), installation
-    adapters: list[CapabilityAdapter] = []
+    adapters: list[CapabilityAdapter[Any]] = []
     result_models = {
         operation.spec.operation_id: operation.spec.result_type
         for bundle, _installed_bundle in bundles.values()
@@ -450,10 +450,13 @@ class ExactComputedVerificationAdapter:
         self.witness_schema_uri = witness_schema_uri
         self.stored_result_input = stored_result_input
         generic_request_model: Any = ExactComputedVerificationRequest
-        self.input_model = generic_request_model[
-            declaration.declaration.request_model,
-            declaration.result_model,
-        ]
+        self.input_model: type[ContractModel] = cast(
+            type[ContractModel],
+            generic_request_model[
+                declaration.declaration.request_model,
+                declaration.result_model,
+            ],
+        )
         verification_capability_id = declaration.declaration.verification_capability_id
         verification_title = declaration.declaration.verification_title
         verification_description = declaration.declaration.verification_description
@@ -494,7 +497,7 @@ class ExactComputedVerificationAdapter:
         return self._descriptor
 
     def prepare(self, request: CapabilityRequest) -> ContractModel:
-        request_model = (
+        request_model: type[ContractModel] = (
             ExactDomainResultVerificationRequest
             if self.stored_result_input
             else self.input_model
@@ -519,12 +522,17 @@ class ExactComputedVerificationAdapter:
         source_artifacts: tuple[StoredArtifact, StoredArtifact, StoredArtifact] | None
         normalized_candidate: dict[str, object] | None
         if self.stored_result_input:
-            source_artifacts = self._resolve_stored_result(request)
+            source_artifacts = self._resolve_stored_result(
+                cast(ExactDomainResultVerificationRequest, request)
+            )
             normalized_input = source_artifacts[0].payload
             normalized_candidate = None
         else:
             normalized_input, normalized_candidate = self._validated_inline_payloads(
-                request
+                cast(
+                    ExactComputedVerificationRequest[ContractModel, ContractModel],
+                    request,
+                )
             )
             source_artifacts = None
         # Check the authorized checker's bounded input scope before any artifact write.
@@ -784,22 +792,18 @@ class ExactComputedVerificationAdapter:
         return statuses.get(execution_status, "ERROR")
 
     def _validated_inline_payloads(
-        self, request: CapabilityRequest
+        self,
+        request: ExactComputedVerificationRequest[ContractModel, ContractModel],
     ) -> tuple[dict[str, object], dict[str, object]]:
         declaration = self.declaration
         try:
-            validated = (
-                request
-                if isinstance(request, self.input_model)
-                else self.input_model.model_validate(request.input)
-            )
             normalized_input = self.schemas.validate(
                 declaration.input_schema_uri,
-                validated.input.model_dump(mode="json"),
+                request.input.model_dump(mode="json"),
             )
             normalized_candidate = self.schemas.validate(
                 declaration.result_schema_uri,
-                validated.candidate.model_dump(mode="json"),
+                request.candidate.model_dump(mode="json"),
             )
         except (SchemaRegistryError, ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
@@ -816,18 +820,13 @@ class ExactComputedVerificationAdapter:
         return normalized_input, normalized_candidate
 
     def _resolve_stored_result(
-        self, request: CapabilityRequest
+        self, request: ExactDomainResultVerificationRequest
     ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
         """Resolve the declared producer's exact materialized lineage."""
 
         declaration = self.declaration
         try:
-            validated = (
-                request
-                if isinstance(request, ExactDomainResultVerificationRequest)
-                else ExactDomainResultVerificationRequest.model_validate(request.input)
-            )
-            result_uri = validated.result_uri
+            result_uri = request.result_uri
             result_artifact = self.store.get(result_uri)
             if (
                 result_artifact.manifest.schema_uri != declaration.result_schema_uri

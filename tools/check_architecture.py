@@ -514,9 +514,10 @@ def _capability_result_bindings(tree: ast.AST) -> tuple[set[str], set[str]]:
     constructor_names: set[str] = set()
     module_names: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and (
-            node.level == 0 and node.module == "jacobian.contracts.capabilities"
-        ):
+        if isinstance(node, ast.ImportFrom) and node.module in {
+            "jacobian.contracts.capabilities",
+            "contracts.capabilities",
+        }:
             constructor_names.update(
                 alias.asname or alias.name
                 for alias in node.names
@@ -531,17 +532,18 @@ def _capability_result_bindings(tree: ast.AST) -> tuple[set[str], set[str]]:
                     module_names.add(f"{bound}.capabilities")
                 elif alias.name == "jacobian":
                     module_names.add(f"{bound}.contracts.capabilities")
-        elif isinstance(node, ast.ImportFrom) and (
-            node.level == 0 and node.module == "jacobian.contracts"
-        ):
+        elif isinstance(node, ast.ImportFrom) and node.module in {
+            "jacobian.contracts",
+            "contracts",
+        }:
             module_names.update(
                 alias.asname or alias.name
                 for alias in node.names
                 if alias.name == "capabilities"
             )
-        elif isinstance(node, ast.ImportFrom) and (
-            node.level == 0 and node.module == "jacobian"
-        ):
+        elif isinstance(node, ast.ImportFrom) and node.module in {
+            "jacobian",
+        }:
             module_names.update(
                 f"{alias.asname or alias.name}.capabilities"
                 for alias in node.names

@@ -493,7 +493,28 @@ class ExactComputedVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> ContractModel:
+        request_model = (
+            ExactDomainResultVerificationRequest
+            if self.stored_result_input
+            else self.input_model
+        )
+        try:
+            return parse_capability_input(request_model, request.input)
+        except ValidationError as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code="INVALID_EXACT_DOMAIN_INPUT",
+                    stage="request_validation",
+                    message=bounded_validation_exception_message(exc),
+                    hint=(
+                        "input must satisfy the producer request contract and "
+                        "candidate must satisfy its result contract."
+                    ),
+                )
+            ) from exc
+
+    def invoke(self, request: ContractModel) -> OperationProjection:
         declaration = self.declaration
         source_artifacts: tuple[StoredArtifact, StoredArtifact, StoredArtifact] | None
         normalized_candidate: dict[str, object] | None

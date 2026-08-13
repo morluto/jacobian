@@ -26,6 +26,7 @@ from jacobian.adapters.mcp.resources import register_resources
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.capability_service import CapabilityPolicy
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime.model import JacobianRuntime
 
 
 def create_server(
@@ -43,14 +44,34 @@ def create_server(
         capability_exclusions=capability_exclusions,
         capability_policy=capability_policy,
     )
+    return create_server_from_runtime(
+        runtime,
+        close_owner=runtime.close,
+        start_owner=lambda: _start_lean_warmup(runtime),
+    )
+
+
+def create_server_from_runtime(
+    runtime: JacobianRuntime,
+    *,
+    close_owner: Callable[[], None],
+    start_owner: Callable[[], None] | None = None,
+) -> MCPServer[AppState]:
+    """Register the local MCP projection over an explicitly owned runtime.
+
+    The caller supplies lifecycle actions so deployment bootstrap and focused
+    compositions exercise identical SDK registration without obscuring which
+    layer owns runtime startup and teardown.
+    """
+
     state = AppState(
         acquire_runtime=lambda: RuntimeLease(runtime),
         worker_registry=MCPBlockingWorkerRegistry(),
     )
     return _build_local_server(
         state=state,
-        close_owner=runtime.close,
-        start_owner=lambda: _start_lean_warmup(runtime),
+        close_owner=close_owner,
+        start_owner=start_owner,
     )
 
 
@@ -91,4 +112,4 @@ if __name__ == "__main__":
     main()
 
 
-__all__ = ["create_server"]
+__all__ = ["create_server", "create_server_from_runtime"]

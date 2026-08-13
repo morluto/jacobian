@@ -5,12 +5,22 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from tests.support.graph_distance_cases import (
+    c7_strong_c7_distance,
+    c7_strong_c7_graph,
+    hoffman_singleton_graph,
+)
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
-from jacobian.contracts.graph_invariant_operations import GraphDistanceMatrixResult
+from jacobian.contracts.graph_coloring import GraphChromaticNumberRequest
+from jacobian.contracts.graph_distance_matrix import GraphDistanceMatrixResult
+from jacobian.contracts.graph_optimization import (
+    GraphHamiltonianPathRequest,
+    GraphOptimizationRequest,
+)
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import build_graph_invariant_bundle
 
@@ -28,6 +38,15 @@ def _invoke(domain_services, vertices: list[str], edges: list[list[str]]):
         CapabilityRequest(
             capability_id="graph.distance_matrix.compute",
             input={"graph": {"vertices": vertices, "edges": edges}},
+        )
+    )
+
+
+def _invoke_graph(domain_services, graph: dict[str, object]):
+    return domain_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="graph.distance_matrix.compute",
+            input={"graph": graph},
         )
     )
 
@@ -95,14 +114,100 @@ def test_distance_matrix_empty_and_singleton_conventions(domain_services) -> Non
     assert singleton.output["result"]["connected"] is True
 
 
-def test_distance_matrix_rejects_graph_above_existing_order_bound(
+def test_distance_matrix_rejects_graph_above_dedicated_order_bound(
     domain_services,
 ) -> None:
-    result = _invoke(domain_services, [f"v{index:02d}" for index in range(33)], [])
+    result = _invoke(domain_services, [f"v{index:02d}" for index in range(65)], [])
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.artifact_uris == ()
-    assert result.diagnostics[0].code == "INVALID_GRAPH_INVARIANT_REQUEST"
+    assert result.diagnostics[0].code == "INVALID_GRAPH_DISTANCE_MATRIX_REQUEST"
+
+
+def test_distance_matrix_accepts_connected_order_64_boundary(domain_services) -> None:
+    vertices = [f"v{index:02d}" for index in range(64)]
+    result = _invoke(
+        domain_services,
+        vertices,
+        [[vertices[index], vertices[index + 1]] for index in range(63)],
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.output["result"]["vertices"] == vertices
+    assert result.output["result"]["distances"][0][-1] == 63
+    assert result.output["result"]["connected"] is True
+
+
+def test_distance_matrix_accepts_disconnected_order_64_boundary(
+    domain_services,
+) -> None:
+    vertices = [f"v{index:02d}" for index in range(64)]
+    result = _invoke(domain_services, vertices, [])
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    matrix = result.output["result"]["distances"]
+    assert len(matrix) == 64
+    assert matrix[0][0] == 0
+    assert matrix[0][1] is None
+    assert result.output["result"]["connected"] is False
+
+
+def test_unrelated_np_hard_graph_contract_bounds_are_unchanged() -> None:
+    graph_33 = {
+        "vertices": [f"v{index:02d}" for index in range(33)],
+        "edges": [],
+    }
+    graph_19 = {
+        "vertices": [f"v{index:02d}" for index in range(19)],
+        "edges": [],
+    }
+
+    with pytest.raises(ValidationError):
+        GraphChromaticNumberRequest.model_validate({"graph": graph_33})
+    with pytest.raises(ValidationError):
+        GraphOptimizationRequest.model_validate({"graph": graph_33})
+    with pytest.raises(ValidationError):
+        GraphHamiltonianPathRequest.model_validate({"graph": graph_19})
+
+
+def test_distance_matrix_computes_hoffman_singleton_case(domain_services) -> None:
+    graph = hoffman_singleton_graph()
+    result = _invoke_graph(domain_services, graph)
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    output = result.output["result"]
+    assert len(output["vertices"]) == 50
+    assert len(graph["edges"]) == 175
+    edge_set = {tuple(edge) for edge in graph["edges"]}
+    expected = [
+        [
+            0
+            if source == target
+            else 1
+            if tuple(sorted((source, target))) in edge_set
+            else 2
+            for target in output["vertices"]
+        ]
+        for source in output["vertices"]
+    ]
+    assert output["distances"] == expected
+    assert output["connected"] is True
+
+
+def test_distance_matrix_computes_c7_strong_c7_case(domain_services) -> None:
+    graph = c7_strong_c7_graph()
+    result = _invoke_graph(domain_services, graph)
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    output = result.output["result"]
+    assert len(output["vertices"]) == 49
+    assert len(graph["edges"]) == 196
+    expected = [
+        [c7_strong_c7_distance(source, target) for target in output["vertices"]]
+        for source in output["vertices"]
+    ]
+    assert output["distances"] == expected
+    assert output["connected"] is True
 
 
 @pytest.mark.parametrize(

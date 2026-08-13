@@ -105,31 +105,34 @@ class VerificationService:
         self.record_schema_uri = store.register_descriptor(
             kind="schema",
             name="jacobian.verification-record",
-            version="1",
+            version="2",
             definition=model_schema(VerificationRecord),
         )
         self.record_semantics_uri = store.register_descriptor(
             kind="semantics",
             name="jacobian.verification-record",
-            version="1",
+            version="2",
             definition={
-                "description": "authorized checker result bound to exact evidence"
+                "description": (
+                    "authorized checker result bound to exact evidence and its "
+                    "measured execution manifest"
+                )
             },
         )
         self.inline_exact_record_schema_uri = store.register_descriptor(
             kind="schema",
             name="jacobian.inline-exact-verification-record",
-            version="1",
+            version="2",
             definition=model_schema(InlineExactVerificationRecord),
         )
         self.inline_exact_record_semantics_uri = store.register_descriptor(
             kind="semantics",
             name="jacobian.inline-exact-verification-record",
-            version="1",
+            version="2",
             definition={
                 "description": (
                     "authorized checker decision bound to canonical inline exact "
-                    "input and candidate values"
+                    "input and candidate values plus its measured execution manifest"
                 )
             },
         )
@@ -236,6 +239,7 @@ class VerificationService:
                 operation_id=operation_id,
                 checker_id=checker.checker_id,
                 implementation_digest=checker.implementation_digest,
+                checker_manifest=checker.implementation,
                 runtime_digest=(
                     checker.implementation.provider_runtime.digest
                     if checker.implementation.provider_runtime is not None
@@ -433,6 +437,7 @@ class VerificationService:
         return VerificationRecord(
             checker_id=checker.checker_id,
             implementation_digest=checker.implementation_digest,
+            checker_manifest=checker.implementation,
             evidence_kind=evidence_kind,
             evidence_uri=evidence_uri,
             bindings=bindings,

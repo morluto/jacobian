@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from functools import partial
 from typing import Any, Literal
 
 from pydantic import ValidationError
@@ -14,13 +13,13 @@ from jacobian.artifacts import ArtifactService
 from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import CapabilityError, CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
+from jacobian.checker_identity import batch_checker_manifest_measurement
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation, ExactReplayCheckerDeclaration
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
     CapabilityInputKind,
-    CapabilityInstallTier,
     CapabilityProviderAvailability,
     CapabilityProviderRuntime,
     CapabilityRequest,
@@ -45,22 +44,8 @@ from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
-from jacobian.provider_runtime import (
-    composite_provider_runtime,
-    known_provider_runtime,
-    source_provider_runtime,
-)
 from jacobian.providers.flint_runtime import (
-    certified_snf_checker_provider_runtime,
-    combinatorics_exact_checker_provider_runtime,
-    exact_domain_checker_provider_runtime,
     exact_domain_checker_source_provider_runtime,
-    graded_syzygy_checker_provider_runtime,
-    graph_exact_checker_provider_runtime,
-    poset_exact_checker_provider_runtime,
-    probability_exact_checker_provider_runtime,
-    projective_arrangement_checker_provider_runtime,
-    topology_exact_checker_provider_runtime,
 )
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError, model_schema
@@ -71,71 +56,7 @@ from jacobian.validation_diagnostics import bounded_validation_exception_message
 from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
-_OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS = frozenset({"python-flint"})
-_ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
-    "jacobian_checkers.exact_domain_operations": "python-flint",
-    "jacobian_checkers.graph_exact_operations": "finite-graph",
-    "jacobian_checkers.exact_probability_operations": "finite-probability",
-    "jacobian_checkers.recurrence_series": "combinatorics",
-    "jacobian_checkers.additive_combinatorics": "combinatorics",
-    "jacobian_checkers.jacobian_syzygy": "graded-syzygy",
-    "jacobian_checkers.projective_arrangements": "projective-arrangement",
-    "jacobian_checkers.simplicial_topology": "topology",
-    "jacobian_checkers.certified_snf": "certified-snf",
-    "jacobian_checkers.finite_posets": "poset",
-    "jacobian_checkers.exact_geometry": "geometry",
-    "jacobian_checkers.matrix_normal_forms": "matrix-hnf",
-    "jacobian_checkers.finite_field_rank": "sympy",
-    "jacobian_checkers.finite_field_polynomial": "finite-field-polynomial",
-}
-
-
-def _finite_field_rank_checker_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
-    source = source_provider_runtime(
-        "jacobian.finite-field-rank-checker-source",
-        version="1",
-        entrypoint=(
-            "jacobian_checkers.finite_field_rank:check_finite_field_linear_map_rank"
-        ),
-        install_tier=CapabilityInstallTier.T0,
-        license_id="MIT",
-        features=("clean-process-checker",),
-    )
-    sympy = known_provider_runtime(
-        "jacobian.sympy",
-        features=("prime-field-rank-replay",),
-    )
-    return composite_provider_runtime(
-        "jacobian.finite-field-rank-checker",
-        components=(source, sympy),
-        features=("independent-prime-field-rank-replay",),
-        checker_ids=checker_ids,
-    )
-
-
-def _finite_field_polynomial_checker_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> CapabilityProviderRuntime:
-    source = source_provider_runtime(
-        "jacobian.finite-field-polynomial-checker-source",
-        version="1",
-        entrypoint="jacobian_checkers.finite_field_polynomial:check_finite_map_table",
-        install_tier=CapabilityInstallTier.T0,
-        license_id="MIT",
-        features=("clean-process-checker",),
-    )
-    sympy = known_provider_runtime(
-        "jacobian.sympy",
-        features=("finite-field-polynomial-replay",),
-    )
-    return composite_provider_runtime(
-        "jacobian.finite-field-polynomial-checker",
-        components=(source, sympy),
-        features=("independent-finite-field-polynomial-replay",),
-        checker_ids=checker_ids,
-    )
+_OPTIONAL_EXACT_REPLAY_PROVIDERS = frozenset({"jacobian.exact-domain-checkers"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +65,7 @@ class ExactDomainCheckerInstallation:
 
     checker_ids: dict[str, str | None]
     provider_runtimes: dict[str, CapabilityProviderRuntime]
+    declaration_providers: dict[str, str]
     witness_schema_uri: str | None = None
     diagnostics: tuple[CapabilityDiagnostic, ...] = ()
 
@@ -158,18 +80,137 @@ class _InstalledDeclaration:
     checker_id: str
 
 
-def _provider_runtime_key(declaration: ExactReplayCheckerDeclaration) -> str:
-    if declaration.entrypoint_module == "jacobian_checkers.linear":
-        return {
-            "check_rational_solution": "linear-solution",
-            "check_rational_inconsistency": "linear-inconsistency",
-        }[declaration.function]
-    try:
-        return _ENTRYPOINT_PROVIDER_RUNTIME_KEYS[declaration.entrypoint_module]
-    except KeyError as exc:
+@dataclass(frozen=True, slots=True)
+class _DeclaredRuntimeGroup:
+    probe: CapabilityProviderRuntime
+    factory: Callable[..., CapabilityProviderRuntime]
+    members: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...]
+    factories: tuple[Callable[..., CapabilityProviderRuntime], ...]
+
+
+def _declaration_factory(
+    declaration: ExactReplayCheckerDeclaration,
+) -> Callable[..., CapabilityProviderRuntime]:
+    factory = declaration.provider_runtime_factory
+    if factory is None:
         raise ValueError(
-            "exact replay checker declaration uses an unsupported provider runtime"
-        ) from exc
+            "exact replay checker declaration requires a provider runtime factory"
+        )
+    return factory
+
+
+def _declared_runtime_groups(
+    pairs: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...],
+) -> tuple[_DeclaredRuntimeGroup, ...]:
+    probes: dict[
+        Callable[..., CapabilityProviderRuntime], CapabilityProviderRuntime
+    ] = {}
+    grouped: dict[
+        str,
+        tuple[
+            CapabilityProviderRuntime,
+            list[Callable[..., CapabilityProviderRuntime]],
+            list[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration]],
+        ],
+    ] = {}
+    for installed, declaration in pairs:
+        factory = _declaration_factory(declaration)
+        probe = probes.setdefault(factory, factory())
+        current = grouped.get(probe.provider)
+        if current is None:
+            grouped[probe.provider] = (probe, [factory], [(installed, declaration)])
+            continue
+        existing_probe, factories, members = current
+        if existing_probe != probe:
+            raise ValueError(
+                "exact replay grouped distinct probes under one provider "
+                f"identity: {probe.provider}"
+            )
+        if factory not in factories:
+            factories.append(factory)
+        members.append((installed, declaration))
+    return tuple(
+        _DeclaredRuntimeGroup(
+            probe=probe,
+            factory=factories[0],
+            members=tuple(members),
+            factories=tuple(factories),
+        )
+        for probe, factories, members in grouped.values()
+    )
+
+
+def _authorize_replay_operation(
+    installer: CheckerInstaller,
+    operation: CheckerOperation,
+    *,
+    authorize: bool,
+    provider_runtime: CapabilityProviderRuntime,
+    source_available: bool,
+    capability_id: str,
+    diagnostics: list[CapabilityDiagnostic],
+) -> str | None:
+    if provider_runtime.availability is CapabilityProviderAvailability.AVAILABLE:
+        return installer.install(operation, authorize=authorize).checker_id
+    can_omit = (
+        provider_runtime.provider in _OPTIONAL_EXACT_REPLAY_PROVIDERS
+        and source_available
+    )
+    if not can_omit:
+        return installer.install(operation, authorize=authorize).checker_id
+    diagnostic = CapabilityDiagnostic(
+        code="EXACT_REPLAY_PROVIDER_UNAVAILABLE",
+        stage="provider_availability",
+        message=(
+            f"Independent replay for {capability_id!r} is not installed: "
+            f"{provider_runtime.diagnostic or 'the provider is unavailable.'}"
+        ),
+        hint="Install or repair the optional python-flint backend, then retry.",
+        details={
+            "capability_id": capability_id,
+            "provider": provider_runtime.provider,
+            "checker_authorization_affected": True,
+        },
+    )
+    diagnostics.append(diagnostic)
+    _LOGGER.warning("%s", diagnostic.message)
+    return None
+
+
+def _authorized_provider_runtimes(
+    groups: tuple[_DeclaredRuntimeGroup, ...],
+    checker_ids: Mapping[str, str | None],
+) -> dict[str, CapabilityProviderRuntime]:
+    provider_runtimes: dict[str, CapabilityProviderRuntime] = {}
+    for group in groups:
+        authorized = tuple(
+            checker_id
+            for _installed, declaration in group.members
+            if (checker_id := checker_ids[declaration.capability_id]) is not None
+        )
+        runtime = group.factory(checker_ids=authorized)
+        for factory in group.factories:
+            if factory is group.factory:
+                continue
+            other = factory(checker_ids=authorized)
+            if other != runtime:
+                raise ValueError(
+                    "exact replay grouped distinct runtimes under one provider "
+                    f"identity: {group.probe.provider}"
+                )
+        existing = provider_runtimes.get(runtime.provider)
+        if existing is not None and existing != runtime:
+            raise ValueError(
+                "exact replay grouped distinct runtimes under one provider "
+                f"identity: {runtime.provider}"
+            )
+        if runtime.provider != group.probe.provider:
+            raise ValueError(
+                "exact replay authorized runtime changed provider identity: "
+                f"{group.probe.provider} -> {runtime.provider}"
+            )
+        provider_runtimes[runtime.provider] = runtime
+    return provider_runtimes
 
 
 def install_exact_domain_checkers(
@@ -181,141 +222,53 @@ def install_exact_domain_checkers(
     """Install independent exact replay against dynamically registered schemas."""
 
     installer = CheckerInstaller(checkers)
-    runtime_factories: dict[
-        str,
-        Callable[..., CapabilityProviderRuntime],
-    ] = {
-        "python-flint": exact_domain_checker_provider_runtime,
-        "certified-snf": certified_snf_checker_provider_runtime,
-        "finite-graph": graph_exact_checker_provider_runtime,
-        "finite-probability": probability_exact_checker_provider_runtime,
-        "combinatorics": combinatorics_exact_checker_provider_runtime,
-        "poset": poset_exact_checker_provider_runtime,
-        "graded-syzygy": graded_syzygy_checker_provider_runtime,
-        "projective-arrangement": projective_arrangement_checker_provider_runtime,
-        "topology": topology_exact_checker_provider_runtime,
-        "sympy": _finite_field_rank_checker_runtime,
-        "finite-field-polynomial": _finite_field_polynomial_checker_runtime,
-        "geometry": partial(
-            source_provider_runtime,
-            "jacobian.exact-geometry-checker",
-            version="1",
-            entrypoint="jacobian_checkers.exact_geometry:check_exact_geometry",
-            install_tier=CapabilityInstallTier.T1,
-            license_id="MIT",
-            features=("standard-library-rational-replay", "clean-process-checker"),
-        ),
-        "matrix-hnf": partial(
-            source_provider_runtime,
-            "jacobian.matrix-hnf-checker",
-            version="1",
-            entrypoint="jacobian_checkers.matrix_normal_forms:check_hermite_normal_form",
-            install_tier=CapabilityInstallTier.T1,
-            license_id="MIT",
-            features=("standard-library-integer-replay", "clean-process-checker"),
-        ),
-        "linear-solution": partial(
-            source_provider_runtime,
-            "jacobian.rational-linear-checker",
-            version="1",
-            entrypoint="jacobian_checkers.linear:check_rational_solution",
-            install_tier=CapabilityInstallTier.T1,
-            license_id="MIT",
-            features=("standard-library-rational-replay", "clean-process-checker"),
-        ),
-        "linear-inconsistency": partial(
-            source_provider_runtime,
-            "jacobian.rational-linear-inconsistency-checker",
-            version="1",
-            entrypoint="jacobian_checkers.linear:check_rational_inconsistency",
-            install_tier=CapabilityInstallTier.T1,
-            license_id="MIT",
-            features=("standard-library-rational-replay", "clean-process-checker"),
-        ),
-    }
-    provider_runtimes = {
-        runtime_key: factory() for runtime_key, factory in runtime_factories.items()
-    }
+    groups = _declared_runtime_groups(_available_declaration_bundles(bundles))
     checker_ids: dict[str, str | None] = {}
-    declarations_by_id: dict[str, ExactReplayCheckerDeclaration] = {}
+    declaration_providers: dict[str, str] = {}
     diagnostics: list[CapabilityDiagnostic] = []
-    exact_checker_source_available = (
+    source_available = (
         exact_domain_checker_source_provider_runtime().availability
         is CapabilityProviderAvailability.AVAILABLE
     )
-    for installed, declaration in _available_declaration_bundles(bundles):
-        declarations_by_id[declaration.capability_id] = declaration
-        runtime_key = _provider_runtime_key(declaration)
-        provider_runtime = provider_runtimes[runtime_key]
-        operation = CheckerOperation(
-            name=f"{declaration.capability_id} independent {declaration.replay_method}",
-            entrypoint=(f"{declaration.entrypoint_module}:{declaration.function}"),
-            evidence_kind=EvidenceKind.WITNESS,
-            format_id=declaration.format_id,
-            format_version="1",
-            claim_schema_uris=(installed.input_schema_uris[declaration.request_model],),
-            semantics_uris=(installed.semantics_uri,),
-            candidate_schema_uris=(
-                installed.result_schema_uris[declaration.capability_id],
-            ),
-            reason=declaration.reason,
-            provider_runtime=provider_runtime,
-        )
-        if (
-            provider_runtime.availability
-            is not CapabilityProviderAvailability.AVAILABLE
-        ):
-            can_omit = (
-                runtime_key in _OPTIONAL_EXACT_REPLAY_PROVIDER_KEYS
-                and exact_checker_source_available
-            )
-            if not can_omit:
-                checker_ids[declaration.capability_id] = installer.install(
+    with batch_checker_manifest_measurement():
+        for group in groups:
+            for installed, declaration in group.members:
+                declaration_providers[declaration.capability_id] = group.probe.provider
+                operation = CheckerOperation(
+                    name=(
+                        f"{declaration.capability_id} independent "
+                        f"{declaration.replay_method}"
+                    ),
+                    entrypoint=(
+                        f"{declaration.entrypoint_module}:{declaration.function}"
+                    ),
+                    evidence_kind=EvidenceKind.WITNESS,
+                    format_id=declaration.format_id,
+                    format_version="1",
+                    claim_schema_uris=(
+                        installed.input_schema_uris[declaration.request_model],
+                    ),
+                    semantics_uris=(installed.semantics_uri,),
+                    candidate_schema_uris=(
+                        installed.result_schema_uris[declaration.capability_id],
+                    ),
+                    reason=declaration.reason,
+                    provider_runtime=group.probe,
+                )
+                checker_ids[declaration.capability_id] = _authorize_replay_operation(
+                    installer,
                     operation,
                     authorize=authorize,
-                ).checker_id
-                continue
-            diagnostic = CapabilityDiagnostic(
-                code="EXACT_REPLAY_PROVIDER_UNAVAILABLE",
-                stage="provider_availability",
-                message=(
-                    f"Independent replay for {declaration.capability_id!r} is "
-                    "not installed: "
-                    f"{provider_runtime.diagnostic or 'the provider is unavailable.'}"
-                ),
-                hint=(
-                    "Install or repair the optional python-flint backend, then retry."
-                ),
-                details={
-                    "capability_id": declaration.capability_id,
-                    "provider": provider_runtime.provider,
-                    "checker_authorization_affected": True,
-                },
-            )
-            diagnostics.append(diagnostic)
-            _LOGGER.warning("%s", diagnostic.message)
-            checker_ids[declaration.capability_id] = None
-            continue
-        checker_ids[declaration.capability_id] = installer.install(
-            operation,
-            authorize=authorize,
-        ).checker_id
-    authorized_ids = {
-        runtime_key: tuple(
-            checker_id
-            for capability_id, checker_id in checker_ids.items()
-            if checker_id is not None
-            and _provider_runtime_key(declarations_by_id[capability_id]) == runtime_key
-        )
-        for runtime_key in provider_runtimes
-    }
+                    provider_runtime=group.probe,
+                    source_available=source_available,
+                    capability_id=declaration.capability_id,
+                    diagnostics=diagnostics,
+                )
     return ExactDomainCheckerInstallation(
         checker_ids=checker_ids,
         diagnostics=tuple(diagnostics),
-        provider_runtimes={
-            runtime_key: factory(checker_ids=authorized_ids[runtime_key])
-            for runtime_key, factory in runtime_factories.items()
-        },
+        provider_runtimes=_authorized_provider_runtimes(groups, checker_ids),
+        declaration_providers=declaration_providers,
     )
 
 
@@ -354,6 +307,7 @@ def install_exact_domain_verification(
         witness_schema_uri=witness_schema_uri,
         diagnostics=installed.diagnostics,
         provider_runtimes=installed.provider_runtimes,
+        declaration_providers=installed.declaration_providers,
     )
     if not any(
         checker_id is not None for checker_id in installation.checker_ids.values()
@@ -391,7 +345,7 @@ def install_exact_domain_verification(
                 verification=verification,
                 witness_schema_uri=witness_schema_uri,
                 provider_runtime=installation.provider_runtimes[
-                    _provider_runtime_key(declaration)
+                    installation.declaration_providers[declaration.capability_id]
                 ],
                 stored_result_input=declaration.capability_id in stored_producers,
             )
@@ -552,10 +506,9 @@ class ExactComputedVerificationAdapter:
                 request
             )
             source_artifacts = None
-        if not _checker_supports(
-            declaration.declaration.capability_id,
-            normalized_input,
-        ):
+        # Check the authorized checker's bounded input scope before any artifact write.
+        supports_input = declaration.declaration.supports_input
+        if supports_input is not None and not supports_input(normalized_input):
             output = ExactComputedVerificationOutput(
                 status="UNSUPPORTED",
                 conclusion="UNKNOWN",
@@ -624,6 +577,8 @@ class ExactComputedVerificationAdapter:
         normalized_input: dict[str, object],
         normalized_candidate: dict[str, object],
     ) -> OperationProjection:
+        """Replay ordinary values through the checker without storing them."""
+
         declaration = self.declaration
         semantics = self.store.get(declaration.semantics_uri)
         bindings = EvidenceBindings(
@@ -838,6 +793,8 @@ class ExactComputedVerificationAdapter:
     def _resolve_stored_result(
         self, request: CapabilityRequest
     ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
+        """Resolve the declared producer's exact materialized lineage."""
+
         declaration = self.declaration
         try:
             result_uri = ExactDomainResultVerificationRequest.model_validate(
@@ -872,123 +829,6 @@ class ExactComputedVerificationAdapter:
                 )
             ) from exc
         return input_artifact, result_artifact, semantics_artifact
-
-
-def _syzygy_checker_supports(payload: dict[str, Any]) -> bool:
-    polynomial = payload.get("polynomial")
-    factors = payload.get("linear_factors")
-    maximum_degree = payload.get("max_degree")
-    if type(maximum_degree) is not int:
-        return False
-    if isinstance(polynomial, dict):
-        body = polynomial.get("polynomial")
-        terms = body.get("terms") if isinstance(body, dict) else None
-        if not isinstance(terms, list):
-            return False
-        homogeneous_degree = max(
-            (
-                sum(term.get("exponents", ()))
-                for term in terms
-                if isinstance(term, dict)
-                and isinstance(term.get("exponents"), list)
-                and all(type(value) is int for value in term["exponents"])
-            ),
-            default=0,
-        )
-        term_count = len(terms)
-        if (
-            terms
-            and all(
-                isinstance(term, dict)
-                and isinstance(term.get("exponents"), list)
-                and len(term["exponents"]) == 3
-                for term in terms
-            )
-            and any(
-                all(term["exponents"][variable] == 0 for term in terms)
-                for variable in range(3)
-            )
-        ):
-            maximum_degree = 0
-    elif isinstance(factors, list):
-        homogeneous_degree = len(factors)
-        support: set[tuple[int, ...]] = {(0, 0, 0)}
-        for factor in factors:
-            coefficients = (
-                factor.get("coefficients") if isinstance(factor, dict) else None
-            )
-            if not isinstance(coefficients, list) or len(coefficients) != 3:
-                return False
-            active_variables = tuple(
-                index
-                for index, coefficient in enumerate(coefficients)
-                if isinstance(coefficient, dict) and coefficient.get("num") != "0"
-            )
-            if not active_variables:
-                return False
-            support = {
-                tuple(
-                    exponent + (1 if variable == index else 0)
-                    for index, exponent in enumerate(monomial)
-                )
-                for monomial in support
-                for variable in active_variables
-            }
-        term_count = len(support)
-        if len(support) == 1 and sum(value > 0 for value in next(iter(support))) < 3:
-            maximum_degree = 0
-    else:
-        return False
-    replay_cells = sum(
-        (3 * ((degree + 2) * (degree + 1) // 2))
-        * ((homogeneous_degree + degree + 1) * (homogeneous_degree + degree) // 2)
-        for degree in range(maximum_degree + 1)
-    )
-    return term_count * replay_cells <= 1_000_000
-
-
-def _checker_supports(operation_id: str, payload: object) -> bool:
-    if operation_id in {
-        "graph.hamiltonian_path.decide",
-        "graph.induced_tree.maximum.compute",
-    }:
-        maximum_order = 18 if operation_id == "graph.hamiltonian_path.decide" else 16
-        return (
-            isinstance(payload, dict)
-            and isinstance(payload.get("graph"), dict)
-            and isinstance(payload["graph"].get("vertices"), list)
-            and len(payload["graph"]["vertices"]) <= maximum_order
-        )
-    if operation_id == "geometry.projective_line_arrangement.flats.materialize":
-        return (
-            isinstance(payload, dict)
-            and isinstance(payload.get("lines"), list)
-            and len(payload["lines"]) <= 64
-        )
-    if not operation_id.startswith("polynomial."):
-        return True
-    if not isinstance(payload, dict):
-        return False
-    if operation_id in {
-        "polynomial.jacobian_syzygy.minimum_degree.compute",
-        "polynomial.jacobian_syzygy.coefficients.materialize",
-    }:
-        return _syzygy_checker_supports(payload)
-    polynomial_fields = {
-        "polynomial.compute.gcd": ("left", "right"),
-        "polynomial.compute.resultant": ("left", "right"),
-        "polynomial.compute.discriminant": ("polynomial",),
-        "polynomial.compute.square_free_decomposition": ("polynomial",),
-        "polynomial.factor.compute": ("polynomial",),
-    }.get(operation_id)
-    if polynomial_fields is None:
-        return False
-    return all(
-        isinstance(payload.get(field), dict)
-        and payload[field].get("variables")
-        and len(payload[field]["variables"]) == 1
-        for field in polynomial_fields
-    )
 
 
 __all__ = [

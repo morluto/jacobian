@@ -11,8 +11,8 @@ services:
     command:
       - |
         mkdir -p /logs/jacobian
-        exec uv run --no-sync jacobian-mcp "$@" > /logs/jacobian/mcp.log 2>&1
-      - jacobian-mcp
+        exec uv run --no-sync jacobian-remote-mcp "$@" > /logs/jacobian/mcp.log 2>&1
+      - jacobian-remote-mcp
       - --transport
       - streamable-http
       - --host

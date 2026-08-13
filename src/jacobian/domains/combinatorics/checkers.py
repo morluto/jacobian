@@ -3,6 +3,7 @@
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.combinatorics import (
+    BinomialRequest,
     CyclicDifferenceSetExtensionRequest,
     CyclicPerfectDifferenceSetRequest,
     IntegerSidonRequest,
@@ -10,6 +11,7 @@ from jacobian.contracts.combinatorics import (
     PolynomialCoefficientRecurrenceEvaluationRequest,
     RationalGeneratingFunctionCoefficientsRequest,
 )
+from jacobian.math.combinatorics import PolynomialCoefficientRecurrenceTableRequest
 from jacobian.providers import flint_runtime
 
 _ENTRYPOINT = "jacobian_checkers.recurrence_series"
@@ -28,6 +30,20 @@ def _combinatorics_runtime(
 
 
 COMBINATORICS_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "combinatorics.compute.binomial",
+        BinomialRequest,
+        "check_binomial",
+        "combinatorics.binomial.multiplicative-recurrence-replay",
+        entrypoint_module="jacobian_checkers.additive_combinatorics",
+        replay_method="standard-library multiplicative recurrence replay",
+        reason=(
+            "operator-authorized checker independently evaluates the bounded "
+            "binomial coefficient by an exact multiplicative recurrence without "
+            "calling math.comb or importing producer code"
+        ),
+        provider_runtime_factory=_combinatorics_runtime,
+    ),
     ExactReplayCheckerDeclaration(
         "combinatorics.integer_set.sidon.decide",
         IntegerSidonRequest,
@@ -85,6 +101,16 @@ COMBINATORICS_EXACT_REPLAY_CHECKERS = (
         entrypoint_module=_ENTRYPOINT,
         provider_runtime_factory=_combinatorics_runtime,
         replay_method="standard-library Fraction polynomial recurrence replay",
+        reason=_REASON,
+    ),
+    ExactReplayCheckerDeclaration(
+        "combinatorics.recurrence.p_recursive.table_residuals.compute",
+        PolynomialCoefficientRecurrenceTableRequest,
+        "check_polynomial_coefficient_recurrence_table_residuals",
+        "combinatorics.p-recursive.submitted-table-residual-replay",
+        entrypoint_module=_ENTRYPOINT,
+        provider_runtime_factory=_combinatorics_runtime,
+        replay_method="standard-library Fraction submitted-table residual replay",
         reason=_REASON,
     ),
     ExactReplayCheckerDeclaration(

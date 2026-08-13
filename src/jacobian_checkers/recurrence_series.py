@@ -416,6 +416,94 @@ def _replay_polynomial_coefficient_recurrence(
     )
 
 
+def _replay_polynomial_coefficient_recurrence_table(
+    source: dict[str, Any], result: dict[str, Any]
+) -> bool:
+    expected_source = {
+        "coefficient_polynomials",
+        "values",
+        "coefficient_convention",
+        "polynomial_convention",
+        "table_convention",
+    }
+    expected_result = {
+        "coefficient_convention",
+        "polynomial_convention",
+        "table_convention",
+        "recurrence_order",
+        "term_count",
+        "residuals",
+        "satisfies_recurrence",
+        "first_failure_index",
+    }
+    if set(source) != expected_source or set(result) != expected_result:
+        return False
+    if (
+        source["coefficient_convention"] != _P_RECURSIVE_CONVENTION
+        or source["polynomial_convention"] != "ASCENDING_POWERS_OF_N"
+        or source["table_convention"] != "VALUES_A_0_THROUGH_A_N_IN_ORDER"
+        or result["coefficient_convention"] != source["coefficient_convention"]
+        or result["polynomial_convention"] != source["polynomial_convention"]
+        or result["table_convention"] != source["table_convention"]
+    ):
+        return False
+    raw_polynomials = source["coefficient_polynomials"]
+    if not isinstance(raw_polynomials, list) or not 2 <= len(raw_polynomials) <= 17:
+        return False
+    polynomials = [_canonical_polynomial(item) for item in raw_polynomials]
+    values = _fractions(source["values"], minimum=2, maximum=513, max_digits=64)
+    order = len(polynomials) - 1
+    if len(values) <= order:
+        return False
+    expected = []
+    for index in range(order, len(values)):
+        residual = sum(
+            (
+                sum(
+                    (
+                        coefficient * index**power
+                        for power, coefficient in enumerate(polynomials[offset])
+                    ),
+                    Fraction(),
+                )
+                * values[index - offset]
+                for offset in range(order + 1)
+            ),
+            Fraction(),
+        )
+        if not _bounded_replay_fraction(residual):
+            return False
+        expected.append(residual)
+    raw_residuals = result["residuals"]
+    if not isinstance(raw_residuals, list) or len(raw_residuals) != len(expected):
+        return False
+    for item, index, residual in zip(
+        raw_residuals, range(order, len(values)), expected, strict=True
+    ):
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"index", "value"}
+            or type(item["index"]) is not int
+            or item["index"] != index
+            or _fraction(item["value"], max_digits=32_768) != residual
+        ):
+            return False
+    failures = [
+        index
+        for index, residual in zip(range(order, len(values)), expected, strict=True)
+        if residual != 0
+    ]
+    return (
+        type(result["recurrence_order"]) is int
+        and result["recurrence_order"] == order
+        and type(result["term_count"]) is int
+        and result["term_count"] == len(values)
+        and type(result["satisfies_recurrence"]) is bool
+        and result["satisfies_recurrence"] == (not failures)
+        and result["first_failure_index"] == (failures[0] if failures else None)
+    )
+
+
 def _replay_rational_series(
     source: dict[str, Any],
     result: dict[str, Any],
@@ -517,6 +605,17 @@ def check_polynomial_coefficient_recurrence_evaluation(
     )
 
 
+def check_polynomial_coefficient_recurrence_table_residuals(
+    request: object,
+) -> dict[str, Any]:
+    return _run(
+        request,
+        operation_id="combinatorics.recurrence.p_recursive.table_residuals.compute",
+        witness_format="combinatorics.p-recursive.submitted-table-residual-replay",
+        replay=_replay_polynomial_coefficient_recurrence_table,
+    )
+
+
 def check_rational_generating_function_coefficients(
     request: object,
 ) -> dict[str, Any]:
@@ -531,5 +630,6 @@ def check_rational_generating_function_coefficients(
 __all__ = [
     "check_linear_recurrence_evaluation",
     "check_polynomial_coefficient_recurrence_evaluation",
+    "check_polynomial_coefficient_recurrence_table_residuals",
     "check_rational_generating_function_coefficients",
 ]

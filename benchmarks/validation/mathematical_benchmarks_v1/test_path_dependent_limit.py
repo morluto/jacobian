@@ -66,6 +66,40 @@ def test_commuted_terms_and_equivalent_rational_strings_pass(tmp_path: Path) -> 
     assert support._run_verifier(task, app, logs).reward == 1.0
 
 
+def test_equivalent_multivariable_nonexistence_wording_passes(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        evidence.read_text().replace(
+            "the limit at the origin does not exist",
+            "no single multivariable limit exists at the origin",
+        )
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs).reward == 1.0
+
+
+def test_unrelated_straight_line_nonexistence_wording_is_rejected(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _case(tmp_path)
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text(
+        evidence.read_text().replace(
+            "the limit at the origin does not exist",
+            "no single straight-line limit exists at the origin",
+        )
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(path, submission)
+    assert support._run_verifier(task, app, logs).reward == 0.0
+
+
 def test_nested_boolean_integer_fields_are_rejected(tmp_path: Path) -> None:
     for index in range(4):
         task, app, logs = _case(tmp_path / f"boolean-{index}")

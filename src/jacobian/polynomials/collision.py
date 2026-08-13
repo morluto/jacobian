@@ -487,7 +487,8 @@ class PolynomialCollisionVerifyAdapter:
             title="Verify a polynomial-map collision",
             description=(
                 "Independently reevaluate one exact map at two supplied distinct "
-                "rational points and verify their claimed common image."
+                "rational points and verify their claimed common image. Each map "
+                "coordinate is limited to 1,024 terms and exponent 32 per variable."
             ),
             provider="jacobian.polynomial-collision-checker",
             provider_runtime=known_provider_runtime(
@@ -498,6 +499,30 @@ class PolynomialCollisionVerifyAdapter:
             input_schema=model_schema(PolynomialCollisionVerifyRequest),
             output_schema=model_schema(PolynomialCollisionVerifyOutput),
             tags=("polynomial", "map", "collision", "verification"),
+            invocation_examples=(
+                example(
+                    "square_map_collision",
+                    "Verify that x squared maps -1 and 1 to the common image 1.",
+                    {
+                        "map": {
+                            "variables": ["x"],
+                            "coordinates": [
+                                {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2],
+                                        }
+                                    ]
+                                }
+                            ],
+                        },
+                        "first_point": [{"num": "-1", "den": "1"}],
+                        "second_point": [{"num": "1", "den": "1"}],
+                        "claimed_image": [{"num": "1", "den": "1"}],
+                    },
+                ),
+            ),
         )
 
     @property

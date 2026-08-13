@@ -7,6 +7,7 @@ from typing import Any
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.matrices import IntegerMatrix, RationalMatrix
+from jacobian.contracts.matrix_operations import DeterminantRationalMatrix
 
 __all__ = [
     "integer_matrix_from_sympy",
@@ -30,7 +31,9 @@ def rational_from_sympy(value: Any) -> CanonicalRational:
     )
 
 
-def rational_matrix_to_sympy(matrix: RationalMatrix) -> Any:
+def rational_matrix_to_sympy(
+    matrix: RationalMatrix | DeterminantRationalMatrix,
+) -> Any:
     import sympy
 
     return sympy.Matrix(

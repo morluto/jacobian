@@ -5,25 +5,25 @@
 `integer.compute.prime_factorization` retains its existing request and result
 contracts and returns `COMPUTED` assurance. The operator-authorized
 `integer.prime_factorization.verify` capability independently replays one
-stored result with Python-FLINT and may promote that exact result to
+submitted `{input, candidate}` pair with Python-FLINT and may promote that exact claim to
 `VERIFIED`.
 
 ## Exact claim and scope
 
 The verifier checks:
 
-> The stored ascending prime-power list is the complete prime factorization of
-> the absolute value of the exact stored nonzero integer.
+> The submitted ascending prime-power list is the complete prime factorization of
+> the absolute value of the exact submitted nonzero integer.
 
 The producer accepts one canonical decimal integer string of at most 256
 characters and an explicit wall-clock budget. Zero remains not applicable.
 Both `1` and `-1` have an empty factor list, and negative integers use the
 factorization of their absolute value.
 
-The verification request supplies a stored result URI, not a caller-selected
-integer or executable checker. The verification record binds the input
-artifact, result artifact, number-theory semantics, schemas, witness format,
-checker identity, checker source digest, and Python-FLINT runtime.
+The verification request supplies the exact producer input plus the complete
+typed candidate value inline. The verification record binds their canonical
+digests, the number-theory semantics, checker identity, checker source digest,
+and Python-FLINT runtime.
 
 ## Independent replay
 
@@ -32,7 +32,7 @@ uses the separately maintained Python-FLINT runtime and does not import the
 producer, its worker, or SymPy.
 
 Before backend replay, the checker requires canonical integer encoding, a
-valid stored producer budget, exact result fields, positive exponents, prime
+valid submitted producer budget, exact result fields, positive exponents, prime
 bases greater than one, strict ascending order, no duplicates, and equality
 between the declared prime-power product and the input absolute value. It then
 compares the complete list with Python-FLINT's independent factorization.

@@ -198,11 +198,19 @@ def _evidence(value: object, result: object) -> bool:
             folded,
         )
     )
+    states_multivariable_nonexistence = bool(
+        "does not exist" in folded
+        or re.search(
+            r"\bno\s+(?:single\s+)?(?:two-variable|multivariable)\s+limit\s+exists\b",
+            folded,
+        )
+    )
     return bool(
         bound == result
         and len(prose) >= 120
         and explains_linewise_limit
-        and all(word in folded for word in ("nonlinear", "origin", "does not exist"))
+        and all(word in folded for word in ("nonlinear", "origin"))
+        and states_multivariable_nonexistence
     )
 
 

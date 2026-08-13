@@ -47,11 +47,12 @@ Successful execution has `COMPLETE` completeness for the single input and
 
 ## Independent verification
 
-The operator-authorized `integer.powerful.verify` capability accepts the
-stored result URI and independently replays the exact claim with Python-FLINT.
+The operator-authorized `integer.powerful.verify` capability accepts the exact
+producer input plus the complete typed candidate inline and independently replays
+the claim with Python-FLINT.
 The checker imports neither SymPy nor the producer or worker modules. A
 successful replay creates a verification record and may promote that exact
-stored result to `VERIFIED`.
+submitted claim to `VERIFIED`.
 
 The checker fails closed unless all of these obligations hold:
 

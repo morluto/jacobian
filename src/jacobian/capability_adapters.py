@@ -6,7 +6,7 @@ from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
-from jacobian.canonical import CanonicalizationError, canonicalize_json
+from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -24,7 +24,7 @@ def parse_capability_input[ModelT: BaseModel](
     """Parse one JSON capability payload strictly into its owning model."""
 
     try:
-        encoded = canonicalize_json(payload)
+        encoded = encode_strict_json(payload)
     except CanonicalizationError as exc:
         raise CapabilityInvocationError(
             CapabilityDiagnostic(

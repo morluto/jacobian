@@ -8,7 +8,7 @@ from typing import Any, cast
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.canonical import CanonicalizationError, canonicalize_json
+from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import (
     CapabilityInvocationError,
@@ -250,7 +250,7 @@ class InstalledOperationAdapter:
                 )
                 for key, value in assembled_input.items()
             }
-            request_bytes = canonicalize_json(bounded_input)
+            request_bytes = encode_strict_json(bounded_input)
         except CanonicalizationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(

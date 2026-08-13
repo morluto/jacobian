@@ -165,7 +165,10 @@ external payload
 Pydantic owns complete request validation, including relationships among
 otherwise valid fields. Required agreement of parents, characteristics,
 presentations, axes, bases, labels, and bound identities is checked during the
-single strict request parse, before provider readiness, preflight, or execution.
+single strict, lossless request parse, before provider readiness, preflight, or
+execution. Domain canonicalization happens only after the owning request model
+has accepted the original values; transport parsing does not reduce rationals
+or normalize Unicode.
 JSON Schema is generated for discovery and is not executed as an additional
 validation pass for built-ins. Before the single final serialization, dispatch
 checks that the published Pydantic model still generates the installed output

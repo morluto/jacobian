@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Self, cast
 from pydantic import Field, ValidationError, model_validator
 
 from jacobian.canonical import (
-    canonicalize_json,
+    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
 )
@@ -159,7 +159,7 @@ def _structural_sparse_polynomial(
     """Build a cheap shape representative without applying operation budgets."""
 
     parsed = _SparsePolynomialInput.model_validate_json(
-        canonicalize_json(value), strict=True
+        encode_strict_json(value), strict=True
     )
     _require_bounded_duplicate_accumulation(parsed)
     representatives: dict[tuple[int, ...], _SparsePolynomialInputTerm] = {}
@@ -181,7 +181,7 @@ def _canonical_sparse_polynomial(
     value: object,
 ) -> SparseRationalPolynomial:
     parsed = _SparsePolynomialInput.model_validate_json(
-        canonicalize_json(value), strict=True
+        encode_strict_json(value), strict=True
     )
     _require_bounded_duplicate_accumulation(parsed)
     coefficients: dict[tuple[int, ...], Fraction] = {}
@@ -654,13 +654,13 @@ def _validate_request[RequestModel: ContractModel](
     error_factory: Callable[[str, str, str], CapabilityInvocationError] | None = None,
 ) -> RequestModel:
     try:
-        strict_payload = loads_strict_json(canonicalize_json(payload))
+        strict_payload = loads_strict_json(encode_strict_json(payload))
         structural_payload = _normalize_sparse_polynomial_inputs(
             strict_payload,
             normalize=_structural_sparse_polynomial,
         )
         model.model_validate_json(
-            canonicalize_json(structural_payload),
+            encode_strict_json(structural_payload),
             context={_CANONICALIZATION_PREFLIGHT_CONTEXT_KEY: True},
             strict=True,
         )
@@ -669,7 +669,7 @@ def _validate_request[RequestModel: ContractModel](
             normalize=_canonical_sparse_polynomial,
         )
         return model.model_validate_json(
-            canonicalize_json(canonical_payload), strict=True
+            encode_strict_json(canonical_payload), strict=True
         )
     except (ValidationError, ValueError) as exc:
         raise (error_factory or _polynomial_error)(

@@ -62,6 +62,18 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
         "polynomial.groebner_basis.compute",
     } <= installed_ids
 
+    groebner_descriptor = next(
+        descriptor
+        for descriptor in runtime.core.capabilities.catalog().capabilities
+        if descriptor.capability_id == "polynomial.groebner_basis.compute"
+    )
+    assert "commutative polynomial ring QQ[x_1,...,x_n]" in (
+        groebner_descriptor.description or ""
+    )
+    assert "noncommutative polynomial algebras are not supported" in (
+        groebner_descriptor.description or ""
+    )
+
     gcd_result = _invoke(
         runtime,
         "polynomial.compute.gcd",

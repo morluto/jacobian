@@ -145,6 +145,8 @@ Pydantic validates the complete request before computation or artifact writes.
 JSON Schema supports discovery and is not an extra built-in execution pass.
 Provider or subprocess output is separately parsed because it crosses another
 untrusted boundary.
+Only `Completed[T]` publishes `T`; non-conclusions retain diagnostics and
+artifact lineage without exposing a mathematical result.
 
 Preflight distinguishes `SUPPORTED`, `UNSUPPORTED(reason)`,
 `PROVIDER_UNAVAILABLE`, and `RESOURCE_LIMIT_EXCEEDED`. It includes bounded work,
@@ -191,6 +193,12 @@ candidate, evidence, protocol, semantics, scope, certificate format, checker
 identity, and runtime identity. Rejection is a checker verdict; interruption,
 timeout, provider failure, malformed output, or missing evidence is a
 non-conclusion and cannot create a record.
+
+An inline producer may expose its whole typed result through an output port and
+an exact checker may accept that value through a candidate input port. This
+changes only the runtime-local carrier: the checker still parses the assembled
+typed request once, independently replays the relation, and alone owns any
+verification record. A candidate reference never transfers producer authority.
 
 ## Values and publication
 

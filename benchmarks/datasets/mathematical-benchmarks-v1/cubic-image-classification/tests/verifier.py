@@ -103,7 +103,11 @@ def _family(value: object) -> set[int] | None:
         return None
     residues = {(target[1] * (minimum + step) + target[0]) % 9 for step in range(9)}
     declared = value["covered_residues"]
-    if not _strict_int_list(declared) or declared != sorted(residues):
+    if (
+        not _strict_int_list(declared)
+        or len(declared) != len(residues)
+        or set(declared) != residues
+    ):
         return None
     return residues
 

@@ -145,7 +145,9 @@ class PolynomialJacobianAdapter:
             title="Compute a polynomial-map Jacobian",
             description=(
                 "Compute the exact Jacobian matrix and determinant of one sparse "
-                "square polynomial map over QQ."
+                "square polynomial map over QQ. Each map coordinate is limited "
+                "to 1,024 terms and exponent 32 per variable; the determinant "
+                "expansion estimate is limited to 1,024 products."
             ),
             provider="jacobian.sympy",
             provider_runtime=known_provider_runtime(

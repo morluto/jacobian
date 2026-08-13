@@ -45,6 +45,14 @@ def test_accepts_alternative_exact_checkpoints(tmp_path: Path) -> None:
     assert support._run_verifier(task, app, logs).reward == 1.0
 
 
+def test_accepts_reordered_distinct_checkpoints(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["checkpoints"].reverse()
+    _rewrite(app, submission)
+    assert support._run_verifier(task, app, logs).reward == 1.0
+
+
 def test_rejects_sampled_but_corrupt_root(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

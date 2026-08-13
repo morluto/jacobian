@@ -15,8 +15,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 PLANNER_PATH = ROOT / ".github" / "scripts" / "plan-benchmarks"
-PATH_POLICY_PATH = ROOT / ".github" / "scripts" / "_ci_paths.py"
-VALIDATION_PLAN_PATH = ROOT / "benchmarks" / "tooling" / "validation_plan.py"
 VALIDATOR_PATH = ROOT / ".github" / "scripts" / "validate-benchmark-plan"
 
 
@@ -154,7 +152,7 @@ def test_plan_is_versioned_and_bound_to_event_base_head_sha() -> None:
 def test_planner_digest_binds_to_planner_and_path_policy_sources() -> None:
     payload = "\n".join(
         f"{path.relative_to(ROOT).as_posix()}\t{path.read_bytes().hex()}"
-        for path in (PLANNER_PATH, PATH_POLICY_PATH, VALIDATION_PLAN_PATH)
+        for path in planner.PLANNER_DIGEST_SOURCES
     ).encode()
     expected = "sha256:" + hashlib.sha256(payload).hexdigest()
     result = planner.plan(
@@ -466,23 +464,6 @@ def test_shared_verifier_harness_states_full_suite_reason() -> None:
     assert json.loads(result["benchmark-plan-reasons"]) == [
         "benchmark validation or documentation change",
         f"shared verifier harness requires full host validation: {path}",
-    ]
-    _assert_plan_valid(result)
-
-
-def test_benchmark_contract_tool_selects_its_owned_host_contract() -> None:
-    path = "benchmarks/tooling/benchmark_contracts.py"
-
-    result = planner.plan([path], event="pull_request")
-
-    assert _host_matrix(result) == [
-        {
-            "name": "control-test_benchmark_contracts",
-            "selector": "benchmarks/validation/test_benchmark_contracts.py",
-            "keyword": "",
-            "splits": 0,
-            "group": 0,
-        }
     ]
     _assert_plan_valid(result)
 

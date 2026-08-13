@@ -1,4 +1,4 @@
-"""Independent finite difference-set replay using only the standard library.
+"""Independent finite combinatorics replay using only the standard library.
 
 This module imports neither the combinatorics producer nor its helper functions.
 Only passive artifact-bound JSON crosses the checker boundary.
@@ -24,6 +24,8 @@ _META_FINITE = {
     "determinism": "DETERMINISTIC",
     "backend": "python-stdlib",
 }
+_MAX_BINOMIAL_N = 10_000
+_MAX_RESULT_DIGITS = 32_768
 
 
 def _reject(detail: str) -> dict[str, Any]:
@@ -293,6 +295,45 @@ def _run_simple(
         return _reject("malformed, unsupported, or mismatched checker request")
 
 
+def _binomial(n: int, k: int) -> int:
+    if k > n:
+        return 0
+    k = min(k, n - k)
+    value = 1
+    for index in range(1, k + 1):
+        product = value * (n - k + index)
+        if product % index:
+            raise ArithmeticError("binomial recurrence lost integer divisibility")
+        value = product // index
+    return value
+
+
+def check_binomial(request: object) -> dict[str, Any]:
+    try:
+        source, result = bound_request(
+            request,
+            operation_id="combinatorics.compute.binomial",
+            witness_format="combinatorics.binomial.multiplicative-recurrence-replay",
+        )
+        if set(source) != {"n", "k"} or set(result) != {"value"}:
+            raise ValueError("binomial source or result fields are malformed")
+        n = source["n"]
+        k = source["k"]
+        if (
+            type(n) is not int
+            or type(k) is not int
+            or not 0 <= n <= _MAX_BINOMIAL_N
+            or not 0 <= k <= _MAX_BINOMIAL_N
+        ):
+            raise ValueError("binomial source is outside checker scope")
+        value = _canonical_integer(result["value"], max_digits=_MAX_RESULT_DIGITS)
+        if value < 0 or value != _binomial(n, k):
+            return _reject("result does not match independent recurrence replay")
+        return _accept("independent multiplicative recurrence replay accepted binomial")
+    except (ArithmeticError, KeyError, TypeError, ValueError, OverflowError):
+        return _reject("malformed, unsupported, or mismatched checker request")
+
+
 def check_integer_sidon(request: object) -> dict[str, Any]:
     return _run_simple(
         request,
@@ -330,6 +371,7 @@ def check_cyclic_difference_set_extension(request: object) -> dict[str, Any]:
 
 
 __all__ = [
+    "check_binomial",
     "check_cyclic_difference_set_extension",
     "check_cyclic_perfect_difference_set",
     "check_integer_sidon",

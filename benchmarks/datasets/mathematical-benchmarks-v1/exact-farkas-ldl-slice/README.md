@@ -17,7 +17,8 @@ calibration is pending. Either an exact LDL factorization or a Sylvester
 certificate is accepted. Floating-point eigenvalues, copied source status, or
 a single positive minor cannot pass.
 
-The verifier independently checks reduced fractions, scalar arithmetic and
-signs, and the selected positive-definiteness certificate. It intentionally
-does not check the remaining matrix entries, the other five blocks, the full
-Farkas implication, or Lean, and caps assurance at `COMPUTED`.
+The verifier independently checks reduced fractions, the published scalar
+replay `m00 = y0 + c00_y` with `m00 < 0` and `objective > 0`, and the selected
+positive-definiteness certificate. It intentionally does not check the
+remaining matrix entries, the other five blocks, the full Farkas implication,
+or Lean, and caps assurance at `COMPUTED`.

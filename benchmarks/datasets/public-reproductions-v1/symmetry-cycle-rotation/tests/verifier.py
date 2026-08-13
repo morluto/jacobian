@@ -15,9 +15,22 @@ ALLOWED = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def _norm_edges(orbits):
-    norm = []
+    if not isinstance(orbits, list):
+        return None
+    norm: list[tuple[tuple[str, str], ...]] = []
     for orbit in orbits:
-        norm.append([sorted([sorted(e) for e in edge]) for edge in orbit])
+        if not isinstance(orbit, list):
+            return None
+        normalized_orbit: list[tuple[str, str]] = []
+        for edge in orbit:
+            if (
+                not isinstance(edge, list)
+                or len(edge) != 2
+                or not all(type(vertex) is str for vertex in edge)
+            ):
+                return None
+            normalized_orbit.append(tuple(sorted(edge)))
+        norm.append(tuple(sorted(normalized_orbit)))
     return sorted(norm)
 
 

@@ -52,6 +52,31 @@ def test_direct_collision_verifier_promotes_only_independent_replay(
     assert result.execution.status is ExecutionStatus.COMPLETED
 
 
+def test_collision_verifier_advertises_and_executes_bounded_example(
+    authorized_polynomial_services,
+) -> None:
+    descriptors = {
+        item.capability_id: item
+        for item in authorized_polynomial_services.core.capabilities.catalog().capabilities
+    }
+    descriptor = descriptors["polynomial.map.collision.verify"]
+
+    assert "exponent 32 per variable" in descriptor.description
+    assert len(descriptor.invocation_examples) == 1
+    invocation = descriptor.invocation_examples[0]
+
+    result = authorized_polynomial_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id=descriptor.capability_id,
+            input=invocation.input,
+        )
+    )
+
+    assert result.execution.status is ExecutionStatus.COMPLETED
+    assert result.verification_record_uri is not None
+    assert result.output["collision_verified"] is True
+
+
 def test_direct_collision_verifier_fails_closed_for_wrong_image(
     authorized_polynomial_services,
 ) -> None:

@@ -143,6 +143,25 @@ def test_equivalent_evidence_wording_is_accepted(tmp_path: Path) -> None:
     assert reward.reward == 1.0
 
 
+def test_hyphenated_algebraic_independence_wording_is_accepted(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _prepare(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        "Both coordinate substitutions are birational with explicit rational "
+        "inverses. The conjugate norm is computed exactly over QQ. The "
+        "modular-form algebraic-independence theorem is a trusted external "
+        "premise and is not verified here.\n"
+    )
+    submission["evidence"][0]["sha256"] = support._digest(evidence)
+    support._write_json(app / "submission.json", submission)
+    reward = support._run_verifier(task, app, logs)
+    assert reward.details["evidence_validity"] == 1.0
+    assert reward.reward == 1.0
+
+
 def test_rational_inverse_wording_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

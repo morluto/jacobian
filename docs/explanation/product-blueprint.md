@@ -125,6 +125,8 @@ preflight runs before allocation, one semantic function executes, a typed
 request-to-result postcondition runs before exposure, and the result is
 serialized once. Timeout, cancellation, provider failure, resource refusal,
 and checker interruption are non-conclusions.
+Only a completed operation exposes a mathematical value or checker verdict;
+non-conclusions may retain diagnostics and artifact references for recovery.
 
 Checker operations remain independent and operator-authorized. Availability is
 not authorization, exact arithmetic is not independent verification, and a

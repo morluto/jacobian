@@ -32,10 +32,10 @@
     "dataset": {"type": "string", "minLength": 1},
     "condition": {"type": "string", "minLength": 1},
     "snapshot_id": {
-      "type": "string",
+      "type": ["string", "null"],
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "harbor_version": {"type": "string", "minLength": 1},
+    "harbor_version": {"type": ["string", "null"], "minLength": 1},
     "eval_args": {"$ref": "#/$defs/eval_args"},
     "job": {"$ref": "#/$defs/job"},
     "runtime_snapshot": {"$ref": "#/$defs/runtime_snapshot"},
@@ -55,6 +55,11 @@
       },
       "then": {
         "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "harbor_version": {"type": "string", "minLength": 1},
           "trials": {
             "type": "array",
             "items": {

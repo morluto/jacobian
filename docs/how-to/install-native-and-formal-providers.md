@@ -24,7 +24,7 @@ and checker runtimes. The
 [source setup profiles](setup-agent-from-source.md#profiles) provide maintained
 installation paths for `core`, `lean`, and `external-proof` checkouts.
 
-For ordinary contributor work, `make setup PROFILE=core` installs and diagnoses
+For ordinary contributor work, `make setup` installs and diagnoses
 the complete locked Python backend surface; that is the contributor quick path
 described in [CONTRIBUTING.md](../../CONTRIBUTING.md). CI owns the full Lean and
 optional native-provider environments, so you

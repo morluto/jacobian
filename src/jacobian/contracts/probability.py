@@ -111,12 +111,6 @@ class GaussianPolynomialTerm(ContractModel):
             )
         if self.coefficient.as_fractions() == (Fraction(), Fraction()):
             raise ValueError("Gaussian polynomial terms must have nonzero coefficients")
-        for component in (self.coefficient.real, self.coefficient.imaginary):
-            require_bounded_rational(
-                component,
-                max_digits=MAX_INPUT_RATIONAL_DIGITS,
-                label="Gaussian polynomial input coefficient",
-            )
         return self
 
 

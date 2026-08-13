@@ -17,10 +17,6 @@ from jacobian.exact_domain_checkers import (
     install_exact_domain_verification,
 )
 from jacobian.finite_coverage import install_finite_coverage
-from jacobian.graphs.coloring import (
-    GraphColoringInstallation,
-    install_graph_coloring_capabilities,
-)
 from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
 from jacobian.installation.context import InstallationContext
@@ -53,9 +49,8 @@ class CoreApplicationInstaller:
     def _install_graph_capabilities(
         self,
         ctx: InstallationContext,
-        services: RuntimeServices,
-    ) -> tuple[GraphInstallation, GraphColoringInstallation]:
-        """Install retained graph and coloring capabilities."""
+    ) -> GraphInstallation:
+        """Install retained graph capabilities."""
 
         graph_adapters, graph = install_graph_capabilities(
             ctx.store,
@@ -67,18 +62,7 @@ class CoreApplicationInstaller:
         )
         for graph_adapter in graph_adapters:
             self.context.register_capability(graph_adapter)
-        coloring_adapters, graph_coloring = install_graph_coloring_capabilities(
-            ctx.store,
-            ctx.schemas,
-            ctx.artifacts,
-            services.core.sat,
-            ctx.verification,
-            ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
-        )
-        for coloring_adapter in coloring_adapters:
-            self.context.register_capability(coloring_adapter)
-        return graph, graph_coloring
+        return graph
 
     def _install_nullstellensatz(self) -> None:
         """Install the named Nullstellensatz family at the composition root.
@@ -132,7 +116,7 @@ class CoreApplicationInstaller:
         if finite_coverage_adapter is not None:
             self.context.register_capability(finite_coverage_adapter)
 
-        graph, _ = self._install_graph_capabilities(ctx, services)
+        graph = self._install_graph_capabilities(ctx)
 
         portfolio = build_builtin_portfolio()
         bundle_result = DomainBundleInstaller(ctx).install(portfolio)

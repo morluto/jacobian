@@ -192,10 +192,12 @@ checker authorization out of plugins and search code.
 
 ## Repository Gotchas
 
-- Before final validation, use `make test-plan BASE=<revision>` and run the
-  selected gate on the final tree. In a shared checkout, agents must own
-  disjoint paths and must not switch branches, stage, commit, clean, or rewrite
-  shared files until their work is integrated.
+- Before final validation, use `make check` plus the named lane that owns the
+  changed behavior on the final tree (`make check-external` for Lean/Mathlib,
+  `make test-provider` for optional or maintained Python providers). In a
+  shared checkout, agents must own disjoint paths and must not switch
+  branches, stage, commit, clean, or rewrite shared files until their work
+  is integrated.
 - Jacobian is pre-stable. Current reference documents and the installed catalog
   define the supported surface; they do not order capability research.
 - Validate the complete Pydantic request model before preflight, provider calls,
@@ -206,6 +208,10 @@ checker authorization out of plugins and search code.
   validation. Exercise incompatible-but-individually-valid values through the
   serialized installed-operation boundary and assert an invalid-request result
   with no execution or publication.
+- Mathematical inputs are not presumed confidential. Public diagnostics should
+  expose a stable domain reason, path, limit, and recovery direction—not
+  arbitrary rejected values, which may be unbounded or user-controlled. This
+  projection must not add another validation pass.
 - A `COMPLETED` bounded operation may return a domain result marked `UNKNOWN` or
   `INCOMPLETE`. Execution completion alone does not establish optimality or a
   mathematical conclusion.
@@ -224,6 +230,9 @@ development workflow. For Harbor task authoring and verifier changes, use the
 repository-local [`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md)
 skill and its exact task validation path. Control/treatment model evaluations
 are explicit operator-run evidence exercises, not routine development gates.
+For source-grounded held-out reliability probes based on recently resolved
+conjectures, use
+[`recent-conjecture-evaluations`](.agents/skills/recent-conjecture-evaluations/SKILL.md).
 
 For remote MCP operation, use
 [Deploy the remote MCP server](docs/how-to/deploy-remote-mcp.md) and the
@@ -254,16 +263,19 @@ Non-obvious caveats:
   not break the kernel, catalog, or the core test suites. Only install Lean/elan
   or those executables when specifically exercising `lean_runtime` tests or SAT
   proof-artifact capabilities.
-- `make test-unit` is the quick unit lane and `make check` combines it with lint
-  and typecheck. Use `make test-all-ci` only for an explicit exhaustive local
-  reproduction. Never run bare `uv run pytest` across the whole suite — it mixes
-  provider and Lean boundary tests into one pool; use a focused `make test-*`
-  target instead.
+- `make test-unit` is the cheap unit lane. `make quick` adds lint; `make check`
+  adds lint and typecheck. `make check-all` explicitly reproduces the Lean-free
+  ordinary CI matrix. Use `make test-all-ci` only
+  for an explicit exhaustive local reproduction; it takes this worktree's
+  exhaustive validation lease (`make validation-status`). Default `uv run pytest` does
+  not collect Lean, storage, process, or MCP; use the matching `make test-*`
+  target for those trees. Never run bare `uv run pytest` as a substitute for
+  the complete specialist matrix.
 - Only the coordinating agent may start an exhaustive test lane. Never delegate
   one to a parallel agent sharing the host. Before an exceptional broad run,
   inspect active processes for pytest jobs from this checkout and stop or wait
-  for them; concurrent runtime/store/subprocess suites turn the 60-second test
-  timeout into a host-contention detector rather than useful failure evidence.
+  for them; concurrent runtime/store/subprocess suites turn per-test timeouts
+  into a host-contention detector rather than useful failure evidence.
 - SQLite is one visible contention point, but not the sole cause: full-runtime
   construction also performs durable filesystem publication, subprocess
   startup, schema registration, and CPU-heavy capability setup. A timeout

@@ -6,8 +6,9 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
-import os
 import re
+import shutil
+import subprocess
 import sys
 import tomllib
 from collections.abc import Callable, Sequence
@@ -98,31 +99,36 @@ def sync_arguments(name: str, *, development: bool = True) -> tuple[str, ...]:
 
 
 def _run(arguments: Sequence[str], cwd: Path) -> int:
-    from benchmarks.tooling.command_runner import (
-        ToolCommandStatus,
-        run_operator_command,
-    )
-
-    result = run_operator_command(
-        arguments[0],
-        arguments[1:],
-        cwd=cwd,
-        timeout_seconds=3600.0,
-        stdout_limit_bytes=8 * 1024 * 1024,
-        stderr_limit_bytes=8 * 1024 * 1024,
-        environment=dict(os.environ),
-    )
-    if result.stdout:
-        sys.stdout.buffer.write(result.stdout)
-    if result.stderr:
-        sys.stderr.buffer.write(result.stderr)
-    return result.exit_code if result.status is ToolCommandStatus.EXITED else 2
+    completed = subprocess.run(list(arguments), cwd=cwd, check=False)
+    return int(completed.returncode)
 
 
 def _tool_path(name: str) -> str | None:
-    from benchmarks.tooling.command_runner import ToolResolver
+    return shutil.which(name)
 
-    return ToolResolver(search_path=os.environ.get("PATH")).resolve(name)
+
+def _capture_stdout(
+    arguments: Sequence[str], *, cwd: Path, timeout_seconds: float
+) -> str | None:
+    executable = arguments[0]
+    resolved = (
+        executable if Path(executable).is_absolute() else _tool_path(str(executable))
+    )
+    if resolved is None:
+        return None
+    try:
+        completed = subprocess.run(
+            [resolved, *arguments[1:]],
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.decode(errors="replace")
 
 
 def _run_required(arguments: Sequence[str], *, cwd: Path, run: CommandRunner) -> None:
@@ -175,7 +181,7 @@ def prepare_profile(repo: Path, name: str, *, run: CommandRunner = _run) -> None
         if _tool_path("elan") is None:
             raise RuntimeError(
                 "the lean profile requires elan; install it, then rerun "
-                "`make setup PROFILE=lean`"
+                "`make setup-lean`"
             )
         toolchain = (
             (repo / "lean" / "lean-toolchain").read_text(encoding="utf-8").strip()
@@ -251,7 +257,7 @@ def _distribution_diagnostic(
         status=status,
         expected=expected or "installed distribution",
         found=found,
-        recovery=f"Run `make setup PROFILE={profile_name}`",
+        recovery="Run `make setup`",
         documentation=(
             NATIVE_PROVIDER_DOCUMENTATION
             if profile_name != "core"
@@ -261,24 +267,12 @@ def _distribution_diagnostic(
 
 
 def _uv_diagnostic(repo: Path) -> Diagnostic:
-    from benchmarks.tooling.command_runner import (
-        ToolCommandStatus,
-        run_operator_command,
-    )
-
     expected = (repo / ".uv-version").read_text(encoding="utf-8").strip()
     found: str | None = None
-    executable = _tool_path("uv")
-    if executable is not None:
-        completed = run_operator_command(
-            "uv",
-            ("--version",),
-            cwd=repo,
-            timeout_seconds=30.0,
-        )
-        if completed.status is ToolCommandStatus.EXITED and completed.exit_code == 0:
-            parts = completed.stdout.decode(errors="replace").strip().split()
-            found = parts[1] if len(parts) >= 2 else None
+    output = _capture_stdout(("uv", "--version"), cwd=repo, timeout_seconds=30.0)
+    if output is not None:
+        parts = output.strip().split()
+        found = parts[1] if len(parts) >= 2 else None
     status = (
         "available"
         if found == expected
@@ -297,38 +291,27 @@ def _uv_diagnostic(repo: Path) -> Diagnostic:
 
 
 def _lean_diagnostics(repo: Path) -> list[Diagnostic]:
-    from benchmarks.tooling.command_runner import (
-        ToolCommandStatus,
-        run_operator_command,
-    )
-
     expected = (repo / "lean" / "lean-toolchain").read_text(encoding="utf-8").strip()
     elan = _tool_path("elan")
     lake = _tool_path("lake")
     installed = False
     found: str | None = None
-    if elan is not None:
-        completed = run_operator_command(
-            "elan",
-            ("toolchain", "list"),
-            cwd=repo,
-            timeout_seconds=30.0,
-        )
-        if completed.status is ToolCommandStatus.EXITED and completed.exit_code == 0:
-            toolchains = [
-                line.split(maxsplit=1)[0]
-                for line in completed.stdout.decode(errors="replace").splitlines()
-                if line.strip()
-            ]
-            installed = expected in toolchains
-            found = expected if installed else ", ".join(toolchains) or None
+    output = _capture_stdout(
+        ("elan", "toolchain", "list"), cwd=repo, timeout_seconds=30.0
+    )
+    if output is not None:
+        toolchains = [
+            line.split(maxsplit=1)[0] for line in output.splitlines() if line.strip()
+        ]
+        installed = expected in toolchains
+        found = expected if installed else ", ".join(toolchains) or None
     return [
         Diagnostic(
             "elan",
             "available" if elan else "unavailable",
             "installed executable",
             elan,
-            "Install elan, then run `make setup PROFILE=lean`",
+            "Install elan, then run `make setup-lean`",
             PROFILE_DOCUMENTATION,
         ),
         Diagnostic(
@@ -340,13 +323,15 @@ def _lean_diagnostics(repo: Path) -> list[Diagnostic]:
             else "unavailable",
             expected,
             found,
-            "Run `make setup PROFILE=lean`",
+            "Run `make setup-lean`",
             PROFILE_DOCUMENTATION,
         ),
     ]
 
 
 def _external_proof_diagnostics() -> list[Diagnostic]:
+    # Imported after the locked environment exists; setup loads this module
+    # before `uv sync` and must not import Jacobian at module import time.
     from jacobian.providers.external_solver_runtime import (
         CADICAL_VERSION,
         CARCARA_VERSION,

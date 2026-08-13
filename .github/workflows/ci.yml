@@ -18,284 +18,144 @@ permissions:
   contents: read
 
 jobs:
-  plan:
-    name: Plan CI
+  static:
+    name: static
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: read
-      contents: read
-    outputs:
-      classification: ${{ steps.classify.outputs.classification }}
-      plan-receipt-digest: ${{ steps.classify.outputs.plan-receipt-digest }}
-      run-python: ${{ steps.classify.outputs.run-python }}
-      run-unit: ${{ steps.classify.outputs.run-unit }}
-      run-component: ${{ steps.classify.outputs.run-component }}
-      run-domain: ${{ steps.classify.outputs.run-domain }}
-      run-composition: ${{ steps.classify.outputs.run-composition }}
-      run-storage: ${{ steps.classify.outputs.run-storage }}
-      run-process: ${{ steps.classify.outputs.run-process }}
-      run-mcp: ${{ steps.classify.outputs.run-mcp }}
-      run-provider: ${{ steps.classify.outputs.run-provider }}
-      run-e2e: ${{ steps.classify.outputs.run-e2e }}
-      run-deploy: ${{ steps.classify.outputs.run-deploy }}
-      run-coverage: ${{ steps.classify.outputs.run-coverage }}
-      run-compatibility: ${{ steps.classify.outputs.run-compatibility }}
-      run-lean: ${{ steps.classify.outputs.run-lean }}
-      run-npm: ${{ steps.classify.outputs.run-npm }}
-      run-static: ${{ steps.classify.outputs.run-static }}
-      run-build: ${{ steps.classify.outputs.run-build }}
-      run-security: ${{ steps.classify.outputs.run-security }}
-      run-duplicate: ${{ steps.classify.outputs.run-duplicate }}
-      run-docs: ${{ steps.classify.outputs.run-docs }}
-      product-lane-matrix: ${{ steps.classify.outputs.product-lane-matrix }}
-      domain-shard-count: ${{ steps.shards.outputs.domain-shard-count }}
-      domain-shards: ${{ steps.shards.outputs.domain-shards }}
-      composition-shard-count: ${{ steps.shards.outputs.composition-shard-count }}
-      composition-shards: ${{ steps.shards.outputs.composition-shards }}
-      node-version-jscpd: ${{ steps.shards.outputs.node-version-jscpd }}
-      node-version-npm: ${{ steps.shards.outputs.node-version-npm }}
-      pytest-randomly-shard-seed: ${{ steps.shards.outputs.pytest-randomly-shard-seed }}
-      pytest-split-version: ${{ steps.shards.outputs.pytest-split-version }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - id: shards
-        name: Load sharded-lane configuration
-        run: .github/scripts/manage-test-timings emit-plan-outputs >> "$GITHUB_OUTPUT"
-      - id: classify
-        name: Classify changed paths
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: >-
-            ${{ github.event.pull_request.base.sha ||
-                github.event.merge_group.base_sha || '' }}
-          HEAD_SHA: >-
-            ${{ github.event.pull_request.head.sha ||
-                github.event.merge_group.head_sha ||
-                github.sha }}
-          FORCE_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
-          FORCE_LEAN: ${{ contains(github.event.pull_request.labels.*.name, 'ci:lean') }}
-          FORCE_PROVIDER: ${{ contains(github.event.pull_request.labels.*.name, 'ci:provider') }}
-        run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            mapfile -d '' changed_paths < <(
-              git diff --name-only -z "$BASE_SHA" "$HEAD_SHA"
-            )
-            planner_args=(--)
-            if [ "$FORCE_FULL" = "true" ]; then
-              planner_args=(--force-full --)
-            elif [ "$FORCE_LEAN" = "true" ]; then
-              planner_args=(--force-lean --)
-            fi
-            if [ "$FORCE_PROVIDER" = "true" ]; then
-              planner_args=(--include-provider "${planner_args[@]}")
-            fi
-            plan_output=$(
-              .github/scripts/classify-ci-paths \
-                "${planner_args[@]}" "${changed_paths[@]}"
-            )
-          else
-            plan_output=$(.github/scripts/classify-ci-paths --force-exhaustive)
-          fi
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - run: make lint-full
+      - run: make typecheck
+      - run: make architecture
+      - run: make todo-check
+      - run: make import-contracts
+      - run: make docs-linkcheck
+      - run: make deploy-check
+      - run: make npm-test
+      - run: make build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
 
-          printf '%s\n' "$plan_output" | .github/scripts/validate-ci-plan
-          printf '%s\n' "$plan_output" >> "$GITHUB_OUTPUT"
-          plan_dir="$RUNNER_TEMP/jacobian-ci-plan"
-          mkdir -p "$plan_dir"
-          printf '%s\n' "$plan_output" > "$plan_dir/plan.txt"
-          printf '%s\n' "${changed_paths[@]}" > "$plan_dir/changed-paths.txt"
-          python .github/scripts/emit-plan-receipt \
-            --kind product-ci \
-            --event "$EVENT_NAME" \
-            --base "$BASE_SHA" \
-            --head "$HEAD_SHA" \
-            --planner .github/scripts/classify-ci-paths \
-            --config .github/ci-impact.json \
-            --config tests/topology.toml \
-            --config .github/scripts/_ci_paths.py \
-            --config .github/scripts/validate-ci-plan \
-            --config .github/workflows/ci.yml \
-            --config Makefile \
-            --config make/development.mk \
-            --config make/harbor.mk \
-            --config make/evaluations.mk \
-            --plan-file "$plan_dir/plan.txt" \
-            --paths-file "$plan_dir/changed-paths.txt" \
-            --output "$plan_dir/plan-receipt.json"
-          echo "plan-receipt-digest=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")" >> "$GITHUB_OUTPUT"
-          echo "Plan receipt: \`$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")\`" >> "$GITHUB_STEP_SUMMARY"
-          classification=$(sed -n 's/^classification=//p' <<< "$plan_output")
-          {
-            echo "## CI plan"
-            echo ""
-            echo "- Classification: \`$classification\`"
-            echo ""
-            echo '```text'
-            echo "$plan_output"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload CI plan receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  python:
+    name: python (${{ matrix.lane }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: unit
+            timeout-minutes: 10
+          - lane: component
+            timeout-minutes: 15
+          - lane: domain
+            timeout-minutes: 15
+          - lane: provider
+            timeout-minutes: 25
+          - lane: composition
+            timeout-minutes: 25
+          - lane: e2e
+            timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: ci-plan-receipt
-          path: ${{ runner.temp }}/jacobian-ci-plan/plan-receipt.json
-          retention-days: 14
-      - name: Prepare domain timing hint
-        if: steps.classify.outputs.run-domain == 'true'
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - run: make test-${{ matrix.lane }}
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          .github/scripts/manage-test-timings prepare
-          --suite domain
-          --output .ci/test-durations.json
-      - name: Share domain timing hint
-        if: steps.classify.outputs.run-domain == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          PYTEST_ARGS: >-
+            --junitxml=pytest.xml
+            --cov --cov-report= --cov-fail-under=0
+      - if: ${{ !cancelled() }}
+        run: uv cache prune --ci
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
         with:
-          name: domain-test-durations-input
-          path: .ci/test-durations.json
+          name: junit-python-${{ matrix.lane }}-3.12
+          path: pytest.xml
+          if-no-files-found: ignore
+          retention-days: 7
+      - if: ${{ !cancelled() }}
+        run: mv .coverage .coverage.python-${{ matrix.lane }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-data-python-${{ matrix.lane }}
+          path: .coverage.python-${{ matrix.lane }}
           include-hidden-files: true
-          retention-days: 1
-      - name: Prepare composition timing hint
-        if: steps.classify.outputs.run-composition == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          .github/scripts/manage-test-timings prepare
-          --suite composition
-          --output .ci/composition-test-durations.json
-      - name: Share composition timing hint
-        if: steps.classify.outputs.run-composition == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+
+  boundaries:
+    name: boundaries (${{ matrix.lane }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [storage, process, mcp]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: composition-test-durations-input
-          path: .ci/composition-test-durations.json
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-tests
+        with:
+          python-version: "3.12"
+      - run: make test-${{ matrix.lane }}
+        env:
+          PYTEST_ARGS: >-
+            --junitxml=pytest.xml
+            --cov --cov-report= --cov-fail-under=0
+      - if: ${{ !cancelled() }}
+        run: uv cache prune --ci
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: junit-${{ matrix.lane }}-3.12
+          path: pytest.xml
+          if-no-files-found: ignore
+          retention-days: 7
+      - if: ${{ !cancelled() }}
+        run: mv .coverage .coverage.${{ matrix.lane }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-data-${{ matrix.lane }}
+          path: .coverage.${{ matrix.lane }}
           include-hidden-files: true
-          retention-days: 1
 
-  lint:
-    name: Lint & Format
-    needs: plan
-    if: ${{ always() }}
+  subprocess_coverage:
+    name: checker subprocess coverage
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require a valid static-analysis plan
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_STATIC: ${{ needs.plan.outputs.run-static }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_STATIC" in true|false) ;; *) exit 1 ;; esac
-      - if: needs.plan.outputs.run-static == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - if: needs.plan.outputs.run-static == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
-      - if: needs.plan.outputs.run-static == 'true'
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - run: make test-checker-subprocess-coverage
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          version: "0.11.28"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - if: needs.plan.outputs.run-static == 'true'
-        run: uv sync --locked --dev
-      - if: needs.plan.outputs.run-static == 'true'
-        run: make lint-full
-      - if: needs.plan.outputs.run-static == 'true'
-        run: make typecheck
-      - if: needs.plan.outputs.run-static == 'true'
-        run: make test-architecture
-      - if: needs.plan.outputs.run-static == 'true'
-        run: make architecture
-      - if: needs.plan.outputs.run-static == 'true'
-        run: make todo-check
+          name: coverage-data-checker-subprocess
+          path: .coverage.checker-subprocess
+          include-hidden-files: true
 
-  docs:
-    name: Documentation
-    needs: plan
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Require a valid documentation plan
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_DOCS: ${{ needs.plan.outputs.run-docs }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_DOCS" in true|false) ;; *) exit 1 ;; esac
-      - if: needs.plan.outputs.run-docs == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - if: needs.plan.outputs.run-docs == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - if: needs.plan.outputs.run-docs == 'true'
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.11.28"
-      - if: needs.plan.outputs.run-docs == 'true'
-        run: make docs-linkcheck
-
-  security-audit:
-    name: Security Audit
-    needs: plan
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Require a valid security-audit plan
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_SECURITY: ${{ needs.plan.outputs.run-security }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_SECURITY" in true|false) ;; *) exit 1 ;; esac
-      - if: needs.plan.outputs.run-security == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - if: needs.plan.outputs.run-security == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - if: needs.plan.outputs.run-security == 'true'
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.11.28"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - if: needs.plan.outputs.run-security == 'true'
-        run: uv sync --locked --dev
-      - if: needs.plan.outputs.run-security == 'true'
-        run: make security-audit
-
-  validate-built-package:
-    name: Validate Built Package (Python ${{ matrix.python-version }})
-    needs: [plan, build]
-    if: needs.plan.outputs.run-build == 'true'
+  wheel:
+    name: wheel (Python ${{ matrix.python-version }})
+    needs: [static]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -303,6 +163,9 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
@@ -325,441 +188,17 @@ jobs:
           "$environment/bin/jacobian" --help
           "$environment/bin/jacobian-mcp" --help
           "$environment/bin/jacobian" --state-dir "$state_dir" init
-
-  unit-test:
-    name: Tests (unit, Python 3.12)
-    needs: plan
-    if: needs.plan.outputs.run-unit == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - run: make test-unit
-        env:
-          PYTEST_ARGS: >-
-            --junitxml=pytest.xml
-            ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
-      - if: ${{ !cancelled() }}
-        run: uv cache prune --ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
-        with:
-          name: junit-unit-3.12
-          path: pytest.xml
-          if-no-files-found: ignore
-          retention-days: 7
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: mv .coverage .coverage.unit
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() && needs.plan.outputs.run-coverage == 'true' }}
-        with:
-          name: coverage-data-unit
-          path: .coverage.unit
-          include-hidden-files: true
-
-  domain-test:
-    name: >-
-      Tests (domain ${{ matrix.shard }} of ${{ needs.plan.outputs.domain-shard-count }},
-      Python 3.12)
-    needs: plan
-    if: needs.plan.outputs.run-domain == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(needs.plan.outputs.domain-shards) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Download domain timing hint
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: domain-test-durations-input
-          path: .ci
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - run: make test-domain
-        env:
-          PYTEST_ARGS: >-
-            --splits ${{ needs.plan.outputs.domain-shard-count }}
-            --group ${{ matrix.shard }}
-            --splitting-algorithm least_duration
-            --durations-path .ci/test-durations.json
-            --randomly-seed ${{ needs.plan.outputs.pytest-randomly-shard-seed }}
-            --store-durations
-            --clean-durations
-            --junitxml=pytest.xml
-            ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
-      - name: Upload domain shard timings
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        continue-on-error: true
-        with:
-          name: domain-duration-shard-${{ matrix.shard }}
-          path: .ci/test-durations.json
-          include-hidden-files: true
-          retention-days: 1
-      - if: ${{ !cancelled() }}
-        run: uv cache prune --ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
-        with:
-          name: >-
-            junit-domain-${{ matrix.shard }}-3.12
-          path: pytest.xml
-          if-no-files-found: ignore
-          retention-days: 7
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: mv .coverage .coverage.domain-${{ matrix.shard }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() && needs.plan.outputs.run-coverage == 'true' }}
-        with:
-          name: coverage-data-domain-${{ matrix.shard }}
-          path: .coverage.domain-${{ matrix.shard }}
-          include-hidden-files: true
-
-  composition-test:
-    name: >-
-      Tests (composition ${{ matrix.shard }} of
-      ${{ needs.plan.outputs.composition-shard-count }}, Python 3.12)
-    needs: plan
-    if: needs.plan.outputs.run-composition == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(needs.plan.outputs.composition-shards) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Download composition timing hint
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: composition-test-durations-input
-          path: .ci
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - run: make test-composition
-        env:
-          PYTEST_ARGS: >-
-            --splits ${{ needs.plan.outputs.composition-shard-count }}
-            --group ${{ matrix.shard }}
-            --splitting-algorithm least_duration
-            --durations-path .ci/composition-test-durations.json
-            --randomly-seed ${{ needs.plan.outputs.pytest-randomly-shard-seed }}
-            --store-durations
-            --clean-durations
-            --junitxml=pytest.xml
-            ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
-      - name: Upload composition shard timings
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        continue-on-error: true
-        with:
-          name: composition-duration-shard-${{ matrix.shard }}
-          path: .ci/composition-test-durations.json
-          include-hidden-files: true
-          retention-days: 1
-      - if: ${{ !cancelled() }}
-        run: uv cache prune --ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
-        with:
-          name: junit-composition-${{ matrix.shard }}-3.12
-          path: pytest.xml
-          if-no-files-found: ignore
-          retention-days: 7
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: mv .coverage .coverage.composition-${{ matrix.shard }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() && needs.plan.outputs.run-coverage == 'true' }}
-        with:
-          name: coverage-data-composition-${{ matrix.shard }}
-          path: .coverage.composition-${{ matrix.shard }}
-          include-hidden-files: true
-
-  process-test:
-    name: Tests (process boundary, Python 3.12)
-    needs: plan
-    if: needs.plan.outputs.run-process == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - name: Run process boundary lane in a separate job
-        run: make test-process
-        env:
-          PYTEST_ARGS: >-
-            --junitxml=pytest.xml
-            ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: mv .coverage .coverage.process
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() && needs.plan.outputs.run-coverage == 'true' }}
-        with:
-          name: coverage-data-process
-          path: .coverage.process
-          include-hidden-files: true
-
-  deployment-check:
-    name: Deployment checks
-    needs: plan
-    if: needs.plan.outputs.run-deploy == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - name: Run the explicit deployment validation gate
-        run: make deploy-check
-
-  deployment-test:
-    name: Deployment Tests
-    if: ${{ always() }}
-    needs: [plan, deployment-check]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require planned deployment validation
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_DEPLOY: ${{ needs.plan.outputs.run-deploy }}
-          DEPLOYMENT_RESULT: ${{ needs.deployment-check.result }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_DEPLOY" in
-            true) test "$DEPLOYMENT_RESULT" = success ;;
-            false) test "$DEPLOYMENT_RESULT" = skipped ;;
-            *) exit 1 ;;
-          esac
-
-  semantic-lane-test:
-    name: Tests (${{ matrix.lane }}, Python 3.12)
-    needs: plan
-    if: needs.plan.outputs.product-lane-matrix != '{"include":[]}'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.product-lane-matrix) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - name: Run semantic lane
-        env:
-          LANE: ${{ matrix.lane }}
-          PYTEST_ARGS: >-
-            --junitxml=pytest.xml
-            ${{ needs.plan.outputs.run-coverage == 'true' && '--cov --cov-report= --cov-fail-under=0' || '' }}
-        run: make "test-${LANE}"
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: mv .coverage .coverage.${{ matrix.lane }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: needs.plan.outputs.run-coverage == 'true'
-        with:
-          name: coverage-data-${{ matrix.lane }}
-          path: .coverage.${{ matrix.lane }}
-          include-hidden-files: true
-
-  publish-test-durations:
-    name: Publish sharded test durations
-    if: github.ref == 'refs/heads/main'
-    needs: [plan, domain-test, composition-test]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Download shard timings
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: '*-duration-shard-*'
-          path: .ci/shards
-
-      - name: Check domain shard timings
-        id: check-domain-timings
-        env:
-          SHARD_COUNT: ${{ needs.plan.outputs.domain-shard-count }}
-        run: |
-          missing=0
-          for shard in $(seq 1 "$SHARD_COUNT"); do
-            path=".ci/shards/domain-duration-shard-${shard}/test-durations.json"
-            if [ ! -f "$path" ]; then
-              echo "::warning::Domain timing artifact for shard ${shard} is unavailable; keeping the previous timing hint"
-              missing=1
-            fi
-          done
-          if [ "$missing" -eq 0 ]; then
-            echo "complete=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "complete=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check composition shard timings
-        id: check-composition-timings
-        env:
-          SHARD_COUNT: ${{ needs.plan.outputs.composition-shard-count }}
-        run: |
-          missing=0
-          for shard in $(seq 1 "$SHARD_COUNT"); do
-            path=".ci/shards/composition-duration-shard-${shard}/composition-test-durations.json"
-            if [ ! -f "$path" ]; then
-              echo "::warning::Composition timing artifact for shard ${shard} is unavailable; keeping the previous timing hint"
-              missing=1
-            fi
-          done
-          if [ "$missing" -eq 0 ]; then
-            echo "complete=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "complete=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Merge domain shard timings
-        if: steps.check-domain-timings.outputs.complete == 'true'
-        env:
-          SHARD_COUNT: ${{ needs.plan.outputs.domain-shard-count }}
-        run: |
-          inputs=()
-          for shard in $(seq 1 "$SHARD_COUNT"); do
-            inputs+=(--input ".ci/shards/domain-duration-shard-${shard}/test-durations.json")
-          done
-          .github/scripts/manage-test-timings merge \
-            --suite domain \
-            "${inputs[@]}" \
-            --output .ci/domain-test-durations.json \
-            --source-sha "${{ github.sha }}" \
-            --python-version "3.12" \
-            --pytest-split-version "${{ needs.plan.outputs.pytest-split-version }}"
-      - name: Merge composition shard timings
-        if: steps.check-composition-timings.outputs.complete == 'true'
-        env:
-          SHARD_COUNT: ${{ needs.plan.outputs.composition-shard-count }}
-        run: |
-          inputs=()
-          for shard in $(seq 1 "$SHARD_COUNT"); do
-            inputs+=(--input ".ci/shards/composition-duration-shard-${shard}/composition-test-durations.json")
-          done
-          .github/scripts/manage-test-timings merge \
-            --suite composition \
-            "${inputs[@]}" \
-            --output .ci/composition-test-durations.json \
-            --source-sha "${{ github.sha }}" \
-            --python-version "3.12" \
-            --pytest-split-version "${{ needs.plan.outputs.pytest-split-version }}"
-      - name: Publish domain timing hint
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: steps.check-domain-timings.outputs.complete == 'true'
-        with:
-          name: domain-test-durations
-          path: .ci/domain-test-durations.json
-          include-hidden-files: true
-          retention-days: 90
-      - name: Publish composition timing hint
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: steps.check-composition-timings.outputs.complete == 'true'
-        with:
-          name: composition-test-durations
-          path: .ci/composition-test-durations.json
-          include-hidden-files: true
-          retention-days: 90
-
-  compatibility-test:
-    name: Compatibility smoke (Python 3.13)
-    needs: plan
-    if: needs.plan.outputs.run-compatibility == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
+      - if: matrix.python-version == '3.13'
+        uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.13"
-      - run: make test-compatibility
+      - if: matrix.python-version == '3.13'
+        run: make test-compatibility
         env:
           PYTEST_ARGS: --junitxml=pytest.xml
-      - if: ${{ !cancelled() }}
-        run: uv cache prune --ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
-        with:
-          name: junit-compatibility-3.13
-          path: pytest.xml
-          if-no-files-found: ignore
-          retention-days: 7
 
-  python-test:
-    name: Python Tests
-    if: ${{ always() }}
-    needs:
-      [plan, unit-test, domain-test, composition-test, process-test, semantic-lane-test, compatibility-test]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require planned Python validation
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_PYTHON: ${{ needs.plan.outputs.run-python }}
-          RUN_UNIT: ${{ needs.plan.outputs.run-unit }}
-          RUN_DOMAIN: ${{ needs.plan.outputs.run-domain }}
-          RUN_COMPOSITION: ${{ needs.plan.outputs.run-composition }}
-          RUN_PROCESS: ${{ needs.plan.outputs.run-process }}
-          RUN_COMPATIBILITY: ${{ needs.plan.outputs.run-compatibility }}
-          PRODUCT_LANE_MATRIX: ${{ needs.plan.outputs.product-lane-matrix }}
-          UNIT_RESULT: ${{ needs.unit-test.result }}
-          DOMAIN_RESULT: ${{ needs.domain-test.result }}
-          COMPOSITION_RESULT: ${{ needs.composition-test.result }}
-          PROCESS_RESULT: ${{ needs.process-test.result }}
-          SEMANTIC_RESULT: ${{ needs.semantic-lane-test.result }}
-          COMPATIBILITY_RESULT: ${{ needs.compatibility-test.result }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_PYTHON" in true|false) ;; *) exit 1 ;; esac
-          case "$RUN_UNIT" in true) test "$UNIT_RESULT" = success ;; false) test "$UNIT_RESULT" = skipped ;; *) exit 1 ;; esac
-          case "$RUN_DOMAIN" in true) test "$DOMAIN_RESULT" = success ;; false) test "$DOMAIN_RESULT" = skipped ;; *) exit 1 ;; esac
-          case "$RUN_COMPOSITION" in true) test "$COMPOSITION_RESULT" = success ;; false) test "$COMPOSITION_RESULT" = skipped ;; *) exit 1 ;; esac
-          case "$RUN_PROCESS" in true) test "$PROCESS_RESULT" = success ;; false) test "$PROCESS_RESULT" = skipped ;; *) exit 1 ;; esac
-          case "$PRODUCT_LANE_MATRIX" in
-            '{"include":[]}') test "$SEMANTIC_RESULT" = skipped ;;
-            '{"include":['*) test "$SEMANTIC_RESULT" = success ;;
-            *) exit 1 ;;
-          esac
-          case "$RUN_COMPATIBILITY" in true) test "$COMPATIBILITY_RESULT" = success ;; false) test "$COMPATIBILITY_RESULT" = skipped ;; *) exit 1 ;; esac
-
-  lean-test-run:
+  lean:
     name: Lean Runtime
-    needs: plan
-    if: needs.plan.outputs.run-lean == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -768,112 +207,46 @@ jobs:
           persist-credentials: false
       - name: Prepare Lean test environment
         uses: ./.github/actions/setup-lean
-      - name: Run Lean tests
-        run: |
-          started=$SECONDS
-          set +e
-          make test-lean
-          status=$?
-          set -e
-          echo "| Selected Lean tests | $((SECONDS - started)) |" >> "$GITHUB_STEP_SUMMARY"
-          exit "$status"
-
-  lean-test:
-    name: Lean Tests
-    if: ${{ always() }}
-    needs: [plan, lean-test-run]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require planned Lean validation
+      - run: make test-lean
         env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_LEAN: ${{ needs.plan.outputs.run-lean }}
-          LEAN_RESULT: ${{ needs.lean-test-run.result }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_LEAN" in true) test "$LEAN_RESULT" = success ;; false) test "$LEAN_RESULT" = skipped ;; *) exit 1 ;; esac
+          JACOBIAN_LEAN_REQUIRED: "1"
 
   coverage:
     name: Coverage
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
+    needs: [python, boundaries, subprocess_coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs:
-      [plan, unit-test, domain-test, composition-test, process-test, semantic-lane-test]
     permissions:
       contents: read
       pull-requests: write
     steps:
-      - name: Require successful Python validation
+      - name: Require python and boundaries
         env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_COVERAGE: ${{ needs.plan.outputs.run-coverage }}
-          RUN_UNIT: ${{ needs.plan.outputs.run-unit }}
-          RUN_DOMAIN: ${{ needs.plan.outputs.run-domain }}
-          RUN_COMPOSITION: ${{ needs.plan.outputs.run-composition }}
-          RUN_PROCESS: ${{ needs.plan.outputs.run-process }}
-          UNIT_RESULT: ${{ needs.unit-test.result }}
-          DOMAIN_RESULT: ${{ needs.domain-test.result }}
-          COMPOSITION_RESULT: ${{ needs.composition-test.result }}
-          PROCESS_RESULT: ${{ needs.process-test.result }}
-          SEMANTIC_RESULT: ${{ needs.semantic-lane-test.result }}
+          PYTHON_RESULT: ${{ needs.python.result }}
+          BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
+          SUBPROCESS_COVERAGE_RESULT: ${{ needs.subprocess_coverage.result }}
         run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_COVERAGE" in true|false) ;; *) exit 1 ;; esac
-          case "$RUN_UNIT" in true) test "$UNIT_RESULT" = success ;; false) test "$UNIT_RESULT" = skipped ;; *) exit 1 ;; esac
-          case "$RUN_DOMAIN" in true) test "$DOMAIN_RESULT" = success ;; false) test "$DOMAIN_RESULT" = skipped ;; *) exit 1 ;; esac
-          case "$RUN_COMPOSITION" in true) test "$COMPOSITION_RESULT" = success ;; false) test "$COMPOSITION_RESULT" = skipped ;; *) exit 1 ;; esac
-          if [ "$RUN_COVERAGE" = "true" ]; then
-            test "$COMPOSITION_RESULT" = "success"
-            test "$RUN_PROCESS" = "true"
-            test "$PROCESS_RESULT" = "success"
-            test "$SEMANTIC_RESULT" = "success"
-          fi
-          if [ "$RUN_COVERAGE" = "true" ]; then
-            test "$UNIT_RESULT" = "success"
-            test "$DOMAIN_RESULT" = "success"
-          fi
-      - if: needs.plan.outputs.run-coverage == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          test "$PYTHON_RESULT" = success
+          test "$BOUNDARIES_RESULT" = success
+          test "$SUBPROCESS_COVERAGE_RESULT" = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - if: needs.plan.outputs.run-coverage == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
-      - if: needs.plan.outputs.run-coverage == 'true'
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.11.28"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: uv sync --locked --dev
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: needs.plan.outputs.run-coverage == 'true'
         with:
           pattern: coverage-data-*
           path: coverage-data
           merge-multiple: true
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: uv run --locked coverage combine coverage-data
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: uv run --locked coverage report --fail-under=50 | tee coverage-report.txt
+      - run: uv run --locked coverage combine coverage-data
+      - run: uv run --locked coverage report --fail-under=50 | tee coverage-report.txt
         shell: bash -o pipefail {0}
-      - if: needs.plan.outputs.run-coverage == 'true'
-        run: uv run --locked coverage xml
+      - run: uv run --locked coverage xml
       - name: Post coverage summary to PR
         if: >-
-          needs.plan.outputs.run-coverage == 'true' &&
           github.event_name == 'pull_request' &&
           github.event.pull_request.user.type != 'Bot' &&
           github.event.pull_request.head.repo.full_name == github.repository
@@ -889,9 +262,6 @@ jobs:
             echo '```'
             echo ""
             echo "**Total coverage: ${pct}%** (threshold: 50%)"
-            echo ""
-            echo "Branch coverage enabled. Complexity tracked via Ruff C90 (max 28)."
-            echo "Duplicate code detection via jscpd (threshold 10)."
           } > coverage-summary.md
           jq -n --rawfile body coverage-summary.md '{body: $body}' > coverage-comment.json
           list_coverage_comments() {
@@ -903,7 +273,6 @@ jobs:
             gh api --method POST \
               "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
               --input coverage-comment.json
-            # Heal TOCTOU races where a concurrent run also created a comment.
             mapfile -t comment_ids < <(list_coverage_comments)
           fi
           if [ "${#comment_ids[@]}" -eq 0 ]; then
@@ -921,192 +290,65 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: needs.plan.outputs.run-coverage == 'true'
         with:
           name: coverage-3.12
           path: coverage.xml
 
-  duplicate-code:
-    name: Duplicate Code Detection
-    needs: plan
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Require a valid duplicate-code plan
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_DUPLICATE: ${{ needs.plan.outputs.run-duplicate }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_DUPLICATE" in true|false) ;; *) exit 1 ;; esac
-      - if: needs.plan.outputs.run-duplicate == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - if: needs.plan.outputs.run-duplicate == 'true'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ needs.plan.outputs.node-version-jscpd }}
-      - if: needs.plan.outputs.run-duplicate == 'true'
-        run: npx --yes jscpd@5.0.12 --config .jscpd.json .
-
-  npm-package:
-    name: npm Package
-    needs: plan
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Require a valid npm plan
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_NPM: ${{ needs.plan.outputs.run-npm }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_NPM" in true|false) ;; *) exit 1 ;; esac
-      - if: needs.plan.outputs.run-npm == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - if: needs.plan.outputs.run-npm == 'true'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ needs.plan.outputs.node-version-npm }}
-          package-manager-cache: false
-      - if: needs.plan.outputs.run-npm == 'true'
-        name: Assert release surfaces agree
-        run: python .github/scripts/check-release-consistency
-      - if: needs.plan.outputs.run-npm == 'true'
-        run: npm test
-        working-directory: npm
-      - if: needs.plan.outputs.run-npm == 'true'
-        run: npm pack --dry-run
-        working-directory: npm
-
-  build:
-    name: Build
-    needs: plan
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Require a valid build plan
-        env:
-          PLAN_RESULT: ${{ needs.plan.result }}
-          RUN_BUILD: ${{ needs.plan.outputs.run-build }}
-        run: |
-          test "$PLAN_RESULT" = success || {
-            echo "Upstream plan did not succeed: $PLAN_RESULT" >&2
-            exit 1
-          }
-          case "$RUN_BUILD" in true|false) ;; *) exit 1 ;; esac
-      - if: needs.plan.outputs.run-build == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - if: needs.plan.outputs.run-build == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - if: needs.plan.outputs.run-build == 'true'
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.11.28"
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-      - if: needs.plan.outputs.run-build == 'true'
-        run: |
-          echo "::group::Build timing"
-          /usr/bin/time -v make build 2>&1 | tee build-timing.log
-          echo "::endgroup::"
-      - name: Extract build metrics
-        if: >-
-          ${{
-            !cancelled() &&
-            needs.plan.result == 'success' &&
-            needs.plan.outputs.run-build == 'true'
-          }}
-        run: |
-          {
-            echo "## Build Performance"
-            echo ""
-            echo "| Metric | Value |"
-            echo "|--------|-------|"
-            grep -oP '(Elapsed \(wall clock\) time.*|Maximum resident set size.*|User time.*|System time.*)' build-timing.log | while IFS=: read -r key val; do
-              echo "| $(echo "$key" | xargs) | $(echo "$val" | xargs) |"
-            done
-            echo ""
-            echo "Build cache: setup-uv (enabled), dependency cache keyed on pyproject.toml + uv.lock"
-          } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: needs.plan.outputs.run-build == 'true'
-        with:
-          name: dist
-          path: dist/
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: >-
-          ${{
-            !cancelled() &&
-            needs.plan.result == 'success' &&
-            needs.plan.outputs.run-build == 'true'
-          }}
-        with:
-          name: build-timing
-          path: build-timing.log
-
-  ci-metrics:
-    name: CI Metrics
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs:
-      - plan
-      - deployment-test
-      - lint
-      - security-audit
-      - validate-built-package
-      - unit-test
-      - domain-test
-      - composition-test
-      - compatibility-test
-      - python-test
-      - process-test
-      - semantic-lane-test
-      - lean-test-run
-      - lean-test
-      - coverage
-      - duplicate-code
-      - npm-package
-      - build
+  required:
+    name: required
+    if: ${{ always() && !cancelled() }}
+    needs: [static, python, boundaries, wheel, coverage, lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      actions: read
-      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Fetch completed job timings
+      - name: Require static python boundaries wheel coverage and selected specialist lanes
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh api
-          "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100"
-          --paginate --slurp > ci-jobs.json
-      - name: Report critical span and runner time
+          STATIC_RESULT: ${{ needs.static.result }}
+          PYTHON_RESULT: ${{ needs.python.result }}
+          BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
+          WHEEL_RESULT: ${{ needs.wheel.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          LEAN_RESULT: ${{ needs.lean.result }}
         run: |
-          .github/scripts/summarize-ci-timings ci-jobs.json | tee ci-timings.md
-          cat ci-timings.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ci-timings
-          path: ci-timings.md
-          retention-days: 30
+          test "$STATIC_RESULT" = success
+          test "$PYTHON_RESULT" = success
+          test "$BOUNDARIES_RESULT" = success
+          test "$WHEEL_RESULT" = success
+          test "$COVERAGE_RESULT" = success
+          test "$LEAN_RESULT" = success
+
+  python-test:
+    name: Python Tests
+    if: ${{ always() && !cancelled() }}
+    needs: [required]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mirror required for existing branch protection
+        env:
+          REQUIRED_RESULT: ${{ needs.required.result }}
+        run: test "$REQUIRED_RESULT" = success
+
+  lean-test:
+    name: Lean Tests
+    if: ${{ always() && !cancelled() }}
+    needs: [lean]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require Lean on the exact merge candidate
+        env:
+          LEAN_RESULT: ${{ needs.lean.result }}
+        run: test "$LEAN_RESULT" = success
+
+  deployment-test:
+    name: Deployment Tests
+    if: ${{ always() && !cancelled() }}
+    needs: [static]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Deploy check runs inside static
+        env:
+          STATIC_RESULT: ${{ needs.static.result }}
+        run: test "$STATIC_RESULT" = success

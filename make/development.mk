@@ -1,15 +1,22 @@
-.PHONY: uv-version-check setup doctor setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck test-architecture test-runtime-inventory compile-test-plan compile-test-plan-check architecture docs-command-check docs-linkcheck
-
-PROFILE ?= core
+.PHONY: uv-version-check setup doctor setup-lean doctor-lean doctor-external setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
 
-setup: ## Install and diagnose a locked development profile (PROFILE=core).
-	python3 tools/development_profiles.py setup --profile "$(PROFILE)" --repo .
+setup: ## Install the locked contributor environment and diagnose Python backends.
+	python3 tools/development_profiles.py setup --repo .
 
-doctor: ## Diagnose a development profile without changing it (PROFILE=core).
-	uv run --locked --no-sync python tools/development_profiles.py doctor --profile "$(PROFILE)" --repo .
+doctor: ## Diagnose the locked contributor environment without changing it.
+	uv run --locked --no-sync python tools/development_profiles.py doctor --repo .
+
+setup-lean: ## Install the locked environment and the pinned Lean toolchain.
+	python3 tools/development_profiles.py setup --profile lean --repo .
+
+doctor-lean: ## Diagnose Lean/elan/lake without changing the checkout.
+	uv run --locked --no-sync python tools/development_profiles.py doctor --profile lean --repo .
+
+doctor-external: ## Diagnose optional SAT proof binaries (no downloads).
+	uv run --locked --no-sync python tools/development_profiles.py doctor --profile external-proof --repo .
 
 setup-agent: ## Configure an agent against this source checkout (ARGS="--client codex --profile core").
 	./scripts/setup-agent $(ARGS)
@@ -31,7 +38,7 @@ eval-image-bind: ## Bind image identity into RUNTIME_SNAPSHOT (JACOBIAN_IMAGE=..
 
 deploy-check: ## Validate the clone-to-systemd deployment entrypoint.
 	bash -n deploy/install.sh
-	$(PYTEST_RUNNER) --name deploy-check -- -n 0 tests/boundary/process/tooling/test_deploy_installer.py
+	$(UV_RUN) pytest -n 0 tests/boundary/process/tooling/test_deploy_installer.py
 
 hooks: setup ## Install pre-commit hooks.
 	$(UV_RUN) pre-commit install --install-hooks
@@ -59,20 +66,8 @@ security-audit: ## Audit dependencies for known vulnerabilities.
 typecheck: ## Run strict static type checking.
 	$(UV_RUN) mypy
 
-test-architecture: ## Enforce semantic test-layer and provider-import boundaries.
-	$(UV_RUN) python -m tools.check_test_architecture .
-
 import-contracts: ## Enforce declared package dependency direction.
 	$(UV_RUN) lint-imports
-
-test-runtime-inventory: ## Fail when authorized complete-runtime uses lack verify/authority signals.
-	$(UV_RUN) python -m tools.inventory_test_runtime --fail-on-unjustified
-
-compile-test-plan: ## Regenerate topology.toml and ci-impact.json from plan_manifest.toml.
-	$(UV_RUN) python -m tools.test_plan.compile --write
-
-compile-test-plan-check: ## Fail when topology or impact projections are stale.
-	$(UV_RUN) python -m tools.test_plan.compile --check
 
 architecture: ## Enforce product source boundary invariants (subprocess, shutil.which, environ, contracts, surfaces).
 	$(UV_RUN) python tools/check_architecture.py

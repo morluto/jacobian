@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.contracts.certified_snf import (
     CertifiedIntegerMatrix,
     CertifiedSmithNormalFormRequest,
+    CertifiedSmithNormalFormResult,
     SmithNormalFormCertificate,
 )
 
@@ -32,6 +33,45 @@ def test_certified_smith_request_rejects_large_input_scalars() -> None:
         CertifiedSmithNormalFormRequest.model_validate(
             {"matrix": _matrix([["1" * 33]])}
         )
+
+
+def test_certified_smith_request_schema_publishes_the_enforced_dimension_cap() -> None:
+    schema = CertifiedSmithNormalFormRequest.model_json_schema()
+    matrix_schema = schema["properties"]["matrix"]
+
+    assert matrix_schema["properties"]["row_count"] == {
+        "maximum": 16,
+        "minimum": 1,
+        "title": "Row Count",
+        "type": "integer",
+    }
+    assert matrix_schema["properties"]["column_count"] == {
+        "maximum": 16,
+        "minimum": 1,
+        "title": "Column Count",
+        "type": "integer",
+    }
+
+
+def test_certified_smith_result_source_composes_into_a_new_request() -> None:
+    source = CertifiedIntegerMatrix.model_validate(_matrix([[2]]))
+    identity = CertifiedIntegerMatrix.model_validate(_matrix([[1]]))
+    result = CertifiedSmithNormalFormResult(
+        certificate=SmithNormalFormCertificate(
+            source=source,
+            diagonal=source,
+            left_transformation=identity,
+            right_transformation=identity,
+            rank=1,
+            invariant_factors=("2",),
+            left_determinant="1",
+            right_determinant="1",
+        )
+    )
+
+    request = CertifiedSmithNormalFormRequest(matrix=result.certificate.source)
+
+    assert request.matrix is result.certificate.source
 
 
 def test_certificate_contract_requires_a_canonical_divisibility_diagonal() -> None:

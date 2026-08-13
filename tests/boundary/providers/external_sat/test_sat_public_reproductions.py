@@ -82,7 +82,7 @@ def test_sat_public_reproductions_reach_checker_bound_results(
                 )
             )
             assert found.execution.status is ExecutionStatus.COMPLETED
-            assert found.output["conclusion"] == "UNKNOWN"
+            assert "conclusion" not in found.output
             evidence_uri = found.output[evidence_field]
             assert evidence_uri is not None
             if case["expected_status"] == "SATISFIABLE":

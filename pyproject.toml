@@ -23,6 +23,7 @@ dependencies = [
     "mcp-types==2.0.0",
     "networkx==3.6.1",
     "pydantic>=2.12,<3",
+    "pydantic-core>=2.41,<3",
     "python-flint==0.9.0",
     "rfc8785==0.1.4",
     "sympy==1.14.0",
@@ -72,15 +73,27 @@ exclude = [
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
-testpaths = ["tests"]
-# Lane runners provide the deadline.  Thread mode avoids relying on a SIGALRM
-# that native solver extensions may not observe; killable work is isolated in
-# the process boundary lane.
+# Default collection is Lean-free and xdist-safe. Storage, process, MCP, and
+# Lean stay on explicit paths / Make targets because they need serial SQLite
+# or kill-safe process supervision.
+testpaths = [
+    "tests/unit",
+    "tests/component",
+    "tests/domain",
+    "tests/composition",
+    "tests/boundary/providers/cvc5",
+    "tests/boundary/providers/external_sat",
+    "tests/boundary/providers/flint",
+    "tests/e2e",
+]
+# Per-invocation --timeout lives on Make/CI commands, not here: a global
+# deadline would interrupt native solvers that process/Lean isolate instead.
 timeout_method = "thread"
 markers = [
     "requires_provider(name): test requires a production provider readiness probe",
     "performance: benchmark or timing evidence excluded from correctness lanes",
     "property: property-based invariant tests",
+    "exhaustive: broad finite reference sweeps run by scheduled validation",
     "destructive_process: test requires child-process isolation and group termination",
 ]
 
@@ -265,7 +278,6 @@ forbidden_modules = ["jacobian.portfolio"]
 
 [tool.coverage.run]
 branch = true
-patch = ["subprocess"]
 source = ["jacobian", "jacobian_checkers"]
 
 [tool.coverage.report]

@@ -208,6 +208,30 @@ def test_accepts_equivalent_concise_audit_evidence(tmp_path: Path) -> None:
     assert accepted.reward == pytest.approx(1.0)
 
 
+def test_limitations_need_not_be_duplicated_in_evidence(tmp_path: Path) -> None:
+    """The public contract assigns excluded claims to the limitations field."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    evidence_path = app / "evidence" / "answer.txt"
+    result_marker = next(
+        line
+        for line in evidence_path.read_text().splitlines()
+        if line.startswith("RESULT_JSON:")
+    )
+    evidence_path.write_text(
+        "Over the Nat domain the nonzero-sum condition is redundant. Over bounded "
+        "integer-valued perturbations, the submitted periodic witness has two "
+        "cancellations.\n"
+        f"{result_marker}\n"
+    )
+    submission = json.loads((app / "submission.json").read_text())
+    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    support._write_json(app / "submission.json", submission)
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted.details["evidence_validity"] == 1.0
+    assert accepted.details["limitation_accuracy"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
+
+
 def test_rejects_multiple_result_markers(tmp_path: Path) -> None:
     """Evidence must bind exactly one unambiguous result marker."""
     task, app, logs = support._prepare_case(tmp_path, TASK, "computed")

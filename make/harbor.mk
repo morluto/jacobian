@@ -1,3 +1,6 @@
+# Harbor-only. Product CI does not classify or plan from PATHS.
+# Changed-path temps live only inside recipes (EXIT trap); never at parse time.
+
 HARBOR_VERSION ?= 0.20.0
 HARBOR_RUNNER ?= uvx --from harbor==$(HARBOR_VERSION) harbor
 HARBOR_PYTHON ?= uvx --from harbor==$(HARBOR_VERSION) --with tomli-w==1.2.0 --with jsonschema python
@@ -28,12 +31,13 @@ case "$$docker_build_mode" in \
 esac;
 endef
 
-.PHONY: harbor-plan harbor-prepare-task harbor-validate-task harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-host-validation harbor-validate harbor-check harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke
+.PHONY: harbor-plan harbor-prepare-task harbor-validate-task harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-host-validation harbor-validate harbor-check harbor-check-all harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke
 
+harbor-plan: export JACOBIAN_HARBOR_PATHS := $(PATHS)
 harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 	@set -eu; \
 	tmp_dir=$$(mktemp -d); \
-	trap 'rm -rf "$$tmp_dir"; if [ -n "$(PATHS_FILE)" ]; then rm -f "$(PATHS_FILE)"; fi' EXIT; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
 	base_sha=""; \
 	base_arg=""; \
 	if [ -n "$(BASE)" ]; then \
@@ -41,23 +45,18 @@ harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 		base_arg="--base $$base_sha"; \
 	fi; \
 	head_sha=$$(git rev-parse HEAD); \
-	if [ -n "$(PATHS)" ]; then \
-		$(UV_RUN) python .github/scripts/normalize-ci-paths --file "$(PATHS_FILE)" > "$$tmp_dir/changed-paths.txt"; \
+	if [ -n "$$JACOBIAN_HARBOR_PATHS" ]; then \
+		printf '%s\n' "$$JACOBIAN_HARBOR_PATHS" > "$$tmp_dir/raw-paths.txt"; \
 	else \
 		{ \
 			if [ -n "$(BASE)" ]; then git diff --name-only "$(BASE)" HEAD; fi; \
 			git diff --name-only HEAD; \
 			git ls-files --others --exclude-standard; \
-		} | sort -u > "$$tmp_dir/changed-paths.txt"; \
+		} | sort -u > "$$tmp_dir/raw-paths.txt"; \
 	fi; \
-	if [ -n "$(PATHS)" ]; then \
-		$(HARBOR_PYTHON) .github/scripts/plan-benchmarks \
-			$$base_arg --head "$$head_sha" --paths-file "$(PATHS_FILE)" > "$$tmp_dir/plan.txt"; \
-	else \
-		changed_paths=$$(tr '\n' ' ' < "$$tmp_dir/changed-paths.txt"); \
-		$(HARBOR_PYTHON) .github/scripts/plan-benchmarks \
-			$$base_arg --head "$$head_sha" -- $$changed_paths > "$$tmp_dir/plan.txt"; \
-	fi; \
+	$(UV_RUN) python .github/scripts/normalize-ci-paths --file "$$tmp_dir/raw-paths.txt" > "$$tmp_dir/changed-paths.txt"; \
+	$(HARBOR_PYTHON) .github/scripts/plan-benchmarks \
+		$$base_arg --head "$$head_sha" --paths-file "$$tmp_dir/changed-paths.txt" > "$$tmp_dir/plan.txt"; \
 	$(UV_RUN) python .github/scripts/validate-benchmark-plan < "$$tmp_dir/plan.txt"; \
 	$(UV_RUN) python .github/scripts/emit-plan-receipt \
 		--kind benchmark --event pull_request \
@@ -69,6 +68,7 @@ harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 		--config benchmarks/environment-profiles.toml \
 		--config .github/workflows/benchmarks.yml \
 		--config Makefile \
+		--config make/harbor.mk \
 		--config tools/check_benchmark_adapters.py \
 		--config tools/check_benchmark_contracts.py \
 		--config tools/check_harbor_dataset.py \
@@ -121,12 +121,17 @@ harbor-validation-tests: ## Run Harbor's host-side validation test suite.
 		$(PYTEST_DIAGNOSTIC_ARGS) $(if $(TESTS),$(TESTS),benchmarks/validation) $(PYTEST_ARGS)
 
 harbor-host-validation: ## Run the full host suite in timing-balanced local shards.
-	$(UV_RUN) python -m benchmarks.tooling.host_validation run-full \
+	$(WORKTREE_ADMISSION) run --target harbor-host-validation -- $(UV_RUN) python -m benchmarks.tooling.host_validation run-full \
 		--total-workers $(HARBOR_VALIDATION_TOTAL_WORKERS) --max-parallel 4
 
-harbor-validate: harbor-contracts harbor-adapter-checks harbor-host-validation ## Run all repository-owned Harbor checks under the pinned Harbor runtime.
+harbor-check: harbor-execution-check harbor-adapter-checks ## Check Harbor contracts and control-plane behavior.
 
-harbor-check: harbor-validate ## Run Harbor topology, digest, provenance, and host-side validation checks.
+harbor-check-all: ## Explicitly run every repository-owned Harbor host regression.
+	$(WORKTREE_ADMISSION) run --target harbor-check-all -- $(MAKE) _harbor-check-all-unlocked
+
+_harbor-check-all-unlocked: harbor-check harbor-host-validation
+
+harbor-validate: harbor-check-all ## Backward-compatible exhaustive Harbor validation alias.
 
 harbor-check-task: ## Validate selected Harbor leaf tasks (DATASET=..., TASKS="task-a task-b").
 	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
@@ -224,7 +229,10 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 		--result "benchmarks/results/$(DATASET)-oracle/$$job_name/result.json" \
 		$(if $(TASKS),--tasks $(TASKS),)
 
-harbor-oracle-all: harbor-check ## Run every registered dataset Oracle with tasks.
+harbor-oracle-all: ## Run every registered dataset Oracle with tasks.
+	$(WORKTREE_ADMISSION) run --target harbor-oracle-all -- $(MAKE) _harbor-oracle-all-unlocked
+
+_harbor-oracle-all-unlocked: harbor-check-all
 	@set -e; for dataset in mathematical-benchmarks-v1 symbolic-coordination-v1 public-reproductions-v1 conjecture-probes-v1 research-diagnostics-v1 provider-feasibility-v1; do \
 		$(MAKE) --no-print-directory harbor-oracle-run DATASET=$$dataset FULL=1 EVAL_ARGS="$(EVAL_ARGS)"; \
 	done

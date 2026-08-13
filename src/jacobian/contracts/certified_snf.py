@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.exact import CanonicalInteger
@@ -48,8 +49,23 @@ class CertifiedIntegerMatrix(ContractModel):
         return self
 
 
+def _certified_smith_input_schema() -> JsonSchemaValue:
+    """Project the producer's request bounds without creating another value type."""
+
+    schema = CertifiedIntegerMatrix.model_json_schema()
+    for field_name in ("row_count", "column_count"):
+        schema["properties"][field_name].update(
+            minimum=1,
+            maximum=MAX_CERTIFIED_SNF_INPUT_DIMENSION,
+        )
+    return schema
+
+
 class CertifiedSmithNormalFormRequest(ContractModel):
-    matrix: CertifiedIntegerMatrix
+    matrix: Annotated[
+        CertifiedIntegerMatrix,
+        WithJsonSchema(_certified_smith_input_schema()),
+    ]
 
     @model_validator(mode="after")
     def require_nonempty_bounded_input(self) -> Self:

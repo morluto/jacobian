@@ -49,7 +49,7 @@ def test_pinned_cadical_produces_a_model_and_text_drat_proof(
         )
         assert model.execution.status is ExecutionStatus.COMPLETED
         assert model.output["status"] == "ASSIGNMENT_PRODUCED"
-        assert model.output["conclusion"] == "UNKNOWN"
+        assert "conclusion" not in model.output
 
         unsatisfiable = runtime.core.sat.put_cnf(
             variable_names=("x",),
@@ -66,4 +66,4 @@ def test_pinned_cadical_produces_a_model_and_text_drat_proof(
         )
         assert proof.execution.status is ExecutionStatus.COMPLETED
         assert proof.output["status"] == "PROOF_PRODUCED"
-        assert proof.output["conclusion"] == "UNKNOWN"
+        assert "conclusion" not in proof.output

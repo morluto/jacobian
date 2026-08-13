@@ -18,7 +18,6 @@ from jacobian.contracts.checkers import EvidenceKind
 from jacobian.provider_runtime import python_distribution_provider_runtime
 from jacobian.registry import (
     CheckerCompatibilityError,
-    CheckerExecutableChangedError,
     CheckerNotFoundError,
     CheckerRegistry,
     CheckerRegistryError,
@@ -265,7 +264,9 @@ def test_checker_authorization_requires_explicit_compatibility_scope(
         )
 
 
-def test_checker_registry_binds_external_runtime_identity(tmp_path: Path) -> None:
+def test_checker_selection_uses_authorized_external_runtime_identity(
+    tmp_path: Path,
+) -> None:
     executable = tmp_path / "external-checker"
     executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o755)
@@ -301,11 +302,16 @@ def test_checker_registry_binds_external_runtime_identity(tmp_path: Path) -> Non
 
     executable.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     executable.chmod(0o755)
-    with pytest.raises(
-        CheckerExecutableChangedError,
-        match="changed after authorization",
-    ):
-        registry.require_active(checker.checker_id)
+    selected = registry.select_compatible(
+        evidence_kind="WITNESS",
+        format_id="example.witness",
+        format_version="1",
+        claim_schema_uri=CLAIM_SCHEMA_A,
+        semantics_uri=CLAIM_SCHEMA_A,
+        candidate_schema_uri=CLAIM_SCHEMA_A,
+    )
+
+    assert selected == checker
 
 
 def test_checker_registry_authorizes_python_distribution_runtime(

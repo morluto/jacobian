@@ -8,23 +8,19 @@ STRESS_COUNT ?= 3
 ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
-TOPOLOGY_RUNNER := $(UV_RUN) python tools/test_topology.py
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
-PUBLIC_COMMANDS := setup doctor fix check-changed check ci-plan
-
-ifneq ($(strip $(PATHS)),)
-PATHS_FILE := $(shell mktemp)
-$(file >$(PATHS_FILE),$(PATHS))
-endif
+WORKTREE_ADMISSION := $(UV_RUN) python tools/worktree_admission.py
+# Fixed semantic lanes covering the Lean-free ordinary testpaths. CI runs these
+# independently; `make check-all` reproduces them locally in this order.
+ORDINARY_TEST_LANES := unit component domain composition e2e provider
+PUBLIC_COMMANDS := setup quick check check-all check-external fix
 
 include make/development.mk
 include make/harbor.mk
 include make/evaluations.mk
 
-# A timeout is a lane-level containment policy.  It intentionally does not live
-# in pyproject.toml: direct pytest invocations must not silently inherit a
-# signal-based deadline that cannot interrupt a native solver.  Process and
-# provider lanes run risky work in killable children and set their own deadline.
+# Timeouts are per-command, not pyproject addopts: process/Lean isolate
+# killable work, and a global signal deadline would hit native solvers.
 .PHONY: help help-all
 
 help: ## Show the primary developer workflow.
@@ -34,112 +30,83 @@ help: ## Show the primary developer workflow.
 help-all: ## Show every low-level and lifecycle developer command.
 	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+test-unit: ## Pure contracts and models (sequential, 10s).
+	$(UV_RUN) pytest --timeout=10 \
+		$(if $(TESTS),$(TESTS),tests/unit) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-plan: ## Print local validation selected for BASE..HEAD or explicit PATHS.
-	@if [ -n "$(PATHS)" ]; then \
-		trap 'rm -f "$(PATHS_FILE)"' EXIT; \
-		$(UV_RUN) python .github/scripts/plan-local-tests --paths-file "$(PATHS_FILE)"; \
-	else \
-		test -n "$(BASE)" || { echo "BASE is required unless PATHS is set (for example: make test-plan BASE=origin/main)" >&2; exit 2; }; \
-		$(UV_RUN) python .github/scripts/plan-local-tests --base "$(BASE)"; \
-	fi
+test-component: ## One-service component tests (4 workers, 30s).
+	$(UV_RUN) pytest -n 4 --dist loadscope --timeout=30 -m "not exhaustive" \
+		$(if $(TESTS),$(TESTS),tests/component) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-ci-plan: ## Print the hosted CI lane plan for BASE..HEAD and working changes.
-	@set -eu; \
-	tmp_dir=$$(mktemp -d); \
-	trap 'rm -rf "$$tmp_dir"; if [ -n "$(PATHS_FILE)" ]; then rm -f "$(PATHS_FILE)"; fi' EXIT; \
-	base_sha=$$(git rev-parse "$(or $(BASE),origin/main)"); \
-	head_sha=$$(git rev-parse HEAD); \
-	if [ -n "$(PATHS)" ]; then \
-		$(UV_RUN) python .github/scripts/normalize-ci-paths --file "$(PATHS_FILE)" > "$$tmp_dir/changed-paths.txt"; \
-	else \
-		{ \
-			git diff --name-only "$(or $(BASE),origin/main)" HEAD; \
-			git diff --name-only HEAD; \
-			git diff --cached --name-only; \
-			git ls-files --others --exclude-standard; \
-		} | sort -u > "$$tmp_dir/changed-paths.txt"; \
-	fi; \
-	if [ -n "$(PATHS)" ]; then \
-		$(UV_RUN) python .github/scripts/classify-ci-paths --paths-file "$(PATHS_FILE)" > "$$tmp_dir/plan.txt"; \
-	else \
-		changed_paths=$$(tr '\n' ' ' < "$$tmp_dir/changed-paths.txt"); \
-		$(UV_RUN) python .github/scripts/classify-ci-paths -- $$changed_paths > "$$tmp_dir/plan.txt"; \
-	fi; \
-	$(UV_RUN) python .github/scripts/validate-ci-plan < "$$tmp_dir/plan.txt"; \
-	$(UV_RUN) python .github/scripts/emit-plan-receipt \
-		--kind product-ci --event pull_request \
-		--base "$$base_sha" --head "$$head_sha" \
-		--planner .github/scripts/classify-ci-paths \
-		--config .github/ci-impact.json --config tests/topology.toml \
-		--config .github/scripts/_ci_paths.py \
-		--config .github/scripts/validate-ci-plan \
-		--config .github/workflows/ci.yml --config Makefile \
-		--config make/development.mk --config make/harbor.mk \
-		--config make/evaluations.mk \
-		--plan-file "$$tmp_dir/plan.txt" \
-		--paths-file "$$tmp_dir/changed-paths.txt" \
-		--output "$$tmp_dir/receipt.json" >/dev/null; \
-	echo "Hosted CI lanes:"; \
-	cat "$$tmp_dir/plan.txt"; \
-	echo "Plan receipt:"; \
-	cat "$$tmp_dir/receipt.json"
+test-domain: ## Explicit mathematical domains (4 workers, 120s).
+	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=120 \
+		$(if $(TESTS),$(TESTS),tests/domain) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-changed: ## Run changed-path tests, defaulting BASE to origin/main.
-	@if [ -n "$(PATHS)" ]; then \
-		trap 'rm -f "$(PATHS_FILE)"' EXIT; \
-		$(UV_RUN) python .github/scripts/plan-local-tests --paths-file "$(PATHS_FILE)" --execute; \
-	else \
-		$(UV_RUN) python .github/scripts/plan-local-tests --base "$(or $(BASE),origin/main)" --execute; \
-	fi
+test-composition: ## Cross-domain composition (2 workers, 120s).
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=120 \
+		$(if $(TESTS),$(TESTS),tests/composition) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-check-changed: ## Plan and run the affected local handoff (BASE=origin/main).
-	$(MAKE) test-changed BASE="$(or $(BASE),origin/main)"
+test-storage: ## SQLite durability and recovery (serial, 120s).
+	$(UV_RUN) pytest --timeout=120 \
+		$(if $(TESTS),$(TESTS),tests/boundary/storage) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-define run_topology_lane
-	$(TOPOLOGY_RUNNER) $(1) \
-		--pytest-args "$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)" \
-		$(if $(TESTS),$(TESTS))
-endef
+test-process: ## Killable child-process boundaries (2 workers, 120s).
+	$(PYTEST_RUNNER) --name process --timeout-seconds 4800 -- \
+		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
+		$(if $(TESTS),$(TESTS),tests/boundary/process) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-unit: ## Run pure contracts and models (10s lane, sequential).
-	$(call run_topology_lane,unit)
+test-mcp: ## MCP transport boundaries (2 workers, 120s).
+	$(PYTEST_RUNNER) --name mcp --timeout-seconds 4800 -- \
+		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
+		$(if $(TESTS),$(TESTS),tests/boundary/mcp) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-component: ## Run one-service component tests (30s lane, four workers).
-	$(call run_topology_lane,component)
+test-provider: ## Maintained Python provider boundaries (1 worker, 180s).
+	$(UV_RUN) pytest -n 1 --dist load --timeout=180 \
+		$(if $(TESTS),$(TESTS),tests/boundary/providers/cvc5 tests/boundary/providers/external_sat tests/boundary/providers/flint) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-domain: ## Run explicitly bundled mathematical domains (120s lane).
-	$(call run_topology_lane,domain)
+test-lean: ## Pinned Lean/Mathlib boundary (serial, 300s, kill-safe).
+	$(PYTEST_RUNNER) --name lean --timeout-seconds 12000 -- \
+		--timeout=300 --timeout-method=signal \
+		$(if $(TESTS),$(TESTS),tests/boundary/providers/lean) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-composition: ## Run complete-runtime composition tests (120s, two workers).
-	$(call run_topology_lane,composition)
+test-e2e: ## Complete caller-visible journeys (serial, 180s).
+	$(UV_RUN) pytest --timeout=180 \
+		$(if $(TESTS),$(TESTS),tests/e2e) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-storage: ## Run SQLite durability and recovery boundaries (serial).
-	$(call run_topology_lane,storage)
+test-ordinary: ## Lean-free ordinary suite in the fixed CI group order.
+	@for lane in $(ORDINARY_TEST_LANES); do \
+		$(MAKE) test-$$lane || exit $$?; \
+	done
 
-test-process: ## Run killable child-process boundaries (two workers).
-	$(call run_topology_lane,process)
+test-compatibility: ## Supported-version import/API compatibility smoke.
+	$(UV_RUN) pytest -n 0 --timeout=30 --timeout-method=thread \
+		tests/unit/tooling/test_ci_compatibility.py \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-mcp: ## Run MCP transport boundaries (two workers).
-	$(call run_topology_lane,mcp)
+test-checker-subprocess-coverage: ## Prove focused checker-worker child coverage collection.
+	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) pytest -n 0 --timeout=30 \
+		tests/unit/test_checker_worker_manifest.py \
+		--cov --cov-config=.coveragerc-subprocess --cov-report= --cov-fail-under=0
+	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) coverage report \
+		--include=src/jacobian/checker_worker.py --fail-under=1
 
-test-provider: ## Run prepared optional-provider boundaries (one worker).
-	$(call run_topology_lane,provider)
+test-all-ci: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.
+	$(WORKTREE_ADMISSION) run --target test-all-ci -- $(MAKE) _test-all-ci-unlocked
 
-test-lean: ## Run the pinned Lean/Mathlib boundary serially.
-	$(call run_topology_lane,lean)
-
-test-e2e: ## Run complete user-visible CLI/workflow scenarios serially.
-	$(call run_topology_lane,e2e)
-
-test-compatibility: ## Run the small supported-version import/API compatibility smoke suite.
-	$(PYTEST_RUNNER) --name compatibility -- -n 0 --timeout=30 --timeout-method=thread tests/unit/tooling/test_ci_compatibility.py $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
-
-test-affected: test-changed ## Compatibility alias for the changed-path planner.
-
-test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
+_test-all-ci-unlocked:
 	$(MAKE) test-unit
 	$(MAKE) test-component
+	$(MAKE) test-exhaustive
 	$(MAKE) test-domain
 	$(MAKE) test-composition
 	$(MAKE) test-storage
@@ -150,8 +117,14 @@ test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
 	$(MAKE) test-e2e
 
 test-stress: ## Repeat explicitly marked property tests on the scheduled lane.
-	$(PYTEST_RUNNER) --name stress -- -n 0 --timeout=120 --timeout-method=thread -m property --count=$(STRESS_COUNT) \
-		$(if $(TESTS),$(TESTS),tests) $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+	$(UV_RUN) pytest -n 0 --timeout=120 --timeout-method=thread -m property \
+		--count=$(STRESS_COUNT) $(if $(TESTS),$(TESTS),tests) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
+test-exhaustive: ## Broad finite reference sweeps reserved for scheduled validation.
+	$(WORKTREE_ADMISSION) run --target test-exhaustive -- $(UV_RUN) pytest -n 0 --timeout=180 --timeout-method=thread -m exhaustive \
+		$(if $(TESTS),$(TESTS),tests) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-ordering: ## Reproduce scheduled ordering (default seed 17; override with PYTEST_ARGS).
 	@test -n "$(ORDERING_LANE)" || { echo "ORDERING_LANE is required" >&2; exit 2; }
@@ -181,13 +154,22 @@ coverage: ## Combine coverage data files and enforce the repository threshold.
 build: ## Build Python source and wheel distributions.
 	uv build
 
-check: lint typecheck test-unit ## Run the fast routine local handoff checks.
+quick: lint test-unit ## Cheap iteration: lint and unit tests.
 
-precommit: ## Fix and run every routine local handoff check.
+check: lint typecheck test-unit ## Routine local handoff: lint, types, and unit tests.
+
+check-all: lint typecheck test-ordinary ## Reproduce the six ordinary Python CI lanes locally.
+
+check-external: test-lean ## Pinned Lean/Mathlib specialist lane only.
+
+precommit: ## Apply safe fixes, then run lint, types, and unit tests (mutates the tree).
 	$(MAKE) fix
 	$(MAKE) check
 
-check-static: lint-full typecheck test-architecture import-contracts compile-test-plan-check test-runtime-inventory architecture todo-check build ## Run CI-owned static checks plus a local package build.
+validation-status: ## Show whether this worktree holds an exhaustive validation lease.
+	$(WORKTREE_ADMISSION) status
+
+check-static: lint-full typecheck import-contracts architecture todo-check build ## CI-owned static checks plus a local package build.
 
 clean: ## Remove local caches, build outputs, and coverage artifacts.
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build htmlcov

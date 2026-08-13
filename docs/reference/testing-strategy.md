@@ -11,7 +11,7 @@ encode a required research sequence.
 | Change | First local check | Escalate when |
 | --- | --- | --- |
 | Documentation | `make docs-linkcheck` | Checked examples also run when their supported contract changes |
-| Python behavior | `make test-plan BASE=<revision>` and selected lane | Finish with `make check-changed BASE=<revision>` |
+| Python behavior | `make check`, then the owning named lane | Use `make check-all` only for an intentional complete ordinary reproduction |
 | Mathematical domain | Owning domain/component tests | Add composition only for real cross-domain handoff |
 | MCP projection | Focused MCP boundary tests | Add stdio/HTTP parity when transport behavior changes |
 | Checker protocol or authority | Focused checker and authority tests | Require an independent exact-diff review |
@@ -19,23 +19,28 @@ encode a required research sequence.
 | Harbor task input or verifier | `make harbor-validate-task DATASET=... TASKS=...` | Run exact Oracle after executable task/verifier changes |
 | Deployment entrypoint | `make deploy-check` | Include affected process checks for code changes |
 
-Before final validation, always preview the exact selection:
+Before final validation, run the ordinary check on the frozen tree:
 
 ```sh
-make test-plan BASE=origin/main
-make check-changed BASE=origin/main
+make setup
+make check
 ```
 
-Do not run the unfiltered pytest suite. Use the Make targets that own provider,
-Lean, storage, process, and composition isolation.
+Default `uv run pytest` collects the Lean-free ordinary `testpaths`. Use the
+Make targets that own storage, process, MCP, and Lean isolation. `make
+check-external` covers the pinned Lean specialist lane when that tree changes.
+
+`make check` is the bounded local handoff: lint, typecheck, and unit tests.
+Hosted CI runs the complete ordinary suite as six fixed semantic lanes: `unit`,
+`component`, `domain`, `composition`, `e2e`, and `provider`. These are static
+Make targets, not path-selected or timing-planned shards. Use the named lane
+that owns the change; `make check-all` runs all six locally in the same order.
 
 ## Test ownership
 
-[`tests/plan_manifest.toml`](../../tests/plan_manifest.toml) owns lanes, gates,
-and path-impact rules. `make compile-test-plan` projects it to
-[`tests/topology.toml`](../../tests/topology.toml) and
-[`ci-impact.json`](../../.github/ci-impact.json); do not hand-edit generated
-projections.
+The filesystem is the metadata. A test under `tests/domain/` is a domain test;
+Lean lives under `tests/boundary/providers/lean/`. Directory prefixes are
+exclusive (longest prefix wins).
 
 | Directory/lane | Evidence owner |
 | --- | --- |
@@ -47,12 +52,33 @@ projections.
 | `tests/boundary/process` | Worker identity, cancellation, resource enforcement |
 | `tests/boundary/mcp` | SDK schema, structured output, resources, stdio/HTTP behavior |
 | `tests/boundary/providers` | Optional provider readiness and identity |
+| `tests/boundary/providers/lean` | Pinned Lean/Mathlib boundary |
 | `tests/e2e` | Complete caller-visible journeys |
+
+Ordinary lanes invoke pytest directly. Three lanes wrap pytest in
+`tools/pytest_lifecycle.py` because child process trees can wedge: process,
+MCP, and Lean.
 
 Use the narrowest production graph that proves the assertion. Complete-runtime
 fixtures are reserved for complete inventory, cross-domain wiring, checker
 authorization, lifecycle, and host boundaries. One operation's request/result
 matrix belongs to its domain or component seam.
+
+Admission follows the asserted contract:
+
+- a test that names one mathematical domain belongs under that domain;
+- a test that directly validates a model belongs in unit;
+- one adapter, checker, or provider seam belongs in component;
+- composition requires a cross-domain edge, complete-portfolio invariant,
+  authority transition, hydration lifecycle, or global policy;
+- boundary tests require the real SQLite, process, MCP, Lean, or optional-provider
+  boundary they assert; and
+- e2e retains only complete caller journeys that would be materially weaker when
+  decomposed.
+
+Names such as `frontier`, `migration`, `regression`, `release`, and issue numbers
+describe history rather than ownership. Put a regression under its permanent
+semantic owner and give it a descriptive behavioral name.
 
 The canonical commands are:
 
@@ -67,15 +93,48 @@ make test-mcp
 make test-provider
 make test-lean
 make test-e2e
+make test-exhaustive
+make test-checker-subprocess-coverage
+make quick
 make check
-make check-changed BASE=origin/main
+make check-all
+make check-external
 make check-static
 ```
 
 `make test-all-ci` is an explicit exhaustive reproduction, not a routine gate.
 Before starting it, confirm that no other pytest job from this checkout is
-running. Concurrent runtime/store/subprocess suites can turn the 60-second
-timeout into host-contention noise.
+running. Concurrent runtime/store/subprocess suites can turn per-test
+timeouts into host-contention noise. Exhaustive local targets
+(`test-all-ci`, `test-exhaustive`, `harbor-check-all`,
+`harbor-host-validation`, `harbor-oracle-all`) take an OS-locked lease in
+this worktree; focused `make test-unit` stays free. `make validation-status`
+reports whether the lease is held.
+
+GitHub Actions identity is the YAML under `.github/workflows` on the default
+branch. Registrations whose files are gone, including historical
+`agent-port-*` and `agent-rebase-*` leftovers, are historical: disable them in
+the GitHub UI and retain their run history.
+`python tools/inventory_github_workflows.py` compares files to registrations
+and never disables workflows. `python tools/restack_feature_branch.py` reports
+unique feature commits and duplicate subjects against a declared parent; it
+never force-pushes.
+
+Ordinary CI coverage instruments each pytest process but does not automatically
+instrument every child it launches. Independent checker calls therefore retain
+their real fresh-process behavior without each short-lived worker producing a
+coverage database. `make test-checker-subprocess-coverage` is the focused
+coverage-transport contract: it enables coverage.py's subprocess patch in an
+isolated profile, exercises accepted, rejected, malformed, and undeclared-import
+worker outcomes, and fails unless child execution is present in the combined
+data. The required aggregate coverage job includes that focused database and
+retains the repository threshold.
+
+Broad finite reference sweeps that are valuable but disproportionate for pull
+requests use the `exhaustive` marker. The component lane excludes them, and
+scheduled validation owns `make test-exhaustive`. Keep a representative
+behavioral case in the ordinary owning lane; do not use the marker to defer
+boundary, authorization, persistence, or public-API coverage.
 
 ## Test principles
 
@@ -93,6 +152,19 @@ carrier invariance, and algebraic invariants when a property expresses the
 contract better than examples. Use representative storage and process seams
 when the claim depends on SQLite, filesystem publication, subprocesses, or
 cancellation.
+
+Let pytest own collection and fixture lifetime through the narrowest owning
+`conftest.py`. Broaden fixture scope only for reusable installation state whose
+tests do not mutate it; tests that revoke authority, patch shared services, or
+otherwise change runtime state retain an isolated fixture.
+
+For repeated installation, first select the smallest production domain bundle.
+Group read-only assertions around an immutable module-scoped fixture only when
+isolation permits it. If measurement still justifies reuse for mutating tests,
+clone a quiesced state template into a private test directory. Keep a
+function-scoped cold start when construction, authorization, or hydration is the
+contract. Do not introduce a universal fixture registry or installation-plan
+abstraction for test convenience.
 
 Do not substitute source-reading tests for caller-visible behavior. If a
 behavioral regression proof is infeasible, state the proof gap.
@@ -257,11 +329,11 @@ skill and exact task validation path when those files change.
 
 After implementation freezes the behavioral tree:
 
-1. run `make test-plan BASE=<revision>`;
-2. run the selected focused lanes;
+1. run `make check` and the named lane that owns the change;
+2. run any named specialist lane the change actually crossed;
 3. complete any required independent exact-diff review;
 4. resolve its consolidated findings;
-5. run `make check-changed BASE=<revision>` on the final tree; and
+5. rerun the invalidated focused checks on the final tree; and
 6. report only evidence that actually ran, including material proof gaps.
 
 After any edit, rerun only checks whose evidence the edit invalidated. Do not

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from tools.check_architecture import check_architecture
 
 
@@ -75,16 +76,44 @@ def test_subprocess_in_checkers_is_flagged(tmp_path: Path) -> None:
     assert sub[0].path == "src/jacobian_checkers/sat.py"
 
 
-def test_subprocess_in_test_topology_is_flagged(tmp_path: Path) -> None:
+def test_subprocess_in_unlisted_tool_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "tools/test_topology.py",
+        "tools/unlisted_runner.py",
         "import subprocess\n\nsubprocess.run(['echo'])\n",
     )
     report = check_architecture(tmp_path)
     sub = [v for v in report.violations if v.code == "subprocess-confined"]
     assert len(sub) == 1
-    assert sub[0].path == "tools/test_topology.py"
+    assert sub[0].path == "tools/unlisted_runner.py"
+
+
+def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tools/development_profiles.py",
+        "import subprocess\n\nsubprocess.run(['uv', 'sync'])\n",
+    )
+    report = check_architecture(tmp_path)
+    assert all(v.code != "subprocess-confined" for v in report.violations)
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "tools/inventory_github_workflows.py",
+        "tools/restack_feature_branch.py",
+        "tools/worktree_admission.py",
+        "tests/unit/tooling/test_restack_feature_branch.py",
+        "tests/unit/tooling/test_worktree_admission.py",
+    ],
+)
+def test_subprocess_in_listed_developer_tooling_is_allowed(
+    tmp_path: Path, relative: str
+) -> None:
+    _write(tmp_path, relative, "import subprocess\n\nsubprocess.run(['true'])\n")
+    report = check_architecture(tmp_path)
+    assert all(v.code != "subprocess-confined" for v in report.violations)
 
 
 def test_subprocess_in_deleted_e2e_fixture_is_rejected(tmp_path: Path) -> None:
@@ -135,10 +164,10 @@ def test_os_execvpe_in_product_is_flagged(tmp_path: Path) -> None:
     assert "execvpe" in sub[0].message
 
 
-def test_os_execvpe_in_test_topology_is_flagged(tmp_path: Path) -> None:
+def test_os_execvpe_in_unlisted_tool_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "tools/test_topology.py",
+        "tools/unlisted_runner.py",
         "import os\n\nos.execvpe('python', ['python'], {})\n",
     )
     report = check_architecture(tmp_path)

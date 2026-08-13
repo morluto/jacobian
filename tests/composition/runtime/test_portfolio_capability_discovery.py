@@ -5,8 +5,22 @@ from __future__ import annotations
 from jacobian.contracts.capabilities import CapabilityDiscoveryRequest
 from jacobian.runtime.model import JacobianRuntime
 
-# Composition-lane admission category for architecture ratchets.
-COMPOSITION_ADMISSION = "DISCOVERY"
+
+def test_catalog_keeps_chromatic_number_without_unused_encoding_workflow(
+    attached_complete_runtime_read_only: JacobianRuntime,
+) -> None:
+    capability_ids = {
+        descriptor.capability_id
+        for descriptor in (
+            attached_complete_runtime_read_only.core.capabilities.catalog().capabilities
+        )
+    }
+
+    assert "graph.invariant.chromatic_number.compute" in capability_ids
+    assert {
+        "graph.coloring.encode_k_cnf",
+        "graph.coloring.encoding.verify",
+    }.isdisjoint(capability_ids)
 
 
 def test_discovery_filters_hidden_and_nonmatching_domains(

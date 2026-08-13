@@ -59,6 +59,31 @@ def test_inline_exact_replay_persists_only_its_bound_record(
     assert record.manifest.parents == (parsed.semantics_uri,)
     assert parsed.semantics_uri in verified.artifact_uris
     assert parsed.decision.accepted is True
+    registration = runtime.core.checkers.require_active(parsed.checker_id)
+    assert parsed.record_schema_version == "4"
+    assert parsed.checker_manifest == registration.implementation
+    assert (
+        parsed.implementation_digest == parsed.checker_manifest.implementation_digest()
+    )
+
+
+def test_inline_exact_validation_does_not_echo_a_rejected_candidate(
+    matrix_services: DomainTestServices,
+) -> None:
+    marker = "private_inline_candidate_marker"
+    checked = matrix_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="matrix.rank.verify",
+            input={
+                "input": {"matrix": _matrix()},
+                "candidate": {"rank": marker, "pivot_columns": []},
+            },
+        )
+    )
+
+    assert checked.execution.status == "ERROR"
+    assert checked.diagnostics[0].code == "INVALID_REQUEST"
+    assert marker not in checked.model_dump_json()
 
 
 def test_inline_exact_rejects_bounded_accepted_checker_decisions(

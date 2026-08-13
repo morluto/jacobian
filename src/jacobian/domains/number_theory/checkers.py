@@ -1,13 +1,25 @@
 """Independent checker declarations owned by the number-theory domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
+from jacobian.providers import flint_runtime
 
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
+
+
+def _flint_exact_replay_runtime(
+    *, checker_ids: tuple[str, ...] = (), refresh: bool = False
+) -> CapabilityProviderRuntime:
+    return flint_runtime.exact_domain_checker_provider_runtime(
+        checker_ids=checker_ids,
+        refresh=refresh,
+    )
+
 
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
@@ -16,6 +28,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "check_integer_prime_factorization",
         "integer.prime-factorization.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        provider_runtime_factory=_flint_exact_replay_runtime,
         replay_method="Python-FLINT prime-factorization replay",
         reason=(
             "operator-authorized Python-FLINT checker independent of the "
@@ -25,7 +38,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         verification_title="Verify an integer prime factorization",
         verification_description=(
             "Independently verify the complete canonical prime-power "
-            "factorization of one stored nonzero integer result."
+            "factorization submitted with its exact nonzero integer input."
         ),
         verification_tags=(
             "verification",
@@ -41,6 +54,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "check_integer_powerful_number",
         "integer.powerful.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        provider_runtime_factory=_flint_exact_replay_runtime,
         replay_method="Python-FLINT powerful-number replay",
         reason=(
             "operator-authorized Python-FLINT checker independent of the "
@@ -49,8 +63,9 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         verification_capability_id="integer.powerful.verify",
         verification_title="Verify a powerful-number decision",
         verification_description=(
-            "Independently verify one stored powerful-number decision, its "
-            "complete canonical factor witness, and every violating prime."
+            "Independently verify one submitted powerful-number decision against "
+            "its exact integer input, complete canonical factor witness, and every "
+            "violating prime."
         ),
         verification_tags=(
             "verification",
@@ -66,6 +81,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
         "check_modular_polynomial_residue_image",
         "modular.polynomial-residue-image.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
+        provider_runtime_factory=_flint_exact_replay_runtime,
         replay_method="Python-FLINT exhaustive modular-polynomial replay",
         reason=(
             "operator-authorized Python-FLINT checker independently reconstructs "

@@ -129,6 +129,20 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
     assert "quick: lint typecheck test-unit" in makefile
 
 
+def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    all_ci = makefile.split(
+        "test-all-ci: ## Explicitly run every semantic lane locally (exceptional).",
+        1,
+    )[1].split("test-stress:", 1)[0]
+
+    assert "$(MAKE) test-component" in all_ci
+    assert "$(MAKE) test-exhaustive" in all_ci
+    assert all_ci.index("$(MAKE) test-component") < all_ci.index(
+        "$(MAKE) test-exhaustive"
+    )
+
+
 def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 

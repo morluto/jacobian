@@ -95,6 +95,7 @@ test-compatibility: ## Supported-version import/API compatibility smoke.
 test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
 	$(MAKE) test-unit
 	$(MAKE) test-component
+	$(MAKE) test-exhaustive
 	$(MAKE) test-domain
 	$(MAKE) test-composition
 	$(MAKE) test-storage

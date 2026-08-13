@@ -43,11 +43,12 @@ relabeling a detached positional matrix.
 
 ## Independent verification
 
-`graph.distance_matrix.verify` is a separate checker operation. It accepts the
-exact producer input and candidate value and independently replays a
-breadth-first traversal from every source using only Python standard-library
-adjacency sets, queues, and integer distances. It does not import NetworkX or
-the producer implementation.
+`graph.distance_matrix.verify` is a separate checker operation. It consumes the
+exact producer input plus one complete typed candidate inline and can promote
+that matrix to `VERIFIED`. The operator-authorized checker independently
+replays a breadth-first traversal from every source using only Python
+standard-library adjacency sets, queues, and integer distances. It does not
+import NetworkX or the producer package.
 
 The checker rejects malformed metadata, source or target ordering, missing or
 extra rows, entry types, diagonal values, asymmetry, incorrect edge distances,
@@ -55,6 +56,22 @@ triangle violations, finite-component closure violations, and false shortest
 paths. Acceptance requires exact comparison of every finite distance and every
 unreachable `null`.
 
-Only the operator-authorized checker may emit a verification record. Failure,
-rejection, timeout, cancellation, or unavailable checker execution does not
-verify the candidate.
+Only the operator-authorized checker may emit a verification record. The
+verification record is bound to the canonical graph input and matrix candidate
+digests, semantics, checker source digest, and provider runtime. Rejection,
+timeout, cancellation, unavailable runtime, or checker error remains `UNKNOWN`
+and cannot produce `VERIFIED`.
+
+## Public composition evidence
+
+The frozen public matched evaluation in
+[Capability workflow evaluations](../../evaluations/benchmark-contracts.md#task-and-verifier-validation)
+used three control/treatment pairs. All treatments autonomously discovered the
+producer and verifier, preserved independently replayable matrix evidence, and
+correctly derived a restricted-set distance profile without substituting
+diameter, radius, or eccentricity. Only the exact matrix received a bound
+verification record; the derived profile did not.
+
+This public answer-visible result is regression evidence for composition, not
+a broad portfolio-value claim. It does not justify adding a restricted-set
+distance capability by itself.

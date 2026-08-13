@@ -49,6 +49,22 @@ def test_exact_replay_declaration_defers_and_caches_provider_runtime() -> None:
     assert calls == 1
 
 
+def test_generated_repr_and_equality_do_not_realize_provider_runtime() -> None:
+    calls = 0
+
+    def factory():
+        nonlocal calls
+        calls += 1
+        return _runtime()
+
+    declaration = _declaration(provider_runtime_factory=factory)
+    equivalent = _declaration(provider_runtime_factory=factory)
+
+    assert "provider_runtime" not in repr(declaration)
+    assert declaration == equivalent
+    assert calls == 0
+
+
 def test_exact_replay_declaration_keeps_direct_runtime_compatibility() -> None:
     runtime = _runtime()
     declaration = _declaration(provider_runtime=runtime)

@@ -110,7 +110,11 @@ class ExactReplayCheckerDeclaration:
     verification_title: str | None = None
     verification_description: str | None = None
     verification_tags: tuple[str, ...] = ()
-    provider_runtime: CapabilityProviderRuntime | None = None
+    provider_runtime: CapabilityProviderRuntime | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
     provider_runtime_factory: ProviderRuntimeFactory | None = field(
         default=None,
         repr=False,

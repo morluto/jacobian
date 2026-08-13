@@ -309,9 +309,7 @@ def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> Non
 
 def test_required_pr_workflows_do_not_cancel_inflight_evidence() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    benchmarks = (ROOT / ".github/workflows/benchmarks.yml").read_text(
-        encoding="utf-8"
-    )
+    benchmarks = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 
     assert "cancel-in-progress: false" in ci
     assert "cancel-in-progress: false" in benchmarks

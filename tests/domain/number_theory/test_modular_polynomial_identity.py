@@ -53,7 +53,7 @@ def test_modular_polynomial_identity_computes_and_verifies(
     assert computed.execution.status is ExecutionStatus.COMPLETED
     assert comparison["identical"] is True
     assert comparison["residual"] == []
-    assert comparison["comparison_scope"] == "FORMAL_COEFFICWISE_IDENTITY"
+    assert comparison["comparison_scope"] == "FORMAL_COEFFICIENTWISE_IDENTITY"
 
     verified = number_theory_services.core.capabilities.invoke(
         CapabilityRequest(

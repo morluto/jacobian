@@ -5,7 +5,14 @@ from __future__ import annotations
 import re
 from typing import Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, StrictStr, field_validator, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 from jacobian.contracts.results import ContractModel
 
@@ -63,10 +70,18 @@ class NormalizedModularPolynomialTerm(ContractModel):
 
 class ModularPolynomialIdentityValue(ContractModel):
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
-    variable_order: tuple[StrictStr, ...] = Field(min_length=1, max_length=_MAX_VARIABLES)
-    normalized_left: tuple[NormalizedModularPolynomialTerm, ...] = Field(max_length=_MAX_TERMS)
-    normalized_right: tuple[NormalizedModularPolynomialTerm, ...] = Field(max_length=_MAX_TERMS)
-    residual: tuple[NormalizedModularPolynomialTerm, ...] = Field(max_length=_MAX_TERMS * 2)
+    variable_order: tuple[StrictStr, ...] = Field(
+        min_length=1, max_length=_MAX_VARIABLES
+    )
+    normalized_left: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+        max_length=_MAX_TERMS
+    )
+    normalized_right: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+        max_length=_MAX_TERMS
+    )
+    residual: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+        max_length=_MAX_TERMS * 2
+    )
     identical: StrictBool
     comparison_scope: Literal["FORMAL_COEFFICIENTWISE_IDENTITY"] = (
         "FORMAL_COEFFICIENTWISE_IDENTITY"

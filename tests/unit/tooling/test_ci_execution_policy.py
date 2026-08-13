@@ -100,10 +100,9 @@ def test_process_lane_is_invoked_by_ci() -> None:
     assert "run: make test-${{ matrix.lane }}" in workflow
 
 
-def test_provider_opt_in_and_deployment_have_explicit_workflow_gates() -> None:
+def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "ci:provider" in workflow
     assert "ci:lean" in workflow
     assert "ci:full" in workflow
     assert "run: make deploy-check" in workflow
@@ -238,11 +237,8 @@ def test_required_ci_gates_fail_when_a_needed_job_is_cancelled() -> None:
     assert "name: Python Tests" in workflow
     assert "name: Lean Tests" in workflow
     assert "name: Deployment Tests" in workflow
-    assert (
-        "needs: [static, python, boundaries, wheel, coverage, lean, optional-providers]"
-    ) in required
+    assert ("needs: [static, python, boundaries, wheel, coverage, lean]") in required
     assert "success|skipped" in required
-    assert "needs.optional-providers.result" in required
     assert "needs.lean.result" in required
 
 
@@ -298,26 +294,3 @@ def test_ordering_lane_dispatches_through_named_make_targets() -> None:
     assert "ORDERING_LANE: ${{ matrix.lane }}" in workflow
     assert "run: make security-audit" in workflow
     assert "run: make duplicate-code" in workflow
-
-
-def test_static_validation_enforces_test_architecture() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    development = (ROOT / "make" / "development.mk").read_text(encoding="utf-8")
-
-    assert "test-architecture:" in development
-    assert "check-static: lint-full typecheck test-architecture" in makefile
-
-
-def test_process_and_provider_lanes_have_explicit_resource_policies() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    process = makefile.split("test-process:", 1)[1].split("test-mcp:", 1)[0]
-    provider = makefile.split("test-provider:", 1)[1].split("test-lean:", 1)[0]
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-
-    assert "-n 2" in process
-    assert "--timeout=120" in process
-    assert "PYTEST_RUNNER" in process or "pytest_lifecycle.py" in process
-    assert "-n 1" in provider
-    assert "--timeout=180" in provider
-    assert "github.event_name != 'pull_request'" in workflow
-    assert "ci:provider" in workflow

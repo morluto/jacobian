@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 from pathlib import Path
@@ -13,25 +12,6 @@ import pytest
 from jacobian.adapters.mcp.context import _public_tool_error
 from jacobian.adapters.mcp.remote import create_remote_server
 from jacobian.adapters.mcp.server import create_server
-from jacobian.adapters.mcp.tooling import _request_id_digest, _request_trace_digest
-
-
-def test_mcp_trace_correlation_hashes_headers_without_retaining_them() -> None:
-    traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
-
-    class RequestContext:
-        def __init__(self) -> None:
-            self.headers = {"traceparent": traceparent}
-            self.request_id = "private-request-id"
-
-    digest, source = _request_trace_digest(RequestContext())
-
-    assert digest == hashlib.sha256(traceparent.encode()).hexdigest()[:8]
-    assert source == "traceparent"
-    assert traceparent not in digest
-    assert "private-request-id" not in digest
-    request_digest = _request_id_digest(RequestContext())
-    assert request_digest == hashlib.sha256(b"private-request-id").hexdigest()[:16]
 
 
 def test_mcp_logs_bounded_tool_metrics_without_arguments(

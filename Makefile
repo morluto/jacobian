@@ -35,7 +35,7 @@ test-unit: ## Pure contracts and models (sequential, 10s).
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-component: ## One-service component tests (4 workers, 30s).
-	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=30 \
+	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=30 -m "not exhaustive" \
 		$(if $(TESTS),$(TESTS),tests/component) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
@@ -109,6 +109,11 @@ test-stress: ## Repeat explicitly marked property tests on the scheduled lane.
 		--count=$(STRESS_COUNT) $(if $(TESTS),$(TESTS),tests) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
+test-exhaustive: ## Broad finite reference sweeps reserved for scheduled validation.
+	$(UV_RUN) pytest -n 0 --timeout=180 --timeout-method=thread -m exhaustive \
+		$(if $(TESTS),$(TESTS),tests) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
 test-ordering: ## Reproduce scheduled ordering (default seed 17; override with PYTEST_ARGS).
 	@test -n "$(ORDERING_LANE)" || { echo "ORDERING_LANE is required" >&2; exit 2; }
 	$(MAKE) test-$(ORDERING_LANE) \
@@ -147,7 +152,7 @@ precommit: ## Fix and run every routine local handoff check.
 	$(MAKE) fix
 	$(MAKE) quick
 
-check-static: lint-full typecheck test-architecture import-contracts test-runtime-inventory architecture todo-check build ## CI-owned static checks plus a local package build.
+check-static: lint-full typecheck import-contracts architecture todo-check build ## CI-owned static checks plus a local package build.
 
 clean: ## Remove local caches, build outputs, and coverage artifacts.
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build htmlcov

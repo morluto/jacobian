@@ -219,7 +219,7 @@ def main() -> None:
             and payload.get("schema_version") == "1"
             and payload.get("task_id") == raw.get("task_id")
             and _json_equal(payload.get("result"), raw.get("result"))
-            and payload.get("limitations") == raw.get("limitations")
+            and _json_equal(payload.get("limitations"), raw.get("limitations"))
         )
     except RecursionError:
         evidence_ok = False

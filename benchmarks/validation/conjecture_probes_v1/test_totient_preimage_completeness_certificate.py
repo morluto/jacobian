@@ -142,6 +142,23 @@ def test_evidence_tamper_and_malformed_json_fail(tmp_path):
     (app / "evidence/answer.json").write_text("tampered\n")
     result = run(app, logs)
     assert result["mathematics"] == 1.0 and result["evidence"] == 0.0
+
+
+def test_evidence_copy_uses_json_typed_equality(tmp_path):
+    app, logs, submission = case(tmp_path)
+    submission["limitations"] = [1]
+    evidence = app / "evidence/answer.json"
+    payload = json.loads(evidence.read_text())
+    payload["limitations"] = [True]
+    evidence.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+
+    result = run(app, logs)
+    assert result["mathematics"] == 1.0
+    assert result["evidence"] == result["aggregate_reward"] == 0.0
     app, logs, _ = case(tmp_path / "json")
     (app / "submission.json").write_text('{"claimed_assurance":NaN}\n')
     assert run(app, logs)["aggregate_reward"] == 0.0

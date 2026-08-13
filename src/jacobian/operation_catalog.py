@@ -30,8 +30,11 @@ class OperationCatalogError(RuntimeError):
 
 
 class VisibilityPolicy(Protocol):
-    profile: str
-    digest: str
+    @property
+    def profile(self) -> str: ...
+
+    @property
+    def digest(self) -> str: ...
 
     def project(self, descriptor: OperationDescriptor) -> OperationDescriptor | None: ...
 

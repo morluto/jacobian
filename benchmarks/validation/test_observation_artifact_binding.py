@@ -231,7 +231,7 @@ def test_observation_rejects_missing_snapshot_id(
         ],
     }
     job_path = _write_observation_job(
-        tmp_path, job, snapshot_id=None, harbor_version=_HARBOR_VERSION
+        tmp_path, job, snapshot_id=None, harbor_version=None
     )
     result_path = _write_result(tmp_path)
 
@@ -245,6 +245,22 @@ def test_observation_rejects_missing_snapshot_id(
 
     assert evidence["status"] == "INCOMPLETE"
     assert any("snapshot_id" in f and "missing" in f for f in failures)
+    assert any("harbor_version" in f and "missing" in f for f in failures)
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "schemas"
+            / "observation-evidence.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    from jsonschema import Draft202012Validator
+
+    assert list(Draft202012Validator(schema).iter_errors(evidence)) == []
+
+    evidence["status"] = "VALID"
+    errors = list(Draft202012Validator(schema).iter_errors(evidence))
+    assert errors, "VALID evidence must retain reproducibility bindings"
 
 
 def test_observation_rejects_mismatched_harbor_version(

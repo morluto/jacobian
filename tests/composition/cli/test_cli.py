@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 import typer
+from tests.support.selected_runtime import selected_runtime_opener
 from typer.testing import CliRunner
 
 from jacobian.cli import CliState, JacobianGroup, app, create_cli_app
 from jacobian.domains.arithmetic import build_arithmetic_bundle
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.runtime import CheckerAuthorityMode
-from tests.support.selected_runtime import selected_runtime_opener
 
 
 def test_cli_help_exposes_only_math_and_operator_commands() -> None:

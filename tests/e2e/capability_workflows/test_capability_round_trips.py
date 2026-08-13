@@ -12,7 +12,6 @@ from tests.support.provider_lean import (
     skip_unless_pinned_lean_core_runtime,
 )
 from tests.support.rationals import rational_payload as _q
-
 from tests.support.state import copy_template
 
 from jacobian.adapters.mcp.server import create_server

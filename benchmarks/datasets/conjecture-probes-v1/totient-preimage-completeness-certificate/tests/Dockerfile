@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/totient-preimage-completeness-certificate" \
-      jacobian.checksum="831d4c1dfb96c8147428b643b2787b5e7324978388b426c52f958e5979f7e500"
+      jacobian.checksum="b9ac88ca3db4f88eeb1c077b4f0d5cbf5f4a4d0c61322210510cf6f886885c47"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

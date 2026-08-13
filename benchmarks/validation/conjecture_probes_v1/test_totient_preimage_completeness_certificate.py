@@ -88,6 +88,15 @@ def test_omission_extra_and_bad_factorization_fail(tmp_path):
     assert run(app, logs)["aggregate_reward"] == 0.0
 
 
+def test_unknown_result_field_only_fails_protocol(tmp_path):
+    app, logs, submission = case(tmp_path)
+    submission["result"]["notes"] = "schema-disallowed annotation"
+    write(app, submission)
+    result = run(app, logs)
+    assert result["mathematics"] == result["correctness"] == 1.0
+    assert result["protocol"] == result["aggregate_reward"] == 0.0
+
+
 def test_incomplete_prime_options_and_false_assurance_fail(tmp_path):
     app, logs, submission = case(tmp_path)
     submission["result"]["prime_power_options"][0]["exponents"].pop()

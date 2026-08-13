@@ -67,11 +67,6 @@ def _expected_solutions(
 def _candidate_certificate_valid(
     result: dict[str, Any], primes: list[int], options: list[list[int]]
 ) -> bool:
-    optional = {
-        "candidate_primes",
-        "prime_power_options",
-        "enumerated_branch_count",
-    }
     if "candidate_primes" in result:
         candidate_primes = result["candidate_primes"]
         if (
@@ -101,12 +96,10 @@ def _candidate_certificate_valid(
             observed_options[option["prime"]] = option["exponents"]
         if observed_options != dict(zip(primes, options, strict=True)):
             return False
-    if "enumerated_branch_count" in result and (
-        type(result["enumerated_branch_count"]) is not int
-        or result["enumerated_branch_count"] != math.prod(map(len, options))
-    ):
-        return False
-    return set(result).issubset({"solutions", "accepted_count"} | optional)
+    return "enumerated_branch_count" not in result or (
+        type(result["enumerated_branch_count"]) is int
+        and result["enumerated_branch_count"] == math.prod(map(len, options))
+    )
 
 
 def _solutions_valid(

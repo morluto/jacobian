@@ -12,7 +12,7 @@ from tests.support.services import (
 )
 
 from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @dataclass(frozen=True, slots=True)

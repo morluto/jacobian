@@ -45,4 +45,5 @@ lean/.lake/
 
 # Test infrastructure state
 .test_durations
+.jacobian-validation.lock
 tmp/

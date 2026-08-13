@@ -72,6 +72,7 @@ PUBLIC_API = {
         "triangle_count",
     ),
     "jacobian.math.matrices": (
+        "SmithNormalForm",
         "adjugate",
         "characteristic_polynomial",
         "determinant",

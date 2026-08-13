@@ -1,12 +1,17 @@
 """Independent checker declarations owned by the number-theory domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.capabilities import CapabilityProviderRuntime
+from jacobian.contracts.capabilities import (
+    CapabilityInstallTier,
+    CapabilityProviderRuntime,
+)
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
+    IntegerPairRequest,
     ModularPolynomialResidueImageRequest,
     PowerfulNumberRequest,
 )
+from jacobian.provider_runtime import source_provider_runtime
 from jacobian.providers import flint_runtime
 
 _EXACT_DOMAIN_ENTRYPOINT = "jacobian_checkers.exact_domain_operations"
@@ -21,7 +26,35 @@ def _flint_exact_replay_runtime(
     )
 
 
+def _integer_lcm_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
+    return source_provider_runtime(
+        "jacobian.integer-lcm-checker",
+        version="1",
+        entrypoint="jacobian_checkers.integer_lcm:check_integer_lcm",
+        install_tier=CapabilityInstallTier.T1,
+        license_id="MIT",
+        features=("standard-library-integer-replay", "clean-process-checker"),
+        checker_ids=checker_ids,
+    )
+
+
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
+    ExactReplayCheckerDeclaration(
+        "integer.compute.lcm",
+        IntegerPairRequest,
+        "check_integer_lcm",
+        "integer.lcm.euclidean-replay",
+        entrypoint_module="jacobian_checkers.integer_lcm",
+        provider_runtime_factory=_integer_lcm_runtime,
+        replay_method="standard-library Euclidean recurrence replay",
+        reason=(
+            "operator-authorized standard-library checker independently evaluates "
+            "the bounded least common multiple by a Euclidean recurrence without "
+            "calling math.lcm or importing producer code"
+        ),
+    ),
     ExactReplayCheckerDeclaration(
         "integer.compute.prime_factorization",
         FactorizationRequest,

@@ -92,6 +92,25 @@ reference:
 }
 ```
 
+The same carrier can avoid reserializing a producer's typed result into an
+independent checker request. For example, the Smith producer exposes its result
+as `output.value_refs.smith_form`, while its checker declares the `candidate`
+input port:
+
+```json
+{
+  "capability_id": "matrix.normal_form.smith.verify",
+  "payload": {"input": {"matrix": {"entries": [["2", "4"], ["6", "8"]]}}},
+  "inputs": {
+    "candidate": {"value_ref": "value://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+  }
+}
+```
+
+The reference only carries the candidate value. The separate checker still
+validates the complete request and independently replays the relation before it
+can create a verification record.
+
 The runtime resolves declared inputs, assembles one request, parses it once,
 runs preflight, executes one semantic operation, checks the request/result
 postcondition, and then publishes the result. Unknown top-level arguments and

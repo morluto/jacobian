@@ -196,6 +196,7 @@ class CoreApplicationInstaller:
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
+            ctx.values,
             ctx.verification,
             ctx.checkers,
             bundles=exact_bundles,

@@ -66,6 +66,12 @@ with math.find, select one item from `invocation_examples`, and copy and adapt t
 item's `input` object as the `payload`. Do not call math.run with an empty `payload`
 merely to discover required fields; the inspect result is the authoritative contract.
 
+When a completed output contains `value_refs`, an inspected consumer may declare a
+matching named `input_port`. Bind that opaque runtime-local reference through
+`inputs`; keep only the consumer's other request fields in `payload`, and do not
+repeat the port-bound field there. A value reference avoids retranscribing the typed
+value but carries no verification authority.
+
 Ordinary tools return calculations. Independent checking uses a separate checker
 tool ID (for example `polynomial.identity.verify`), not a switch on the producer.
 Failed, cancelled, timed-out, or incomplete runs are not mathematical conclusions.

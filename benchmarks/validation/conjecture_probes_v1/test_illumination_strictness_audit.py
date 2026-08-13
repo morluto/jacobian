@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import json
+import shutil
 import sys
 from itertools import product
 from pathlib import Path
 
 import pytest
+from benchmarks.validation._verifier_child import run_verifier_in_child
 
 ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/illumination-strictness-audit"
@@ -40,6 +43,44 @@ def _support_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _child_case(tmp_path: Path) -> tuple[Path, Path]:
+    app = tmp_path / "app"
+    logs = tmp_path / "logs"
+    app.mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(TASK / "tests/input.json", app / "input.json")
+    module = _module()
+    result = _result(module)
+    payload = {
+        "schema_version": "1",
+        "task_id": module.TASK_ID,
+        "result": result,
+        "limitations": module.LIMITATIONS,
+    }
+    evidence = app / "evidence/answer.json"
+    evidence.parent.mkdir()
+    evidence.write_text(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+    )
+    submission = {
+        "task_id": module.TASK_ID,
+        "conclusion": "WEAK_ILLUMINATION_IS_UNSOUND_AND_REPAIRED",
+        "result": result,
+        "claimed_assurance": "CHECKED",
+        "scope": "cube-illumination-strictness-audit-v1",
+        "completeness": "COMPLETE",
+        "evidence": [
+            {
+                "path": "evidence/answer.json",
+                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
+            }
+        ],
+        "limitations": module.LIMITATIONS,
+    }
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+    return app, logs
 
 
 def test_raw_submission_is_bounded_before_read(monkeypatch):
@@ -248,3 +289,14 @@ def test_task_exports_visible_input_to_separate_verifier():
         'artifacts=["/app/submission.json","/app/evidence","/app/input.json"]'
         in task_toml
     )
+
+
+def test_tampered_declared_input_preserves_correctness_but_gates_reward(tmp_path):
+    app, logs = _child_case(tmp_path)
+    (app / "input.json").write_text("{}\n")
+
+    reward = run_verifier_in_child(task=TASK, app=app, logs=logs)
+
+    assert reward.details["input_binding"] == 0.0
+    assert reward.details["correctness"] == 1.0
+    assert reward.details["aggregate_reward"] == 0.0

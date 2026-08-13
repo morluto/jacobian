@@ -40,8 +40,10 @@ make harbor-oracle-task DATASET=<dataset-id> TASKS="<task-id>"
 
 The focused gate requires an explicit dataset and one or more task IDs; it does
 not silently expand to the full corpus. Use `make harbor-check` for changes to
-shared Harbor tooling, schemas, the registry, suite policy, or other
-control-plane files. For `mathematical-benchmarks-v1` pytest regressions, put verifier
+shared Harbor contracts, schemas, the registry, suite policy, or other
+control-plane files. Reserve `make harbor-check-all` for shared verifier-harness
+changes or an intentional full local reproduction. For
+`mathematical-benchmarks-v1` pytest regressions, put verifier
 attack cases in
 `benchmarks/validation/mathematical_benchmarks_v1/test_<task_id_with_underscores>.py`
 rather than a shared dump; see the Harbor skill's validation regression layout

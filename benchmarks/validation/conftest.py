@@ -33,8 +33,8 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             continue
         module = getattr(item, "module", None)
         if isinstance(module, ModuleType) and module not in rebound_modules:
-            setattr(module, "planner", benchmark_planner)
-            setattr(module, "_assert_plan_valid", validate_plan)
+            module.__dict__["planner"] = benchmark_planner
+            module.__dict__["_assert_plan_valid"] = validate_plan
             rebound_modules.add(module)
         if item.name == "test_planner_digest_binds_to_planner_and_path_policy_sources":
             item.add_marker(

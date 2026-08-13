@@ -76,6 +76,18 @@ def _trace_valid(trace: list, expected_trace: list) -> bool:
     return trace_by_n == {entry["n"]: entry for entry in expected_trace}
 
 
+def _general_determinant_valid(value: object) -> bool:
+    """Accept canonical and exact parity notations induced by the proof."""
+    if not isinstance(value, str):
+        return False
+    compact = re.sub(r"\s+", "", value).casefold()
+    return compact in {
+        "1_if_n_eq_1_else_minus_1",
+        "(-1)^(2^(n-1)-1)",
+        "(-1)**(2**(n-1)-1)",
+    }
+
+
 def _result(value: object, source: dict[str, Any]) -> bool:
     required = {
         "sample_n",
@@ -126,7 +138,7 @@ def _result(value: object, source: dict[str, Any]) -> bool:
         return False
     return bool(
         value["general_even_count"] == "2^(n-1)-1"
-        and value["general_determinant"] == "1_if_n_eq_1_else_minus_1"
+        and _general_determinant_valid(value["general_determinant"])
     )
 
 

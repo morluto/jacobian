@@ -64,3 +64,26 @@ def test_rejects_duplicate_evidence_descriptors(tmp_path: Path) -> None:
     rejected = support._run_verifier(task, app, logs)
     assert rejected.details["evidence_validity"] == 0.0
     assert rejected.reward == 0.0
+
+
+def test_accepts_parity_formula_notation_from_agent_evaluation(tmp_path: Path) -> None:
+    """The exact parity expression must not be rejected as prose variance."""
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["general_determinant"] = "(-1)^(2^(n-1)-1)"
+    support._write_json(app / "submission.json", submission)
+
+    accepted = support._run_verifier(task, app, logs)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == 1.0
+
+
+def test_rejects_wrong_general_determinant_formula(tmp_path: Path) -> None:
+    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["general_determinant"] = "(-1)^(2^(n-1))"
+    support._write_json(app / "submission.json", submission)
+
+    rejected = support._run_verifier(task, app, logs)
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

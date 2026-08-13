@@ -12,7 +12,9 @@ subsets and the resulting determinant.
 The public determinant values alone are insufficient.  The verifier rebuilds
 the intersection matrix and checks the submitted factorization exactly, then
 recomputes the parity formula.  Bind `/app/evidence/answer.txt`; do not claim
-`VERIFIED`.
+`VERIFIED`. Scope the claim to all nonempty-subset intersection matrices for
+`n>=1`. In `limitations`, state that the finite incidence-factorization replay
+does not replay the universal theorem in Lean.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

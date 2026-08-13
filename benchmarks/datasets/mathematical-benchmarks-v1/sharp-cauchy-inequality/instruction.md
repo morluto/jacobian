@@ -10,11 +10,20 @@ registered proof modes, and a positive rational equality witness proving
 sharpness. In `CS_COMPOSITION` mode, provide the four quadratic forms used by
 the two Cauchy--Schwarz steps and both exact sum-square residual identities. In
 `AMGM_SQUARES` mode, first normalize the coefficient triple by its positive
-sum, then provide the normalized polynomial residual and its exact
-sum-of-squares decomposition. In `DIRECT_SOS` mode, provide the core
-polynomials `d`, `u`, `v`, the `residual`, the `constraint_residual`, and a
+sum, so `a+b+c=1`. In both `AMGM_SQUARES` and `DIRECT_SOS` modes, use the
+following core polynomials exactly:
+
+- `d = a*x+b*y+c*z`;
+- `u = a*b+b*c+c*a`;
+- `v = x*y+y*z+z*x`;
+- `residual = 1-d-u-v`;
+- `constraint_residual = 2-(a+b+c)^2-(x+y+z)^2`.
+
+In `AMGM_SQUARES` mode, `sos_twice` is
+`(a-x)^2+(b-y)^2+(c-z)^2`, and must satisfy
+`2*residual-sos_twice=constraint_residual`. In `DIRECT_SOS` mode, provide a
 list `sos_factors` of sparse polynomials whose squared sum equals
-`2*residual - constraint_residual`; any independently checkable sum-of-squares
+`2*residual-constraint_residual`; any independently checkable sum-of-squares
 decomposition is accepted. Sparse polynomials use variables ordered
 `[a,b,c,x,y,z]`, integer coefficients, and lexicographically ordered exponent
 vectors. Numerical sampling and prose-only proofs are not accepted.

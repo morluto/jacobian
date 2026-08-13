@@ -11,6 +11,21 @@ from benchmarks.validation.mathematical_benchmarks_v1 import support
 TASK = "sharp-cauchy-inequality"
 
 
+def test_sharp_cauchy_inequality_publishes_certificate_definitions() -> None:
+    instruction = (
+        support.TASKS / "sharp-cauchy-inequality" / "instruction.md"
+    ).read_text()
+    for definition in (
+        "`d = a*x+b*y+c*z`",
+        "`u = a*b+b*c+c*a`",
+        "`v = x*y+y*z+z*x`",
+        "`residual = 1-d-u-v`",
+        "`constraint_residual = 2-(a+b+c)^2-(x+y+z)^2`",
+        "`2*residual-sos_twice=constraint_residual`",
+    ):
+        assert definition in instruction
+
+
 def test_sharp_cauchy_inequality_accepts_symbolic_certificate(tmp_path: Path) -> None:
     task, app, logs = support._prepare_case(
         tmp_path, "sharp-cauchy-inequality", "computed"

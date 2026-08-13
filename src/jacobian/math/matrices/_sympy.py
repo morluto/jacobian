@@ -8,18 +8,14 @@ import sympy
 from sympy.matrices.matrixbase import MatrixBase
 
 
-def exact_matrix(
-    value: MatrixBase, *, maximum_dimension: int = 32
-) -> MatrixBase:
+def exact_matrix(value: MatrixBase, *, maximum_dimension: int = 32) -> MatrixBase:
     if not isinstance(value, MatrixBase):
         raise TypeError("matrix must be a SymPy MatrixBase")
     if (
         not 1 <= value.rows <= maximum_dimension
         or not 1 <= value.cols <= maximum_dimension
     ):
-        raise ValueError(
-            f"matrix dimensions must be between 1 and {maximum_dimension}"
-        )
+        raise ValueError(f"matrix dimensions must be between 1 and {maximum_dimension}")
     if any(not entry.is_number or entry.is_finite is not True for entry in value):
         raise ValueError("matrix entries must be finite exact numbers")
     if any(entry.has(sympy.Float) for entry in value):

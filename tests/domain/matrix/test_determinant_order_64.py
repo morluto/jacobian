@@ -28,9 +28,7 @@ def _truncated_legendre_matrix(prime: int) -> dict[str, object]:
         if residue == 0:
             character = 0
         else:
-            character = (
-                1 if pow(residue, (prime - 1) // 2, prime) == 1 else -1
-            )
+            character = 1 if pow(residue, (prime - 1) // 2, prime) == 1 else -1
         return 1 + character
 
     return _matrix(
@@ -70,10 +68,7 @@ def test_determinant_rejects_order_above_64(
     matrix_services: DomainTestServices,
 ) -> None:
     matrix = _matrix(
-        [
-            [1 if row == column else 0 for column in range(65)]
-            for row in range(65)
-        ]
+        [[1 if row == column else 0 for column in range(65)] for row in range(65)]
     )
     result = matrix_services.core.capabilities.invoke(
         CapabilityRequest(

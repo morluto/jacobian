@@ -222,19 +222,37 @@ def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
             )
         )
         assert registration.implementation.entrypoint.startswith(expected_module)
-    graph_runtime = installation.provider_runtimes["finite-graph"]
+    graph_runtime = installation.provider_runtimes["jacobian.graph-exact-checkers"]
     assert graph_runtime.provider == "jacobian.graph-exact-checkers"
     assert {
         component["provider"] for component in graph_runtime.configuration["components"]
     } == {"jacobian.graph-exact-checker-source"}
-    syzygy_runtime = installation.provider_runtimes["graded-syzygy"]
+    syzygy_runtime = installation.provider_runtimes["jacobian.graded-syzygy-checkers"]
     assert syzygy_runtime.provider == "jacobian.graded-syzygy-checkers"
     assert {
         component["provider"]
         for component in syzygy_runtime.configuration["components"]
     } == {"jacobian.graded-syzygy-checker-source"}
-    projective_runtime = installation.provider_runtimes["projective-arrangement"]
+    projective_runtime = installation.provider_runtimes[
+        "jacobian.projective-arrangement-checkers"
+    ]
     assert projective_runtime.provider == "jacobian.projective-arrangement-checkers"
+    assert (
+        installation.declaration_providers["polynomial.compute.gcd"]
+        == "jacobian.exact-domain-checkers"
+    )
+    assert (
+        installation.declaration_providers["matrix.normal_form.rref.compute"]
+        == "jacobian.exact-domain-checkers"
+    )
+    assert (
+        installation.declaration_providers["integer.compute.prime_factorization"]
+        == "jacobian.exact-domain-checkers"
+    )
+    assert (
+        installation.declaration_providers["graph.hamiltonian_path.decide"]
+        == "jacobian.graph-exact-checkers"
+    )
 
 
 def test_installer_preserves_operator_control(tmp_path: Path) -> None:
@@ -302,7 +320,7 @@ def test_installer_omits_exact_replay_when_its_provider_is_unavailable(
         }
     )
     monkeypatch.setattr(
-        "jacobian.exact_domain_checkers.exact_domain_checker_provider_runtime",
+        "jacobian.providers.flint_runtime.exact_domain_checker_provider_runtime",
         lambda **_: unavailable,
     )
     matrix_ids = (
@@ -368,8 +386,7 @@ def test_installer_does_not_omit_replay_when_bundled_source_is_unavailable(
         lambda: unavailable_source,
     )
     monkeypatch.setattr(
-        exact_domain_checkers,
-        "exact_domain_checker_provider_runtime",
+        "jacobian.providers.flint_runtime.exact_domain_checker_provider_runtime",
         lambda **_: unavailable_provider,
     )
 

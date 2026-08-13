@@ -193,11 +193,11 @@ checker authorization out of plugins and search code.
 ## Repository Gotchas
 
 - Before final validation, use `make check` plus the named lane that owns the
-  changed behavior (and `make check-external` when
-  Lean or optional providers change) on the final tree. In a shared checkout,
-  agents must own
-  disjoint paths and must not switch branches, stage, commit, clean, or rewrite
-  shared files until their work is integrated.
+  changed behavior on the final tree (`make check-external` for Lean/Mathlib,
+  `make test-provider` for optional or maintained Python providers). In a
+  shared checkout, agents must own disjoint paths and must not switch
+  branches, stage, commit, clean, or rewrite shared files until their work
+  is integrated.
 - Jacobian is pre-stable. Current reference documents and the installed catalog
   define the supported surface; they do not order capability research.
 - Validate the complete Pydantic request model before preflight, provider calls,
@@ -266,7 +266,8 @@ Non-obvious caveats:
 - `make test-unit` is the cheap unit lane. `make quick` adds lint; `make check`
   adds lint and typecheck. `make check-all` explicitly reproduces the Lean-free
   ordinary CI matrix. Use `make test-all-ci` only
-  for an explicit exhaustive local reproduction. Default `uv run pytest` does
+  for an explicit exhaustive local reproduction; it takes this worktree's
+  exhaustive validation lease (`make validation-status`). Default `uv run pytest` does
   not collect Lean, storage, process, or MCP; use the matching `make test-*`
   target for those trees. Never run bare `uv run pytest` as a substitute for
   the complete specialist matrix.

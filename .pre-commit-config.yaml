@@ -39,10 +39,10 @@ repos:
     hooks:
       - id: jacobian-pre-push
         name: Jacobian pre-push static checks
-        # Keep the push hook below the interactive feedback budget.  The
-        # affected test planner and CI own the resource-heavy correctness
-        # lanes; running the complete unit loop here caused routine pushes to
-        # take roughly a minute and encouraged --no-verify bypasses.
+        # Keep the push hook below the interactive feedback budget. CI owns
+        # the resource-heavy correctness lanes; running the complete unit loop
+        # here caused routine pushes to take roughly a minute and encouraged
+        # --no-verify bypasses.
         entry: make lint typecheck
         language: system
         pass_filenames: false

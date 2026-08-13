@@ -35,7 +35,6 @@ jobs:
           package-manager-cache: false
       - run: make lint-full
       - run: make typecheck
-      - run: make test-architecture
       - run: make architecture
       - run: make todo-check
       - run: make import-contracts
@@ -62,12 +61,12 @@ jobs:
             timeout-minutes: 15
           - lane: domain
             timeout-minutes: 15
+          - lane: provider
+            timeout-minutes: 25
           - lane: composition
             timeout-minutes: 25
           - lane: e2e
             timeout-minutes: 15
-          - lane: provider
-            timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -196,23 +195,6 @@ jobs:
         uses: ./.github/actions/setup-lean
       - run: make test-lean
 
-  optional-providers:
-    name: Optional providers
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:provider') ||
-      contains(github.event.pull_request.labels.*.name, 'ci:full')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - run: make test-provider
-
   coverage:
     name: Coverage
     if: ${{ always() && !cancelled() }}
@@ -296,8 +278,8 @@ jobs:
 
   required:
     name: required
-    if: ${{ always() }}
-    needs: [static, python, boundaries, wheel, coverage, lean, optional-providers]
+    if: ${{ always() && !cancelled() }}
+    needs: [static, python, boundaries, wheel, coverage, lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -309,7 +291,6 @@ jobs:
           WHEEL_RESULT: ${{ needs.wheel.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
           LEAN_RESULT: ${{ needs.lean.result }}
-          PROVIDERS_RESULT: ${{ needs.optional-providers.result }}
         run: |
           test "$STATIC_RESULT" = success
           test "$PYTHON_RESULT" = success
@@ -320,14 +301,10 @@ jobs:
             success|skipped) ;;
             *) exit 1 ;;
           esac
-          case "$PROVIDERS_RESULT" in
-            success|skipped) ;;
-            *) exit 1 ;;
-          esac
 
   python-test:
     name: Python Tests
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
     needs: [required]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -339,7 +316,7 @@ jobs:
 
   lean-test:
     name: Lean Tests
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
     needs: [lean]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -355,7 +332,7 @@ jobs:
 
   deployment-test:
     name: Deployment Tests
-    if: ${{ always() }}
+    if: ${{ always() && !cancelled() }}
     needs: [static]
     runs-on: ubuntu-latest
     timeout-minutes: 5

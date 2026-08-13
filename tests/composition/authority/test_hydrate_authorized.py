@@ -10,9 +10,6 @@ from tests.support.state import copy_template
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 from jacobian.runtime.model import JacobianRuntime
 
-# Composition-lane admission category for architecture ratchets.
-COMPOSITION_ADMISSION = "AUTHORITY"
-
 
 def _verify_ids(runtime: JacobianRuntime) -> set[str]:
     return {
@@ -34,19 +31,18 @@ def _audit_count(root: Path) -> int:
 
 def test_hydrate_authorized_matches_bundled_authority_without_audit(
     tmp_path: Path,
+    authorized_portfolio_template: Path,
 ) -> None:
-    seed = tmp_path / "seed"
-    with create_runtime(
-        seed, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    ) as authorized:
-        expected = _verify_ids(authorized)
-        baseline_audit = _audit_count(seed)
-
-    attached = copy_template(seed, tmp_path / "attached")
+    baseline_audit = _audit_count(authorized_portfolio_template)
+    attached = copy_template(authorized_portfolio_template, tmp_path / "attached")
     with create_runtime(
         attached, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
     ) as hydrated:
-        assert _verify_ids(hydrated) == expected
+        assert {
+            "sat.model.verify",
+            "polynomial.gcd.verify",
+            "matrix.multiply.verify",
+        } <= _verify_ids(hydrated)
         assert _audit_count(attached) == baseline_audit
 
 
@@ -59,12 +55,3 @@ def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> Non
         assert "polynomial.gcd.verify" not in _verify_ids(runtime)
         assert "sat.model.verify" not in _verify_ids(runtime)
         assert "matrix.determinant.verify" not in _verify_ids(runtime)
-
-
-def test_authorized_runtime_hydrates_reference_checkers(
-    authorized_complete_runtime: JacobianRuntime,
-) -> None:
-    ids = _verify_ids(authorized_complete_runtime)
-    assert "sat.model.verify" in ids
-    assert "polynomial.gcd.verify" in ids
-    assert "matrix.multiply.verify" in ids

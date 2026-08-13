@@ -150,8 +150,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
         # Untrusted plugin entrypoints manage their own process lifecycle.
         PurePosixPath("tests/support/process_entrypoints.py"),
-        # Architecture policy test uses subprocess in a synthetic import probe.
-        PurePosixPath("tests/unit/tooling/test_architecture_policy.py"),
         # This checker's own test file uses subprocess in synthetic probes.
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),

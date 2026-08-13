@@ -145,3 +145,32 @@ def test_evidence_tamper_and_malformed_json_fail(tmp_path):
     app, logs, _ = case(tmp_path / "json")
     (app / "submission.json").write_text('{"claimed_assurance":NaN}\n')
     assert run(app, logs)["aggregate_reward"] == 0.0
+
+
+def test_unknown_solution_does_not_collapse_independent_diagnostics(tmp_path):
+    app, logs, submission = case(tmp_path)
+    submission["result"]["solutions"][0] = {
+        "n": 1,
+        "factorization": [],
+        "totient": 48,
+    }
+    submission["claimed_assurance"] = "VERIFIED"
+    write(app, submission)
+
+    result = run(app, logs)
+
+    assert result["correctness"] == 0.0
+    assert result["false_certification"] == 1.0
+
+
+def test_evidence_accepts_large_legal_whitespace_padding(tmp_path):
+    app, logs, submission = case(tmp_path)
+    evidence_path = app / "evidence/answer.json"
+    payload = evidence_path.read_text()
+    evidence_path.write_text(" " * (17 * 1024 * 1024) + payload)
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+
+    assert run(app, logs)["aggregate_reward"] == 1.0

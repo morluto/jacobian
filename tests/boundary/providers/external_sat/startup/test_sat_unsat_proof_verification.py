@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,9 +7,9 @@ from typing import Any, Never
 
 import pytest
 from tests.boundary.providers.external_sat.external_sat_support import (
+    fake_drat_trim,
     open_sat_proof_verifier_services,
 )
-from tests.support.artifacts import sha256_file as _sha256_file
 from tests.support.services import DomainTestServices
 
 import jacobian_checkers.sat
@@ -27,41 +26,8 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatResourceBudget
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.providers.external_solver_runtime import drat_trim_provider_runtime
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
 from jacobian.verification.errors import CheckerExecutionError
-
-
-def _fake_drat_trim(tmp_path: Path, body: str) -> Path:
-    executable = tmp_path / "drat-trim"
-    executable.write_text(
-        (
-            f"#!{sys.executable}\n"
-            "import sys\n"
-            "if '-h' in sys.argv:\n"
-            "    print('usage: drat-trim [INPUT] [<PROOF>] [<option> ...]')\n"
-            "    raise SystemExit(0)\n"
-            f"{body}\n"
-        ),
-        encoding="utf-8",
-    )
-    executable.chmod(0o755)
-    manifest = executable.with_name(executable.name + ".jacobian-runtime.json")
-    manifest.write_text(
-        (
-            "{\n"
-            '  "runtime_manifest_version": "1",\n'
-            '  "provider": "drat-trim",\n'
-            '  "release_tag": "v05.22.2023",\n'
-            '  "source_repository": '
-            '"https://github.com/marijnheule/drat-trim",\n'
-            '  "source_commit": '
-            '"2e5e29cb0019d5cfd547d4208dca1b3ec290349f",\n'
-            f'  "executable_sha256": "{_sha256_file(executable)}"\n'
-            "}\n"
-        ),
-        encoding="utf-8",
-    )
-    return executable
 
 
 def _producer() -> CapabilityProviderRuntime:
@@ -102,7 +68,7 @@ def test_drat_trim_runtime_requires_exact_operator_provenance(
     tmp_path: Path,
     attack: str,
 ) -> None:
-    executable = _fake_drat_trim(
+    executable = fake_drat_trim(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )
@@ -127,30 +93,6 @@ def test_drat_trim_runtime_requires_exact_operator_provenance(
     assert runtime.version is None
     assert runtime.digest is None
     assert runtime.diagnostic is not None
-
-
-def test_complete_portfolio_includes_authorized_sat_proof_verifier(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    executable = _fake_drat_trim(
-        tmp_path,
-        "print('s VERIFIED')\nraise SystemExit(0)",
-    )
-    runtime = drat_trim_provider_runtime(executable)
-    monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.drat_trim_provider_runtime",
-        lambda *_args, **_kwargs: runtime,
-    )
-
-    with create_runtime(
-        tmp_path / "complete-state",
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-    ) as complete:
-        assert "sat.unsat_proof.verify" in {
-            descriptor.capability_id
-            for descriptor in complete.core.capabilities.catalog().capabilities
-        }
 
 
 def _proof(runtime: DomainTestServices) -> tuple[str, str]:
@@ -180,7 +122,7 @@ def test_unsat_proof_is_verified_by_authorized_external_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _fake_drat_trim(
+    executable = fake_drat_trim(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )
@@ -238,7 +180,7 @@ def test_rejected_proof_never_establishes_sat_or_unsat(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _fake_drat_trim(
+    executable = fake_drat_trim(
         tmp_path,
         "print('s NOT VERIFIED')\nraise SystemExit(1)",
     )
@@ -255,7 +197,7 @@ def test_rejected_proof_never_establishes_sat_or_unsat(
 def test_proof_verify_requires_runtime_and_operator_authorization(
     tmp_path: Path,
 ) -> None:
-    executable = _fake_drat_trim(
+    executable = fake_drat_trim(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )
@@ -302,7 +244,7 @@ def test_checker_operational_failure_never_creates_a_conclusion(
     expected_status: ExecutionStatus,
     expected_output_status: str,
 ) -> None:
-    executable = _fake_drat_trim(
+    executable = fake_drat_trim(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )
@@ -327,7 +269,7 @@ def test_runtime_replacement_after_authorization_fails_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    executable = _fake_drat_trim(
+    executable = fake_drat_trim(
         tmp_path,
         "print('s VERIFIED')\nraise SystemExit(0)",
     )

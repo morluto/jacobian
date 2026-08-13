@@ -15,8 +15,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 PLANNER_PATH = ROOT / ".github" / "scripts" / "plan-benchmarks"
-PATH_POLICY_PATH = ROOT / ".github" / "scripts" / "_ci_paths.py"
-VALIDATION_PLAN_PATH = ROOT / "benchmarks" / "tooling" / "validation_plan.py"
 VALIDATOR_PATH = ROOT / ".github" / "scripts" / "validate-benchmark-plan"
 
 
@@ -154,7 +152,7 @@ def test_plan_is_versioned_and_bound_to_event_base_head_sha() -> None:
 def test_planner_digest_binds_to_planner_and_path_policy_sources() -> None:
     payload = "\n".join(
         f"{path.relative_to(ROOT).as_posix()}\t{path.read_bytes().hex()}"
-        for path in (PLANNER_PATH, PATH_POLICY_PATH, VALIDATION_PLAN_PATH)
+        for path in planner.PLANNER_DIGEST_SOURCES
     ).encode()
     expected = "sha256:" + hashlib.sha256(payload).hexdigest()
     result = planner.plan(

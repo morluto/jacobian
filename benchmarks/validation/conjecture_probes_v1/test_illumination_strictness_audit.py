@@ -205,6 +205,12 @@ def test_evidence_copied_fields_bind_to_raw_submission():
         changed_raw[field] = replacement
         assert not module._evidence_payload_matches_submission(payload, changed_raw)
 
+    omitted_raw = dict(raw)
+    omitted_raw.pop("result")
+    null_payload = dict(payload)
+    null_payload["result"] = None
+    assert not module._evidence_payload_matches_submission(null_payload, omitted_raw)
+
 
 def test_accepts_reordered_repair():
     module = _module()

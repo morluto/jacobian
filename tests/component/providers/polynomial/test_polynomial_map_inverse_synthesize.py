@@ -33,6 +33,18 @@ def _triangular_forward() -> dict[str, Any]:
     }
 
 
+def _triangular_inverse() -> dict[str, Any]:
+    return {
+        "map_schema_version": "1",
+        "domain": "QQ",
+        "variables": ["u", "v"],
+        "coordinates": [
+            {"terms": [_term(1, [1, 0]), _term(-1, [0, 2])]},
+            {"terms": [_term(1, [0, 1])]},
+        ],
+    }
+
+
 def _request(
     *,
     degree: int,
@@ -293,10 +305,7 @@ def test_ring_mismatches_fail_closed(polynomial_services) -> None:
 def test_corrupted_found_candidate_does_not_verify(
     authorized_polynomial_services,
 ) -> None:
-    synthesized = authorized_polynomial_services.core.capabilities.invoke(
-        _request(degree=2)
-    )
-    corrupted = deepcopy(synthesized.output["candidate_inverse_map"])
+    corrupted = _triangular_inverse()
     corrupted["coordinates"][0]["terms"][1]["coefficient"]["num"] = "-2"
     checked = authorized_polynomial_services.core.capabilities.invoke(
         CapabilityRequest(

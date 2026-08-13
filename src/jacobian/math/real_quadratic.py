@@ -13,6 +13,12 @@ from jacobian.contracts.results import ContractModel
 
 _MAX_RADICAND = 1_000_000
 _MAX_DIGITS = 256
+RealQuadraticSignBasis = Literal[
+    "RATIONAL_ONLY",
+    "RADICAL_ONLY",
+    "SAME_SIGN",
+    "OPPOSING_SIGNS_SQUARED_MAGNITUDES",
+]
 
 
 def _is_square_free(value: int) -> bool:
@@ -80,12 +86,7 @@ class RealQuadraticOrderValue(ContractModel):
     right: RealQuadraticValue
     difference: RealQuadraticValue
     order: Literal["LT", "EQ", "GT"]
-    sign_basis: Literal[
-        "RATIONAL_ONLY",
-        "RADICAL_ONLY",
-        "SAME_SIGN",
-        "OPPOSING_SIGNS_SQUARED_MAGNITUDES",
-    ]
+    sign_basis: RealQuadraticSignBasis
     sign_certificate: RealQuadraticSignCertificate
 
     @model_validator(mode="after")
@@ -113,7 +114,7 @@ class RealQuadraticOrderValue(ContractModel):
         )
         if self.order != expected_order:
             raise ValueError("order must match exact quadratic sign")
-        expected_basis = (
+        expected_basis: RealQuadraticSignBasis = (
             "RATIONAL_ONLY"
             if b == 0
             else "RADICAL_ONLY"
@@ -150,7 +151,7 @@ def real_quadratic_order(
     )
     d = request.left.radicand
     sign = _sign(a, b, d)
-    basis = (
+    basis: RealQuadraticSignBasis = (
         "RATIONAL_ONLY"
         if b == 0
         else "RADICAL_ONLY"

@@ -11,17 +11,23 @@ from jacobian_checkers.bound_artifacts import bound_request
 
 def _reject(detail: str) -> dict[str, Any]:
     return {
-        "accepted": False, "conclusion": "UNKNOWN",
-        "arithmetic": "EXACT_RATIONAL", "method": "DIRECT_WITNESS",
-        "coverage": "NOT_APPLICABLE", "detail": detail,
+        "accepted": False,
+        "conclusion": "UNKNOWN",
+        "arithmetic": "EXACT_RATIONAL",
+        "method": "DIRECT_WITNESS",
+        "coverage": "NOT_APPLICABLE",
+        "detail": detail,
     }
 
 
 def _accept(detail: str) -> dict[str, Any]:
     return {
-        "accepted": True, "conclusion": "TRUE",
-        "arithmetic": "EXACT_RATIONAL", "method": "DIRECT_WITNESS",
-        "coverage": "NOT_APPLICABLE", "detail": detail,
+        "accepted": True,
+        "conclusion": "TRUE",
+        "arithmetic": "EXACT_RATIONAL",
+        "method": "DIRECT_WITNESS",
+        "coverage": "NOT_APPLICABLE",
+        "detail": detail,
     }
 
 
@@ -44,7 +50,9 @@ def _wire(value: Fraction) -> dict[str, str]:
 
 def _value(raw: object) -> tuple[Fraction, Fraction, int]:
     if not isinstance(raw, dict) or set(raw) != {
-        "rational_part", "radical_coefficient", "radicand"
+        "rational_part",
+        "radical_coefficient",
+        "radicand",
     }:
         raise ValueError("real-quadratic value is malformed")
     d = raw["radicand"]
@@ -98,17 +106,22 @@ def check_real_quadratic_order(request: object) -> dict[str, Any]:
             },
             "order": "LT" if sign < 0 else "GT" if sign > 0 else "EQ",
             "sign_basis": (
-                "RATIONAL_ONLY" if b == 0
-                else "RADICAL_ONLY" if a == 0
-                else "SAME_SIGN" if (a > 0) == (b > 0)
+                "RATIONAL_ONLY"
+                if b == 0
+                else "RADICAL_ONLY"
+                if a == 0
+                else "SAME_SIGN"
+                if (a > 0) == (b > 0)
                 else "OPPOSING_SIGNS_SQUARED_MAGNITUDES"
             ),
             "sign_certificate": {
                 "rational_part_squared": _wire(rational_square),
                 "radical_part_squared": _wire(radical_square),
                 "magnitude_order": (
-                    "LT" if rational_square < radical_square
-                    else "GT" if rational_square > radical_square
+                    "LT"
+                    if rational_square < radical_square
+                    else "GT"
+                    if rational_square > radical_square
                     else "EQ"
                 ),
             },

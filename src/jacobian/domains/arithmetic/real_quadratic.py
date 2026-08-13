@@ -28,6 +28,7 @@ def _real_quadratic_runtime(
         checker_ids=checker_ids,
     )
 
+
 REAL_QUADRATIC_CAPABILITIES = (
     arithmetic_operation(
         "arithmetic.real_quadratic.order.compute",

@@ -5,16 +5,17 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from tests.support.state import copy_template
+from tests.support.exact_domain import open_exact_domain_services
 
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
-from jacobian.runtime.model import JacobianRuntime
+from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.services import CoreServices
 
 
-def _verify_ids(runtime: JacobianRuntime) -> set[str]:
+def _verify_ids(core: CoreServices) -> set[str]:
     return {
         entry.capability_id
-        for entry in runtime.core.capabilities.catalog().capabilities
+        for entry in core.capabilities.catalog().capabilities
         if ".verify" in entry.capability_id
     }
 
@@ -31,27 +32,31 @@ def _audit_count(root: Path) -> int:
 
 def test_hydrate_authorized_matches_bundled_authority_without_audit(
     tmp_path: Path,
-    authorized_portfolio_template: Path,
 ) -> None:
-    baseline_audit = _audit_count(authorized_portfolio_template)
-    attached = copy_template(authorized_portfolio_template, tmp_path / "attached")
-    with create_runtime(
-        attached, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
+    root = tmp_path / "state"
+    bundle = build_matrix_bundle()
+    with open_exact_domain_services(root, bundle):
+        pass
+    baseline_audit = _audit_count(root)
+
+    with open_exact_domain_services(
+        root,
+        bundle,
+        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
     ) as hydrated:
         assert {
-            "sat.model.verify",
-            "polynomial.gcd.verify",
             "matrix.multiply.verify",
-        } <= _verify_ids(hydrated)
-        assert _audit_count(attached) == baseline_audit
+            "matrix.determinant.verify",
+        } <= _verify_ids(hydrated.core)
+        assert _audit_count(root) == baseline_audit
 
 
 def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> None:
-    with create_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
-    ) as runtime:
+    bundle = build_matrix_bundle()
+    with open_exact_domain_services(
+        tmp_path,
+        bundle,
+        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
+    ) as services:
         assert _audit_count(tmp_path) == 0
-        # Atomic / resource verify surfaces may still appear; domain checkers must not.
-        assert "polynomial.gcd.verify" not in _verify_ids(runtime)
-        assert "sat.model.verify" not in _verify_ids(runtime)
-        assert "matrix.determinant.verify" not in _verify_ids(runtime)
+        assert "matrix.determinant.verify" not in _verify_ids(services.core)

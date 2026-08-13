@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -17,6 +18,8 @@ from jacobian.runtime.config import CheckerAuthorityMode
 
 if TYPE_CHECKING:
     from jacobian.runtime.model import JacobianRuntime
+
+RuntimeOpener = Callable[..., Any]
 
 
 class JacobianGroup(TyperGroup):
@@ -54,31 +57,28 @@ class JacobianGroup(TyperGroup):
                     active_failure.add_note(f"CLI cleanup also failed: {cleanup_exc}")
 
 
-app = typer.Typer(
-    name="jacobian",
-    cls=JacobianGroup,
-    help="Run installed atomic mathematical operations.",
-    no_args_is_help=True,
-)
-
-
 class CliState:
     def __init__(
         self,
         state_dir: Path,
         *,
         checker_authority: CheckerAuthorityMode,
+        runtime_opener: RuntimeOpener | None = None,
     ) -> None:
         self.state_dir = state_dir
         self.checker_authority = checker_authority
+        self._runtime_opener = runtime_opener
         self._runtime: JacobianRuntime | None = None
 
     @property
     def runtime(self) -> JacobianRuntime:
         if self._runtime is None:
-            from jacobian.runtime import create_runtime
+            opener = self._runtime_opener
+            if opener is None:
+                from jacobian.runtime import create_runtime
 
-            self._runtime = create_runtime(
+                opener = create_runtime
+            self._runtime = opener(
                 self.state_dir,
                 checker_authority=self.checker_authority,
             )
@@ -90,25 +90,6 @@ class CliState:
             self._runtime = None
 
 
-@app.callback()
-def configure(
-    context: typer.Context,
-    state_dir: Annotated[
-        Path,
-        typer.Option("--state-dir", help="Local artifact and metadata directory."),
-    ] = Path(".jacobian"),
-    checker_authority: Annotated[
-        CheckerAuthorityMode,
-        typer.Option(
-            "--checker-authority",
-            help="Checker authority policy for this runtime.",
-        ),
-    ] = CheckerAuthorityMode.INSTALL_BUNDLED,
-) -> None:
-    context.obj = CliState(state_dir, checker_authority=checker_authority)
-
-
-@app.command("init")
 def initialize(context: typer.Context) -> None:
     """Initialize storage and report the installed operation count."""
 
@@ -118,7 +99,6 @@ def initialize(context: typer.Context) -> None:
     typer.echo(f"Installed {count} mathematical operations.")
 
 
-@app.command("catalog")
 def catalog(context: typer.Context) -> None:
     """Print the complete installed operation catalog."""
 
@@ -126,7 +106,6 @@ def catalog(context: typer.Context) -> None:
     _emit(value.model_dump(mode="json"))
 
 
-@app.command("inspect")
 def inspect_operation(context: typer.Context, operation_id: str) -> None:
     """Print one exact installed operation declaration."""
 
@@ -144,7 +123,6 @@ def inspect_operation(context: typer.Context, operation_id: str) -> None:
     _emit(descriptor.model_dump(mode="json"))
 
 
-@app.command("run")
 def run_operation(
     context: typer.Context,
     operation_id: str,
@@ -175,7 +153,6 @@ def run_operation(
     _emit(result.model_dump(mode="json"))
 
 
-@app.command("provider-measure")
 def provider_measure(
     context: typer.Context,
     operation_id: str,
@@ -205,6 +182,48 @@ def provider_measure(
             include_cold_install=include_cold_install,
         ).model_dump(mode="json")
     )
+
+
+def create_cli_app(*, runtime_opener: RuntimeOpener | None = None) -> typer.Typer:
+    """Create the operator CLI, optionally over a caller-owned runtime opener."""
+
+    application = typer.Typer(
+        name="jacobian",
+        cls=JacobianGroup,
+        help="Run installed atomic mathematical operations.",
+        no_args_is_help=True,
+    )
+
+    @application.callback()
+    def configure(
+        context: typer.Context,
+        state_dir: Annotated[
+            Path,
+            typer.Option("--state-dir", help="Local artifact and metadata directory."),
+        ] = Path(".jacobian"),
+        checker_authority: Annotated[
+            CheckerAuthorityMode,
+            typer.Option(
+                "--checker-authority",
+                help="Checker authority policy for this runtime.",
+            ),
+        ] = CheckerAuthorityMode.INSTALL_BUNDLED,
+    ) -> None:
+        context.obj = CliState(
+            state_dir,
+            checker_authority=checker_authority,
+            runtime_opener=runtime_opener,
+        )
+
+    application.command("init")(initialize)
+    application.command("catalog")(catalog)
+    application.command("inspect")(inspect_operation)
+    application.command("run")(run_operation)
+    application.command("provider-measure")(provider_measure)
+    return application
+
+
+app = create_cli_app()
 
 
 def _state(context: typer.Context) -> CliState:

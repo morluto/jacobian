@@ -86,12 +86,14 @@ make harbor-oracle-task DATASET=<dataset-id> TASKS="<task-id>"
 ```
 
 The focused commands require explicit task IDs and do not fall back to all
-tasks. The full repository gate remains the appropriate check for
-`registry.toml`, suite headers and policy, shared tooling, schemas, global
-task-ID uniqueness, or other control-plane changes:
+tasks. The repository control-plane gate checks `registry.toml`, suite headers
+and policy, shared contracts, schemas, global task-ID uniqueness, adapters, and
+execution configuration. Add the explicit full-host gate only when the shared
+verifier harness changes or a portfolio-wide reproduction is intended:
 
 ```sh
 make harbor-check
+make harbor-check-all
 make benchmark-inventory OUTPUT=/tmp/benchmark-inventory.json
 make harbor-oracle DATASET=mathematical-benchmarks-v1 FULL=1
 ```

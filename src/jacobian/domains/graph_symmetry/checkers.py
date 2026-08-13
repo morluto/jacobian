@@ -1,7 +1,14 @@
 """Independent checker declaration owned by the graph-symmetry domain."""
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.graph_symmetry import GraphSymmetryOrbitRequest
+from jacobian.providers import flint_runtime
+
+
+def _graph_runtime(*, checker_ids: tuple[str, ...] = ()) -> CapabilityProviderRuntime:
+    return flint_runtime.graph_exact_checker_provider_runtime(checker_ids=checker_ids)
+
 
 GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
@@ -10,6 +17,7 @@ GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS = (
         "check_graph_symmetry_generator_orbits",
         "graph.symmetry.generator-orbits.stdlib-replay",
         entrypoint_module="jacobian_checkers.graph_exact_operations",
+        provider_runtime_factory=_graph_runtime,
         replay_method="declared color-preserving generator orbit replay",
         reason=(
             "operator-authorized standard-library checker independently validates "

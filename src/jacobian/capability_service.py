@@ -9,7 +9,7 @@ those boundaries behind a second compatibility API.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from jacobian.canonical import canonicalize_json
 from jacobian.capability_adapters import CapabilityAdapter
@@ -142,7 +142,7 @@ class CapabilityService(
     ) -> None:
         self.store = store
         self.policy = policy or CapabilityPolicy()
-        self._adapters: dict[str, CapabilityAdapter] = {}
+        self._adapters: dict[str, CapabilityAdapter[Any]] = {}
         self._descriptors: dict[str, CapabilityDescriptor] = {}
 
 

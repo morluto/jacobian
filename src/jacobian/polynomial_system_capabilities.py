@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -148,8 +149,6 @@ def install_polynomial_system_capabilities(
 class PolynomialSystemSolutionAdapter:
     """Verify one exact assignment against every declared constraint."""
 
-    typed_input = True
-
     def __init__(self, resources: PolynomialSystemResources) -> None:
         self.resources = resources
         checker_id = resources.installation.checker_id
@@ -180,10 +179,12 @@ class PolynomialSystemSolutionAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> PolynomialSystemSolutionRequest:
         try:
-            validated = PolynomialSystemSolutionRequest.model_validate(request.input)
-        except ValidationError as exc:
+            return parse_capability_input(
+                PolynomialSystemSolutionRequest, request.input
+            )
+        except (ValidationError, ValueError) as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_POLYNOMIAL_SYSTEM_SOLUTION_REQUEST",
@@ -202,6 +203,8 @@ class PolynomialSystemSolutionAdapter:
                     ),
                 )
             ) from exc
+
+    def invoke(self, validated: PolynomialSystemSolutionRequest) -> OperationProjection:
         installation = self.resources.installation
         checker_id = installation.checker_id
         if checker_id is None:

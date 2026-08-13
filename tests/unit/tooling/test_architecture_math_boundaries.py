@@ -112,6 +112,31 @@ def test_final_projection_may_construct_public_result_envelopes(
     assert "capability-result-projection" not in _codes(tmp_path)
 
 
+def test_product_code_cannot_restore_marker_selected_adapter_modes(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/polynomials/adapter.py",
+        "class Adapter:\n    typed_input = True\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/graphs/adapter.py",
+        "from jacobian.capability_adapters import TypedInputAdapter\n",
+    )
+
+    violations = [
+        item
+        for item in check_architecture(tmp_path).violations
+        if item.code == "legacy-adapter-mode"
+    ]
+    assert {item.path for item in violations} == {
+        "src/jacobian/graphs/adapter.py",
+        "src/jacobian/polynomials/adapter.py",
+    }
+
+
 def test_contracts_can_import_canonical_and_contract_modules(tmp_path: Path) -> None:
     _write(
         tmp_path,

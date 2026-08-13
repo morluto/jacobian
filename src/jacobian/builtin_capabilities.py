@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityDiagnostic,
@@ -11,7 +12,7 @@ from jacobian.contracts.capabilities import (
 )
 from jacobian.contracts.lean import (
     LeanCheckOutput,
-    LeanEnvironment,
+    LeanCheckRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.lean_frontend.service import LeanService
@@ -40,16 +41,7 @@ class LeanCheckAdapter:
             ),
             provider="jacobian.lean4",
             provider_runtime=provider_runtime,
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "statement": {"type": "string", "minLength": 1, "maxLength": 2000},
-                    "proof": {"type": "string", "minLength": 1, "maxLength": 20000},
-                    "environment": {"enum": ["CORE", "MATHLIB"]},
-                },
-                "required": ["statement", "proof"],
-                "additionalProperties": False,
-            },
+            input_schema=LeanCheckRequest.model_json_schema(),
             output_schema=LeanCheckOutput.model_json_schema(),
             tags=(
                 "lean",
@@ -84,12 +76,14 @@ class LeanCheckAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        payload = request.input
+    def prepare(self, request: CapabilityRequest) -> LeanCheckRequest:
+        return parse_capability_input(LeanCheckRequest, request.input)
+
+    def invoke(self, payload: LeanCheckRequest) -> OperationProjection:
         checked = self.lean.verify(
-            statement=str(payload["statement"]),
-            proof=str(payload["proof"]),
-            environment=LeanEnvironment(str(payload.get("environment", "CORE"))),
+            statement=payload.statement,
+            proof=payload.proof,
+            environment=payload.environment,
         )
         verified = checked.result.verification_record_uri is not None
         evidence = (checked.certificate_uri,)

@@ -11,6 +11,7 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     canonicalize_json,
+    encode_strict_json,
     sha256_digest,
 )
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
@@ -26,6 +27,19 @@ def test_equivalent_rationals_have_identical_canonical_bytes() -> None:
     second = canonicalize_json({"weight": {"num": "1", "den": "2"}})
 
     assert first == second == b'{"weight":{"den":"2","num":"1"}}'
+
+
+def test_strict_json_encoding_preserves_unreduced_rationals_and_unicode() -> None:
+    decomposed = "e\u0301"
+
+    encoded = encode_strict_json(
+        {"weight": {"num": "2", "den": "4"}, "label": decomposed}
+    )
+
+    assert encoded.decode("utf-8") == (
+        f'{{"label":"{decomposed}","weight":{{"den":"4","num":"2"}}}}'
+    )
+    assert encode_strict_json(decomposed) == b'"e\xcc\x81"'
 
 
 @pytest.mark.parametrize(

@@ -76,7 +76,7 @@ def test_inline_exact_validation_does_not_echo_a_rejected_candidate(
     )
 
     assert checked.execution.status == "ERROR"
-    assert checked.diagnostics[0].code == "INVALID_REQUEST"
+    assert checked.diagnostics[0].code == "INVALID_EXACT_DOMAIN_INPUT"
     assert marker not in checked.model_dump_json()
 
 

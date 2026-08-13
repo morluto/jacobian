@@ -173,27 +173,31 @@ def test_apply_tactic_materializes_and_reuses_replayable_state(
 
     first = project_operation_result(
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "(P Q : Prop) → P ∧ Q",
-                    "proof_prefix": ["intro P Q"],
-                    "tactic": "constructor",
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "(P Q : Prop) → P ∧ Q",
+                        "proof_prefix": ["intro P Q"],
+                        "tactic": "constructor",
+                    },
+                )
             )
         )
     )
     successor_uri = first.output["successor_states"][0]["state_uri"]
     second = project_operation_result(
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "state_uri": successor_uri,
-                    "tactic": "all_goals assumption",
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "state_uri": successor_uri,
+                        "tactic": "all_goals assumption",
+                    },
+                )
             )
         )
     )
@@ -231,14 +235,16 @@ def test_apply_tactic_returns_rejection_without_successor(
 
     result = project_operation_result(
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "(P Q : Prop) → P → Q",
-                    "proof_prefix": ["intro P Q hP"],
-                    "tactic": "exact hP",
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "(P Q : Prop) → P → Q",
+                        "proof_prefix": ["intro P Q hP"],
+                        "tactic": "exact hP",
+                    },
+                )
             )
         )
     )
@@ -288,13 +294,15 @@ def test_rejected_transition_persists_all_protocol_diagnostics(
 
     result = project_operation_result(
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "True",
-                    "tactic": "skip",
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "tactic": "skip",
+                    },
+                )
             )
         )
     )
@@ -319,13 +327,15 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
     )
     opened = project_operation_result(
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "statement": "True",
-                    "tactic": "trivial",
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "statement": "True",
+                        "tactic": "trivial",
+                    },
+                )
             )
         )
     )
@@ -341,13 +351,15 @@ def test_apply_tactic_rejects_environment_stale_state_before_replay(
 
     with pytest.raises(CapabilityInvocationError) as raised:
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "state_uri": stale.artifact_uri,
-                    "tactic": "trivial",
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "state_uri": stale.artifact_uri,
+                        "tactic": "trivial",
+                    },
+                )
             )
         )
 
@@ -370,15 +382,17 @@ def test_apply_tactic_preserves_cross_field_validation_evidence(tmp_path: Path) 
 
     with pytest.raises(CapabilityInvocationError) as raised:
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={
-                    "environment": "CORE",
-                    "state_uri": "artifact://sha256/" + "a" * 64,
-                    "statement": "True",
-                    "proof_prefix": ["skip"],
-                    "tactic": "trivial",
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={
+                        "environment": "CORE",
+                        "state_uri": "artifact://sha256/" + "a" * 64,
+                        "statement": "True",
+                        "proof_prefix": ["skip"],
+                        "tactic": "trivial",
+                    },
+                )
             )
         )
 

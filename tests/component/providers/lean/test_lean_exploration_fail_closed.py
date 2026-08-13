@@ -132,11 +132,14 @@ def test_typed_goal_extraction_failure_is_a_structured_non_conclusion(
         fail_extraction,
     )
 
+    adapter = LeanProofStateAdapter(resources)
     with pytest.raises(CapabilityInvocationError) as error:
-        LeanProofStateAdapter(resources).invoke(
-            CapabilityRequest(
-                capability_id="lean.proof_state.apply_tactic",
-                input={"statement": "True", "tactic": "skip"},
+        adapter.invoke(
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.proof_state.apply_tactic",
+                    input={"statement": "True", "tactic": "skip"},
+                )
             )
         )
 
@@ -203,13 +206,15 @@ def test_premise_retrieval_rejects_by_prefix_before_starting_lean(
 
     with pytest.raises(CapabilityInvocationError) as error:
         adapter.invoke(
-            CapabilityRequest(
-                capability_id="lean.retrieve.premises",
-                input={
-                    "environment": "MATHLIB",
-                    "statement": "∀ x : Real, x ^ 2 ≥ 0",
-                    "proof_prefix": ["by", "intro x"],
-                },
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.retrieve.premises",
+                    input={
+                        "environment": "MATHLIB",
+                        "statement": "∀ x : Real, x ^ 2 ≥ 0",
+                        "proof_prefix": ["by", "intro x"],
+                    },
+                )
             )
         )
 
@@ -256,11 +261,14 @@ def test_premise_retrieval_maps_repl_runtime_failure_to_domain_diagnostic(
         fail_repl,
     )
 
+    adapter = LeanPremiseRetrievalAdapter(resources)
     with pytest.raises(CapabilityInvocationError) as error:
-        LeanPremiseRetrievalAdapter(resources).invoke(
-            CapabilityRequest(
-                capability_id="lean.retrieve.premises",
-                input={"statement": "True"},
+        adapter.invoke(
+            adapter.prepare(
+                CapabilityRequest(
+                    capability_id="lean.retrieve.premises",
+                    input={"statement": "True"},
+                )
             )
         )
 

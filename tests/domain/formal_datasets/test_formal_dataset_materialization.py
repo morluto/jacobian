@@ -25,7 +25,7 @@ class _PublicAdapter:
         self.resources = adapter.resources
 
     def invoke(self, request: CapabilityRequest) -> CapabilityResult:
-        projection = self._adapter.invoke(request)
+        projection = self._adapter.invoke(self._adapter.prepare(request))
         assert isinstance(projection, OperationProjection)
         return project_operation_result(projection)
 

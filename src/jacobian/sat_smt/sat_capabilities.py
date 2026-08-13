@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_installation import CheckerInstaller
@@ -73,8 +73,6 @@ class SatUnsatProofCheckerInstallation:
 
 class SatCnfMaterializationAdapter:
     """Create one canonical CNF artifact without making a SAT conclusion."""
-
-    typed_input = True
 
     def __init__(self, sat: SatArtifactService) -> None:
         self.sat = sat
@@ -151,9 +149,9 @@ class SatCnfMaterializationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> SatCnfMaterializationRequest:
         try:
-            validated = SatCnfMaterializationRequest.model_validate(request.input)
+            return parse_capability_input(SatCnfMaterializationRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -171,6 +169,7 @@ class SatCnfMaterializationAdapter:
                 )
             ) from exc
 
+    def invoke(self, validated: SatCnfMaterializationRequest) -> OperationProjection:
         terminal = execute_operation(self.spec, validated)
         if not isinstance(terminal, Completed):
             return OperationProjection(
@@ -242,7 +241,10 @@ def install_sat_assignment_checker(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[CapabilityAdapter | None, SatAssignmentCheckerInstallation]:
+) -> tuple[
+    CapabilityAdapter[SatAssignmentVerificationRequest] | None,
+    SatAssignmentCheckerInstallation,
+]:
     """Install the assignment evidence schema and optionally authorize replay."""
 
     witness_schema_uri = schemas.register_model(
@@ -272,7 +274,7 @@ def install_sat_assignment_checker(
         witness_schema_uri=witness_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter | None = None
+    adapter: CapabilityAdapter[SatAssignmentVerificationRequest] | None = None
     if checker_id is not None:
         adapter = SatAssignmentVerificationAdapter(
             store=store,
@@ -294,7 +296,10 @@ def install_sat_unsat_proof_checker(
     runtime: CapabilityProviderRuntime,
     *,
     authorize_checker: bool,
-) -> tuple[CapabilityAdapter | None, SatUnsatProofCheckerInstallation]:
+) -> tuple[
+    CapabilityAdapter[SatUnsatProofVerificationRequest] | None,
+    SatUnsatProofCheckerInstallation,
+]:
     """Install the proof certificate schema and optionally authorize DRAT replay."""
 
     certificate_schema_uri = schemas.register_model(
@@ -328,7 +333,7 @@ def install_sat_unsat_proof_checker(
         certificate_schema_uri=certificate_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter | None = None
+    adapter: CapabilityAdapter[SatUnsatProofVerificationRequest] | None = None
     if checker_id is not None:
         adapter = SatUnsatProofVerificationAdapter(
             store=store,
@@ -343,8 +348,6 @@ def install_sat_unsat_proof_checker(
 
 class SatAssignmentVerificationAdapter:
     """Verify one assignment; never infer UNSAT from assignment rejection."""
-
-    typed_input = True
 
     def __init__(
         self,
@@ -400,8 +403,12 @@ class SatAssignmentVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = SatAssignmentVerificationRequest.model_validate(request.input)
+    def prepare(self, request: CapabilityRequest) -> SatAssignmentVerificationRequest:
+        return parse_capability_input(SatAssignmentVerificationRequest, request.input)
+
+    def invoke(
+        self, validated: SatAssignmentVerificationRequest
+    ) -> OperationProjection:
         try:
             resolved = self.sat.resolve_assignment(validated.assignment_uri)
             semantics = self.store.get(self.sat.installation.semantics_uri)
@@ -514,8 +521,6 @@ class SatAssignmentVerificationAdapter:
 class SatUnsatProofVerificationAdapter:
     """Verify one raw proof; rejection never establishes satisfiability."""
 
-    typed_input = True
-
     def __init__(
         self,
         *,
@@ -571,8 +576,12 @@ class SatUnsatProofVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = SatUnsatProofVerificationRequest.model_validate(request.input)
+    def prepare(self, request: CapabilityRequest) -> SatUnsatProofVerificationRequest:
+        return parse_capability_input(SatUnsatProofVerificationRequest, request.input)
+
+    def invoke(
+        self, validated: SatUnsatProofVerificationRequest
+    ) -> OperationProjection:
         try:
             resolved = self.sat.resolve_proof(validated.proof_uri)
             semantics = self.store.get(self.sat.installation.semantics_uri)

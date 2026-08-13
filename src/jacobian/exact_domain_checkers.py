@@ -6,12 +6,12 @@ import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityError, CapabilityInvocationError
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_installation import CheckerInstaller
@@ -88,6 +88,11 @@ _ENTRYPOINT_PROVIDER_RUNTIME_KEYS = {
     "jacobian_checkers.finite_field_rank": "sympy",
     "jacobian_checkers.finite_field_polynomial": "finite-field-polynomial",
 }
+
+_ExactVerificationPrepared = (
+    ExactDomainResultVerificationRequest
+    | ExactComputedVerificationRequest[ContractModel, ContractModel]
+)
 
 
 def _finite_field_rank_checker_runtime(
@@ -328,7 +333,7 @@ def install_exact_domain_verification(
     *,
     bundles: Mapping[str, tuple[DomainBundle, InstalledDomainBundle]],
     authorize: bool,
-) -> tuple[tuple[CapabilityAdapter, ...], ExactDomainCheckerInstallation]:
+) -> tuple[tuple[CapabilityAdapter[Any], ...], ExactDomainCheckerInstallation]:
     """Authorize exact replay and expose per-producer verification capabilities.
 
     Each authorized exact replay declaration becomes one
@@ -359,7 +364,7 @@ def install_exact_domain_verification(
         checker_id is not None for checker_id in installation.checker_ids.values()
     ):
         return (), installation
-    adapters: list[CapabilityAdapter] = []
+    adapters: list[CapabilityAdapter[Any]] = []
     result_models = {
         operation.spec.operation_id: operation.spec.result_type
         for bundle, _installed_bundle in bundles.values()
@@ -539,17 +544,59 @@ class ExactComputedVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> _ExactVerificationPrepared:
+        try:
+            if self.stored_result_input:
+                return parse_capability_input(
+                    ExactDomainResultVerificationRequest,
+                    request.input,
+                )
+            return cast(
+                ExactComputedVerificationRequest[ContractModel, ContractModel],
+                parse_capability_input(self.input_model, request.input),
+            )
+        except ValidationError as exc:
+            raise CapabilityInvocationError(
+                CapabilityDiagnostic(
+                    code=(
+                        "INVALID_EXACT_DOMAIN_RESULT"
+                        if self.stored_result_input
+                        else "INVALID_EXACT_DOMAIN_INPUT"
+                    ),
+                    stage=(
+                        "artifact_resolution"
+                        if self.stored_result_input
+                        else "request_validation"
+                    ),
+                    message=bounded_validation_exception_message(exc),
+                    path="result_uri" if self.stored_result_input else None,
+                    hint=(
+                        "Pass the result_uri returned by this exact producer."
+                        if self.stored_result_input
+                        else (
+                            "input must satisfy the producer request contract and "
+                            "candidate must satisfy its result contract."
+                        )
+                    ),
+                )
+            ) from exc
+
+    def invoke(self, prepared: _ExactVerificationPrepared) -> OperationProjection:
         declaration = self.declaration
         source_artifacts: tuple[StoredArtifact, StoredArtifact, StoredArtifact] | None
         normalized_candidate: dict[str, object] | None
         if self.stored_result_input:
-            source_artifacts = self._resolve_stored_result(request)
+            source_artifacts = self._resolve_stored_result(
+                cast(ExactDomainResultVerificationRequest, prepared)
+            )
             normalized_input = source_artifacts[0].payload
             normalized_candidate = None
         else:
             normalized_input, normalized_candidate = self._validated_inline_payloads(
-                request
+                cast(
+                    ExactComputedVerificationRequest[ContractModel, ContractModel],
+                    prepared,
+                )
             )
             source_artifacts = None
         # Check the authorized checker's bounded input scope before any artifact write.
@@ -811,11 +858,11 @@ class ExactComputedVerificationAdapter:
         return statuses.get(execution_status, "ERROR")
 
     def _validated_inline_payloads(
-        self, request: CapabilityRequest
+        self,
+        validated: ExactComputedVerificationRequest[ContractModel, ContractModel],
     ) -> tuple[dict[str, object], dict[str, object]]:
         declaration = self.declaration
         try:
-            validated = self.input_model.model_validate(request.input)
             normalized_input = self.schemas.validate(
                 declaration.input_schema_uri,
                 validated.input.model_dump(mode="json"),
@@ -839,15 +886,13 @@ class ExactComputedVerificationAdapter:
         return normalized_input, normalized_candidate
 
     def _resolve_stored_result(
-        self, request: CapabilityRequest
+        self, validated: ExactDomainResultVerificationRequest
     ) -> tuple[StoredArtifact, StoredArtifact, StoredArtifact]:
         """Resolve the declared producer's exact materialized lineage."""
 
         declaration = self.declaration
         try:
-            result_uri = ExactDomainResultVerificationRequest.model_validate(
-                request.input
-            ).result_uri
+            result_uri = validated.result_uri
             result_artifact = self.store.get(result_uri)
             if (
                 result_artifact.manifest.schema_uri != declaration.result_schema_uri

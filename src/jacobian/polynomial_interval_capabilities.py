@@ -302,14 +302,18 @@ class PolynomialIntervalEncloseAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> PolynomialIntervalEnclosureRequest:
+        return _validate_request(
             PolynomialIntervalEnclosureRequest,
             request.input,
             code="INVALID_POLYNOMIAL_INTERVAL_ENCLOSURE_REQUEST",
             operation="interval enclosure",
             error_factory=_interval_error,
         )
+
+    def invoke(
+        self, validated: PolynomialIntervalEnclosureRequest
+    ) -> OperationProjection:
         started = time.monotonic()
         polynomial = validated.polynomial
         interval = validated.interval
@@ -417,14 +421,20 @@ class PolynomialIntervalEnclosureVerifyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialIntervalEnclosureVerifyRequest:
+        return _validate_request(
             PolynomialIntervalEnclosureVerifyRequest,
             request.input,
             code="INVALID_POLYNOMIAL_INTERVAL_ENCLOSURE_VERIFY_REQUEST",
             operation="interval enclosure verification",
             error_factory=_interval_error,
         )
+
+    def invoke(
+        self, validated: PolynomialIntervalEnclosureVerifyRequest
+    ) -> OperationProjection:
         installation = self.resources.installation
         checker_id = installation.checker_id
         if checker_id is None:

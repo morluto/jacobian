@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from jacobian.bounded_process import bounded_process_cancelled
 from jacobian.canonical import loads_strict_json
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -69,7 +69,7 @@ class _Cvc5Run:
 def install_cvc5_capability(
     smt: SmtArtifactService,
     runtime: CapabilityProviderRuntime,
-) -> CapabilityAdapter:
+) -> CapabilityAdapter[SmtUnsatProofFindRequest]:
     """Install the Alethe producer for one exact available cvc5 runtime."""
 
     if (
@@ -189,8 +189,6 @@ class _Cvc5Backend:
 class Cvc5UnsatProofFindAdapter:
     """Preserve raw cvc5 Alethe evidence without validating it."""
 
-    typed_input = True
-
     def __init__(
         self,
         *,
@@ -250,31 +248,24 @@ class Cvc5UnsatProofFindAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> SmtUnsatProofFindRequest:
         try:
-            validated = SmtUnsatProofFindRequest.model_validate(request.input)
+            return parse_capability_input(SmtUnsatProofFindRequest, request.input)
+        except ValidationError as exc:
+            raise CapabilityInvocationError(
+                _invalid_smt_unsat_proof_request_diagnostic(self.smt, exc)
+            ) from exc
+
+    def invoke(self, validated: SmtUnsatProofFindRequest) -> OperationProjection:
+        try:
             problem_uri = self.smt.put_problem(
                 logic=validated.logic,
                 smtlib_text=validated.smtlib_text,
             ).artifact_uri
             resolved = self.smt.resolve_problem(problem_uri)
-        except (ValidationError, ValueError) as exc:
+        except ValueError as exc:
             raise CapabilityInvocationError(
-                CapabilityDiagnostic(
-                    code="INVALID_SMT_UNSAT_PROOF_REQUEST",
-                    stage="input_validation",
-                    message=str(exc),
-                    path="smtlib_text",
-                    schema_uri=self.smt.installation.problem_schema_uri,
-                    expected=(
-                        "one exact QF_UF, QF_LIA, or QF_LRA SMT-LIB 2.6 query "
-                        "within an enforceable wall-time budget"
-                    ),
-                    hint=(
-                        "Use one set-logic, declarations and assertions, then one "
-                        "final check-sat; incremental and result commands are excluded."
-                    ),
-                )
+                _invalid_smt_unsat_proof_request_diagnostic(self.smt, exc)
             ) from exc
         run = self.backend.run(resolved, validated)
         if (
@@ -340,6 +331,26 @@ class Cvc5UnsatProofFindAdapter:
             output,
             tuple(artifacts),
         )
+
+
+def _invalid_smt_unsat_proof_request_diagnostic(
+    smt: SmtArtifactService, exc: Exception
+) -> CapabilityDiagnostic:
+    return CapabilityDiagnostic(
+        code="INVALID_SMT_UNSAT_PROOF_REQUEST",
+        stage="input_validation",
+        message=str(exc),
+        path="smtlib_text",
+        schema_uri=smt.installation.problem_schema_uri,
+        expected=(
+            "one exact QF_UF, QF_LIA, or QF_LRA SMT-LIB 2.6 query within an "
+            "enforceable wall-time budget"
+        ),
+        hint=(
+            "Use one set-logic, declarations and assertions, then one final "
+            "check-sat; incremental and result commands are excluded."
+        ),
+    )
 
 
 def _completed_result(

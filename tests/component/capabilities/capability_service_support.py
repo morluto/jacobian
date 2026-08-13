@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pydantic import ConfigDict
+
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
     CapabilityInstallTier,
@@ -22,6 +25,7 @@ from jacobian.contracts.results import (
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
+from jacobian.schema_registry import model_schema
 
 TEST_RUNTIME = CapabilityProviderRuntime(
     provider="tests",
@@ -71,7 +75,15 @@ class _Value(ContractModel):
     value: int
 
 
-class _InvalidValue(ContractModel):
+class _ValueRequest(ContractModel):
+    value: int
+
+
+class _EmptyRequest(ContractModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class _WrongValue(ContractModel):
     value: str
 
 
@@ -84,44 +96,16 @@ class ComputedAdapter:
         description="Small adapter used to prove no MCP or runtime edit is required.",
         provider="tests",
         provider_runtime=TEST_RUNTIME,
-        input_schema={
-            "type": "object",
-            "properties": {"value": {"type": "integer"}},
-            "required": ["value"],
-            "additionalProperties": False,
-        },
-        output_schema={
-            "type": "object",
-            "properties": {"value": {"type": "integer"}},
-            "required": ["value"],
-            "additionalProperties": False,
-        },
+        input_schema=model_schema(_ValueRequest),
+        output_schema=model_schema(_Value),
         tags=("test",),
     )
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        value = _Value(value=int(request.input["value"]) * 2)
-        return OperationProjection(
-            operation_id=self.descriptor.capability_id,
-            version=self.descriptor.version,
-            terminal=Completed(value=value),
-            publication=PublishedOperation(output=value),
-        )
+    def prepare(self, request: CapabilityRequest) -> _ValueRequest:
+        return parse_capability_input(_ValueRequest, request.input)
 
-
-@dataclass(frozen=True)
-class InvalidOutputAdapter:
-    descriptor = ComputedAdapter.descriptor.model_copy(
-        update={
-            "capability_id": "example.invalid-output",
-            "title": "Return schema-invalid output",
-            "description": "Fixture for the adapter result validation boundary.",
-        }
-    )
-
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        del request
-        value = _InvalidValue(value="not-an-integer")
+    def invoke(self, parsed: _ValueRequest) -> OperationProjection:
+        value = _Value(value=parsed.value * 2)
         return OperationProjection(
             operation_id=self.descriptor.capability_id,
             version=self.descriptor.version,
@@ -143,16 +127,74 @@ class NotReadyProviderAdapter:
         output_schema={"type": "object"},
     )
 
-    def invoke(self, _request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
+        return parse_capability_input(_EmptyRequest, request.input)
+
+    def invoke(self, _request: _EmptyRequest) -> OperationProjection:
         raise AssertionError("provider must be rejected before adapter invocation")
+
+
+@dataclass(frozen=True)
+class MismatchedOutputAdapter:
+    descriptor = CapabilityDescriptor(
+        capability_id="example.mismatched-output",
+        version="1",
+        title="Return the wrong typed value",
+        description="Fixture for the installed output-model boundary.",
+        provider="tests",
+        provider_runtime=TEST_RUNTIME,
+        input_schema=model_schema(_EmptyRequest),
+        output_schema=model_schema(_Value),
+    )
+
+    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
+        return parse_capability_input(_EmptyRequest, request.input)
+
+    def invoke(self, _request: _EmptyRequest) -> OperationProjection:
+        value = _WrongValue(value="not-an-integer")
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=value),
+            publication=PublishedOperation(output=value),
+        )
+
+
+@dataclass(frozen=True)
+class InvalidOutputValueAdapter:
+    descriptor = CapabilityDescriptor(
+        capability_id="example.invalid-output-value",
+        version="1",
+        title="Return an invalid typed value",
+        description="Fixture for unchecked model construction at publication.",
+        provider="tests",
+        provider_runtime=TEST_RUNTIME,
+        input_schema=model_schema(_EmptyRequest),
+        output_schema=model_schema(_Value),
+    )
+
+    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
+        return parse_capability_input(_EmptyRequest, request.input)
+
+    def invoke(self, _request: _EmptyRequest) -> OperationProjection:
+        value = _Value.model_construct(value="not-an-integer")
+        return OperationProjection(
+            operation_id=self.descriptor.capability_id,
+            version=self.descriptor.version,
+            terminal=Completed(value=value),
+            publication=PublishedOperation(output=value),
+        )
 
 
 @dataclass(frozen=True)
 class DiscoveryAdapter:
     descriptor: CapabilityDescriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        value = _Value(value=int(request.input["value"]))
+    def prepare(self, request: CapabilityRequest) -> _ValueRequest:
+        return parse_capability_input(_ValueRequest, request.input)
+
+    def invoke(self, request: _ValueRequest) -> OperationProjection:
+        value = _Value(value=request.value)
         return OperationProjection(
             operation_id=self.descriptor.capability_id,
             version=self.descriptor.version,
@@ -174,7 +216,10 @@ class CrashingAdapter:
         output_schema={"type": "object"},
     )
 
-    def invoke(self, _request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
+        return parse_capability_input(_EmptyRequest, request.input)
+
+    def invoke(self, _request: _EmptyRequest) -> OperationProjection:
         raise RuntimeError("provider=fixture internal-adapter-id=secret")
 
 
@@ -188,10 +233,13 @@ class ForgedVerifiedAdapter:
         provider="tests",
         provider_runtime=TEST_RUNTIME,
         input_schema={"type": "object"},
-        output_schema={"type": "object"},
+        output_schema=model_schema(_Value),
     )
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> _EmptyRequest:
+        return parse_capability_input(_EmptyRequest, request.input)
+
+    def invoke(self, request: _EmptyRequest) -> OperationProjection:
         del request
         record_uri = "artifact://sha256/" + "f" * 64
         value = _Value(value=0)

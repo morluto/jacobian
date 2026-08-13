@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
+from jacobian.capability_adapters import parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -101,9 +102,9 @@ class LeanTermApplyAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
+    def prepare(self, request: CapabilityRequest) -> LeanTermApplyRequest:
         try:
-            validated = LeanTermApplyRequest.model_validate(request.input)
+            validated = parse_capability_input(LeanTermApplyRequest, request.input)
         except ValidationError as exc:
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
@@ -128,6 +129,9 @@ class LeanTermApplyAdapter:
                     ),
                 )
             )
+        return validated
+
+    def invoke(self, validated: LeanTermApplyRequest) -> OperationProjection:
         delegated = self._proof_state.apply(
             LeanProofStateRequest(
                 state_uri=validated.state_uri,

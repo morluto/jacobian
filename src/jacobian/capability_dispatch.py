@@ -8,15 +8,13 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.capability_adapters import CapabilityAdapter, TypedInputAdapter
+from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import (
     CapabilityError,
     CapabilityInvocationError,
-    PayloadValidationError,
     enriched_invalid_request,
 )
 from jacobian.capability_telemetry import log_invocation
-from jacobian.capability_validation import json_value_type, validate_payload
 from jacobian.contracts.capabilities import (
     CapabilityDiagnostic,
     CapabilityRequest,
@@ -29,6 +27,7 @@ from jacobian.provider_runtime import (
     ProviderRuntimeError,
     require_provider_runtime_ready,
 )
+from jacobian.schema_registry import model_schema
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class CapabilityDispatchMixin:
     def invoke(self: Any, request: CapabilityRequest) -> CapabilityResult:
         started = time.monotonic()
         try:
-            adapter: CapabilityAdapter = self._adapters[request.capability_id]
+            adapter: CapabilityAdapter[Any] = self._adapters[request.capability_id]
         except KeyError:
             result = _unknown_capability_failure(request)
             log_invocation(result, started)
@@ -49,17 +48,17 @@ class CapabilityDispatchMixin:
         if resolution is not None:
             log_invocation(resolution, started)
             return resolution
-        try:
-            normalized_request = _normalize_request(adapter, descriptor, request)
-        except CapabilityError as exc:
-            result = _input_validation_failure(descriptor, request, exc)
+        invalid_inputs = _undeclared_value_inputs_failure(descriptor, request)
+        if invalid_inputs is not None:
+            result = invalid_inputs
             log_invocation(result, started)
             return result
         try:
+            prepared = adapter.prepare(request)
             result = invoke_ready_adapter(
                 adapter=adapter,
                 descriptor=descriptor,
-                request=normalized_request,
+                prepared=prepared,
             )
         except CapabilityInvocationError as exc:
             result = failed_result(
@@ -90,40 +89,31 @@ class CapabilityDispatchMixin:
         if invalid is not None:
             log_invocation(invalid, started)
             return invalid
-        if result.execution.status is ExecutionStatus.COMPLETED and not isinstance(
-            adapter, TypedInputAdapter
-        ):
-            result = _normalize_completed_adapter_output(
-                descriptor=descriptor,
-                result=result,
-                started=started,
-            )
-            if result.execution.status is not ExecutionStatus.COMPLETED:
-                return result
         self._validate_verified_result(result)
         log_invocation(result, started)
         return result
 
 
-def _normalize_request(
-    adapter: CapabilityAdapter,
+def _undeclared_value_inputs_failure(
     descriptor: Any,
     request: CapabilityRequest,
-) -> CapabilityRequest:
-    """Use the adapter's typed parser or the external schema-only boundary."""
-
-    if request.inputs and not descriptor.input_ports:
-        raise PayloadValidationError(
-            "the selected capability declares no typed value inputs",
+) -> CapabilityResult | None:
+    if not request.inputs or descriptor.input_ports:
+        return None
+    return failed_result(
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
+        diagnostic=CapabilityDiagnostic(
+            code="INVALID_REQUEST",
+            stage="capability_input_validation",
+            message="The selected capability declares no typed value inputs.",
             path="inputs",
-            actual_type="object",
             expected="no value references",
+            actual_type="object",
+            hint="Remove the undeclared value-reference inputs and retry.",
             details={"unknown_input_ports": sorted(request.inputs)},
-        )
-    if isinstance(adapter, TypedInputAdapter):
-        return request
-    normalized_input = validate_payload(descriptor.input_schema, request.input)
-    return request.model_copy(update={"input": normalized_input})
+        ),
+    )
 
 
 def _unknown_capability_failure(request: CapabilityRequest) -> CapabilityResult:
@@ -214,50 +204,6 @@ def _adapter_execution_failure(
     )
 
 
-def _input_validation_failure(
-    descriptor: Any,
-    request: CapabilityRequest,
-    exc: CapabilityError,
-) -> CapabilityResult:
-    path = exc.path if isinstance(exc, PayloadValidationError) else error_path(exc)
-    return failed_result(
-        operation_id=descriptor.capability_id,
-        version=descriptor.version,
-        diagnostic=CapabilityDiagnostic(
-            code="INVALID_REQUEST",
-            stage="capability_input_validation",
-            message=(
-                "The capability input does not match its advertised schema"
-                + (f" at {path}." if path else ".")
-            ),
-            path=path,
-            expected=(
-                exc.expected
-                if isinstance(exc, PayloadValidationError)
-                else "input matching the capability descriptor JSON Schema"
-            ),
-            actual_type=(
-                exc.actual_type
-                if isinstance(exc, PayloadValidationError)
-                else json_value_type(request.input)
-            ),
-            hint=(
-                "Correct the reported field. The exact violated constraint "
-                "and any required or missing top-level fields are included "
-                "in diagnostic details."
-            ),
-            details={
-                "required_fields": descriptor.input_schema.get("required", []),
-                "missing_fields": sorted(
-                    set(descriptor.input_schema.get("required", []))
-                    - set(request.input)
-                ),
-                **(exc.details if isinstance(exc, PayloadValidationError) else {}),
-            },
-        ),
-    )
-
-
 def _adapter_result_identity_failure(
     *,
     descriptor: Any,
@@ -280,40 +226,6 @@ def _adapter_result_identity_failure(
     return None
 
 
-def _normalize_completed_adapter_output(
-    *,
-    descriptor: Any,
-    result: CapabilityResult,
-    started: float,
-) -> CapabilityResult:
-    try:
-        normalized_output = validate_payload(descriptor.output_schema, result.output)
-    except PayloadValidationError as exc:
-        invalid = failed_result(
-            operation_id=descriptor.capability_id,
-            version=descriptor.version,
-            diagnostic=CapabilityDiagnostic(
-                code="ADAPTER_RESULT_INVALID",
-                stage="adapter_execution",
-                message=(
-                    "The adapter output does not match its advertised "
-                    f"schema at {exc.path}."
-                ),
-                path=exc.path,
-                expected=exc.expected,
-                actual_type=exc.actual_type,
-                hint=(
-                    "Fix the capability adapter to return output matching "
-                    "its descriptor schema."
-                ),
-                details=exc.details,
-            ),
-        )
-        log_invocation(invalid, started)
-        return invalid
-    return result.model_copy(update={"output": normalized_output})
-
-
 def failed_result(
     *,
     operation_id: str,
@@ -333,7 +245,7 @@ def failed_result(
 
 
 def invoke_ready_adapter(
-    *, adapter: CapabilityAdapter, descriptor: Any, request: CapabilityRequest
+    *, adapter: CapabilityAdapter[Any], descriptor: Any, prepared: Any
 ) -> CapabilityResult:
     runtime = descriptor.provider_runtime
     if runtime is None:
@@ -357,13 +269,46 @@ def invoke_ready_adapter(
                 details={"provider_failure_code": exc.code.value},
             ),
         )
-    outcome = adapter.invoke(request)
+    outcome = adapter.invoke(prepared)
+    invalid = _adapter_output_model_failure(descriptor, outcome)
+    if invalid is not None:
+        outcome = invalid
     return project_operation_result(outcome)
 
 
-def error_path(exc: Exception) -> str | None:
-    path, separator, _ = str(exc).partition(": ")
-    return path if separator else None
+def _adapter_output_model_failure(
+    descriptor: Any, outcome: OperationProjection
+) -> OperationProjection | None:
+    publication = outcome.publication
+    output = publication.output if publication is not None else None
+    if output is None:
+        return None
+    output_type = type(output)
+    if model_schema(output_type) == descriptor.output_schema:
+        try:
+            output_type.model_validate(
+                output.model_dump(mode="python", warnings="error"), strict=True
+            )
+        except (TypeError, ValueError, ValidationError):
+            pass
+        else:
+            return None
+    return OperationProjection(
+        operation_id=descriptor.capability_id,
+        version=descriptor.version,
+        terminal=Failed(
+            status=ExecutionStatus.ERROR,
+            diagnostic=CapabilityDiagnostic(
+                code="ADAPTER_RESULT_INVALID",
+                stage="adapter_execution",
+                message=(
+                    "The adapter returned a typed result that does not match "
+                    "its installed output model."
+                ),
+                hint="Fix the adapter output type or its capability descriptor.",
+            ),
+        ),
+    )
 
 
 __all__ = ["CapabilityDispatchMixin"]

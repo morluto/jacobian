@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any, Self, cast
 
 from pydantic import Field, ValidationError, model_validator
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import (
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+)
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.contracts.capabilities import (
     CapabilityDescriptor,
@@ -154,7 +158,9 @@ def _structural_sparse_polynomial(
 ) -> SparseRationalPolynomial:
     """Build a cheap shape representative without applying operation budgets."""
 
-    parsed = _SparsePolynomialInput.model_validate(value)
+    parsed = _SparsePolynomialInput.model_validate_json(
+        encode_strict_json(value), strict=True
+    )
     _require_bounded_duplicate_accumulation(parsed)
     representatives: dict[tuple[int, ...], _SparsePolynomialInputTerm] = {}
     for term in parsed.terms:
@@ -174,7 +180,9 @@ def _structural_sparse_polynomial(
 def _canonical_sparse_polynomial(
     value: object,
 ) -> SparseRationalPolynomial:
-    parsed = _SparsePolynomialInput.model_validate(value)
+    parsed = _SparsePolynomialInput.model_validate_json(
+        encode_strict_json(value), strict=True
+    )
     _require_bounded_duplicate_accumulation(parsed)
     coefficients: dict[tuple[int, ...], Fraction] = {}
     for term in parsed.terms:
@@ -646,19 +654,23 @@ def _validate_request[RequestModel: ContractModel](
     error_factory: Callable[[str, str, str], CapabilityInvocationError] | None = None,
 ) -> RequestModel:
     try:
+        strict_payload = loads_strict_json(encode_strict_json(payload))
         structural_payload = _normalize_sparse_polynomial_inputs(
-            payload,
+            strict_payload,
             normalize=_structural_sparse_polynomial,
         )
-        model.model_validate(
-            structural_payload,
+        model.model_validate_json(
+            encode_strict_json(structural_payload),
             context={_CANONICALIZATION_PREFLIGHT_CONTEXT_KEY: True},
+            strict=True,
         )
         canonical_payload = _normalize_sparse_polynomial_inputs(
-            payload,
+            strict_payload,
             normalize=_canonical_sparse_polynomial,
         )
-        return model.model_validate(canonical_payload)
+        return model.model_validate_json(
+            encode_strict_json(canonical_payload), strict=True
+        )
     except (ValidationError, ValueError) as exc:
         raise (error_factory or _polynomial_error)(
             code,

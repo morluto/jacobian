@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from jacobian.artifacts import ArtifactService
-from jacobian.capability_adapters import CapabilityAdapter
+from jacobian.capability_adapters import CapabilityAdapter, parse_capability_input
 from jacobian.capability_errors import CapabilityInvocationError
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -55,7 +55,10 @@ def install_polynomial_expression_checker(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[CapabilityAdapter | None, PolynomialExpressionCheckerInstallation]:
+) -> tuple[
+    CapabilityAdapter[Any] | None,
+    PolynomialExpressionCheckerInstallation,
+]:
     """Install the witness schema and optionally authorize exact AST replay."""
 
     witness_schema_uri = schemas.register_model(
@@ -92,7 +95,7 @@ def install_polynomial_expression_checker(
         witness_schema_uri=witness_schema_uri,
         checker_id=checker_id,
     )
-    adapter: CapabilityAdapter | None = None
+    adapter: CapabilityAdapter[Any] | None = None
     if checker_id is not None:
         adapter = PolynomialExpressionNormalizationVerificationAdapter(
             store=store,
@@ -106,8 +109,6 @@ def install_polynomial_expression_checker(
 
 class PolynomialExpressionNormalizationVerificationAdapter:
     """Verify canonical coefficients against every node of one bound AST."""
-
-    typed_input = True
 
     def __init__(
         self,
@@ -166,10 +167,17 @@ class PolynomialExpressionNormalizationVerificationAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = PolynomialExpressionNormalizationVerificationRequest.model_validate(
-            request.input
+    def prepare(
+        self, request: CapabilityRequest
+    ) -> PolynomialExpressionNormalizationVerificationRequest:
+        return parse_capability_input(
+            PolynomialExpressionNormalizationVerificationRequest,
+            request.input,
         )
+
+    def invoke(
+        self, validated: PolynomialExpressionNormalizationVerificationRequest
+    ) -> OperationProjection:
         try:
             resolved = self.expressions.resolve_normalization(
                 validated.normalization_uri

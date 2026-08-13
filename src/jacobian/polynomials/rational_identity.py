@@ -124,13 +124,15 @@ class RationalFunctionIdentityAdapter:
     def descriptor(self) -> CapabilityDescriptor:
         return self._descriptor
 
-    def invoke(self, request: CapabilityRequest) -> OperationProjection:
-        validated = _validate_request(
+    def prepare(self, request: CapabilityRequest) -> RationalFunctionIdentityRequest:
+        return _validate_request(
             RationalFunctionIdentityRequest,
             request.input,
             code="INVALID_RATIONAL_FUNCTION_IDENTITY_REQUEST",
             operation="rational-function identity verification",
         )
+
+    def invoke(self, validated: RationalFunctionIdentityRequest) -> OperationProjection:
         checker_id = self.resources.installation.rational_function_identity_checker_id
         if checker_id is None:
             raise _polynomial_error(

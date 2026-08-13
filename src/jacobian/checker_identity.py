@@ -21,7 +21,6 @@ from pathlib import Path
 from types import FrameType, ModuleType
 from typing import Any, cast
 
-from jacobian.canonical import canonicalize_json
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import (
     CheckerManifest,
@@ -214,13 +213,7 @@ def build_checker_manifest(
 def checker_implementation_digest(manifest: CheckerManifest) -> str:
     """Return the identity digest of one versioned checker execution manifest."""
 
-    return (
-        "sha256:"
-        + hashlib.sha256(
-            b"jacobian.checker-implementation.v2\x00"
-            + canonicalize_json(manifest.model_dump(mode="json", exclude_none=True))
-        ).hexdigest()
-    )
+    return manifest.implementation_digest()
 
 
 def require_manifest_unchanged(manifest: CheckerManifest) -> str:

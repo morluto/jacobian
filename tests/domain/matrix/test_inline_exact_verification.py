@@ -59,6 +59,12 @@ def test_inline_exact_replay_persists_only_its_bound_record(
     assert record.manifest.parents == (parsed.semantics_uri,)
     assert parsed.semantics_uri in verified.artifact_uris
     assert parsed.decision.accepted is True
+    registration = runtime.core.checkers.require_active(parsed.checker_id)
+    assert parsed.record_schema_version == "4"
+    assert parsed.checker_manifest == registration.implementation
+    assert (
+        parsed.implementation_digest == parsed.checker_manifest.implementation_digest()
+    )
 
 
 def test_inline_exact_validation_does_not_echo_a_rejected_candidate(

@@ -65,6 +65,22 @@ fixtures are reserved for complete inventory, cross-domain wiring, checker
 authorization, lifecycle, and host boundaries. One operation's request/result
 matrix belongs to its domain or component seam.
 
+Admission follows the asserted contract:
+
+- a test that names one mathematical domain belongs under that domain;
+- a test that directly validates a model belongs in unit;
+- one adapter, checker, or provider seam belongs in component;
+- composition requires a cross-domain edge, complete-portfolio invariant,
+  authority transition, hydration lifecycle, or global policy;
+- boundary tests require the real SQLite, process, MCP, Lean, or optional-provider
+  boundary they assert; and
+- e2e retains only complete caller journeys that would be materially weaker when
+  decomposed.
+
+Names such as `frontier`, `migration`, `regression`, `release`, and issue numbers
+describe history rather than ownership. Put a regression under its permanent
+semantic owner and give it a descriptive behavioral name.
+
 The canonical commands are:
 
 ```sh
@@ -129,6 +145,14 @@ Let pytest own collection and fixture lifetime through the narrowest owning
 `conftest.py`. Broaden fixture scope only for reusable installation state whose
 tests do not mutate it; tests that revoke authority, patch shared services, or
 otherwise change runtime state retain an isolated fixture.
+
+For repeated installation, first select the smallest production domain bundle.
+Group read-only assertions around an immutable module-scoped fixture only when
+isolation permits it. If measurement still justifies reuse for mutating tests,
+clone a quiesced state template into a private test directory. Keep a
+function-scoped cold start when construction, authorization, or hydration is the
+contract. Do not introduce a universal fixture registry or installation-plan
+abstraction for test convenience.
 
 Do not substitute source-reading tests for caller-visible behavior. If a
 behavioral regression proof is infeasible, state the proof gap.

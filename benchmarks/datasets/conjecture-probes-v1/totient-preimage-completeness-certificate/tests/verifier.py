@@ -8,6 +8,8 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
+    _finite_json_float,
+    _reject_duplicate_keys,
     evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
@@ -180,7 +182,9 @@ def _raw() -> dict[str, Any] | None:
     try:
         value = json.loads(
             path.read_text(),
+            object_pairs_hook=_reject_duplicate_keys,
             parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)),
+            parse_float=_finite_json_float,
         )
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
@@ -217,7 +221,8 @@ def main() -> None:
             isinstance(payload, dict)
             and set(payload) == {"schema_version", "task_id", "result", "limitations"}
             and payload.get("schema_version") == "1"
-            and payload.get("task_id") == raw.get("task_id")
+            and type(raw.get("task_id")) is str
+            and _json_equal(payload.get("task_id"), raw["task_id"])
             and _json_equal(payload.get("result"), raw.get("result"))
             and _json_equal(payload.get("limitations"), raw.get("limitations"))
         )

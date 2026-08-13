@@ -159,6 +159,34 @@ def test_evidence_copy_uses_json_typed_equality(tmp_path):
     result = run(app, logs)
     assert result["mathematics"] == 1.0
     assert result["evidence"] == result["aggregate_reward"] == 0.0
+
+
+def test_raw_submission_rejects_duplicate_keys(tmp_path):
+    app, logs, submission = case(tmp_path)
+    canonical = json.dumps(submission["result"], separators=(",", ":"))
+    (app / "submission.json").write_text(
+        '{"result":{"accepted_count":0},"result":' + canonical + "}"
+    )
+
+    result = run(app, logs)
+    assert result["mathematics"] == result["aggregate_reward"] == 0.0
+
+
+def test_evidence_requires_present_string_task_id(tmp_path):
+    app, logs, submission = case(tmp_path)
+    submission.pop("task_id")
+    evidence = app / "evidence/answer.json"
+    payload = json.loads(evidence.read_text())
+    payload["task_id"] = None
+    evidence.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    submission["evidence"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+
+    result = run(app, logs)
+    assert result["mathematics"] == 1.0
+    assert result["evidence"] == result["aggregate_reward"] == 0.0
     app, logs, _ = case(tmp_path / "json")
     (app / "submission.json").write_text('{"claimed_assurance":NaN}\n')
     assert run(app, logs)["aggregate_reward"] == 0.0

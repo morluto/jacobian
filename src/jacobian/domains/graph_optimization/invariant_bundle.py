@@ -11,6 +11,9 @@ from jacobian.domains.graph_optimization.graph6 import (
     GRAPH6_CAPABILITIES,
     GRAPH6_CHECKER_DECLARATIONS,
 )
+from jacobian.domains.graph_optimization.distance_matrix import (
+    DISTANCE_MATRIX_OPERATION,
+)
 from jacobian.domains.graph_optimization.invariants import (
     EXACT_GRAPH_INVARIANT_CAPABILITIES,
 )
@@ -35,7 +38,10 @@ def build_graph_invariant_bundle() -> DomainBundle:
                 "graph_class": "finite simple undirected",
                 "maximum_order": 32,
                 "maximum_edges": 496,
+                "distance_matrix_maximum_order": 64,
+                "distance_matrix_maximum_edges": 2_016,
                 "exact_computations": [
+                    "distance_matrix",
                     "girth",
                     "diameter",
                     "edge_connectivity",
@@ -70,7 +76,11 @@ def build_graph_invariant_bundle() -> DomainBundle:
             ),
         ),
         backend_version=f"networkx-{NETWORKX_VERSION};sympy-{SYMPY_VERSION}",
-        capabilities=(*GRAPH6_CAPABILITIES, *EXACT_GRAPH_INVARIANT_CAPABILITIES),
+        capabilities=(
+            *GRAPH6_CAPABILITIES,
+            DISTANCE_MATRIX_OPERATION,
+            *EXACT_GRAPH_INVARIANT_CAPABILITIES,
+        ),
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
                 code="INVALID_GRAPH_INVARIANT_REQUEST",

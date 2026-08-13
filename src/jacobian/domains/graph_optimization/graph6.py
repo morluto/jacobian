@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pydantic import Field, StrictStr
 
-from jacobian.capability_service import CapabilityDiagnostic
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.base import ContractModel
+from jacobian.contracts.capabilities import CapabilityDiagnostic
 from jacobian.domains._examples import example
 from jacobian.math.graphs.graph6 import Graph6DecodeValue, decode_graph6
 from jacobian.operation_bindings import inline_operation

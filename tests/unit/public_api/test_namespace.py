@@ -78,6 +78,7 @@ PUBLIC_API = {
         "smith_normal_form",
         "solve_linear_system",
         "trace",
+        "SmithNormalForm",
     ),
     "jacobian.math.polynomials": (
         "derivative",

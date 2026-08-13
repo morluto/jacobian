@@ -8,8 +8,9 @@ from tests.support.services import DomainTestServices
 from jacobian.contracts.capabilities import CapabilityRequest
 from jacobian.contracts.checkers import CheckerDecision
 from jacobian.contracts.exact_domain_verification import InlineExactVerificationRecord
-from jacobian.contracts.matrix_operations import MatrixRankResult, SmithNormalFormResult
+from jacobian.contracts.matrix_operations import MatrixRankResult
 from jacobian.contracts.results import Arithmetic, Conclusion, Coverage, Method
+from jacobian.math.matrices.values import SmithNormalForm
 
 
 def _matrix() -> dict[str, object]:
@@ -27,8 +28,8 @@ def _integer_matrix() -> dict[str, object]:
     return {"entries": [["2", "4"], ["6", "8"]]}
 
 
-def _wrong_smith_result() -> SmithNormalFormResult:
-    return SmithNormalFormResult.model_validate(
+def _wrong_smith_result() -> SmithNormalForm:
+    return SmithNormalForm.model_validate(
         {
             "normal_form": {"entries": [["1", "0"], ["0", "8"]]},
             "rank": 2,
@@ -56,11 +57,11 @@ def test_smith_checker_consumes_the_producers_typed_candidate_reference(
     assert [
         port.model_dump(mode="json")
         for port in descriptors["matrix.normal_form.smith.compute"].output_ports
-    ] == [{"name": "smith_form", "value_type": "SmithNormalFormResult"}]
+    ] == [{"name": "smith_form", "value_type": "SmithNormalForm"}]
     assert [
         port.model_dump(mode="json")
         for port in descriptors["matrix.normal_form.smith.verify"].input_ports
-    ] == [{"name": "candidate", "value_type": "SmithNormalFormResult"}]
+    ] == [{"name": "candidate", "value_type": "SmithNormalForm"}]
 
     verified = runtime.core.capabilities.invoke(
         CapabilityRequest(

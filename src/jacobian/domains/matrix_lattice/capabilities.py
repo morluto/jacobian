@@ -26,7 +26,6 @@ from jacobian.contracts.matrix_operations import (
     RationalMatrixProductRequest,
     RationalMatrixRequest,
     RrefResult,
-    SmithNormalFormResult,
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
@@ -45,6 +44,7 @@ from jacobian.domains.matrix_lattice.operations import (
     compute_smith_normal_form,
     compute_trace,
 )
+from jacobian.math.matrices.values import SmithNormalForm
 from jacobian.operation_bindings import InstalledOperation, inline_operation
 from jacobian.operation_ports import OutputPort
 from jacobian.operations import (
@@ -426,7 +426,7 @@ MATRIX_CAPABILITIES = (
             "unavailable left or right transformations."
         ),
         IntegerMatrixRequest,
-        SmithNormalFormResult,
+        SmithNormalForm,
         compute_smith_normal_form,
         "matrix",
         "smith-normal-form",
@@ -438,7 +438,7 @@ MATRIX_CAPABILITIES = (
                 {"matrix": {"entries": [["2", "4"], ["6", "8"]]}},
             ),
         ),
-        output_ports=(OutputPort(name="smith_form", value_type=SmithNormalFormResult),),
+        output_ports=(OutputPort(name="smith_form", value_type=SmithNormalForm),),
         version="2",
     ),
 )

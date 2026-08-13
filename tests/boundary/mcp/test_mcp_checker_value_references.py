@@ -41,9 +41,9 @@ def test_mcp_keeps_two_tools_while_a_checker_consumes_a_typed_candidate(
             assert checker_contract.structured_content is not None
             assert producer_contract.structured_content["capability"][
                 "output_ports"
-            ] == [{"name": "smith_form", "value_type": "SmithNormalFormResult"}]
+            ] == [{"name": "smith_form", "value_type": "SmithNormalForm"}]
             assert checker_contract.structured_content["capability"]["input_ports"] == [
-                {"name": "candidate", "value_type": "SmithNormalFormResult"}
+                {"name": "candidate", "value_type": "SmithNormalForm"}
             ]
 
             computed = await client.call_tool(

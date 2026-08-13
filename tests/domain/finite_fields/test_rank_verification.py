@@ -113,18 +113,14 @@ def _restriction_request() -> RestrictScalarsRequest:
 
 
 def test_rank_request_rejects_cross_field_values_before_execution(
-    tmp_path: Path,
+    finite_field_services,
 ) -> None:
-    with open_exact_domain_services(
-        tmp_path,
-        build_finite_field_bundle(),
-    ) as services:
-        result = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.linear_map.rank.compute",
-                input=_cross_field_rank_payload(),
-            )
+    result = finite_field_services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.linear_map.rank.compute",
+            input=_cross_field_rank_payload(),
         )
+    )
 
     assert result.execution.status.value == "ERROR"
     assert result.diagnostics[0].code == "INVALID_FINITE_FIELD_REQUEST"
@@ -135,35 +131,32 @@ def test_rank_request_rejects_cross_field_values_before_execution(
 
 
 def test_operator_authorized_sympy_replay_accepts_rank_and_rejects_forgery(
-    tmp_path: Path,
+    finite_field_services,
 ) -> None:
     request = _request()
     input_payload = request.model_dump(mode="json")
 
-    with open_exact_domain_services(
-        tmp_path,
-        build_finite_field_bundle(),
-    ) as services:
-        computed = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.linear_map.rank.compute",
-                input=input_payload,
-            )
+    services = finite_field_services
+    computed = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.linear_map.rank.compute",
+            input=input_payload,
         )
-        candidate = computed.output["result"]
-        verified = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.linear_map.rank.verify",
-                input={"input": input_payload, "candidate": candidate},
-            )
+    )
+    candidate = computed.output["result"]
+    verified = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.linear_map.rank.verify",
+            input={"input": input_payload, "candidate": candidate},
         )
-        forged = {**candidate, "rank": 0}
-        rejected = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.linear_map.rank.verify",
-                input={"input": input_payload, "candidate": forged},
-            )
+    )
+    forged = {**candidate, "rank": 0}
+    rejected = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.linear_map.rank.verify",
+            input={"input": input_payload, "candidate": forged},
         )
+    )
 
     assert computed.output["result"]["rank"] == 1
     assert computed.verification_record_uri is None
@@ -184,50 +177,45 @@ def test_operator_authorized_sympy_replay_accepts_rank_and_rejects_forgery(
     ],
 )
 def test_inline_verification_record_rejects_unrelated_projected_identity(
-    tmp_path: Path,
+    finite_field_services,
     field: str,
     unrelated: str,
 ) -> None:
     request = _request()
     input_payload = request.model_dump(mode="json")
 
-    with open_exact_domain_services(
-        tmp_path,
-        build_finite_field_bundle(),
-    ) as services:
-        computed = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.linear_map.rank.compute",
-                input=input_payload,
-            )
+    services = finite_field_services
+    computed = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.linear_map.rank.compute",
+            input=input_payload,
         )
-        verified = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.linear_map.rank.verify",
-                input={"input": input_payload, "candidate": computed.output["result"]},
-            )
+    )
+    verified = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.linear_map.rank.verify",
+            input={"input": input_payload, "candidate": computed.output["result"]},
         )
-        forged = verified.model_copy(
-            update={"output": {**verified.output, field: unrelated}}
-        )
+    )
+    forged = verified.model_copy(
+        update={"output": {**verified.output, field: unrelated}}
+    )
 
-        expected = field[:-3] if field.endswith("_id") else field
-        with pytest.raises(CapabilityError, match=f"different {expected}"):
-            services.core.capabilities._validate_verified_result(forged)
+    expected = field[:-3] if field.endswith("_id") else field
+    with pytest.raises(CapabilityError, match=f"different {expected}"):
+        services.core.capabilities._validate_verified_result(forged)
 
 
 def test_inline_verification_record_rejects_stale_candidate_binding(
-    tmp_path: Path,
+    finite_field_services,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _request()
     input_payload = _omit_presentation_defaults(request.model_dump(mode="json"))
     assert isinstance(input_payload, dict)
 
-    with open_exact_domain_services(
-        tmp_path,
-        build_finite_field_bundle(),
-    ) as services:
+    services = finite_field_services
+    try:
         computed = services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id="finite_field.linear_map.rank.compute",
@@ -276,6 +264,8 @@ def test_inline_verification_record_rejects_stale_candidate_binding(
         )
 
         rejected = services.core.capabilities.invoke(stale_request)
+    finally:
+        monkeypatch.undo()
 
     assert rejected.execution.status == "ERROR"
     assert rejected.verification_record_uri is None
@@ -284,36 +274,33 @@ def test_inline_verification_record_rejects_stale_candidate_binding(
 
 
 def test_operator_authorized_sympy_replay_checks_restriction_of_scalars(
-    tmp_path: Path,
+    finite_field_services,
 ) -> None:
     request = _restriction_request()
     input_payload = request.model_dump(mode="json")
 
-    with open_exact_domain_services(
-        tmp_path,
-        build_finite_field_bundle(),
-    ) as services:
-        computed = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.restrict_scalars.compute",
-                input=input_payload,
-            )
+    services = finite_field_services
+    computed = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.restrict_scalars.compute",
+            input=input_payload,
         )
-        candidate = computed.output["result"]
-        verified = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.restrict_scalars.verify",
-                input={"input": input_payload, "candidate": candidate},
-            )
+    )
+    candidate = computed.output["result"]
+    verified = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.restrict_scalars.verify",
+            input={"input": input_payload, "candidate": candidate},
         )
-        forged = deepcopy(candidate)
-        forged["matrix"]["entries"] = [[1], [0]]
-        rejected = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.restrict_scalars.verify",
-                input={"input": input_payload, "candidate": forged},
-            )
+    )
+    forged = deepcopy(candidate)
+    forged["matrix"]["entries"] = [[1], [0]]
+    rejected = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.restrict_scalars.verify",
+            input={"input": input_payload, "candidate": forged},
         )
+    )
 
     assert candidate["matrix"]["entries"] == [[0], [1]]
     assert verified.output["status"] == "VERIFIED"
@@ -322,7 +309,7 @@ def test_operator_authorized_sympy_replay_checks_restriction_of_scalars(
 
 
 def test_operator_authorized_sympy_replay_checks_complete_polynomial_table(
-    tmp_path: Path,
+    finite_field_services,
 ) -> None:
     presentation = finite_field(2, (1, 1, 1))
     zero = element(presentation, (0, 0))
@@ -334,31 +321,28 @@ def test_operator_authorized_sympy_replay_checks_complete_polynomial_table(
     )
     input_payload = request.model_dump(mode="json")
 
-    with open_exact_domain_services(
-        tmp_path,
-        build_finite_field_bundle(),
-    ) as services:
-        computed = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.polynomial_map.table.compute",
-                input=input_payload,
-            )
+    services = finite_field_services
+    computed = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.polynomial_map.table.compute",
+            input=input_payload,
         )
-        candidate = computed.output["result"]
-        verified = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.polynomial_map.table.verify",
-                input={"input": input_payload, "candidate": candidate},
-            )
+    )
+    candidate = computed.output["result"]
+    verified = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.polynomial_map.table.verify",
+            input={"input": input_payload, "candidate": candidate},
         )
-        forged = deepcopy(candidate)
-        forged["entries"][2][1] = forged["entries"][0][1]
-        rejected = services.core.capabilities.invoke(
-            CapabilityRequest(
-                capability_id="finite_field.polynomial_map.table.verify",
-                input={"input": input_payload, "candidate": forged},
-            )
+    )
+    forged = deepcopy(candidate)
+    forged["entries"][2][1] = forged["entries"][0][1]
+    rejected = services.core.capabilities.invoke(
+        CapabilityRequest(
+            capability_id="finite_field.polynomial_map.table.verify",
+            input={"input": input_payload, "candidate": forged},
         )
+    )
 
     assert verified.output["status"] == "VERIFIED"
     assert rejected.output["status"] == "REJECTED"

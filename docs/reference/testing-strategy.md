@@ -77,6 +77,8 @@ make test-mcp
 make test-provider
 make test-lean
 make test-e2e
+make test-exhaustive
+make test-checker-subprocess-coverage
 make quick
 make check
 make check-external
@@ -87,6 +89,22 @@ make check-static
 Before starting it, confirm that no other pytest job from this checkout is
 running. Concurrent runtime/store/subprocess suites can turn per-test
 timeouts into host-contention noise.
+
+Ordinary CI coverage instruments each pytest process but does not automatically
+instrument every child it launches. Independent checker calls therefore retain
+their real fresh-process behavior without each short-lived worker producing a
+coverage database. `make test-checker-subprocess-coverage` is the focused
+coverage-transport contract: it enables coverage.py's subprocess patch in an
+isolated profile, exercises accepted, rejected, malformed, and undeclared-import
+worker outcomes, and fails unless child execution is present in the combined
+data. The required aggregate coverage job includes that focused database and
+retains the repository threshold.
+
+Broad finite reference sweeps that are valuable but disproportionate for pull
+requests use the `exhaustive` marker. The component lane excludes them, and
+scheduled validation owns `make test-exhaustive`. Keep a representative
+behavioral case in the ordinary owning lane; do not use the marker to defer
+boundary, authorization, persistence, or public-API coverage.
 
 ## Test principles
 
@@ -104,6 +122,11 @@ carrier invariance, and algebraic invariants when a property expresses the
 contract better than examples. Use representative storage and process seams
 when the claim depends on SQLite, filesystem publication, subprocesses, or
 cancellation.
+
+Let pytest own collection and fixture lifetime through the narrowest owning
+`conftest.py`. Broaden fixture scope only for reusable installation state whose
+tests do not mutate it; tests that revoke authority, patch shared services, or
+otherwise change runtime state retain an isolated fixture.
 
 Do not substitute source-reading tests for caller-visible behavior. If a
 behavioral regression proof is infeasible, state the proof gap.

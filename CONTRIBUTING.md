@@ -35,10 +35,10 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
 
-CI always runs that ordinary Python surface plus storage/process/MCP
-boundaries and the wheel smoke. Lean and optional native/formal providers run
-on merge/main or with the `ci:lean` / `ci:provider` / `ci:full` labels. You do
-not need to reproduce those locally for a routine change.
+CI always runs that ordinary Python surface plus storage/process/MCP,
+maintained Python provider boundaries, and the wheel smoke. Lean runs on
+merge/main or with the `ci:lean` / `ci:full` labels. You do not need to
+reproduce those locally for a routine change.
 
 Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
 `make test-process`, `make test-mcp`, `make test-e2e`, `make test-domain`, and
@@ -47,6 +47,12 @@ confidence gate. Run one only when your change crosses that boundary or you are
 reproducing an environment-specific failure. The
 [testing strategy](docs/reference/testing-strategy.md) is the authoritative
 source for the change matrix, directory ownership, and the escalation rules.
+
+Coverage follows the same ownership rule. Ordinary lanes collect parent-process
+branch coverage without instrumenting every checker child. Changes to checker
+worker startup or coverage transport additionally run
+`make test-checker-subprocess-coverage`, the small lane that explicitly enables
+and verifies child-process coverage collection.
 
 ### When the quick path is not enough
 
@@ -134,11 +140,11 @@ once, fails fast through static quality and contracts, runs the selected host
 tests serially, then runs each exact Oracle serially. Neither command starts an
 Oracle or model.
 
-`make harbor-execution-check` validates repository-wide Harbor contracts (job
-JSON, MCP config, job-level Compose overlays, execution helpers) and the unit
-tests that own them; it deliberately excludes the task-specific verifier
-regressions under `benchmarks/validation/`, where `make harbor-check` retains
-the full integration role. Task `environment/docker-compose.yaml` files are
+`make harbor-check` validates repository-wide Harbor contracts (job JSON, MCP
+config, job-level Compose overlays, adapters, and execution helpers) and the
+unit tests that own them; it deliberately excludes unrelated task-specific
+verifier regressions. `make harbor-check-all` is the explicit full integration
+reproduction. Task `environment/docker-compose.yaml` files are
 executable benchmark input, not job overlays, and remain gated by
 `make harbor-check-task` and `make harbor-oracle-task`. Use
 `make harbor-plan BASE=origin/main` for benchmark contracts and Oracle scope;
@@ -230,15 +236,16 @@ Test directories define semantic ownership: `tests/unit`, `tests/component`,
 `tests/domain`, `tests/composition`, `tests/boundary`, and `tests/e2e`. Use the
 matching `make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_provider(name)`, `performance`,
-`property`, and `destructive_process`. They do not replace directory ownership.
+`property`, `exhaustive`, and `destructive_process`. They do not replace
+directory ownership. Scheduled validation owns `make test-exhaustive`; keep a
+representative behavioral case in the ordinary owning lane.
 
 Lane execution follows the test directory layout. Storage, process, MCP, and
 Lean stay on named Make targets because they need serial SQLite or kill-safe
 process supervision. Prefer the hydration ladder in the
 [testing strategy](docs/reference/testing-strategy.md): domain services before
 `attached_complete_runtime` before `authorized_complete_runtime` before
-`fresh_complete_runtime`. Inventory complete-runtime usage with
-`make test-runtime-inventory`.
+`fresh_complete_runtime`.
 
 Tests may reuse concept-specific helpers under `tests/support`, but must not
 import helpers from a sibling semantic lane. Keep fixtures in the narrowest

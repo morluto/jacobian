@@ -2,16 +2,15 @@
 
 import pytest
 
-from jacobian.domains.graph_optimization.checkers import (
-    GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
-)
-from jacobian.domains.number_theory.checkers import (
-    NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
-)
+from jacobian.domain_bundles import DomainBundle
+from jacobian.portfolio.builtin import build_builtin_portfolio_components
 
-_INLINE_REPLAY_CHECKERS = (
-    *GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
-    *NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
+_INLINE_REPLAY_CHECKERS = tuple(
+    declaration
+    for component in build_builtin_portfolio_components()
+    if isinstance(component, DomainBundle)
+    for declaration in component.checker_declarations
+    if ".materialize" not in declaration.capability_id
 )
 
 

@@ -1352,6 +1352,49 @@ def _unsupported_surface_text_violations(
     return tuple(violations)
 
 
+_EXPENSIVE_RUNTIME_FIXTURES = frozenset(
+    {
+        "attached_complete_runtime",
+        "attached_complete_runtime_read_only",
+        "authorized_complete_runtime",
+        "authorized_complete_runtime_read_only",
+        "fresh_complete_runtime",
+    }
+)
+
+
+def _calls_create_runtime(node: ast.AST) -> bool:
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        func = child.func
+        if isinstance(func, ast.Name) and func.id == "create_runtime":
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == "create_runtime":
+            return True
+    return False
+
+
+def _discarded_expensive_runtime_fixtures(node: ast.FunctionDef) -> frozenset[str]:
+    params = {arg.arg for arg in node.args.args}
+    requested = params & _EXPENSIVE_RUNTIME_FIXTURES
+    if not requested:
+        return frozenset()
+    discarded: set[str] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Assign) or len(child.targets) != 1:
+            continue
+        target = child.targets[0]
+        if (
+            isinstance(target, ast.Name)
+            and target.id == "_"
+            and isinstance(child.value, ast.Name)
+            and child.value.id in requested
+        ):
+            discarded.add(child.value.id)
+    return frozenset(discarded)
+
+
 _HISTORICAL_TEST_BUCKET_WORDS = frozenset(
     {"frontier", "migration", "regression", "release"}
 )
@@ -1402,6 +1445,21 @@ def _test_ownership_violations(
                 "focused tests must use their owning seam instead of the complete runtime",
             )
         )
+
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
+            continue
+        discarded = _discarded_expensive_runtime_fixtures(node)
+        if discarded and _calls_create_runtime(node):
+            names = ", ".join(sorted(discarded))
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "expensive runtime fixtures must be the subject under test, "
+                    f"not discarded setup: {names}",
+                )
+            )
 
     if (
         not focused_suite

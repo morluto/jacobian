@@ -100,10 +100,24 @@ def test_process_lane_is_invoked_by_ci() -> None:
     assert "run: make test-${{ matrix.lane }}" in workflow
 
 
+def test_lean_job_is_required_on_every_event_and_builds_semantic_targets() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    action = (ROOT / ".github/actions/setup-lean/action.yml").read_text(
+        encoding="utf-8"
+    )
+
+    lean = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
+    assert "if: >-" not in lean
+    assert "JACOBIAN_LEAN_REQUIRED" in lean
+    assert "use-github-cache: false" in action
+    assert "use-mathlib-cache: true" in action
+    assert "lake build JacobianLeanRuntime repl jacobian_lean_proof_state" in action
+    assert "tools/preflight_lean_runtime.py --required" in action
+
+
 def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "ci:lean" in workflow
     assert "ci:full" in workflow
     assert "run: make deploy-check" in workflow
     assert "name: Deployment Tests" in workflow
@@ -128,12 +142,14 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
     assert "quick: lint test-unit" in makefile
     assert "check: lint typecheck test-unit" in makefile
     assert "check-all: lint typecheck test-ordinary" in makefile
+    assert "check-external: test-lean ##" in makefile
+    assert "check-external: test-lean test-provider" not in makefile
 
 
 def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     all_ci = makefile.split(
-        "test-all-ci: ## Explicitly run every semantic lane locally (exceptional).",
+        "test-all-ci: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.",
         1,
     )[1].split("test-stress:", 1)[0]
 
@@ -255,8 +271,12 @@ def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> Non
     assert "name: Lean Tests" in workflow
     assert "name: Deployment Tests" in workflow
     assert ("needs: [static, python, boundaries, wheel, coverage, lean]") in required
-    assert "success|skipped" in required
+    assert "success|skipped" not in required
+    assert 'test "$LEAN_RESULT" = success' in required
     assert "needs.lean.result" in required
+    lean_job = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
+    assert "github.event_name != 'pull_request'" not in lean_job
+    assert "JACOBIAN_LEAN_REQUIRED" in lean_job
 
 
 def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:

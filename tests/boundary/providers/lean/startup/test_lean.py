@@ -7,8 +7,10 @@ from typing import Any, cast
 
 import pytest
 from tests.support.provider_lean import (
+    PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
-    pinned_mathlib_runtime_available,
+    skip_unless_pinned_lean_core_runtime,
+    skip_unless_pinned_mathlib_runtime,
 )
 from tests.support.state import copy_template
 
@@ -34,24 +36,10 @@ from jacobian.lean_frontend.declarations import (
 )
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 
-PROJECT_ROOT = Path(__file__).resolve().parents[5]
-MATHLIB_OLEAN = (
-    PROJECT_ROOT
-    / "lean"
-    / ".lake"
-    / "packages"
-    / "mathlib"
-    / ".lake"
-    / "build"
-    / "lib"
-    / "lean"
-    / "Mathlib.olean"
-)
-
 pytestmark = [
     pytest.mark.skipif(
-        not pinned_mathlib_runtime_available(),
-        reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
+        skip_unless_pinned_lean_core_runtime(),
+        reason=PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     ),
 ]
 
@@ -142,8 +130,8 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
 
 
 @pytest.mark.skipif(
-    not MATHLIB_OLEAN.is_file(),
-    reason="the pinned mathlib runtime has not been built",
+    skip_unless_pinned_mathlib_runtime(),
+    reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
 )
 @pytest.mark.timeout(240)
 def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
@@ -515,6 +503,10 @@ def test_lean_cache_does_not_reuse_a_revoked_checker_result(
     assert repeated.result.verification_record_uri is None
 
 
+@pytest.mark.skipif(
+    skip_unless_pinned_mathlib_runtime(),
+    reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
+)
 def test_mathlib_warmup_starts_only_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

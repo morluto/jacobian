@@ -36,9 +36,9 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
 
 CI always runs that ordinary Python surface plus storage/process/MCP,
-maintained Python provider boundaries, and the wheel smoke. Lean runs on
-merge/main or with the `ci:lean` / `ci:full` labels. You do not need to
-reproduce those locally for a routine change.
+maintained Python provider boundaries, the wheel smoke, and Lean. You do not
+need to reproduce Lean locally for a routine change unless you edited Lean
+sources, fixtures, or provider identity.
 
 Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
 `make test-process`, `make test-mcp`, `make test-e2e`, `make test-domain`, and

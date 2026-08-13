@@ -28,8 +28,7 @@ make check
 
 Default `uv run pytest` collects the Lean-free ordinary `testpaths`. Use the
 Make targets that own storage, process, MCP, and Lean isolation. `make
-check-external` covers Lean and maintained-provider probes when those trees
-change.
+check-external` covers the pinned Lean specialist lane when that tree changes.
 
 `make check` is the bounded local handoff: lint, typecheck, and unit tests.
 Hosted CI runs the complete ordinary suite as six fixed semantic lanes: `unit`,

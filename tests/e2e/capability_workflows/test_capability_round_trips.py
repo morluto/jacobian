@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 from mcp import Client
 from tests.support.provider_lean import (
-    PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
-    pinned_mathlib_runtime_available,
+    PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
+    skip_unless_pinned_lean_core_runtime,
 )
 from tests.support.rationals import rational_payload as _q
 
@@ -240,8 +240,8 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
 
 
 @pytest.mark.skipif(
-    not pinned_mathlib_runtime_available(),
-    reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
+    skip_unless_pinned_lean_core_runtime(),
+    reason=PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
 )
 def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
     tmp_path: Path,

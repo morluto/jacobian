@@ -35,7 +35,7 @@ test-unit: ## Pure contracts and models (sequential, 10s).
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-component: ## One-service component tests (4 workers, 30s).
-	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=30 -m "not exhaustive" \
+	$(UV_RUN) pytest -n 4 --dist loadscope --timeout=30 -m "not exhaustive" \
 		$(if $(TESTS),$(TESTS),tests/component) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
@@ -99,7 +99,7 @@ test-checker-subprocess-coverage: ## Prove focused checker-worker child coverage
 	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) coverage report \
 		--include=src/jacobian/checker_worker.py --fail-under=1
 
-test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
+test-all-ci: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.
 	$(MAKE) test-unit
 	$(MAKE) test-component
 	$(MAKE) test-exhaustive
@@ -154,11 +154,11 @@ quick: lint test-unit ## Cheap iteration: lint and unit tests.
 
 check: lint typecheck test-unit ## Routine local handoff: lint, types, and unit tests.
 
-check-all: lint typecheck test-ordinary ## Explicitly reproduce all ordinary CI lanes.
+check-all: lint typecheck test-ordinary ## Reproduce the six ordinary Python CI lanes locally.
 
-check-external: test-lean test-provider ## Lean and maintained-provider isolation.
+check-external: test-lean ## Pinned Lean/Mathlib specialist lane only.
 
-precommit: ## Fix and run every routine local handoff check.
+precommit: ## Apply safe fixes, then run lint, types, and unit tests (mutates the tree).
 	$(MAKE) fix
 	$(MAKE) check
 

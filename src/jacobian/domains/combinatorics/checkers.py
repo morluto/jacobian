@@ -41,6 +41,7 @@ COMBINATORICS_EXACT_REPLAY_CHECKERS = (
             "binomial coefficient by an exact multiplicative recurrence without "
             "calling math.comb or importing producer code"
         ),
+        provider_runtime_factory=_combinatorics_runtime,
     ),
     ExactReplayCheckerDeclaration(
         "combinatorics.integer_set.sidon.decide",

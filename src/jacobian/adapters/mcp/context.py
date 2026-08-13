@@ -130,14 +130,11 @@ def _configured_root(state_dir: str | Path | None) -> Path:
 
 
 def _unwrap_tool_error(exc: Exception) -> Exception:
-    current = exc
-    for _ in range(4):
-        if not isinstance(current, ToolError) or not isinstance(
-            current.__cause__, Exception
-        ):
-            return current
-        current = current.__cause__
-    return current
+    """Recover the single SDK wrapper without recursively peeling causes."""
+
+    if isinstance(exc, ToolError) and isinstance(exc.__cause__, Exception):
+        return exc.__cause__
+    return exc
 
 
 def _classify_public_tool_error(

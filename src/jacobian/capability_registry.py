@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from jacobian.capability_adapters import CapabilityAdapter
 from jacobian.capability_errors import CapabilityError
 from jacobian.capability_validation import validator
 from jacobian.contracts.capabilities import (
     CapabilityCatalog,
+    CapabilityDescriptor,
     CapabilityProviderAvailability,
 )
 
@@ -60,6 +61,14 @@ class CapabilityRegistryMixin:
             policy_digest=self.policy.digest,
             capabilities=projected,
         )
+
+    def inspect(self: Any, capability_id: str) -> CapabilityDescriptor | None:
+        """Return one policy-visible descriptor without projecting the catalog."""
+
+        descriptor = self._descriptors.get(capability_id)
+        if descriptor is None:
+            return None
+        return cast(CapabilityDescriptor | None, self.policy.project(descriptor))
 
 
 __all__ = ["CapabilityRegistryMixin"]

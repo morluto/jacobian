@@ -77,7 +77,6 @@ def _capability_discovery_response(
     limit: int | None,
     cursor: str | None,
 ) -> dict[str, Any]:
-    catalog = runtime.core.capabilities.catalog()
     discovery_request = CapabilityDiscoveryRequest(
         query=query,
         domain=domain,
@@ -101,12 +100,15 @@ def _capability_discovery_response(
                 ),
             }
         }
-    descriptors = {
-        descriptor.capability_id: descriptor for descriptor in catalog.capabilities
-    }
     discovered_payload = discovered.model_dump(mode="json")
     discovered_payload["matches"] = [
-        _discovery_operation_card(match, descriptors[match["capability_id"]])
+        _discovery_operation_card(
+            match,
+            cast(
+                CapabilityDescriptor,
+                runtime.core.capabilities.inspect(match["capability_id"]),
+            ),
+        )
         for match in cast(list[dict[str, Any]], discovered_payload["matches"])
     ]
     response = {

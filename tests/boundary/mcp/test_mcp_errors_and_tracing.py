@@ -17,11 +17,10 @@ from jacobian.runtime import CheckerAuthorityMode
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 
-def test_mcp_logs_bounded_tool_metrics_without_arguments(
+def test_mcp_logs_bounded_capability_metrics_without_arguments(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    caplog.set_level(logging.INFO, logger="jacobian.adapters.mcp.core")
     caplog.set_level(logging.INFO, logger="jacobian.adapters.mcp.tooling")
 
     async def scenario() -> None:
@@ -54,16 +53,6 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
     asyncio.run(scenario())
 
     messages = [record.getMessage() for record in caplog.records]
-    metric = next(
-        message
-        for message in messages
-        if "MCP tool call tool=math.find status=success" in message
-    )
-    assert "duration_ms=" in metric
-    assert "response_bytes=" in metric
-    assert "argument_digest=sha256:" in metric
-    assert "request_digest=" in metric
-    assert "private-query-marker" not in metric
     attempt = next(
         message
         for message in messages
@@ -74,18 +63,9 @@ def test_mcp_logs_bounded_tool_metrics_without_arguments(
     assert "diagnostic_codes=UNKNOWN_CAPABILITY" in attempt
     assert "trace_digest=" in attempt
     assert "request_digest=" in attempt
-    run_metric = next(
-        message
-        for message in messages
-        if "MCP tool call tool=math.run status=success" in message
-    )
-    metric_request = metric.split("request_digest=", 1)[1].split(" ", 1)[0]
-    run_request = run_metric.split("request_digest=", 1)[1].split(" ", 1)[0]
-    attempt_request = attempt.split("request_digest=", 1)[1].split(" ", 1)[0]
-    assert metric_request != attempt_request
-    assert run_request == attempt_request
     assert "argument_digest=sha256:" in attempt
     assert "private-payload-marker" not in attempt
+    assert "private-query-marker" not in " ".join(messages)
 
 
 def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None:

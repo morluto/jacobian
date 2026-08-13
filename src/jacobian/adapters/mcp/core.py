@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
 from mcp.server import MCPServer
@@ -22,14 +21,7 @@ from jacobian.adapters.mcp.context import (
 )
 from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
-from jacobian.adapters.mcp.tooling import (
-    AgentRecoveryError,
-    _argument_digest,
-    _request_id_digest,
-    _request_trace_digest,
-    _response_size,
-    _tool_annotations,
-)
+from jacobian.adapters.mcp.tooling import AgentRecoveryError, _tool_annotations
 from jacobian.adapters.mcp.tools import capability_describe, capability_invoke
 from jacobian.contracts.capabilities import CapabilityCatalog
 
@@ -72,6 +64,24 @@ class JacobianMCPServer(MCPServer[AppState]):
                     code=INVALID_PARAMS,
                     message=_public_tool_error(name, detail),
                 ) from detail
+            stringified_arguments = sorted(
+                argument_name
+                for argument_name, value in arguments.items()
+                if isinstance(value, str)
+                and _schema_accepts_container(
+                    tool.input_schema,
+                    tool.input_schema.get("properties", {}).get(argument_name, {}),
+                )
+            )
+            if stringified_arguments:
+                detail = ValueError(
+                    "structured tool arguments must not be JSON strings: "
+                    + ", ".join(stringified_arguments)
+                )
+                raise MCPError(
+                    code=INVALID_PARAMS,
+                    message=_public_tool_error(name, detail),
+                ) from detail
         try:
             return await super().call_tool(name, arguments, context)
         except MCPError:
@@ -81,8 +91,32 @@ class JacobianMCPServer(MCPServer[AppState]):
             raise ToolError(_public_tool_error(name, exc)) from exc
 
 
+def _schema_accepts_container(
+    root: dict[str, Any],
+    schema: dict[str, Any],
+) -> bool:
+    """Detect SDK arguments whose declared value must remain structured JSON."""
+
+    reference = schema.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/$defs/"):
+        resolved = root.get("$defs", {}).get(reference.removeprefix("#/$defs/"), {})
+        return isinstance(resolved, dict) and _schema_accepts_container(root, resolved)
+    declared_type = schema.get("type")
+    if declared_type in {"object", "array"}:
+        return True
+    return any(
+        isinstance(branch, dict) and _schema_accepts_container(root, branch)
+        for keyword in ("anyOf", "oneOf")
+        for branch in schema.get(keyword, ())
+    )
+
+
 class JacobianCoreExtension(Extension):
-    """Stable Jacobian tools and static resources contributed through MCP v2."""
+    """Advertised, versioned contract for Jacobian's fixed MCP surface.
+
+    This remains an SDK extension deliberately: clients can identify the
+    two-tool Jacobian protocol contract through ``io.jacobian/core``.
+    """
 
     identifier = "io.jacobian/core"
 
@@ -169,79 +203,17 @@ class JacobianCoreExtension(Extension):
         ctx: Any,
         call_next: Any,
     ) -> Any:
-        started = time.monotonic()
-        arguments = params.arguments or {}
-        argument_digest = _argument_digest(arguments)
-        request_digest = _request_id_digest(ctx)
-        trace_digest, trace_source = _request_trace_digest(ctx)
-        try:
-            state = ctx.lifespan_context
-            if not isinstance(state, AppState):
-                raise AgentRecoveryError(
-                    "Jacobian is unavailable for this request. Retry once; if it "
-                    "fails again, inspect the local Jacobian log."
-                )
-            with _runtime_scope(state):
-                result = await call_next(ctx)
-        except MCPError:
-            _log_tool_call(
-                params.name,
-                started,
-                argument_digest,
-                request_digest=request_digest,
-                trace_digest=trace_digest,
-                trace_source=trace_source,
-                status="error",
+        state = ctx.lifespan_context
+        if not isinstance(state, AppState):
+            raise AgentRecoveryError(
+                "Jacobian is unavailable for this request. Retry once; if it "
+                "fails again, inspect the local Jacobian log."
             )
-            raise
-        except Exception:
-            _log_tool_call(
-                params.name,
-                started,
-                argument_digest,
-                request_digest=request_digest,
-                trace_digest=trace_digest,
-                trace_source=trace_source,
-                status="error",
-            )
-            raise
-        _log_tool_call(
-            params.name,
-            started,
-            argument_digest,
-            request_digest=request_digest,
-            trace_digest=trace_digest,
-            trace_source=trace_source,
-            status=("error" if getattr(result, "is_error", False) else "success"),
-            result=result,
-        )
-        return result
-
-
-def _log_tool_call(
-    name: str,
-    started: float,
-    argument_digest: str,
-    *,
-    request_digest: str,
-    trace_digest: str,
-    trace_source: str,
-    status: str,
-    result: Any | None = None,
-) -> None:
-    _LOGGER.info(
-        "MCP tool call tool=%s status=%s request_digest=%s "
-        "trace_digest=%s trace_source=%s duration_ms=%.3f "
-        "response_bytes=%d argument_digest=%s",
-        name,
-        status,
-        request_digest,
-        trace_digest,
-        trace_source,
-        (time.monotonic() - started) * 1000,
-        0 if result is None else _response_size(result),
-        argument_digest,
-    )
+        # The SDK's OpenTelemetry middleware owns protocol tracing, duration,
+        # status, and trace propagation. This interceptor owns only Jacobian's
+        # runtime lease and blocking-worker request scope.
+        with _runtime_scope(state):
+            return await call_next(ctx)
 
 
 __all__ = ["JacobianCoreExtension", "JacobianMCPServer"]

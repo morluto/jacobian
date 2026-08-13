@@ -137,6 +137,23 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 )
             assert '"code": "INVALID_INPUT"' in str(retired_reasoning_input.value)
 
+            for tool_name, arguments in (
+                (
+                    "math.find",
+                    {"request": ('{"op":"search","query":"matrix rank"}')},
+                ),
+                (
+                    "math.run",
+                    {
+                        "capability_id": "polynomial.expression.normalize",
+                        "payload": "{}",
+                    },
+                ),
+            ):
+                with pytest.raises(MCPError) as stringified_object:
+                    await client.call_tool(tool_name, arguments)
+                assert '"code": "INVALID_INPUT"' in str(stringified_object.value)
+
             contract_result = await client.call_tool(
                 "math.find",
                 {

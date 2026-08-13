@@ -15,6 +15,25 @@ from jacobian.provider_runtime import source_provider_runtime
 
 _GRAPH_ENTRYPOINT = "jacobian_checkers.graph_exact_operations"
 
+
+def _distance_matrix_checker_runtime():
+    """Measure the dedicated labelled-matrix checker only during installation."""
+
+    return source_provider_runtime(
+        "jacobian.graph-distance-matrix-checker",
+        version="1",
+        entrypoint=(
+            "jacobian_checkers.graph_distance_matrix:check_graph_distance_matrix"
+        ),
+        install_tier=CapabilityInstallTier.T1,
+        license_id="MIT",
+        features=(
+            "standard-library-all-sources-bfs-replay",
+            "clean-process-checker",
+        ),
+    )
+
+
 GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
     ExactReplayCheckerDeclaration(
         "graph.hamiltonian_path.decide",
@@ -147,20 +166,7 @@ GRAPH_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library BFS checker independently binds "
             "every distance to its declared source and target labels"
         ),
-        provider_runtime=source_provider_runtime(
-            "jacobian.graph-distance-matrix-checker",
-            version="1",
-            entrypoint=(
-                "jacobian_checkers.graph_distance_matrix:"
-                "check_graph_distance_matrix"
-            ),
-            install_tier=CapabilityInstallTier.T1,
-            license_id="MIT",
-            features=(
-                "standard-library-all-sources-bfs-replay",
-                "clean-process-checker",
-            ),
-        ),
+        provider_runtime_factory=_distance_matrix_checker_runtime,
         verification_capability_id="graph.distance_matrix.verify",
         verification_title="Verify an exact labelled graph distance matrix",
         verification_description=(

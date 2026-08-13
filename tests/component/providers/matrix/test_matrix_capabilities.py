@@ -1,27 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
 from fractions import Fraction
 from itertools import permutations
-from pathlib import Path
 from random import Random
 from typing import Any
 
 import pytest
 import sympy
-from tests.support.exact_domain import open_exact_domain_services
-from tests.support.services import open_domain_services
 
 from jacobian.contracts.capabilities import (
     CapabilityProviderAvailability,
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.matrix_lattice import build_matrix_bundle
-from jacobian.runtime.services import CoreServices
-from jacobian.verification.service import VerificationService
 
 _LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
 
@@ -54,44 +45,6 @@ def _reference_determinant(rows: list[list[Fraction]]) -> Fraction:
     return total
 
 
-@dataclass(frozen=True, slots=True)
-class _MatrixRuntime:
-    core: CoreServices
-    verification: VerificationService
-
-
-@contextmanager
-def _open_matrix_runtime(
-    root: Path,
-    *,
-    install_checker: bool,
-) -> Iterator[_MatrixRuntime]:
-    if install_checker:
-        with open_exact_domain_services(root, build_matrix_bundle()) as services:
-            yield _MatrixRuntime(
-                core=services.core,
-                verification=services.installation.verification,
-            )
-        return
-    with open_domain_services(root, build_matrix_bundle()) as services:
-        yield _MatrixRuntime(
-            core=services.core,
-            verification=services.installation.verification,
-        )
-
-
-@pytest.fixture
-def matrix_services(tmp_path: Path) -> Iterator[_MatrixRuntime]:
-    with _open_matrix_runtime(tmp_path, install_checker=False) as services:
-        yield services
-
-
-@pytest.fixture
-def matrix_checker_services(tmp_path: Path) -> Iterator[_MatrixRuntime]:
-    with _open_matrix_runtime(tmp_path, install_checker=True) as services:
-        yield services
-
-
 @pytest.mark.parametrize(
     ("rows", "expected"),
     [
@@ -106,7 +59,7 @@ def matrix_checker_services(tmp_path: Path) -> Iterator[_MatrixRuntime]:
     ],
 )
 def test_matrix_determinant_compute_is_exact_and_unverified(
-    matrix_services: _MatrixRuntime,
+    matrix_services: Any,
     rows: list[list[int | Fraction]],
     expected: Fraction,
 ) -> None:
@@ -125,7 +78,7 @@ def test_matrix_determinant_compute_is_exact_and_unverified(
 
 
 def test_matrix_determinant_verify_independently_recomputes_exact_value(
-    matrix_checker_services: _MatrixRuntime,
+    matrix_checker_services: Any,
 ) -> None:
     runtime = matrix_checker_services
     matrix = _matrix(
@@ -159,7 +112,7 @@ def test_matrix_determinant_verify_independently_recomputes_exact_value(
 
 
 def test_matrix_determinant_verify_rejects_wrong_bound_value(
-    matrix_checker_services: _MatrixRuntime,
+    matrix_checker_services: Any,
 ) -> None:
     runtime = matrix_checker_services
     matrix = _matrix([[1, 2], [3, 4]])
@@ -189,7 +142,7 @@ def test_matrix_determinant_verify_rejects_wrong_bound_value(
 
 
 def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
-    matrix_checker_services: _MatrixRuntime,
+    matrix_checker_services: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runtime = matrix_checker_services
@@ -225,7 +178,7 @@ def test_matrix_determinant_verify_timeout_is_not_a_conclusion(
 
 
 def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
-    matrix_services: _MatrixRuntime,
+    matrix_services: Any,
 ) -> None:
     runtime = matrix_services
 
@@ -251,7 +204,7 @@ def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
 
 
 def test_matrix_rank_verify_independently_recomputes_inline_candidate(
-    matrix_checker_services: _MatrixRuntime,
+    matrix_checker_services: Any,
 ) -> None:
     matrix = _matrix([[1, 2, 3], [2, 4, 6], [0, 1, 1]])
     computed = matrix_checker_services.core.capabilities.invoke(
@@ -274,7 +227,7 @@ def test_matrix_rank_verify_independently_recomputes_inline_candidate(
 
 
 def test_matrix_rank_rejects_authoritative_values_above_its_operation_budget(
-    matrix_services: _MatrixRuntime,
+    matrix_services: Any,
 ) -> None:
     result = matrix_services.core.capabilities.invoke(
         CapabilityRequest(
@@ -294,7 +247,7 @@ def test_matrix_rank_rejects_authoritative_values_above_its_operation_budget(
 
 
 def test_matrix_determinant_rejects_rectangular_input(
-    matrix_services: _MatrixRuntime,
+    matrix_services: Any,
 ) -> None:
     runtime = matrix_services
 
@@ -310,7 +263,7 @@ def test_matrix_determinant_rejects_rectangular_input(
 
 
 def test_matrix_determinant_matches_independent_bounded_oracle(
-    matrix_services: _MatrixRuntime,
+    matrix_services: Any,
 ) -> None:
     runtime = matrix_services
     random = Random(20260726)
@@ -337,7 +290,7 @@ def test_matrix_determinant_matches_independent_bounded_oracle(
 
 
 def test_matrix_capabilities_report_sympy_provider_identity(
-    matrix_services: _MatrixRuntime,
+    matrix_services: Any,
 ) -> None:
     runtime = matrix_services
     descriptors = {

@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from copy import deepcopy
-from pathlib import Path
 from typing import Any
-
-import pytest
-from tests.support.exact_domain import open_exact_domain_services
-from tests.support.services import DomainTestServices
 
 from jacobian.checker_operations import derive_verification_capability_id
 from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.posets import build_finite_poset_bundle
 
 _PRESENTATION = {
     "elements": ["0", "a", "b", "1"],
@@ -28,47 +21,36 @@ _PRESENTATION = {
 }
 
 
-@pytest.fixture
-def poset_services(tmp_path: Path) -> Iterator[DomainTestServices]:
-    """Install finite posets and their independent exact checkers only."""
-
-    with open_exact_domain_services(
-        tmp_path / "state",
-        build_finite_poset_bundle(),
-    ) as services:
-        yield services
-
-
 def _result_payload(runtime: Any, computed: Any) -> dict[str, Any]:
     if "result_uri" in computed.output:
         return runtime.core.store.get(computed.output["result_uri"]).payload
     return computed.output["result"]
 
 
-def _computed_cases(poset_services) -> list[tuple[str, dict, Any]]:
-    materialized = poset_services.core.capabilities.invoke(
+def _computed_cases(verified_poset_services) -> list[tuple[str, dict, Any]]:
+    materialized = verified_poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="poset.finite.compute",
             input=_PRESENTATION,
         )
     )
-    poset = _result_payload(poset_services, materialized)["poset"]
+    poset = _result_payload(verified_poset_services, materialized)["poset"]
     width_input = {"poset": poset}
-    width = poset_services.core.capabilities.invoke(
+    width = verified_poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="poset.width.compute",
             input=width_input,
         )
     )
     linear_input = {"poset": poset}
-    linear = poset_services.core.capabilities.invoke(
+    linear = verified_poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="poset.linear_extensions.count",
             input=linear_input,
         )
     )
     mobius_input = {"poset": poset, "scope": "COMPLETE_MATRIX", "intervals": []}
-    mobius = poset_services.core.capabilities.invoke(
+    mobius = verified_poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id="poset.mobius_function.compute",
             input=mobius_input,
@@ -83,10 +65,12 @@ def _computed_cases(poset_services) -> list[tuple[str, dict, Any]]:
 
 
 def test_poset_results_are_independently_verified(
-    poset_services,
+    verified_poset_services,
 ) -> None:
-    for producer_id, producer_input, computed in _computed_cases(poset_services):
-        verified = poset_services.core.capabilities.invoke(
+    for producer_id, producer_input, computed in _computed_cases(
+        verified_poset_services
+    ):
+        verified = verified_poset_services.core.capabilities.invoke(
             CapabilityRequest(
                 capability_id=derive_verification_capability_id(producer_id),
                 input=(
@@ -113,19 +97,21 @@ def test_poset_results_are_independently_verified(
 
 
 def test_poset_checker_rejects_forged_width_certificate(
-    poset_services,
+    verified_poset_services,
 ) -> None:
-    materialized = poset_services.core.capabilities.invoke(
+    materialized = verified_poset_services.core.capabilities.invoke(
         CapabilityRequest(capability_id="poset.finite.compute", input=_PRESENTATION)
     )
     producer_id = "poset.width.compute"
-    producer_input = {"poset": _result_payload(poset_services, materialized)["poset"]}
-    width = poset_services.core.capabilities.invoke(
+    producer_input = {
+        "poset": _result_payload(verified_poset_services, materialized)["poset"]
+    }
+    width = verified_poset_services.core.capabilities.invoke(
         CapabilityRequest(capability_id=producer_id, input=producer_input)
     )
     forged_candidate = deepcopy(width.output["result"])
     forged_candidate["maximum_antichain"] = ["0", "1"]
-    rejected = poset_services.core.capabilities.invoke(
+    rejected = verified_poset_services.core.capabilities.invoke(
         CapabilityRequest(
             capability_id=derive_verification_capability_id(producer_id),
             input={"input": producer_input, "candidate": forged_candidate},
@@ -138,11 +124,11 @@ def test_poset_checker_rejects_forged_width_certificate(
 
 
 def test_poset_checker_runtime_binds_only_independent_source(
-    poset_services,
+    verified_poset_services,
 ) -> None:
     descriptor = next(
         item
-        for item in poset_services.core.capabilities.catalog().capabilities
+        for item in verified_poset_services.core.capabilities.catalog().capabilities
         if item.capability_id == "poset.width.verify"
     )
     assert descriptor.provider_runtime is not None

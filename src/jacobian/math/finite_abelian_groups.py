@@ -127,8 +127,18 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
 
     @model_validator(mode="after")
     def bind_structural_summary(self) -> Self:
+        self._validate_group_structure()
+        self._validate_factor_sets()
+        self._validate_histogram()
+        self._validate_decision_witness_presence()
+        self._validate_witnesses()
+        return self
+
+    def _validate_group_structure(self) -> None:
         if self.group_order != prod(self.moduli):
             raise ValueError("group order must equal the product of cyclic moduli")
+
+    def _validate_factor_sets(self) -> None:
         factors = (self.normalized_left, self.normalized_right)
         for factor in factors:
             if factor != tuple(sorted(set(factor))):
@@ -145,6 +155,8 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
                 raise ValueError("normalized factor coordinates must be residues")
         if self.pair_count != len(self.normalized_left) * len(self.normalized_right):
             raise ValueError("pair count must equal the factor product size")
+
+    def _validate_histogram(self) -> None:
         counts = tuple(
             item.representation_count for item in self.representation_histogram
         )
@@ -170,6 +182,8 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
         )
         if positive_count != self.distinct_sum_count:
             raise ValueError("distinct sum count must match the histogram")
+
+    def _validate_decision_witness_presence(self) -> None:
         exact = self.pair_count == self.group_order and self.representation_histogram == (
             FiniteAbelianRepresentationCount(
                 representation_count=1,
@@ -192,8 +206,6 @@ class FiniteAbelianGroupFactorizationResult(ContractModel):
             self.first_missing is not None or self.first_duplicate is not None
         ):
             raise ValueError("exact factorizations cannot carry failure witnesses")
-        self._validate_witnesses()
-        return self
 
     def _validate_witnesses(self) -> None:
         def canonical(element: tuple[int, ...]) -> bool:

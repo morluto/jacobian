@@ -6,15 +6,34 @@ from pydantic import Field, StrictStr
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.capabilities import CapabilityDiagnostic
+from jacobian.contracts.capabilities import (
+    CapabilityDiagnostic,
+    CapabilityInstallTier,
+    CapabilityProviderRuntime,
+)
 from jacobian.domains._examples import example
 from jacobian.math.graphs.graph6 import Graph6DecodeValue, decode_graph6
 from jacobian.operation_bindings import inline_operation
 from jacobian.operations import OperationRefusalError, OperationSpec
+from jacobian.provider_runtime import source_provider_runtime
 
 
 class Graph6DecodeRequest(ContractModel):
     graph6: StrictStr = Field(min_length=1, max_length=352)
+
+
+def _graph6_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
+    return source_provider_runtime(
+        "jacobian.graph6-checker",
+        version="1",
+        entrypoint="jacobian_checkers.graph6:check_graph6_decode",
+        install_tier=CapabilityInstallTier.T1,
+        license_id="MIT",
+        features=("standard-library-graph6-replay", "clean-process-checker"),
+        checker_ids=checker_ids,
+    )
 
 
 def _decode(request: Graph6DecodeRequest) -> Graph6DecodeValue:
@@ -68,6 +87,7 @@ GRAPH6_CHECKER_DECLARATIONS = (
         "check_graph6_decode",
         "graph.graph6-decode.standard-library-v1",
         entrypoint_module="jacobian_checkers.graph6",
+        provider_runtime_factory=_graph6_runtime,
         replay_method="standard-library graph6 bitstream replay",
         reason=(
             "operator-authorized standard-library checker independently decodes "

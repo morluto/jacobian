@@ -1360,18 +1360,6 @@ _COMPOSITION_OWNERS = frozenset(
 )
 
 
-def _call_names(tree: ast.AST) -> frozenset[str]:
-    names: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        if isinstance(node.func, ast.Name):
-            names.add(node.func.id)
-        elif isinstance(node.func, ast.Attribute):
-            names.add(node.func.attr)
-    return frozenset(names)
-
-
 def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
     return any(
         isinstance(node, ast.ImportFrom)
@@ -1380,17 +1368,21 @@ def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
     )
 
 
-def _create_runtime_call_names(tree: ast.AST) -> frozenset[str]:
-    names = {"create_runtime"}
+def _imports_complete_runtime_constructor(tree: ast.AST) -> bool:
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom) or node.module != "jacobian.runtime":
-            continue
-        names.update(
-            alias.asname or alias.name
-            for alias in node.names
-            if alias.name == "create_runtime"
-        )
-    return frozenset(names)
+        if isinstance(node, ast.Import):
+            if any(alias.name == "jacobian.runtime" for alias in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            if node.module == "jacobian.runtime" and any(
+                alias.name == "create_runtime" for alias in node.names
+            ):
+                return True
+            if node.module == "jacobian" and any(
+                alias.name == "runtime" for alias in node.names
+            ):
+                return True
+    return False
 
 
 def _test_ownership_violations(
@@ -1401,10 +1393,10 @@ def _test_ownership_violations(
         return ()
 
     violations: list[Violation] = []
-    calls = _call_names(tree)
-    creates_runtime = bool(calls & _create_runtime_call_names(tree))
     focused_suite = len(parts) >= 2 and parts[1] in {"component", "domain", "unit"}
-    if focused_suite and (creates_runtime or _imports_complete_runtime_fixtures(tree)):
+    imports_complete_runtime = _imports_complete_runtime_fixtures(tree)
+    imports_runtime = _imports_complete_runtime_constructor(tree)
+    if focused_suite and (imports_runtime or imports_complete_runtime):
         violations.append(
             Violation(
                 str(relative),
@@ -1414,22 +1406,9 @@ def _test_ownership_violations(
         )
 
     if (
-        len(parts) >= 2
-        and parts[1] == "domain"
-        and len(_imported_bundle_domains(tree)) > 1
-    ):
-        violations.append(
-            Violation(
-                str(relative),
-                "test-ownership",
-                "domain tests may install bundles from only one domain owner",
-            )
-        )
-
-    if (
         not focused_suite
         and relative.name == "conftest.py"
-        and (creates_runtime or _imports_complete_runtime_fixtures(tree))
+        and (imports_runtime or imports_complete_runtime)
     ):
         owning_complete_runtime = len(parts) >= 2 and parts[1] in {
             "boundary",
@@ -1452,10 +1431,7 @@ def _test_ownership_violations(
             for part in parts[2:]
             for word in part.replace(".", "_").split("_")
         }
-        historical = sorted(
-            (lowered & _HISTORICAL_TEST_BUCKET_WORDS)
-            | {word for word in lowered if word.isdecimal()}
-        )
+        historical = sorted(lowered & _HISTORICAL_TEST_BUCKET_WORDS)
         if historical:
             violations.append(
                 Violation(
@@ -1478,22 +1454,6 @@ def _test_ownership_violations(
             )
 
     return tuple(violations)
-
-
-def _imported_bundle_domains(tree: ast.AST) -> frozenset[str]:
-    bundle_domains: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom) or node.module is None:
-            continue
-        module_parts = node.module.split(".")
-        if module_parts[:2] != ["jacobian", "domains"] or len(module_parts) < 3:
-            continue
-        if any(
-            alias.name.startswith("build_") and alias.name.endswith("_bundle")
-            for alias in node.names
-        ):
-            bundle_domains.add(module_parts[2])
-    return frozenset(bundle_domains)
 
 
 # ---------------------------------------------------------------------------

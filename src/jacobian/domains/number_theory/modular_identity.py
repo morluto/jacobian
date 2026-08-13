@@ -28,6 +28,7 @@ def _modular_identity_runtime(
         checker_ids=checker_ids,
     )
 
+
 MODULAR_IDENTITY_CAPABILITIES = (
     number_theory_operation(
         "modular.polynomial_identity.compute",
@@ -80,8 +81,13 @@ MODULAR_IDENTITY_CHECKERS = (
             "this does not compare induced polynomial functions."
         ),
         verification_tags=(
-            "verification", "exact", "number-theory", "modular", "polynomial",
-            "identity", "coefficientwise",
+            "verification",
+            "exact",
+            "number-theory",
+            "modular",
+            "polynomial",
+            "identity",
+            "coefficientwise",
         ),
     ),
 )

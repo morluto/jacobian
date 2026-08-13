@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, TypedDict
 
 from jacobian_checkers.bound_artifacts import bound_request
 
@@ -11,23 +11,34 @@ _INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
 _VARIABLE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 
+class _NormalizedTerm(TypedDict):
+    coefficient: int
+    exponents: list[int]
+
+
 def _reject(detail: str) -> dict[str, Any]:
     return {
-        "accepted": False, "conclusion": "UNKNOWN",
-        "arithmetic": "EXACT_INTEGER", "method": "DIRECT_WITNESS",
-        "coverage": "NOT_APPLICABLE", "detail": detail,
+        "accepted": False,
+        "conclusion": "UNKNOWN",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "DIRECT_WITNESS",
+        "coverage": "NOT_APPLICABLE",
+        "detail": detail,
     }
 
 
 def _accept(detail: str) -> dict[str, Any]:
     return {
-        "accepted": True, "conclusion": "TRUE",
-        "arithmetic": "EXACT_INTEGER", "method": "DIRECT_WITNESS",
-        "coverage": "NOT_APPLICABLE", "detail": detail,
+        "accepted": True,
+        "conclusion": "TRUE",
+        "arithmetic": "EXACT_INTEGER",
+        "method": "DIRECT_WITNESS",
+        "coverage": "NOT_APPLICABLE",
+        "detail": detail,
     }
 
 
-def _normalize(raw: object, *, variables: int, modulus: int) -> list[dict[str, object]]:
+def _normalize(raw: object, *, variables: int, modulus: int) -> list[_NormalizedTerm]:
     if not isinstance(raw, list) or len(raw) > 64:
         raise ValueError("term list is outside checker scope")
     coefficients: dict[tuple[int, ...], int] = {}
@@ -42,11 +53,15 @@ def _normalize(raw: object, *, variables: int, modulus: int) -> list[dict[str, o
             or _INTEGER.fullmatch(coefficient) is None
             or not isinstance(exponents, list)
             or len(exponents) != variables
-            or any(type(value) is not int or not 0 <= value <= 32 for value in exponents)
+            or any(
+                type(value) is not int or not 0 <= value <= 32 for value in exponents
+            )
         ):
             raise ValueError("term is outside checker scope")
         vector = tuple(exponents)
-        coefficients[vector] = (coefficients.get(vector, 0) + int(coefficient)) % modulus
+        coefficients[vector] = (
+            coefficients.get(vector, 0) + int(coefficient)
+        ) % modulus
     return [
         {"coefficient": coefficient, "exponents": list(exponents)}
         for exponents, coefficient in sorted(coefficients.items())
@@ -71,15 +86,22 @@ def check_modular_polynomial_identity(request: object) -> dict[str, Any]:
             or not isinstance(variables, list)
             or not 1 <= len(variables) <= 6
             or len(set(variables)) != len(variables)
-            or any(not isinstance(name, str) or _VARIABLE.fullmatch(name) is None for name in variables)
+            or any(
+                not isinstance(name, str) or _VARIABLE.fullmatch(name) is None
+                for name in variables
+            )
         ):
             raise ValueError("scope is malformed")
         left = _normalize(source["left"], variables=len(variables), modulus=modulus)
         right = _normalize(source["right"], variables=len(variables), modulus=modulus)
-        coefficients = {tuple(term["exponents"]): int(term["coefficient"]) for term in left}
+        coefficients = {
+            tuple(term["exponents"]): int(term["coefficient"]) for term in left
+        }
         for term in right:
             vector = tuple(term["exponents"])
-            coefficients[vector] = (coefficients.get(vector, 0) - int(term["coefficient"])) % modulus
+            coefficients[vector] = (
+                coefficients.get(vector, 0) - int(term["coefficient"])
+            ) % modulus
         residual = [
             {"coefficient": coefficient, "exponents": list(exponents)}
             for exponents, coefficient in sorted(coefficients.items())

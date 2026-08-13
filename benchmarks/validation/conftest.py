@@ -1,20 +1,32 @@
-"""Keep benchmark validation imports rooted at the repository checkout."""
+"""Keep benchmark validation imports isolated at the dynamic verifier boundary."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Iterator
 
 import pytest
 
-ROOT = Path(__file__).parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+_ISOLATE_PREFIXES = (
+    "benchmarks/validation/mathematical_benchmarks_v1/",
+    "benchmarks/validation/symbolic_coordination_v1/",
+)
 
 
 @pytest.fixture(autouse=True)
-def _isolate_task_verifier_imports():
+def isolate_verifier_imports(request: pytest.FixtureRequest) -> Iterator[None]:
     """Prevent one task's top-level verifier_support import leaking to another."""
+
+    relative = Path(str(request.node.path)).as_posix()
+    needs_isolation = (
+        any(prefix in relative for prefix in _ISOLATE_PREFIXES)
+        or "verifier_child" in relative
+        or "test_verifier_" in Path(relative).name
+    )
+    if not needs_isolation:
+        yield
+        return
 
     original_path = list(sys.path)
     sys.modules.pop("verifier_support", None)

@@ -24,8 +24,7 @@ def test_determinant_scalar_budget_scales_to_the_inline_output_cap() -> None:
 
     denominator = str(10**255 + 1000)
     entries = tuple(
-        tuple({"num": "1", "den": denominator} for _ in range(33))
-        for _ in range(33)
+        tuple({"num": "1", "den": denominator} for _ in range(33)) for _ in range(33)
     )
 
     with pytest.raises(ValidationError, match="determinant input"):

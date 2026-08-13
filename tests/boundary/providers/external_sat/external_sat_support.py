@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from tests.support.artifacts import sha256_file
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -22,6 +24,76 @@ from jacobian.sat_smt.sat_capabilities import (
     install_sat_unsat_proof_checker,
 )
 from jacobian.sat_smt.smt_capabilities import install_smt_unsat_proof_checker
+
+
+def fake_drat_trim(tmp_path: Path, body: str) -> Path:
+    executable = tmp_path / "drat-trim"
+    executable.write_text(
+        (
+            f"#!{sys.executable}\n"
+            "import sys\n"
+            "if '-h' in sys.argv:\n"
+            "    print('usage: drat-trim [INPUT] [<PROOF>] [<option> ...]')\n"
+            "    raise SystemExit(0)\n"
+            f"{body}\n"
+        ),
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    manifest = executable.with_name(executable.name + ".jacobian-runtime.json")
+    manifest.write_text(
+        (
+            "{\n"
+            '  "runtime_manifest_version": "1",\n'
+            '  "provider": "drat-trim",\n'
+            '  "release_tag": "v05.22.2023",\n'
+            '  "source_repository": '
+            '"https://github.com/marijnheule/drat-trim",\n'
+            '  "source_commit": '
+            '"2e5e29cb0019d5cfd547d4208dca1b3ec290349f",\n'
+            f'  "executable_sha256": "{sha256_file(executable)}"\n'
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    return executable
+
+
+def fake_carcara(tmp_path: Path, body: str) -> Path:
+    executable = tmp_path / "carcara"
+    executable.write_text(
+        (
+            f"#!{sys.executable}\n"
+            "import sys\n"
+            "if '--version' in sys.argv:\n"
+            "    print('carcara 1.1.0 [git master 394edbb]')\n"
+            "    raise SystemExit(0)\n"
+            "if sys.argv[1:] == ['check', '--help']:\n"
+            "    print('--strict-parsing --parse-hole-args '\n"
+            "          '--allow-int-real-subtyping --expand-let-bindings')\n"
+            "    raise SystemExit(0)\n"
+            f"{body}\n"
+        ),
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    manifest = executable.with_name(executable.name + ".jacobian-runtime.json")
+    manifest.write_text(
+        (
+            "{\n"
+            '  "runtime_manifest_version": "1",\n'
+            '  "provider": "carcara",\n'
+            '  "version": "1.1.0",\n'
+            '  "source_repository": "https://github.com/ufmg-smite/carcara",\n'
+            '  "source_commit": '
+            '"394edbb15ba95c47893f1d821fddde7e016af178",\n'
+            '  "compatible_cvc5_version": "1.3.4",\n'
+            f'  "executable_sha256": "{sha256_file(executable)}"\n'
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    return executable
 
 
 @contextmanager

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.support.state import copy_template
 
 from jacobian.capability_errors import CapabilityError
 from jacobian.contracts.capabilities import (
@@ -134,10 +135,10 @@ def test_graph_domain_runtime_identities_bind_every_executed_backend() -> None:
 
 def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
     tmp_path: Path,
-    authorized_complete_runtime: None,
+    authorized_portfolio_template: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _ = authorized_complete_runtime
+    state = copy_template(authorized_portfolio_template, tmp_path / "state")
     unavailable = CapabilityProviderRuntime(
         provider="jacobian.lean4",
         availability=CapabilityProviderAvailability.UNAVAILABLE,
@@ -152,21 +153,24 @@ def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
     )
 
     runtime = create_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
+        state, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
     )
-
-    assert runtime.portfolio_resources.lean is None
-    capability_ids = {
-        item.capability_id for item in runtime.core.capabilities.catalog().capabilities
-    }
-    assert {
-        "lean.check",
-        "lean.declaration.dependencies",
-        "lean.declaration.inspect",
-        "lean.declaration.search",
-        "lean.proof.axioms.inspect",
-        "lean.proof_edit.validate",
-    }.isdisjoint(capability_ids)
+    try:
+        assert runtime.portfolio_resources.lean is None
+        capability_ids = {
+            item.capability_id
+            for item in runtime.core.capabilities.catalog().capabilities
+        }
+        assert {
+            "lean.check",
+            "lean.declaration.dependencies",
+            "lean.declaration.inspect",
+            "lean.declaration.search",
+            "lean.proof.axioms.inspect",
+            "lean.proof_edit.validate",
+        }.isdisjoint(capability_ids)
+    finally:
+        runtime.close()
 
 
 def test_unhealthy_lean_frontend_is_absent_from_catalog(
@@ -187,13 +191,16 @@ def test_unhealthy_lean_frontend_is_absent_from_catalog(
     )
 
     runtime = create_runtime(tmp_path, checker_authority=CheckerAuthorityMode.NONE)
-
-    capability_ids = {
-        item.capability_id for item in runtime.core.capabilities.catalog().capabilities
-    }
-    assert {"lean.statement.propose", "lean.statement.compare"}.isdisjoint(
-        capability_ids
-    )
+    try:
+        capability_ids = {
+            item.capability_id
+            for item in runtime.core.capabilities.catalog().capabilities
+        }
+        assert {"lean.statement.propose", "lean.statement.compare"}.isdisjoint(
+            capability_ids
+        )
+    finally:
+        runtime.close()
 
 
 def test_failed_invocation_keeps_provider_identity_in_the_descriptor(

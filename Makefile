@@ -10,9 +10,9 @@ PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
 # Fixed semantic lanes covering the Lean-free ordinary testpaths. CI runs these
-# independently; `make check` runs the same lanes locally in this order.
+# independently; `make check-all` reproduces them locally in this order.
 ORDINARY_TEST_LANES := unit component domain composition e2e provider
-PUBLIC_COMMANDS := setup quick check check-external fix
+PUBLIC_COMMANDS := setup quick check check-all check-external fix
 
 include make/development.mk
 include make/harbor.mk
@@ -92,6 +92,13 @@ test-compatibility: ## Supported-version import/API compatibility smoke.
 		tests/unit/tooling/test_ci_compatibility.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
+test-checker-subprocess-coverage: ## Prove focused checker-worker child coverage collection.
+	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) pytest -n 0 --timeout=30 \
+		tests/unit/test_checker_worker_manifest.py \
+		--cov --cov-config=.coveragerc-subprocess --cov-report= --cov-fail-under=0
+	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) coverage report \
+		--include=src/jacobian/checker_worker.py --fail-under=1
+
 test-all-ci: ## Explicitly run every semantic lane locally (exceptional).
 	$(MAKE) test-unit
 	$(MAKE) test-component
@@ -143,15 +150,17 @@ coverage: ## Combine coverage data files and enforce the repository threshold.
 build: ## Build Python source and wheel distributions.
 	uv build
 
-quick: lint typecheck test-unit ## Cheap iteration: lint, types, unit tests.
+quick: lint test-unit ## Cheap iteration: lint and unit tests.
 
-check: lint typecheck test-ordinary ## PR-equivalent ordinary Python validation.
+check: lint typecheck test-unit ## Routine local handoff: lint, types, and unit tests.
+
+check-all: lint typecheck test-ordinary ## Explicitly reproduce all ordinary CI lanes.
 
 check-external: test-lean test-provider ## Lean and maintained-provider isolation.
 
 precommit: ## Fix and run every routine local handoff check.
 	$(MAKE) fix
-	$(MAKE) quick
+	$(MAKE) check
 
 check-static: lint-full typecheck import-contracts architecture todo-check build ## CI-owned static checks plus a local package build.
 

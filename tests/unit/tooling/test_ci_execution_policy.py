@@ -125,8 +125,9 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
         "ORDINARY_TEST_LANES := unit component domain composition e2e provider"
         in makefile
     )
-    assert "check: lint typecheck test-ordinary" in makefile
-    assert "quick: lint typecheck test-unit" in makefile
+    assert "quick: lint test-unit" in makefile
+    assert "check: lint typecheck test-unit" in makefile
+    assert "check-all: lint typecheck test-ordinary" in makefile
 
 
 def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
@@ -256,6 +257,26 @@ def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> Non
     assert ("needs: [static, python, boundaries, wheel, coverage, lean]") in required
     assert "success|skipped" in required
     assert "needs.lean.result" in required
+
+
+def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    subprocess_config = (ROOT / ".coveragerc-subprocess").read_text(encoding="utf-8")
+    target = (
+        (ROOT / "Makefile")
+        .read_text(encoding="utf-8")
+        .split("test-checker-subprocess-coverage:", 1)[1]
+        .split("test-all-ci:", 1)[0]
+    )
+
+    assert 'patch = ["subprocess"]' not in pyproject
+    assert "patch = subprocess" in subprocess_config
+    assert "tests/unit/test_checker_worker_manifest.py" in target
+    assert "--cov-config=.coveragerc-subprocess" in target
+    assert "--include=src/jacobian/checker_worker.py --fail-under=1" in target
+    assert workflow.count("make test-checker-subprocess-coverage") == 1
+    assert "needs: [python, boundaries, subprocess_coverage]" in workflow
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:

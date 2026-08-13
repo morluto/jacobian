@@ -278,6 +278,46 @@ def test_distance_matrix_checker_accepts_exact_boundary_claims(
     assert decision["coverage"] == "EXHAUSTIVE"
 
 
+def test_distance_matrix_checker_handles_dedicated_order_boundary() -> None:
+    vertices = [f"v{index:02d}" for index in range(64)]
+    distances = [
+        [0 if source == target else None for target in range(64)]
+        for source in range(64)
+    ]
+    checker_request = _distance_matrix_checker_request(
+        vertices=vertices,
+        edges=[],
+        result_vertices=vertices,
+        distances=distances,
+        connected=False,
+    )
+
+    decision = check_graph_distance_matrix(checker_request)
+
+    assert decision["accepted"] is True
+    assert decision["conclusion"] == "TRUE"
+
+
+def test_distance_matrix_checker_rejects_order_above_dedicated_bound() -> None:
+    vertices = [f"v{index:02d}" for index in range(65)]
+    distances = [
+        [0 if source == target else None for target in range(65)]
+        for source in range(65)
+    ]
+    checker_request = _distance_matrix_checker_request(
+        vertices=vertices,
+        edges=[],
+        result_vertices=vertices,
+        distances=distances,
+        connected=False,
+    )
+
+    decision = check_graph_distance_matrix(checker_request)
+
+    assert decision["accepted"] is False
+    assert decision["conclusion"] == "UNKNOWN"
+
+
 @pytest.mark.parametrize(
     "mutate",
     (

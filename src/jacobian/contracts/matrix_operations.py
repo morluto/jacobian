@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, field_validator, model_validator
 
@@ -20,6 +20,11 @@ from jacobian.contracts.results import ContractModel
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 64
+
+DeterminantRow = Annotated[
+    tuple[CanonicalRational, ...],
+    Field(min_length=1, max_length=MAX_DETERMINANT_MATRIX_DIMENSION),
+]
 
 
 def _check_integer_digits(
@@ -80,7 +85,7 @@ class DeterminantRationalMatrix(ContractModel):
 
     matrix_schema_version: Literal["1"] = "1"
     domain: Literal["QQ"] = "QQ"
-    entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
+    entries: tuple[DeterminantRow, ...] = Field(
         min_length=1, max_length=MAX_DETERMINANT_MATRIX_DIMENSION
     )
 

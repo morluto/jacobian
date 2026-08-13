@@ -9,6 +9,9 @@ from jacobian.domains.probability.checkers import PROBABILITY_EXACT_REPLAY_CHECK
 from jacobian.domains.probability.gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
+from jacobian.domains.probability.mutual_information import (
+    MUTUAL_INFORMATION_CAPABILITY,
+)
 from jacobian.domains.probability.operations import FINITE_PROBABILITY_CAPABILITIES
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 from jacobian.provider_runtime import PYTHON_FLINT_VERSION
@@ -34,12 +37,13 @@ def build_finite_probability_bundle() -> DomainBundle:
         schema_namespace="jacobian.validated-analysis",
         semantics=DomainSemantics(
             name="jacobian.probability",
-            version="4",
+            version="5",
             definition={
                 "description": "bounded exact rational probability operations",
                 "scope": (
                     "raw moments, explicit event mass and conditioning, total "
-                    "pushforwards, independent finite convolutions, and one fixed-order "
+                    "pushforwards, independent finite convolutions, exact mutual "
+                    "information for bounded rational joint tables, one fixed-order "
                     "moment of a sparse complex-rational polynomial in independent "
                     "standard real Gaussian variables, and exact small-graph terminal "
                     "connection reliability"
@@ -49,9 +53,12 @@ def build_finite_probability_bundle() -> DomainBundle:
         ),
         provider_runtime=python_flint_probability_provider_runtime(),
         backend_version=f"python-flint-{PYTHON_FLINT_VERSION}",
-        capabilities=tuple(
-            _operation_with_canonical_gaussian_input(operation)
-            for operation in FINITE_PROBABILITY_CAPABILITIES
+        capabilities=(
+            MUTUAL_INFORMATION_CAPABILITY,
+            *(
+                _operation_with_canonical_gaussian_input(operation)
+                for operation in FINITE_PROBABILITY_CAPABILITIES
+            ),
         ),
         diagnostics=DomainDiagnostics(
             invalid_request=CapabilityDiagnostic(
@@ -59,8 +66,9 @@ def build_finite_probability_bundle() -> DomainBundle:
                 stage="finite_probability_input_validation",
                 message="Input does not satisfy the bounded exact-probability contract.",
                 hint=(
-                    "Use a bounded normalized finite distribution or a bounded "
-                    "Gaussian polynomial request, or a fully weighted small graph."
+                    "Use a bounded normalized finite distribution or joint table, "
+                    "a bounded Gaussian polynomial request, or a fully weighted "
+                    "small graph."
                 ),
             )
         ),

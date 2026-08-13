@@ -7,6 +7,7 @@ from jacobian.math import (
     matrices,
     polynomials,
     prime_field_linear_algebra,
+    probability,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "matrices",
     "polynomials",
     "prime_field_linear_algebra",
+    "probability",
 ]

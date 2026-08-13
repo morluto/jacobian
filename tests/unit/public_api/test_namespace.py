@@ -14,6 +14,7 @@ PUBLIC_API = {
         "matrices",
         "polynomials",
         "prime_field_linear_algebra",
+        "probability",
     ),
     "jacobian.math.finite_fields": (
         "Axis",
@@ -99,6 +100,13 @@ PUBLIC_API = {
         "quotient_basis",
         "rank",
         "rref",
+    ),
+    "jacobian.math.probability": (
+        "FiniteJointTable",
+        "MutualInformationCertificate",
+        "MutualInformationResult",
+        "MutualInformationTerm",
+        "mutual_information",
     ),
 }
 

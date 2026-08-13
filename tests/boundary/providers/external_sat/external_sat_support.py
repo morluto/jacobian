@@ -10,6 +10,7 @@ from tests.support.services import (
     open_domain_services,
 )
 
+from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.providers.external_solver_runtime import (
     cadical_provider_runtime,
     drat_trim_provider_runtime,
@@ -20,6 +21,65 @@ from jacobian.sat_smt.sat_capabilities import (
     install_sat_assignment_checker,
     install_sat_unsat_proof_checker,
 )
+from jacobian.sat_smt.smt_capabilities import install_smt_unsat_proof_checker
+
+
+@contextmanager
+def open_sat_proof_verifier_services(
+    root: Path,
+    runtime: CapabilityProviderRuntime,
+    *,
+    checker_authority: CheckerAuthorityMode,
+) -> Iterator[DomainTestServices]:
+    """Open only the production SAT proof-verifier graph."""
+
+    with open_domain_services(
+        root,
+        checker_authority=checker_authority,
+    ) as services:
+        with atomic_installation(services.core):
+            verifier, _installation = install_sat_unsat_proof_checker(
+                services.core.store,
+                services.core.schemas,
+                services.core.artifacts,
+                services.core.sat,
+                services.application.verification,
+                services.core.checkers,
+                runtime,
+                authorize_checker=services.installation.authorizes_bundled_checkers,
+            )
+            if verifier is not None:
+                services.installation.register_capability(verifier)
+        yield services
+
+
+@contextmanager
+def open_smt_proof_verifier_services(
+    root: Path,
+    runtime: CapabilityProviderRuntime,
+    *,
+    checker_authority: CheckerAuthorityMode,
+) -> Iterator[DomainTestServices]:
+    """Open only the production SMT proof-verifier graph."""
+
+    with open_domain_services(
+        root,
+        checker_authority=checker_authority,
+    ) as services:
+        with atomic_installation(services.core):
+            verifier, _installation = install_smt_unsat_proof_checker(
+                services.core.store,
+                services.core.schemas,
+                services.core.artifacts,
+                services.core.smt,
+                services.application.verification,
+                services.core.checkers,
+                runtime,
+                authorize_checker=services.installation.authorizes_bundled_checkers,
+            )
+            if verifier is not None:
+                services.installation.register_capability(verifier)
+        yield services
 
 
 @contextmanager
@@ -88,7 +148,7 @@ def _open_external_sat_services(
                 services.installation.register_capability(assignment)
 
             if install_proof_checker:
-                proof, _installation = install_sat_unsat_proof_checker(
+                proof, _proof_installation = install_sat_unsat_proof_checker(
                     services.core.store,
                     services.core.schemas,
                     services.core.artifacts,

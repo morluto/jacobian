@@ -7,8 +7,11 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from jacobian.cli import CliState, JacobianGroup, app
+from jacobian.cli import CliState, JacobianGroup, app, create_cli_app
+from jacobian.domains.arithmetic import build_arithmetic_bundle
+from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.runtime import CheckerAuthorityMode
+from tests.support.selected_runtime import selected_runtime_opener
 
 
 def test_cli_help_exposes_only_math_and_operator_commands() -> None:
@@ -35,6 +38,9 @@ def test_cli_init_reports_installed_operation_count(tmp_path: Path) -> None:
 
 def test_cli_catalog_and_inspect_share_installed_declaration(tmp_path: Path) -> None:
     runner = CliRunner()
+    selected = create_cli_app(
+        runtime_opener=selected_runtime_opener(build_matrix_bundle())
+    )
     common = [
         "--state-dir",
         str(tmp_path),
@@ -42,9 +48,9 @@ def test_cli_catalog_and_inspect_share_installed_declaration(tmp_path: Path) -> 
         "NONE",
     ]
 
-    catalog_call = runner.invoke(app, [*common, "catalog"])
+    catalog_call = runner.invoke(selected, [*common, "catalog"])
     inspect_call = runner.invoke(
-        app,
+        selected,
         [*common, "inspect", "matrix.determinant.compute"],
     )
 
@@ -75,9 +81,12 @@ def test_cli_run_executes_one_installed_operation_from_inline_json(
             ],
         }
     }
+    selected = create_cli_app(
+        runtime_opener=selected_runtime_opener(build_matrix_bundle())
+    )
 
     result = CliRunner().invoke(
-        app,
+        selected,
         [
             "--state-dir",
             str(tmp_path),
@@ -102,9 +111,12 @@ def test_cli_run_executes_one_installed_operation_from_inline_json(
 def test_cli_run_reads_strict_json_file(tmp_path: Path) -> None:
     payload = tmp_path / "payload.json"
     payload.write_text('{"left":"12","right":"18"}', encoding="utf-8")
+    selected = create_cli_app(
+        runtime_opener=selected_runtime_opener(build_arithmetic_bundle())
+    )
 
     result = CliRunner().invoke(
-        app,
+        selected,
         [
             "--state-dir",
             str(tmp_path / "state"),

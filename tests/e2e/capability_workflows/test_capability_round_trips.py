@@ -13,6 +13,8 @@ from tests.support.provider_lean import (
 )
 from tests.support.rationals import rational_payload as _q
 
+from tests.support.state import copy_template
+
 from jacobian.adapters.mcp.server import create_server
 from jacobian.runtime import CheckerAuthorityMode
 
@@ -105,7 +107,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
             ]
 
         restarted = create_server(
-            tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+            tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
         )
         async with Client(restarted, raise_exceptions=True) as client:
             replayed = await _tool(
@@ -123,10 +125,14 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
     asyncio.run(scenario())
 
 
-def test_polynomial_factor_result_verifies_through_mcp(tmp_path: Path) -> None:
+def test_polynomial_factor_result_verifies_through_mcp(
+    tmp_path: Path,
+    authorized_portfolio_template: Path,
+) -> None:
     async def scenario() -> None:
+        state = copy_template(authorized_portfolio_template, tmp_path / "state")
         server = create_server(
-            tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+            state, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
         )
         async with Client(server, raise_exceptions=True) as client:
             factor_input = {"polynomial": _polynomial(-1, 0, 1)}
@@ -278,7 +284,7 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
             assert record["payload"]["evidence_uri"] in verified["artifact_uris"]
 
         restarted = create_server(
-            tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+            tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
         )
         async with Client(restarted, raise_exceptions=True) as client:
             replayed = await validate(client)

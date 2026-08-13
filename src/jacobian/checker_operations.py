@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from jacobian.contracts.capabilities import CapabilityProviderRuntime
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.results import ContractModel
+
+ProviderRuntimeFactory = Callable[[], CapabilityProviderRuntime]
 
 # Producer operation verb segments stripped when deriving a verifier capability
 # ID. Each producer capability ID contains exactly one of these segments; the
@@ -107,11 +110,16 @@ class ExactReplayCheckerDeclaration:
     verification_title: str | None = None
     verification_description: str | None = None
     verification_tags: tuple[str, ...] = ()
-    provider_runtime_factory: Callable[..., CapabilityProviderRuntime] | None = None
+    provider_runtime: CapabilityProviderRuntime | None = None
+    provider_runtime_factory: ProviderRuntimeFactory | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
     supports_input: Callable[[object], bool] | None = None
 
     def __post_init__(self) -> None:
-        for field, value in {
+        for field_name, value in {
             "capability_id": self.capability_id,
             "function": self.function,
             "format_id": self.format_id,
@@ -121,11 +129,18 @@ class ExactReplayCheckerDeclaration:
         }.items():
             if not value.strip():
                 raise ValueError(
-                    f"exact replay checker declaration {field} must not be empty"
+                    f"exact replay checker declaration {field_name} must not be empty"
                 )
-        if self.provider_runtime_factory is None:
+        runtime = object.__getattribute__(self, "provider_runtime")
+        factory = object.__getattribute__(self, "provider_runtime_factory")
+        if runtime is not None and factory is not None:
             raise ValueError(
-                "exact replay checker declaration requires a provider runtime factory"
+                "declaration must provide either provider_runtime or "
+                "provider_runtime_factory, not both"
+            )
+        if runtime is not None and runtime.checker_ids:
+            raise ValueError(
+                "declaration-owned provider runtime must not pre-authorize checker IDs"
             )
         derived_id = derive_verification_capability_id(self.capability_id)
         explicit_text = (
@@ -172,6 +187,28 @@ class ExactReplayCheckerDeclaration:
                 "verification_tags",
                 derive_verification_tags(self.capability_id),
             )
+
+    def __getattribute__(self, name: str) -> Any:
+        if name != "provider_runtime":
+            return object.__getattribute__(self, name)
+        runtime = object.__getattribute__(self, "provider_runtime")
+        if runtime is not None:
+            return runtime
+        factory = object.__getattribute__(self, "provider_runtime_factory")
+        if factory is None:
+            return None
+        realized = factory()
+        if not isinstance(realized, CapabilityProviderRuntime):
+            raise TypeError(
+                "declaration-owned provider runtime factory must return "
+                "CapabilityProviderRuntime"
+            )
+        if realized.checker_ids:
+            raise ValueError(
+                "declaration-owned provider runtime must not pre-authorize checker IDs"
+            )
+        object.__setattr__(self, "provider_runtime", realized)
+        return realized
 
 
 @dataclass(frozen=True, slots=True)

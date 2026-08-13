@@ -259,7 +259,7 @@ def test_paths_file_stays_on_harbor_planning() -> None:
     assert "PATHS_FILE :=" not in harbor
     assert "$(shell mktemp)" not in harbor
     assert "tr '\\n' ' '" not in harbor
-    assert "--paths-file \"$$tmp_dir/changed-paths.txt\"" in harbor
+    assert '--paths-file "$$tmp_dir/changed-paths.txt"' in harbor
     assert "--config make/harbor.mk" in harbor
     assert "PATHS_FILE" not in workflow
 

@@ -21,9 +21,10 @@ def test_exact_replay_declaration_requires_provider_runtime_factory() -> None:
 
 
 def test_exact_domain_checkers_has_no_central_semantic_maps() -> None:
-    source = (ROOT / "src/jacobian/exact_domain_checkers.py").read_text(encoding="utf-8")
+    source = (ROOT / "src/jacobian/exact_domain_checkers.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "_ENTRYPOINT_PROVIDER_RUNTIME_KEYS" not in source
     assert "def _checker_supports" not in source
     assert "def _provider_runtime_key" not in source
-

@@ -102,9 +102,9 @@ def _declaration_factory(
 def _declared_runtime_groups(
     pairs: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...],
 ) -> tuple[_DeclaredRuntimeGroup, ...]:
-    probes: dict[Callable[..., CapabilityProviderRuntime], CapabilityProviderRuntime] = (
-        {}
-    )
+    probes: dict[
+        Callable[..., CapabilityProviderRuntime], CapabilityProviderRuntime
+    ] = {}
     grouped: dict[
         str,
         tuple[

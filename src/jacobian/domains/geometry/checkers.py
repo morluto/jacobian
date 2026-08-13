@@ -19,7 +19,9 @@ from jacobian.provider_runtime import source_provider_runtime
 _ENTRYPOINT = "jacobian_checkers.exact_geometry"
 
 
-def _geometry_runtime(*, checker_ids: tuple[str, ...] = ()) -> CapabilityProviderRuntime:
+def _geometry_runtime(
+    *, checker_ids: tuple[str, ...] = ()
+) -> CapabilityProviderRuntime:
     return source_provider_runtime(
         "jacobian.exact-geometry-checker",
         version="1",

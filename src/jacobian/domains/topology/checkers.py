@@ -20,7 +20,9 @@ _REASON = (
 def _topology_runtime(
     *, checker_ids: tuple[str, ...] = ()
 ) -> CapabilityProviderRuntime:
-    return flint_runtime.topology_exact_checker_provider_runtime(checker_ids=checker_ids)
+    return flint_runtime.topology_exact_checker_provider_runtime(
+        checker_ids=checker_ids
+    )
 
 
 TOPOLOGY_EXACT_REPLAY_CHECKERS = (

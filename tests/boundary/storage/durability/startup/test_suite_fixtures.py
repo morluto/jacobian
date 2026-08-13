@@ -125,5 +125,7 @@ def test_complete_portfolio_template_is_quiescent_and_copyable(
         destination,
         descriptor_uri=_polynomial_expression_schema_uri(complete_portfolio_template),
     )
-    with create_runtime(destination, checker_authority=CheckerAuthorityMode.NONE) as runtime:
+    with create_runtime(
+        destination, checker_authority=CheckerAuthorityMode.NONE
+    ) as runtime:
         assert runtime.core.capabilities.catalog().capabilities

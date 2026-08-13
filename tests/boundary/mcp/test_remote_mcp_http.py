@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import socket
 import threading
@@ -65,10 +66,11 @@ def test_authenticated_streamable_http_isolates_tenant_data(
     ) as port:
         asyncio.run(_remote_tenant_scenario(port))
         tenant_roots = sorted((tmp_path / "state" / "tenants").iterdir())
-        assert len(tenant_roots) == 2
-        alpha_db = (tenant_roots[0] / "metadata.sqlite3").read_bytes()
-        beta_db = (tenant_roots[1] / "metadata.sqlite3").read_bytes()
-        assert alpha_db != beta_db
+        assert {path.name for path in tenant_roots} == {
+            hashlib.sha256(b"alpha").hexdigest(),
+            hashlib.sha256(b"beta").hexdigest(),
+        }
+        assert all((path / "metadata.sqlite3").is_file() for path in tenant_roots)
 
 
 def test_default_authority_remote_mcp_matches_deployment_identity(

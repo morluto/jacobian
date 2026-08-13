@@ -468,6 +468,7 @@ def create_remote_server(
     capability_policy: CapabilityPolicy | None = None,
     max_tenant_runtimes: int | None = None,
     tenant_idle_timeout_seconds: float | None = None,
+    runtime_factory: Callable[..., JacobianRuntime] | None = None,
 ) -> MCPServer[AppState]:
     """Create one remote host routing requests to isolated tenant runtimes."""
 
@@ -489,6 +490,7 @@ def create_remote_server(
             if tenant_idle_timeout_seconds is None
             else tenant_idle_timeout_seconds
         ),
+        runtime_factory=create_runtime if runtime_factory is None else runtime_factory,
     )
 
     def acquire_runtime() -> RuntimeLease:

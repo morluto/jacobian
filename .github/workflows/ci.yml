@@ -199,10 +199,6 @@ jobs:
 
   lean:
     name: Lean Runtime
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'ci:lean') ||
-      contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -212,6 +208,8 @@ jobs:
       - name: Prepare Lean test environment
         uses: ./.github/actions/setup-lean
       - run: make test-lean
+        env:
+          JACOBIAN_LEAN_REQUIRED: "1"
 
   coverage:
     name: Coverage
@@ -317,10 +315,7 @@ jobs:
           test "$BOUNDARIES_RESULT" = success
           test "$WHEEL_RESULT" = success
           test "$COVERAGE_RESULT" = success
-          case "$LEAN_RESULT" in
-            success|skipped) ;;
-            *) exit 1 ;;
-          esac
+          test "$LEAN_RESULT" = success
 
   python-test:
     name: Python Tests
@@ -341,14 +336,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Accept skipped Lean on ordinary PRs
+      - name: Require Lean on the exact merge candidate
         env:
           LEAN_RESULT: ${{ needs.lean.result }}
-        run: |
-          case "$LEAN_RESULT" in
-            success|skipped) exit 0 ;;
-            *) exit 1 ;;
-          esac
+        run: test "$LEAN_RESULT" = success
 
   deployment-test:
     name: Deployment Tests

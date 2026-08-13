@@ -16,7 +16,7 @@ Use the installed catalog and current references for present tool membership.
 
 ## Contributor quick path
 
-Most changes need only the locked environment and the ordinary check:
+Most changes need only the locked environment and the bounded local handoff:
 
 ```sh
 make setup
@@ -25,20 +25,20 @@ make check
 
 Then open a pull request. `make setup` installs the locked development
 environment with the complete maintained Python backend stack. `make check`
-runs Ruff, mypy, and the same Lean-free ordinary test suite CI covers in fixed
-semantic groups.
+runs Ruff, mypy, and the unit lane. Add the named `make test-*` lane for the
+behavior or boundary changed; CI runs the complete fixed semantic matrix.
 Open the PR once it is green, and add any explicitly relevant specialist
 validation called out below.
 
-`make quick` is the cheaper loop: lint, types, and `tests/unit` only. The
+`make quick` is the cheaper loop: lint and `tests/unit` only. The
 pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
 
 CI always runs that ordinary Python surface plus storage/process/MCP,
-maintained Python provider boundaries, and the wheel smoke. Lean runs on
-merge/main or with the `ci:lean` / `ci:full` labels. You do not need to
-reproduce those locally for a routine change.
+maintained Python provider boundaries, the wheel smoke, and Lean. You do not
+need to reproduce Lean locally for a routine change unless you edited Lean
+sources, fixtures, or provider identity.
 
 Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
 `make test-process`, `make test-mcp`, `make test-e2e`, `make test-domain`, and
@@ -48,6 +48,12 @@ reproducing an environment-specific failure. The
 [testing strategy](docs/reference/testing-strategy.md) is the authoritative
 source for the change matrix, directory ownership, and the escalation rules.
 
+Coverage follows the same ownership rule. Ordinary lanes collect parent-process
+branch coverage without instrumenting every checker child. Changes to checker
+worker startup or coverage transport additionally run
+`make test-checker-subprocess-coverage`, the small lane that explicitly enables
+and verifies child-process coverage collection.
+
 ### When the quick path is not enough
 
 - **Documentation only:** `make docs-linkcheck` is the dedicated lane; CI runs
@@ -56,14 +62,19 @@ source for the change matrix, directory ownership, and the escalation rules.
 - **Broad or unknown impact** (CI, dependencies, shared infrastructure): run
   `make check-static` plus the affected tests, and let CI own the fail-closed
   functional lanes.
-- **Lean or optional providers:** `make check-external` when those trees
-  change. CI owns the full Lean and optional-provider environments.
+- **Lean:** `make check-external` when Lean or Mathlib trees change. That
+  target is the pinned Lean specialist lane only (`test-lean`).
+- **Optional or maintained Python providers:** `make test-provider` when those
+  trees change. `make check-all` already includes that lane; `check-external`
+  does not rerun it. CI owns the full Lean and optional-provider environments.
 - **Exhaustive local reproduction:** `make test-all-ci` is an explicit exception
-  path, not a routine gate. Before it, verify that no other pytest or
-  delegated-agent validation is running on the host, and never assign it to a
-  parallel agent sharing the checkout. The manually dispatched Python Debug and
-  Lean Debug workflows reproduce one pytest file or node in a prepared remote
-  environment when the relevant local runtime is impractical.
+  path, not a routine gate. It takes this worktree's exhaustive validation
+  lease; `make validation-status` shows whether that lease is held. Before it,
+  verify that no other pytest or delegated-agent validation is running on the
+  host, and never assign it to a parallel agent sharing the checkout. The
+  manually dispatched Python Debug and Lean Debug workflows reproduce one
+  pytest file or node in a prepared remote environment when the relevant local
+  runtime is impractical.
 
 ## Development environment
 
@@ -73,8 +84,10 @@ Jacobian uses Python 3.12 and the uv release pinned in [`.uv-version`](.uv-versi
 make setup          # locked dev environment and Python backends
 ```
 
-`make check` is the PR-equivalent ordinary Python validation. `make quick` is
-lint, types, and unit tests. The pre-push hook intentionally runs only
+`make check` is the bounded lint, type, and unit handoff; `make quick` omits
+typechecking for a shorter edit loop.
+`make check-all` explicitly reproduces every ordinary Python CI lane. The
+pre-push hook intentionally runs only
 `make lint typecheck` so it stays below the interactive feedback budget.
 `make check-static` adds dependency/dead-code checks and a package build when a
 focused change needs them. Run `make help` for the common command index and
@@ -108,12 +121,13 @@ while another agent is working. Integrate their edits first, then run the
 planned checks on the final tree. Use isolated worktrees only when the workflow
 explicitly assigns them.
 
-Before final validation, run `make check` on the final tree. If the tree
-changes during validation, rerun checks whose evidence was invalidated by
-that change; do not describe results from an earlier tree as final-tree
-validation. `make check` is the normal local handoff; CI owns the exhaustive
-evidence described above. Use `make check-external` when Lean or optional
-providers change.
+Before final validation, run `make check` plus the named lane that owns the
+changed behavior. If the tree changes during validation, rerun checks whose
+evidence was invalidated by that change; do not describe results from an
+earlier tree as final-tree validation. `make check-all` is an explicit broad
+reproduction, not a routine closeout requirement. CI owns the complete matrix.
+Use `make check-external` when Lean or Mathlib change, and `make test-provider`
+when optional or maintained Python providers change.
 
 ## Harbor and Oracle validation
 
@@ -134,16 +148,28 @@ once, fails fast through static quality and contracts, runs the selected host
 tests serially, then runs each exact Oracle serially. Neither command starts an
 Oracle or model.
 
-`make harbor-execution-check` validates repository-wide Harbor contracts (job
-JSON, MCP config, job-level Compose overlays, execution helpers) and the unit
-tests that own them; it deliberately excludes the task-specific verifier
-regressions under `benchmarks/validation/`, where `make harbor-check` retains
-the full integration role. Task `environment/docker-compose.yaml` files are
+`make harbor-check` validates repository-wide Harbor contracts (job JSON, MCP
+config, job-level Compose overlays, adapters, and execution helpers) and the
+unit tests that own them; it deliberately excludes unrelated task-specific
+verifier regressions. `make harbor-check-all` is the explicit full integration
+reproduction and takes the same worktree admission lease as other exhaustive
+local targets. `make harbor-plan` normalizes changed paths once and feeds that
+canonical file to the planner, validator, and receipt; temps live only inside
+the recipe. Task `environment/docker-compose.yaml` files are
 executable benchmark input, not job overlays, and remain gated by
 `make harbor-check-task` and `make harbor-oracle-task`. Use
 `make harbor-plan BASE=origin/main` for benchmark contracts and Oracle scope;
 run it through Make because the planner requires the pinned Harbor runtime to
 compute task digests.
+
+Current GitHub Actions identity is the workflow YAML on the default branch.
+Historical registrations whose files are gone, including leftover
+`agent-port-*` and `agent-rebase-*` workflows, stay disabled in the GitHub UI
+with their run history retained; do not add an auto-disable bot.
+`python tools/inventory_github_workflows.py` is the non-mutating inventory.
+To rebuild a leaf from `main` (or another declared parent) plus unique
+commits, run `python tools/restack_feature_branch.py`; the helper reports
+duplicate subjects and never force-pushes.
 
 For the exact task authoring workflow and verifier changes, use the
 [`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md) skill. The

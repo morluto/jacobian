@@ -129,7 +129,7 @@ class PolynomialMapInverseSynthesizeAdapter:
                             "support_mode": "FULL_TOTAL_DEGREE",
                             "solver": "sympy.solve",
                             "limits": {
-                                "timeout_ms": 10000,
+                                "timeout_ms": 30000,
                                 "max_inverse_degree": 4,
                                 "max_composition_degree": 32,
                                 "max_unknown_coefficients": 64,

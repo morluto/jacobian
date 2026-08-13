@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
-import pytest
-from benchmarks.tooling.benchmark_contracts import validate_all
+from benchmarks.tooling.benchmark_contracts import (
+    benchmark_contract_inventory,
+    collect_contract_failures,
+    validate_job_contract,
+)
+from benchmarks.tooling.harbor_suite import load_registry
 
 ROOT = Path(__file__).parents[3]
 
@@ -44,46 +49,63 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
     ]
 
 
-@pytest.mark.timeout(30)
-def test_validate_all_covers_proxy_control_and_observation_jobs() -> None:
+def test_benchmark_inventory_covers_proxy_control_and_observation_jobs() -> None:
     """The execution-config gate must validate proxied job configs, not skip them.
 
-    ``validate_all`` is the contract layer beneath ``make harbor-contracts``,
-    which is the first step of ``make harbor-execution-check``.  A malformed
-    proxied control or observation job must be caught here rather than only
-    failing when an operator runs the proxied evaluation.
+    The inventory is consumed by ``validate_all``, the contract layer beneath
+    ``make harbor-contracts``. A missing proxy entry would therefore remove it
+    from the repository gate.
     """
-    failures = validate_all()
+    inventory = benchmark_contract_inventory()
 
-    # The committed proxy jobs are valid, so there must be no failures.
-    assert failures == [], "benchmark contract failures:\n" + "\n".join(failures)
+    assert tuple(path.name for path in inventory.proxy_jobs) == (
+        "mathematical-benchmarks-v1-control-proxy.json",
+        "jacobian-observation-proxy.json",
+    )
 
 
-@pytest.mark.timeout(30)
-def test_validate_all_catches_a_malformed_proxy_control_job(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_job_contract_rejects_a_malformed_proxy_control_job() -> None:
     """A malformed proxied control job must not pass the execution-config gate."""
-    from benchmarks.tooling import benchmark_contracts
+    path = benchmark_contract_inventory().proxy_jobs[0]
+    malformed = _read_json(path)
+    malformed["artifacts"] = ["logs/agent/trajectory.json"]
 
-    original_read_json = benchmark_contracts._read_json
-
-    def patched_read_json(path: Path) -> object:
-        if path.name == "mathematical-benchmarks-v1-control-proxy.json":
-            malformed = original_read_json(path)
-            assert isinstance(malformed, dict)
-            malformed["artifacts"] = ["logs/agent/trajectory.json"]
-            return malformed
-        return original_read_json(path)
-
-    monkeypatch.setattr(benchmark_contracts, "_read_json", patched_read_json)
-
-    failures = validate_all()
+    failures = validate_job_contract(
+        malformed,
+        path=path,
+        suite=load_registry()[0],
+    )
 
     assert any("control-proxy" in f and "artifacts" in f for f in failures), (
         f"expected a contract failure for the malformed proxy control job, "
         f"got: {failures}"
     )
+
+
+def test_contract_failure_collection_runs_every_phase_in_order() -> None:
+    calls: list[str] = []
+
+    def phase(name: str, *failures: str) -> Callable[[], list[str]]:
+        def validate() -> list[str]:
+            calls.append(name)
+            return list(failures)
+
+        return validate
+
+    failures = collect_contract_failures(
+        (
+            phase("schemas", "schema failure"),
+            phase("proxy jobs"),
+            phase("snapshots", "snapshot failure 1", "snapshot failure 2"),
+        )
+    )
+
+    assert calls == ["schemas", "proxy jobs", "snapshots"]
+    assert failures == [
+        "schema failure",
+        "snapshot failure 1",
+        "snapshot failure 2",
+    ]
 
 
 def test_paired_jobs_use_three_attempts_per_condition() -> None:

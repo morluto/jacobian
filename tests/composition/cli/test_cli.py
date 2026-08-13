@@ -11,7 +11,6 @@ from typer.testing import CliRunner
 from jacobian.cli import CliState, JacobianGroup, app, create_cli_app
 from jacobian.domains.matrix_lattice import build_matrix_bundle
 from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_cli_help_exposes_only_math_and_operator_commands() -> None:
@@ -32,7 +31,7 @@ def test_cli_init_reports_installed_operation_count(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.stderr
     assert f"Initialized Jacobian state in {tmp_path.resolve()}" in result.stdout
-    assert "Installed " in result.stdout
+    assert "Compiled " in result.stdout
     assert " mathematical operations." in result.stdout
 
 
@@ -44,8 +43,6 @@ def test_cli_catalog_and_inspect_share_installed_declaration(tmp_path: Path) -> 
     common = [
         "--state-dir",
         str(tmp_path),
-        "--checker-authority",
-        "NONE",
     ]
 
     catalog_call = runner.invoke(selected, [*common, "catalog"])
@@ -90,8 +87,6 @@ def test_cli_run_executes_one_installed_operation_from_inline_json(
         [
             "--state-dir",
             str(tmp_path),
-            "--checker-authority",
-            "NONE",
             "run",
             "matrix.determinant.compute",
             "--json",
@@ -120,8 +115,6 @@ def test_cli_run_reads_strict_json_file(tmp_path: Path) -> None:
         [
             "--state-dir",
             str(tmp_path / "state"),
-            "--checker-authority",
-            "NONE",
             "run",
             "integer.compute.gcd",
             "--file",
@@ -163,10 +156,7 @@ def test_cli_cleanup_failure_propagates_after_successful_command(
 
     @test_app.callback()
     def configure_test_state(context: typer.Context) -> None:
-        context.obj = CliState(
-            tmp_path,
-            checker_authority=CheckerAuthorityMode.NONE,
-        )
+        context.obj = CliState(tmp_path)
 
     @test_app.command("succeed")
     def succeed() -> None:

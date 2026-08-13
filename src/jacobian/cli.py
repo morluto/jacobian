@@ -13,7 +13,18 @@ from typer import _click
 from typer.core import TyperGroup
 
 from jacobian.canonical import loads_strict_json
-from jacobian.contracts.operations import OperationRequest
+from jacobian.contracts.operations import (
+    OperationCatalogSnapshot,
+    OperationDescriptor,
+    OperationRequest,
+)
+from jacobian.operation_catalog import OperationCatalog
+from jacobian.operation_service import OperationPolicy
+from jacobian.operator_lifecycle import (
+    CheckerAuthorization,
+    initialize_state,
+    update_state,
+)
 from jacobian.runtime.config import CheckerAuthorityMode
 
 if TYPE_CHECKING:
@@ -62,11 +73,9 @@ class CliState:
         self,
         state_dir: Path,
         *,
-        checker_authority: CheckerAuthorityMode,
         runtime_opener: RuntimeOpener | None = None,
     ) -> None:
         self.state_dir = state_dir
-        self.checker_authority = checker_authority
         self._runtime_opener = runtime_opener
         self._runtime: JacobianRuntime | None = None
 
@@ -80,9 +89,29 @@ class CliState:
                 opener = create_runtime
             self._runtime = opener(
                 self.state_dir,
-                checker_authority=self.checker_authority,
+                checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
             )
         return self._runtime
+
+    @property
+    def catalog(self) -> OperationCatalog:
+        from jacobian import __version__
+
+        return OperationCatalog(
+            self.state_dir / "metadata.sqlite3",
+            OperationPolicy(),
+            expected_package_version=__version__,
+        )
+
+    def catalog_snapshot(self) -> OperationCatalogSnapshot:
+        if self._runtime_opener is not None:
+            return self.runtime.core.operations.catalog()
+        return self.catalog.snapshot()
+
+    def inspect(self, operation_id: str) -> OperationDescriptor | None:
+        if self._runtime_opener is not None:
+            return self.runtime.core.operations.inspect(operation_id)
+        return self.catalog.inspect(operation_id)
 
     def close(self) -> None:
         if self._runtime is not None:
@@ -90,34 +119,54 @@ class CliState:
             self._runtime = None
 
 
-def initialize(context: typer.Context) -> None:
+def initialize(
+    context: typer.Context,
+    checker_authorization: Annotated[
+        CheckerAuthorization,
+        typer.Option("--checker-authorization"),
+    ] = CheckerAuthorization.BUNDLED,
+) -> None:
     """Initialize storage and report the installed operation count."""
 
     state = _state(context)
-    count = len(state.runtime.core.operations.catalog().operations)
-    typer.echo(f"Initialized Jacobian state in {state.runtime.core.store.root}")
-    typer.echo(f"Installed {count} mathematical operations.")
+    result = initialize_state(
+        state.state_dir,
+        checker_authorization=checker_authorization,
+    )
+    typer.echo(f"Initialized Jacobian state in {state.state_dir.resolve()}")
+    typer.echo(f"Compiled {result.operation_count} mathematical operations.")
+
+
+def update(
+    context: typer.Context,
+    checker_authorization: Annotated[
+        CheckerAuthorization,
+        typer.Option("--checker-authorization"),
+    ] = CheckerAuthorization.BUNDLED,
+) -> None:
+    """Migrate existing state and atomically select a fresh operation catalog."""
+
+    state = _state(context)
+    result = update_state(
+        state.state_dir,
+        checker_authorization=checker_authorization,
+    )
+    typer.echo(f"Updated Jacobian state in {state.state_dir.resolve()}")
+    typer.echo(f"Compiled {result.operation_count} mathematical operations.")
+    typer.echo("Restart running Jacobian servers to load the new catalog revision.")
 
 
 def catalog(context: typer.Context) -> None:
     """Print the complete installed operation catalog."""
 
-    value = _state(context).runtime.core.operations.catalog()
+    value = _state(context).catalog_snapshot()
     _emit(value.model_dump(mode="json"))
 
 
 def inspect_operation(context: typer.Context, operation_id: str) -> None:
     """Print one exact installed operation declaration."""
 
-    catalog_value = _state(context).runtime.core.operations.catalog()
-    descriptor = next(
-        (
-            item
-            for item in catalog_value.operations
-            if item.operation_id == operation_id
-        ),
-        None,
-    )
+    descriptor = _state(context).inspect(operation_id)
     if descriptor is None:
         raise ValueError(f"operation {operation_id!r} is not installed")
     _emit(descriptor.model_dump(mode="json"))
@@ -201,21 +250,14 @@ def create_cli_app(*, runtime_opener: RuntimeOpener | None = None) -> typer.Type
             Path,
             typer.Option("--state-dir", help="Local artifact and metadata directory."),
         ] = Path(".jacobian"),
-        checker_authority: Annotated[
-            CheckerAuthorityMode,
-            typer.Option(
-                "--checker-authority",
-                help="Checker authority policy for this runtime.",
-            ),
-        ] = CheckerAuthorityMode.INSTALL_BUNDLED,
     ) -> None:
         context.obj = CliState(
             state_dir,
-            checker_authority=checker_authority,
             runtime_opener=runtime_opener,
         )
 
     application.command("init")(initialize)
+    application.command("update")(update)
     application.command("catalog")(catalog)
     application.command("inspect")(inspect_operation)
     application.command("run")(run_operation)

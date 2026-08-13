@@ -307,12 +307,15 @@ def test_required_ci_gates_fail_closed_without_extending_cancelled_runs() -> Non
     assert "JACOBIAN_LEAN_REQUIRED" in lean_job
 
 
-def test_required_pr_workflows_do_not_cancel_inflight_evidence() -> None:
+def test_required_pr_workflows_cancel_stale_evidence() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     benchmarks = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 
-    assert "cancel-in-progress: false" in ci
-    assert "cancel-in-progress: false" in benchmarks
+    expected_concurrency = (
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
+    )
+    assert expected_concurrency in ci
+    assert expected_concurrency in benchmarks
     validation = benchmarks.split("  validation:", 1)[1].split("  timings:", 1)[0]
     assert "if: ${{ always() }}" in validation
     assert "if: ${{ always() && !cancelled() }}" not in validation

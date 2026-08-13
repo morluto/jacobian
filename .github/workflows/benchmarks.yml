@@ -14,9 +14,9 @@ on:
 
 concurrency:
   group: benchmarks-${{ github.workflow }}-${{ github.ref }}
-  # Benchmark Validation is a required PR check; preserve its evidence once
-  # planning has started instead of cancelling it on every synchronize event.
-  cancel-in-progress: false
+  # A newer PR commit supersedes stale evidence; Benchmark Validation still
+  # runs after dependency cancellation and rejects missing evidence.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: read

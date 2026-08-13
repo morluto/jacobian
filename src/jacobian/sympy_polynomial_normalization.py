@@ -22,6 +22,7 @@ from jacobian.contracts.capabilities import (
     CapabilityRequest,
 )
 from jacobian.contracts.polynomial_expressions import (
+    POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES,
     SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION,
     PolynomialExpansionTermBudgetError,
     PolynomialExpressionNormalizeOutput,
@@ -49,6 +50,10 @@ from jacobian.schema_registry import model_schema
 from jacobian.sympy_polynomial_protocol import (
     make_sympy_polynomial_worker_request,
     parse_sympy_polynomial_worker_response,
+)
+from jacobian.validation_diagnostics import (
+    project_validation_errors,
+    validation_error_message,
 )
 from jacobian.worker_environment import worker_environment
 
@@ -287,12 +292,21 @@ class SympyPolynomialExpressionNormalizeAdapter:
                         },
                     )
                 ) from exc
-            validation_errors = _validation_errors(exc)
+            validation_errors, validation_error_count = _validation_errors(exc)
             raise CapabilityInvocationError(
                 CapabilityDiagnostic(
                     code="INVALID_TYPED_POLYNOMIAL_EXPRESSION",
                     stage="input_validation",
-                    message=str(exc),
+                    message=(
+                        validation_error_message(
+                            exc,
+                            safe_messages=(
+                                POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES
+                            ),
+                        )
+                        if isinstance(exc, ValidationError)
+                        else str(exc)
+                    ),
                     path="expression",
                     schema_uri=self.expressions.installation.expression_schema_uri,
                     expected=(
@@ -304,7 +318,14 @@ class SympyPolynomialExpressionNormalizeAdapter:
                         "Declare every variable and use typed nodes; do not pass "
                         "formula strings or expression denominators."
                     ),
-                    details={"validation_errors": validation_errors},
+                    details={
+                        "validation_error_count": validation_error_count,
+                        "validation_errors": validation_errors,
+                        "validation_errors_omitted": max(
+                            0,
+                            validation_error_count - len(validation_errors),
+                        ),
+                    },
                 )
             ) from exc
 
@@ -426,19 +447,24 @@ def _expansion_budget_error(
     return None
 
 
-def _validation_errors(error: ValidationError | ValueError) -> list[dict[str, Any]]:
+def _validation_errors(
+    error: ValidationError | ValueError,
+) -> tuple[list[dict[str, Any]], int]:
     if isinstance(error, ValidationError):
-        return [
-            dict(item)
-            for item in error.errors(include_url=False, include_context=False)
-        ]
-    return [
-        {
-            "type": type(error).__name__,
-            "loc": ["expression"],
-            "msg": str(error),
-        }
-    ]
+        return project_validation_errors(
+            error,
+            safe_messages=POLYNOMIAL_EXPRESSION_PUBLIC_VALIDATION_MESSAGES,
+        )
+    return (
+        [
+            {
+                "type": type(error).__name__,
+                "loc": ["expression"],
+                "msg": str(error),
+            }
+        ],
+        1,
+    )
 
 
 def _runtime_ms(started: float) -> int:

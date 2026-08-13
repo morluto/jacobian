@@ -481,5 +481,5 @@ def test_enriched_diagnostic_still_fails_closed_for_non_digest_error(
 
     assert result.execution.status is ExecutionStatus.ERROR
     assert result.diagnostics[0].code == "INVALID_FINITE_SIMPLICIAL_TOPOLOGY_REQUEST"
-    assert "maximal" in (result.diagnostics[0].hint or "")
+    assert "topology_non_maximal_facets" in (result.diagnostics[0].hint or "")
     assert result.artifact_uris == ()

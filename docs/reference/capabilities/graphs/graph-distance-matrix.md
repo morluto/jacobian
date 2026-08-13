@@ -43,8 +43,8 @@ verification of the distance claim.
 
 ## Independent verification
 
-`graph.distance_matrix.verify` consumes one stored producer result and can
-promote that exact matrix to `VERIFIED`. The operator-authorized checker uses
+`graph.distance_matrix.verify` consumes the exact producer input plus one complete
+typed candidate inline and can promote that matrix to `VERIFIED`. The operator-authorized checker uses
 only Python standard-library adjacency sets, queues, and integer distances. It
 does not import NetworkX or the producer package.
 
@@ -55,9 +55,9 @@ checks. Acceptance still requires an exhaustive breadth-first traversal from
 every source and exact comparison of every finite distance and unreachable
 `null`.
 
-The verification record is bound to the exact graph input artifact, matrix
-result artifact, schemas, semantics, checker source digest, witness format, and
-provider runtime. Rejection, timeout, cancellation, unavailable runtime, or
+The verification record is bound to the canonical graph input and matrix
+candidate digests, semantics, checker source digest, and provider runtime.
+Rejection, timeout, cancellation, unavailable runtime, or
 checker error remains `UNKNOWN` and cannot produce `VERIFIED`.
 
 ## Public composition evidence

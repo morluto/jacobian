@@ -164,6 +164,8 @@ def test_unified_exec_mode_is_opt_in(tmp_path: Path) -> None:
     direct = _codex_arguments(**common, tool_mode=ToolMode.DIRECT)
     unified = _codex_arguments(**common, tool_mode=ToolMode.UNIFIED_EXEC)
 
+    assert "--approve-for-me" in direct
+    assert "never" not in direct
     assert "unified_exec" not in direct
     assert unified[-3:-1] == ("--enable", "unified_exec")
     assert 'mcp_servers.jacobian.default_tools_approval_mode="approve"' in unified

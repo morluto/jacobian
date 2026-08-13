@@ -6,12 +6,12 @@
 `graph.invariant.radius.compute` version `2` retain their existing producer
 contracts and `COMPUTED` assurance. Operator-authorized
 `graph.invariant.diameter.verify` and `graph.invariant.radius.verify`
-capabilities can promote one exact stored result to `VERIFIED` after
+capabilities can promote one exact submitted `{input, candidate}` claim to `VERIFIED` after
 independent all-sources breadth-first replay.
 
 ## Exact claims and conventions
 
-Each verifier checks one stored producer result against the exact stored finite
+Each verifier checks one complete typed candidate against the exact submitted finite
 simple undirected graph:
 
 - for a nonempty connected graph, diameter is the maximum vertex eccentricity
@@ -21,8 +21,8 @@ simple undirected graph:
   and returns `status = NOT_APPLICABLE`, `connected = false`, and
   `exactness = NOT_APPLICABLE`.
 
-The claim is bound to the input artifact, result artifact, graph semantics,
-result schema, checker identity, checker source digest, and provider runtime.
+The claim is bound to canonical input and candidate digests, graph semantics,
+checker identity, checker source digest, and provider runtime.
 The verifier does not certify a directly supplied graph, an unbounded graph
 family, or a theorem that later uses the metric.
 

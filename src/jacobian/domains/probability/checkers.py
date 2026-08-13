@@ -5,10 +5,12 @@ from jacobian.contracts.probability import (
     FiniteConvolutionRequest,
     FiniteEventRequest,
     FinitePushforwardRequest,
-    GaussianPolynomialMomentRequest,
     GraphConnectionProbabilityRequest,
 )
 from jacobian.contracts.validated_analysis import FiniteRawMomentRequest
+from jacobian.domains.probability.gaussian_inputs import (
+    CanonicalGaussianPolynomialMomentRequest,
+)
 
 _ENTRYPOINT = "jacobian_checkers.exact_probability_operations"
 _REASON = (
@@ -64,7 +66,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
     ),
     ExactReplayCheckerDeclaration(
         "probability.gaussian_polynomial.moment.compute",
-        GaussianPolynomialMomentRequest,
+        CanonicalGaussianPolynomialMomentRequest,
         "check_gaussian_polynomial_moment",
         "probability.gaussian-polynomial-moment.fraction-replay",
         entrypoint_module=_ENTRYPOINT,

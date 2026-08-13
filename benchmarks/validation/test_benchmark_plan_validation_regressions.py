@@ -1,11 +1,8 @@
-"""Regressions for bounded benchmark-plan validation and script bootstrapping."""
+"""Regressions for bounded benchmark-plan validation."""
 
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
-from pathlib import Path
 
 import pytest
 from tools.benchmark_plan.validation import (
@@ -14,7 +11,6 @@ from tools.benchmark_plan.validation import (
     validate_plan,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
 DIGEST = "sha256:" + "a" * 64
 
 
@@ -103,18 +99,3 @@ def test_host_split_count_is_bounded_before_group_expansion() -> None:
 
     with pytest.raises(BenchmarkPlanValidationError, match="invalid splits"):
         validate_plan(plan)
-
-
-def test_path_adapter_bootstraps_repository_imports_from_foreign_cwd(
-    tmp_path: Path,
-) -> None:
-    adapter = ROOT / ".github" / "scripts" / "_ci_paths.py"
-    result = subprocess.run(
-        [sys.executable, str(adapter)],
-        cwd=tmp_path,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr

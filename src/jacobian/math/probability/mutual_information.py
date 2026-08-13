@@ -103,6 +103,10 @@ class MutualInformationCertificate:
     def __post_init__(self) -> None:
         if type(self.scale) is not int or self.scale <= 0:
             raise ValueError("mutual-information certificate scale must be positive")
+        if self.scale.bit_length() > MAX_MUTUAL_INFORMATION_SCALE_BITS:
+            raise ValueError(
+                "mutual-information certificate scale exceeds the replay bound"
+            )
         if type(self.product) is not Fraction or self.product <= 0:
             raise ValueError("mutual-information certificate product must be positive")
 
@@ -181,6 +185,8 @@ class MutualInformationResult:
             raise TypeError("native row marginals must be Fractions")
         if any(type(value) is not Fraction for value in self.column_marginals):
             raise TypeError("native column marginals must be Fractions")
+        if type(self.log_base) is not int or not 2 <= self.log_base <= 36:
+            raise ValueError("mutual-information log base must lie from 2 through 36")
         if sum(self.row_marginals, Fraction()) != 1:
             raise ValueError("row marginals must sum exactly to one")
         if sum(self.column_marginals, Fraction()) != 1:
@@ -202,6 +208,23 @@ class MutualInformationResult:
         product = self.certificate.product
         if product < 1:
             raise ValueError("mutual-information product contradicts nonnegativity")
+        weighted_ratios = [
+            (term.probability, term.likelihood_ratio)
+            for term in self.positive_support
+        ]
+        _require_bounded_product(self.certificate.scale, weighted_ratios)
+        expected_product = Fraction(1)
+        for probability, ratio in weighted_ratios:
+            scaled_probability = self.certificate.scale * probability
+            if scaled_probability.denominator != 1:
+                raise ValueError(
+                    "mutual-information certificate scale does not clear support masses"
+                )
+            expected_product *= ratio ** scaled_probability.numerator
+        if product != expected_product:
+            raise ValueError(
+                "mutual-information certificate product is inconsistent with support"
+            )
         if self.sign != ("ZERO" if product == 1 else "POSITIVE"):
             raise ValueError("mutual-information sign must match the exact product")
         base_exponent = _rational_base_exponent(product, self.log_base)
@@ -222,7 +245,14 @@ def _require_bounded_product(
         raise ValueError("mutual-information certificate scale exceeds the replay bound")
     power_cost = 0
     for probability, ratio in weighted_ratios:
-        exponent = scale * probability.numerator // probability.denominator
+        scaled_probability = scale * probability
+        if scaled_probability.denominator != 1:
+            raise ValueError(
+                "mutual-information certificate scale does not clear support masses"
+            )
+        exponent = scaled_probability.numerator
+        if ratio == 1:
+            continue
         power_cost += exponent * (
             ratio.numerator.bit_length() + ratio.denominator.bit_length()
         )

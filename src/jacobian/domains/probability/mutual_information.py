@@ -94,6 +94,19 @@ class FiniteJointTableMutualInformationRequest(ContractModel):
             cell_count += len(row)
             if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
                 raise ValueError("joint table exceeds the bounded cell count")
+            for cell in row:
+                if isinstance(cell, Mapping):
+                    for component in ("num", "den"):
+                        raw_component = cell.get(component)
+                        if (
+                            isinstance(raw_component, str)
+                            and len(raw_component.lstrip("-"))
+                            > MAX_INPUT_RATIONAL_DIGITS
+                        ):
+                            raise ValueError(
+                                "joint-table probability exceeds the "
+                                f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound"
+                            )
         return value
 
     @model_validator(mode="after")
@@ -209,6 +222,13 @@ class FiniteJointTableMutualInformationResult(ContractModel):
             raw = value.get(field_name)
             if isinstance(raw, (list, tuple)) and len(raw) > maximum:
                 raise ValueError(f"{field_name} exceeds the bounded result cardinality")
+        certificate = value.get("log_product_certificate")
+        if isinstance(certificate, Mapping):
+            scale = certificate.get("scale")
+            if isinstance(scale, str) and len(scale.lstrip("-")) > 309:
+                raise ValueError(
+                    "mutual-information certificate scale exceeds the replay bound"
+                )
         return value
 
     @model_validator(mode="after")

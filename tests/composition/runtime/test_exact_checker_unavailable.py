@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
 
-import jacobian.exact_domain_checkers as exact_domain_checkers
 from jacobian.contracts.capabilities import CapabilityProviderAvailability
 from jacobian.domains.graph_optimization import build_graph_optimization_bundle
 from jacobian.domains.matrix_lattice import build_matrix_bundle
@@ -26,8 +25,7 @@ def test_unavailable_flint_replay_preserves_runtime_and_reports_diagnostics(
         }
     )
     monkeypatch.setattr(
-        exact_domain_checkers,
-        "exact_domain_checker_provider_runtime",
+        "jacobian.providers.flint_runtime.exact_domain_checker_provider_runtime",
         lambda **_: unavailable,
     )
 

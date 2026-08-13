@@ -154,6 +154,21 @@ def test_composition_module_requires_a_semantic_owner_directory(tmp_path: Path) 
     ]
 
 
+def test_discarded_complete_runtime_fixture_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tests/boundary/providers/lean/startup/test_discard.py",
+        "def test_hydration(authorized_complete_runtime, tmp_path):\n"
+        "    _ = authorized_complete_runtime\n"
+        "    create_runtime(tmp_path)\n",
+    )
+
+    assert _ownership_messages(tmp_path) == [
+        "expensive runtime fixtures must be the subject under test, "
+        "not discarded setup: authorized_complete_runtime"
+    ]
+
+
 def test_owned_composition_module_is_accepted(tmp_path: Path) -> None:
     _write(tmp_path, "tests/composition/interoperability/test_value_handoff.py")
 

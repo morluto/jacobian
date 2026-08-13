@@ -272,7 +272,7 @@ class InstalledOperationAdapter:
         try:
             parsed_request = cast(
                 ContractModel,
-                parse_capability_input(self.spec.request_type, bounded_input),
+                parse_capability_input(self.spec.request_type, assembled_input),
             )
         except ValidationError as exc:
             base = self.spec.invalid_request or self.bundle.diagnostics.invalid_request

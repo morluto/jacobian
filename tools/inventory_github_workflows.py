@@ -14,18 +14,13 @@ import subprocess
 from pathlib import Path
 
 HISTORICAL_PREFIXES = ("agent-port-", "agent-rebase-")
+WORKFLOW_LIST_LIMIT = 1000
 
 
 def workflow_stems(root: Path) -> set[str]:
     workflow_dir = root / ".github" / "workflows"
-    return {
-        path.stem
-        for path in workflow_dir.glob("*.yml")
-        if path.is_file()
-    } | {
-        path.stem
-        for path in workflow_dir.glob("*.yaml")
-        if path.is_file()
+    return {path.stem for path in workflow_dir.glob("*.yml") if path.is_file()} | {
+        path.stem for path in workflow_dir.glob("*.yaml") if path.is_file()
     }
 
 
@@ -49,18 +44,31 @@ def classify(
     }
 
 
-def _registered_from_gh() -> set[str]:
-    completed = subprocess.run(
-        ["gh", "workflow", "list", "--all", "--json", "name,path,state"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        raise SystemExit(completed.stderr.strip() or "gh workflow list failed")
-    rows = json.loads(completed.stdout)
+def _workflow_list_command() -> list[str]:
+    return [
+        "gh",
+        "workflow",
+        "list",
+        "--all",
+        "--limit",
+        str(WORKFLOW_LIST_LIMIT),
+        "--json",
+        "name,path,state",
+    ]
+
+
+def _stems_from_workflow_rows(rows: object) -> set[str]:
+    if not isinstance(rows, list):
+        raise SystemExit("gh workflow list must return a JSON array")
+    if len(rows) >= WORKFLOW_LIST_LIMIT:
+        raise SystemExit(
+            "gh workflow list hit the requested limit; raise --limit so "
+            "historical registrations are not dropped"
+        )
     stems: set[str] = set()
     for row in rows:
+        if not isinstance(row, dict):
+            raise SystemExit("gh workflow list entries must be objects")
         path = row.get("path")
         if isinstance(path, str) and path:
             stems.add(Path(path).stem)
@@ -69,6 +77,18 @@ def _registered_from_gh() -> set[str]:
         if isinstance(name, str):
             stems.add(name)
     return stems
+
+
+def _registered_from_gh() -> set[str]:
+    completed = subprocess.run(
+        _workflow_list_command(),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise SystemExit(completed.stderr.strip() or "gh workflow list failed")
+    return _stems_from_workflow_rows(json.loads(completed.stdout))
 
 
 def main(argv: list[str] | None = None) -> int:

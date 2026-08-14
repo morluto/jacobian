@@ -37,6 +37,7 @@ from jacobian.storage.identity import (
 from jacobian.storage.models import StorageLimits
 
 _MAX_BLOB_BYTES = StorageLimits().max_artifact_bytes
+_MAX_TOTAL_BLOB_BYTES = StorageLimits().max_total_blob_bytes
 
 
 def _blob_path(state_dir: Path, digest: str) -> Path | None:
@@ -203,6 +204,75 @@ def _artifact_binding_diagnostic(
     return _payload_binding_diagnostic(state_dir, manifest)
 
 
+def _measure_cas_blob(
+    state_dir: Path, prefix: Path, blob: Path
+) -> tuple[int | None, str | None]:
+    if blob.is_symlink() or not blob.is_file():
+        return None, "artifact blob storage contains a non-regular entry"
+    digest = f"sha256:{prefix.name}{blob.name}"
+    if _blob_path(state_dir, digest) != blob:
+        return None, "artifact blob storage contains an invalid content address"
+
+    measured = hashlib.sha256()
+    size_bytes = 0
+    with blob.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            measured.update(chunk)
+            size_bytes += len(chunk)
+            if size_bytes > _MAX_BLOB_BYTES:
+                return None, "artifact blob storage contains an oversized blob"
+    if f"sha256:{measured.hexdigest()}" != digest:
+        return None, "artifact blob storage contains a corrupt blob"
+    return size_bytes, None
+
+
+def _blob_tree_measurement(state_dir: Path) -> tuple[int | None, str | None]:
+    blob_root = state_dir / "blobs" / "sha256"
+    if not blob_root.is_dir() or blob_root.is_symlink():
+        return None, "artifact blob storage is missing or invalid"
+
+    total_bytes = 0
+    for prefix in _iter_directory(blob_root, label="artifact blob storage"):
+        if prefix.is_symlink() or not prefix.is_dir():
+            return None, "artifact blob storage contains an invalid prefix"
+        for blob in _iter_directory(prefix, label="artifact blob prefix"):
+            size_bytes, diagnostic = _measure_cas_blob(state_dir, prefix, blob)
+            if diagnostic is not None:
+                return None, diagnostic
+            if size_bytes is None:
+                return None, "artifact blob storage contains an unreadable blob"
+            total_bytes += size_bytes
+            if total_bytes > _MAX_TOTAL_BLOB_BYTES:
+                return None, "artifact blob storage exceeds the runtime quota"
+    return total_bytes, None
+
+
+def _quota_diagnostic(connection: sqlite3.Connection, state_dir: Path) -> str | None:
+    row = connection.execute(
+        "SELECT size_bytes, reconciliation_required FROM blob_quota WHERE id = 0"
+    ).fetchone()
+    if row is None:
+        return "artifact blob quota metadata is missing"
+    size_bytes = row["size_bytes"]
+    reconciliation_required = row["reconciliation_required"]
+    if (
+        not isinstance(size_bytes, int)
+        or isinstance(size_bytes, bool)
+        or not isinstance(reconciliation_required, int)
+        or isinstance(reconciliation_required, bool)
+    ):
+        return "artifact blob quota metadata is invalid"
+    if reconciliation_required != 0:
+        return "artifact blob quota metadata requires recovery before deployment"
+
+    measured_bytes, diagnostic = _blob_tree_measurement(state_dir)
+    if diagnostic is not None:
+        return diagnostic
+    if measured_bytes != size_bytes:
+        return "artifact blob quota differs from restored blob storage"
+    return None
+
+
 def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
     database_path = state_dir / "metadata.sqlite3"
     try:
@@ -214,9 +284,9 @@ def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
                 diagnostic = _artifact_binding_diagnostic(connection, state_dir, row)
                 if diagnostic is not None:
                     return diagnostic
+            return _quota_diagnostic(connection, state_dir)
     except (OSError, sqlite3.DatabaseError) as exc:
         return f"could not inspect artifact blob references: {exc}"
-    return None
 
 
 def _parser() -> argparse.ArgumentParser:

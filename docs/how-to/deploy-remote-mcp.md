@@ -208,8 +208,10 @@ VPS must preserve them. The maintained authenticated unit uses
    reference resolves to a local regular file whose SHA-256 matches its content
    address, and each manifest remains bound to its committed metadata, parents,
    descriptors, and mathematical object digest. Existing blob files must be
-   readable, and the tenant, staging, blob, and existing blob-prefix directories
-   must be readable, writable, and traversable. It may report `MISSING` only when
+   readable and match their content addresses, and the persisted blob quota must
+   match the full restored CAS tree without a pending recovery marker. The
+   tenant, staging, blob, and existing blob-prefix directories must be readable,
+   writable, and traversable. It may report `MISSING` only when
    the selected tenant directory does not exist; an existing directory with
    missing or uninitialized metadata is a blocking partial restore. Every
    selected tenant must report `MISSING`, `COMPATIBLE`, or a supported

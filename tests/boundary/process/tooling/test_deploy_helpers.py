@@ -179,6 +179,47 @@ def test_state_preflight_rejects_inconsistent_manifest_bindings(
     assert report["diagnostic"] == ("artifact manifest differs from committed metadata")
 
 
+@pytest.mark.parametrize(
+    ("size_delta", "reconciliation_required", "diagnostic"),
+    (
+        (1, 0, "artifact blob quota differs from restored blob storage"),
+        (
+            0,
+            1,
+            "artifact blob quota metadata requires recovery before deployment",
+        ),
+    ),
+)
+def test_state_preflight_rejects_unreconciled_blob_quota(
+    tmp_path: Path,
+    size_delta: int,
+    reconciliation_required: int,
+    diagnostic: str,
+) -> None:
+    tenant_id = "stale-blob-quota"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state) as repository:
+        repository.register_descriptor(
+            kind="schema",
+            name="quota-fixture",
+            version="1",
+            definition={"type": "object"},
+        )
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute(
+            "UPDATE blob_quota SET size_bytes = size_bytes + ?, "
+            "reconciliation_required = ? WHERE id = 0",
+            (size_delta, reconciliation_required),
+        )
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == diagnostic
+
+
 def test_state_preflight_rejects_state_below_the_supported_floor(
     tmp_path: Path,
 ) -> None:

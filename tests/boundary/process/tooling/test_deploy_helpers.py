@@ -27,6 +27,7 @@ from jacobian._deployment_smoke import (
     is_transient_transport_failure,
     raise_for_http_error,
 )
+from jacobian.persistence.migrations import CURRENT_STATE_FORMAT_REVISION
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -53,7 +54,7 @@ def test_state_preflight_accepts_missing_and_current_tenant_state(
 
     current = inspect_selected_state(tmp_path, (tenant_id,))
     assert current[0]["status"] == "COMPATIBLE"
-    assert current[0]["persisted_revision"] == 11
+    assert current[0]["persisted_revision"] == CURRENT_STATE_FORMAT_REVISION
     assert current[0]["blocking"] is False
 
 
@@ -165,6 +166,96 @@ def test_state_preflight_rejects_a_tenant_database_the_service_cannot_stat(
 
     with pytest.raises(PermissionError, match="tenant database"):
         _require_probe_access(tmp_path, (tenant_id,))
+
+
+def test_state_preflight_rejects_a_readable_but_unwritable_tenant_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = "read-only-database-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    database = state / "metadata.sqlite3"
+    original_access = os.access
+
+    def guarded_access(
+        path: os.PathLike[str],
+        mode: int,
+        *,
+        effective_ids: bool = False,
+    ) -> bool:
+        if Path(path) == database and mode & os.W_OK:
+            return False
+        return original_access(path, mode, effective_ids=effective_ids)
+
+    monkeypatch.setattr("deploy.preflight_state.os.access", guarded_access)
+
+    with pytest.raises(
+        PermissionError, match=r"tenant database.*not readable and writable"
+    ):
+        _require_probe_access(tmp_path, (tenant_id,))
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    (Path("staging"), Path("blobs/sha256"), Path("blobs/sha256/ab")),
+)
+def test_state_preflight_rejects_an_unwritable_runtime_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: Path,
+) -> None:
+    tenant_id = "read-only-runtime-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    denied = state / relative_path
+    denied.mkdir(parents=True, exist_ok=True)
+    original_access = os.access
+
+    def guarded_access(
+        path: os.PathLike[str],
+        mode: int,
+        *,
+        effective_ids: bool = False,
+    ) -> bool:
+        if Path(path) == denied and mode & os.W_OK:
+            return False
+        return original_access(path, mode, effective_ids=effective_ids)
+
+    monkeypatch.setattr("deploy.preflight_state.os.access", guarded_access)
+
+    with pytest.raises(
+        PermissionError, match="not readable, writable, and traversable"
+    ):
+        _require_probe_access(tmp_path, (tenant_id,))
+
+
+def test_state_preflight_requires_a_missing_tenant_to_be_creatable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenants_root = tmp_path / "tenants"
+    tenants_root.mkdir()
+    original_access = os.access
+
+    def guarded_access(
+        path: os.PathLike[str],
+        mode: int,
+        *,
+        effective_ids: bool = False,
+    ) -> bool:
+        if Path(path) == tenants_root and mode & os.W_OK:
+            return False
+        return original_access(path, mode, effective_ids=effective_ids)
+
+    monkeypatch.setattr("deploy.preflight_state.os.access", guarded_access)
+
+    with pytest.raises(PermissionError, match="tenant state root"):
+        _require_probe_access(tmp_path, ("missing-tenant",))
 
 
 def test_release_retention_keeps_active_and_explicit_previous_release(

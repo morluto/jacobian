@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import pwd
+import stat
 from pathlib import Path
 
 from jacobian.adapters.mcp.remote import load_static_token_file
@@ -77,26 +78,92 @@ def _drop_privileges(user_name: str) -> None:
     os.setuid(account.pw_uid)
 
 
+def _existing_path_stat(path: Path, *, label: str) -> os.stat_result | None:
+    try:
+        return path.stat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise PermissionError(f"{label} is not accessible: {exc}") from exc
+
+
+def _require_directory_access(path: Path, *, label: str) -> bool:
+    metadata = _existing_path_stat(path, label=label)
+    if metadata is None:
+        return False
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise PermissionError(f"{label} is not a directory")
+    if not os.access(path, os.R_OK | os.W_OK | os.X_OK, effective_ids=True):
+        raise PermissionError(
+            f"{label} is not readable, writable, and traversable by the service identity"
+        )
+    return True
+
+
+def _require_file_access(path: Path, *, label: str) -> None:
+    metadata = _existing_path_stat(path, label=label)
+    if metadata is None:
+        return
+    if not stat.S_ISREG(metadata.st_mode):
+        raise PermissionError(f"{label} is not a regular file")
+    if not os.access(path, os.R_OK | os.W_OK, effective_ids=True):
+        raise PermissionError(
+            f"{label} is not readable and writable by the service identity"
+        )
+
+
+def _require_blob_prefix_access(blob_root: Path, *, tenant_key: str) -> None:
+    if not blob_root.is_dir():
+        return
+    try:
+        prefixes = tuple(blob_root.iterdir())
+    except OSError as exc:
+        raise PermissionError(
+            f"tenant blob root {tenant_key} is not accessible: {exc}"
+        ) from exc
+    for prefix in prefixes:
+        if prefix.is_dir() and not prefix.is_symlink():
+            _require_directory_access(
+                prefix,
+                label=f"tenant blob prefix {tenant_key} ({prefix.name})",
+            )
+
+
+def _require_existing_tenant_access(state_dir: Path, *, tenant_key: str) -> None:
+    database = state_dir / "metadata.sqlite3"
+    _require_file_access(database, label=f"tenant database {tenant_key}")
+    for suffix in ("-journal", "-shm", "-wal", ".lifecycle.lock"):
+        _require_file_access(
+            database.with_name(database.name + suffix),
+            label=f"tenant database runtime file {tenant_key} ({suffix})",
+        )
+    for name in (".blob-quota.lock", ".transaction-recovery"):
+        _require_file_access(
+            state_dir / name,
+            label=f"tenant runtime file {tenant_key} ({name})",
+        )
+
+    for relative in (Path("blobs"), Path("blobs/sha256"), Path("staging")):
+        _require_directory_access(
+            state_dir / relative,
+            label=f"tenant runtime directory {tenant_key} ({relative})",
+        )
+    _require_blob_prefix_access(state_dir / "blobs" / "sha256", tenant_key=tenant_key)
+
+
 def _require_probe_access(state_root: Path, tenant_ids: tuple[str, ...]) -> None:
     for tenant_id in tenant_ids:
         tenant_key = hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()
         state_dir = state_root / "tenants" / tenant_key
-        try:
-            state_dir.stat()
-        except FileNotFoundError:
+        state_label = f"tenant state {tenant_key}"
+        if not _require_directory_access(state_dir, label=state_label):
+            tenants_root = state_dir.parent
+            if _existing_path_stat(tenants_root, label="tenant state root") is not None:
+                _require_directory_access(tenants_root, label="tenant state root")
+            elif _existing_path_stat(state_root, label="state root") is not None:
+                _require_directory_access(state_root, label="state root")
             continue
-        except OSError as exc:
-            raise PermissionError(
-                f"tenant state {tenant_key} is not accessible: {exc}"
-            ) from exc
-        try:
-            (state_dir / "metadata.sqlite3").stat()
-        except FileNotFoundError:
-            continue
-        except OSError as exc:
-            raise PermissionError(
-                f"tenant database {tenant_key} is not accessible: {exc}"
-            ) from exc
+        _require_existing_tenant_access(state_dir, tenant_key=tenant_key)
 
 
 def main() -> int:

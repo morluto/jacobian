@@ -182,19 +182,23 @@ VPS must preserve them. The maintained authenticated unit uses
    `0600`. Rebuildable `cache/lean-declarations` data may be omitted.
 6. Rerun the same installer command without `--skip-smoke`. Its candidate-state
    preflight reads the token mapping while privileged, drops permanently to the
-   `jacobian` service identity, and then checks every selected tenant. It must
-   report `MISSING`, `COMPATIBLE`, or a supported `MIGRATION_PENDING` state
-   before activation. Do not bypass an `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`,
-   or `UNREADABLE` result; an access failure means destination ownership or mode
+   `jacobian` service identity, and then checks every selected tenant. In that
+   identity it verifies that SQLite and its runtime files are readable and
+   writable, and that the tenant, staging, blob, and existing blob-prefix
+   directories are readable, writable, and traversable. It must report
+   `MISSING`, `COMPATIBLE`, or a supported `MIGRATION_PENDING` state before
+   activation. Do not bypass an `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`, or
+   `UNREADABLE` result; an access failure means destination ownership or mode
    restoration is incomplete.
 7. Verify `deployment://identity`, the two-tool surface, catalog policy, required
    capabilities, and any provider-specific smoke before switching DNS or client
    configuration. Keep the source VPS and its unchanged state available until
    the destination has passed these checks.
 
-Current Jacobian accepts state revision 11. Older revisions have no direct
-import bridge; retain the old state unchanged with a compatible checkout and
-start fresh state on current Jacobian as described in
+Current Jacobian writes state revision 12 and accepts revision 11 for an
+in-place migration. Earlier revisions have no direct import bridge; retain the
+old state unchanged with a compatible checkout and start fresh state on current
+Jacobian as described in
 [Persistent state format](../reference/state-format.md).
 
 Migration reminders:

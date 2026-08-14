@@ -94,7 +94,8 @@ Configuration:
                                 provider and checker portfolio.
   --retain-releases COUNT       Keep the active release plus the newest rollback
                                 releases (default: 2 total).
-  --skip-smoke                  Do not run the read-only MCP deployment smoke.
+  --skip-smoke                  Do not run the read-only MCP deployment smoke;
+                                services are still started.
   --dry-run                     Validate host prerequisites and print the plan.
   -h, --help                    Show this help.
 
@@ -484,6 +485,11 @@ if ((ALLOW_ANONYMOUS)) && [[ "${MODE}" != "local" ]] \
 fi
 if [[ -n "${AUTH_TOKENS_FILE}" && ! -f "${AUTH_TOKENS_FILE}" ]]; then
     die "auth token file does not exist: ${AUTH_TOKENS_FILE}"
+fi
+if ((SKIP_SMOKE)) && [[ "${MODE}" != "local" ]]; then
+    printf '%s\n' \
+        'warning: --skip-smoke does not keep public ingress offline; use --mode local while staging a VPS migration, then rerun in the final public mode after restoring state' \
+        >&2
 fi
 
 GIT=(git -c "safe.directory=${REPO_ROOT}" -C "${REPO_ROOT}")

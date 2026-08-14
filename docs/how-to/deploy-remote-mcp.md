@@ -167,11 +167,14 @@ VPS must preserve them. The maintained authenticated unit uses
    deployed and run the final installer command with `--dry-run`.
 2. Securely transfer the existing token file when authentication is enabled.
    Do not place it in the repository, shell history, or an unencrypted archive.
-3. Run the installer once on the destination with the final mode, install root,
-   profile, tenant options, and `--skip-smoke`. For authenticated operation,
-   pass the transferred file with `--auth-tokens-file`. This provisions the
-   service users, immutable release, units, and destination directories without
-   advertising a passing deployment.
+3. Run the installer once on the destination with `--mode local`, the final
+   install root, profile, tenant options, and `--skip-smoke`. For authenticated
+   operation, pass the transferred file with `--auth-tokens-file`. Omit
+   ingress-only options such as `--domain` until the final deployment. Local
+   mode provisions the service users, immutable release, units, and destination
+   directories while disabling Caddy and Funnel. Do not use `--mode domain` or
+   `--mode tailscale` for this staging pass: `--skip-smoke` skips validation but
+   still starts the selected services.
 4. Stop `jacobian-mcp.service` on the destination. Stop it on the source, or
    quiesce all writers and take a storage-level snapshot, before the final copy.
    Copy the complete selected state root, including `metadata.sqlite3`, blobs,
@@ -180,16 +183,16 @@ VPS must preserve them. The maintained authenticated unit uses
 5. On the destination, restore state ownership to `jacobian:jacobian`. Keep
    `/etc/jacobian-mcp` owned by root with mode `0700` and its token file at mode
    `0600`. Rebuildable `cache/lean-declarations` data may be omitted.
-6. Rerun the same installer command without `--skip-smoke`. Its candidate-state
-   preflight reads the token mapping while privileged, drops permanently to the
-   `jacobian` service identity, and then checks every selected tenant. In that
-   identity it verifies that SQLite and its runtime files are readable and
-   writable, and that the tenant, staging, blob, and existing blob-prefix
-   directories are readable, writable, and traversable. It must report
-   `MISSING`, `COMPATIBLE`, or a supported `MIGRATION_PENDING` state before
-   activation. Do not bypass an `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`, or
-   `UNREADABLE` result; an access failure means destination ownership or mode
-   restoration is incomplete.
+6. Rerun the installer in the intended final mode, add its ingress options, and
+   omit `--skip-smoke`. Its candidate-state preflight reads the token mapping
+   while privileged, drops permanently to the `jacobian` service identity, and
+   then checks every selected tenant. In that identity it verifies that SQLite
+   and its runtime files are readable and writable, and that the tenant,
+   staging, blob, and existing blob-prefix directories are readable, writable,
+   and traversable. It must report `MISSING`, `COMPATIBLE`, or a supported
+   `MIGRATION_PENDING` state before activation. Do not bypass an `UNSUPPORTED`,
+   `INCOMPATIBLE`, `CORRUPT`, or `UNREADABLE` result; an access failure means
+   destination ownership or mode restoration is incomplete.
 7. Verify `deployment://identity`, the two-tool surface, catalog policy, required
    capabilities, and any provider-specific smoke before switching DNS or client
    configuration. Keep the source VPS and its unchanged state available until

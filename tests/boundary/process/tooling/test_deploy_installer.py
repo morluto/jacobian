@@ -133,6 +133,28 @@ def test_domain_dry_run_reports_connector_without_requiring_root() -> None:
     assert "funnel:      disabled" in completed.stdout
 
 
+def test_public_skip_smoke_warns_that_ingress_still_starts() -> None:
+    completed = _run(
+        "--mode",
+        "domain",
+        "--domain",
+        "math.example.org",
+        "--skip-smoke",
+        "--dry-run",
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "--skip-smoke does not keep public ingress offline" in completed.stderr
+    assert "use --mode local while staging a VPS migration" in completed.stderr
+
+
+def test_local_skip_smoke_does_not_emit_a_public_ingress_warning() -> None:
+    completed = _run("--mode", "local", "--skip-smoke", "--dry-run")
+
+    assert completed.returncode == 0, completed.stderr
+    assert "public ingress offline" not in completed.stderr
+
+
 def test_dry_run_derives_every_runtime_path_from_custom_install_root() -> None:
     completed = _run(
         "--install-root",

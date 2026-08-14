@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.artifacts import ArtifactService
-from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_service import OperationService
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.polytope import PolytopeService
@@ -26,7 +26,7 @@ class CoreServices:
     schemas: SchemaRegistry
     artifacts: ArtifactService
     values: ValueReferenceStore
-    installer: OperationInstaller
+    binder: OperationBinder
     sat: SatArtifactService
     smt: SmtArtifactService
     polynomial_expressions: PolynomialExpressionArtifactService

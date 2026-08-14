@@ -49,8 +49,8 @@ from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 
 
 @dataclass(frozen=True, slots=True)
-class InstalledDomainBundle:
-    """Resources and adapters created for one installed domain bundle."""
+class BoundDomainOperations:
+    """Execution bindings and durable schemas for one domain bundle."""
 
     adapters: tuple[OperationAdapter[Any], ...]
     semantics_uri: str
@@ -81,8 +81,8 @@ def _result_type(operation: DomainOperation) -> type[ContractModel]:
     return _spec(operation).result_type
 
 
-class OperationInstaller:
-    """Bind domain declarations to schemas, providers, and publication."""
+class OperationBinder:
+    """Bind domain declarations to execution and publication resources."""
 
     def __init__(
         self,
@@ -96,7 +96,7 @@ class OperationInstaller:
         self.artifacts = artifacts
         self.values = values or ValueReferenceStore()
 
-    def install(self, bundle: DomainBundle) -> InstalledDomainBundle:
+    def bind(self, bundle: DomainBundle) -> BoundDomainOperations:
         self._validate_bundle(bundle)
         semantics_uri = self.store.register_descriptor(
             kind="semantics",
@@ -132,7 +132,7 @@ class OperationInstaller:
             self._adapter(operation, bundle, resources)
             for operation in bundle.operations
         )
-        return InstalledDomainBundle(
+        return BoundDomainOperations(
             adapters=adapters,
             semantics_uri=semantics_uri,
             input_schema_uris=input_schema_uris,
@@ -146,7 +146,7 @@ class OperationInstaller:
         bundle: DomainBundle,
         resources: OperationResources,
     ) -> OperationAdapter[Any]:
-        return InstalledOperationAdapter(operation, bundle, resources)
+        return DeclaredOperationAdapter(operation, bundle, resources)
 
     @staticmethod
     def _validate_bundle(bundle: DomainBundle) -> None:
@@ -157,7 +157,7 @@ class OperationInstaller:
             raise ValueError(f"duplicate operation ID in bundle {bundle.domain_id}")
 
 
-class InstalledOperationAdapter:
+class DeclaredOperationAdapter:
     """Execute one semantic operation, then apply its publication policy."""
 
     def __init__(

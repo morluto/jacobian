@@ -167,7 +167,7 @@ class CheckerPortfolioInstaller:
         if declarations is None:
             return
         ctx = self.context
-        query_installation = ctx.operations.install(
+        query_installation = ctx.binder.bind(
             build_lean_declaration_query_bundle(declarations, runtime)
         )
         for adapter in query_installation.adapters:

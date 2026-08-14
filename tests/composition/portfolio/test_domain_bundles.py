@@ -16,7 +16,7 @@ from jacobian.domains.combinatorics import build_combinatorics_bundle
 from jacobian.domains.finite_sets import build_finite_set_bundle
 from jacobian.domains.number_theory import build_number_theory_bundle
 from jacobian.domains.sequences import build_sequence_bundle
-from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_service import OperationService
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -74,9 +74,9 @@ def service(tmp_path: Path) -> Iterator[OperationService]:
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
     service = OperationService(store)
-    installer = OperationInstaller(store, schemas, artifacts)
+    installer = OperationBinder(store, schemas, artifacts)
     for bundle in ALL_BUNDLES:
-        for adapter in installer.install(bundle).adapters:
+        for adapter in installer.bind(bundle).adapters:
             service.register(adapter)
     try:
         yield service

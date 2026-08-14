@@ -21,7 +21,7 @@ from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceOperationInstaller:
+class ResourceOperationBinder:
     """Install resources after their core operation dependencies exist."""
 
     context: InstallationContext

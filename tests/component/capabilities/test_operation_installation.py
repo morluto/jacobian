@@ -14,6 +14,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_bindings import (
     durable_operation,
     inline_operation,
@@ -26,7 +27,6 @@ from jacobian.operation_declarations import (
     PreflightResult,
     PreflightStatus,
 )
-from jacobian.operation_installation import OperationInstaller
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
     DomainDiagnostics,
@@ -127,12 +127,12 @@ def _synthetic_bundle() -> DomainBundle:
 
 
 def _install(runtime: DomainTestServices, bundle: DomainBundle) -> None:
-    installation = OperationInstaller(
+    installation = OperationBinder(
         runtime.core.store,
         runtime.core.schemas,
         runtime.core.artifacts,
         runtime.core.values,
-    ).install(bundle)
+    ).bind(bundle)
     for adapter in installation.adapters:
         runtime.core.operations.register(adapter)
 
@@ -746,7 +746,7 @@ def test_operation_specific_invalid_request_is_not_enriched(
 def test_installer_rejects_empty_and_duplicate_domain_bundles(
     operation_services,
 ) -> None:
-    installer = OperationInstaller(
+    installer = OperationBinder(
         operation_services.core.store,
         operation_services.core.schemas,
         operation_services.core.artifacts,
@@ -754,6 +754,6 @@ def test_installer_rejects_empty_and_duplicate_domain_bundles(
     bundle = _synthetic_bundle()
 
     with pytest.raises(ValueError, match="must not be empty"):
-        installer.install(replace(bundle, operations=()))
+        installer.bind(replace(bundle, operations=()))
     with pytest.raises(ValueError, match="duplicate operation ID"):
-        installer.install(replace(bundle, operations=(bundle.operations[0],) * 2))
+        installer.bind(replace(bundle, operations=(bundle.operations[0],) * 2))

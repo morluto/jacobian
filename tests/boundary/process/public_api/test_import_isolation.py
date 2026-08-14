@@ -31,7 +31,7 @@ def test_native_namespace_does_not_import_runtime_or_transport() -> None:
     forbidden = (
         "jacobian.runtime",
         "jacobian.mcp",
-        "jacobian.operation_installation",
+        "jacobian.operation_binding",
         "jacobian.providers",
     )
     _assert_not_imported(_imported_modules("jacobian.math"), forbidden)
@@ -116,7 +116,7 @@ def test_native_matrices_does_not_import_capabilities_or_provider_loading() -> N
             "jacobian.artifact_repository",
             "jacobian.operation_dispatch",
             "jacobian.operation_service",
-            "jacobian.operation_installation",
+            "jacobian.operation_binding",
             "jacobian.provider_runtime",
             "jacobian.providers",
             "jacobian.runtime",
@@ -132,7 +132,7 @@ def test_native_probability_import_does_not_load_wire_or_runtime_owner() -> None
         (
             "jacobian.domains.probability",
             "jacobian.operation_bindings",
-            "jacobian.operation_installation",
+            "jacobian.operation_binding",
             "jacobian.provider_runtime",
             "jacobian.providers",
             "jacobian.runtime",
@@ -148,7 +148,7 @@ def test_native_finite_fields_does_not_eagerly_import_flint() -> None:
         imported,
         (
             "jacobian.adapters",
-            "jacobian.operation_installation",
+            "jacobian.operation_binding",
             "jacobian.providers",
             "jacobian.runtime",
             "jacobian.storage",

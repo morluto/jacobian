@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from jacobian.artifacts import ArtifactService
-from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_service import OperationService
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
@@ -26,7 +26,7 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
         schemas = SchemaRegistry(store)
         artifacts = ArtifactService(store, schemas)
         values = ValueReferenceStore()
-        installer = OperationInstaller(store, schemas, artifacts, values)
+        binder = OperationBinder(store, schemas, artifacts, values)
         with store.transaction():
             sat = install_sat_artifacts(store, schemas, artifacts)
             smt = install_smt_artifacts(store, schemas, artifacts)
@@ -48,7 +48,7 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
             schemas=schemas,
             artifacts=artifacts,
             values=values,
-            installer=installer,
+            binder=binder,
             sat=sat,
             smt=smt,
             polynomial_expressions=polynomial_expressions,

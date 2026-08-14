@@ -8,7 +8,7 @@ from jacobian.portfolio.checker_installation import CheckerPortfolioInstaller
 from jacobian.portfolio.core_installation import CoreApplicationInstaller
 from jacobian.portfolio.foundation_installation import FoundationInstaller
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
-from jacobian.portfolio.resource_installation import ResourceOperationInstaller
+from jacobian.portfolio.resource_installation import ResourceOperationBinder
 from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import RuntimeServices
 
@@ -47,7 +47,7 @@ def install_portfolio(
             graph = CoreApplicationInstaller(context).install(
                 services,
             )
-            ResourceOperationInstaller(context).install(graph)
+            ResourceOperationBinder(context).install(graph)
             CheckerPortfolioInstaller(context, resolver).install(
                 services,
                 resources,

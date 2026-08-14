@@ -15,19 +15,15 @@ from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ContractModel
 from jacobian.domain_bundles import DomainBundle
 from jacobian.installation.context import InstallationContext
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
-from jacobian.operation_installation import OperationInstaller
 from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
-from jacobian.portfolio.result import (
-    BundleInstallationStatus,
-    PortfolioInstallationResult,
-)
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.schema_registry import SchemaRegistry
@@ -102,7 +98,7 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
     try:
         schemas = SchemaRegistry(store)
         artifacts = ArtifactService(store, schemas)
-        operations = OperationInstaller(store, schemas, artifacts)
+        operations = OperationBinder(store, schemas, artifacts)
         checkers = CheckerRegistry(store)
         verification = VerificationService(store, checkers, schemas)
         registered: list[str] = []
@@ -117,7 +113,7 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
             values=operations.values,
             checkers=checkers,
             verification=verification,
-            operations=operations,
+            binder=operations,
             checker_authority=CheckerAuthorityMode.NONE,
             register_operation=register_operation,
         )
@@ -129,27 +125,22 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
 def test_install_domains_installs_every_available_bundle_and_registers_adapters(
     assembly: _RecordingContext,
 ) -> None:
-    assembler = DomainBundleInstaller(assembly.context)
+    assembler = DomainBundleBinder(assembly.context)
     plan = PortfolioPlan(components=(_synthetic_bundle(domain_id="alpha"),))
 
-    result = assembler.install(plan)
+    result = assembler.bind(plan)
 
-    assert isinstance(result, PortfolioInstallationResult)
-    assert result.diagnostics == ()
-    assert set(result.installed) == {"alpha"}
+    assert set(result) == {"alpha"}
     assert assembly.registered == ["alpha.compute.double"]
-
-    (outcome,) = result.outcomes
-    assert outcome.status is BundleInstallationStatus.INSTALLED
-    assert outcome.installed is result.installed["alpha"]
-    assert outcome.operation_ids == ("alpha.compute.double",)
-    assert outcome.diagnostic is None
+    assert tuple(
+        adapter.descriptor.operation_id for adapter in result["alpha"].adapters
+    ) == ("alpha.compute.double",)
 
 
 def test_install_domains_preserves_declaration_order_across_bundles(
     assembly: _RecordingContext,
 ) -> None:
-    assembler = DomainBundleInstaller(assembly.context)
+    assembler = DomainBundleBinder(assembly.context)
     plan = PortfolioPlan(
         components=(
             _synthetic_bundle(domain_id="alpha"),
@@ -157,21 +148,21 @@ def test_install_domains_preserves_declaration_order_across_bundles(
         )
     )
 
-    result = assembler.install(plan)
+    result = assembler.bind(plan)
 
-    assert [outcome.domain_id for outcome in result.outcomes] == ["alpha", "beta"]
+    assert tuple(result) == ("alpha", "beta")
     assert assembly.registered == ["alpha.compute.double", "beta.compute.double"]
 
 
 def test_install_domains_validates_the_plan_before_installing(
     assembly: _RecordingContext,
 ) -> None:
-    assembler = DomainBundleInstaller(assembly.context)
+    assembler = DomainBundleBinder(assembly.context)
     bundle = _synthetic_bundle(domain_id="alpha")
     plan = PortfolioPlan(components=(bundle, bundle))
 
     with pytest.raises(ValueError, match="duplicate domain bundles"):
-        assembler.install(plan)
+        assembler.bind(plan)
 
     # Nothing was installed because validation failed before the loop.
     assert assembly.registered == []
@@ -180,14 +171,12 @@ def test_install_domains_validates_the_plan_before_installing(
 def test_empty_plan_yields_complete_empty_result(
     assembly: _RecordingContext,
 ) -> None:
-    assembler = DomainBundleInstaller(assembly.context)
+    assembler = DomainBundleBinder(assembly.context)
     plan = PortfolioPlan(components=())
 
-    result = assembler.install(plan)
+    result = assembler.bind(plan)
 
-    assert result.installed == {}
-    assert result.diagnostics == ()
-    assert result.outcomes == ()
+    assert result == {}
 
 
 def test_install_failure_propagates_without_silent_partial_portfolio(
@@ -195,12 +184,12 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
 ) -> None:
     """A bundle installation defect must propagate, not be absorbed.
 
-    OperationInstaller rejects an empty-operation bundle. The assembler must
+    OperationBinder rejects an empty-operation bundle. The assembler must
     not normalize that into a diagnostic; it must raise so the caller's
     enclosing transaction rolls back the partial portfolio atomically.
     """
 
-    assembler = DomainBundleInstaller(assembly.context)
+    assembler = DomainBundleBinder(assembly.context)
     broken = _synthetic_bundle(domain_id="broken", operations=())
     plan = PortfolioPlan(
         components=(
@@ -211,7 +200,7 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
     )
 
     with pytest.raises(ValueError, match="must not be empty"):
-        assembler.install(plan)
+        assembler.bind(plan)
 
     # The earlier bundle's adapter registration happened in-memory only and the
     # caller is expected to roll back its enclosing transaction; the assembler
@@ -222,17 +211,17 @@ def test_install_failure_propagates_without_silent_partial_portfolio(
 def test_duplicate_operation_id_within_a_bundle_propagates(
     assembly: _RecordingContext,
 ) -> None:
-    """OperationInstaller rejects duplicate operation IDs within a bundle.
+    """OperationBinder rejects duplicate operation IDs within a bundle.
 
     The assembler must propagate that defect rather than recording a skip.
     """
 
-    assembler = DomainBundleInstaller(assembly.context)
+    assembler = DomainBundleBinder(assembly.context)
     base = _synthetic_bundle(domain_id="alpha")
     duplicate = base.operations[0]
     bundle = replace(base, operations=(base.operations[0], duplicate))
 
     with pytest.raises(ValueError, match="duplicate operation ID"):
-        assembler.install(PortfolioPlan(components=(bundle,)))
+        assembler.bind(PortfolioPlan(components=(bundle,)))
 
     assert assembly.registered == []

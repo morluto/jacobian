@@ -1,4 +1,4 @@
-"""Focused operation installation support shared by owning test lanes."""
+"""Focused operation binding support shared by owning test lanes."""
 
 from __future__ import annotations
 
@@ -15,18 +15,18 @@ from jacobian.verification.service import VerificationService
 
 
 @contextmanager
-def install_operation_bundle(
+def bind_operation_group(
     tmp_path: Path,
-    installer: Callable[..., tuple[Any, Any]],
+    binder: Callable[..., tuple[Any, Any]],
 ) -> Iterator[tuple[Any, Any, ArtifactRepository]]:
-    """Build and close a minimal store around one installed operation bundle."""
+    """Build and close a minimal store around one bound operation group."""
 
     store = ArtifactRepository(tmp_path / "store")
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
     checkers = CheckerRegistry(store)
     verification = VerificationService(store, checkers, schemas)
-    adapters, installed = installer(
+    adapters, bound = binder(
         store,
         schemas,
         artifacts,
@@ -35,6 +35,6 @@ def install_operation_bundle(
         authorize_checker=True,
     )
     try:
-        yield adapters, installed, store
+        yield adapters, bound, store
     finally:
         store.close()

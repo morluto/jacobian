@@ -28,7 +28,7 @@ def test_only_explicit_builtin_composition_imports_every_domain_factory() -> Non
     assert len(factories) == len(set(factories)), "duplicate domain factories"
     central_installers = (
         SOURCE / "portfolio" / "assembler.py",
-        SOURCE / "portfolio" / "domain_installation.py",
+        SOURCE / "portfolio" / "domain_binding.py",
         SOURCE / "portfolio" / "foundation_installation.py",
     )
     assert all(

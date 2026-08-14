@@ -12,7 +12,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.formal_datasets import build_formal_dataset_bundle
-from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -34,7 +34,7 @@ def _adapter(tmp_path: Path) -> _PublicAdapter:
     store = ArtifactRepository(tmp_path)
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
-    installation = OperationInstaller(store, schemas, artifacts).install(
+    installation = OperationBinder(store, schemas, artifacts).bind(
         build_formal_dataset_bundle()
     )
     return _PublicAdapter(installation.adapters[0])
@@ -330,7 +330,7 @@ def test_model_backed_artifact_rejects_digest_tampering(tmp_path: Path) -> None:
     store = ArtifactRepository(tmp_path)
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
-    installation = OperationInstaller(store, schemas, artifacts).install(
+    installation = OperationBinder(store, schemas, artifacts).bind(
         build_formal_dataset_bundle()
     )
     adapter = _PublicAdapter(installation.adapters[0])

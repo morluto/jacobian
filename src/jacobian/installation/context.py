@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from jacobian.artifacts import ArtifactService
 from jacobian.operation_adapters import OperationAdapter
-from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_binding import OperationBinder
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.schema_registry import SchemaRegistry
@@ -31,7 +31,7 @@ class InstallationContext:
     values: ValueReferenceStore
     checkers: CheckerRegistry
     verification: VerificationService
-    operations: OperationInstaller
+    binder: OperationBinder
     checker_authority: CheckerAuthorityMode
     register_operation: Callable[[OperationAdapter[Any]], None]
 
@@ -75,7 +75,7 @@ def create_installation_context(
         values=core.values,
         checkers=core.checkers,
         verification=services.verification,
-        operations=core.installer,
+        binder=core.binder,
         checker_authority=options.checker_authority,
         register_operation=register,
     )

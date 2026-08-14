@@ -21,6 +21,7 @@ from jacobian.finite_coverage import install_finite_coverage
 from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
 from jacobian.installation.context import InstallationContext
+from jacobian.operation_binding import BoundDomainOperations
 from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
 )
@@ -28,11 +29,8 @@ from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdap
 from jacobian.polynomials import install_polynomial_capabilities
 from jacobian.polytope_operations import PolytopeSeparationAdapter
 from jacobian.portfolio.builtin import build_builtin_portfolio
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
-from jacobian.portfolio.result import (
-    PortfolioInstallationResult,
-)
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.services import RuntimeServices
@@ -87,10 +85,7 @@ class CoreApplicationInstaller:
         for adapter in core.adapters:
             ctx.register_operation(adapter)
         singular_runtime = singular_provider_runtime()
-        if (
-            singular_runtime.availability
-            is not ProviderAvailability.AVAILABLE
-        ):
+        if singular_runtime.availability is not ProviderAvailability.AVAILABLE:
             return
 
         singular = install_singular_producer(ctx, core, singular_runtime)
@@ -120,7 +115,7 @@ class CoreApplicationInstaller:
         graph = self._install_graph_capabilities(ctx)
 
         portfolio = build_builtin_portfolio()
-        bundle_result = DomainBundleInstaller(ctx).install(portfolio)
+        bundle_result = DomainBundleBinder(ctx).bind(portfolio)
         self.install_domain_verification(bundle_result, portfolio)
         self._install_nullstellensatz()
 
@@ -180,16 +175,16 @@ class CoreApplicationInstaller:
 
     def install_domain_verification(
         self,
-        bundles: PortfolioInstallationResult,
+        bundles: dict[str, BoundDomainOperations],
         plan: PortfolioPlan,
     ) -> ExactDomainCheckerInstallation | None:
         ctx = self.context
         exact_bundles = {
-            bundle.domain_id: (bundle, bundles.installed[bundle.domain_id])
+            bundle.domain_id: (bundle, bundles[bundle.domain_id])
             for bundle in plan.components
             if isinstance(bundle, DomainBundle)
             and bundle.checker_declarations
-            and bundle.domain_id in bundles.installed
+            and bundle.domain_id in bundles
         }
         if not exact_bundles:
             return None

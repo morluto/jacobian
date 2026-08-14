@@ -7,7 +7,7 @@ from pathlib import Path
 
 from jacobian.domain_bundles import DomainBundle
 from jacobian.installation.context import create_installation_context
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
@@ -33,7 +33,7 @@ def create_selected_runtime(
         installation = create_installation_context(core, services, options)
         if bundles:
             with atomic_installation(core):
-                DomainBundleInstaller(installation).install(
+                DomainBundleBinder(installation).bind(
                     PortfolioPlan(components=tuple(bundles))
                 )
         return JacobianRuntime(

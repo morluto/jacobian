@@ -14,7 +14,7 @@ class PortfolioPlan:
     The plan is a literal, ordered tuple of ordinary domain bundles. It
     performs no discovery, registration, or ranking:
     callers install it through
-    :class:`jacobian.portfolio.domain_installation.DomainBundleInstaller`,
+    :class:`jacobian.portfolio.domain_binding.DomainBundleBinder`,
     which records every per-component outcome as a typed diagnostic.
     """
 

@@ -16,7 +16,7 @@ from jacobian.polynomial_interval_operations import (
     PolynomialIntervalEnclosureVerifyAdapter,
     install_polynomial_interval_operations,
 )
-from tests.support.operation_installations import install_operation_bundle
+from tests.support.operation_bindings import bind_operation_group
 from tests.support.polynomials import univariate_term as _term
 
 
@@ -43,7 +43,7 @@ def _interval(lo: str, hi: str) -> dict[str, Any]:
 
 @pytest.fixture()
 def installation(tmp_path: Path):
-    with install_operation_bundle(
+    with bind_operation_group(
         tmp_path, install_polynomial_interval_operations
     ) as bundle:
         yield bundle

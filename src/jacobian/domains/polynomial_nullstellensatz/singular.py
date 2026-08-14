@@ -38,8 +38,8 @@ from jacobian.domains.polynomial_nullstellensatz.system import (
 )
 from jacobian.installation.context import InstallationContext
 from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_binding import BoundDomainOperations
 from jacobian.operation_errors import OperationInvocationError
-from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
@@ -324,7 +324,7 @@ class SingularNullstellensatzCertificateAdapter:
     def __init__(
         self,
         context: InstallationContext,
-        dependency: InstalledDomainBundle,
+        dependency: BoundDomainOperations,
         provider_runtime: ProviderObservation,
     ) -> None:
         self.context = context
@@ -523,15 +523,15 @@ class SingularNullstellensatzCertificateAdapter:
 
 def install_singular_producer(
     context: InstallationContext,
-    dependency: InstalledDomainBundle,
+    dependency: BoundDomainOperations,
     provider_runtime: ProviderObservation,
-) -> InstalledDomainBundle:
+) -> BoundDomainOperations:
     adapter = SingularNullstellensatzCertificateAdapter(
         context,
         dependency,
         provider_runtime,
     )
-    return InstalledDomainBundle(
+    return BoundDomainOperations(
         adapters=(adapter,),
         semantics_uri=dependency.semantics_uri,
         input_schema_uris={

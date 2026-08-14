@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.operation_installations import install_operation_bundle
+from tests.support.operation_bindings import bind_operation_group
 from tests.support.polynomials import univariate_term as _term
 
 from jacobian.contracts.operations import (
@@ -268,7 +268,7 @@ def test_checker_rejects_noncanonical_rational() -> None:
 
 @pytest.fixture()
 def installation(tmp_path: Path):
-    with install_operation_bundle(
+    with bind_operation_group(
         tmp_path, install_polynomial_positivity_operations
     ) as bundle:
         yield bundle

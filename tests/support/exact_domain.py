@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jacobian.domain_bundles import DomainBundle
-from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.operation_binding import BoundDomainOperations
 from jacobian.portfolio.core_installation import CoreApplicationInstaller
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.config import CheckerAuthorityMode
 from tests.support.services import (
@@ -24,35 +24,33 @@ from tests.support.services import (
 class VerifiedDomainTestServices(DomainTestServices):
     """Focused services plus the exact installed bundle resources."""
 
-    bundles: dict[str, InstalledDomainBundle]
+    bundles: dict[str, BoundDomainOperations]
 
 
 def install_verified_domain_bundles(
     services: DomainTestServices,
     *bundles: DomainBundle,
-) -> dict[str, InstalledDomainBundle]:
+) -> dict[str, BoundDomainOperations]:
     """Install selected bundles through the production portfolio path."""
 
     if not bundles:
         raise ValueError("at least one verified domain bundle is required")
     with atomic_installation(services.core):
-        installed = DomainBundleInstaller(services.installation).install(
+        bound = DomainBundleBinder(services.installation).bind(
             PortfolioPlan(components=bundles)
         )
         missing = tuple(
-            bundle.domain_id
-            for bundle in bundles
-            if bundle.domain_id not in installed.installed
+            bundle.domain_id for bundle in bundles if bundle.domain_id not in bound
         )
         if missing:
             raise ValueError(
                 "verified domain installation omitted bundle(s): " + ", ".join(missing)
             )
         CoreApplicationInstaller(services.installation).install_domain_verification(
-            installed,
+            bound,
             PortfolioPlan(components=bundles),
         )
-    return installed.installed
+    return bound
 
 
 @contextmanager

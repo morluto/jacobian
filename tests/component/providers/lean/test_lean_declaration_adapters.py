@@ -31,7 +31,7 @@ from jacobian.lean_frontend.declarations import (
     LeanDeclarationService,
 )
 from jacobian.operation_adapters import OperationAdapter
-from jacobian.operation_installation import OperationInstaller
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -122,7 +122,7 @@ def _query_adapter(
     store = ArtifactRepository(tmp_path)
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
-    installation = OperationInstaller(store, schemas, artifacts).install(
+    installation = OperationBinder(store, schemas, artifacts).bind(
         build_lean_declaration_query_bundle(
             LeanDeclarationService(backend),
             _RUNTIME,

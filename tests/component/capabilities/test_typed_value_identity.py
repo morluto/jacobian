@@ -9,9 +9,9 @@ from tests.support.services import DomainTestServices, open_domain_services
 from jacobian.contracts.operations import OperationDiagnostic, OperationRequest
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
+from jacobian.operation_binding import OperationBinder
 from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
-from jacobian.operation_installation import OperationInstaller
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 
@@ -97,12 +97,12 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
             )
         ),
     )
-    installation = OperationInstaller(
+    installation = OperationBinder(
         typed_value_services.core.store,
         typed_value_services.core.schemas,
         typed_value_services.core.artifacts,
         typed_value_services.core.values,
-    ).install(bundle)
+    ).bind(bundle)
     for adapter in installation.adapters:
         typed_value_services.core.operations.register(adapter)
 

@@ -59,7 +59,7 @@ from jacobian.domains.projective_geometry.bundle import (
 from jacobian.exact_domain_checkers import (
     install_exact_domain_checkers as _install_exact_domain_checkers,
 )
-from jacobian.operation_installation import InstalledDomainBundle
+from jacobian.operation_binding import BoundDomainOperations
 from jacobian.provider_runtime import source_provider_runtime
 from jacobian.providers.flint_runtime import (
     exact_domain_checker_provider_runtime,
@@ -74,8 +74,8 @@ def _installed(
     operation_ids: tuple[str, ...],
     *,
     character: str,
-) -> InstalledDomainBundle:
-    return InstalledDomainBundle(
+) -> BoundDomainOperations:
+    return BoundDomainOperations(
         adapters=(),
         semantics_uri=_uri(character),
         input_schema_uris={
@@ -93,7 +93,7 @@ def install_exact_domain_checkers(
     registry: CheckerRegistry,
     *,
     authorize: bool,
-    **installed: InstalledDomainBundle,
+    **installed: BoundDomainOperations,
 ):
     domain_ids = {
         "graph": "graph_optimization",
@@ -457,7 +457,7 @@ def test_installer_does_not_omit_replay_when_bundled_source_is_unavailable(
 
 def _single_matrix_declaration_bundle(
     declaration: ExactReplayCheckerDeclaration,
-) -> tuple[dict[str, tuple[DomainBundle, InstalledDomainBundle]], str]:
+) -> tuple[dict[str, tuple[DomainBundle, BoundDomainOperations]], str]:
     bundle = build_matrix_bundle()
     bundle = replace(bundle, checker_declarations=(declaration,))
     installed = _installed(

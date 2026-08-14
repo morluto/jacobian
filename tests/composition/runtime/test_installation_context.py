@@ -15,7 +15,7 @@ def _graphs() -> tuple[SimpleNamespace, SimpleNamespace, list[object]]:
         schemas=object(),
         artifacts=object(),
         values=object(),
-        installer=object(),
+        binder=object(),
         operations=SimpleNamespace(register=registered.append),
         checkers=object(),
     )

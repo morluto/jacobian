@@ -39,10 +39,10 @@ from jacobian.contracts.results import (
 )
 from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_binding import BoundDomainOperations
 from jacobian.operation_bindings import DurablePublication
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_errors import OperationError, OperationInvocationError
-from jacobian.operation_installation import InstalledDomainBundle
 from jacobian.operation_ports import InputPort
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -86,17 +86,17 @@ class _InstalledDeclaration:
 @dataclass(frozen=True, slots=True)
 class _DeclaredRuntimeGroup:
     probe: ProviderObservation
-    members: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...]
+    members: tuple[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration], ...]
 
 
 def _declared_runtime_groups(
-    pairs: tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...],
+    pairs: tuple[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration], ...],
 ) -> tuple[_DeclaredRuntimeGroup, ...]:
     grouped: dict[
         str,
         tuple[
             ProviderObservation,
-            list[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration]],
+            list[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration]],
         ],
     ] = {}
     for installed, declaration in pairs:
@@ -195,7 +195,7 @@ def _authorized_provider_runtimes(
 def install_exact_domain_checkers(
     checkers: CheckerRegistry,
     *,
-    bundles: Mapping[str, tuple[DomainBundle, InstalledDomainBundle]],
+    bundles: Mapping[str, tuple[DomainBundle, BoundDomainOperations]],
     authorize: bool,
 ) -> ExactDomainCheckerInstallation:
     """Install independent exact replay against dynamically registered schemas."""
@@ -271,7 +271,7 @@ def install_exact_domain_verification(
     verification: VerificationService,
     checkers: CheckerRegistry,
     *,
-    bundles: Mapping[str, tuple[DomainBundle, InstalledDomainBundle]],
+    bundles: Mapping[str, tuple[DomainBundle, BoundDomainOperations]],
     authorize: bool,
 ) -> tuple[tuple[OperationAdapter[Any], ...], ExactDomainCheckerInstallation]:
     """Authorize exact replay and expose per-producer verification operations.
@@ -360,11 +360,11 @@ def install_exact_domain_verification(
 
 
 def _available_declaration_bundles(
-    bundles: Mapping[str, tuple[DomainBundle, InstalledDomainBundle]],
-) -> tuple[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration], ...]:
+    bundles: Mapping[str, tuple[DomainBundle, BoundDomainOperations]],
+) -> tuple[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration], ...]:
     """Pair domain-owned declarations with their unique installed producer."""
 
-    available: list[tuple[InstalledDomainBundle, ExactReplayCheckerDeclaration]] = []
+    available: list[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration]] = []
     owners: dict[str, str] = {}
     for domain_id, (bundle, installed) in bundles.items():
         producer_operation_ids = {
@@ -408,7 +408,7 @@ def _available_declaration_bundles(
 
 
 def _installed_declaration(
-    bundle: InstalledDomainBundle,
+    bundle: BoundDomainOperations,
     declaration: ExactReplayCheckerDeclaration,
     installation: ExactDomainCheckerInstallation,
     result_model: type[ContractModel],

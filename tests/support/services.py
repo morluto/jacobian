@@ -13,7 +13,7 @@ from jacobian.installation.context import (
     InstallationContext,
     create_installation_context,
 )
-from jacobian.portfolio.domain_installation import DomainBundleInstaller
+from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
@@ -73,7 +73,7 @@ def open_domain_services(
         )
         if bundles:
             with atomic_installation(core):
-                DomainBundleInstaller(installation).install(
+                DomainBundleBinder(installation).bind(
                     PortfolioPlan(components=tuple(bundles))
                 )
         yield DomainTestServices(

@@ -27,13 +27,13 @@ Three terms define the lifecycle:
 
 - A **built-in operation** is a typed mathematical function shipped by
   Jacobian.
-- The **package index** is read-only discovery metadata for ordinary inline
-  and family operations, generated at wheel build. `math.find` / `math.run` for
-  inline IDs do not require `jacobian init`. Family execution still needs
-  overlay state for artifacts and checkers.
+- **`math.find` / `math.run`** resolve those operations from live
+  declarations and family discovery cards. Ordinary inline IDs do not require
+  `jacobian init`. Family execution still needs overlay state for artifacts
+  and checkers.
 - The **compiled catalog overlay** is operator state created by
   `jacobian init` or `jacobian update`: visibility, checkers, executables, and
-  artifacts. SQLite does not mirror packaged built-in descriptors.
+  artifacts. SQLite does not mirror built-in descriptors.
 - An **external checker or executable** is exceptional operator-managed
   machinery whose identity is internal and fail-closed.
 
@@ -65,7 +65,7 @@ MCP / CLI / hosts
         ▼
 compiled catalog and selected operation declaration
         │
-        └──► OperationDeclaration + PublicationPolicy ──► jacobian.math.<domain>
+        └──► InlineOperation | OperationDeclaration ──► jacobian.math.<domain>
         │
         ▼
 private maintained backends
@@ -176,8 +176,8 @@ surface.
 A shared abstraction must replace repetition in at least two surviving
 production paths in the same change. An ordinary operation should need no more
 than one public domain function, one request model when necessary, one rich
-result type when necessary, one `OperationDeclaration`, and one external publication
-binding only when inline transport is insufficient.
+result type when necessary, one `InlineOperation` or `OperationDeclaration`,
+and one external publication binding only when inline transport is insufficient.
 
 Transforms such as transpose, embedding, basis change, restriction of scalars,
 reduction, permutation, projection, and reindexing are explicit mathematical

@@ -13,9 +13,9 @@ built-in operation ID or payload. The product surface is
 4. when independent checking matters, run a **separate checker tool** (often a
    `*.verify` ID)—not a second mode on the producer.
 
-Do not infer availability or payload fields from examples. The active compiled
-catalog is authoritative; optional external executables and checker
-authorization may affect which exceptional operations it contains.
+Do not infer availability or payload fields from examples. The active catalog
+is authoritative; optional external executables and checker authorization may
+affect which exceptional operations it contains.
 
 ## Discover and describe
 

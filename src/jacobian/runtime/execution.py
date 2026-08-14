@@ -148,7 +148,7 @@ def create_serving_runtime(
     operation_policy: OperationVisibilityPolicy,
     checker_registry: CheckerRegistry | None = None,
 ) -> JacobianRuntime:
-    """Serve from the package index, opening SQLite only when overlay state exists."""
+    """Serve from built-in declarations, opening SQLite only when overlay state exists."""
 
     if catalog.overlay is None:
         return create_inline_serving_runtime(catalog)

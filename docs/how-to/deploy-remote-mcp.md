@@ -237,7 +237,7 @@ VPS must preserve them. The maintained authenticated unit uses
    remaining client configuration. Keep the source VPS and its unchanged state
    available, but stopped, until the destination has passed these checks.
 
-Current Jacobian writes state revision 12 and accepts revision 11 for an
+Current Jacobian writes state revision 13 and accepts revision 12 for an
 in-place migration. Earlier revisions have no direct import bridge; retain the
 old state unchanged with a compatible checkout and start fresh state on current
 Jacobian as described in

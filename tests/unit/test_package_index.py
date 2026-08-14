@@ -45,7 +45,7 @@ def test_package_index_loads_matrix_determinant_symbol() -> None:
     assert descriptor.symbol == "MATRIX_DETERMINANT_COMPUTE"
 
 
-def test_load_package_index_round_trips_generated_entries() -> None:
+def test_load_package_index_matches_live_declarations() -> None:
     generated = generate_package_index()
     loaded = load_package_index()
 

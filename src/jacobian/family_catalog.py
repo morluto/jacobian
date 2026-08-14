@@ -1,7 +1,7 @@
-"""Static family-operation cards for the packaged catalog index.
+"""Static family-operation cards for ``math.find``.
 
-These records are discovery metadata. They are compiled from public request and
-result models without constructing operation adapters.
+These records are discovery metadata compiled from public request and result
+models without constructing operation adapters.
 """
 
 from __future__ import annotations

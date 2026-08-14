@@ -3,7 +3,7 @@
 [Documentation home](../index.md)
 
 - Status: Current MCP contract
-- Availability is defined by the active operator-compiled catalog
+- Availability is defined by built-in declarations plus the optional overlay
 
 Jacobian exposes exactly two MCP tools.
 

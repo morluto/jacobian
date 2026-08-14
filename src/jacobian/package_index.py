@@ -1,16 +1,14 @@
-"""Read-only package index for built-in mathematical operations.
+"""In-process inventory of built-in mathematical operations.
 
-The index is generated from ``InlineOperation`` declarations and family cards
-at wheel build. Editable checkouts reconstruct it in memory when the packaged
-JSON is absent.
+``math.find`` and ``math.run`` load ``InlineOperation`` declarations and family
+discovery cards from source. There is no generated JSON schema dump.
 """
 
 from __future__ import annotations
 
-import json
 import sys
 from dataclasses import dataclass
-from importlib import import_module, resources
+from importlib import import_module
 from typing import Any, cast
 
 from jacobian.builtin_operation_modules import BUILTIN_OPERATION_MODULES
@@ -18,6 +16,7 @@ from jacobian.contracts.operations import (
     OperationDescriptor,
     OperationExample,
 )
+from jacobian.family_catalog import family_index_payloads
 from jacobian.inline_execution import (
     InlineOperationAdapter,
     inline_operation_descriptor,
@@ -26,12 +25,10 @@ from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_catalog import OperationCatalogError, OperationSearchCard
 from jacobian.operation_declarations import InlineOperation
 
-_PACKAGE_INDEX_RESOURCE = "inline_index.json"
-
 
 @dataclass(frozen=True, slots=True)
 class PackageIndexEntry:
-    """One packaged inline operation and the symbol that reconstructs it."""
+    """One built-in operation and the symbol that reconstructs it."""
 
     operation_id: str
     version: str
@@ -60,34 +57,10 @@ class PackageIndexEntry:
             examples=self.examples,
         )
 
-    def as_json(self) -> dict[str, Any]:
-        payload = {
-            "operation_id": self.operation_id,
-            "version": self.version,
-            "title": self.title,
-            "description": self.description,
-            "tags": list(self.tags),
-            "examples": [
-                {
-                    "name": example.name,
-                    "description": example.description,
-                    "input": dict(example.input),
-                }
-                for example in self.examples
-            ],
-            "input_schema": self.input_schema,
-            "output_schema": self.output_schema,
-            "module": self.module,
-            "symbol": self.symbol,
-        }
-        if self.family is not None:
-            payload["family"] = self.family
-        return payload
-
 
 @dataclass(frozen=True, slots=True)
 class PackageIndex:
-    """Immutable lookup of packaged inline operations."""
+    """Immutable lookup of built-in operations for search and run."""
 
     entries: dict[str, PackageIndexEntry]
 
@@ -157,9 +130,6 @@ def collect_inline_index_entries() -> tuple[PackageIndexEntry, ...]:
 def collect_family_index_entries() -> tuple[PackageIndexEntry, ...]:
     """Compile family discovery cards without constructing adapters."""
 
-    # Generate-only import: serving loads JSON and must not import family contracts.
-    from jacobian.family_catalog import family_index_payloads
-
     entries: list[PackageIndexEntry] = []
     for payload in family_index_payloads():
         examples = tuple(
@@ -189,7 +159,7 @@ def collect_family_index_entries() -> tuple[PackageIndexEntry, ...]:
 
 
 def collect_package_index_entries() -> tuple[PackageIndexEntry, ...]:
-    """Return packaged inline and family discovery cards."""
+    """Return built-in inline and family discovery cards."""
 
     combined = {
         entry.operation_id: entry
@@ -199,7 +169,7 @@ def collect_package_index_entries() -> tuple[PackageIndexEntry, ...]:
 
 
 def generate_package_index() -> PackageIndex:
-    """Build the in-memory index from live inline declarations."""
+    """Build the in-memory inventory from live declarations and family cards."""
 
     return PackageIndex(
         {entry.operation_id: entry for entry in collect_package_index_entries()}
@@ -207,26 +177,13 @@ def generate_package_index() -> PackageIndex:
 
 
 def load_package_index() -> PackageIndex:
-    """Load the packaged index, reconstructing it when the JSON is absent."""
+    """Load built-in declarations so ``math.find`` / ``math.run`` can resolve IDs."""
 
-    packaged = _read_packaged_index()
-    if packaged is not None:
-        return packaged
     return generate_package_index()
 
 
-def write_package_index(path: Any) -> None:
-    """Write the generated index JSON for a wheel or local package data file."""
-
-    payload = [entry.as_json() for entry in collect_package_index_entries()]
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
 class PackageIndexRegistry:
-    """Resolve packaged inline operations without a binder or SQLite digest."""
+    """Resolve built-in inline operations without a binder or SQLite digest."""
 
     def __init__(self, index: PackageIndex) -> None:
         self.index = index
@@ -252,14 +209,14 @@ class PackageIndexRegistry:
 
 
 def load_inline_operation(entry: PackageIndexEntry) -> InlineOperation[Any, Any]:
-    """Load one inline operation from its packaged module and symbol."""
+    """Load one inline operation from its declaration module and symbol."""
 
     module = import_module(entry.module)
     target = getattr(module, entry.symbol)
     if isinstance(target, InlineOperation):
         if target.operation_id != entry.operation_id:
             raise RuntimeError(
-                "packaged inline symbol does not match operation_id: "
+                "inline declaration symbol does not match operation_id: "
                 f"{entry.operation_id}"
             )
         return target
@@ -272,8 +229,7 @@ def load_inline_operation(entry: PackageIndexEntry) -> InlineOperation[Any, Any]
     )
     if len(matches) != 1:
         raise RuntimeError(
-            "packaged inline locator did not resolve exactly once: "
-            f"{entry.operation_id}"
+            f"inline locator did not resolve exactly once: {entry.operation_id}"
         )
     return matches[0]
 
@@ -305,47 +261,6 @@ def _locator_for(
     return module.__name__, factory_name
 
 
-def _read_packaged_index() -> PackageIndex | None:
-    try:
-        payload = resources.files("jacobian.data").joinpath(_PACKAGE_INDEX_RESOURCE)
-        if not payload.is_file():
-            return None
-        raw = json.loads(payload.read_text(encoding="utf-8"))
-    except (FileNotFoundError, ModuleNotFoundError, OSError):
-        return None
-    if not isinstance(raw, list):
-        raise RuntimeError("packaged inline index must be a JSON array")
-    entries = tuple(_entry_from_json(item) for item in raw)
-    return PackageIndex({entry.operation_id: entry for entry in entries})
-
-
-def _entry_from_json(item: object) -> PackageIndexEntry:
-    if not isinstance(item, dict):
-        raise RuntimeError("packaged inline index entries must be objects")
-    payload = cast(dict[str, Any], item)
-    examples = tuple(
-        OperationExample(
-            name=str(example["name"]),
-            description=str(example["description"]),
-            input=dict(example["input"]),
-        )
-        for example in cast(list[dict[str, Any]], payload["examples"])
-    )
-    return PackageIndexEntry(
-        operation_id=str(payload["operation_id"]),
-        version=str(payload["version"]),
-        title=str(payload["title"]),
-        description=str(payload["description"]),
-        tags=tuple(str(tag) for tag in cast(list[Any], payload["tags"])),
-        examples=examples,
-        input_schema=dict(payload["input_schema"]),
-        output_schema=dict(payload["output_schema"]),
-        module=str(payload.get("module") or ""),
-        symbol=str(payload.get("symbol") or ""),
-        family=(str(payload["family"]) if payload.get("family") is not None else None),
-    )
-
-
 __all__ = [
     "PackageIndex",
     "PackageIndexEntry",
@@ -356,5 +271,4 @@ __all__ = [
     "generate_package_index",
     "load_inline_operation",
     "load_package_index",
-    "write_package_index",
 ]

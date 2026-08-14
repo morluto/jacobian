@@ -1,4 +1,4 @@
-"""Serving catalog that prefers the packaged inline index over SQLite copies."""
+"""Serving catalog of built-in declarations plus an optional SQLite overlay."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ class ServingCatalog:
         *,
         expected_package_version: str | None = None,
     ) -> ServingCatalog:
-        """Open the packaged index, plus SQLite overlay when state exists."""
+        """Open built-in declarations, plus SQLite overlay when state exists."""
 
         visibility = policy or OperationVisibilityPolicy()
         overlay = None

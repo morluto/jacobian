@@ -46,11 +46,12 @@ dual-mode tools.**
 catalogs, documentation, tests, and wire contracts.
 
 **Lifecycle vocabulary.** A built-in operation is a typed mathematical
-function shipped by Jacobian. Ordinary inline operations are indexed at wheel
-build and can be served with no state directory. Family operations are also
-indexed at wheel build for discovery. `jacobian init` and
+function shipped by Jacobian. Ordinary inline operations are live
+`InlineOperation` declarations; `math.find` and `math.run` load them with no
+state directory. Family operations contribute discovery cards from public
+request and result models. `jacobian init` and
 `jacobian update` compile overlay state for checkers, executables, and
-artifacts; they do not mirror packaged built-in descriptors. Serving never discovers or installs operations. Reserve **installation** for Jacobian itself and
+artifacts; they do not mirror built-in descriptors. Serving never discovers or installs operations. Reserve **installation** for Jacobian itself and
 optional external executables. Ordinary maintained libraries such as SymPy,
 NetworkX, FLINT, Z3, and cvc5 are private math backends, not operation-specific
 providers. Exact runtime identity belongs only to exceptional external

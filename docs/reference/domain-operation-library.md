@@ -212,7 +212,7 @@ An ordinary operation should require at most:
 1. one public domain function with one canonical input type;
 2. one request model when a boundary model is necessary;
 3. one rich result/value model when a scalar is insufficient;
-4. one `OperationDeclaration`; and
+4. one `InlineOperation` or `OperationDeclaration`; and
 5. one external publication binding only when inline transport is insufficient.
 
 Add focused behavior tests through the public Python function and installed

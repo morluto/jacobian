@@ -27,12 +27,11 @@ IDs; a producer is never switched into a checker role.
 
 ## Pure declarations and the compiled catalog
 
-An `OperationDeclaration` is immutable data describing one operation: its ID,
-version, title, description, tags, typed request and result models, execution,
-publication policy, ports, examples, preflight, postcondition, and effect.
-Ordinary operations call a typed mathematical kernel directly. Exceptional
-process and checker operations may name a bounded worker or an authorized
-checker identity.
+An `OperationDeclaration` is immutable data describing one durable, ported, or
+stateful operation. Ordinary read-only math uses `InlineOperation`: ID, version,
+title, description, tags, typed request and result models, and the kernel
+callable. Exceptional process and checker operations may name a bounded worker
+or an authorized checker identity.
 
 Declarations contain no stores, registered schema URIs, service objects, live
 providers, authorization records, or installer callbacks. Each mathematical
@@ -43,24 +42,24 @@ architecture.
 
 `jacobian init` and `jacobian update` compile overlay state for checkers,
 executables, artifacts, and family-backed resources. Built-in inline and family
-operations are served from the packaged index. Overlay SQLite must not mirror
-those packaged descriptors; revision-12 catalogs that still do are stale until
-`jacobian update`. The persisted overlay has an
+operations are served from live declarations and discovery cards. Overlay
+SQLite must not mirror those descriptors; revision-12 catalogs that still do
+are stale until `jacobian update`. The persisted overlay has an
 active revision, compact search cards for non-indexed operations, exact
 descriptors, declaration locators and digests, and checker-binding identity.
-Search reads the package index plus overlay cards; exact inspection reads one
+Search reads built-in cards plus overlay cards; exact inspection reads one
 descriptor. The full `operation://catalog` resource is materialized only when
 explicitly requested. Visibility filtering is applied to search, inspection,
 execution, and the resource without rebuilding the compiled snapshot.
 
 The catalog is inert searchable data. Indexed inline operations carry a
-module and symbol locator in the package index. Overlay entries persist a
-typed JSON locator: a declaration-module locator or a family locator such as
-`{"kind":"family","family":"graph"}`. Legacy `family:` prefixes are stale and
-fail closed until `jacobian update`. The runtime-local `OperationRegistry`
-decodes that locator only after an operation is selected. Each family has one
-`FamilyResolver` with shared resources, an adapter cache, and a close
-boundary. Inline IDs skip SQLite digest comparison. Packaged family IDs skip
+module and symbol locator taken from the declaration module. Overlay entries
+persist a typed JSON locator: a declaration-module locator or a family locator
+such as `{"kind":"family","family":"graph"}`. Legacy `family:` prefixes are
+stale and fail closed until `jacobian update`. The runtime-local
+`OperationRegistry` decodes that locator only after an operation is selected.
+Each family has one `FamilyResolver` with shared resources, an adapter cache,
+and a close boundary. Inline IDs skip SQLite digest comparison. Family IDs skip
 built-in title and schema digest drift against SQLite mirrors; they still
 fail closed on missing checkers, missing executables, and revoked authority.
 Graph, polynomial, Lean, and
@@ -116,7 +115,7 @@ bindings. A selected checker still enters a bounded worker and remeasures its
 exact executable before and after execution. Missing, revoked, changed,
 malformed, timed-out, or cancelled checkers fail closed.
 
-A serving process can run ordinary inline operations from the packaged index
+A serving process can run ordinary inline operations from built-in declarations
 with no state directory. Family operations, checkers, and artifacts still
 require the current state format, an active overlay snapshot, and a matching
 package/catalog version. Missing or stale overlay state is a stable
@@ -133,9 +132,10 @@ copied.
 
 ## Migration and non-goals
 
-Revision 12 is the current operation-catalog cutover. `jacobian update`
-migrates supported revision-11 stores, retires the superseded generic runtime
-tables, and selects the new catalog. Checker identity is remeasured rather
+Revision 13 is the current overlay-only catalog cutover. `jacobian update`
+migrates supported revision-12 stores and selects the new overlay. Revision 12
+is the minimum accepted source; revision-11 stores remain readable only with a
+matching older checkout. Checker identity is remeasured rather
 than trusted from copied records. There are no compatibility aliases for the
 public wire contract.
 

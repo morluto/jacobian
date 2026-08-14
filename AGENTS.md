@@ -12,8 +12,6 @@ working beyond a small local change.
 Jacobian gives agents atomic, composable tools for higher mathematics:
 discovering, running, and combining typed computations to investigate
 conjectures, build examples, calculate invariants, and check bounded claims.
-Jacobian supplies primitives; the agent owns strategy, decomposition, and when
-to stop.
 
 It is a **stateless MCP server for atomic, composable mathematics** with two
 tools:

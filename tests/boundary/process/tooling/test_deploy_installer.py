@@ -20,14 +20,18 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(autouse=True)
 def _provide_optional_host_tools(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> Path:
     tool_directory = tmp_path / "deployment-tools"
     tool_directory.mkdir()
     for tool_name in ("caddy", "elan"):
         tool = tool_directory / tool_name
         tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         tool.chmod(0o755)
+    du = tool_directory / "du"
+    du.write_text("#!/bin/sh\nprintf '0\\t%s\\n' \"$3\"\n", encoding="utf-8")
+    du.chmod(0o755)
     monkeypatch.setenv("PATH", f"{tool_directory}:{os.environ['PATH']}")
+    return tool_directory
 
 
 def _run(
@@ -385,7 +389,7 @@ def test_dry_run_validates_host_tools_and_disk_before_reporting_a_plan() -> None
 
     uv = source.index('UV_BIN="$(find_executable uv')
     systemd = source.index('SYSTEMCTL_BIN="$(find_executable systemctl')
-    disk = source.index('AVAILABLE_INSTALL_KIB="$(df -Pk')
+    disk = source.index('INSTALL_DISK_INFO="$(')
     dry_run = source.index("if ((DRY_RUN)); then")
 
     assert uv < dry_run
@@ -406,6 +410,28 @@ def test_dry_run_waives_build_space_only_for_a_reusable_release() -> None:
     assert 'cat "${RELEASE_DIR}/.release-profile"' in disk_block
     assert '== "${RELEASE_PROFILE}"' in disk_block
     assert "REQUIRED_INSTALL_KIB=0" in disk_block
+
+
+def test_disk_preflight_reserves_state_snapshot_space_before_dry_run() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    disk_block = source[
+        source.index('INSTALL_DISK_INFO="$(') : source.index("if ((DRY_RUN)); then")
+    ]
+
+    assert 'STATE_SIZE_KIB="$(du -sk -- "${STATE_DIR}"' in disk_block
+    assert "REQUIRED_ROLLBACK_KIB=$((STATE_SIZE_KIB + 64 * 1024))" in disk_block
+    assert "REQUIRED_SHARED_KIB=$((REQUIRED_INSTALL_KIB + REQUIRED_ROLLBACK_KIB))" in (
+        disk_block
+    )
+    assert 'AVAILABLE_ROLLBACK_KIB="${ROLLBACK_DISK_INFO##* }"' in disk_block
+
+
+def test_anonymous_deployment_snapshots_the_anonymous_state_root() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    state_selection = source.index('STATE_DIR="${ANONYMOUS_STATE_ROOT}"')
+    rollback_snapshot = source.index('snapshot_file state "${STATE_DIR}"')
+
+    assert state_selection < rollback_snapshot
 
 
 def test_runtime_inputs_remain_service_readable_after_root_probes() -> None:

@@ -152,7 +152,10 @@ advertising it.
 `uv`, systemd, Caddy, Tailscale, and optional elan executables and checks free
 space at the installation filesystem. A new Lean release requires at least 12
 GiB free; a new core release requires at least 2 GiB. Existing complete release
-directories do not require that build-space reserve.
+directories do not require that build-space reserve. The rollback temporary
+filesystem must also retain the full current state snapshot plus 64 MiB for
+configuration and metadata; when it shares the installation filesystem, both
+reserves are added before deployment work begins.
 
 ## Migrate to another VPS
 

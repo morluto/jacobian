@@ -551,6 +551,7 @@ esac
 AUTH_DESCRIPTION="generated or existing static bearer token"
 if ((ALLOW_ANONYMOUS)); then
     AUTH_DESCRIPTION="anonymous shared tenant ${ANONYMOUS_TENANT_ID}"
+    STATE_DIR="${ANONYMOUS_STATE_ROOT}"
 elif [[ -n "${AUTH_TOKENS_FILE}" ]]; then
     AUTH_DESCRIPTION="static bearer tokens from ${AUTH_TOKENS_FILE}"
 fi
@@ -603,7 +604,11 @@ while [[ ! -e "${DISK_PROBE_PATH}" ]]; do
     DISK_PROBE_PATH="${DISK_PROBE_PATH%/*}"
     [[ -n "${DISK_PROBE_PATH}" ]] || DISK_PROBE_PATH="/"
 done
-AVAILABLE_INSTALL_KIB="$(df -Pk "${DISK_PROBE_PATH}" | awk 'NR == 2 {print $4}')"
+INSTALL_DISK_INFO="$(
+    df -Pk "${DISK_PROBE_PATH}" | awk 'NR == 2 {print $1, $4}'
+)"
+INSTALL_FILESYSTEM="${INSTALL_DISK_INFO%% *}"
+AVAILABLE_INSTALL_KIB="${INSTALL_DISK_INFO##* }"
 REQUIRED_INSTALL_KIB=$((2 * 1024 * 1024))
 if ((WITH_LEAN)); then
     REQUIRED_INSTALL_KIB=$((12 * 1024 * 1024))
@@ -614,8 +619,32 @@ if [[ -d "${RELEASE_DIR}" \
         == "${RELEASE_PROFILE}" ]]; then
     REQUIRED_INSTALL_KIB=0
 fi
-((AVAILABLE_INSTALL_KIB >= REQUIRED_INSTALL_KIB)) || die \
-    "insufficient free space below ${DISK_PROBE_PATH}: need ${REQUIRED_INSTALL_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
+
+ROLLBACK_PROBE_PATH="${TMPDIR:-/tmp}"
+[[ -d "${ROLLBACK_PROBE_PATH}" && -w "${ROLLBACK_PROBE_PATH}" ]] || die \
+    "rollback temporary directory is not writable: ${ROLLBACK_PROBE_PATH}"
+ROLLBACK_DISK_INFO="$(
+    df -Pk "${ROLLBACK_PROBE_PATH}" | awk 'NR == 2 {print $1, $4}'
+)"
+ROLLBACK_FILESYSTEM="${ROLLBACK_DISK_INFO%% *}"
+AVAILABLE_ROLLBACK_KIB="${ROLLBACK_DISK_INFO##* }"
+STATE_SIZE_KIB=0
+if [[ -e "${STATE_DIR}" || -L "${STATE_DIR}" ]]; then
+    STATE_SIZE_KIB="$(du -sk -- "${STATE_DIR}" | awk '{print $1}')" \
+        || die "could not measure state rollback size at ${STATE_DIR}"
+fi
+REQUIRED_ROLLBACK_KIB=$((STATE_SIZE_KIB + 64 * 1024))
+
+if [[ "${INSTALL_FILESYSTEM}" == "${ROLLBACK_FILESYSTEM}" ]]; then
+    REQUIRED_SHARED_KIB=$((REQUIRED_INSTALL_KIB + REQUIRED_ROLLBACK_KIB))
+    ((AVAILABLE_INSTALL_KIB >= REQUIRED_SHARED_KIB)) || die \
+        "insufficient shared free space for release and rollback: need ${REQUIRED_SHARED_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
+else
+    ((AVAILABLE_INSTALL_KIB >= REQUIRED_INSTALL_KIB)) || die \
+        "insufficient free space below ${DISK_PROBE_PATH}: need ${REQUIRED_INSTALL_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
+    ((AVAILABLE_ROLLBACK_KIB >= REQUIRED_ROLLBACK_KIB)) || die \
+        "insufficient rollback space at ${ROLLBACK_PROBE_PATH}: need ${REQUIRED_ROLLBACK_KIB} KiB, found ${AVAILABLE_ROLLBACK_KIB} KiB"
+fi
 
 if ((DRY_RUN)); then
     cat <<EOF
@@ -633,7 +662,8 @@ Jacobian deployment plan
   lean:        $(((WITH_LEAN)) && printf 'pinned CORE + MATHLIB runtime' || printf 'disabled')
   retention:   ${RETAIN_RELEASES} completed releases including active
   smoke:       $(((SKIP_SMOKE)) && printf 'skipped' || printf 'required')
-  free space:  ${AVAILABLE_INSTALL_KIB} KiB at ${DISK_PROBE_PATH}
+  free space:  ${AVAILABLE_INSTALL_KIB} KiB at ${DISK_PROBE_PATH} for release
+  rollback:    ${AVAILABLE_ROLLBACK_KIB} KiB at ${ROLLBACK_PROBE_PATH}; ${REQUIRED_ROLLBACK_KIB} KiB reserved
   tools:       uv=${UV_BIN}, systemctl=${SYSTEMCTL_BIN}$(((WITH_LEAN)) && printf ', elan=%s' "${ELAN_BIN}")$([[ "${MODE}" != "local" ]] && printf ', caddy=%s' "${CADDY_BIN}")
 EOF
     exit 0

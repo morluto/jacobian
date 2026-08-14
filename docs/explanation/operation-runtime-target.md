@@ -41,23 +41,26 @@ module. A fixed source-controlled module index lists the built-ins;
 third-party plugin discovery and a domain-bundle framework are not part of the
 architecture.
 
-`jacobian init` and `jacobian update` compile the declarations into one
-revisioned catalog. The persisted catalog has an active revision, compact
-search cards, exact descriptors, declaration locators and digests, and
-checker-binding identity. Search reads cards; exact
-inspection reads one descriptor. The full `operation://catalog` resource is
-materialized only when explicitly requested. Visibility filtering is applied
-to search, inspection, execution, and the resource without rebuilding the
-compiled snapshot.
+`jacobian init` and `jacobian update` compile overlay state for checkers,
+executables, artifacts, and family-backed operations. Ordinary inline
+operations such as `matrix.determinant.compute` are served from the packaged
+index and do not require a state directory. The persisted overlay has an
+active revision, compact search cards for non-indexed operations, exact
+descriptors, declaration locators and digests, and checker-binding identity.
+Search reads the package index plus overlay cards; exact inspection reads one
+descriptor. The full `operation://catalog` resource is materialized only when
+explicitly requested. Visibility filtering is applied to search, inspection,
+execution, and the resource without rebuilding the compiled snapshot.
 
-The catalog is inert searchable data. Each entry carries either a declaration
-module locator or an explicit `family:<name>` binding origin. The
+The catalog is inert searchable data. Indexed inline operations carry a
+module and symbol locator in the package index. Overlay entries carry either
+a declaration module locator or an explicit family binding origin. The
 runtime-local `OperationRegistry` reads that locator only after an operation is
-selected, validates the loaded declaration or family adapter against the
-persisted identity, schemas, and digest, and caches the result. The fixed
-family table is assembled by the runtime; graph, polynomial, Lean, and SAT/SMT
-modules own their selected IDs and binding logic. The runtime owns any
-closeable resources acquired by those binders and releases them at shutdown.
+selected. Inline IDs skip SQLite digest comparison. Family adapters still
+validate persisted identity, schemas, and digest. The fixed family table is
+assembled by the runtime; graph, polynomial, Lean, and SAT/SMT modules own
+their selected IDs and binding logic. The runtime owns any closeable resources
+acquired by those binders and releases them at shutdown.
 
 ## Mathematical backends, execution, and publication
 
@@ -108,11 +111,13 @@ bindings. A selected checker still enters a bounded worker and remeasures its
 exact executable before and after execution. Missing, revoked, changed,
 malformed, timed-out, or cancelled checkers fail closed.
 
-A serving process requires the current state format, an active catalog
-snapshot, and a matching package/catalog version. Missing or stale state is a
-stable `STATE_INITIALIZATION_REQUIRED` or `STATE_UPDATE_REQUIRED` diagnostic
-with the exact `jacobian init` or `jacobian update` command. Serving never
-repairs state automatically; a successful update requires a restart.
+A serving process can run ordinary inline operations from the packaged index
+with no state directory. Family operations, checkers, and artifacts still
+require the current state format, an active overlay snapshot, and a matching
+package/catalog version. Missing or stale overlay state is a stable
+`STATE_INITIALIZATION_REQUIRED` or `STATE_UPDATE_REQUIRED` diagnostic with
+the exact `jacobian init` or `jacobian update` command. Serving never repairs
+state automatically; a successful update requires a restart.
 
 One installation owns one catalog and checker-authorization index. Remote
 tenants share those mathematical definitions while retaining isolated artifact

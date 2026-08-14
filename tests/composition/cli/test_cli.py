@@ -140,6 +140,57 @@ def test_cli_run_reads_strict_json_file(tmp_path: Path) -> None:
     assert response["execution"]["status"] == "COMPLETED"
 
 
+def test_cli_run_matrix_determinant_without_state_directory(tmp_path: Path) -> None:
+    payload = {
+        "matrix": {
+            "matrix_schema_version": "1",
+            "domain": "QQ",
+            "entries": [
+                [
+                    {"num": "1", "den": "1"},
+                    {"num": "2", "den": "1"},
+                ],
+                [
+                    {"num": "3", "den": "1"},
+                    {"num": "4", "den": "1"},
+                ],
+            ],
+        }
+    }
+    missing = tmp_path / "absent-state"
+
+    inspect_call = CliRunner().invoke(
+        app,
+        [
+            "--state-dir",
+            str(missing),
+            "inspect",
+            "matrix.determinant.compute",
+        ],
+    )
+    run_call = CliRunner().invoke(
+        app,
+        [
+            "--state-dir",
+            str(missing),
+            "run",
+            "matrix.determinant.compute",
+            "--json",
+            json.dumps(payload),
+        ],
+    )
+
+    assert inspect_call.exit_code == 0, inspect_call.stderr
+    assert (
+        json.loads(inspect_call.stdout)["operation_id"] == "matrix.determinant.compute"
+    )
+    assert run_call.exit_code == 0, run_call.stderr
+    response = json.loads(run_call.stdout)
+    assert response["execution"]["status"] == "COMPLETED"
+    assert response["output"]["result"]["determinant"] == {"num": "-2", "den": "1"}
+    assert not missing.exists()
+
+
 @pytest.mark.parametrize("arguments", [(), ("--json", "{}", "--file", "input.json")])
 def test_cli_run_requires_exactly_one_payload_source(
     tmp_path: Path,

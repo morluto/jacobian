@@ -29,10 +29,10 @@ from jacobian.adapters.mcp.lifecycle import (
     runtime_lifespan,
 )
 from jacobian.adapters.mcp.resources import register_resources
-from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_visibility import OperationVisibilityPolicy
-from jacobian.runtime.execution import create_execution_runtime
+from jacobian.runtime.execution import create_serving_runtime
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.serving_catalog import ServingCatalog
 
 
 def create_server(
@@ -44,7 +44,7 @@ def create_server(
 
     root = _configured_root(state_dir)
     policy = operation_policy or OperationVisibilityPolicy()
-    catalog = OperationCatalog(
+    catalog = ServingCatalog.open(
         root / "metadata.sqlite3",
         policy,
         expected_package_version=__version__,
@@ -69,7 +69,7 @@ class _LazyLocalRuntime:
     def __init__(
         self,
         root: Path,
-        catalog: OperationCatalog,
+        catalog: ServingCatalog,
         *,
         operation_policy: OperationVisibilityPolicy,
     ) -> None:
@@ -86,7 +86,7 @@ class _LazyLocalRuntime:
 
     def _ensure_selected_runtime(self) -> JacobianRuntime:
         if self._selected_runtime is None:
-            self._selected_runtime = create_execution_runtime(
+            self._selected_runtime = create_serving_runtime(
                 self.root,
                 self.catalog,
                 operation_policy=self.operation_policy,

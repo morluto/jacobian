@@ -65,6 +65,9 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/jacobian", "src/jacobian_checkers"]
 
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
 [tool.hatch.build.targets.sdist]
 exclude = [
     "/.diagnostics",

@@ -48,7 +48,7 @@ def compile_operation_catalog(
         polytope = PolytopeService(core.store, core.schemas)
         runtime = JacobianRuntime(core, verification, polytope)
         context = create_catalog_build_context(
-            runtime.core,
+            core,
             verification,
             authorize_bundled_checkers=authorize_bundled_checkers,
         )

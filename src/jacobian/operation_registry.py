@@ -16,6 +16,7 @@ from jacobian.operation_binding import OperationBinder
 from jacobian.operation_catalog import (
     OperationCatalog,
     OperationCatalogError,
+    OperationCatalogView,
     OperationDeclarationRecord,
     exact_checker_declaration_digest,
     operation_declaration_digest,
@@ -23,6 +24,7 @@ from jacobian.operation_catalog import (
     public_operation_descriptor,
 )
 from jacobian.operation_declarations import InlineOperation, OperationDeclarations
+from jacobian.package_index import PackageIndex, load_package_index
 from jacobian.registry import CheckerRegistry
 from jacobian.selected_operation_bindings import (
     ResourceOwner,
@@ -38,18 +40,22 @@ class OperationRegistry:
 
     def __init__(
         self,
-        catalog: OperationCatalog,
+        catalog: OperationCatalogView,
         binder: OperationBinder,
         checkers: CheckerRegistry,
         resource_owner: ResourceOwner,
         *,
         control_plane: LazyControlPlane,
+        package_index: PackageIndex | None = None,
     ) -> None:
         self.catalog = catalog
         self.binder = binder
         self.checkers = checkers
         self._control_plane = control_plane
         self._resource_owner = resource_owner
+        self._package_index = (
+            package_index if package_index is not None else load_package_index()
+        )
         self._adapters: dict[str, OperationAdapter[Any]] = {}
 
     def close(self) -> None:
@@ -57,10 +63,19 @@ class OperationRegistry:
 
         self._adapters.clear()
 
+    def _resolve_package_index(self, operation_id: str) -> OperationAdapter[Any]:
+        adapter: OperationAdapter[Any] = InlineOperationAdapter(
+            self._package_index.load(operation_id)
+        )
+        self._adapters[operation_id] = adapter
+        return adapter
+
     def resolve(self, operation_id: str) -> OperationAdapter[Any]:
         cached = self._adapters.get(operation_id)
         if cached is not None:
             return cached
+        if self._package_index.contains(operation_id):
+            return self._resolve_package_index(operation_id)
         descriptor = self.catalog.inspect(operation_id)
         record = self.catalog.declaration_record(operation_id)
         if descriptor is None or record is None:
@@ -112,7 +127,10 @@ class OperationRegistry:
                 "operation declaration version changed; run `jacobian update`: "
                 f"{operation_id}"
             )
-        if operation_declaration_digest(declaration) != record.declaration_digest:
+        if (
+            record.declaration_digest != "package-index"
+            and operation_declaration_digest(declaration) != record.declaration_digest
+        ):
             raise OperationCatalogError(
                 f"operation declaration changed; run `jacobian update`: {operation_id}"
             )
@@ -204,7 +222,7 @@ class OperationRegistry:
                 f"operation declaration changed; run `jacobian update`: {operation_id}"
             )
         adapter = bind_selected_exact_verification(
-            catalog=self.catalog,
+            catalog=_sqlite_catalog(self.catalog, operation_id),
             operation_id=operation_id,
             operations=operations,
             declarations=checker_declarations,
@@ -218,6 +236,19 @@ class OperationRegistry:
             )
         self._adapters[operation_id] = adapter
         return adapter
+
+
+def _sqlite_catalog(
+    catalog: OperationCatalogView, operation_id: str
+) -> OperationCatalog:
+    if isinstance(catalog, OperationCatalog):
+        return catalog
+    overlay = getattr(catalog, "overlay", None)
+    if isinstance(overlay, OperationCatalog):
+        return overlay
+    raise OperationCatalogError(
+        f"exact verifier requires overlay catalog state: {operation_id}"
+    )
 
 
 __all__ = ["OperationRegistry"]

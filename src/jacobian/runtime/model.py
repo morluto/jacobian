@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.resources import RuntimeResources
 from jacobian.verification.service import VerificationService
 
 if TYPE_CHECKING:
     from jacobian.runtime.execution import LazyControlPlane
+
+
+@dataclass(slots=True)
+class InlineServingResources:
+    """Dispatcher-only resources for packaged inline operations."""
+
+    operations: OperationDispatcher
+
+    def close(self) -> None:
+        self.operations.close()
+
+
+type RuntimeCore = RuntimeResources | InlineServingResources
 
 
 class RuntimeClosedError(RuntimeError):
@@ -21,13 +36,18 @@ class JacobianRuntime:
 
     def __init__(
         self,
-        core: RuntimeResources,
+        core: RuntimeCore,
         verification: VerificationService | None = None,
         polytope: PolytopeService | None = None,
         *,
         control_plane: LazyControlPlane | None = None,
+        inline_serving: bool = False,
     ) -> None:
-        if control_plane is None and (verification is None or polytope is None):
+        if (
+            not inline_serving
+            and control_plane is None
+            and (verification is None or polytope is None)
+        ):
             raise TypeError(
                 "JacobianRuntime requires verification and polytope or a control plane"
             )
@@ -36,19 +56,24 @@ class JacobianRuntime:
         self._verification = verification
         self._polytope = polytope
         self._control_plane = control_plane
+        self._inline_serving = inline_serving
 
     @property
     def verification(self) -> VerificationService:
         if self._verification is not None:
             return self._verification
-        assert self._control_plane is not None
+        if self._control_plane is None:
+            raise RuntimeClosedError(
+                "inline serving runtime has no verification service"
+            )
         return self._control_plane.verification
 
     @property
     def polytope(self) -> PolytopeService:
         if self._polytope is not None:
             return self._polytope
-        assert self._control_plane is not None
+        if self._control_plane is None:
+            raise RuntimeClosedError("inline serving runtime has no polytope service")
         return self._control_plane.polytope
 
     def close(self) -> None:
@@ -82,4 +107,4 @@ class JacobianRuntime:
         self.close()
 
 
-__all__ = ["JacobianRuntime", "RuntimeClosedError"]
+__all__ = ["InlineServingResources", "JacobianRuntime", "RuntimeClosedError"]

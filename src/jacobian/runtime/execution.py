@@ -6,17 +6,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
 
-from jacobian.operation_catalog import OperationCatalog
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogView
 from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_visibility import OperationVisibilityPolicy
+from jacobian.package_index import PackageIndexRegistry
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.model import InlineServingResources, JacobianRuntime
 from jacobian.runtime.resources import RuntimeResources
 from jacobian.runtime.selected_families import create_runtime_selected_families
 from jacobian.selected_operation_bindings import RuntimeSelectedFamily
+from jacobian.serving_catalog import ServingCatalog
 from jacobian.verification.service import VerificationService
 
 
@@ -83,15 +85,31 @@ class LazyControlPlane:
         return self._families
 
 
+def create_inline_serving_runtime(
+    catalog: ServingCatalog,
+) -> JacobianRuntime:
+    """Serve packaged inline operations without opening a state directory."""
+
+    registry = PackageIndexRegistry(catalog.index)
+    dispatcher = OperationDispatcher(catalog, registry)
+    return JacobianRuntime(
+        InlineServingResources(dispatcher),
+        inline_serving=True,
+    )
+
+
 def create_execution_runtime(
     root: str | Path,
-    catalog: OperationCatalog,
+    catalog: OperationCatalogView,
     *,
     operation_policy: OperationVisibilityPolicy,
     checker_registry: CheckerRegistry | None = None,
 ) -> JacobianRuntime:
     """Open artifact state and defer family machinery until a non-inline ID."""
 
+    sqlite = catalog.overlay if isinstance(catalog, ServingCatalog) else catalog
+    if not isinstance(sqlite, OperationCatalog):
+        raise TypeError("execution runtime requires a SQLite operation catalog")
     core = bootstrap_services(
         root,
         operation_policy=operation_policy,
@@ -101,13 +119,16 @@ def create_execution_runtime(
     try:
         if checker_registry is not None:
             core.checkers = checker_registry
-        control_plane = LazyControlPlane(core, catalog)
+        control_plane = LazyControlPlane(core, sqlite)
         registry = OperationRegistry(
             catalog,
             core.binder,
             core.checkers,
             core,
             control_plane=control_plane,
+            package_index=catalog.index
+            if isinstance(catalog, ServingCatalog)
+            else None,
         )
         core.operations = OperationDispatcher(catalog, registry)
         return JacobianRuntime(core, control_plane=control_plane)
@@ -119,4 +140,28 @@ def create_execution_runtime(
         raise
 
 
-__all__ = ["LazyControlPlane", "create_execution_runtime"]
+def create_serving_runtime(
+    root: str | Path,
+    catalog: ServingCatalog,
+    *,
+    operation_policy: OperationVisibilityPolicy,
+    checker_registry: CheckerRegistry | None = None,
+) -> JacobianRuntime:
+    """Serve from the package index, opening SQLite only when overlay state exists."""
+
+    if catalog.overlay is None:
+        return create_inline_serving_runtime(catalog)
+    return create_execution_runtime(
+        root,
+        catalog,
+        operation_policy=operation_policy,
+        checker_registry=checker_registry,
+    )
+
+
+__all__ = [
+    "LazyControlPlane",
+    "create_execution_runtime",
+    "create_inline_serving_runtime",
+    "create_serving_runtime",
+]

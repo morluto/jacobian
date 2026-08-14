@@ -46,9 +46,10 @@ dual-mode tools.**
 catalogs, documentation, tests, and wire contracts.
 
 **Lifecycle vocabulary.** A built-in operation is a typed mathematical
-function shipped by Jacobian. `jacobian init` and `jacobian update` compile
-those declarations into an inert searchable catalog; serving never discovers
-or installs operations. Reserve **installation** for Jacobian itself and
+function shipped by Jacobian. Ordinary inline operations are indexed at wheel
+build and can be served with no state directory. `jacobian init` and
+`jacobian update` compile overlay state for checkers, executables, artifacts,
+and family-backed operations; serving never discovers or installs operations. Reserve **installation** for Jacobian itself and
 optional external executables. Ordinary maintained libraries such as SymPy,
 NetworkX, FLINT, Z3, and cvc5 are private math backends, not operation-specific
 providers. Exact runtime identity belongs only to exceptional external
@@ -297,8 +298,10 @@ Non-obvious caveats:
   observed in `PRAGMA`, `fsync`, `os.link`, or process startup under concurrent
   suites must be reproduced with the owning focused test before it is treated
   as a product defect.
-- Quick end-to-end smoke of the product surface: `uv run jacobian --state-dir .jacobian init`
-  (CLI), `uv run jacobian-mcp` for one local stdio server, or
+- Quick end-to-end smoke of the product surface: `uv run jacobian run
+  matrix.determinant.compute --json '{"matrix":{"matrix_schema_version":"1","domain":"QQ","entries":[[{"num":"1","den":"1"},{"num":"2","den":"1"}],[{"num":"3","den":"1"},{"num":"4","den":"1"}]]}}'`
+  (CLI, no state directory), `uv run jacobian --state-dir .jacobian init` for
+  overlay/checker state, `uv run jacobian-mcp` for one local stdio server, or
   `uv run jacobian-remote-mcp --host 127.0.0.1 --port 8000 --allow-anonymous`
   for an explicit remote test host. Remote hosting requires `--allow-anonymous`
   or `--auth-tokens-file`; those options are intentionally absent from the local

@@ -24,6 +24,7 @@ from jacobian.operation_errors import (
 )
 from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.operation_telemetry import log_invocation
+from jacobian.operation_verification import validate_verified_result
 from jacobian.operations import Failed
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
@@ -84,9 +85,8 @@ def dispatch_operation(dispatch: Any, request: OperationRequest) -> OperationRes
     if invalid is not None:
         log_invocation(invalid, started)
         return invalid
-    from jacobian.operation_verification import validate_verified_result
-
-    validate_verified_result(dispatch.store, result)
+    if dispatch.store is not None:
+        validate_verified_result(dispatch.store, result)
     log_invocation(result, started)
     return result
 

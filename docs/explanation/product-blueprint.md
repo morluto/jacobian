@@ -27,8 +27,12 @@ Three terms define the lifecycle:
 
 - A **built-in operation** is a typed mathematical function shipped by
   Jacobian.
-- The **compiled catalog** is inert searchable metadata created by
-  `jacobian init` or `jacobian update`.
+- The **package index** is read-only discovery metadata for ordinary inline
+  operations, generated at wheel build. `math.find` / `math.run` for those IDs
+  do not require `jacobian init`.
+- The **compiled catalog overlay** is operator state created by
+  `jacobian init` or `jacobian update`: visibility, checkers, executables, and
+  artifacts.
 - An **external checker or executable** is exceptional operator-managed
   machinery whose identity is internal and fail-closed.
 

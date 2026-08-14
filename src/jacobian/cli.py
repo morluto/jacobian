@@ -18,7 +18,6 @@ from jacobian.contracts.operations import (
     OperationDescriptor,
     OperationRequest,
 )
-from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.operator_lifecycle import (
     CheckerAuthorization,
@@ -26,6 +25,7 @@ from jacobian.operator_lifecycle import (
     initialize_state,
     update_state,
 )
+from jacobian.serving_catalog import ServingCatalog
 
 if TYPE_CHECKING:
     from jacobian.runtime.model import JacobianRuntime
@@ -78,15 +78,16 @@ class CliState:
         self.state_dir = state_dir
         self._runtime_opener = runtime_opener
         self._runtime: JacobianRuntime | None = None
+        self._catalog: ServingCatalog | None = None
 
     @property
     def runtime(self) -> JacobianRuntime:
         if self._runtime is None:
             opener = self._runtime_opener
             if opener is None:
-                from jacobian.runtime.execution import create_execution_runtime
+                from jacobian.runtime.execution import create_serving_runtime
 
-                self._runtime = create_execution_runtime(
+                self._runtime = create_serving_runtime(
                     self.state_dir,
                     self.catalog,
                     operation_policy=OperationVisibilityPolicy(),
@@ -98,14 +99,16 @@ class CliState:
         return self._runtime
 
     @property
-    def catalog(self) -> OperationCatalog:
+    def catalog(self) -> ServingCatalog:
         from jacobian import __version__
 
-        return OperationCatalog(
-            self.state_dir / "metadata.sqlite3",
-            OperationVisibilityPolicy(),
-            expected_package_version=__version__,
-        )
+        if self._catalog is None:
+            self._catalog = ServingCatalog.open(
+                self.state_dir / "metadata.sqlite3",
+                OperationVisibilityPolicy(),
+                expected_package_version=__version__,
+            )
+        return self._catalog
 
     def catalog_snapshot(self) -> OperationCatalogSnapshot:
         if self._runtime_opener is not None:

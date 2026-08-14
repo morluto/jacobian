@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from threading import Lock
-from typing import Any
+from typing import Any, Protocol
 
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
@@ -14,22 +14,34 @@ from jacobian.contracts.operations import (
     OperationResult,
 )
 from jacobian.operation_adapters import OperationAdapter
-from jacobian.operation_catalog import OperationCatalog
+from jacobian.operation_catalog import OperationCatalogView
 from jacobian.operation_dispatch import dispatch_operation
 from jacobian.operation_registration import register_operation
-from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_visibility import OperationVisibilityPolicy
+
+
+class OperationResolver(Protocol):
+    """Resolve one visible operation adapter and participate in shutdown."""
+
+    binder: Any
+
+    def resolve(self, operation_id: str) -> OperationAdapter[Any]: ...
+
+    def close(self) -> None: ...
 
 
 class OperationDispatcher:
     """Resolve a visible operation only when its first request arrives."""
 
-    def __init__(self, catalog: OperationCatalog, registry: OperationRegistry) -> None:
+    def __init__(
+        self, catalog: OperationCatalogView, registry: OperationResolver
+    ) -> None:
         if not isinstance(catalog.policy, OperationVisibilityPolicy):
             raise TypeError(
                 "operation dispatcher requires an OperationVisibilityPolicy"
             )
-        self.store = registry.binder.store
+        binder = registry.binder
+        self.store = None if binder is None else binder.store
         self.policy = catalog.policy
         self._adapters: dict[str, OperationAdapter[Any]] = {}
         self._descriptors: dict[str, OperationDescriptor] = {}

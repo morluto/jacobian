@@ -26,11 +26,14 @@ from jacobian.adapters.mcp.context import (
 )
 from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
 from jacobian.adapters.mcp.server import _build_server
-from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.registry import CheckerRegistry
-from jacobian.runtime.execution import create_execution_runtime
+from jacobian.runtime.execution import (
+    create_inline_serving_runtime,
+    create_serving_runtime,
+)
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.serving_catalog import ServingCatalog
 from jacobian.storage.repository import ArtifactRepository
 
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -464,14 +467,23 @@ def create_remote_server(
 
     root = _configured_root(state_dir)
     policy = operation_policy or OperationVisibilityPolicy()
-    catalog = OperationCatalog(
+    catalog = ServingCatalog.open(
         root / "metadata.sqlite3",
         policy,
         expected_package_version=__version__,
     )
     shared_store: ArtifactRepository | None = None
     selected_factory = runtime_factory
-    if selected_factory is None:
+    if selected_factory is None and catalog.overlay is None:
+
+        def selected_factory(
+            tenant_root: str | Path,
+            **_options: object,
+        ) -> JacobianRuntime:
+            del tenant_root, _options
+            return create_inline_serving_runtime(catalog)
+
+    elif selected_factory is None:
         shared_store = ArtifactRepository(root)
         shared_checkers = CheckerRegistry(shared_store)
 
@@ -533,13 +545,13 @@ def create_remote_server(
 
 def _create_tenant_runtime(
     tenant_root: Path,
-    catalog: OperationCatalog,
+    catalog: ServingCatalog,
     shared_checkers: CheckerRegistry,
     operation_policy: OperationVisibilityPolicy,
 ) -> JacobianRuntime:
     """Create tenant-owned artifacts over deployment-owned mathematical state."""
 
-    return create_execution_runtime(
+    return create_serving_runtime(
         tenant_root,
         catalog,
         operation_policy=operation_policy,

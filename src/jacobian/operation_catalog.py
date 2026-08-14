@@ -49,6 +49,30 @@ class VisibilityPolicy(Protocol):
     def allows(self, operation_id: str, tags: tuple[str, ...]) -> bool: ...
 
 
+class OperationCatalogView(Protocol):
+    """Inspect, search, and locator surface used by serving dispatch."""
+
+    policy: VisibilityPolicy
+
+    def inspect(self, operation_id: str) -> OperationDescriptor | None: ...
+
+    def declaration_record(
+        self, operation_id: str
+    ) -> OperationDeclarationRecord | None: ...
+
+    def checker_binding(self, operation_id: str) -> OperationCheckerBinding | None: ...
+
+    def checker_bindings(
+        self, operation_id: str
+    ) -> tuple[OperationCheckerBinding, ...]: ...
+
+    def search(
+        self, request: OperationDiscoveryRequest
+    ) -> OperationDiscoveryResult: ...
+
+    def snapshot(self) -> OperationCatalogSnapshot: ...
+
+
 @dataclass(frozen=True, slots=True)
 class CatalogHeader:
     revision: int
@@ -560,9 +584,11 @@ __all__ = [
     "OperationCatalog",
     "OperationCatalogError",
     "OperationCatalogStore",
+    "OperationCatalogView",
     "OperationCheckerBinding",
     "OperationDeclarationRecord",
     "OperationSearchCard",
+    "VisibilityPolicy",
     "declaration_digest",
     "exact_checker_declaration_digest",
     "operation_declaration_digest",

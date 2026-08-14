@@ -12,6 +12,7 @@ from jacobian.adapters.mcp.context import AppState, _runtime
 from jacobian.contracts.artifacts import ArtifactManifest
 from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.results import ContractModel
+from jacobian.runtime.model import InlineServingResources
 from jacobian.storage.errors import ArtifactNotFoundError
 
 
@@ -38,7 +39,12 @@ def register_resources(
     ) -> _ArtifactResource:
         try:
             with _runtime(ctx) as active_runtime:
-                artifact = active_runtime.core.store.get(f"artifact://sha256/{digest}")
+                core = active_runtime.core
+                if isinstance(core, InlineServingResources):
+                    raise ResourceNotFoundError(
+                        "The requested Jacobian resource does not exist."
+                    )
+                artifact = core.store.get(f"artifact://sha256/{digest}")
         except ArtifactNotFoundError as exc:
             raise ResourceNotFoundError(
                 "The requested Jacobian resource does not exist."

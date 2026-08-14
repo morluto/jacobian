@@ -82,14 +82,17 @@ Linter enforces the leaf boundaries and dependency direction. Operation
 declarations live outside `jacobian.math`.
 
 Domain declaration modules export immutable operation tuples and perform no
-installation. The catalog compiler imports them during `jacobian init` or
-`jacobian update`; serving resolves either the declaration module or an
-explicit family binding origin selected by `math.run`. Graph, polynomial,
-Lean, and SAT/SMT families own their selected IDs and binding logic; the
-runtime-local resolver only chooses that fixed family seam, validates identity,
-caches the adapter, and participates in shutdown. An operation may call a
-private computational backend, but that backend owns no runtime, storage,
-publication, installation, or checker authority.
+installation. Ordinary inline operations are indexed at wheel build; serving
+loads one declaration symbol and runs it without a state directory.
+`jacobian init` and `jacobian update` compile overlay state for visibility,
+checkers, executables, artifacts, and family-backed operations. Serving
+resolves either the packaged locator or an explicit family binding origin
+selected by `math.run`. Graph, polynomial, Lean, and SAT/SMT families own
+their selected IDs and binding logic; the runtime-local resolver only chooses
+that fixed family seam, validates identity, caches the adapter, and
+participates in shutdown. An operation may call a private computational
+backend, but that backend owns no runtime, storage, publication,
+installation, or checker authority.
 
 ## Mathematical value and backend layers
 

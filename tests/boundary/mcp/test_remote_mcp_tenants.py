@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from jacobian.adapters.mcp.remote import (
+    TenantRuntimeHold,
     TenantRuntimeRouter,
     TenantRuntimeRouterClosedError,
-    TenantRuntimeScope,
 )
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.storage.errors import ArtifactNotFoundError
@@ -84,10 +84,10 @@ def test_tenant_router_single_flights_one_tenant_and_parallelizes_distinct_tenan
         max_tenant_runtimes=3,
         runtime_factory=factory,  # type: ignore[arg-type]
     )
-    leases = []
+    holds = []
 
     def acquire(subject: str) -> None:
-        leases.append(router.lease_for(subject))
+        holds.append(router.hold_for(subject))
 
     workers = [
         threading.Thread(target=acquire, args=(subject,))
@@ -100,18 +100,18 @@ def test_tenant_router_single_flights_one_tenant_and_parallelizes_distinct_tenan
         assert not worker.is_alive()
 
     alpha_runtimes = [
-        lease.runtime
-        for lease in leases
-        if lease.runtime.identity.name == hashlib.sha256(b"alpha").hexdigest()
+        hold.runtime
+        for hold in holds
+        if hold.runtime.identity.name == hashlib.sha256(b"alpha").hexdigest()
     ]
     assert len(created) == 2
     assert len(alpha_runtimes) == 2
     assert alpha_runtimes[0] is alpha_runtimes[1]
-    for lease in leases:
-        lease.release()
+    for hold in holds:
+        hold.release()
 
 
-def test_tenant_router_uses_idle_ttl_lru_and_never_evicts_an_active_lease(
+def test_tenant_router_uses_idle_ttl_lru_and_never_evicts_an_active_request(
     tmp_path: Path,
 ) -> None:
     now = [0.0]
@@ -129,7 +129,7 @@ def test_tenant_router_uses_idle_ttl_lru_and_never_evicts_an_active_lease(
         clock=lambda: now[0],
         runtime_factory=factory,  # type: ignore[arg-type]
     )
-    alpha = router.lease_for("alpha")
+    alpha = router.hold_for("alpha")
     now[0] = 1
     beta_runtime = router.runtime_for("beta")
     now[0] = 2
@@ -143,7 +143,7 @@ def test_tenant_router_uses_idle_ttl_lru_and_never_evicts_an_active_lease(
     assert alpha_runtime.close_calls == 0
     assert gamma_runtime.close_calls == 0
 
-    active = router.lease_for("alpha")
+    active = router.hold_for("alpha")
     now[0] = 20
     refreshed_gamma = router.runtime_for("gamma")
     assert refreshed_gamma is not gamma_runtime
@@ -183,7 +183,7 @@ def test_tenant_router_quarantines_failed_eviction_until_shutdown_retry(
 
     assert first.close_calls == 3
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
-        router.lease_for("beta")
+        router.hold_for("beta")
 
 
 def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
@@ -216,7 +216,7 @@ def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
 
     def evict() -> None:
         try:
-            router.lease_for("beta")
+            router.hold_for("beta")
         except BaseException as exc:
             eviction_error.append(exc)
 
@@ -224,7 +224,7 @@ def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
     evictor.start()
     assert close_started.wait(timeout=2)
 
-    acquired: list[TenantRuntimeScope] = []
+    acquired: list[TenantRuntimeHold] = []
     reacquirer_waiting = threading.Event()
     original_wait = router._condition.wait
 
@@ -235,7 +235,7 @@ def test_tenant_router_blocks_same_tenant_during_eviction_cleanup(
     monkeypatch.setattr(router._condition, "wait", observed_wait)
 
     def reacquire() -> None:
-        acquired.append(router.lease_for("alpha"))
+        acquired.append(router.hold_for("alpha"))
 
     reacquirer = threading.Thread(target=reacquire)
     reacquirer.start()
@@ -275,7 +275,7 @@ def test_tenant_router_retries_only_failed_runtime_shutdowns(tmp_path: Path) -> 
         router.close()
     assert [runtime.close_calls for runtime in created] == [1, 1]
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
-        router.lease_for("gamma")
+        router.hold_for("gamma")
 
     created[0].fail_close = False
     router.close()
@@ -304,13 +304,13 @@ def test_tenant_router_shutdown_is_retryable_after_base_exception(
         router.close()
 
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
-        router.lease_for("alpha")
+        router.hold_for("alpha")
     router.close()
     router.close()
 
     assert runtime.close_calls == 2
     with pytest.raises(TenantRuntimeRouterClosedError, match="closing"):
-        router.lease_for("alpha")
+        router.hold_for("alpha")
 
 
 def test_tenant_router_closes_remaining_runtimes_after_base_exception(
@@ -420,7 +420,7 @@ def test_concurrent_shutdown_callers_close_each_runtime_once(
         tmp_path,
         runtime_factory=lambda _path, **_kwargs: runtime,  # type: ignore[arg-type]
     )
-    lease = router.lease_for("alpha")
+    hold = router.hold_for("alpha")
     waiting_threads: set[int] = set()
     waiters_lock = threading.Lock()
     both_waiting = threading.Event()
@@ -448,7 +448,7 @@ def test_concurrent_shutdown_callers_close_each_runtime_once(
     assert both_waiting.wait(timeout=2)
     assert runtime.close_calls == 0
 
-    lease.release()
+    hold.release()
     for closer in closers:
         closer.join(timeout=2)
         assert not closer.is_alive()

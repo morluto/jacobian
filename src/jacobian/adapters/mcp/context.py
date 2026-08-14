@@ -27,14 +27,14 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class AppState:
-    acquire_runtime: Callable[[], RuntimeScope]
+    acquire_runtime: Callable[[], RuntimeAccess]
     operation_catalog: Any
     worker_registry: MCPBlockingWorkerRegistry
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeScope:
-    """One request's runtime and optional release action."""
+class RuntimeAccess:
+    """A lazily acquired runtime and its private host release callback."""
 
     runtime: JacobianRuntime
     release: Callable[[], None] | None = None
@@ -58,8 +58,8 @@ _active_runtime: ContextVar[JacobianRuntime | None] = ContextVar(
 def _runtime(ctx: Context[Any, Any]) -> Iterator[JacobianRuntime]:
     """Return a runtime, holding a tenant runtime hold for the full request lifetime.
 
-    When tenant isolation is active, the lease is held until the context
-    manager exits so the runtime cannot be evicted mid-request.
+    When tenant isolation is active, the host holds the runtime until the
+    context manager exits so it cannot be evicted mid-request.
     """
 
     active_runtime = _active_runtime.get()
@@ -93,15 +93,15 @@ def _catalog(ctx: Context[Any, Any]) -> Any:
 def _runtime_scope(state: AppState) -> Iterator[JacobianRuntime]:
     """Bind exactly one runtime and blocking-worker owner to an MCP request."""
 
-    lease = state.acquire_runtime()
+    access = state.acquire_runtime()
     with blocking_worker_scope(
         state.worker_registry,
-        lease_release=lease.release,
+        release_callback=access.release,
     ):
-        token: Token[JacobianRuntime | None] = _active_runtime.set(lease.runtime)
+        token: Token[JacobianRuntime | None] = _active_runtime.set(access.runtime)
         try:
-            _start_lean_warmup(lease.runtime)
-            yield lease.runtime
+            _start_lean_warmup(access.runtime)
+            yield access.runtime
         finally:
             _active_runtime.reset(token)
 

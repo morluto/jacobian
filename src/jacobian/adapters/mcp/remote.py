@@ -20,7 +20,7 @@ from jacobian import __version__
 from jacobian.adapters.mcp.context import (
     AppState,
     AuthenticationError,
-    RuntimeScope,
+    RuntimeAccess,
     TenantRuntimeLimitError,
     _configured_root,
 )
@@ -47,12 +47,12 @@ class TenantRuntimeRouterClosedError(RuntimeError):
 @dataclass(slots=True)
 class _TenantRuntimeEntry:
     runtime: JacobianRuntime
-    active_leases: int
+    active_requests: int
     last_used: float
 
 
-class TenantRuntimeScope:
-    """One caller-owned hold preventing eviction or shutdown of a runtime."""
+class TenantRuntimeHold:
+    """Private host guard preventing eviction during an active request."""
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class TenantRuntimeScope:
 
 
 type _AcquisitionPlan = (
-    TenantRuntimeScope | tuple[str, _TenantRuntimeEntry] | Literal["CREATE", "WAIT"]
+    TenantRuntimeHold | tuple[str, _TenantRuntimeEntry] | Literal["CREATE", "WAIT"]
 )
 
 
@@ -174,15 +174,15 @@ class TenantRuntimeRouter:
         self._shutdown_in_flight = False
 
     def runtime_for(self, subject: str | None) -> JacobianRuntime:
-        """Return a compatible unleased runtime for non-request local callers."""
+        """Return a compatible runtime for non-request local callers."""
 
-        lease = self.lease_for(subject)
+        hold = self.hold_for(subject)
         try:
-            return lease.runtime
+            return hold.runtime
         finally:
-            lease.release()
+            hold.release()
 
-    def lease_for(self, subject: str | None) -> TenantRuntimeScope:
+    def hold_for(self, subject: str | None) -> TenantRuntimeHold:
         """Acquire one tenant runtime, creating or evicting outside the lock."""
 
         tenant_key = self._tenant_key(subject)
@@ -193,7 +193,7 @@ class TenantRuntimeRouter:
                         "tenant runtime router is closing"
                     )
                 plan = self._plan_acquisition(tenant_key)
-                if isinstance(plan, TenantRuntimeScope):
+                if isinstance(plan, TenantRuntimeHold):
                     return plan
                 if plan == "WAIT":
                     self._condition.wait()
@@ -217,12 +217,12 @@ class TenantRuntimeRouter:
             self._creating.discard(tenant_key)
             entry = _TenantRuntimeEntry(
                 runtime=runtime,
-                active_leases=1,
+                active_requests=1,
                 last_used=self._clock(),
             )
             self._runtimes[tenant_key] = entry
             self._condition.notify_all()
-        return TenantRuntimeScope(self, tenant_key, runtime)
+        return TenantRuntimeHold(self, tenant_key, runtime)
 
     def _tenant_key(self, subject: str | None) -> str:
         tenant = subject
@@ -246,12 +246,12 @@ class TenantRuntimeRouter:
             return "WAIT"
         entry = self._runtimes.get(tenant_key)
         if entry is not None and not (
-            entry.active_leases == 0
+            entry.active_requests == 0
             and now - entry.last_used >= self.idle_timeout_seconds
         ):
-            entry.active_leases += 1
+            entry.active_requests += 1
             entry.last_used = now
-            return TenantRuntimeScope(self, tenant_key, entry.runtime)
+            return TenantRuntimeHold(self, tenant_key, entry.runtime)
         if entry is not None:
             return self._begin_eviction(tenant_key, self._runtimes.pop(tenant_key))
         quarantined = self._quarantined.pop(tenant_key, None)
@@ -278,7 +278,7 @@ class TenantRuntimeRouter:
         inactive = tuple(
             (key, candidate)
             for key, candidate in self._runtimes.items()
-            if candidate.active_leases == 0
+            if candidate.active_requests == 0
         )
         if not inactive:
             raise TenantRuntimeLimitError(
@@ -314,9 +314,9 @@ class TenantRuntimeRouter:
     def _release(self, tenant_key: str) -> None:
         with self._condition:
             entry = self._runtimes.get(tenant_key)
-            if entry is None or entry.active_leases < 1:
-                raise RuntimeError("tenant runtime lease ownership was lost")
-            entry.active_leases -= 1
+            if entry is None or entry.active_requests < 1:
+                raise RuntimeError("tenant runtime request ownership was lost")
+            entry.active_requests -= 1
             entry.last_used = self._clock()
             self._condition.notify_all()
 
@@ -327,7 +327,7 @@ class TenantRuntimeRouter:
             while (
                 self._creating
                 or self._evictions_in_flight
-                or any(entry.active_leases for entry in self._runtimes.values())
+                or any(entry.active_requests for entry in self._runtimes.values())
             ):
                 self._condition.wait()
             return tuple(self._runtimes.items()) + tuple(self._quarantined.items())
@@ -488,11 +488,11 @@ def create_remote_server(
         runtime_factory=create_runtime if runtime_factory is None else runtime_factory,
     )
 
-    def acquire_runtime() -> RuntimeScope:
+    def acquire_runtime() -> RuntimeAccess:
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
-        lease = router.lease_for(subject)
-        return RuntimeScope(lease.runtime, lease.release)
+        hold = router.hold_for(subject)
+        return RuntimeAccess(hold.runtime, hold.release)
 
     state = AppState(
         acquire_runtime=acquire_runtime,

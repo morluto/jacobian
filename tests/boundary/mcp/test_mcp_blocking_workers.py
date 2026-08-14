@@ -1,4 +1,4 @@
-"""MCP blocking-worker cancellation, drain, lease, and lifespan shutdown."""
+"""MCP blocking-worker cancellation, drain, and lifespan shutdown."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 from jacobian.adapters.mcp.context import (
     AppState,
-    RuntimeScope,
+    RuntimeAccess,
     _runtime,
     _runtime_scope,
 )
@@ -224,7 +224,7 @@ def test_repeated_cancellation_keeps_draining_blocking_work() -> None:
     asyncio.run(scenario())
 
 
-def test_cancelled_worker_retains_its_request_lease_until_late_completion(
+def test_cancelled_worker_retains_its_runtime_until_late_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A late worker cannot outlive the tenant runtime hold protecting its runtime."""
@@ -234,7 +234,7 @@ def test_cancelled_worker_retains_its_request_lease_until_late_completion(
     )
     registry = MCPBlockingWorkerRegistry()
     release = threading.Event()
-    lease_released = threading.Event()
+    runtime_released = threading.Event()
     worker_finished = threading.Event()
 
     async def scenario() -> None:
@@ -247,7 +247,9 @@ def test_cancelled_worker_retains_its_request_lease_until_late_completion(
             worker_finished.set()
 
         async def request() -> None:
-            with blocking_worker_scope(registry, lease_release=lease_released.set):
+            with blocking_worker_scope(
+                registry, release_callback=runtime_released.set
+            ):
                 await _run_blocking(blocking_operation)
 
         task = asyncio.create_task(request())
@@ -256,12 +258,12 @@ def test_cancelled_worker_retains_its_request_lease_until_late_completion(
         with pytest.raises(asyncio.CancelledError):
             await task
         assert registry.active_count == 1
-        assert not lease_released.is_set()
+        assert not runtime_released.is_set()
 
         release.set()
         await asyncio.wait_for(asyncio.to_thread(worker_finished.wait, 1), timeout=1)
         await asyncio.sleep(0)
-        assert lease_released.is_set()
+        assert runtime_released.is_set()
         assert registry.active_count == 0
 
     asyncio.run(scenario())
@@ -335,7 +337,7 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
         registry.register(worker, request_scope=None)
         with pytest.raises(MCPBlockingWorkerShutdownError):
             state = AppState(
-                acquire_runtime=lambda: RuntimeScope(Runtime()),  # type: ignore[arg-type]
+                acquire_runtime=lambda: RuntimeAccess(Runtime()),  # type: ignore[arg-type]
                 operation_catalog=object(),
                 worker_registry=registry,
             )
@@ -354,7 +356,7 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
     asyncio.run(scenario())
 
 
-def test_failed_tenant_warmup_releases_the_acquired_lease(
+def test_failed_tenant_warmup_releases_the_acquired_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Warmup executes inside the scope which owns every tenant runtime hold."""
@@ -364,10 +366,10 @@ def test_failed_tenant_warmup_releases_the_acquired_lease(
 
     runtime = object()
 
-    def acquire_runtime() -> RuntimeScope:
+    def acquire_runtime() -> RuntimeAccess:
         nonlocal acquired
         acquired += 1
-        return RuntimeScope(runtime, released.set)  # type: ignore[arg-type]
+        return RuntimeAccess(runtime, released.set)  # type: ignore[arg-type]
 
     state = AppState(
         acquire_runtime=acquire_runtime,
@@ -394,7 +396,7 @@ def test_failed_tenant_warmup_releases_the_acquired_lease(
     assert released.is_set()
 
 
-def test_injected_context_reuses_the_interceptor_tenant_lease(
+def test_injected_context_reuses_the_interceptor_tenant_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     acquired = 0
@@ -405,10 +407,10 @@ def test_injected_context_reuses_the_interceptor_tenant_lease(
         nonlocal released
         released += 1
 
-    def acquire_runtime() -> RuntimeScope:
+    def acquire_runtime() -> RuntimeAccess:
         nonlocal acquired
         acquired += 1
-        return RuntimeScope(runtime, release_runtime)  # type: ignore[arg-type]
+        return RuntimeAccess(runtime, release_runtime)  # type: ignore[arg-type]
 
     state = AppState(
         acquire_runtime=acquire_runtime,

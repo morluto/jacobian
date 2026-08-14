@@ -39,7 +39,7 @@ class MCPBlockingWorkerRegistry:
 
     A cancelled request may finish before its thread does.  The registry keeps
     that task observable until its result or failure is consumed, and lets a
-    tenant request lease remain held for the same interval.
+    tenant runtime hold remain active for the same interval.
     """
 
     def __init__(self) -> None:
@@ -49,7 +49,7 @@ class MCPBlockingWorkerRegistry:
 
     @property
     def active_count(self) -> int:
-        # A finished task still owns its request lease until its done callback
+        # A finished task still owns its request hold until its done callback
         # consumes the late result and releases that scope.
         return len(self._workers)
 
@@ -90,7 +90,7 @@ class MCPBlockingWorkerRegistry:
 
         Lifespan shutdown uses this after a bounded drain expires.  The callback
         runs on the event-loop thread after the final worker's late result has
-        been consumed, so tenant leases protecting its runtime have already
+        been consumed, so tenant holds protecting its runtime have already
         been released.
         """
 
@@ -136,10 +136,10 @@ class MCPBlockingWorkerRegistry:
 
 
 class _MCPBlockingRequestScope:
-    """Release a request's tenant lease only after all of its workers finish."""
+    """Release a tenant runtime only after all request workers finish."""
 
-    def __init__(self, lease_release: Callable[[], None] | None) -> None:
-        self._lease_release = lease_release
+    def __init__(self, release_callback: Callable[[], None] | None) -> None:
+        self._release_callback = release_callback
         self._workers = 0
         self._request_finished = False
         self._released = False
@@ -160,10 +160,10 @@ class _MCPBlockingRequestScope:
             self._request_finished
             and self._workers == 0
             and not self._released
-            and self._lease_release is not None
+            and self._release_callback is not None
         ):
             self._released = True
-            self._lease_release()
+            self._release_callback()
 
 
 _blocking_worker_scope: ContextVar[_MCPBlockingRequestScope | None] = ContextVar(
@@ -180,11 +180,11 @@ _blocking_worker_registry: ContextVar[MCPBlockingWorkerRegistry | None] = Contex
 def blocking_worker_scope(
     registry: MCPBlockingWorkerRegistry,
     *,
-    lease_release: Callable[[], None] | None = None,
+    release_callback: Callable[[], None] | None = None,
 ) -> Any:
     """Bind lifespan worker ownership to one MCP request or resource read."""
 
-    scope = _MCPBlockingRequestScope(lease_release)
+    scope = _MCPBlockingRequestScope(release_callback)
     registry_token: Token[MCPBlockingWorkerRegistry | None] = (
         _blocking_worker_registry.set(registry)
     )

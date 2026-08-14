@@ -13,7 +13,7 @@ from mcp.server import MCPServer
 from jacobian import __version__
 from jacobian.adapters.mcp.context import (
     AppState,
-    RuntimeScope,
+    RuntimeAccess,
     _configured_root,
 )
 from jacobian.adapters.mcp.core import (
@@ -84,7 +84,7 @@ class _LazyLocalRuntime:
         self._runtime: JacobianRuntime | None = None
         self._lock = threading.Lock()
 
-    def acquire(self) -> RuntimeScope:
+    def acquire(self) -> RuntimeAccess:
         with self._lock:
             if self._runtime is None:
                 self._runtime = create_runtime(
@@ -93,7 +93,7 @@ class _LazyLocalRuntime:
                     operation_exclusions=self.operation_exclusions,
                     operation_policy=self.operation_policy,
                 )
-            return RuntimeScope(self._runtime)
+            return RuntimeAccess(self._runtime)
 
     def close(self) -> None:
         with self._lock:
@@ -116,7 +116,7 @@ def create_server_from_runtime(
     """
 
     state = AppState(
-        acquire_runtime=lambda: RuntimeScope(runtime),
+        acquire_runtime=lambda: RuntimeAccess(runtime),
         operation_catalog=runtime.core.operations,
         worker_registry=MCPBlockingWorkerRegistry(),
     )

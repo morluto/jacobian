@@ -15,7 +15,7 @@ from tests.support.provider_lean import (
 from jacobian.contracts.operations import (
     OperationRequest,
 )
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 
 pytestmark = [
     pytest.mark.skipif(

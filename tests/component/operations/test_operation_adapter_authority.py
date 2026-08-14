@@ -27,7 +27,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_errors import OperationError
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 
 
 @pytest.fixture

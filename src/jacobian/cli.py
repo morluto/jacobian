@@ -19,7 +19,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.operator_lifecycle import (
     CheckerAuthorization,
     initialize_state,

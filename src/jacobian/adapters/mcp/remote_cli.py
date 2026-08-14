@@ -100,7 +100,7 @@ def main() -> None:
         create_remote_server,
         load_static_token_file,
     )
-    from jacobian.operation_service import OperationVisibilityPolicy
+    from jacobian.operation_visibility import OperationVisibilityPolicy
 
     token_verifier = None
     auth = None

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 
 
 def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(

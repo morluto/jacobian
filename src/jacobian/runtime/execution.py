@@ -7,7 +7,7 @@ from pathlib import Path
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.operation_registry import OperationRegistry
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services

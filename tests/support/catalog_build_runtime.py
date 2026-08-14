@@ -7,7 +7,7 @@ from pathlib import Path
 from jacobian.catalog_build import build_catalog_operations
 from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.catalog_build_resources import CatalogBuildResources
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.model import JacobianRuntime

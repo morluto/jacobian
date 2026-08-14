@@ -15,7 +15,7 @@ from jacobian.operation_catalog import (
     OperationCatalogError,
     OperationCatalogStore,
 )
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.registry import CheckerRegistry
 from jacobian.storage.repository import ArtifactRepository
 

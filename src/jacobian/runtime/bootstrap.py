@@ -6,7 +6,8 @@ from pathlib import Path
 
 from jacobian.artifacts import ArtifactService
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_service import OperationService, OperationVisibilityPolicy
+from jacobian.operation_service import OperationService
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.resources import RuntimeResources

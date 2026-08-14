@@ -30,7 +30,7 @@ from jacobian.adapters.mcp.lifecycle import (
 )
 from jacobian.adapters.mcp.resources import register_resources
 from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.runtime.execution import create_execution_runtime
 from jacobian.runtime.model import JacobianRuntime
 

@@ -18,7 +18,7 @@ from jacobian.operation_catalog import (
     exact_checker_declaration_digest,
     operation_declaration_digest,
 )
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services

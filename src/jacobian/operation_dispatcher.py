@@ -12,7 +12,8 @@ from jacobian.contracts.operations import (
 )
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_registry import OperationRegistry
-from jacobian.operation_service import OperationService, OperationVisibilityPolicy
+from jacobian.operation_service import OperationService
+from jacobian.operation_visibility import OperationVisibilityPolicy
 
 
 class OperationDispatcher(OperationService):

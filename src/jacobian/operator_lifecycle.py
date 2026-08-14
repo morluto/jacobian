@@ -13,7 +13,7 @@ from jacobian.operation_catalog import (
     OperationCatalog,
     OperationCatalogError,
 )
-from jacobian.operation_service import OperationVisibilityPolicy
+from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.persistence.migrations import (
     CURRENT_STATE_FORMAT_REVISION,
     STATE_MIGRATIONS,

@@ -20,7 +20,7 @@ def _load(name: str) -> ModuleType:
     return module
 
 
-def test_lean_setup_installs_pin_then_gets_cache_and_builds(
+def test_lean_setup_installs_only_the_pinned_toolchain(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     setup_lean = _load("setup_lean")
@@ -39,15 +39,7 @@ def test_lean_setup_installs_pin_then_gets_cache_and_builds(
     setup_lean.setup_lean(repo, run=record)
 
     assert commands == [
-        (
-            ("elan", "toolchain", "install", "leanprover/lean4:v4.31.0"),
-            repo,
-        ),
-        (("lake", "exe", "cache", "get"), repo / "lean"),
-        (
-            ("lake", "build", "repl", "jacobian_lean_proof_state"),
-            repo / "lean",
-        ),
+        (("elan", "toolchain", "install", "leanprover/lean4:v4.31.0"), repo)
     ]
     assert all("update" not in command for command, _cwd in commands)
 

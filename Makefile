@@ -12,7 +12,7 @@ PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
 VALIDATION_LOCK := $(UV_RUN) python tools/with_validation_lock.py
 # Fixed semantic lanes covering the Lean-free ordinary testpaths. CI runs these
 # independently; `make check-all` reproduces them locally in this order.
-ORDINARY_TEST_LANES := unit component domain composition e2e provider
+ORDINARY_TEST_LANES := unit component domain composition
 PUBLIC_COMMANDS := setup quick check check-all check-external fix
 
 include make/development.mk
@@ -50,11 +50,6 @@ test-composition: ## Cross-domain composition (2 workers, 120s).
 		$(if $(TESTS),$(TESTS),tests/composition) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-storage: ## SQLite durability and recovery (serial, 120s).
-	$(UV_RUN) pytest --timeout=120 \
-		$(if $(TESTS),$(TESTS),tests/boundary/storage) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
-
 test-process: ## Killable child-process boundaries (2 workers, 120s).
 	$(PYTEST_RUNNER) --name process --timeout-seconds 4800 -- \
 		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
@@ -67,20 +62,10 @@ test-mcp: ## MCP transport boundaries (2 workers, 120s).
 		$(if $(TESTS),$(TESTS),tests/boundary/mcp) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-provider: ## Maintained Python provider boundaries (1 worker, 180s).
-	$(UV_RUN) pytest -n 1 --dist load --timeout=180 \
-		$(if $(TESTS),$(TESTS),tests/boundary/providers/cvc5 tests/boundary/providers/external_sat tests/boundary/providers/flint) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
-
 test-lean: ## Pinned Lean/Mathlib boundary (serial, 300s, kill-safe).
 	$(PYTEST_RUNNER) --name lean --timeout-seconds 12000 -- \
 		--timeout=300 --timeout-method=signal \
-		$(if $(TESTS),$(TESTS),tests/boundary/providers/lean) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
-
-test-e2e: ## Complete caller-visible journeys (serial, 180s).
-	$(UV_RUN) pytest --timeout=180 \
-		$(if $(TESTS),$(TESTS),tests/e2e) \
+		$(if $(TESTS),$(TESTS),tests/unit/domains/test_logic_operations.py) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test: test-ordinary ## All ordinary Python tests.
@@ -95,13 +80,6 @@ test-compatibility: ## Supported-version import/API compatibility smoke.
 		tests/unit/tooling/test_ci_compatibility.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-checker-subprocess-coverage: ## Prove focused checker-worker child coverage collection.
-	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) pytest -n 0 --timeout=30 \
-		tests/unit/test_checker_worker_manifest.py \
-		--cov --cov-config=.coveragerc-subprocess --cov-report= --cov-fail-under=0
-	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) coverage report \
-		--include=src/jacobian/checker_worker.py --fail-under=1
-
 test-full: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.
 	$(VALIDATION_LOCK) run --target test-full -- $(MAKE) _test-full
 
@@ -111,12 +89,9 @@ _test-full:
 	$(MAKE) _test-exhaustive
 	$(MAKE) test-domain
 	$(MAKE) test-composition
-	$(MAKE) test-storage
 	$(MAKE) test-process
 	$(MAKE) test-mcp
-	$(MAKE) test-provider
 	$(MAKE) test-lean
-	$(MAKE) test-e2e
 
 test-stress: ## Repeat explicitly marked property tests on the scheduled lane.
 	$(UV_RUN) pytest -n 0 --timeout=120 --timeout-method=thread -m property \

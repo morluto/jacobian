@@ -41,7 +41,7 @@ def test_wheel_job_covers_supported_pythons_and_313_compatibility_smoke() -> Non
 
     assert 'python-version: ["3.12", "3.13"]' in wheel
     assert "--only-binary :all:" in wheel
-    assert '"$environment/bin/jacobian" --state-dir "$state_dir" init' in wheel
+    assert '"$environment/bin/jacobian" run integer.compute.gcd' in wheel
     assert "make test-compatibility" in wheel
     assert "make test\n" not in wheel
 
@@ -111,7 +111,7 @@ def test_process_lane_is_invoked_by_ci() -> None:
         encoding="utf-8"
     )
 
-    assert "lane: [storage, process, mcp]" in workflow
+    assert "lane: [process, mcp]" in workflow
     assert "uses: ./.github/actions/run-test-lane" in workflow
     assert "run: make test-${{ inputs.lane }}" in action
 
@@ -137,15 +137,14 @@ def test_full_lean_runs_on_merge_group_and_main() -> None:
 
     lean = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
     assert "if: github.event_name != 'pull_request'" in lean
-    assert "JACOBIAN_LEAN_REQUIRED" in lean
+    assert "JACOBIAN_LEAN_REQUIRED" not in lean
     assert "use-github-cache: false" in action
-    assert "use-mathlib-cache: true" in action
-    assert "lake build JacobianLeanRuntime repl jacobian_lean_proof_state" in action
-    assert "tools/preflight_lean_runtime.py --required" in action
-    assert "GitHub .lake cache mode | disabled" in action
-    assert "Restored bytes | 0" in action
-    assert "Saved bytes | 0" in action
-    assert "lean/.lake bytes after build" in action
+    assert "auto-config: false" in action
+    assert "use-mathlib-cache: false" in action
+    assert "JacobianLeanRuntime" not in action
+    assert "jacobian_lean_proof_state" not in action
+    assert "preflight_lean_runtime" not in action
+    assert "Mathlib" not in action
     assert "uses: actions/cache" not in action
 
 
@@ -166,13 +165,10 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
     assert "lane: component" in workflow
     assert "lane: domain" in workflow
     assert "lane: composition" in workflow
-    assert "lane: e2e" in workflow
-    assert "lane: provider" in workflow
+    assert "lane: e2e" not in workflow
+    assert "lane: provider" not in workflow
     assert "uses: ./.github/actions/run-test-lane" in workflow
-    assert (
-        "ORDINARY_TEST_LANES := unit component domain composition e2e provider"
-        in makefile
-    )
+    assert "ORDINARY_TEST_LANES := unit component domain composition" in makefile
     assert "quick: lint test-unit" in makefile
     assert "check: lint typecheck test-unit" in makefile
     assert "check-all: lint typecheck test-ordinary" in makefile
@@ -385,7 +381,7 @@ def test_required_ci_gates_fail_closed_after_cancellation() -> None:
     assert "needs.lean.result" in required
     lean_job = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
     assert "if: github.event_name != 'pull_request'" in lean_job
-    assert "JACOBIAN_LEAN_REQUIRED" in lean_job
+    assert "JACOBIAN_LEAN_REQUIRED" not in lean_job
 
 
 def test_required_pr_workflows_cancel_stale_evidence() -> None:
@@ -409,24 +405,13 @@ def test_required_pr_workflows_cancel_stale_evidence() -> None:
     )
 
 
-def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:
+def test_ci_does_not_schedule_deleted_checker_worker_coverage() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    subprocess_config = (ROOT / ".coveragerc-subprocess").read_text(encoding="utf-8")
-    target = (
-        (ROOT / "Makefile")
-        .read_text(encoding="utf-8")
-        .split("test-checker-subprocess-coverage:", 1)[1]
-        .split("test-full:", 1)[0]
-    )
 
-    assert 'patch = ["subprocess"]' not in pyproject
-    assert "patch = subprocess" in subprocess_config
-    assert "tests/unit/test_checker_worker_manifest.py" in target
-    assert "--cov-config=.coveragerc-subprocess" in target
-    assert "--include=src/jacobian/checker_worker.py --fail-under=1" in target
-    assert workflow.count("make test-checker-subprocess-coverage") == 1
-    assert "needs: [python, boundaries, subprocess_coverage]" in workflow
+    assert "subprocess_coverage:" not in workflow
+    assert "test-checker-subprocess-coverage" not in (ROOT / "Makefile").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:
@@ -476,10 +461,7 @@ def test_ordering_lane_dispatches_through_named_make_targets() -> None:
     assert "ORDERING_LANE is required" in ordering
     assert "$(MAKE) test-$(ORDERING_LANE)" in ordering
     assert "uv run --locked pytest" not in ordering
-    assert (
-        "lane: [unit, component, domain, composition, storage, process, mcp, e2e]"
-        in workflow
-    )
+    assert "lane: [unit, component, domain, composition, process, mcp]" in workflow
     assert "ORDERING_LANE: ${{ matrix.lane }}" in workflow
     assert "run: make security-audit" in workflow
     assert "run: make duplicate-code" in workflow

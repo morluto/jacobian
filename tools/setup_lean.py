@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the pinned Lean toolchain and build local Jacobian Lean targets."""
+"""Install the fixed Lean toolchain used by the one-shot ``lean.check`` tool."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _run_required(arguments: Sequence[str], *, cwd: Path, run: CommandRunner) ->
 
 
 def setup_lean(repo: Path, *, run: CommandRunner = _run) -> None:
-    """Install the repository-pinned Lean toolchain and build local targets."""
+    """Install the repository-pinned Lean toolchain without a Lean workspace."""
 
     repo = repo.resolve()
     if shutil.which("elan") is None:
@@ -35,12 +35,6 @@ def setup_lean(repo: Path, *, run: CommandRunner = _run) -> None:
         )
     toolchain = (repo / "lean" / "lean-toolchain").read_text(encoding="utf-8").strip()
     _run_required(("elan", "toolchain", "install", toolchain), cwd=repo, run=run)
-    _run_required(("lake", "exe", "cache", "get"), cwd=repo / "lean", run=run)
-    _run_required(
-        ("lake", "build", "repl", "jacobian_lean_proof_state"),
-        cwd=repo / "lean",
-        run=run,
-    )
 
 
 def main() -> int:

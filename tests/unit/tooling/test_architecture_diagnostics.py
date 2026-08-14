@@ -50,7 +50,6 @@ def test_wt438_directory_is_excluded(tmp_path: Path) -> None:
         "build",
         "dist",
         "htmlcov",
-        "lean/.lake",
         "node_modules",
     ],
 )

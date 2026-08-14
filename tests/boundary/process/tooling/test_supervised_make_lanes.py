@@ -60,7 +60,7 @@ def test_lean_lane_dry_run_is_serial_and_supervised() -> None:
     assert "--name lean" in output
     assert "--timeout=300" in output
     assert "--timeout-method=signal" in output
-    assert "tests/boundary/providers/lean" in output
+    assert "tests/unit/domains/test_logic_operations.py" in output
     assert " -n " not in output
 
 
@@ -81,12 +81,12 @@ def test_ordinary_unit_lane_invokes_pytest_directly() -> None:
     output = _make_dry_run("test-unit")
 
     assert "pytest_lifecycle.py" not in output
-    assert "pytest --timeout=10" in output
+    assert "--timeout=10" in output
     assert "tests/unit" in output
 
 
-def test_explicit_lean_module_still_collects() -> None:
-    representative = "tests/boundary/providers/lean/test_lean_residual_contracts.py"
+def test_logic_operation_module_still_collects() -> None:
+    representative = "tests/unit/domains/test_logic_operations.py"
     completed = subprocess.run(
         [
             "uv",

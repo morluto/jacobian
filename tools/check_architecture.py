@@ -100,6 +100,8 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
     {
         # The bounded process engine itself.
         PurePosixPath("src/jacobian/bounded_process.py"),
+        # One-shot Lean checking has a bounded subprocess boundary.
+        PurePosixPath("src/jacobian/domains/logic/operations.py"),
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/setup_lean.py"),
@@ -109,23 +111,11 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # Developer helpers that shell out to git, gh, or Make. They are not
         # product process callers.
         PurePosixPath("tools/inventory_github_workflows.py"),
-        # This clean-room verifier must independently replay the pinned Lean
-        # protocol inside its isolated verifier image.  It cannot import the
-        # repository command runner without widening the verifier build
-        # context, so its one exact replay transport owns the process.
-        PurePosixPath(
-            "benchmarks/datasets/provider-feasibility-v1/lean-repl/tests/replay.py"
-        ),
         # --- Explicit test fixtures where subprocess is the test mechanism ---
         # Process boundary tests directly exercise subprocess seams.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
-        PurePosixPath("tests/boundary/process/test_cvc5_worker_command_profile.py"),
         PurePosixPath("tests/boundary/process/test_process_policy.py"),
         PurePosixPath("tests/boundary/process/test_inline_no_state_dir.py"),
-        PurePosixPath("tests/boundary/process/test_rational_lp_worker_protocol.py"),
-        PurePosixPath(
-            "tests/boundary/process/polynomial/test_polynomial_system_adapter_guards.py"
-        ),
         PurePosixPath("tests/boundary/process/public_api/test_import_isolation.py"),
         # Tooling boundary tests invoke CI scripts and installers as subprocesses.
         PurePosixPath("tests/boundary/process/tooling/ci.py"),
@@ -137,34 +127,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # MCP transport boundary tests spawn server processes.
         PurePosixPath("tests/boundary/mcp/test_mcp_entrypoint.py"),
         PurePosixPath("tests/boundary/mcp/test_remote_mcp_auth.py"),
-        # Provider startup boundary tests spawn provider executables.
-        PurePosixPath(
-            "tests/boundary/providers/external_sat/startup/"
-            "test_sat_unsat_proof_verification.py"
-        ),
-        PurePosixPath(
-            "tests/boundary/providers/external_sat/startup/"
-            "test_smt_unsat_proof_verification.py"
-        ),
-        PurePosixPath(
-            "tests/boundary/providers/flint/startup/test_required_provider_startup.py"
-        ),
-        PurePosixPath(
-            "tests/boundary/providers/lean/test_lean_statement_operations.py"
-        ),
-        # Storage recovery/transaction boundary tests crash and recover processes.
-        PurePosixPath(
-            "tests/boundary/storage/transactions/test_process_crash_recovery.py"
-        ),
-        PurePosixPath("tests/boundary/storage/transactions/test_quota_accounting.py"),
-        PurePosixPath(
-            "tests/boundary/storage/transactions/test_state_database_migrations.py"
-        ),
-        # Checker component tests spawn checker processes.
-        PurePosixPath("tests/component/checkers/test_exact_domain_checker_attacks.py"),
-        PurePosixPath("tests/component/checkers/test_lean4_checker.py"),
-        # Lean provider component tests spawn lean checker.
-        PurePosixPath("tests/component/providers/lean/test_lean_checker_errors.py"),
         # Matrix provider component tests spawn matrix executables.
         PurePosixPath("tests/component/providers/matrix/test_matrix_operations.py"),
         # Real analysis domain test uses external analysis executables.
@@ -255,9 +217,7 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/providers/singular_runtime.py"),
         PurePosixPath("src/jacobian/providers/external_solver_runtime.py"),
         PurePosixPath("src/jacobian/provider_measurements.py"),
-        PurePosixPath("src/jacobian/lean_frontend/repl.py"),
-        PurePosixPath("src/jacobian/lean_frontend/exploration.py"),
-        PurePosixPath("src/jacobian_checkers/lean4.py"),
+        PurePosixPath("src/jacobian/domains/logic/operations.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/doctor_external_tools.py"),
         PurePosixPath("tools/setup_lean.py"),
@@ -1636,177 +1596,12 @@ def _unsupported_surface_text_violations(
     return tuple(violations)
 
 
-_EXPENSIVE_RUNTIME_FIXTURES = frozenset(
-    {
-        "attached_complete_runtime",
-        "attached_complete_runtime_read_only",
-        "authorized_complete_runtime",
-        "authorized_complete_runtime_read_only",
-        "fresh_complete_runtime",
-    }
-)
-
-
-def _calls_catalog_build_runtime(node: ast.AST) -> bool:
-    for child in _walk_nodes(node):
-        if not isinstance(child, ast.Call):
-            continue
-        func = child.func
-        if isinstance(func, ast.Name) and func.id == "create_catalog_build_runtime":
-            return True
-        if (
-            isinstance(func, ast.Attribute)
-            and func.attr == "create_catalog_build_runtime"
-        ):
-            return True
-    return False
-
-
-def _discarded_expensive_runtime_fixtures(node: ast.FunctionDef) -> frozenset[str]:
-    params = {arg.arg for arg in node.args.args}
-    requested = params & _EXPENSIVE_RUNTIME_FIXTURES
-    if not requested:
-        return frozenset()
-    discarded: set[str] = set()
-    for child in _walk_nodes(node):
-        if not isinstance(child, ast.Assign) or len(child.targets) != 1:
-            continue
-        target = child.targets[0]
-        if (
-            isinstance(target, ast.Name)
-            and target.id == "_"
-            and isinstance(child.value, ast.Name)
-            and child.value.id in requested
-        ):
-            discarded.add(child.value.id)
-    return frozenset(discarded)
-
-
-_LEAN_BEHAVIOR_TEST_MODULES = frozenset(
-    {
-        "tests/boundary/providers/lean/startup/test_lean.py",
-        "tests/boundary/providers/lean/startup/test_lean_exploration_operations.py",
-    }
-)
 _HISTORICAL_TEST_BUCKET_WORDS = frozenset(
     {"frontier", "migration", "regression", "release"}
 )
 _COMPOSITION_OWNERS = frozenset(
     {"authority", "catalog", "cli", "interoperability", "runtime"}
 )
-_CLI_COMPLETE_PORTFOLIO_ALLOWLIST = frozenset(
-    {
-        "test_cli_help_exposes_only_math_and_operator_commands",
-        "test_cli_init_reports_installed_operation_count",
-        "test_cli_run_requires_exactly_one_payload_source",
-        "test_cli_run_matrix_determinant_without_state_directory",
-    }
-)
-
-
-def _imports_qualified_module(tree: ast.AST, module: str) -> bool:
-    parent, _, name = module.rpartition(".")
-    for node in _walk_nodes(tree):
-        if isinstance(node, ast.Import):
-            if any(alias.name == module for alias in node.names):
-                return True
-        elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            if node.module == module:
-                return True
-            if (
-                parent
-                and node.module == parent
-                and any(alias.name == name for alias in node.names)
-            ):
-                return True
-    return False
-
-
-def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
-    return _imports_qualified_module(tree, "tests.support.complete_runtime_fixtures")
-
-
-def _imports_jacobian_runtime(tree: ast.AST) -> bool:
-    return _imports_qualified_module(
-        tree, "jacobian.runtime"
-    ) or _imports_qualified_module(tree, "tests.support.catalog_build_runtime")
-
-
-def _create_cli_app_call_has_runtime_opener(node: ast.Call) -> bool:
-    return any(keyword.arg == "runtime_opener" for keyword in node.keywords)
-
-
-def _calls_unscoped_cli_runtime(node: ast.AST) -> bool:
-    for child in _walk_nodes(node):
-        if not isinstance(child, ast.Call):
-            continue
-        func = child.func
-        if (
-            isinstance(func, ast.Name)
-            and func.id == "create_cli_app"
-            and (not _create_cli_app_call_has_runtime_opener(child))
-        ):
-            return True
-        if (
-            isinstance(func, ast.Attribute)
-            and func.attr == "create_cli_app"
-            and (not _create_cli_app_call_has_runtime_opener(child))
-        ):
-            return True
-        if (
-            isinstance(func, ast.Attribute)
-            and func.attr == "invoke"
-            and child.args
-            and isinstance(child.args[0], ast.Name)
-            and child.args[0].id == "app"
-        ):
-            return True
-    return _calls_catalog_build_runtime(node)
-
-
-def _cli_projection_violations(
-    relative: PurePosixPath, tree: ast.AST
-) -> tuple[Violation, ...]:
-    parts = relative.parts
-    if len(parts) < 3 or parts[1] != "composition" or parts[2] != "cli":
-        return ()
-    violations: list[Violation] = []
-    for node in tree.body:
-        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
-            continue
-        if node.name in _CLI_COMPLETE_PORTFOLIO_ALLOWLIST:
-            continue
-        if _calls_unscoped_cli_runtime(node):
-            violations.append(
-                Violation(
-                    str(relative),
-                    "test-ownership",
-                    "CLI projection tests must use selected_runtime_opener; "
-                    f"{node.name} cold-starts the complete portfolio",
-                )
-            )
-    return tuple(violations)
-
-
-def _discarded_runtime_setup_violations(
-    relative: PurePosixPath, tree: ast.AST
-) -> tuple[Violation, ...]:
-    violations: list[Violation] = []
-    for node in tree.body:
-        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
-            continue
-        discarded = _discarded_expensive_runtime_fixtures(node)
-        if discarded and _calls_catalog_build_runtime(node):
-            names = ", ".join(sorted(discarded))
-            violations.append(
-                Violation(
-                    str(relative),
-                    "test-ownership",
-                    "expensive runtime fixtures must be the subject under test, "
-                    f"not discarded setup: {names}",
-                )
-            )
-    return tuple(violations)
 
 
 def _test_ownership_violations(
@@ -1817,51 +1612,6 @@ def _test_ownership_violations(
         return ()
 
     violations: list[Violation] = []
-    focused_suite = len(parts) >= 2 and parts[1] in {"component", "domain", "unit"}
-    imports_complete_runtime = _imports_complete_runtime_fixtures(tree)
-    imports_runtime = _imports_jacobian_runtime(tree)
-    if str(relative) in _LEAN_BEHAVIOR_TEST_MODULES and (
-        imports_runtime or imports_complete_runtime
-    ):
-        violations.append(
-            Violation(
-                str(relative),
-                "test-ownership",
-                "Lean behavior tests must use tests.support.lean_runtime "
-                "instead of the complete catalog-build runtime",
-            )
-        )
-
-    if focused_suite and (imports_runtime or imports_complete_runtime):
-        violations.append(
-            Violation(
-                str(relative),
-                "test-ownership",
-                "focused tests must use their owning seam instead of the complete runtime",
-            )
-        )
-    violations.extend(_discarded_runtime_setup_violations(relative, tree))
-    violations.extend(_cli_projection_violations(relative, tree))
-
-    if (
-        not focused_suite
-        and relative.name == "conftest.py"
-        and (imports_runtime or imports_complete_runtime)
-    ):
-        owning_complete_runtime = len(parts) >= 2 and parts[1] in {
-            "boundary",
-            "composition",
-            "e2e",
-        }
-        if not owning_complete_runtime:
-            violations.append(
-                Violation(
-                    str(relative),
-                    "test-ownership",
-                    "complete-runtime fixtures belong only to their boundary, "
-                    "composition, or e2e subtree",
-                )
-            )
 
     if len(parts) >= 2 and parts[1] == "composition":
         lowered = {
@@ -1965,9 +1715,7 @@ def check_architecture(root: Path | str = ROOT) -> ArchitectureReport:
     project_root = Path(root).resolve()
     repository_files = _repository_files(project_root)
     py_files = [path for path in repository_files if path.suffix == ".py"]
-    text_files = [
-        path for path in repository_files if path.suffix in _TEXT_EXTENSIONS
-    ]
+    text_files = [path for path in repository_files if path.suffix in _TEXT_EXTENSIONS]
 
     violations: list[Violation] = []
     for file_path in py_files:

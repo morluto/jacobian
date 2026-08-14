@@ -6,7 +6,7 @@ on:
       pytest-selector:
         description: One Lean pytest file or node ID to run
         required: true
-        default: tests/boundary/providers/lean/startup/test_lean.py
+        default: tests/unit/domains/test_logic_operations.py
         type: string
       keyword:
         description: Optional pytest -k expression

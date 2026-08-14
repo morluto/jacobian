@@ -17,7 +17,6 @@ classifiers = [
 ]
 dependencies = [
     "cvc5==1.3.4",
-    "filelock>=3.20,<4",
     "jsonschema>=4.23,<5",
     "mcp==2.0.0",
     "mcp-types==2.0.0",
@@ -73,18 +72,13 @@ exclude = [
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
-# Default collection is Lean-free and xdist-safe. Storage, process, MCP, and
-# Lean stay on explicit paths / Make targets because they need serial SQLite
-# or kill-safe process supervision.
+# Default collection is Lean-free and xdist-safe. Process, MCP, and optional
+# Lean checks stay on explicit paths / Make targets.
 testpaths = [
     "tests/unit",
     "tests/component",
     "tests/domain",
     "tests/composition",
-    "tests/boundary/providers/cvc5",
-    "tests/boundary/providers/external_sat",
-    "tests/boundary/providers/flint",
-    "tests/e2e",
 ]
 # Per-invocation --timeout lives on Make/CI commands, not here: a global
 # deadline would interrupt native solvers that process/Lean isolate instead.

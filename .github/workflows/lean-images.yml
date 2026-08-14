@@ -5,13 +5,11 @@ on:
     branches: [main]
     paths:
       - "containers/lean-checker/**"
-      - "containers/lean-repl-agent/**"
       - ".github/workflows/lean-images.yml"
   push:
     branches: [main]
     paths:
       - "containers/lean-checker/**"
-      - "containers/lean-repl-agent/**"
       - ".github/workflows/lean-images.yml"
   workflow_dispatch:
 
@@ -38,8 +36,6 @@ jobs:
         include:
           - image: jacobian-lean-checker
             directory: lean-checker
-          - image: jacobian-lean-repl-agent
-            directory: lean-repl-agent
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -91,8 +87,6 @@ jobs:
         include:
           - image: jacobian-lean-checker
             directory: lean-checker
-          - image: jacobian-lean-repl-agent
-            directory: lean-repl-agent
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -329,8 +329,7 @@ def test_inline_executor_cannot_import_control_plane_layers(tmp_path: Path) -> N
     _write(
         tmp_path,
         "src/jacobian/inline_execution.py",
-        "from jacobian.storage.repository import ArtifactRepository\n"
-        "from jacobian.sat_smt.sat import install_sat_artifacts\n",
+        "from jacobian.adapters.mcp.server import create_server\n",
     )
 
     assert "inline-executor-boundary" in _codes(tmp_path)

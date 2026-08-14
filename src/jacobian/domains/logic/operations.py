@@ -25,6 +25,7 @@ _MAX_CLAUSES = 8_192
 _MAX_LITERALS = 32_768
 _MAX_SMTLIB_BYTES = 128_000
 _MAX_MODEL_BYTES = 64_000
+_LEAN_TOOLCHAIN = "leanprover/lean4:v4.31.0"
 
 
 class CanonicalCnf(ContractModel):
@@ -313,9 +314,10 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
                 environment=worker_environment(
                     extra_variables=("PATH", "ELAN_HOME"),
                     overrides={
+                        "ELAN_TOOLCHAIN": _LEAN_TOOLCHAIN,
                         "ELAN_HOME": os.environ.get(
                             "ELAN_HOME", str(Path.home() / ".elan")
-                        )
+                        ),
                     },
                     locale="C.UTF-8",
                 ),

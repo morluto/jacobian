@@ -43,7 +43,6 @@ dist/
 htmlcov/
 benchmarks/results/
 /jobs/
-lean/.lake/
 
 # Test infrastructure state
 .test_durations

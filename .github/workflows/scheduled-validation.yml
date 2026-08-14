@@ -37,7 +37,7 @@ jobs:
       fail-fast: false
       matrix:
         seed: [17, 20260727]
-        lane: [unit, component, domain, composition, storage, process, mcp, e2e]
+        lane: [unit, component, domain, composition, process, mcp]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-python-tests
@@ -47,17 +47,6 @@ jobs:
         env:
           ORDERING_LANE: ${{ matrix.lane }}
           PYTEST_ARGS: --randomly-seed=${{ matrix.seed }} --durations=20
-
-  optional-providers:
-    name: Optional provider validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - run: make test-provider
 
   security-audit:
     name: Dependency audit

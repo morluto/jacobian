@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 
 def _imported_modules(target: str) -> set[str]:
@@ -42,33 +41,6 @@ def test_native_namespace_does_not_eagerly_import_packaged_backends() -> None:
         _imported_modules("jacobian.math"),
         ("networkx", "sympy", "flint"),
     )
-
-
-def test_runtime_assembly_does_not_import_packaged_backends(tmp_path: Path) -> None:
-    script = """
-import sys
-from pathlib import Path
-from tests.support.catalog_build_runtime import create_catalog_build_runtime
-
-runtime = create_catalog_build_runtime(Path(sys.argv[1]))
-try:
-    forbidden = {"networkx", "sympy", "flint", "z3", "cvc5"}
-    imported = sorted(forbidden.intersection(sys.modules))
-    if imported:
-        raise AssertionError(f"packaged backends imported during assembly: {imported}")
-finally:
-    runtime.close()
-"""
-    completed = subprocess.run(
-        [sys.executable, "-c", script, str(tmp_path / "runtime")],
-        check=False,
-        capture_output=True,
-        env={**os.environ, "SYMPY_GROUND_TYPES": "python"},
-        text=True,
-        timeout=120,
-    )
-
-    assert completed.returncode == 0, completed.stderr
 
 
 def test_backend_check_import_does_not_load_assembly_or_domains() -> None:
@@ -125,7 +97,6 @@ def test_native_finite_fields_does_not_eagerly_import_flint() -> None:
             "jacobian.operation_binding",
             "jacobian.providers",
             "jacobian.runtime",
-            "jacobian.storage",
         ),
     )
 

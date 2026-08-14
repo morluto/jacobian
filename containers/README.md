@@ -1,14 +1,13 @@
 # Reusable evaluation runtimes
 
-These images separate an agent/provider's exploratory toolchain from a
-verifier's authority to replay a submitted mathematical artifact.
+This image supplies the fixed Lean compiler used to replay bounded submitted
+source in an independent verifier.
 
 | Image | Purpose | Must not contain |
 | --- | --- | --- |
 | `jacobian-lean-checker` | Compile and inspect submitted Lean source in a clean verifier. | Task solution, task-specific expected output, or the REPL. |
-| `jacobian-lean-repl-agent` | Run the pinned Lean REPL for provider-feasibility and agent environments. | Authority to certify a report as independently verified. |
 
-The release workflow publishes both images to GHCR after a trusted `main` push.
+The release workflow publishes this image to GHCR after a trusted `main` push.
 It emits immutable commit tags, an OCI digest, SBOM, provenance, and a size
 receipt. A Harbor task must pin the resulting `@sha256:` reference in its
 environment profile or task Dockerfile. Tags are discovery conveniences, not

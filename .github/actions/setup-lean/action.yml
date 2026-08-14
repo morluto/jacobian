@@ -1,5 +1,5 @@
-name: Prepare Lean test environment
-description: Restore pinned Lean and Mathlib, install Python dependencies, and build the Jacobian REPL.
+name: Prepare Lean check environment
+description: Install the fixed Lean toolchain and Python dependencies for one-shot Lean checks.
 
 inputs:
   timing-heading:
@@ -13,11 +13,12 @@ runs:
     - name: Start Lean setup timing
       shell: bash
       run: echo "LEAN_SETUP_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
-    - name: Set up Lean and restore Mathlib cache
+    - name: Set up the fixed Lean toolchain
       uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9 # v1
       with:
         lake-package-directory: lean
-        use-mathlib-cache: true
+        auto-config: false
+        use-mathlib-cache: false
         use-github-cache: false
         build: false
         test: false
@@ -28,13 +29,13 @@ runs:
         TIMING_HEADING: ${{ inputs.timing-heading }}
       run: |
         duration=$(($(date +%s) - LEAN_SETUP_STARTED_AT))
-        echo "LEAN_MATHLIB_CACHE_SECONDS=$duration" >> "$GITHUB_ENV"
+        echo "LEAN_TOOLCHAIN_SETUP_SECONDS=$duration" >> "$GITHUB_ENV"
         {
           echo "## $TIMING_HEADING"
           echo ""
           echo "| Phase | Seconds |"
           echo "| --- | ---: |"
-          echo "| Toolchain and Mathlib cache | $duration |"
+          echo "| Fixed Lean toolchain | $duration |"
         } >> "$GITHUB_STEP_SUMMARY"
     - name: Set up Python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -51,53 +52,16 @@ runs:
     - name: Install Python dependencies
       shell: bash
       run: uv sync --locked --dev
-    - name: Build Lean exploration runtime
-      shell: bash
-      working-directory: lean
-      run: |
-        started=$SECONDS
-        set +e
-        lake build JacobianLeanRuntime repl jacobian_lean_proof_state
-        status=$?
-        set -e
-        build_seconds=$((SECONDS - started))
-        lake_bytes=$(du -sb .lake 2>/dev/null | cut -f1)
-        lake_bytes=${lake_bytes:-0}
-        echo "LEAN_LAKE_BUILD_SECONDS=$build_seconds" >> "$GITHUB_ENV"
-        echo "LEAN_LAKE_BYTES=$lake_bytes" >> "$GITHUB_ENV"
-        echo "| Build Jacobian Lean exploration runtime | $build_seconds |" >> "$GITHUB_STEP_SUMMARY"
-        exit "$status"
-    - name: Prove CORE and MATHLIB runtimes are available
-      shell: bash
-      working-directory: ${{ github.workspace }}
-      env:
-        JACOBIAN_LEAN_REQUIRED: "1"
-      run: |
-        started=$SECONDS
-        uv run --locked python tools/preflight_lean_runtime.py --required
-        echo "| Lean runtime preflight | $((SECONDS - started)) |" >> "$GITHUB_STEP_SUMMARY"
-    - name: Record Lean cache telemetry
+    - name: Record Lean setup telemetry
       if: always()
       shell: bash
       run: |
-        mathlib_seconds=${LEAN_MATHLIB_CACHE_SECONDS:-0}
-        build_seconds=${LEAN_LAKE_BUILD_SECONDS:-0}
-        lake_bytes=${LEAN_LAKE_BYTES:-0}
-        net_seconds=$((mathlib_seconds + build_seconds))
+        setup_seconds=${LEAN_TOOLCHAIN_SETUP_SECONDS:-0}
         {
           echo ""
-          echo "## Lean cache"
+          echo "## Lean toolchain"
           echo ""
           echo "| Field | Value |"
           echo "| --- | --- |"
-          echo "| GitHub .lake cache mode | disabled |"
-          echo "| GitHub .lake restore | skipped |"
-          echo "| Restored bytes | 0 |"
-          echo "| Restore seconds | 0 |"
-          echo "| Saved bytes | 0 |"
-          echo "| Save seconds | 0 |"
-          echo "| Toolchain and Mathlib cache seconds | $mathlib_seconds |"
-          echo "| Local lake build seconds | $build_seconds |"
-          echo "| lean/.lake bytes after build | $lake_bytes |"
-          echo "| Net Lean setup seconds | $net_seconds |"
+          echo "| Fixed toolchain setup seconds | $setup_seconds |"
         } >> "$GITHUB_STEP_SUMMARY"

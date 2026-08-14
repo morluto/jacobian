@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import shutil
+
+import pytest
+
 from jacobian.domains.logic import operations
 from jacobian.domains.logic.domain_declarations import logic_operations
 from jacobian.domains.logic.operations import (
@@ -109,3 +113,13 @@ def test_lean_check_returns_typed_rejection_without_retaining_source(
             severity="ERROR", message="Snippet.lean:1:20: error: invalid proof"
         ),
     )
+
+
+def test_lean_check_elaborates_a_bounded_inline_source() -> None:
+    if shutil.which("lean") is None:
+        pytest.skip("the fixed Lean toolchain is not installed")
+
+    result = check_lean_source(LeanCheckRequest(source="example : True := by trivial"))
+
+    assert result.outcome == "ELABORATED"
+    assert result.diagnostics == ()

@@ -535,7 +535,6 @@ version = "0.12.0"
 source = { editable = "." }
 dependencies = [
     { name = "cvc5" },
-    { name = "filelock" },
     { name = "jsonschema" },
     { name = "mcp" },
     { name = "mcp-types" },
@@ -596,7 +595,6 @@ dev-core = [
 [package.metadata]
 requires-dist = [
     { name = "cvc5", specifier = "==1.3.4" },
-    { name = "filelock", specifier = ">=3.20,<4" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mcp", specifier = "==2.0.0" },
     { name = "mcp-types", specifier = "==2.0.0" },

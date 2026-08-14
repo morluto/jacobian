@@ -24,13 +24,13 @@ _sp = _sub + _proc
 def test_subprocess_in_product_source_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/verification/service.py",
+        "src/jacobian/domains/other.py",
         "import subprocess\n\nsubprocess.run(['echo', 'hi'])\n",
     )
     report = check_architecture(tmp_path)
     sub = [v for v in report.violations if v.code == "subprocess-confined"]
     assert len(sub) == 1
-    assert sub[0].path == "src/jacobian/verification/service.py"
+    assert sub[0].path == "src/jacobian/domains/other.py"
     assert sub[0].line == 1
 
 
@@ -49,16 +49,6 @@ def test_subprocess_in_command_runner_is_allowed(tmp_path: Path) -> None:
         tmp_path,
         "benchmarks/tooling/command_runner.py",
         "import subprocess\n\nsubprocess.Popen(['true'])\n",
-    )
-    report = check_architecture(tmp_path)
-    assert all(v.code != "subprocess-confined" for v in report.violations)
-
-
-def test_subprocess_in_clean_room_lean_replay_is_allowed(tmp_path: Path) -> None:
-    _write(
-        tmp_path,
-        "benchmarks/datasets/provider-feasibility-v1/lean-repl/tests/replay.py",
-        "import subprocess\n\nsubprocess.Popen(['repl'])\n",
     )
     report = check_architecture(tmp_path)
     assert all(v.code != "subprocess-confined" for v in report.violations)
@@ -176,7 +166,7 @@ def test_os_execvpe_in_unlisted_tool_is_flagged(tmp_path: Path) -> None:
 def test_subprocess_import_from_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/lean_frontend/repl.py",
+        "src/jacobian/domains/other.py",
         "from subprocess import Popen\n\nPopen(['lean'])\n",
     )
     report = check_architecture(tmp_path)
@@ -233,13 +223,13 @@ def test_benign_string_without_subprocess_pattern_is_not_flagged(
 def test_run_bounded_process_in_product_caller_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/verification/service.py",
+        "src/jacobian/domains/logic/operations.py",
         "from jacobian.bounded_process import run_bounded_process\nrun_bounded_process(['echo'])\n",
     )
     report = check_architecture(tmp_path)
     gateway = [v for v in report.violations if v.code == "bounded-process-gateway"]
     assert len(gateway) >= 1
-    assert gateway[0].path == "src/jacobian/verification/service.py"
+    assert gateway[0].path == "src/jacobian/domains/logic/operations.py"
 
 
 def test_run_bounded_process_in_process_policy_is_allowed(tmp_path: Path) -> None:
@@ -310,16 +300,6 @@ def test_shutil_which_in_command_runner_is_allowed(tmp_path: Path) -> None:
         tmp_path,
         "benchmarks/tooling/command_runner.py",
         "import shutil\n\nshutil.which('git')\n",
-    )
-    report = check_architecture(tmp_path)
-    assert all(v.code != "shutil-which-resolver" for v in report.violations)
-
-
-def test_shutil_which_in_checker_lean4_is_allowed(tmp_path: Path) -> None:
-    _write(
-        tmp_path,
-        "src/jacobian_checkers/lean4.py",
-        "import shutil\n\nshutil.which('elan')\n",
     )
     report = check_architecture(tmp_path)
     assert all(v.code != "shutil-which-resolver" for v in report.violations)

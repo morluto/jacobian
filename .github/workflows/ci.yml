@@ -62,12 +62,8 @@ jobs:
             timeout-minutes: 15
           - lane: domain
             timeout-minutes: 15
-          - lane: provider
-            timeout-minutes: 25
           - lane: composition
             timeout-minutes: 25
-          - lane: e2e
-            timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lane: [storage, process, mcp]
+        lane: [process, mcp]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -103,24 +99,6 @@ jobs:
           junit-artifact: junit-${{ matrix.lane }}-3.12
           coverage-artifact: coverage-data-${{ matrix.lane }}
           coverage-file: .coverage.${{ matrix.lane }}
-
-  subprocess_coverage:
-    name: checker subprocess coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-python-tests
-        with:
-          python-version: "3.12"
-      - run: make test-checker-subprocess-coverage
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-data-checker-subprocess
-          path: .coverage.checker-subprocess
-          include-hidden-files: true
 
   wheel:
     name: wheel (Python ${{ matrix.python-version }})
@@ -150,13 +128,13 @@ jobs:
           wheel="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
           test -n "$wheel"
           environment="$RUNNER_TEMP/jacobian-wheel-${{ matrix.python-version }}"
-          state_dir="$RUNNER_TEMP/jacobian-state-${{ matrix.python-version }}"
           uv venv --python "${{ matrix.python-version }}" "$environment"
           uv pip install --python "$environment/bin/python" \
             --only-binary :all: "$wheel"
           "$environment/bin/jacobian" --help
           "$environment/bin/jacobian-mcp" --help
-          "$environment/bin/jacobian" --state-dir "$state_dir" init
+          "$environment/bin/jacobian" run integer.compute.gcd \
+            --json '{"left":"84","right":"30"}'
       - if: matrix.python-version == '3.13'
         uses: ./.github/actions/setup-python-tests
         with:
@@ -182,25 +160,21 @@ jobs:
       - name: Prepare Lean test environment
         uses: ./.github/actions/setup-lean
       - run: make test-lean
-        env:
-          JACOBIAN_LEAN_REQUIRED: "1"
 
   coverage:
     name: Coverage
     if: ${{ always() }}
-    needs: [python, boundaries, subprocess_coverage]
+    needs: [python, boundaries]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require python and boundaries
+      - name: Require python and boundary lanes
         env:
           PYTHON_RESULT: ${{ needs.python.result }}
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
-          SUBPROCESS_COVERAGE_RESULT: ${{ needs.subprocess_coverage.result }}
         run: |
           test "$PYTHON_RESULT" = success
           test "$BOUNDARIES_RESULT" = success
-          test "$SUBPROCESS_COVERAGE_RESULT" = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

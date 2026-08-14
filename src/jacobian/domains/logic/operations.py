@@ -238,6 +238,8 @@ class SmtSolveRequest(ContractModel):
             raise ValueError("SMT-LIB input must declare the requested logic")
         if commands.count(("check-sat",)) != 1:
             raise ValueError("SMT-LIB input must contain exactly one check-sat command")
+        if commands[-1:] != (("check-sat",),):
+            raise ValueError("SMT-LIB input must end with its check-sat command")
         return self
 
 

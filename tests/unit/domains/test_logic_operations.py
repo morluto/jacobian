@@ -122,6 +122,14 @@ def test_smt_request_rejects_a_logic_name_hidden_in_a_comment() -> None:
         )
 
 
+def test_smt_request_rejects_state_changes_after_check_sat() -> None:
+    with pytest.raises(ValueError, match="end with its check-sat command"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(check-sat)\n(assert false)\n",
+        )
+
+
 def test_lean_check_returns_typed_rejection_without_retaining_source(
     monkeypatch,
 ) -> None:

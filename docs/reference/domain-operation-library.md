@@ -88,12 +88,16 @@ is deliberately small:
 
 ```python
 @dataclass(frozen=True, slots=True)
-class OperationSpec(Generic[RequestT, ResultT]):
+class OperationDeclaration(Generic[RequestT, ResultT]):
     operation_id: str
     version: str
+    title: str
+    description: str
     request_type: type[RequestT]
     result_type: type[ResultT]
     execute: Callable[[RequestT], ResultT]
+    publication: PublicationPolicy[ResultT] = InlinePublication()
+    tags: tuple[str, ...] = ()
     preflight: Callable[[RequestT], PreflightResult] | None = None
     postcondition: Callable[[RequestT, ResultT], None] | None = None
     effect: Effect = Effect.READ_ONLY
@@ -103,27 +107,16 @@ class OperationSpec(Generic[RequestT, ResultT]):
 `lambda request: determinant(request.matrix)`. It may not reimplement the
 mathematics.
 
-An installed operation pairs the semantic declaration with separate provider
-and publication facts:
-
-```python
-@dataclass(frozen=True, slots=True)
-class InstalledOperation(Generic[RequestT, ResultT]):
-    spec: OperationSpec[RequestT, ResultT]
-    publication: PublicationPolicy[ResultT]
-    provider_binding: ProviderBinding
-```
-
 Publication owns inline bounds, previews, request-local references, durable
 artifacts, and semantic closure over referenced parents and axes. It never owns
 request validation, mathematical postconditions, domain applicability,
-provider selection, checker authority, or operation effects.
+checker authority, or operation effects.
 
-`DomainBundle` groups ordinary installed operations and their shared semantics;
-it has no managed-installer callback. Specialized artifact/checker lifecycles
-belong to explicitly named components in the portfolio composition root. This
-keeps runtime services and dependency ordering out of the semantic operation
-model instead of adding an optional installation mode to every bundle.
+Each domain declaration module exports an immutable tuple of declarations.
+There is no domain-bundle, installer, provider-container, or import-time
+registration layer. The operator lifecycle compiles these declarations into
+the catalog, and execution imports only the module containing the selected
+operation.
 
 ## Execution contract
 
@@ -131,7 +124,7 @@ The ordinary path is:
 
 ```text
 external payload
-  → resolve InstalledOperation
+  → resolve OperationDeclaration
   → one TypeAdapter parse
   → preflight
   → jacobian.math function
@@ -156,7 +149,7 @@ known without executing the operation.
 A request-to-result postcondition runs before anything is exposed. Failure
 publishes no value reference, artifact, or verification record.
 
-Envelope metadata is not part of `OperationSpec`. In particular, an
+Envelope metadata is not part of `OperationDeclaration`. In particular, an
 ordinary operation does not configure generic completeness, scope,
 relationships, or obligations. A v2 result carries a `verification_record_uri`
 only when an independent checker accepted the result; that pointer carries no
@@ -164,7 +157,7 @@ mathematical or verification authority beyond the record it identifies.
 
 ## Bounded searches
 
-A retained bounded search is an ordinary `OperationSpec`. Its domain-owned
+A retained bounded search is an ordinary `OperationDeclaration`. Its domain-owned
 result records the facts callers need—for example `EXACT`, `INCOMPLETE`, or
 `UNKNOWN`, the admitted bounds, and any witness. It does not acquire generic
 scope, completeness, relationship, or obligation wrappers.
@@ -219,7 +212,7 @@ An ordinary operation should require at most:
 1. one public domain function with one canonical input type;
 2. one request model when a boundary model is necessary;
 3. one rich result/value model when a scalar is insufficient;
-4. one `OperationSpec`; and
+4. one `OperationDeclaration`; and
 5. one external publication binding only when inline transport is insufficient.
 
 Add focused behavior tests through the public Python function and installed

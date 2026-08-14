@@ -36,7 +36,7 @@ computation never authorizes its own result as independently verified.
 | Agent | Representation choices, multi-step strategy, checker selection, stopping |
 | `jacobian.math` | Public mathematical values, constructors, and functions |
 | Operation declarations | Typed request/result binding and mathematical pre/postconditions |
-| Runtime | Installation, provider selection, execution bounds, publication, and provenance |
+| Runtime | Typed execution bounds, publication, and provenance |
 | Operator | Checker authorization and host policy |
 | MCP SDK | Static tool schemas, typed structured output, transport, progress, and cancellation |
 
@@ -46,20 +46,17 @@ The dependency direction is one way:
 MCP / CLI / hosts
         │
         ▼
-runtime and installed operation bindings
+compiled catalog and selected operation declaration
         │
-        ├──► PublicationPolicy + ProviderBinding
-        │
-        └──► OperationSpec ──► jacobian.math.<domain>
+        └──► OperationDeclaration + PublicationPolicy ──► jacobian.math.<domain>
         │
         ▼
 private maintained backends
 ```
 
-`OperationSpec` owns semantic operation metadata. An installed binding pairs it
-with provider selection and a separate publication policy. Publication owns
-transport only; it does not own mathematical validation, applicability,
-provider selection, effects, checker authority, or request parsing.
+`OperationDeclaration` owns semantic operation metadata and its publication
+policy. Publication owns transport only; it does not own mathematical
+validation, applicability, effects, checker authority, or request parsing.
 
 ## Mathematical values
 
@@ -162,7 +159,7 @@ will remain separate decisions if that surface is introduced.
 A shared abstraction must replace repetition in at least two surviving
 production paths in the same change. An ordinary operation should need no more
 than one public domain function, one request model when necessary, one rich
-result type when necessary, one `OperationSpec`, and one external publication
+result type when necessary, one `OperationDeclaration`, and one external publication
 binding only when inline transport is insufficient.
 
 Transforms such as transpose, embedding, basis change, restriction of scalars,

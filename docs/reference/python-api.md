@@ -2,7 +2,7 @@
 
 Jacobian provides a deliberately small native-value API for deterministic
 mathematical computations. It is independent of the MCP transport and does not
-construct a operation runtime.
+construct an operation runtime.
 
 ```python
 from fractions import Fraction
@@ -55,7 +55,7 @@ The supported modules and symbols are:
 
 `SimpleUndirectedGraph` is owned by `jacobian.math.graphs`; graph operation and
 artifact boundaries convert it explicitly to their wire contract. Native
-callers therefore do not depend on a operation-specific contract module.
+callers therefore do not depend on an operation-specific contract module.
 
 `projective_line` returns a `ProjectiveLine` value rather than an unbound tuple,
 so its presentation, axis, completeness, order, and digest remain attached.

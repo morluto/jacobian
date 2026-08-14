@@ -75,7 +75,7 @@ registered only when that executable passes its version and commit probe; this
 profile does not require a Mathlib checkout.
 
 If the separately managed Lean runtime is absent or unhealthy, the runtime
-still starts. Capabilities requiring the failed profile are absent from
+still starts. Operations requiring the failed profile are absent from
 `operation://catalog`, and no invocation is attempted. Explicit
 operator-installed adapters fail registration instead of silently falling
 back to another provider.

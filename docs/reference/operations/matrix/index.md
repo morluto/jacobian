@@ -33,7 +33,7 @@ Its private `_sympy.py` backend owns SymPy calls, while
 operation boundary. Operation declarations and native callers therefore use
 one mathematical implementation. The native API accepts SymPy `MatrixBase`
 values directly, imports its backend lazily, and does not route through
-`math.run` or construct a operation runtime.
+`math.run` or construct an operation runtime.
 
 ## Artifact-backed operations
 

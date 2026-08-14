@@ -64,10 +64,10 @@ MCP / CLI / hosts
 runtime
     imports installed bindings, providers, storage, checker authority
 
-installed binding
-    = OperationSpec + PublicationPolicy + ProviderBinding
+operation declaration
+    = typed request/result + implementation + PublicationPolicy
 
-OperationSpec
+OperationDeclaration
     imports jacobian.math values and functions
 
 jacobian.math.<domain>
@@ -82,15 +82,12 @@ MCP, CLI, storage, installation, publication, or checker authority. Import
 Linter enforces the leaf boundaries and dependency direction. Operation
 declarations live outside `jacobian.math`.
 
-The portfolio composition root is the only owner that assembles runtime
-services and installation order. Ordinary `DomainBundle` values contain typed
-operation declarations only; they do not carry installer callbacks or runtime
-collaborators. A operation family with a genuinely specialized artifact or
-checker lifecycle is represented as an explicitly named managed portfolio
-component rather than widening the semantic bundle contract.
-An operation may still bind a typed computational backend, provided that
+Domain declaration modules export immutable operation tuples and perform no
+installation. The catalog compiler imports them during `jacobian init` or
+`jacobian update`; serving imports only the declaration module selected by
+`math.run`. An operation may call a private computational backend, but that
 backend owns no runtime, storage, publication, installation, or checker
-authority. This is execution dependency injection, not lifecycle ownership.
+authority.
 
 ## Mathematical value and backend layers
 
@@ -116,16 +113,20 @@ constructing backend values. Mathematical code never round-trips through JSON.
 
 ## Domain operation library
 
-`OperationSpec[RequestT, ResultT]` is the small semantic declaration:
+`OperationDeclaration[RequestT, ResultT]` is the immutable semantic declaration:
 
 ```python
 @dataclass(frozen=True, slots=True)
-class OperationSpec(Generic[RequestT, ResultT]):
+class OperationDeclaration(Generic[RequestT, ResultT]):
     operation_id: str
     version: str
+    title: str
+    description: str
     request_type: type[RequestT]
     result_type: type[ResultT]
     execute: Callable[[RequestT], ResultT]
+    publication: PublicationPolicy[ResultT] = InlinePublication()
+    tags: tuple[str, ...] = ()
     preflight: Callable[[RequestT], PreflightResult] | None = None
     postcondition: Callable[[RequestT, ResultT], None] | None = None
     effect: Effect = Effect.READ_ONLY
@@ -134,20 +135,10 @@ class OperationSpec(Generic[RequestT, ResultT]):
 The callable binds validated request fields to one public mathematical
 function; it is not another implementation of the mathematics.
 
-An installed binding adds transport and provider facts:
-
-```python
-@dataclass(frozen=True, slots=True)
-class InstalledOperation(Generic[RequestT, ResultT]):
-    spec: OperationSpec[RequestT, ResultT]
-    publication: PublicationPolicy[ResultT]
-    provider_binding: ProviderBinding
-```
-
 Publication may decide inline eligibility, bounded previews, request-local
 references, durable artifacts, and closure over referenced parents or axes. It
 does not own mathematical validation, applicability, checker authority,
-provider selection, effects, or parsing.
+effects, or parsing.
 
 Built-ins use a static explicit inventory. External operation packages and
 entry-point discovery are not supported.
@@ -156,7 +147,7 @@ entry-point discovery are not supported.
 
 ```text
 external payload
-  → resolve InstalledOperation
+  → resolve OperationDeclaration
   → one TypeAdapter parse
   → preflight
   → execute one semantic function
@@ -196,7 +187,7 @@ their owned typed values or terminal states. The public dispatcher constructs
 the wire envelope once, after publication has returned the complete artifact
 closure; installed adapters return a typed projection rather than constructing
 the envelope themselves. Artifact-producing operations must not move storage writes
-into `OperationSpec.execute`; a domain-specific publisher may preserve an
+into `OperationDeclaration.execute`; a domain-specific publisher may preserve an
 established durable schema and parent closure without expanding the generic
 publication policy.
 
@@ -305,7 +296,7 @@ canonicalizers.
 
 ## Bounded searches
 
-A retained bounded search uses the same `OperationSpec` path as any other
+A retained bounded search uses the same `OperationDeclaration` path as any other
 mathematical operation. Its domain-owned result carries the applicable status,
 bounds, coverage facts, and witness directly. `Completed` means only that this
 typed result was produced; exactness is established by the result's own status,

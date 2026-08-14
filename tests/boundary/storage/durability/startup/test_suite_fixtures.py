@@ -5,8 +5,6 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from tests.support.catalog_build_options import CheckerAuthorityMode
-from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.state import publish_template, quiesce_sqlite_template
 
 from jacobian.runtime.bootstrap import bootstrap_services
@@ -50,6 +48,16 @@ def _polynomial_expression_schema_uri(root: Path) -> str:
         connection.close()
     assert row is not None
     return str(row[0])
+
+
+def _artifact_count(root: Path) -> int:
+    connection = sqlite3.connect(root / "metadata.sqlite3")
+    try:
+        row = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()
+    finally:
+        connection.close()
+    assert row is not None
+    return int(row[0])
 
 
 def _build_sentinel_store(staging: Path) -> None:
@@ -125,7 +133,6 @@ def test_complete_portfolio_template_is_quiescent_and_copyable(
         destination,
         descriptor_uri=_polynomial_expression_schema_uri(complete_portfolio_template),
     )
-    with create_catalog_build_runtime(
-        destination, checker_authority=CheckerAuthorityMode.NONE
-    ) as runtime:
-        assert runtime.core.operations.snapshot().operations
+    original_artifacts = _artifact_count(complete_portfolio_template)
+    assert original_artifacts > 0
+    assert _artifact_count(destination) == original_artifacts

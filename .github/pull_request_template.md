@@ -16,7 +16,7 @@ make check
 
 If this change crosses a named boundary, add the explicitly relevant specialist
 lane(s) and list them below. Specialist lanes are troubleshooting/boundary
-work, not a routine gate; CI owns Lean/provider (merge/main or label),
+work, not a routine gate; CI owns Lean on merge-group/main, provider,
 coverage, compatibility, packaging, and the ordinary Python surface. See
 [CONTRIBUTING.md](../CONTRIBUTING.md) and the
 [testing strategy](../docs/reference/testing-strategy.md) for lane ownership.

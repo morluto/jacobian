@@ -16,6 +16,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from tools.benchmark_plan.model import plan_from_mapping
+from tools.benchmark_plan.validation import validate_plan
+
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.receipts import canonical_json, digest_bytes, receipt_digest
 from benchmarks.tooling.validation_plan import (
@@ -49,7 +52,6 @@ class ExecutionProvenance:
     planner_digest: str
     topology_digest: str
     plan_digest: str
-    plan_receipt_digest: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,69 +153,35 @@ def _entry(value: object) -> HostValidation:
     return entry
 
 
-def load_plan_receipt(
+def load_plan(
     path: Path, *, execution_sha: str
 ) -> tuple[ExecutionProvenance, tuple[HostValidation, ...]]:
-    """Validate a plan receipt and return its host matrix and provenance."""
+    """Validate a canonical plan.json and return its host matrix and provenance."""
 
-    receipt = _read_json_object(path, "benchmark plan receipt")
-    declared = _require_digest(receipt.get("receipt_digest"), "plan receipt digest")
-    unsigned = {key: value for key, value in receipt.items() if key != "receipt_digest"}
-    if receipt_digest(unsigned) != declared:
-        raise HarborSuiteError(
-            "benchmark plan receipt digest does not match its content"
-        )
-    if receipt.get("receipt_version") != "1" or receipt.get("plan_kind") != "benchmark":
-        raise HarborSuiteError("benchmark plan receipt has an unsupported identity")
-    plan = receipt.get("plan")
-    if not isinstance(plan, dict) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in plan.items()
-    ):
-        raise HarborSuiteError("benchmark plan receipt has an invalid plan")
-    plan_payload = "".join(f"{key}={plan[key]}\n" for key in sorted(plan)).encode()
-    plan_digest = _require_digest(receipt.get("plan_digest"), "plan digest")
-    if _digest_bytes(plan_payload) != plan_digest:
-        raise HarborSuiteError("benchmark plan digest does not match its plan")
-    plan_head_sha = _require_sha(plan.get("benchmark-plan-head-sha"), "plan head SHA")
-    if receipt.get("head_sha") != plan_head_sha:
-        raise HarborSuiteError("benchmark plan receipt and plan head SHA disagree")
+    payload = _read_json_object(path, "benchmark plan")
     try:
-        matrix = json.loads(plan["benchmark-host-validation-matrix"])
-    except (KeyError, json.JSONDecodeError) as exc:
-        raise HarborSuiteError("benchmark plan host matrix is invalid") from exc
-    if not isinstance(matrix, list):
-        raise HarborSuiteError("benchmark plan host matrix must be a list")
-    entries = tuple(_entry(value) for value in matrix)
+        validate_plan(payload)
+    except ValueError as exc:
+        raise HarborSuiteError(f"benchmark plan is invalid: {exc}") from exc
+    plan = plan_from_mapping(payload)
+    entries = tuple(_entry(value) for value in plan.host_matrix)
+    plan_digest = _digest_bytes(_canonical(plan.to_json_dict()))
+    topology = plan.topology_digest
+    if topology == "" and not entries and not plan.run_check:
+        topology_digest = ""
+    else:
+        topology_digest = _require_digest(topology, "topology digest")
+    head_sha = plan.head_sha or execution_sha
     return (
         ExecutionProvenance(
-            plan_head_sha=plan_head_sha,
+            plan_head_sha=_require_sha(head_sha, "plan head SHA"),
             execution_sha=_require_sha(execution_sha, "execution SHA"),
-            planner_digest=_require_digest(
-                plan.get("benchmark-planner-digest"), "planner digest"
-            ),
-            topology_digest=_topology_digest(plan, entries),
+            planner_digest=_require_digest(plan.planner_digest, "planner digest"),
+            topology_digest=topology_digest,
             plan_digest=plan_digest,
-            plan_receipt_digest=declared,
         ),
         entries,
     )
-
-
-def _topology_digest(plan: Mapping[str, str], entries: Sequence[HostValidation]) -> str:
-    value = plan.get("benchmark-topology-digest")
-    selected = any(
-        plan.get(name) == "true"
-        for name in (
-            "run-benchmark-check",
-            "run-benchmark-record-schema",
-            "run-benchmark-host-validation",
-            "run-benchmark-inventory",
-            "run-benchmark-oracle",
-        )
-    )
-    if value == "" and not selected and not entries:
-        return ""
-    return _require_digest(value, "topology digest")
 
 
 def local_provenance(
@@ -235,18 +203,12 @@ def local_provenance(
     )
     matrix = [entry.as_matrix_entry() for entry in entries]
     plan_digest = _digest_bytes(_canonical(matrix))
-    identity = {
-        "execution_sha": execution_sha,
-        "planner_digest": planner_digest,
-        "plan_digest": plan_digest,
-    }
     return ExecutionProvenance(
         plan_head_sha=execution_sha,
         execution_sha=execution_sha,
         planner_digest=planner_digest,
         topology_digest=plan_digest,
         plan_digest=plan_digest,
-        plan_receipt_digest=receipt_digest(identity),
     )
 
 
@@ -443,7 +405,6 @@ def _default_runner(root: Path, environment: Mapping[str, str]) -> ShardRunner:
             root=root,
             name=f"host-validation/{entry.name}",
             environment=environment,
-            predicted_seconds=entry.predicted_seconds,
         )
         return ShardResult(
             status=result.status,
@@ -671,15 +632,15 @@ def _positive_int(value: str) -> int:
 def _resolve_plan(
     args: argparse.Namespace,
 ) -> tuple[ExecutionProvenance, tuple[HostValidation, ...]]:
-    if args.plan_receipt is None:
+    if args.plan is None:
         if args.execution_sha is not None:
-            raise HarborSuiteError("--execution-sha requires --plan-receipt")
+            raise HarborSuiteError("--execution-sha requires --plan")
         planned = full_host_validation()
         return local_provenance(ROOT, planned), planned
     if args.execution_sha is None:
-        raise HarborSuiteError("--execution-sha is required with --plan-receipt")
+        raise HarborSuiteError("--execution-sha is required with --plan")
     execution_sha = verify_execution_sha(ROOT, args.execution_sha)
-    return load_plan_receipt(args.plan_receipt, execution_sha=execution_sha)
+    return load_plan(args.plan, execution_sha=execution_sha)
 
 
 def _selected_entries(
@@ -688,12 +649,10 @@ def _selected_entries(
     if args.command == "run-entry":
         entry = _entry(json.loads(args.entry_json))
         if entry not in planned:
-            raise HarborSuiteError(
-                "requested host entry is absent from the plan receipt"
-            )
+            raise HarborSuiteError("requested host entry is absent from the plan")
         return (entry,)
     entries = full_host_validation()
-    if args.plan_receipt is not None and tuple(planned) != entries:
+    if args.plan is not None and tuple(planned) != entries:
         raise HarborSuiteError("run-full requires the complete full-host matrix")
     return entries
 
@@ -707,7 +666,7 @@ def main(argv: list[str] | None = None) -> int:
         child.add_argument("--receipt-dir", type=Path)
         child.add_argument("--total-workers", type=_positive_int, required=True)
         child.add_argument("--max-parallel", type=_positive_int, default=4)
-        child.add_argument("--plan-receipt", type=Path)
+        child.add_argument("--plan", type=Path)
         child.add_argument("--execution-sha")
         child.add_argument("--store-durations", action="store_true")
         child.add_argument("--durations-output", type=Path)
@@ -753,7 +712,7 @@ __all__ = [
     "ShardResult",
     "build_receipt",
     "execute",
-    "load_plan_receipt",
+    "load_plan",
     "local_provenance",
     "pytest_arguments",
     "timing_digest",

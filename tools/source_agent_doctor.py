@@ -56,9 +56,21 @@ from jacobian.providers.lean_runtime import lean_frontend_provider_runtime  # no
 from jacobian.providers.sympy_runtime import (  # noqa: E402
     sympy_polynomial_normalization_provider_runtime,
 )
-from tools.development_profiles import PROFILE_NAMES, PROFILES  # noqa: E402
 
-_PROFILE_PROVIDERS = {name: selected.providers for name, selected in PROFILES.items()}
+PROFILE_NAMES = ("core", "lean", "external-proof")
+_CORE_PROVIDERS = (
+    "networkx",
+    "sympy",
+    "z3",
+    "python-flint",
+    "python-flint-hnf",
+    "cvc5",
+)
+_PROFILE_PROVIDERS = {
+    "core": _CORE_PROVIDERS,
+    "lean": (*_CORE_PROVIDERS, "lean"),
+    "external-proof": (*_CORE_PROVIDERS, "cadical", "drat-trim", "carcara"),
+}
 
 
 def _catalog_digest(catalog: OperationCatalogSnapshot) -> str:

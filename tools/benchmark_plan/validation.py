@@ -1,25 +1,22 @@
-"""Validate the benchmark planner's GitHub Actions output contract.
-
-The planner emits a versioned plan bound to the triggering event and the
-base/head (or merge-group) SHA, a digest of the planner, and a digest of the
-benchmark topology. This validator enforces the full fail-closed contract:
-every expected key is present, SHA bindings are well formed, the record/schema,
-host-verifier, prospective-digest, inventory, and Oracle evidence roles are
-mutually consistent, and an unselected role is never confused with a failed
-one.
-"""
+"""Validate the canonical Harbor benchmark plan object."""
 
 from __future__ import annotations
 
 import json
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Mapping
 from typing import Any, NoReturn
 
-from tools.benchmark_plan.compiler import EVENTS, MODES, PLAN_VERSION
+from tools.benchmark_plan.model import (
+    EVENTS,
+    MODES,
+    PLAN_KEYS,
+    PLAN_VERSION,
+    SCOPES,
+    BenchmarkPlan,
+)
 
-SCOPES = {"none", "changed-tasks", "affected-datasets", "all"}
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 SHA = re.compile(r"[0-9a-f]{40,64}\Z")
 HOST_NAME = re.compile(r"[A-Za-z0-9_.-]+\Z")
@@ -31,26 +28,6 @@ HOST_SELECTOR = re.compile(
 HOST_KEYWORD = re.compile(r"[A-Za-z0-9_.-]*\Z")
 MAX_MATRIX_JOBS = 256
 
-KEYS = {
-    "benchmark-plan-version",
-    "benchmark-plan-event",
-    "benchmark-plan-base-sha",
-    "benchmark-plan-head-sha",
-    "benchmark-planner-digest",
-    "benchmark-topology-digest",
-    "benchmark-plan-mode",
-    "run-benchmark-check",
-    "run-benchmark-record-schema",
-    "run-benchmark-prospective-digest",
-    "run-benchmark-inventory",
-    "run-benchmark-host-validation",
-    "benchmark-host-validation-matrix",
-    "run-benchmark-oracle",
-    "benchmark-oracle-scope",
-    "benchmark-oracle-matrix",
-    "benchmark-plan-reasons",
-}
-
 
 class BenchmarkPlanValidationError(ValueError):
     """The emitted benchmark plan violates its fail-closed contract."""
@@ -58,23 +35,6 @@ class BenchmarkPlanValidationError(ValueError):
 
 def fail(message: str) -> NoReturn:
     raise BenchmarkPlanValidationError(message)
-
-
-def _json_array(value: str, name: str) -> list[Any]:
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as exc:
-        fail(f"{name} is not valid JSON: {exc}")
-    if not isinstance(parsed, list):
-        fail(f"{name} must be a JSON array")
-    return parsed
-
-
-def _bool(plan: dict[str, str], key: str) -> bool:
-    value = plan[key]
-    if value not in {"true", "false"}:
-        fail(f"invalid benchmark boolean {key}: {value}")
-    return value == "true"
 
 
 def _require_sha(value: str, name: str) -> None:
@@ -87,6 +47,18 @@ def _require_sha(value: str, name: str) -> None:
 def _require_positive_seconds(value: Any, label: str) -> None:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
         fail(label)
+
+
+def _require_bool(value: Any, name: str) -> bool:
+    if not isinstance(value, bool):
+        fail(f"invalid benchmark boolean {name}: {value}")
+    return value
+
+
+def _require_list(value: Any, name: str) -> list[Any]:
+    if not isinstance(value, list):
+        fail(f"{name} must be a JSON array")
+    return value
 
 
 def _validate_task_digests(index: int, tasks: list[str], digests: Any) -> None:
@@ -242,80 +214,134 @@ def _validate_host_matrix(matrix: list[Any]) -> None:
             fail(f"incomplete benchmark host validation sharding: {selector}")
 
 
-def _host_validation_selection(plan: dict[str, str], *, run_check: bool) -> bool:
-    selected = _bool(plan, "run-benchmark-host-validation")
-    matrix = _json_array(
-        plan["benchmark-host-validation-matrix"],
-        "benchmark host validation matrix",
-    )
-    if selected and not run_check:
-        fail("benchmark host validation requires benchmark checks")
-    if selected != bool(matrix):
-        fail("benchmark host validation flag and matrix disagree")
-    _validate_host_matrix(matrix)
-    return selected
+def _payload(plan: BenchmarkPlan | Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(plan, BenchmarkPlan):
+        return plan.to_json_dict()
+    if not isinstance(plan, Mapping):
+        fail("benchmark plan must be an object")
+    return dict(plan)
 
 
-def _validate_identity(plan: dict[str, str]) -> str:
-    if set(plan) != KEYS:
-        fail(f"benchmark plan keys differ: expected {sorted(KEYS)}, got {sorted(plan)}")
-    if plan["benchmark-plan-version"] != PLAN_VERSION:
-        fail(f"unsupported benchmark plan version: {plan['benchmark-plan-version']}")
-    if plan["benchmark-plan-event"] not in EVENTS:
-        fail(f"invalid benchmark plan event: {plan['benchmark-plan-event']}")
-    mode = plan["benchmark-plan-mode"]
-    if mode not in MODES:
-        fail(f"invalid benchmark plan mode: {mode}")
-    _require_sha(plan["benchmark-plan-base-sha"], "benchmark-plan-base-sha")
-    _require_sha(plan["benchmark-plan-head-sha"], "benchmark-plan-head-sha")
-    if DIGEST.fullmatch(plan["benchmark-planner-digest"]) is None:
-        fail(f"invalid benchmark-planner-digest: {plan['benchmark-planner-digest']}")
-    return mode
+def _validate_identities(payload: Mapping[str, Any]) -> None:
+    if set(payload) != set(PLAN_KEYS):
+        fail(
+            f"benchmark plan keys differ: expected {sorted(PLAN_KEYS)}, "
+            f"got {sorted(payload)}"
+        )
+    if payload["schema_version"] != PLAN_VERSION:
+        fail(f"unsupported benchmark plan version: {payload['schema_version']}")
+    if payload["event"] not in EVENTS:
+        fail(f"invalid benchmark plan event: {payload['event']}")
+    if payload["mode"] not in MODES:
+        fail(f"invalid benchmark plan mode: {payload['mode']}")
+    _require_sha(str(payload["base_sha"]), "base-sha")
+    _require_sha(str(payload["head_sha"]), "head-sha")
+    planner_digest = payload["planner_digest"]
+    if not isinstance(planner_digest, str) or DIGEST.fullmatch(planner_digest) is None:
+        fail(f"invalid planner-digest: {planner_digest}")
+    changed = payload["changed_paths_digest"]
+    if changed != "" and (
+        not isinstance(changed, str) or DIGEST.fullmatch(changed) is None
+    ):
+        fail(f"invalid changed_paths_digest: {changed}")
 
 
 def _validate_check_topology(
-    plan: dict[str, str],
     *,
     run_check: bool,
-    mode: str,
     record_schema: bool,
+    mode: str,
+    topology: object,
     reasons: list[Any],
 ) -> None:
-    topology = plan["benchmark-topology-digest"]
     if run_check:
-        if DIGEST.fullmatch(topology) is None:
-            fail("benchmark-topology-digest must be a sha256 digest when checks run")
+        if not isinstance(topology, str) or DIGEST.fullmatch(topology) is None:
+            fail("topology-digest must be a sha256 digest when checks run")
         if mode == "none":
             fail("benchmark plan mode must not be none when checks run")
         if not record_schema:
-            fail("run-benchmark-record-schema must run when benchmark checks run")
+            fail("record-schema must run when benchmark checks run")
         if not reasons:
             fail("a benchmark plan with work must record reasons")
-    elif topology != "":
-        fail("benchmark-topology-digest must be empty when checks are skipped")
+        return
+    if topology != "":
+        fail("topology-digest must be empty when checks are skipped")
 
 
-def _validate_lane_independence(
+def _validate_inventory_and_mode(
     *,
     run_check: bool,
-    mode: str,
     prospective_digest: bool,
     inventory: bool,
     record_schema: bool,
-    host_validation: bool,
-    run_oracle: bool,
-    reasons: list[Any],
+    mode: str,
 ) -> None:
     if prospective_digest and not run_check:
-        fail("run-benchmark-prospective-digest requires benchmark checks")
+        fail("prospective-digest requires benchmark checks")
     if inventory and not run_check:
-        fail("run-benchmark-inventory requires benchmark checks")
+        fail("inventory requires benchmark checks")
     if inventory and mode not in {"integration", "full"}:
-        fail("run-benchmark-inventory requires integration or full mode")
+        fail("inventory requires integration or full mode")
     if mode in {"integration", "full"} and not run_check:
         fail("integration or full mode requires benchmark checks")
     if mode == "none" and run_check:
         fail("benchmark plan mode none conflicts with running checks")
+    if prospective_digest and not record_schema:
+        fail("prospective-digest requires record/schema checks")
+
+
+def _validate_oracle_scope(
+    *,
+    run_check: bool,
+    record_schema: bool,
+    run_oracle: bool,
+    scope: object,
+    oracle_matrix: list[Any],
+) -> None:
+    if scope not in SCOPES:
+        fail(f"invalid benchmark Oracle scope: {scope}")
+    if run_oracle:
+        if not (run_check and record_schema):
+            fail("benchmark Oracle work requires checks and record/schema lanes")
+        if scope == "none":
+            fail("benchmark Oracle work requires a scope and a non-empty matrix")
+        return
+    if scope != "none" or oracle_matrix:
+        fail("disabled benchmark Oracle work must have none scope and empty matrix")
+
+
+def _validate_lane_consistency(
+    *,
+    run_check: bool,
+    record_schema: bool,
+    prospective_digest: bool,
+    inventory: bool,
+    host_validation: bool,
+    run_oracle: bool,
+    mode: str,
+    scope: object,
+    topology: object,
+    reasons: list[Any],
+    oracle_matrix: list[Any],
+) -> None:
+    if not all(isinstance(reason, str) and reason for reason in reasons):
+        fail("benchmark plan reasons must be non-empty strings")
+    if host_validation and not run_check:
+        fail("benchmark host validation requires benchmark checks")
+    _validate_check_topology(
+        run_check=run_check,
+        record_schema=record_schema,
+        mode=mode,
+        topology=topology,
+        reasons=reasons,
+    )
+    _validate_inventory_and_mode(
+        run_check=run_check,
+        prospective_digest=prospective_digest,
+        inventory=inventory,
+        record_schema=record_schema,
+        mode=mode,
+    )
     if not run_check and (
         record_schema
         or prospective_digest
@@ -325,83 +351,55 @@ def _validate_lane_independence(
         or reasons
     ):
         fail("a skipped benchmark plan cannot contain work or reasons")
-
-
-def _validate_oracle_selection(
-    plan: dict[str, str],
-    *,
-    run_check: bool,
-    record_schema: bool,
-) -> None:
-    run_oracle = _bool(plan, "run-benchmark-oracle")
-    scope = plan["benchmark-oracle-scope"]
-    if scope not in SCOPES:
-        fail(f"invalid benchmark Oracle scope: {scope}")
-    matrix = _json_array(plan["benchmark-oracle-matrix"], "benchmark Oracle matrix")
-    if run_oracle:
-        if not (run_check and record_schema):
-            fail("benchmark Oracle work requires checks and record/schema lanes")
-        if scope == "none" or not matrix:
-            fail("benchmark Oracle work requires a scope and a non-empty matrix")
-    elif scope != "none" or matrix:
-        fail("disabled benchmark Oracle work must have none scope and empty matrix")
-    _validate_matrix(matrix)
-
-
-def validate_plan(plan: dict[str, str]) -> None:
-    """Validate a complete benchmark plan mapping."""
-
-    mode = _validate_identity(plan)
-    run_check = _bool(plan, "run-benchmark-check")
-    record_schema = _bool(plan, "run-benchmark-record-schema")
-    prospective_digest = _bool(plan, "run-benchmark-prospective-digest")
-    inventory = _bool(plan, "run-benchmark-inventory")
-    run_oracle = _bool(plan, "run-benchmark-oracle")
-    host_validation = _host_validation_selection(plan, run_check=run_check)
-    reasons = _json_array(plan["benchmark-plan-reasons"], "benchmark plan reasons")
-    if not all(isinstance(reason, str) and reason for reason in reasons):
-        fail("benchmark plan reasons must be non-empty strings")
-    if prospective_digest and not record_schema:
-        fail("run-benchmark-prospective-digest requires record/schema checks")
-    _validate_check_topology(
-        plan,
+    _validate_oracle_scope(
         run_check=run_check,
-        mode=mode,
         record_schema=record_schema,
-        reasons=reasons,
+        run_oracle=run_oracle,
+        scope=scope,
+        oracle_matrix=oracle_matrix,
     )
-    _validate_lane_independence(
+
+
+def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
+    """Validate a complete canonical benchmark plan."""
+
+    payload = _payload(plan)
+    _validate_identities(payload)
+    run_check = _require_bool(payload["run_check"], "run_check")
+    record_schema = _require_bool(payload["record_schema"], "record_schema")
+    prospective_digest = _require_bool(
+        payload["prospective_digest"], "prospective_digest"
+    )
+    inventory = _require_bool(payload["inventory"], "inventory")
+    host_matrix = _require_list(payload["host_matrix"], "host_matrix")
+    oracle_matrix = _require_list(payload["oracle_matrix"], "oracle_matrix")
+    reasons = _require_list(payload["reasons"], "reasons")
+    _validate_host_matrix(host_matrix)
+    _validate_lane_consistency(
         run_check=run_check,
-        mode=mode,
+        record_schema=record_schema,
         prospective_digest=prospective_digest,
         inventory=inventory,
-        record_schema=record_schema,
-        host_validation=host_validation,
-        run_oracle=run_oracle,
+        host_validation=bool(host_matrix),
+        run_oracle=bool(oracle_matrix),
+        mode=str(payload["mode"]),
+        scope=payload["oracle_scope"],
+        topology=payload["topology_digest"],
         reasons=reasons,
+        oracle_matrix=oracle_matrix,
     )
-    _validate_oracle_selection(plan, run_check=run_check, record_schema=record_schema)
-
-
-def _read_plan(lines: Iterable[str]) -> dict[str, str]:
-    plan: dict[str, str] = {}
-    for raw_line in lines:
-        line = raw_line.rstrip("\n")
-        if "=" not in line:
-            fail(f"invalid benchmark plan line: {line}")
-        key, value = line.split("=", 1)
-        if key in plan:
-            fail(f"duplicate benchmark plan key: {key}")
-        plan[key] = value
-    return plan
+    _validate_matrix(oracle_matrix)
 
 
 def main() -> int:
-    """Read a key=value plan from stdin and return a CLI status."""
+    """Read a JSON plan from stdin and return a CLI status."""
 
     try:
-        validate_plan(_read_plan(sys.stdin))
-    except BenchmarkPlanValidationError as exc:
+        payload = json.load(sys.stdin)
+        if not isinstance(payload, dict):
+            fail("benchmark plan must be an object")
+        validate_plan(payload)
+    except (BenchmarkPlanValidationError, json.JSONDecodeError, OSError) as exc:
         print(exc, file=sys.stderr)
         return 1
     return 0
@@ -409,6 +407,7 @@ def main() -> int:
 
 __all__ = [
     "EVENTS",
+    "MAX_MATRIX_JOBS",
     "MODES",
     "PLAN_VERSION",
     "BenchmarkPlanValidationError",

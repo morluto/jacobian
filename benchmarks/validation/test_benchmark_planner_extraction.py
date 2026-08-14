@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 import pytest
 import tools.benchmark_plan.compiler as planner
+from tools.benchmark_plan.model import BenchmarkPlan
 from tools.benchmark_plan.validation import validate_plan
 
 
@@ -20,11 +20,10 @@ def stable_digests(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _host_matrix(result: dict[str, str]) -> list[dict[str, object]]:
-    matrix = json.loads(result["benchmark-host-validation-matrix"])
+def _host_matrix(result: BenchmarkPlan) -> list[dict[str, object]]:
     return [
         {key: value for key, value in entry.items() if key != "predicted_seconds"}
-        for entry in matrix
+        for entry in result.host_matrix
     ]
 
 
@@ -43,7 +42,7 @@ def test_planner_digest_binds_every_declared_semantic_source() -> None:
         event="pull_request",
     )
 
-    assert result["benchmark-planner-digest"] == expected
+    assert result.planner_digest == expected
     validate_plan(result)
 
 
@@ -53,9 +52,9 @@ def test_extracted_path_policy_change_runs_benchmark_contracts() -> None:
         event="pull_request",
     )
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["benchmark-plan-mode"] == "changed"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.mode == "changed"
     validate_plan(result)
 
 
@@ -83,3 +82,6 @@ def test_path_adapter_source_is_part_of_the_declared_digest_contract() -> None:
     assert Path("tools/benchmark_plan/paths.py") in {
         path.relative_to(planner.ROOT) for path in planner.PLANNER_DIGEST_SOURCES
     }
+    assert planner.ROOT / "tools" / "benchmark_plan" / "model.py" in (
+        planner.PLANNER_DIGEST_SOURCES
+    )

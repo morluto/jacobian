@@ -169,6 +169,11 @@ jobs:
 
   lean:
     name: Lean Runtime
+    # Full Lean is the merge-group/main gate. Pull requests skip it so
+    # intermediate commits are not blocked for the ~14 minute specialist suite.
+    # Enable GitHub merge queue on main; otherwise Lean only runs after a
+    # push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -187,9 +192,6 @@ jobs:
     needs: [python, boundaries, subprocess_coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Require python and boundaries
         env:
@@ -215,50 +217,15 @@ jobs:
       - run: uv run --locked coverage report --fail-under=50 | tee coverage-report.txt
         shell: bash -o pipefail {0}
       - run: uv run --locked coverage xml
-      - name: Post coverage summary to PR
-        if: >-
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.user.type != 'Bot' &&
-          github.event.pull_request.head.repo.full_name == github.repository
+      - name: Publish coverage summary
         run: |
-          pct="$(awk '$1 == "TOTAL" { value = $NF; sub(/%$/, "", value); print value }' coverage-report.txt)"
-          test -n "$pct"
           {
-            echo "<!-- jacobian-coverage-report -->"
             echo "## Coverage Report"
             echo ""
             echo '```'
             cat coverage-report.txt
             echo '```'
-            echo ""
-            echo "**Total coverage: ${pct}%** (threshold: 50%)"
-          } > coverage-summary.md
-          jq -n --rawfile body coverage-summary.md '{body: $body}' > coverage-comment.json
-          list_coverage_comments() {
-            gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
-              --jq '.[] | select(.user.login == "github-actions[bot]") | select((.body | contains("<!-- jacobian-coverage-report -->")) or (.body | startswith("## Coverage Report"))) | .id'
-          }
-          mapfile -t comment_ids < <(list_coverage_comments)
-          if [ "${#comment_ids[@]}" -eq 0 ]; then
-            gh api --method POST \
-              "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-              --input coverage-comment.json
-            mapfile -t comment_ids < <(list_coverage_comments)
-          fi
-          if [ "${#comment_ids[@]}" -eq 0 ]; then
-            echo "failed to create or locate coverage comment" >&2
-            exit 1
-          fi
-          gh api --method PATCH \
-            "repos/$GITHUB_REPOSITORY/issues/comments/${comment_ids[0]}" \
-            --input coverage-comment.json
-          for duplicate_id in "${comment_ids[@]:1}"; do
-            gh api --method DELETE \
-              "repos/$GITHUB_REPOSITORY/issues/comments/$duplicate_id"
-          done
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-3.12
@@ -273,6 +240,7 @@ jobs:
     steps:
       - name: Require static python boundaries wheel coverage and selected specialist lanes
         env:
+          EVENT_NAME: ${{ github.event_name }}
           STATIC_RESULT: ${{ needs.static.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
@@ -285,4 +253,8 @@ jobs:
           test "$BOUNDARIES_RESULT" = success
           test "$WHEEL_RESULT" = success
           test "$COVERAGE_RESULT" = success
-          test "$LEAN_RESULT" = success
+          if [ "$EVENT_NAME" = pull_request ]; then
+            test "$LEAN_RESULT" = skipped || test "$LEAN_RESULT" = success
+          else
+            test "$LEAN_RESULT" = success
+          fi

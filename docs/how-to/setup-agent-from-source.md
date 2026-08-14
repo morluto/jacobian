@@ -55,6 +55,9 @@ not install prompts, skills, or client-specific mathematical workflows.
 
 ## Profiles
 
+These names only select extra operator-installed tools after the same locked
+`uv sync`. They do not choose different Python dependency sets.
+
 | Profile | Installed or checked surface |
 | --- | --- |
 | `core` | Complete locked Python backend stack: SymPy, NetworkX, Z3, Python-FLINT, and cvc5 |

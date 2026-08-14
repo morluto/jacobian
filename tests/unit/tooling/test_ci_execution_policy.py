@@ -117,19 +117,24 @@ def test_python_and_boundary_lanes_share_evidence_collection() -> None:
     assert "uv cache prune --ci" in action
 
 
-def test_lean_job_is_required_on_every_event_and_builds_semantic_targets() -> None:
+def test_full_lean_runs_on_merge_group_and_main() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     action = (ROOT / ".github/actions/setup-lean/action.yml").read_text(
         encoding="utf-8"
     )
 
     lean = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
-    assert "if: >-" not in lean
+    assert "if: github.event_name != 'pull_request'" in lean
     assert "JACOBIAN_LEAN_REQUIRED" in lean
     assert "use-github-cache: false" in action
     assert "use-mathlib-cache: true" in action
     assert "lake build JacobianLeanRuntime repl jacobian_lean_proof_state" in action
     assert "tools/preflight_lean_runtime.py --required" in action
+    assert "GitHub .lake cache mode | disabled" in action
+    assert "Restored bytes | 0" in action
+    assert "Saved bytes | 0" in action
+    assert "lean/.lake bytes after build" in action
+    assert "uses: actions/cache" not in action
 
 
 def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() -> None:
@@ -167,29 +172,33 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
 def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     all_ci = makefile.split(
-        "test-all-ci: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.",
+        "test-full: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.",
         1,
     )[1].split("test-stress:", 1)[0]
 
     assert "$(MAKE) test-component" in all_ci
-    assert "$(MAKE) test-exhaustive" in all_ci
-    assert "$(WORKTREE_ADMISSION) run --target test-all-ci" in all_ci
+    assert "$(MAKE) _test-exhaustive" in all_ci
+    assert "$(VALIDATION_LOCK) run --target test-full" in all_ci
     assert all_ci.index("$(MAKE) test-component") < all_ci.index(
-        "$(MAKE) test-exhaustive"
+        "$(MAKE) _test-exhaustive"
     )
 
 
-def test_focused_unit_lane_skips_worktree_admission() -> None:
+def test_focused_unit_lane_skips_validation_lock() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     unit = makefile.split("test-unit:", 1)[1].split("test-component:", 1)[0]
     exhaustive = makefile.split("test-exhaustive:", 1)[1].split("test-ordering:", 1)[0]
     harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
 
-    assert "WORKTREE_ADMISSION" not in unit
-    assert "$(WORKTREE_ADMISSION) run --target test-exhaustive" in exhaustive
-    assert "$(WORKTREE_ADMISSION) run --target harbor-check-all" in harbor
-    assert "$(WORKTREE_ADMISSION) run --target harbor-host-validation" in harbor
-    assert "$(WORKTREE_ADMISSION) run --target harbor-oracle-all" in harbor
+    assert "VALIDATION_LOCK" not in unit
+    assert "$(VALIDATION_LOCK) run --target test-exhaustive" in exhaustive
+    assert "$(MAKE) _test-exhaustive" in exhaustive
+    assert "$(VALIDATION_LOCK) run --target harbor-check-all" in harbor
+    assert "$(VALIDATION_LOCK) run --target harbor-host-validation" in harbor
+    assert "$(VALIDATION_LOCK) run --target harbor-oracle-all" in harbor
+    assert "harbor-check-all -- $(MAKE) _harbor-check-all" in harbor
+    assert "_harbor-check-all: harbor-check _harbor-host-validation" in harbor
+    assert "_harbor-oracle-all: _harbor-check-all" in harbor
 
 
 def test_component_lane_uses_module_fixture_affinity() -> None:
@@ -208,7 +217,9 @@ def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> 
     assert "workflow_dispatch:" in workflow
     assert "EVENT_NAME: ${{ github.event_name }}" in workflow
     assert '--event "$EVENT_NAME"' in workflow
-    assert "validate-benchmark-plan" in workflow
+    assert '--output "$plan_dir/plan.json"' in workflow
+    assert '--github-output "$GITHUB_OUTPUT"' in workflow
+    assert "validate-benchmark-plan" not in workflow
     assert "ci:benchmark-full" in workflow
 
 
@@ -241,8 +252,9 @@ def test_benchmark_contracts_run_once_for_record_and_digest_evidence() -> None:
     assert "--total-workers 8 --max-parallel 4" in workflow
     assert '--execution-sha "${{ github.sha }}"' in workflow
     assert "  prospective-digest:" not in workflow
-    assert "python .github/scripts/emit-plan-receipt" in workflow
-    assert "benchmark-plan-receipt" in workflow
+    assert "python .github/scripts/emit-plan-receipt" not in workflow
+    assert "benchmark-plan-receipt" not in workflow
+    assert "name: benchmark-plan" in workflow
 
 
 def test_benchmark_stable_gate_validates_provenance_receipts_in_python() -> None:
@@ -250,7 +262,9 @@ def test_benchmark_stable_gate_validates_provenance_receipts_in_python() -> None
     validation = workflow.split("  validation:", 1)[1].split("  timings:", 1)[0]
 
     assert "benchmarks.tooling.benchmark_validation" in validation
-    assert "benchmark-plan-receipt" in validation
+    assert "--plan" in validation
+    assert "plan.json" in validation
+    assert "benchmark-plan-receipt" not in validation
     assert "benchmark-host-timing-*" in validation
     assert "benchmark-test-durations-input" in validation
     assert '--execution-sha "${{ github.sha }}"' in validation
@@ -259,13 +273,12 @@ def test_benchmark_stable_gate_validates_provenance_receipts_in_python() -> None
 
 def test_product_ci_does_not_emit_a_plan_receipt() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    script = (ROOT / ".github/scripts/emit-plan-receipt").read_text(encoding="utf-8")
 
     assert "python .github/scripts/emit-plan-receipt" not in workflow
     assert "ci-plan-receipt" not in workflow
     assert "classify-ci-paths" not in workflow
-    assert "kind must be 'benchmark'" in script
-    assert "CI or benchmark plan" not in script
+    assert not (ROOT / ".github/scripts/emit-plan-receipt").exists()
+    assert not (ROOT / ".github/scripts/validate-benchmark-plan").exists()
 
 
 def test_paths_file_stays_on_harbor_planning() -> None:
@@ -278,7 +291,9 @@ def test_paths_file_stays_on_harbor_planning() -> None:
     assert "$(shell mktemp)" not in harbor
     assert "tr '\\n' ' '" not in harbor
     assert '--paths-file "$$tmp_dir/changed-paths.txt"' in harbor
-    assert "--config make/harbor.mk" in harbor
+    assert '--output "$$tmp_dir/plan.json"' in harbor
+    assert "validate-benchmark-plan" not in harbor
+    assert "emit-plan-receipt" not in harbor
     assert "PATHS_FILE" not in workflow
 
 
@@ -296,11 +311,41 @@ def test_static_job_runs_docs_linkcheck() -> None:
     assert 'node-version: "24"' in static
 
 
-def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
+def test_benchmark_plan_is_shown_as_json_in_the_job_summary() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 
-    assert "Plan receipt: \\`$(python" in workflow
-    assert "Plan receipt: \\\\`$(python" not in workflow
+    assert "echo '```json'" in workflow
+    assert 'cat "$plan_dir/plan.json"' in workflow
+    assert "Plan receipt:" not in workflow
+
+
+def test_coverage_report_lives_in_the_job_summary_not_a_pr_comment() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    coverage = workflow.split("  coverage:", 1)[1].split("  required:", 1)[0]
+
+    assert "$GITHUB_STEP_SUMMARY" in coverage
+    assert "jacobian-coverage-report" not in workflow
+    assert "issues/$PR_NUMBER/comments" not in workflow
+    assert "pull-requests: write" not in coverage
+
+
+def test_benchmark_job_outputs_are_only_if_projections() -> None:
+    workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
+    outputs = workflow.split("    outputs:", 1)[1].split("    steps:", 1)[0]
+
+    assert "run-benchmark-check:" in outputs
+    assert "run-benchmark-record-schema:" in outputs
+    assert "run-benchmark-inventory:" in outputs
+    assert "run-benchmark-host-validation:" in outputs
+    assert "benchmark-host-validation-matrix:" in outputs
+    assert "run-benchmark-oracle:" in outputs
+    assert "benchmark-oracle-matrix:" in outputs
+    assert "benchmark-plan-version:" not in outputs
+    assert "benchmark-planner-digest:" not in outputs
+    assert "benchmark-plan-reasons:" not in outputs
+    assert "run-benchmark-prospective-digest:" not in outputs
+    assert "benchmark-oracle-scope:" not in outputs
+    assert "PROSPECTIVE_DIGEST_FLAG" not in workflow
 
 
 def test_required_ci_gates_fail_closed_after_cancellation() -> None:
@@ -320,10 +365,13 @@ def test_required_ci_gates_fail_closed_after_cancellation() -> None:
     assert "deployment-test:" not in workflow
     assert ("needs: [static, python, boundaries, wheel, coverage, lean]") in required
     assert "success|skipped" not in required
+    assert "EVENT_NAME: ${{ github.event_name }}" in required
+    assert 'if [ "$EVENT_NAME" = pull_request ]; then' in required
+    assert 'test "$LEAN_RESULT" = skipped || test "$LEAN_RESULT" = success' in required
     assert 'test "$LEAN_RESULT" = success' in required
     assert "needs.lean.result" in required
     lean_job = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
-    assert "github.event_name != 'pull_request'" not in lean_job
+    assert "if: github.event_name != 'pull_request'" in lean_job
     assert "JACOBIAN_LEAN_REQUIRED" in lean_job
 
 
@@ -356,7 +404,7 @@ def test_subprocess_coverage_is_owned_by_one_focused_worker_lane() -> None:
         (ROOT / "Makefile")
         .read_text(encoding="utf-8")
         .split("test-checker-subprocess-coverage:", 1)[1]
-        .split("test-all-ci:", 1)[0]
+        .split("test-full:", 1)[0]
     )
 
     assert 'patch = ["subprocess"]' not in pyproject

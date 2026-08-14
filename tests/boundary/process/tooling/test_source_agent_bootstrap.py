@@ -30,10 +30,7 @@ def _bootstrap_checkout(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     (checkout / "tools").mkdir(parents=True)
     (checkout / "npm" / "bin").mkdir(parents=True)
     shutil.copy2(ROOT / "scripts" / "setup-agent", checkout / "scripts" / "setup-agent")
-    shutil.copy2(
-        ROOT / "tools" / "development_profiles.py",
-        checkout / "tools" / "development_profiles.py",
-    )
+    shutil.copy2(ROOT / "tools" / "setup_lean.py", checkout / "tools" / "setup_lean.py")
     (checkout / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
     (checkout / "uv.lock").touch()
     (checkout / ".uv-version").write_text("0.0.0\n")
@@ -167,11 +164,12 @@ def test_every_bootstrap_profile_audits_z3_and_networkx() -> None:
         assert "networkx" in providers
 
 
-def test_source_bootstrap_delegates_profile_setup_to_shared_definitions() -> None:
+def test_source_bootstrap_uses_locked_uv_sync_and_optional_lean_setup() -> None:
     script = (ROOT / "scripts" / "setup-agent").read_text(encoding="utf-8")
 
-    assert "tools/development_profiles.py" in script
-    assert 'prepare --profile "$PROFILE"' in script
+    assert "uv sync --locked" in script
+    assert "tools/setup_lean.py" in script
+    assert "development_profiles.py" not in script
     assert "lake update" not in script
     assert "lake build" not in script
 

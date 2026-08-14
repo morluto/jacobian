@@ -3,20 +3,20 @@
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
 
-setup: ## Install the locked contributor environment and diagnose Python backends.
-	python3 tools/development_profiles.py setup --repo .
+setup: uv-version-check ## Install the locked Python environment.
+	uv sync --locked --dev
 
-doctor: ## Diagnose the locked contributor environment without changing it.
-	uv run --locked --no-sync python tools/development_profiles.py doctor --repo .
+doctor: ## Diagnose operator-installed Lean and SAT tools that uv does not own.
+	uv run --locked --no-sync python tools/doctor_external_tools.py --repo .
 
-setup-lean: ## Install the locked environment and the pinned Lean toolchain.
-	python3 tools/development_profiles.py setup --profile lean --repo .
+setup-lean: setup ## Install the locked environment and the pinned Lean toolchain.
+	python3 tools/setup_lean.py --repo .
 
 doctor-lean: ## Diagnose Lean/elan/lake without changing the checkout.
-	uv run --locked --no-sync python tools/development_profiles.py doctor --profile lean --repo .
+	uv run --locked --no-sync python tools/doctor_external_tools.py --repo . --require lean
 
 doctor-external: ## Diagnose optional SAT proof binaries (no downloads).
-	uv run --locked --no-sync python tools/development_profiles.py doctor --profile external-proof --repo .
+	uv run --locked --no-sync python tools/doctor_external_tools.py --repo . --require external-proof
 
 setup-agent: ## Configure an agent against this source checkout (ARGS="--client codex --profile core").
 	./scripts/setup-agent $(ARGS)

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Thin CI adapter for Harbor/benchmark planning.
-
-Semantic planning lives in ``tools.benchmark_plan.compiler``. This file only
-bootstraps the repository import root, re-exports the stable compatibility
-surface, and delegates CLI execution to the package-owned implementation.
-"""
+"""Thin CI adapter for Harbor/benchmark planning."""
 
 from __future__ import annotations
 
@@ -15,71 +10,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.benchmark_plan.compiler import (  # noqa: E402
-    _ORACLE_SCOPE_RANK,
-    BENCHMARK_CONFIG_PREFIX,
-    BENCHMARK_CONTROL_PATHS,
-    BENCHMARK_EXECUTION_CONTROL_PATHS,
-    EVENTS,
-    MAX_DATASET_SHARDS,
-    MAX_PULL_REQUEST_ORACLE_TASKS,
-    MODES,
-    PLAN_VERSION,
-    PLANNER_DIGEST_SOURCES,
-    TARGET_TASKS_PER_SHARD,
-    _Classification,
-    _classify_benchmark_paths,
-    _classify_control_path,
-    _classify_dataset_path,
-    _classify_shared_path,
-    _digest,
-    _emit,
-    _escalate,
-    _exact_entry,
-    _file_sha256,
-    _harbor_suite,
-    _json,
-    _membership,
-    _oracle_matrix,
-    _planner_digest,
-    _shard_entries,
-    _topology_digest,
-    main,
-    plan,
-)
+from tools.benchmark_plan.compiler import main, plan  # noqa: E402
 
-__all__ = [
-    "BENCHMARK_CONFIG_PREFIX",
-    "BENCHMARK_CONTROL_PATHS",
-    "BENCHMARK_EXECUTION_CONTROL_PATHS",
-    "EVENTS",
-    "MAX_DATASET_SHARDS",
-    "MAX_PULL_REQUEST_ORACLE_TASKS",
-    "MODES",
-    "PLANNER_DIGEST_SOURCES",
-    "PLAN_VERSION",
-    "TARGET_TASKS_PER_SHARD",
-    "_ORACLE_SCOPE_RANK",
-    "_Classification",
-    "_classify_benchmark_paths",
-    "_classify_control_path",
-    "_classify_dataset_path",
-    "_classify_shared_path",
-    "_digest",
-    "_emit",
-    "_escalate",
-    "_exact_entry",
-    "_file_sha256",
-    "_harbor_suite",
-    "_json",
-    "_membership",
-    "_oracle_matrix",
-    "_planner_digest",
-    "_shard_entries",
-    "_topology_digest",
-    "main",
-    "plan",
-]
+__all__ = ["main", "plan"]
 
 if __name__ == "__main__":
     raise SystemExit(main())

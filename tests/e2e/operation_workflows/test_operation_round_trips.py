@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from mcp import Client
@@ -15,7 +16,11 @@ from tests.support.rationals import rational_payload as _q
 from tests.support.state import copy_template
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.operator_lifecycle import CheckerAuthorization, initialize_state
+from jacobian.operator_lifecycle import (
+    CheckerAuthorization,
+    active_catalog_revision,
+    initialize_state,
+)
 
 
 def _polynomial(*coefficients_ascending: int) -> dict[str, object]:
@@ -107,32 +112,38 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 record["payload"]["semantics_uri"],
             ]
 
-        restarted = create_server(tmp_path)
-        async with Client(restarted, raise_exceptions=True) as client:
-            replayed = await _tool(
-                client,
-                "math.run",
-                {
-                    "operation_id": "polynomial.gcd.verify",
-                    "payload": {"input": gcd_input, "candidate": candidate},
-                },
-            )
-            assert replayed["output"]["status"] == "VERIFIED"
-            assert replayed["output"]["verification_record_uri"] == record_uri
-            assert (await _artifact(client, record_uri))["artifact_uri"] == record_uri
+        revision = active_catalog_revision(tmp_path)
+        assert revision is not None
+        with patch("jacobian.operator_lifecycle._build_catalog") as build_catalog:
+            restarted = create_server(tmp_path)
+            async with Client(restarted, raise_exceptions=True) as client:
+                replayed = await _tool(
+                    client,
+                    "math.run",
+                    {
+                        "operation_id": "polynomial.gcd.verify",
+                        "payload": {"input": gcd_input, "candidate": candidate},
+                    },
+                )
+                assert replayed["output"]["status"] == "VERIFIED"
+                assert replayed["output"]["verification_record_uri"] == record_uri
+                assert (await _artifact(client, record_uri))[
+                    "artifact_uri"
+                ] == record_uri
+            build_catalog.assert_not_called()
+        assert active_catalog_revision(tmp_path) == revision
 
     asyncio.run(scenario())
 
 
 def test_polynomial_factor_result_verifies_through_mcp(
     tmp_path: Path,
-    authorized_portfolio_template: Path,
+    initialized_authorized_state_template: Path,
 ) -> None:
     async def scenario() -> None:
-        state = copy_template(authorized_portfolio_template, tmp_path / "state")
-        initialize_state(
-            state,
-            checker_authorization=CheckerAuthorization.BUNDLED,
+        state = copy_template(
+            initialized_authorized_state_template,
+            tmp_path / "state",
         )
         server = create_server(state)
         async with Client(server, raise_exceptions=True) as client:

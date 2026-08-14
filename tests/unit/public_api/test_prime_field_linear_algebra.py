@@ -39,6 +39,25 @@ def test_column_and_quotient_bases_are_source_ordered() -> None:
     ) == ((0, 1, 0), (0, 0, 1))
 
 
+def test_column_basis_returns_original_pivot_columns() -> None:
+    matrix = PrimeFieldMatrix(
+        prime=5,
+        entries=((1, 2, 3, 4), (0, 0, 1, 1)),
+        columns=4,
+    )
+    assert column_basis(matrix) == ((1, 0), (3, 1))
+
+
+def test_quotient_basis_keeps_original_cycle_vectors() -> None:
+    cycles = ((2, 1, 0), (1, 1, 0), (0, 0, 1))
+    assert quotient_basis(cycles, ((1, 3, 0),), prime=5) == ((1, 1, 0), (0, 0, 1))
+
+
+def test_quotient_basis_rejects_ragged_vectors() -> None:
+    with pytest.raises(ValueError, match="dimension"):
+        quotient_basis(((1, 0),), ((1, 0, 0),), prime=3)
+
+
 def test_empty_shapes_remain_explicit() -> None:
     zero_by_three = PrimeFieldMatrix(prime=2, entries=(), columns=3)
     three_by_zero = PrimeFieldMatrix(prime=2, entries=((), (), ()), columns=0)

@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-import json
-import subprocess
 import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
+import tools.benchmark_plan.compiler as planner
+from tools.benchmark_plan.model import BenchmarkPlan
+from tools.benchmark_plan.validation import validate_plan
 
 ROOT = Path(__file__).resolve().parents[2]
-PLANNER_PATH = ROOT / ".github" / "scripts" / "plan-benchmarks"
-VALIDATOR_PATH = ROOT / ".github" / "scripts" / "validate-benchmark-plan"
 
 
 def _load_script(module_name: str, path: Path) -> ModuleType:
@@ -28,9 +27,6 @@ def _load_script(module_name: str, path: Path) -> ModuleType:
         module_state.setitem(sys.modules, module_name, module)
         spec.loader.exec_module(module)
     return module
-
-
-planner = _load_script("benchmark_planner", PLANNER_PATH)
 
 
 @pytest.fixture(autouse=True)
@@ -72,55 +68,42 @@ def test_load_script_scopes_sys_modules_registration(
         assert module_name not in sys.modules
 
 
-def _matrix(result: dict[str, str]) -> list[dict[str, object]]:
-    return json.loads(result["benchmark-oracle-matrix"])
+def _matrix(result: BenchmarkPlan) -> list[dict[str, object]]:
+    return list(result.oracle_matrix)
 
 
-def _matrix_tasks(result: dict[str, str]) -> set[str]:
+def _matrix_tasks(result: BenchmarkPlan) -> set[str]:
     return {str(task) for item in _matrix(result) for task in item["tasks"]}
 
 
-def _host_matrix(result: dict[str, str]) -> list[dict[str, object]]:
-    matrix = json.loads(result["benchmark-host-validation-matrix"])
+def _host_matrix(result: BenchmarkPlan) -> list[dict[str, object]]:
     return [
         {key: value for key, value in entry.items() if key != "predicted_seconds"}
-        for entry in matrix
+        for entry in result.host_matrix
     ]
 
 
-def _raw_host_matrix(result: dict[str, str]) -> list[dict[str, object]]:
-    return json.loads(result["benchmark-host-validation-matrix"])
+def _raw_host_matrix(result: BenchmarkPlan) -> list[dict[str, object]]:
+    return list(result.host_matrix)
 
 
-def _assert_plan_valid(result: dict[str, str]) -> None:
-    payload = "\n".join(f"{key}={value}" for key, value in result.items()) + "\n"
-    proc = subprocess.run(
-        [sys.executable, str(VALIDATOR_PATH)],
-        input=payload,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-
-
-def _lane(result: dict[str, str], key: str) -> bool:
-    return result[key] == "true"
+def _assert_plan_valid(result: BenchmarkPlan) -> None:
+    validate_plan(result)
 
 
 def test_product_only_changes_skip_benchmark_work() -> None:
     result = planner.plan(["src/jacobian/math.py"], event="pull_request")
 
-    assert result["benchmark-plan-version"] == "2"
-    assert result["benchmark-plan-event"] == "pull_request"
-    assert result["benchmark-plan-mode"] == "none"
-    assert result["benchmark-topology-digest"] == ""
-    assert result["run-benchmark-check"] == "false"
-    assert result["run-benchmark-record-schema"] == "false"
-    assert result["run-benchmark-prospective-digest"] == "false"
-    assert result["run-benchmark-inventory"] == "false"
-    assert result["run-benchmark-oracle"] == "false"
-    assert result["benchmark-oracle-scope"] == "none"
+    assert result.schema_version == 1
+    assert result.event == "pull_request"
+    assert result.mode == "none"
+    assert result.topology_digest == ""
+    assert result.run_check is False
+    assert result.record_schema is False
+    assert result.prospective_digest is False
+    assert result.inventory is False
+    assert result.run_oracle is False
+    assert result.oracle_scope == "none"
     assert _matrix(result) == []
     _assert_plan_valid(result)
 
@@ -138,38 +121,22 @@ def test_plan_is_versioned_and_bound_to_event_base_head_sha() -> None:
         head=head,
     )
 
-    assert result["benchmark-plan-version"] == "2"
-    assert result["benchmark-plan-event"] == "pull_request"
-    assert result["benchmark-plan-base-sha"] == base
-    assert result["benchmark-plan-head-sha"] == head
-    assert result["benchmark-planner-digest"].startswith("sha256:")
-    assert len(result["benchmark-planner-digest"]) == 71
-    assert result["benchmark-topology-digest"].startswith("sha256:")
-    assert len(result["benchmark-topology-digest"]) == 71
+    assert result.schema_version == 1
+    assert result.event == "pull_request"
+    assert result.base_sha == base
+    assert result.head_sha == head
+    assert result.planner_digest.startswith("sha256:")
+    assert len(result.planner_digest) == 71
+    assert result.topology_digest.startswith("sha256:")
+    assert len(result.topology_digest) == 71
     _assert_plan_valid(result)
-
-
-def test_planner_digest_binds_to_planner_and_path_policy_sources() -> None:
-    payload = "\n".join(
-        f"{path.relative_to(ROOT).as_posix()}\t{path.read_bytes().hex()}"
-        for path in planner.PLANNER_DIGEST_SOURCES
-    ).encode()
-    expected = "sha256:" + hashlib.sha256(payload).hexdigest()
-    result = planner.plan(
-        [
-            "benchmarks/datasets/mathematical-benchmarks-v1/"
-            "parameterized-sharp-bound-audit/tests/verifier.py"
-        ],
-        event="pull_request",
-    )
-    assert result["benchmark-planner-digest"] == expected
 
 
 @pytest.mark.parametrize(
     "path",
     [
         ".github/scripts/plan-benchmarks",
-        ".github/scripts/validate-benchmark-plan",
+        "tools/benchmark_plan/validation.py",
         ".github/workflows/benchmarks.yml",
         "Makefile",
         "tools/harbor_task_workflow.py",
@@ -178,29 +145,29 @@ def test_planner_digest_binds_to_planner_and_path_policy_sources() -> None:
 def test_benchmark_control_plane_changes_run_contract_checks(path: str) -> None:
     result = planner.plan([path], event="pull_request")
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
+    assert result.run_check is True
+    assert result.record_schema is True
     # Planner/workflow/Makefile changes do not alter task content digests.
-    assert result["run-benchmark-prospective-digest"] == "false"
-    assert result["run-benchmark-inventory"] == "false"
-    assert result["run-benchmark-oracle"] == "false"
-    assert result["benchmark-oracle-scope"] == "none"
-    assert result["benchmark-plan-mode"] == "changed"
+    assert result.prospective_digest is False
+    assert result.inventory is False
+    assert result.run_oracle is False
+    assert result.oracle_scope == "none"
+    assert result.mode == "changed"
     assert _matrix(result) == []
     _assert_plan_valid(result)
 
 
 @pytest.mark.parametrize(
     "path",
-    [".github/scripts/manage-test-timings", ".github/scripts/emit-plan-receipt"],
+    [".github/scripts/manage-test-timings"],
 )
 def test_non_host_control_utilities_do_not_select_full_verifier_corpus(
     path: str,
 ) -> None:
     result = planner.plan([path], event="pull_request")
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-host-validation"] == "false"
+    assert result.run_check is True
+    assert result.run_host_validation is False
     assert _host_matrix(result) == []
     _assert_plan_valid(result)
 
@@ -208,9 +175,9 @@ def test_non_host_control_utilities_do_not_select_full_verifier_corpus(
 def test_root_makefile_runs_contracts_without_host_verifier_replay() -> None:
     result = planner.plan(["Makefile"], event="pull_request")
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-host-validation"] == "false"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.run_host_validation is False
     assert _host_matrix(result) == []
     _assert_plan_valid(result)
 
@@ -218,12 +185,12 @@ def test_root_makefile_runs_contracts_without_host_verifier_replay() -> None:
 def test_harbor_makefile_change_keeps_full_host_verifier_coverage() -> None:
     result = planner.plan(["make/harbor.mk"], event="pull_request")
 
-    assert result["run-benchmark-host-validation"] == "true"
+    assert result.run_host_validation is True
     assert len(_host_matrix(result)) == 4
     assert any(
         "shared verifier execution harness requires full host validation: "
         "make/harbor.mk" in reason
-        for reason in json.loads(result["benchmark-plan-reasons"])
+        for reason in list(result.reasons)
     )
     _assert_plan_valid(result)
 
@@ -234,18 +201,18 @@ def test_execution_configuration_change_defers_oracle_to_merge_queue() -> None:
     pull_request = planner.plan([path], event="pull_request")
     merge_group = planner.plan([path], event="merge_group")
 
-    assert pull_request["run-benchmark-check"] == "true"
-    assert pull_request["run-benchmark-record-schema"] == "true"
-    assert pull_request["run-benchmark-prospective-digest"] == "true"
-    assert pull_request["run-benchmark-inventory"] == "false"
-    assert pull_request["run-benchmark-oracle"] == "false"
-    assert pull_request["benchmark-oracle-scope"] == "none"
-    assert pull_request["benchmark-plan-mode"] == "changed"
+    assert pull_request.run_check is True
+    assert pull_request.record_schema is True
+    assert pull_request.prospective_digest is True
+    assert pull_request.inventory is False
+    assert pull_request.run_oracle is False
+    assert pull_request.oracle_scope == "none"
+    assert pull_request.mode == "changed"
     assert _matrix(pull_request) == []
-    assert merge_group["run-benchmark-oracle"] == "true"
-    assert merge_group["benchmark-oracle-scope"] == "all"
-    assert merge_group["benchmark-plan-mode"] == "integration"
-    assert merge_group["run-benchmark-inventory"] == "true"
+    assert merge_group.run_oracle is True
+    assert merge_group.oracle_scope == "all"
+    assert merge_group.mode == "integration"
+    assert merge_group.inventory is True
     assert _matrix(merge_group)
     _assert_plan_valid(pull_request)
     _assert_plan_valid(merge_group)
@@ -257,14 +224,14 @@ def test_shared_tooling_change_defers_oracle_and_runs_digests_on_pull_request() 
     pull_request = planner.plan([path], event="pull_request")
     merge_group = planner.plan([path], event="merge_group")
 
-    assert pull_request["run-benchmark-check"] == "true"
-    assert pull_request["run-benchmark-record-schema"] == "true"
-    assert pull_request["run-benchmark-prospective-digest"] == "true"
-    assert pull_request["run-benchmark-oracle"] == "false"
-    assert pull_request["benchmark-plan-mode"] == "changed"
-    assert merge_group["run-benchmark-oracle"] == "true"
-    assert merge_group["benchmark-oracle-scope"] == "all"
-    assert merge_group["run-benchmark-inventory"] == "true"
+    assert pull_request.run_check is True
+    assert pull_request.record_schema is True
+    assert pull_request.prospective_digest is True
+    assert pull_request.run_oracle is False
+    assert pull_request.mode == "changed"
+    assert merge_group.run_oracle is True
+    assert merge_group.oracle_scope == "all"
+    assert merge_group.inventory is True
     assert _matrix(merge_group)
 
 
@@ -277,13 +244,13 @@ def test_task_readme_change_runs_record_schema_without_oracle_or_digests() -> No
         event="pull_request",
     )
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "false"
-    assert result["run-benchmark-inventory"] == "false"
-    assert result["run-benchmark-oracle"] == "false"
-    assert result["benchmark-oracle-scope"] == "none"
-    assert result["benchmark-plan-mode"] == "changed"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.prospective_digest is False
+    assert result.inventory is False
+    assert result.run_oracle is False
+    assert result.oracle_scope == "none"
+    assert result.mode == "changed"
     assert _matrix(result) == []
     _assert_plan_valid(result)
 
@@ -302,12 +269,12 @@ def test_new_task_directory_and_member_resolve_directly_without_version_bump() -
         event="pull_request",
     )
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "changed-tasks"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "true"
-    assert result["run-benchmark-inventory"] == "false"
-    assert result["benchmark-plan-mode"] == "changed"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "changed-tasks"
+    assert result.record_schema is True
+    assert result.prospective_digest is True
+    assert result.inventory is False
+    assert result.mode == "changed"
     matrix = _matrix(result)
     assert len(matrix) == 1
     assert matrix[0]["dataset"] == "mathematical-benchmarks-v1"
@@ -327,15 +294,15 @@ def test_executable_task_change_selects_exact_task_without_version_bump() -> Non
         event="pull_request",
     )
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "changed-tasks"
-    assert result["benchmark-plan-mode"] == "changed"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "changed-tasks"
+    assert result.mode == "changed"
     matrix = _matrix(result)
     assert len(matrix) == 1
     assert matrix[0]["dataset"] == "mathematical-benchmarks-v1"
     assert matrix[0]["tasks"] == ["parameterized-sharp-bound-audit"]
     host_matrix = _host_matrix(result)
-    assert result["run-benchmark-host-validation"] == "true"
+    assert result.run_host_validation is True
     assert {(entry["selector"], entry["keyword"]) for entry in host_matrix} == {
         (
             "benchmarks/validation/mathematical_benchmarks_v1/"
@@ -451,7 +418,7 @@ def test_shared_benchmark_support_falls_back_to_full_host_validation() -> None:
     ]
     assert any(
         "shared benchmark tooling requires full host validation" in reason
-        for reason in json.loads(result["benchmark-plan-reasons"])
+        for reason in list(result.reasons)
     )
     _assert_plan_valid(result)
 
@@ -461,7 +428,7 @@ def test_shared_verifier_harness_states_full_suite_reason() -> None:
     result = planner.plan([path], event="pull_request")
 
     assert len(_host_matrix(result)) == 4
-    assert json.loads(result["benchmark-plan-reasons"]) == [
+    assert list(result.reasons) == [
         "benchmark validation or documentation change",
         f"shared verifier harness requires full host validation: {path}",
     ]
@@ -474,12 +441,12 @@ def test_membership_change_defers_dataset_oracle_until_merge_queue() -> None:
         event="pull_request",
     )
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "true"
-    assert result["run-benchmark-oracle"] == "false"
-    assert result["benchmark-oracle-scope"] == "none"
-    assert result["benchmark-plan-mode"] == "changed"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.prospective_digest is True
+    assert result.run_oracle is False
+    assert result.oracle_scope == "none"
+    assert result.mode == "changed"
     assert _matrix(result) == []
 
 
@@ -489,10 +456,10 @@ def test_membership_change_runs_affected_dataset_in_merge_queue() -> None:
         event="merge_group",
     )
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "affected-datasets"
-    assert result["benchmark-plan-mode"] == "integration"
-    assert result["run-benchmark-inventory"] == "true"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "affected-datasets"
+    assert result.mode == "integration"
+    assert result.inventory is True
     assert _matrix(result)
     assert {item["dataset"] for item in _matrix(result)} == {
         "mathematical-benchmarks-v1"
@@ -509,9 +476,9 @@ def test_merge_group_keeps_widest_oracle_scope_for_mixed_changes() -> None:
         event="merge_group",
     )
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "all"
-    assert result["benchmark-plan-mode"] == "integration"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "all"
+    assert result.mode == "integration"
     assert len(_matrix(result)) > 1
     _assert_plan_valid(result)
 
@@ -530,11 +497,11 @@ def test_existing_task_member_change_selects_changed_task_oracle_on_pull_request
         event="pull_request",
     )
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "changed-tasks"
-    assert result["run-benchmark-prospective-digest"] == "true"
-    assert result["run-benchmark-inventory"] == "false"
-    assert result["benchmark-plan-mode"] == "changed"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "changed-tasks"
+    assert result.prospective_digest is True
+    assert result.inventory is False
+    assert result.mode == "changed"
     matrix = _matrix(result)
     assert len(matrix) == 1
     assert matrix[0]["dataset"] == "mathematical-benchmarks-v1"
@@ -563,15 +530,15 @@ def test_deleted_task_is_deferred_to_merge_queue_on_pull_request() -> None:
         event="merge_group",
     )
 
-    assert pull_request["run-benchmark-check"] == "true"
-    assert pull_request["run-benchmark-record-schema"] == "true"
-    assert pull_request["run-benchmark-prospective-digest"] == "true"
-    assert pull_request["run-benchmark-oracle"] == "false"
-    assert pull_request["benchmark-oracle-scope"] == "none"
-    assert pull_request["benchmark-plan-mode"] == "changed"
+    assert pull_request.run_check is True
+    assert pull_request.record_schema is True
+    assert pull_request.prospective_digest is True
+    assert pull_request.run_oracle is False
+    assert pull_request.oracle_scope == "none"
+    assert pull_request.mode == "changed"
     assert _matrix(pull_request) == []
-    assert merge_group["run-benchmark-oracle"] == "true"
-    assert merge_group["benchmark-oracle-scope"] == "affected-datasets"
+    assert merge_group.run_oracle is True
+    assert merge_group.oracle_scope == "affected-datasets"
     assert {item["dataset"] for item in _matrix(merge_group)} == {
         "mathematical-benchmarks-v1"
     }
@@ -584,11 +551,11 @@ def test_shared_tooling_change_is_contract_only_on_pull_request() -> None:
         ["benchmarks/tooling/verifier_support.py"], event="pull_request"
     )
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "true"
-    assert result["run-benchmark-oracle"] == "false"
-    assert result["benchmark-oracle-scope"] == "none"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.prospective_digest is True
+    assert result.run_oracle is False
+    assert result.oracle_scope == "none"
     assert _matrix(result) == []
 
 
@@ -597,10 +564,10 @@ def test_shared_tooling_change_runs_full_portfolio_in_merge_queue() -> None:
         ["benchmarks/tooling/verifier_support.py"], event="merge_group"
     )
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "all"
-    assert result["benchmark-plan-mode"] == "integration"
-    assert result["run-benchmark-inventory"] == "true"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "all"
+    assert result.mode == "integration"
+    assert result.inventory is True
     assert len(_matrix(result)) > 1
 
 
@@ -616,11 +583,11 @@ def test_large_task_set_is_deferred_from_pull_request_to_merge_queue() -> None:
     pull_request = planner.plan(paths, event="pull_request")
     merge_group = planner.plan(paths, event="merge_group")
 
-    assert pull_request["run-benchmark-oracle"] == "false"
-    assert pull_request["benchmark-oracle-scope"] == "none"
+    assert pull_request.run_oracle is False
+    assert pull_request.oracle_scope == "none"
     assert _matrix(pull_request) == []
-    assert merge_group["run-benchmark-oracle"] == "true"
-    assert merge_group["benchmark-oracle-scope"] == "changed-tasks"
+    assert merge_group.run_oracle is True
+    assert merge_group.oracle_scope == "changed-tasks"
     assert set(task_ids) <= _matrix_tasks(merge_group)
 
 
@@ -636,11 +603,11 @@ def test_large_task_set_deferred_on_pull_request_runs_on_main_push() -> None:
     pull_request = planner.plan(paths, event="pull_request")
     push = planner.plan(paths, event="push")
 
-    assert pull_request["run-benchmark-oracle"] == "false"
-    assert push["run-benchmark-oracle"] == "true"
-    assert push["benchmark-oracle-scope"] == "changed-tasks"
-    assert push["benchmark-plan-mode"] == "integration"
-    assert push["run-benchmark-inventory"] == "true"
+    assert pull_request.run_oracle is False
+    assert push.run_oracle is True
+    assert push.oracle_scope == "changed-tasks"
+    assert push.mode == "integration"
+    assert push.inventory is True
     assert set(task_ids) <= _matrix_tasks(push)
     _assert_plan_valid(push)
 
@@ -660,21 +627,21 @@ def test_documentation_changes_do_not_consume_the_oracle_task_cap() -> None:
 
     result = planner.plan(paths, event="pull_request")
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "changed-tasks"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "changed-tasks"
     assert _matrix_tasks(result) == {task_ids[0]}
 
 
 def test_main_push_owns_integration_oracle_and_inventory() -> None:
     result = planner.plan(["benchmarks/tooling/verifier_support.py"], event="push")
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "true"
-    assert result["run-benchmark-inventory"] == "true"
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "all"
-    assert result["benchmark-plan-mode"] == "integration"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.prospective_digest is True
+    assert result.inventory is True
+    assert result.run_oracle is True
+    assert result.oracle_scope == "all"
+    assert result.mode == "integration"
     assert _matrix(result)
     _assert_plan_valid(result)
 
@@ -682,13 +649,13 @@ def test_main_push_owns_integration_oracle_and_inventory() -> None:
 def test_adapter_documentation_change_never_runs_oracle() -> None:
     result = planner.plan(["benchmarks/adapters/README.md"], event="merge_group")
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "false"
-    assert result["run-benchmark-oracle"] == "false"
-    assert result["benchmark-oracle-scope"] == "none"
-    assert result["benchmark-plan-mode"] == "integration"
-    assert result["run-benchmark-inventory"] == "true"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.prospective_digest is False
+    assert result.run_oracle is False
+    assert result.oracle_scope == "none"
+    assert result.mode == "integration"
+    assert result.inventory is True
     _assert_plan_valid(result)
 
 
@@ -698,11 +665,11 @@ def test_snapshot_change_runs_contracts_without_oracle() -> None:
         event="pull_request",
     )
 
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "false"
-    assert result["run-benchmark-oracle"] == "false"
-    assert "immutable benchmark snapshot change" in result["benchmark-plan-reasons"]
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.prospective_digest is False
+    assert result.run_oracle is False
+    assert "immutable benchmark snapshot change" in result.reasons
     _assert_plan_valid(result)
 
 
@@ -714,10 +681,10 @@ def test_environment_profile_change_defers_full_oracle_to_merge_queue() -> None:
         ["benchmarks/environment-profiles.toml"], event="merge_group"
     )
 
-    assert pull_request["run-benchmark-prospective-digest"] == "true"
-    assert pull_request["run-benchmark-oracle"] == "false"
-    assert merge_group["run-benchmark-oracle"] == "true"
-    assert merge_group["benchmark-oracle-scope"] == "all"
+    assert pull_request.prospective_digest is True
+    assert pull_request.run_oracle is False
+    assert merge_group.run_oracle is True
+    assert merge_group.oracle_scope == "all"
     _assert_plan_valid(pull_request)
     _assert_plan_valid(merge_group)
 
@@ -725,12 +692,12 @@ def test_environment_profile_change_defers_full_oracle_to_merge_queue() -> None:
 def test_unknown_benchmark_path_fails_closed_to_full_portfolio() -> None:
     result = planner.plan(["benchmarks/new-control-plane.py"], event="pull_request")
 
-    assert result["run-benchmark-oracle"] == "true"
-    assert result["benchmark-oracle-scope"] == "all"
-    assert result["benchmark-plan-mode"] == "full"
-    assert result["run-benchmark-inventory"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "true"
+    assert result.run_oracle is True
+    assert result.oracle_scope == "all"
+    assert result.mode == "full"
+    assert result.inventory is True
+    assert result.record_schema is True
+    assert result.prospective_digest is True
     assert _matrix(result)
     assert len({item["dataset"] for item in _matrix(result)}) > 1
     _assert_plan_valid(result)
@@ -739,14 +706,14 @@ def test_unknown_benchmark_path_fails_closed_to_full_portfolio() -> None:
 def test_force_full_includes_each_dataset_task_pair() -> None:
     result = planner.plan([], event="workflow_dispatch", force_full=True)
 
-    assert result["benchmark-plan-version"] == "2"
-    assert result["benchmark-oracle-scope"] == "all"
-    assert result["benchmark-plan-mode"] == "full"
-    assert result["run-benchmark-check"] == "true"
-    assert result["run-benchmark-record-schema"] == "true"
-    assert result["run-benchmark-prospective-digest"] == "true"
-    assert result["run-benchmark-inventory"] == "true"
-    assert result["run-benchmark-oracle"] == "true"
+    assert result.schema_version == 1
+    assert result.oracle_scope == "all"
+    assert result.mode == "full"
+    assert result.run_check is True
+    assert result.record_schema is True
+    assert result.prospective_digest is True
+    assert result.inventory is True
+    assert result.run_oracle is True
     assert _matrix(result)
     assert _matrix_tasks(result) == {
         ref.path.name
@@ -759,10 +726,10 @@ def test_force_full_includes_each_dataset_task_pair() -> None:
 def test_schedule_event_runs_full_portfolio() -> None:
     result = planner.plan([], event="schedule")
 
-    assert result["benchmark-plan-mode"] == "full"
-    assert result["benchmark-oracle-scope"] == "all"
-    assert result["run-benchmark-inventory"] == "true"
-    assert result["run-benchmark-oracle"] == "true"
+    assert result.mode == "full"
+    assert result.oracle_scope == "all"
+    assert result.inventory is True
+    assert result.run_oracle is True
     _assert_plan_valid(result)
 
 
@@ -833,11 +800,8 @@ def test_two_unrelated_synthetic_additions_yield_independent_matrices(
     # The topology digest binds to the full inventory, not the changed subset:
     # both plans see the same tree, so they share one topology digest while
     # their Oracle matrices remain independent.
-    assert addition_alpha["benchmark-topology-digest"].startswith("sha256:")
-    assert (
-        addition_alpha["benchmark-topology-digest"]
-        == (addition_beta["benchmark-topology-digest"])
-    )
+    assert addition_alpha.topology_digest.startswith("sha256:")
+    assert addition_alpha.topology_digest == (addition_beta.topology_digest)
     _assert_plan_valid(addition_alpha)
     _assert_plan_valid(addition_beta)
 

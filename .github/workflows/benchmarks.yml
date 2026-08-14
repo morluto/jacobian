@@ -28,24 +28,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     outputs:
-      benchmark-plan-version: ${{ steps.plan.outputs.benchmark-plan-version }}
-      benchmark-plan-event: ${{ steps.plan.outputs.benchmark-plan-event }}
-      benchmark-plan-base-sha: ${{ steps.plan.outputs.benchmark-plan-base-sha }}
-      benchmark-plan-head-sha: ${{ steps.plan.outputs.benchmark-plan-head-sha }}
-      benchmark-planner-digest: ${{ steps.plan.outputs.benchmark-planner-digest }}
-      benchmark-topology-digest: ${{ steps.plan.outputs.benchmark-topology-digest }}
-      benchmark-plan-mode: ${{ steps.plan.outputs.benchmark-plan-mode }}
       run-benchmark-check: ${{ steps.plan.outputs.run-benchmark-check }}
       run-benchmark-record-schema: ${{ steps.plan.outputs.run-benchmark-record-schema }}
-      run-benchmark-prospective-digest: ${{ steps.plan.outputs.run-benchmark-prospective-digest }}
       run-benchmark-inventory: ${{ steps.plan.outputs.run-benchmark-inventory }}
       run-benchmark-host-validation: ${{ steps.plan.outputs.run-benchmark-host-validation }}
       benchmark-host-validation-matrix: ${{ steps.plan.outputs.benchmark-host-validation-matrix }}
       run-benchmark-oracle: ${{ steps.plan.outputs.run-benchmark-oracle }}
-      benchmark-oracle-scope: ${{ steps.plan.outputs.benchmark-oracle-scope }}
       benchmark-oracle-matrix: ${{ steps.plan.outputs.benchmark-oracle-matrix }}
-      benchmark-plan-reasons: ${{ steps.plan.outputs.benchmark-plan-reasons }}
-      benchmark-plan-receipt-digest: ${{ steps.plan.outputs.benchmark-plan-receipt-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -97,57 +86,25 @@ jobs:
           if [ -f .benchmark-timings.json ]; then
             planner_args+=(--timings-file .benchmark-timings.json)
           fi
-          plan_output=$(
-            uvx --from harbor==0.20.0 --with tomli-w==1.2.0 \
-              python .github/scripts/plan-benchmarks \
-              "${planner_args[@]}" -- "${changed_paths[@]}"
-          )
-          printf '%s\n' "$plan_output" | python .github/scripts/validate-benchmark-plan
-          printf '%s\n' "$plan_output" >> "$GITHUB_OUTPUT"
           plan_dir="$RUNNER_TEMP/jacobian-benchmark-plan"
           mkdir -p "$plan_dir"
-          printf '%s\n' "$plan_output" > "$plan_dir/plan.txt"
+          uvx --from harbor==0.20.0 --with tomli-w==1.2.0 \
+            python .github/scripts/plan-benchmarks \
+            "${planner_args[@]}" --output "$plan_dir/plan.json" \
+            --github-output "$GITHUB_OUTPUT" -- "${changed_paths[@]}"
           printf '%s\n' "${changed_paths[@]}" > "$plan_dir/changed-paths.txt"
-          python .github/scripts/emit-plan-receipt \
-            --kind benchmark \
-            --event "$EVENT_NAME" \
-            --base "$BASE_SHA" \
-            --head "$HEAD_SHA" \
-            --planner .github/scripts/plan-benchmarks \
-            --config .github/scripts/_ci_paths.py \
-            --config .github/scripts/manage-test-timings \
-            --config .github/scripts/validate-benchmark-plan \
-            --config benchmarks/registry.toml \
-            --config benchmarks/environment-profiles.toml \
-            --config .github/workflows/benchmarks.yml \
-            --config Makefile \
-            --config make/harbor.mk \
-            --config tools/check_benchmark_adapters.py \
-            --config tools/check_benchmark_contracts.py \
-            --config tools/check_benchmark_static.py \
-            --config tools/pytest_lifecycle.py \
-            --config tools/check_harbor_dataset.py \
-            --config tools/sync_harbor_verifier_support.py \
-            --config benchmarks/tooling/benchmark_validation.py \
-            --config benchmarks/tooling/host_validation.py \
-            --config benchmarks/tooling/validation_plan.py \
-            --plan-file "$plan_dir/plan.txt" \
-            --paths-file "$plan_dir/changed-paths.txt" \
-            --output "$plan_dir/plan-receipt.json"
-          echo "benchmark-plan-receipt-digest=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")" >> "$GITHUB_OUTPUT"
           {
             echo "## Benchmark plan"
             echo
-            echo '```text'
-            echo "$plan_output"
+            echo '```json'
+            cat "$plan_dir/plan.json"
             echo '```'
-            echo "Plan receipt: \`$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt_digest"])' "$plan_dir/plan-receipt.json")\`"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload benchmark plan receipt
+      - name: Upload benchmark plan
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: benchmark-plan-receipt
-          path: ${{ runner.temp }}/jacobian-benchmark-plan/plan-receipt.json
+          name: benchmark-plan
+          path: ${{ runner.temp }}/jacobian-benchmark-plan/plan.json
           retention-days: 14
       - name: Prepare benchmark pytest timing hint
         if: steps.plan.outputs.run-benchmark-host-validation == 'true'
@@ -224,10 +181,10 @@ jobs:
         with:
           name: benchmark-test-durations-input
           path: .ci
-      - name: Download benchmark plan receipt
+      - name: Download benchmark plan
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: benchmark-plan-receipt
+          name: benchmark-plan
           path: ${{ runner.temp }}/benchmark-plan
       - name: Run selected host-side verifier regressions
         env:
@@ -235,7 +192,7 @@ jobs:
         run: |
           uv run --locked python -m benchmarks.tooling.host_validation run-entry \
             --entry-json "$HOST_ENTRY" \
-            --plan-receipt "${{ runner.temp }}/benchmark-plan/plan-receipt.json" \
+            --plan "${{ runner.temp }}/benchmark-plan/plan.json" \
             --execution-sha "${{ github.sha }}" \
             --timings .ci/benchmark-test-durations.json \
             --durations-output "${{ runner.temp }}/benchmark-host-timing/durations/benchmark-test-durations.json" \
@@ -333,12 +290,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Download benchmark plan receipt
+      - name: Download benchmark plan
         if: needs.plan.result == 'success'
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: benchmark-plan-receipt
+          name: benchmark-plan
           path: ${{ runner.temp }}/benchmark-validation/plan
       - name: Download host shard receipts
         if: needs.plan.outputs.run-benchmark-host-validation == 'true'
@@ -359,7 +316,6 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           PLAN_CHECK: ${{ needs.plan.outputs.run-benchmark-check }}
           RECORD_SCHEMA_FLAG: ${{ needs.plan.outputs.run-benchmark-record-schema }}
-          PROSPECTIVE_DIGEST_FLAG: ${{ needs.plan.outputs.run-benchmark-prospective-digest }}
           INVENTORY_FLAG: ${{ needs.plan.outputs.run-benchmark-inventory }}
           HOST_VALIDATION_FLAG: ${{ needs.plan.outputs.run-benchmark-host-validation }}
           ORACLE_FLAG: ${{ needs.plan.outputs.run-benchmark-oracle }}
@@ -371,7 +327,7 @@ jobs:
         run: |
           python -m benchmarks.tooling.benchmark_validation \
             --plan-result "$PLAN_RESULT" \
-            --plan-receipt "${{ runner.temp }}/benchmark-validation/plan/plan-receipt.json" \
+            --plan "${{ runner.temp }}/benchmark-validation/plan/plan.json" \
             --execution-sha "${{ github.sha }}" \
             --receipt-root "${{ runner.temp }}/benchmark-validation/host" \
             --timings "${{ runner.temp }}/benchmark-validation/timing/benchmark-test-durations.json" \

@@ -9,7 +9,7 @@ ORDERING_DEFAULT_SEED := --randomly-seed=17
 PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
-WORKTREE_ADMISSION := $(UV_RUN) python tools/worktree_admission.py
+VALIDATION_LOCK := $(UV_RUN) python tools/with_validation_lock.py
 # Fixed semantic lanes covering the Lean-free ordinary testpaths. CI runs these
 # independently; `make check-all` reproduces them locally in this order.
 ORDINARY_TEST_LANES := unit component domain composition e2e provider
@@ -83,6 +83,8 @@ test-e2e: ## Complete caller-visible journeys (serial, 180s).
 		$(if $(TESTS),$(TESTS),tests/e2e) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
+test: test-ordinary ## All ordinary Python tests.
+
 test-ordinary: ## Lean-free ordinary suite in the fixed CI group order.
 	@for lane in $(ORDINARY_TEST_LANES); do \
 		$(MAKE) test-$$lane || exit $$?; \
@@ -100,13 +102,13 @@ test-checker-subprocess-coverage: ## Prove focused checker-worker child coverage
 	COVERAGE_FILE=.coverage.checker-subprocess $(UV_RUN) coverage report \
 		--include=src/jacobian/checker_worker.py --fail-under=1
 
-test-all-ci: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.
-	$(WORKTREE_ADMISSION) run --target test-all-ci -- $(MAKE) _test-all-ci-unlocked
+test-full: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.
+	$(VALIDATION_LOCK) run --target test-full -- $(MAKE) _test-full
 
-_test-all-ci-unlocked:
+_test-full:
 	$(MAKE) test-unit
 	$(MAKE) test-component
-	$(MAKE) test-exhaustive
+	$(MAKE) _test-exhaustive
 	$(MAKE) test-domain
 	$(MAKE) test-composition
 	$(MAKE) test-storage
@@ -122,7 +124,10 @@ test-stress: ## Repeat explicitly marked property tests on the scheduled lane.
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-exhaustive: ## Broad finite reference sweeps reserved for scheduled validation.
-	$(WORKTREE_ADMISSION) run --target test-exhaustive -- $(UV_RUN) pytest -n 0 --timeout=180 --timeout-method=thread -m exhaustive \
+	$(VALIDATION_LOCK) run --target test-exhaustive -- $(MAKE) _test-exhaustive
+
+_test-exhaustive:
+	$(UV_RUN) pytest -n 0 --timeout=180 --timeout-method=thread -m exhaustive \
 		$(if $(TESTS),$(TESTS),tests) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
@@ -166,8 +171,8 @@ precommit: ## Apply safe fixes, then run lint, types, and unit tests (mutates th
 	$(MAKE) fix
 	$(MAKE) check
 
-validation-status: ## Show whether this worktree holds an exhaustive validation lease.
-	$(WORKTREE_ADMISSION) status
+validation-status: ## Show whether this worktree holds an exhaustive validation lock.
+	$(VALIDATION_LOCK) status
 
 check-static: lint-full typecheck import-contracts architecture todo-check build ## CI-owned static checks plus a local package build.
 

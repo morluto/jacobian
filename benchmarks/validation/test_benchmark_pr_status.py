@@ -14,10 +14,10 @@ from tools import benchmark_pr_status
 from tools.benchmark_pr_status import GitHubReader, build_status, render_human
 
 
-def _zip_receipt(digest: str = "sha256:abc") -> bytes:
+def _zip_plan(digest: str = "sha256:abc") -> bytes:
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as bundle:
-        bundle.writestr("plan-receipt.json", json.dumps({"receipt_digest": digest}))
+        bundle.writestr("plan.json", json.dumps({"planner_digest": digest}))
     return output.getvalue()
 
 
@@ -55,14 +55,14 @@ class FakeRunner:
                     "artifacts": [
                         {
                             "id": 77,
-                            "name": "benchmark-plan-receipt",
+                            "name": "benchmark-plan",
                             "expired": False,
                         }
                     ]
                 }
             ).encode()
         if call[-1].endswith("/zip"):
-            return _zip_receipt()
+            return _zip_plan()
         raise AssertionError(call)
 
 
@@ -99,7 +99,7 @@ def _payload(*, validation: str = "SUCCESS") -> dict[str, object]:
     }
 
 
-def test_batch_status_binds_actual_plan_receipt_and_reports_blocker() -> None:
+def test_batch_status_binds_actual_plan_digest_and_reports_blocker() -> None:
     runner = FakeRunner()
     reader = GitHubReader("o/r", runner=runner)
 
@@ -108,14 +108,14 @@ def test_batch_status_binds_actual_plan_receipt_and_reports_blocker() -> None:
     assert status.tasks == ("mathematical-benchmarks-v1/task-a",)
     assert status.unresolved_threads == 1
     assert status.preparation == "confirmed"
-    assert status.receipt_digest == "sha256:abc"
+    assert status.plan_digest == "sha256:abc"
     assert status.ci == "passed"
     assert status.merge_ready is False
     assert status.blockers == ("unresolved-threads=1",)
     assert "#42 blocked" in render_human([status])
 
 
-def test_failed_validation_is_ci_failure_even_when_receipt_exists() -> None:
+def test_failed_validation_is_ci_failure_even_when_plan_exists() -> None:
     runner = FakeRunner()
     status = build_status(
         GitHubReader("o/r", runner=runner), 42, _payload(validation="FAILURE")
@@ -125,18 +125,18 @@ def test_failed_validation_is_ci_failure_even_when_receipt_exists() -> None:
     assert "ci=failed" in status.blockers
 
 
-def test_missing_receipt_artifact_is_fail_closed() -> None:
-    class MissingReceipt(FakeRunner):
+def test_missing_plan_artifact_is_fail_closed() -> None:
+    class MissingPlan(FakeRunner):
         def __call__(self, arguments: Sequence[str]) -> bytes:
             if tuple(arguments)[-1].endswith("/artifacts"):
                 return b'{"artifacts":[]}'
             return super().__call__(arguments)
 
-    runner = MissingReceipt()
+    runner = MissingPlan()
     status = build_status(GitHubReader("o/r", runner=runner), 42, _payload())
 
-    assert status.receipt_digest is None
-    assert "validation-receipt=missing" in status.blockers
+    assert status.plan_digest is None
+    assert "validation-plan=missing" in status.blockers
 
 
 def test_skipped_preparation_check_is_not_confirmed() -> None:

@@ -84,7 +84,7 @@ def test_help_all_retains_specialist_and_compatibility_commands() -> None:
         "harbor-validate-task",
         "deploy-check",
         "npm-test",
-        "test-all-ci",
+        "test-full",
         "validation-status",
     }
     assert "precommit" in commands

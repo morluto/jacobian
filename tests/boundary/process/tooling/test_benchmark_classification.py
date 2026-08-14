@@ -76,9 +76,9 @@ def test_task_documentation_does_not_select_oracle(
         head="b" * 40,
     )
 
-    assert plan["run-benchmark-oracle"] == "false"
-    assert plan["benchmark-oracle-scope"] == "none"
-    assert "task documentation change" in plan["benchmark-plan-reasons"]
+    assert plan.run_oracle is False
+    assert plan.oracle_scope == "none"
+    assert any("task documentation change" in reason for reason in plan.reasons)
 
 
 @pytest.mark.parametrize(
@@ -93,9 +93,9 @@ def test_benchmark_control_tools_run_contract_gate_without_oracle(
 
     plan = planner.plan([path], base="a" * 40, head="b" * 40)
 
-    assert plan["run-benchmark-check"] == "true"
-    assert plan["run-benchmark-record-schema"] == "true"
-    assert plan["run-benchmark-oracle"] == "false"
+    assert plan.run_check is True
+    assert plan.record_schema is True
+    assert plan.run_oracle is False
 
 
 def test_task_environment_selects_exact_task_oracle(
@@ -112,9 +112,12 @@ def test_task_environment_selects_exact_task_oracle(
         head="b" * 40,
     )
 
-    assert plan["run-benchmark-oracle"] == "true"
-    assert plan["benchmark-oracle-scope"] == "changed-tasks"
-    assert "autoformalization-semantic-audit" in plan["benchmark-oracle-matrix"]
+    assert plan.run_oracle is True
+    assert plan.oracle_scope == "changed-tasks"
+    assert any(
+        "autoformalization-semantic-audit" in entry["tasks"]
+        for entry in plan.oracle_matrix
+    )
 
 
 def test_shared_environment_profile_escalates_only_on_integration_event(
@@ -135,9 +138,9 @@ def test_shared_environment_profile_escalates_only_on_integration_event(
         head="b" * 40,
     )
 
-    assert pull_request["run-benchmark-oracle"] == "false"
-    assert merge_group["run-benchmark-oracle"] == "true"
-    assert merge_group["benchmark-oracle-scope"] == "all"
+    assert pull_request.run_oracle is False
+    assert merge_group.run_oracle is True
+    assert merge_group.oracle_scope == "all"
 
 
 def test_main_push_is_an_integration_owner(
@@ -152,7 +155,7 @@ def test_main_push_is_an_integration_owner(
         head="b" * 40,
     )
 
-    assert push["run-benchmark-oracle"] == "true"
-    assert push["benchmark-oracle-scope"] == "all"
-    assert push["run-benchmark-inventory"] == "true"
-    assert push["benchmark-plan-mode"] == "integration"
+    assert push.run_oracle is True
+    assert push.oracle_scope == "all"
+    assert push.inventory is True
+    assert push.mode == "integration"

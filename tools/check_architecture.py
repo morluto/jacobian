@@ -98,11 +98,13 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/bounded_process.py"),
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
-        PurePosixPath("tools/development_profiles.py"),
+        PurePosixPath("tools/setup_lean.py"),
+        PurePosixPath("tools/doctor_external_tools.py"),
+        PurePosixPath("tools/process_supervisor.py"),
+        PurePosixPath("tools/with_validation_lock.py"),
         # Developer helpers that shell out to git, gh, or Make. They are not
         # product process callers.
         PurePosixPath("tools/inventory_github_workflows.py"),
-        PurePosixPath("tools/worktree_admission.py"),
         # This clean-room verifier must independently replay the pinned Lean
         # protocol inside its isolated verifier image.  It cannot import the
         # repository command runner without widening the verifier build
@@ -169,7 +171,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_unsupported_surfaces.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),
-        PurePosixPath("tests/unit/tooling/test_worktree_admission.py"),
+        PurePosixPath("tests/unit/tooling/test_validation_lock.py"),
         # Benchmark regressions spawn task-owned solution or Oracle entrypoints.
         PurePosixPath(
             "benchmarks/validation/mathematical_benchmarks_v1/"
@@ -252,7 +254,8 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/lean_frontend/exploration.py"),
         PurePosixPath("src/jacobian_checkers/lean4.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
-        PurePosixPath("tools/development_profiles.py"),
+        PurePosixPath("tools/doctor_external_tools.py"),
+        PurePosixPath("tools/setup_lean.py"),
         PurePosixPath("tools/source_agent_doctor.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
@@ -1624,6 +1627,13 @@ _HISTORICAL_TEST_BUCKET_WORDS = frozenset(
 _COMPOSITION_OWNERS = frozenset(
     {"authority", "catalog", "cli", "interoperability", "runtime"}
 )
+_CLI_COMPLETE_PORTFOLIO_ALLOWLIST = frozenset(
+    {
+        "test_cli_help_exposes_only_math_and_operator_commands",
+        "test_cli_init_reports_installed_operation_count",
+        "test_cli_run_requires_exactly_one_payload_source",
+    }
+)
 
 
 def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
@@ -1649,6 +1659,62 @@ def _imports_jacobian_runtime(tree: ast.AST) -> bool:
             ):
                 return True
     return False
+
+
+def _create_cli_app_call_has_runtime_opener(node: ast.Call) -> bool:
+    return any(keyword.arg == "runtime_opener" for keyword in node.keywords)
+
+
+def _calls_unscoped_cli_runtime(node: ast.AST) -> bool:
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        func = child.func
+        if (
+            isinstance(func, ast.Name)
+            and func.id == "create_cli_app"
+            and (not _create_cli_app_call_has_runtime_opener(child))
+        ):
+            return True
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "create_cli_app"
+            and (not _create_cli_app_call_has_runtime_opener(child))
+        ):
+            return True
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "invoke"
+            and child.args
+            and isinstance(child.args[0], ast.Name)
+            and child.args[0].id == "app"
+        ):
+            return True
+    return _calls_catalog_build_runtime(node)
+
+
+def _cli_projection_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    parts = relative.parts
+    if len(parts) < 3 or parts[1] != "composition" or parts[2] != "cli":
+        return ()
+    violations: list[Violation] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
+            continue
+        if node.name in _CLI_COMPLETE_PORTFOLIO_ALLOWLIST:
+            continue
+        if _calls_unscoped_cli_runtime(node):
+            violations.append(
+                Violation(
+                    str(relative),
+                    "test-ownership",
+                    "CLI projection tests must use selected_runtime_opener; "
+                    f"{node.name} cold-starts the complete portfolio",
+                )
+            )
+    return tuple(violations)
 
 
 def _discarded_runtime_setup_violations(
@@ -1704,6 +1770,7 @@ def _test_ownership_violations(
             )
         )
     violations.extend(_discarded_runtime_setup_violations(relative, tree))
+    violations.extend(_cli_projection_violations(relative, tree))
 
     if (
         not focused_suite

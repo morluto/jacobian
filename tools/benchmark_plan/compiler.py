@@ -25,6 +25,7 @@ import importlib
 import json
 import math
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +35,9 @@ from benchmarks.tooling.validation_plan import (
 )
 
 from tools.benchmark_plan.control_paths import BENCHMARK_CONTROL_PATHS
+from tools.benchmark_plan.model import EVENTS, BenchmarkPlan
 from tools.benchmark_plan.paths import normalize_paths, path_values
+from tools.benchmark_plan.validation import validate_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -45,13 +48,11 @@ PLANNER_DIGEST_SOURCES = (
     ROOT / "tools" / "benchmark_plan" / "__init__.py",
     ROOT / "tools" / "benchmark_plan" / "control_paths.py",
     ROOT / "tools" / "benchmark_plan" / "compiler.py",
+    ROOT / "tools" / "benchmark_plan" / "model.py",
     ROOT / "tools" / "benchmark_plan" / "paths.py",
     ROOT / "tools" / "benchmark_plan" / "validation.py",
 )
 
-PLAN_VERSION = "2"
-EVENTS = ("pull_request", "merge_group", "push", "schedule", "workflow_dispatch")
-MODES = ("none", "changed", "integration", "full")
 MAX_PULL_REQUEST_ORACLE_TASKS = 8
 TARGET_TASKS_PER_SHARD = 12
 MAX_DATASET_SHARDS = 4
@@ -71,10 +72,6 @@ BENCHMARK_EXECUTION_CONTROL_PATHS = frozenset(
     }
 )
 BENCHMARK_CONFIG_PREFIX = "benchmarks/config/"
-
-
-def _json(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
 def _harbor_suite() -> Any:
@@ -211,11 +208,18 @@ def _shard_entries(
     return matrix
 
 
+def _paths_digest(paths: list[str]) -> str:
+    if not paths:
+        return ""
+    return "sha256:" + hashlib.sha256(("\n".join(paths) + "\n").encode()).hexdigest()
+
+
 def _emit(
     *,
     event: str,
     base: str | None,
     head: str | None,
+    changed_paths_digest: str,
     planner_digest: str,
     topology_digest: str,
     mode: str,
@@ -228,26 +232,26 @@ def _emit(
     scope: str,
     matrix: list[dict[str, Any]],
     reasons: list[str],
-) -> dict[str, str]:
-    return {
-        "benchmark-plan-version": PLAN_VERSION,
-        "benchmark-plan-event": event,
-        "benchmark-plan-base-sha": base or "",
-        "benchmark-plan-head-sha": head or "",
-        "benchmark-planner-digest": planner_digest,
-        "benchmark-topology-digest": topology_digest,
-        "benchmark-plan-mode": mode,
-        "run-benchmark-check": str(run_check).lower(),
-        "run-benchmark-record-schema": str(record_schema).lower(),
-        "run-benchmark-prospective-digest": str(prospective_digest).lower(),
-        "run-benchmark-inventory": str(inventory).lower(),
-        "run-benchmark-host-validation": str(bool(host_validation)).lower(),
-        "benchmark-host-validation-matrix": _json(host_validation),
-        "run-benchmark-oracle": str(run_oracle).lower(),
-        "benchmark-oracle-scope": scope,
-        "benchmark-oracle-matrix": _json(matrix),
-        "benchmark-plan-reasons": _json(list(dict.fromkeys(reasons))),
-    }
+) -> BenchmarkPlan:
+    plan = BenchmarkPlan(
+        event=event,
+        base_sha=base or "",
+        head_sha=head or "",
+        changed_paths_digest=changed_paths_digest,
+        planner_digest=planner_digest,
+        topology_digest=topology_digest,
+        mode=mode,
+        run_check=run_check,
+        record_schema=record_schema,
+        prospective_digest=prospective_digest,
+        inventory=inventory,
+        host_matrix=tuple(host_validation),
+        oracle_scope=scope if run_oracle else "none",
+        oracle_matrix=tuple(matrix if run_oracle else []),
+        reasons=tuple(dict.fromkeys(reasons)),
+    )
+    validate_plan(plan)
+    return plan
 
 
 def _oracle_matrix(
@@ -524,11 +528,12 @@ def plan(
     timings: dict[str, float] | None = None,
     base: str | None = None,
     head: str | None = None,
-) -> dict[str, str]:
+) -> BenchmarkPlan:
     if event not in EVENTS:
         raise ValueError(f"unsupported benchmark event: {event}")
 
     planner_digest = _planner_digest()
+    changed_paths_digest = _paths_digest(paths)
 
     # Scheduled, manual, and forced runs own an explicit full-portfolio sweep.
     if force_full or event in {"schedule", "workflow_dispatch"}:
@@ -539,6 +544,7 @@ def plan(
             event=event,
             base=base,
             head=head,
+            changed_paths_digest=changed_paths_digest,
             planner_digest=planner_digest,
             topology_digest=_topology_digest(suites),
             mode="full",
@@ -568,6 +574,7 @@ def plan(
             event=event,
             base=base,
             head=head,
+            changed_paths_digest=changed_paths_digest,
             planner_digest=planner_digest,
             topology_digest="",
             mode="none",
@@ -649,6 +656,7 @@ def plan(
         event=event,
         base=base,
         head=head,
+        changed_paths_digest=changed_paths_digest,
         planner_digest=planner_digest,
         topology_digest=topology_digest,
         mode=mode,
@@ -699,6 +707,8 @@ def main() -> int:
     parser.add_argument("--head")
     parser.add_argument("--paths", nargs="+", action="append", dest="path_groups")
     parser.add_argument("--paths-file", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--github-output", type=Path)
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args()
     try:
@@ -711,15 +721,24 @@ def main() -> int:
             timings = _load_timings(args.timings_file)
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
-    for key, value in plan(
+    result = plan(
         paths,
         event=args.event,
         force_full=args.force_full,
         timings=timings,
         base=args.base,
         head=args.head,
-    ).items():
-        print(f"{key}={value}")
+    )
+    rendered = json.dumps(result.to_json_dict(), indent=2, sort_keys=True) + "\n"
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered, encoding="utf-8")
+    else:
+        sys.stdout.write(rendered)
+    if args.github_output is not None:
+        with args.github_output.open("a", encoding="utf-8") as handle:
+            for key, value in result.github_outputs().items():
+                handle.write(f"{key}={value}\n")
     return 0
 
 

@@ -106,8 +106,8 @@ class PolynomialCollisionAdapter:
                 "jacobian.artifact-comparison",
                 features=("polynomial-collision-witness",),
                 checker_ids=(
-                    (resources.installation.collision_checker_id,)
-                    if resources.installation.collision_checker_id is not None
+                    (resources.contracts.collision_checker_id,)
+                    if resources.contracts.collision_checker_id is not None
                     else ()
                 ),
             ),
@@ -167,8 +167,8 @@ class PolynomialCollisionAdapter:
         second_image = second_evaluation.image
         claim = PolynomialInjectivityClaim(map_uri=candidate_uri)
         claim_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.claim_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.claim_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=claim.model_dump(mode="json"),
             parents=(candidate_uri,),
             summary="rational polynomial-map injectivity claim",
@@ -180,9 +180,7 @@ class PolynomialCollisionAdapter:
         if candidate_collision:
             # Evaluation payloads are candidate evidence. The independent checker,
             # not this comparison adapter, replays the map at both points.
-            semantics = self.resources.store.get(
-                self.resources.installation.semantics_uri
-            )
+            semantics = self.resources.store.get(self.resources.contracts.semantics_uri)
             witness = WitnessEnvelope(
                 witness_format="polynomial.map_collision",
                 format_version="1",
@@ -199,8 +197,8 @@ class PolynomialCollisionAdapter:
                 ).model_dump(mode="json"),
             )
             witness_artifact = self.resources.store.put(
-                schema_uri=self.resources.installation.witness_schema_uri,
-                semantics_uri=self.resources.installation.semantics_uri,
+                schema_uri=self.resources.contracts.witness_schema_uri,
+                semantics_uri=self.resources.contracts.semantics_uri,
                 payload=witness.model_dump(mode="json"),
                 parents=(
                     claim_artifact.artifact_uri,
@@ -257,8 +255,8 @@ class PolynomialCollisionSearchAdapter:
                 "jacobian.sympy",
                 features=("bounded-rational-grid-search",),
                 checker_ids=(
-                    (resources.installation.collision_checker_id,)
-                    if resources.installation.collision_checker_id is not None
+                    (resources.contracts.collision_checker_id,)
+                    if resources.contracts.collision_checker_id is not None
                     else ()
                 ),
             ),
@@ -373,17 +371,15 @@ class PolynomialCollisionSearchAdapter:
             )
             candidate = self.resources.store.get(map_uri)
             claim = self.resources.artifacts.put(
-                schema_uri=self.resources.installation.claim_schema_uri,
-                semantics_uri=self.resources.installation.semantics_uri,
+                schema_uri=self.resources.contracts.claim_schema_uri,
+                semantics_uri=self.resources.contracts.semantics_uri,
                 payload=PolynomialInjectivityClaim(map_uri=map_uri).model_dump(
                     mode="json"
                 ),
                 parents=(map_uri,),
                 summary="rational polynomial-map injectivity claim",
             )
-            semantics = self.resources.store.get(
-                self.resources.installation.semantics_uri
-            )
+            semantics = self.resources.store.get(self.resources.contracts.semantics_uri)
             witness = WitnessEnvelope(
                 witness_format="polynomial.map_collision",
                 format_version="1",
@@ -400,8 +396,8 @@ class PolynomialCollisionSearchAdapter:
                 ).model_dump(mode="json"),
             )
             witness_artifact = self.resources.artifacts.put(
-                schema_uri=self.resources.installation.witness_schema_uri,
-                semantics_uri=self.resources.installation.semantics_uri,
+                schema_uri=self.resources.contracts.witness_schema_uri,
+                semantics_uri=self.resources.contracts.semantics_uri,
                 payload=witness.model_dump(mode="json"),
                 parents=(
                     claim.artifact_uri,
@@ -481,7 +477,7 @@ class PolynomialCollisionVerifyAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        checker_id = resources.installation.collision_checker_id
+        checker_id = resources.contracts.collision_checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
         self._descriptor = OperationDescriptor(
@@ -546,13 +542,13 @@ class PolynomialCollisionVerifyAdapter:
         _, map_uri = _materialize_map(self.resources, validated.map)
         candidate = self.resources.store.get(map_uri)
         claim_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.claim_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.claim_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=PolynomialInjectivityClaim(map_uri=map_uri).model_dump(mode="json"),
             parents=(map_uri,),
             summary="rational polynomial-map injectivity claim",
         )
-        semantics = self.resources.store.get(self.resources.installation.semantics_uri)
+        semantics = self.resources.store.get(self.resources.contracts.semantics_uri)
         witness = WitnessEnvelope(
             witness_format="polynomial.map_collision",
             format_version="1",
@@ -569,13 +565,13 @@ class PolynomialCollisionVerifyAdapter:
             ).model_dump(mode="json"),
         )
         witness_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.witness_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.witness_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=witness.model_dump(mode="json"),
             parents=(claim_artifact.artifact_uri, map_uri),
             summary="exact rational polynomial-map collision witness",
         )
-        checker_id = self.resources.installation.collision_checker_id
+        checker_id = self.resources.contracts.collision_checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
         checked = self.resources.verification.verify_witness(
@@ -622,7 +618,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        checker_id = resources.installation.inverse_collision_checker_id
+        checker_id = resources.contracts.inverse_collision_checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
         self._descriptor = OperationDescriptor(
@@ -662,7 +658,7 @@ class PolynomialMapInverseCollisionVerifyAdapter:
     def invoke(
         self, validated: PolynomialMapInverseCollisionVerifyRequest
     ) -> OperationProjection:
-        checker_id = self.resources.installation.inverse_collision_checker_id
+        checker_id = self.resources.contracts.inverse_collision_checker_id
         if checker_id is None:
             raise _polynomial_error(
                 "POLYNOMIAL_INVERSE_COLLISION_CHECKER_UNAVAILABLE",
@@ -673,15 +669,15 @@ class PolynomialMapInverseCollisionVerifyAdapter:
         map_artifact = self.resources.store.get(map_uri)
         candidate = self.resources.store.get(map_uri)
         claim = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.inverse_collision_claim_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.inverse_collision_claim_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=PolynomialNoTwoSidedInverseClaim(
                 map_uri=map_uri,
             ).model_dump(mode="json"),
             parents=(map_uri,),
             summary="polynomial-map no-two-sided-inverse claim",
         )
-        semantics = self.resources.store.get(self.resources.installation.semantics_uri)
+        semantics = self.resources.store.get(self.resources.contracts.semantics_uri)
         witness = WitnessEnvelope(
             witness_format="polynomial.map_collision_refutes_inverse",
             format_version="1",
@@ -698,8 +694,8 @@ class PolynomialMapInverseCollisionVerifyAdapter:
             ).model_dump(mode="json"),
         )
         witness_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.witness_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.witness_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=witness.model_dump(mode="json"),
             parents=(claim.artifact_uri, map_uri),
             summary="exact collision obstructing a two-sided polynomial inverse",

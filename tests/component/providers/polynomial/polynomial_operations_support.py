@@ -17,15 +17,15 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.polynomials import install_polynomial_operations
-from jacobian.polynomials.resources import PolynomialInstallation
+from jacobian.polynomials import build_polynomial_operations
+from jacobian.polynomials.resources import PolynomialContracts
 
 
 @dataclass(frozen=True, slots=True)
 class PolynomialTestServices(DomainTestServices):
     """The exact production graph owned by polynomial operation behavior."""
 
-    polynomial: PolynomialInstallation
+    polynomial: PolynomialContracts
 
 
 @contextmanager
@@ -41,7 +41,7 @@ def open_polynomial_services(
         checker_authority=checker_authority,
     ) as services:
         with atomic_installation(services.core):
-            adapters, polynomial = install_polynomial_operations(
+            adapters, polynomial = build_polynomial_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,

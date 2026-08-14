@@ -441,8 +441,8 @@ class PolynomialMapInverseSynthesizeAdapter:
     ) -> OperationProjection:
         started = time.monotonic()
         forward_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.map_schema_uri,
-            semantics_uri=self.resources.installation.inverse_semantics_uri,
+            schema_uri=self.resources.contracts.map_schema_uri,
+            semantics_uri=self.resources.contracts.inverse_semantics_uri,
             payload=validated.forward_map.model_dump(mode="json"),
             summary="forward map for bounded inverse synthesis",
         )
@@ -511,8 +511,8 @@ class PolynomialMapInverseSynthesizeAdapter:
             )
         )
         synthesis = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.inverse_synthesis_schema_uri,
-            semantics_uri=self.resources.installation.inverse_semantics_uri,
+            schema_uri=self.resources.contracts.inverse_synthesis_schema_uri,
+            semantics_uri=self.resources.contracts.inverse_semantics_uri,
             payload=payload.model_dump(mode="json"),
             parents=parents,
             summary=f"bounded polynomial inverse synthesis: {status.value}",
@@ -557,7 +557,7 @@ class PolynomialMapInverseVerifyAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        checker_id = resources.installation.inverse_checker_id
+        checker_id = resources.contracts.inverse_checker_id
         self._descriptor = OperationDescriptor(
             operation_id="polynomial.map.inverse.verify",
             version="1",
@@ -647,22 +647,22 @@ class PolynomialMapInverseVerifyAdapter:
     ) -> PolynomialOperationResult[PolynomialMapInverseVerifyOutput]:
         """Verify one validated inverse without re-entering the adapter."""
 
-        checker_id = self.resources.installation.inverse_checker_id
+        checker_id = self.resources.contracts.inverse_checker_id
         if checker_id is None:
             raise _polynomial_error(
                 "POLYNOMIAL_MAP_INVERSE_CHECKER_UNAVAILABLE",
                 "inverse_verification",
                 "No authorized polynomial-map inverse checker is installed.",
             )
-        semantics_uri = self.resources.installation.inverse_semantics_uri
+        semantics_uri = self.resources.contracts.inverse_semantics_uri
         forward = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.map_schema_uri,
+            schema_uri=self.resources.contracts.map_schema_uri,
             semantics_uri=semantics_uri,
             payload=validated.forward_map.model_dump(mode="json"),
             summary="forward sparse rational polynomial map",
         )
         inverse = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.map_schema_uri,
+            schema_uri=self.resources.contracts.map_schema_uri,
             semantics_uri=semantics_uri,
             payload=validated.inverse_map.model_dump(mode="json"),
             summary="candidate inverse sparse rational polynomial map",
@@ -705,7 +705,7 @@ class PolynomialMapInverseVerifyAdapter:
             forward_after_inverse_checker_records=tuple(right_records),
         )
         residual_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.inverse_residual_schema_uri,
+            schema_uri=self.resources.contracts.inverse_residual_schema_uri,
             semantics_uri=semantics_uri,
             payload=residual_payload.model_dump(mode="json"),
             parents=tuple(
@@ -721,7 +721,7 @@ class PolynomialMapInverseVerifyAdapter:
             summary="both exact polynomial-map composition residual families",
         )
         claim = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.inverse_claim_schema_uri,
+            schema_uri=self.resources.contracts.inverse_claim_schema_uri,
             semantics_uri=semantics_uri,
             payload=PolynomialMapInverseClaim(
                 forward_map_uri=forward.artifact_uri,
@@ -759,7 +759,7 @@ class PolynomialMapInverseVerifyAdapter:
             payload=replay_payload,
         )
         certificate_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.certificate_schema_uri,
+            schema_uri=self.resources.contracts.certificate_schema_uri,
             semantics_uri=semantics_uri,
             payload=certificate.model_dump(mode="json"),
             parents=tuple(

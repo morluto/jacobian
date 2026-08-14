@@ -29,7 +29,7 @@ from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
-from jacobian.polynomials import install_polynomial_operations
+from jacobian.polynomials import build_polynomial_operations
 from jacobian.polytope import PolytopeService
 from jacobian.polytope_operations import PolytopeSeparationAdapter
 from jacobian.provider_runtime import known_provider_runtime
@@ -144,7 +144,7 @@ class CatalogOperationBuilder:
         if graph_isomorphism_adapter is not None:
             self.context.register_operation(graph_isomorphism_adapter)
 
-        polynomial_adapters, _ = install_polynomial_operations(
+        polynomial_adapters, _ = build_polynomial_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,

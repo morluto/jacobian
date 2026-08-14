@@ -1,4 +1,4 @@
-"""Installation records for polynomial-map operations."""
+"""Shared contracts and services for polynomial-map operations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ from jacobian.verification.service import VerificationService
 
 
 @dataclass(frozen=True, slots=True)
-class PolynomialInstallation:
+class PolynomialContracts:
+    """Schemas, semantics, and checker bindings for polynomial operations."""
+
     semantics_uri: str
     identity_semantics_uri: str
     rational_function_identity_semantics_uri: str
@@ -47,4 +49,4 @@ class PolynomialResources:
     store: ArtifactRepository
     artifacts: ArtifactService
     verification: VerificationService
-    installation: PolynomialInstallation
+    contracts: PolynomialContracts

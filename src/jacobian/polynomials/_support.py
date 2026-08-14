@@ -232,8 +232,8 @@ def _materialize_map(
     polynomial_map: RationalPolynomialMap,
 ) -> tuple[RationalPolynomialMap, str]:
     artifact = resources.artifacts.put(
-        schema_uri=resources.installation.map_schema_uri,
-        semantics_uri=resources.installation.semantics_uri,
+        schema_uri=resources.contracts.map_schema_uri,
+        semantics_uri=resources.contracts.semantics_uri,
         payload=polynomial_map.model_dump(mode="json"),
         summary="exact sparse rational polynomial map",
     )
@@ -255,13 +255,13 @@ def _load_evaluation(
                 stage="evaluation_resolution",
                 message="The requested polynomial evaluation artifact is unavailable.",
                 path=path,
-                schema_uri=resources.installation.evaluation_schema_uri,
+                schema_uri=resources.contracts.evaluation_schema_uri,
                 hint="Use an evaluation URI returned by polynomial.map.evaluate.",
             )
         ) from exc
     if (
-        artifact.manifest.schema_uri != resources.installation.evaluation_schema_uri
-        or artifact.manifest.semantics_uri != resources.installation.semantics_uri
+        artifact.manifest.schema_uri != resources.contracts.evaluation_schema_uri
+        or artifact.manifest.semantics_uri != resources.contracts.semantics_uri
         or not isinstance(artifact.payload, dict)
     ):
         raise OperationInvocationError(
@@ -270,7 +270,7 @@ def _load_evaluation(
                 stage="evaluation_validation",
                 message="The artifact is not a compatible polynomial-map evaluation.",
                 path=path,
-                schema_uri=resources.installation.evaluation_schema_uri,
+                schema_uri=resources.contracts.evaluation_schema_uri,
                 hint="Use an evaluation URI returned by polynomial.map.evaluate.",
             )
         )
@@ -283,7 +283,7 @@ def _load_evaluation(
                 stage="evaluation_validation",
                 message="The polynomial-map evaluation artifact payload is malformed.",
                 path=path,
-                schema_uri=resources.installation.evaluation_schema_uri,
+                schema_uri=resources.contracts.evaluation_schema_uri,
                 hint="Recreate the artifact through polynomial.map.evaluate.",
             )
         ) from exc
@@ -294,7 +294,7 @@ def _load_evaluation(
                 stage="evaluation_validation",
                 message="The evaluation artifact is not bound to its declared map.",
                 path=path,
-                schema_uri=resources.installation.evaluation_schema_uri,
+                schema_uri=resources.contracts.evaluation_schema_uri,
                 hint="Recreate the artifact through polynomial.map.evaluate.",
             )
         )
@@ -314,13 +314,13 @@ def _load_polynomial_map(
                 stage="map_resolution",
                 message="The polynomial map referenced by an evaluation is unavailable.",
                 path="evaluation.map_uri",
-                schema_uri=resources.installation.map_schema_uri,
+                schema_uri=resources.contracts.map_schema_uri,
                 hint="Recreate the evaluations through polynomial.map.evaluate.",
             )
         ) from exc
     if (
-        artifact.manifest.schema_uri != resources.installation.map_schema_uri
-        or artifact.manifest.semantics_uri != resources.installation.semantics_uri
+        artifact.manifest.schema_uri != resources.contracts.map_schema_uri
+        or artifact.manifest.semantics_uri != resources.contracts.semantics_uri
         or not isinstance(artifact.payload, dict)
     ):
         raise OperationInvocationError(
@@ -329,7 +329,7 @@ def _load_polynomial_map(
                 stage="map_validation",
                 message="An evaluation references an incompatible polynomial map.",
                 path="evaluation.map_uri",
-                schema_uri=resources.installation.map_schema_uri,
+                schema_uri=resources.contracts.map_schema_uri,
                 hint="Recreate the evaluations through polynomial.map.evaluate.",
             )
         )
@@ -342,7 +342,7 @@ def _load_polynomial_map(
                 stage="map_validation",
                 message="The referenced polynomial map artifact payload is malformed.",
                 path="evaluation.map_uri",
-                schema_uri=resources.installation.map_schema_uri,
+                schema_uri=resources.contracts.map_schema_uri,
                 hint="Recreate the evaluations through polynomial.map.evaluate.",
             )
         ) from exc
@@ -766,8 +766,8 @@ def _materialize_evaluation(
         backend_version=SYMPY_VERSION,
     )
     artifact = resources.artifacts.put(
-        schema_uri=resources.installation.evaluation_schema_uri,
-        semantics_uri=resources.installation.semantics_uri,
+        schema_uri=resources.contracts.evaluation_schema_uri,
+        semantics_uri=resources.contracts.semantics_uri,
         payload=evaluation.model_dump(mode="json"),
         parents=(map_uri,),
         summary="exact rational polynomial-map point evaluation",

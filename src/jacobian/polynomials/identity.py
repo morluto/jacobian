@@ -45,8 +45,8 @@ class PolynomialIdentityAdapter:
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
         checker_ids = (
-            (resources.installation.identity_checker_id,)
-            if resources.installation.identity_checker_id is not None
+            (resources.contracts.identity_checker_id,)
+            if resources.contracts.identity_checker_id is not None
             else ()
         )
         self._descriptor = OperationDescriptor(
@@ -117,7 +117,7 @@ class PolynomialIdentityAdapter:
     ) -> PolynomialOperationResult[PolynomialIdentityOutput]:
         """Verify one validated identity without re-entering the adapter."""
 
-        checker_id = self.resources.installation.identity_checker_id
+        checker_id = self.resources.contracts.identity_checker_id
         if checker_id is None:
             raise _polynomial_error(
                 "POLYNOMIAL_IDENTITY_CHECKER_UNAVAILABLE",
@@ -125,8 +125,8 @@ class PolynomialIdentityAdapter:
                 "No authorized polynomial identity checker is installed.",
             )
         left = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.left_polynomial_schema_uri,
-            semantics_uri=self.resources.installation.identity_semantics_uri,
+            schema_uri=self.resources.contracts.left_polynomial_schema_uri,
+            semantics_uri=self.resources.contracts.identity_semantics_uri,
             payload=RationalPolynomial(
                 variables=validated.variables,
                 polynomial=validated.left,
@@ -134,8 +134,8 @@ class PolynomialIdentityAdapter:
             summary="left exact rational polynomial",
         )
         right = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.right_polynomial_schema_uri,
-            semantics_uri=self.resources.installation.identity_semantics_uri,
+            schema_uri=self.resources.contracts.right_polynomial_schema_uri,
+            semantics_uri=self.resources.contracts.identity_semantics_uri,
             payload=RationalPolynomial(
                 variables=validated.variables,
                 polynomial=validated.right,
@@ -143,8 +143,8 @@ class PolynomialIdentityAdapter:
             summary="right exact rational polynomial",
         )
         claim = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.identity_claim_schema_uri,
-            semantics_uri=self.resources.installation.identity_semantics_uri,
+            schema_uri=self.resources.contracts.identity_claim_schema_uri,
+            semantics_uri=self.resources.contracts.identity_semantics_uri,
             payload=PolynomialIdentityClaim(
                 variables=validated.variables,
                 left_uri=left.artifact_uri,
@@ -154,7 +154,7 @@ class PolynomialIdentityAdapter:
             summary="exact polynomial identity claim",
         )
         semantics = self.resources.store.get(
-            self.resources.installation.identity_semantics_uri
+            self.resources.contracts.identity_semantics_uri
         )
         certificate_payload = PolynomialIdentityReplayPayload(
             variables=validated.variables,
@@ -177,8 +177,8 @@ class PolynomialIdentityAdapter:
             payload=certificate_payload,
         )
         certificate_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.certificate_schema_uri,
-            semantics_uri=self.resources.installation.identity_semantics_uri,
+            schema_uri=self.resources.contracts.certificate_schema_uri,
+            semantics_uri=self.resources.contracts.identity_semantics_uri,
             payload=certificate.model_dump(mode="json"),
             parents=(claim.artifact_uri, right.artifact_uri, left.artifact_uri),
             summary="exact sparse polynomial identity replay certificate",

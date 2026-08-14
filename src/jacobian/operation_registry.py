@@ -397,7 +397,7 @@ class OperationRegistry:
                 self.checkers,
                 self.catalog,
             )
-        from jacobian.polynomials.installation import (
+        from jacobian.polynomials.operation_build import (
             bind_selected_polynomial_operation,
         )
 

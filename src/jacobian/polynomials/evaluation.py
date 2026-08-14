@@ -156,8 +156,8 @@ class PolynomialJacobianAdapter:
                 "jacobian.sympy",
                 features=("symbolic-jacobian", "rational-polynomials"),
                 checker_ids=(
-                    (resources.installation.jacobian_checker_id,)
-                    if resources.installation.jacobian_checker_id is not None
+                    (resources.contracts.jacobian_checker_id,)
+                    if resources.contracts.jacobian_checker_id is not None
                     else ()
                 ),
             ),
@@ -248,21 +248,21 @@ class PolynomialJacobianAdapter:
             backend_version=SYMPY_VERSION,
         )
         jacobian_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.jacobian_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.jacobian_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=jacobian.model_dump(mode="json"),
             parents=(map_uri,),
             summary="exact rational polynomial-map Jacobian",
         )
         claim = PolynomialJacobianClaim(source_map_uri=map_uri)
         claim_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.jacobian_claim_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.jacobian_claim_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=claim.model_dump(mode="json"),
             parents=(map_uri, jacobian_artifact.artifact_uri),
             summary="exact polynomial Jacobian replay claim",
         )
-        semantics = self.resources.store.get(self.resources.installation.semantics_uri)
+        semantics = self.resources.store.get(self.resources.contracts.semantics_uri)
         source_map = self.resources.store.get(map_uri)
         certificate_payload = PolynomialJacobianReplayPayload(
             source_map_uri=map_uri,
@@ -284,8 +284,8 @@ class PolynomialJacobianAdapter:
             payload=certificate_payload,
         )
         certificate_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.certificate_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.certificate_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=certificate.model_dump(mode="json"),
             parents=(
                 claim_artifact.artifact_uri,
@@ -321,7 +321,7 @@ class PolynomialKellerConditionVerifyAdapter:
 
     def __init__(self, resources: PolynomialResources) -> None:
         self.resources = resources
-        checker_id = resources.installation.keller_checker_id
+        checker_id = resources.contracts.keller_checker_id
         if checker_id is None:
             raise RuntimeError("checker is not installed")
         self._descriptor = OperationDescriptor(
@@ -389,7 +389,7 @@ class PolynomialKellerConditionVerifyAdapter:
     def invoke(
         self, validated: PolynomialKellerConditionVerifyRequest
     ) -> OperationProjection:
-        checker_id = self.resources.installation.keller_checker_id
+        checker_id = self.resources.contracts.keller_checker_id
         if checker_id is None:
             raise _polynomial_error(
                 "POLYNOMIAL_KELLER_CHECKER_UNAVAILABLE",
@@ -409,8 +409,8 @@ class PolynomialKellerConditionVerifyAdapter:
         map_uri = jacobian.map_uri
         jacobian_uri = jacobian.jacobian_uri
         claim = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.keller_claim_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.keller_claim_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=PolynomialKellerConditionClaim(
                 map_uri=map_uri,
                 jacobian_uri=jacobian_uri,
@@ -418,7 +418,7 @@ class PolynomialKellerConditionVerifyAdapter:
             parents=(map_uri, jacobian_uri),
             summary="polynomial-map Keller-condition claim",
         )
-        semantics = self.resources.store.get(self.resources.installation.semantics_uri)
+        semantics = self.resources.store.get(self.resources.contracts.semantics_uri)
         map_artifact = self.resources.store.get(map_uri)
         jacobian_artifact = self.resources.store.get(jacobian_uri)
         replay_payload = PolynomialKellerConditionReplayPayload(
@@ -441,8 +441,8 @@ class PolynomialKellerConditionVerifyAdapter:
             payload=replay_payload,
         )
         certificate_artifact = self.resources.artifacts.put(
-            schema_uri=self.resources.installation.certificate_schema_uri,
-            semantics_uri=self.resources.installation.semantics_uri,
+            schema_uri=self.resources.contracts.certificate_schema_uri,
+            semantics_uri=self.resources.contracts.semantics_uri,
             payload=certificate.model_dump(mode="json"),
             parents=(claim.artifact_uri, jacobian_uri, map_uri),
             summary="exact polynomial-map Keller-condition replay certificate",

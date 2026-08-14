@@ -1,4 +1,4 @@
-"""Register polynomial-map schemas, adapters, and optional checkers."""
+"""Build polynomial-map resources and catalog descriptors."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ from jacobian.polynomials.inverse import (
     PolynomialMapInverseVerifyAdapter,
 )
 from jacobian.polynomials.rational_identity import RationalFunctionIdentityAdapter
-from jacobian.polynomials.resources import PolynomialInstallation, PolynomialResources
+from jacobian.polynomials.resources import PolynomialContracts, PolynomialResources
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
@@ -60,8 +60,8 @@ from jacobian.verification_operations import witness_verification_adapter
 def register_polynomial_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-) -> PolynomialInstallation:
-    """Register passive polynomial-map contracts without checker installation."""
+) -> PolynomialContracts:
+    """Register passive polynomial-map contracts without checker authorization."""
 
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -203,7 +203,7 @@ def register_polynomial_resources(
         field: schemas.register(name=name, version="1", schema=model_schema(model))
         for field, (name, model) in models.items()
     }
-    return PolynomialInstallation(
+    return PolynomialContracts(
         semantics_uri=semantics_uri,
         identity_semantics_uri=identity_semantics_uri,
         rational_function_identity_semantics_uri=(
@@ -305,11 +305,11 @@ def bind_selected_polynomial_operation(
         checker_fields["identity_checker_id"] = _catalog_checker_id(
             catalog, checkers, "polynomial.identity.verify"
         )
-    installation = replace(
+    contracts = replace(
         register_polynomial_resources(store, schemas),
         **cast(dict[str, Any], checker_fields),
     )
-    resources = PolynomialResources(store, artifacts, verification, installation)
+    resources = PolynomialResources(store, artifacts, verification, contracts)
     return adapter_type(resources)
 
 
@@ -330,7 +330,7 @@ def _catalog_checker_id(
     return binding.checker_id
 
 
-def install_polynomial_operations(
+def build_polynomial_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
@@ -338,7 +338,7 @@ def install_polynomial_operations(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[tuple[OperationAdapter[Any], ...], PolynomialInstallation]:
+) -> tuple[tuple[OperationAdapter[Any], ...], PolynomialContracts]:
     """Register exact polynomial-map schemas, adapters, and optional checker."""
     contracts = register_polynomial_resources(store, schemas)
     collision_checker_id = authorize_checker_operation(
@@ -456,7 +456,7 @@ def install_polynomial_operations(
         ),
         authorize=authorize_checker,
     ).checker_id
-    installation = replace(
+    contracts = replace(
         contracts,
         collision_checker_id=collision_checker_id,
         jacobian_checker_id=jacobian_checker_id,
@@ -470,7 +470,7 @@ def install_polynomial_operations(
         store=store,
         artifacts=artifacts,
         verification=verification,
-        installation=installation,
+        contracts=contracts,
     )
     collision_evidence_verify = witness_verification_adapter(
         operation_id="polynomial.map.collision_evidence.verify",
@@ -518,5 +518,5 @@ def install_polynomial_operations(
                 else ()
             ),
         ),
-        installation,
+        contracts,
     )

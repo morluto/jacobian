@@ -11,14 +11,14 @@ from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.polynomial import polynomial_operations
-from jacobian.polynomials import install_polynomial_operations
+from jacobian.polynomials import build_polynomial_operations
 from tests.support.services import DomainTestServices, open_domain_services
 
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(tmp_path / "state", polynomial_operations()) as services:
-        adapters, _installation = install_polynomial_operations(
+        adapters, _contracts = build_polynomial_operations(
             services.core.store,
             services.core.schemas,
             services.core.artifacts,

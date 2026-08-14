@@ -138,8 +138,8 @@ def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() ->
     assert "ci:full" not in workflow
     assert "ci:lean" not in workflow
     assert "run: make deploy-check" in workflow
-    assert "name: Deployment Tests" in workflow
     assert "name: required" in workflow
+    assert "name: Deployment Tests" not in workflow
 
 
 def test_python_jobs_use_fixed_local_semantic_targets() -> None:
@@ -305,17 +305,19 @@ def test_plan_receipt_digests_are_rendered_as_markdown_code() -> None:
 
 def test_required_ci_gates_fail_closed_after_cancellation() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    required = workflow.split("  required:", 1)[1].split("  python-test:", 1)[0]
-    aggregate_tail = workflow.split("  required:", 1)[1]
+    required = workflow.split("  required:", 1)[1]
 
     assert "treating gate as non-failure" not in workflow
-    assert aggregate_tail.count("if: ${{ always() }}") == 4
-    assert "if: ${{ always() && !cancelled() }}" not in aggregate_tail
+    assert required.count("if: ${{ always() }}") == 1
+    assert "if: ${{ always() && !cancelled() }}" not in required
     assert "if: ${{ always() }}" in required
     assert "name: required" in workflow
-    assert "name: Python Tests" in workflow
-    assert "name: Lean Tests" in workflow
-    assert "name: Deployment Tests" in workflow
+    assert "name: Python Tests" not in workflow
+    assert "name: Lean Tests" not in workflow
+    assert "name: Deployment Tests" not in workflow
+    assert "python-test:" not in workflow
+    assert "lean-test:" not in workflow
+    assert "deployment-test:" not in workflow
     assert ("needs: [static, python, boundaries, wheel, coverage, lean]") in required
     assert "success|skipped" not in required
     assert 'test "$LEAN_RESULT" = success' in required

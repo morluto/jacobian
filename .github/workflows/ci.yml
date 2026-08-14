@@ -286,39 +286,3 @@ jobs:
           test "$WHEEL_RESULT" = success
           test "$COVERAGE_RESULT" = success
           test "$LEAN_RESULT" = success
-
-  python-test:
-    name: Python Tests
-    if: ${{ always() }}
-    needs: [required]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Mirror required for existing branch protection
-        env:
-          REQUIRED_RESULT: ${{ needs.required.result }}
-        run: test "$REQUIRED_RESULT" = success
-
-  lean-test:
-    name: Lean Tests
-    if: ${{ always() }}
-    needs: [lean]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require Lean on the exact merge candidate
-        env:
-          LEAN_RESULT: ${{ needs.lean.result }}
-        run: test "$LEAN_RESULT" = success
-
-  deployment-test:
-    name: Deployment Tests
-    if: ${{ always() }}
-    needs: [static]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Deploy check runs inside static
-        env:
-          STATIC_RESULT: ${{ needs.static.result }}
-        run: test "$STATIC_RESULT" = success

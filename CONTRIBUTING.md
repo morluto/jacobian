@@ -167,6 +167,7 @@ Historical registrations whose files are gone, including leftover
 `agent-port-*` and `agent-rebase-*` workflows, stay disabled in the GitHub UI
 with their run history retained; do not add an auto-disable bot.
 `python tools/inventory_github_workflows.py` is the non-mutating inventory.
+Branch protection should require the CI check named `required`.
 
 For the exact task authoring workflow and verifier changes, use the
 [`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md) skill. The

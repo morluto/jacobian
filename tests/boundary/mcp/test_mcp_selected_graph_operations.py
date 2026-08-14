@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from jacobian.adapters.mcp import server as server_module
+from jacobian.adapters.mcp.server import create_server
+from jacobian.checker_installation import CheckerInstaller
+
+
+def test_graph_resource_operations_do_not_assemble_the_portfolio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError(
+            "selected graph operations must not assemble the portfolio"
+        )
+
+    monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
+    monkeypatch.setattr(CheckerInstaller, "install", reject_portfolio_assembly)
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            constructed = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.construct.explicit",
+                    "payload": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["a", "b"], ["b", "c"]],
+                    },
+                },
+            )
+            assert constructed.structured_content is not None
+            assert constructed.structured_content["execution"]["status"] == "COMPLETED"
+            graph_uri = constructed.structured_content["output"]["graph_uri"]
+
+            properties = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.compute.properties",
+                    "payload": {
+                        "graph_uri": graph_uri,
+                        "properties": ["order", "size", "tree"],
+                    },
+                },
+            )
+            assert properties.structured_content is not None
+            assert properties.structured_content["execution"]["status"] == "COMPLETED"
+            assert properties.structured_content["output"]["properties"] == {
+                "order": {
+                    "value": 3,
+                    "exactness": "EXACT",
+                    "backend": "networkx",
+                },
+                "size": {
+                    "value": 2,
+                    "exactness": "EXACT",
+                    "backend": "networkx",
+                },
+                "tree": {
+                    "value": True,
+                    "exactness": "EXACT",
+                    "backend": "networkx",
+                },
+            }
+
+    asyncio.run(scenario())

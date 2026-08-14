@@ -32,7 +32,7 @@ from jacobian.adapters.mcp.resources import register_resources
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_dispatcher import OperationDispatcher
-from jacobian.operation_registry import OperationRegistry
+from jacobian.operation_registry import OperationRegistry, supports_selected_operation
 from jacobian.operation_service import OperationPolicy
 from jacobian.portfolio.assembler import assemble_portfolio
 from jacobian.portfolio.builtin import BUILTIN_OPERATION_MODULES
@@ -99,9 +99,14 @@ class _LazyLocalRuntime:
                 else None
             )
             built_in_modules = dict(BUILTIN_OPERATION_MODULES)
-            if (
-                record is None or record.module not in built_in_modules
-            ) and operation_id is not None:
+            needs_complete_binding = operation_id is not None and (
+                record is None
+                or (
+                    record.module not in built_in_modules
+                    and not supports_selected_operation(operation_id)
+                )
+            )
+            if needs_complete_binding:
                 runtime = self._ensure_selected_runtime()
                 if not self._complete_binding:
                     dispatcher = runtime.core.operations

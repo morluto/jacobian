@@ -20,6 +20,20 @@ from jacobian.portfolio.builtin import load_builtin_operation_module
 from jacobian.registry import CheckerRegistry
 from jacobian.verification.service import VerificationService
 
+_SELECTED_RESOURCE_OPERATIONS = frozenset(
+    {
+        "graph.construct.explicit",
+        "graph.search.atlas",
+        "graph.compute.properties",
+    }
+)
+
+
+def supports_selected_operation(operation_id: str) -> bool:
+    """Return whether a non-declaration operation has a narrow selected binder."""
+
+    return operation_id in _SELECTED_RESOURCE_OPERATIONS
+
 
 class OperationRegistry:
     """Import, verify, and cache only selected built-in declarations."""
@@ -50,6 +64,13 @@ class OperationRegistry:
                 load_builtin_operation_module(record.module)
             )
         except ValueError as exc:
+            adapter = self._resolve_selected_resource_operation(
+                operation_id,
+                descriptor,
+                record,
+            )
+            if adapter is not None:
+                return adapter
             raise OperationCatalogError(
                 f"operation {operation_id} is not a declared built-in operation"
             ) from exc
@@ -88,6 +109,40 @@ class OperationRegistry:
             for candidate in bound.adapters
             if candidate.descriptor.operation_id == operation_id
         )
+        if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
+            mode="json"
+        ):
+            raise OperationCatalogError(
+                f"operation schema changed; run `jacobian update`: {operation_id}"
+            )
+        self._adapters[operation_id] = adapter
+        return adapter
+
+    def _resolve_selected_resource_operation(
+        self,
+        operation_id: str,
+        descriptor: OperationDescriptor,
+        record: OperationDeclarationRecord,
+    ) -> OperationAdapter[Any] | None:
+        if not supports_selected_operation(operation_id):
+            return None
+        from jacobian.graphs.installation import bind_selected_graph_operation
+
+        adapter = bind_selected_graph_operation(
+            operation_id,
+            self.binder.store,
+            self.binder.schemas,
+            self.binder.artifacts,
+        )
+        if adapter is None:
+            raise OperationCatalogError(
+                f"selected operation binder is missing: {operation_id}"
+            )
+        expected_digest = operation_declaration_digest_from_descriptor(descriptor)
+        if expected_digest != record.declaration_digest:
+            raise OperationCatalogError(
+                f"operation declaration changed; run `jacobian update`: {operation_id}"
+            )
         if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
             mode="json"
         ):
@@ -138,4 +193,21 @@ class OperationRegistry:
         return adapter
 
 
-__all__ = ["OperationRegistry"]
+def operation_declaration_digest_from_descriptor(
+    descriptor: OperationDescriptor,
+) -> str:
+    """Match the catalog digest used by retained resource-backed operations."""
+
+    from jacobian.operation_catalog import declaration_digest
+
+    return declaration_digest(
+        {
+            "operation_id": descriptor.operation_id,
+            "version": descriptor.version,
+            "input_schema": descriptor.input_schema,
+            "output_schema": descriptor.output_schema,
+        }
+    )
+
+
+__all__ = ["OperationRegistry", "supports_selected_operation"]

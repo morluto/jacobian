@@ -35,6 +35,26 @@ class OperationCatalogError(RuntimeError):
     """Persisted catalog state is missing, malformed, or inconsistent."""
 
 
+OMITTED_PACKAGED_OPERATIONS_CODE = "omitted_packaged_operations"
+
+
+def omitted_packaged_operations(
+    diagnostics: tuple[dict[str, Any], ...],
+) -> frozenset[str]:
+    """Return packaged IDs omitted from one overlay snapshot, if recorded."""
+
+    for diagnostic in diagnostics:
+        if diagnostic.get("code") != OMITTED_PACKAGED_OPERATIONS_CODE:
+            continue
+        operation_ids = diagnostic.get("operation_ids")
+        if not isinstance(operation_ids, list):
+            raise OperationCatalogError(
+                "omitted packaged operations diagnostic is malformed"
+            )
+        return frozenset(str(operation_id) for operation_id in operation_ids)
+    return frozenset()
+
+
 class VisibilityPolicy(Protocol):
     @property
     def profile(self) -> str: ...
@@ -182,6 +202,17 @@ class OperationCatalogStore:
         with sqlite3.connect(self.database_path) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("BEGIN IMMEDIATE")
+            snapshot_diagnostics = [
+                diagnostic
+                for diagnostic in diagnostics
+                if diagnostic.get("code") != OMITTED_PACKAGED_OPERATIONS_CODE
+            ]
+            snapshot_diagnostics.append(
+                {
+                    "code": OMITTED_PACKAGED_OPERATIONS_CODE,
+                    "operation_ids": list(omitted_operations),
+                }
+            )
             cursor = connection.execute(
                 """
                 INSERT INTO operation_catalog_snapshots(
@@ -192,7 +223,7 @@ class OperationCatalogStore:
                 (
                     package_version,
                     checker_binding_digest,
-                    canonicalize_json(list(diagnostics)),
+                    canonicalize_json(snapshot_diagnostics),
                 ),
             )
             if cursor.lastrowid is None:
@@ -255,7 +286,7 @@ class OperationCatalogStore:
             revision=revision,
             operation_count=len(entries),
             omitted_operations=omitted_operations,
-            diagnostics=diagnostics,
+            diagnostics=tuple(snapshot_diagnostics),
         )
 
 
@@ -578,6 +609,7 @@ def _cursor_start(
 
 
 __all__ = [
+    "OMITTED_PACKAGED_OPERATIONS_CODE",
     "CatalogBuildResult",
     "CatalogHeader",
     "CompiledCatalogEntry",
@@ -591,6 +623,7 @@ __all__ = [
     "VisibilityPolicy",
     "declaration_digest",
     "exact_checker_declaration_digest",
+    "omitted_packaged_operations",
     "operation_declaration_digest",
     "operation_declaration_digest_from_descriptor",
     "public_operation_descriptor",

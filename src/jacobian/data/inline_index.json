@@ -28948,7 +28948,32 @@
   },
   {
     "description": "Normalize a typed rational polynomial expression.",
-    "examples": [],
+    "examples": [
+      {
+        "description": "Normalize x + x to canonical sparse coefficients over QQ.",
+        "input": {
+          "expression": {
+            "expression": {
+              "kind": "add",
+              "operands": [
+                {
+                  "kind": "variable",
+                  "name": "x"
+                },
+                {
+                  "kind": "variable",
+                  "name": "x"
+                }
+              ]
+            },
+            "variables": [
+              "x"
+            ]
+          }
+        },
+        "name": "combine_like_terms"
+      }
+    ],
     "family": "polynomial",
     "input_schema": {
       "$defs": {
@@ -44312,7 +44337,46 @@
   },
   {
     "description": "Canonicalize and store the exact CNF consumed by SAT model and UNSAT search operations.",
-    "examples": [],
+    "examples": [
+      {
+        "description": "Encode two items with exactly one of two colors and forbid them from sharing a color.",
+        "input": {
+          "clauses": [
+            [
+              1,
+              2
+            ],
+            [
+              -1,
+              -2
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              -3,
+              -4
+            ],
+            [
+              -1,
+              -3
+            ],
+            [
+              -2,
+              -4
+            ]
+          ],
+          "variable_names": [
+            "item1_red",
+            "item1_blue",
+            "item2_red",
+            "item2_blue"
+          ]
+        },
+        "name": "finite-coloring-cnf"
+      }
+    ],
     "family": "sat-smt",
     "input_schema": {
       "additionalProperties": false,

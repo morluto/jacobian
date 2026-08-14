@@ -84,6 +84,7 @@ from jacobian.contracts.nullstellensatz import (
     NullstellensatzVerificationOutput,
     NullstellensatzVerificationRequest,
 )
+from jacobian.contracts.operations import OperationExample
 from jacobian.contracts.polynomial_expressions import (
     PolynomialExpressionNormalizationVerificationOutput,
     PolynomialExpressionNormalizationVerificationRequest,
@@ -214,6 +215,7 @@ class FamilyIndexSpec:
     tags: tuple[str, ...]
     request_type: type[BaseModel]
     result_type: type[BaseModel]
+    examples: tuple[OperationExample, ...] = ()
 
 
 FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
@@ -555,6 +557,26 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         ),
         request_type=PolynomialExpressionNormalizeRequest,
         result_type=PolynomialExpressionNormalizeOutput,
+        examples=(
+            OperationExample(
+                name="combine_like_terms",
+                description=(
+                    "Normalize x + x to canonical sparse coefficients over QQ."
+                ),
+                input={
+                    "expression": {
+                        "variables": ["x"],
+                        "expression": {
+                            "kind": "add",
+                            "operands": [
+                                {"kind": "variable", "name": "x"},
+                                {"kind": "variable", "name": "x"},
+                            ],
+                        },
+                    }
+                },
+            ),
+        ),
     ),
     FamilyIndexSpec(
         operation_id="polynomial.expression_normalization.verify",
@@ -860,6 +882,31 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         ),
         request_type=SatCnfMaterializationRequest,
         result_type=SatCnfMaterializationOutput,
+        examples=(
+            OperationExample(
+                name="finite-coloring-cnf",
+                description=(
+                    "Encode two items with exactly one of two colors and forbid "
+                    "them from sharing a color."
+                ),
+                input={
+                    "variable_names": [
+                        "item1_red",
+                        "item1_blue",
+                        "item2_red",
+                        "item2_blue",
+                    ],
+                    "clauses": [
+                        [1, 2],
+                        [-1, -2],
+                        [3, 4],
+                        [-3, -4],
+                        [-1, -3],
+                        [-2, -4],
+                    ],
+                },
+            ),
+        ),
     ),
     FamilyIndexSpec(
         operation_id="sat.lrat.verify",
@@ -1049,6 +1096,14 @@ def _family_index_payload(spec: FamilyIndexSpec) -> dict[str, Any]:
         "title": spec.title,
         "description": spec.description,
         "tags": spec.tags,
+        "examples": [
+            {
+                "name": example.name,
+                "description": example.description,
+                "input": dict(example.input),
+            }
+            for example in spec.examples
+        ],
         "input_schema": input_schema,
         "output_schema": SCHEMA_COMPILER.compile_model(spec.result_type).definition(),
     }

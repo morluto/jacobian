@@ -79,6 +79,9 @@ def test_family_index_covers_selected_family_ids() -> None:
     assert indexed == selected
     assert {entry.operation_id for entry in entries} == selected
     assert all(entry.family for entry in entries)
+    examples = {entry.operation_id: entry.examples for entry in entries}
+    assert examples["polynomial.expression.normalize"][0].name == "combine_like_terms"
+    assert examples["sat.cnf.materialize"][0].name == "finite-coloring-cnf"
 
 
 def test_family_graph_properties_schema_lists_supported_invariants() -> None:

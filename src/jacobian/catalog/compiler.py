@@ -73,6 +73,14 @@ def compile_operation_catalog(
         )
         entries = _compiled_entries(descriptors)
         packaged = load_package_index()
+        bound_ids = {descriptor.operation_id for descriptor in bound_descriptors}
+        omitted_operations = tuple(
+            sorted(
+                operation_id
+                for operation_id in packaged.entries
+                if operation_id not in bound_ids
+            )
+        )
         result = OperationCatalogStore(state_dir / "metadata.sqlite3").commit(
             package_version=__version__,
             checker_binding_digest=declaration_digest(
@@ -85,11 +93,12 @@ def compile_operation_catalog(
             ),
             entries=entries,
             checker_bindings=checker_bindings,
+            omitted_operations=omitted_operations,
         )
         return CatalogBuildResult(
             revision=result.revision,
-            operation_count=len(packaged.entries) + result.operation_count,
-            omitted_operations=result.omitted_operations,
+            operation_count=len(bound_descriptors),
+            omitted_operations=omitted_operations,
             diagnostics=result.diagnostics,
         )
     finally:

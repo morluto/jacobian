@@ -239,6 +239,35 @@ def test_serving_catalog_rejects_packaged_builtin_mirrors(tmp_path: Path) -> Non
         )
 
 
+def test_serving_catalog_hides_omitted_packaged_ids(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.commit(
+        package_version="0.13.0",
+        checker_binding_digest="sha256:" + "c" * 64,
+        entries=(_entry("synthetic.overlay.only", "Overlay only"),),
+        checker_bindings={},
+        omitted_operations=("lean.check", "sat.model.find"),
+    )
+
+    catalog = ServingCatalog.open(
+        tmp_path / "metadata.sqlite3",
+        OperationVisibilityPolicy(),
+        expected_package_version="0.13.0",
+    )
+
+    assert catalog.inspect("lean.check") is None
+    assert catalog.inspect("sat.model.find") is None
+    assert catalog.declaration_record("lean.check") is None
+    assert catalog.inspect("graph.construct.explicit") is not None
+    assert catalog.inspect("sat.cnf.materialize") is not None
+    assert catalog.inspect("synthetic.overlay.only") is not None
+    snapshot_ids = {item.operation_id for item in catalog.snapshot().operations}
+    assert "lean.check" not in snapshot_ids
+    assert "sat.model.find" not in snapshot_ids
+    assert "graph.construct.explicit" in snapshot_ids
+    assert "synthetic.overlay.only" in snapshot_ids
+
+
 def test_catalog_loads_the_selected_checker_binding_index(tmp_path: Path) -> None:
     store = _store(tmp_path)
     checker_id, implementation_digest = _commit_with_checker(store)

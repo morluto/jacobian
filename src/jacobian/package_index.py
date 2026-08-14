@@ -162,6 +162,14 @@ def collect_family_index_entries() -> tuple[PackageIndexEntry, ...]:
 
     entries: list[PackageIndexEntry] = []
     for payload in family_index_payloads():
+        examples = tuple(
+            OperationExample(
+                name=str(example["name"]),
+                description=str(example["description"]),
+                input=dict(example["input"]),
+            )
+            for example in cast(list[dict[str, Any]], payload.get("examples") or ())
+        )
         entries.append(
             PackageIndexEntry(
                 operation_id=str(payload["operation_id"]),
@@ -169,7 +177,7 @@ def collect_family_index_entries() -> tuple[PackageIndexEntry, ...]:
                 title=str(payload["title"]),
                 description=str(payload["description"]),
                 tags=tuple(str(tag) for tag in payload["tags"]),
-                examples=(),
+                examples=examples,
                 input_schema=dict(payload["input_schema"]),
                 output_schema=dict(payload["output_schema"]),
                 module="",

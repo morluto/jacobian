@@ -35,6 +35,11 @@ def test_serving_catalog_inspects_family_ids_from_the_package_index() -> None:
     snapshot_ids = {item.operation_id for item in catalog.snapshot().operations}
     assert "matrix.determinant.compute" in snapshot_ids
     assert "graph.construct.explicit" in snapshot_ids
+    assert "polynomial.expression.normalize" in snapshot_ids
+    assert "lean.check" not in snapshot_ids
+    assert "sat.cnf.materialize" not in snapshot_ids
+    assert catalog.inspect("lean.check") is None
+    assert catalog.declaration_record("sat.cnf.materialize") is None
 
 
 def test_inline_serving_runtime_runs_determinant_without_state() -> None:

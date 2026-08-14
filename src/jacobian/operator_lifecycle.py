@@ -11,6 +11,7 @@ from jacobian.operation_catalog import (
     CatalogBuildResult,
     OperationCatalog,
     OperationCatalogError,
+    omitted_packaged_operations,
 )
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.persistence.migrations import (
@@ -46,7 +47,9 @@ def initialize_state(
             return CatalogBuildResult(
                 revision=current.header.revision,
                 operation_count=len(serving.snapshot().operations),
-                omitted_operations=(),
+                omitted_operations=tuple(
+                    sorted(omitted_packaged_operations(current.header.diagnostics))
+                ),
                 diagnostics=current.header.diagnostics,
             )
     return _build_catalog(state_dir, checker_authorization)

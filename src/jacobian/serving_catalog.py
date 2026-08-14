@@ -18,12 +18,15 @@ from jacobian.operation_catalog import (
     OperationDeclarationRecord,
     OperationSearchCard,
     VisibilityPolicy,
+    omitted_packaged_operations,
     public_operation_descriptor,
 )
 from jacobian.operation_discovery import discover_operations
 from jacobian.operation_locators import FamilyLocator, encode_locator
 from jacobian.operation_visibility import OperationVisibilityPolicy
-from jacobian.package_index import PackageIndex, load_package_index
+from jacobian.package_index import PackageIndex, PackageIndexEntry, load_package_index
+
+_OPTIONAL_INDEX_FAMILIES = frozenset({"lean", "sat-smt"})
 
 
 class ServingCatalog:
@@ -38,6 +41,7 @@ class ServingCatalog:
         self.index = index
         self.overlay = overlay
         self.policy = policy
+        self._omitted_packaged = _omitted_packaged_ids(index, overlay)
 
     @classmethod
     def open(
@@ -62,7 +66,7 @@ class ServingCatalog:
         return catalog
 
     def inspect(self, operation_id: str) -> OperationDescriptor | None:
-        entry = self.index.get(operation_id)
+        entry = self._visible_index_entry(operation_id)
         if entry is not None:
             return self.policy.project(public_operation_descriptor(entry.descriptor()))
         if self.overlay is None:
@@ -72,7 +76,7 @@ class ServingCatalog:
     def declaration_record(
         self, operation_id: str
     ) -> OperationDeclarationRecord | None:
-        entry = self.index.get(operation_id)
+        entry = self._visible_index_entry(operation_id)
         if entry is not None:
             module = entry.module
             if entry.family is not None:
@@ -103,8 +107,12 @@ class ServingCatalog:
 
     def snapshot(self) -> OperationCatalogSnapshot:
         descriptors: dict[str, OperationDescriptor] = {}
-        for candidate in self.index.descriptors():
-            projected = self.policy.project(public_operation_descriptor(candidate))
+        for entry in self.index.entries.values():
+            if self._visible_index_entry(entry.operation_id) is None:
+                continue
+            projected = self.policy.project(
+                public_operation_descriptor(entry.descriptor())
+            )
             if projected is not None:
                 descriptors[projected.operation_id] = projected
         if self.overlay is not None:
@@ -119,11 +127,30 @@ class ServingCatalog:
             operations=operations,
         )
 
+    def _visible_index_entry(self, operation_id: str) -> PackageIndexEntry | None:
+        if operation_id in self._omitted_packaged:
+            return None
+        return self.index.get(operation_id)
+
     def cards(self) -> tuple[OperationSearchCard, ...]:
         return tuple(
             OperationSearchCard.from_descriptor(descriptor)
             for descriptor in self.snapshot().operations
         )
+
+
+def _omitted_packaged_ids(
+    index: PackageIndex, overlay: OperationCatalog | None
+) -> frozenset[str]:
+    """Hide unavailable optional families and compile-omitted packaged IDs."""
+
+    if overlay is None:
+        return frozenset(
+            entry.operation_id
+            for entry in index.entries.values()
+            if entry.family in _OPTIONAL_INDEX_FAMILIES
+        )
+    return omitted_packaged_operations(overlay.header.diagnostics)
 
 
 def _reject_packaged_descriptor_mirrors(

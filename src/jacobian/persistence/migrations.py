@@ -564,9 +564,10 @@ _OPERATION_CATALOG_SCHEMA_STATEMENTS = (
     CREATE TABLE IF NOT EXISTS operation_checker_bindings (
         snapshot_revision INTEGER NOT NULL,
         operation_id TEXT NOT NULL,
+        binding_index INTEGER NOT NULL CHECK (binding_index >= 0),
         checker_id TEXT NOT NULL,
         manifest_digest TEXT NOT NULL,
-        PRIMARY KEY (snapshot_revision, operation_id),
+        PRIMARY KEY (snapshot_revision, operation_id, binding_index),
         FOREIGN KEY (snapshot_revision)
             REFERENCES operation_catalog_snapshots(revision) ON DELETE RESTRICT,
         FOREIGN KEY (checker_id)

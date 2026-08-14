@@ -83,8 +83,8 @@ def _commit_with_checker(store: OperationCatalogStore) -> tuple[str, str]:
         ),
         checker_bindings={
             "matrix.rank.compute": (
-                checker.checker_id,
-                checker.implementation_digest,
+                (checker.checker_id, checker.implementation_digest),
+                (checker.checker_id, checker.implementation_digest),
             )
         },
     )
@@ -236,9 +236,14 @@ def test_catalog_loads_the_selected_checker_binding_index(tmp_path: Path) -> Non
     binding = catalog.checker_binding("matrix.rank.compute")
 
     assert binding is not None
+    assert binding.binding_index == 0
     assert binding.checker_id == checker_id
     assert binding.manifest_digest == implementation_digest
+    bindings = catalog.checker_bindings("matrix.rank.compute")
+    assert tuple(item.binding_index for item in bindings) == (0, 1)
+    assert tuple(item.checker_id for item in bindings) == (checker_id, checker_id)
     assert catalog.checker_binding("missing.operation") is None
+    assert catalog.checker_bindings("missing.operation") == ()
 
 
 def test_failed_catalog_commit_leaves_previous_revision_active(tmp_path: Path) -> None:
@@ -252,8 +257,10 @@ def test_failed_catalog_commit_leaves_previous_revision_active(tmp_path: Path) -
             entries=(_entry("integer.gcd.compute", "Changed GCD"),),
             checker_bindings={
                 "integer.gcd.compute": (
-                    "checker://sha256/" + "f" * 64,
-                    "sha256:" + "1" * 64,
+                    (
+                        "checker://sha256/" + "f" * 64,
+                        "sha256:" + "1" * 64,
+                    ),
                 )
             },
         )

@@ -65,10 +65,8 @@ def compile_operation_catalog(
             checker_binding_digest=declaration_digest(
                 {
                     "bindings": [
-                        [operation_id, [checker_id, digest]]
-                        for operation_id, (checker_id, digest) in sorted(
-                            checker_bindings.items()
-                        )
+                        [operation_id, [list(binding) for binding in bindings]]
+                        for operation_id, bindings in sorted(checker_bindings.items())
                     ]
                 }
             ),
@@ -134,17 +132,18 @@ def _compiled_entries(
 def _checker_bindings(
     checkers: CheckerRegistry,
     descriptors: tuple[OperationDescriptor, ...],
-) -> dict[str, tuple[str, str]]:
-    bindings: dict[str, tuple[str, str]] = {}
+) -> dict[str, tuple[tuple[str, str], ...]]:
+    bindings: dict[str, tuple[tuple[str, str], ...]] = {}
     for descriptor in descriptors:
         runtime = descriptor.provider_runtime
         if runtime is None or not runtime.checker_ids:
             continue
-        checker_id = str(runtime.checker_ids[0])
-        registration = checkers.require_active(checker_id)
-        bindings[descriptor.operation_id] = (
-            checker_id,
-            registration.implementation_digest,
+        bindings[descriptor.operation_id] = tuple(
+            (
+                str(checker_id),
+                checkers.require_active(str(checker_id)).implementation_digest,
+            )
+            for checker_id in runtime.checker_ids
         )
     return bindings
 

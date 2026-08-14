@@ -110,6 +110,7 @@ class OperationCheckerBinding:
     """Trusted checker identity selected with one immutable catalog revision."""
 
     operation_id: str
+    binding_index: int
     checker_id: str
     manifest_digest: str
 
@@ -145,7 +146,7 @@ class OperationCatalogStore:
         package_version: str,
         checker_binding_digest: str,
         entries: tuple[CompiledCatalogEntry, ...],
-        checker_bindings: dict[str, tuple[str, str]],
+        checker_bindings: dict[str, tuple[tuple[str, str], ...]],
         diagnostics: tuple[dict[str, Any], ...] = (),
         omitted_operations: tuple[str, ...] = (),
     ) -> CatalogBuildResult:
@@ -197,17 +198,25 @@ class OperationCatalogStore:
                         entry.declaration_digest,
                     ),
                 )
-            for operation_id, (checker_id, manifest_digest) in sorted(
-                checker_bindings.items()
-            ):
-                connection.execute(
-                    """
-                    INSERT INTO operation_checker_bindings(
-                        snapshot_revision, operation_id, checker_id, manifest_digest
-                    ) VALUES (?, ?, ?, ?)
-                    """,
-                    (revision, operation_id, checker_id, manifest_digest),
-                )
+            for operation_id, operation_bindings in sorted(checker_bindings.items()):
+                for binding_index, (checker_id, manifest_digest) in enumerate(
+                    operation_bindings
+                ):
+                    connection.execute(
+                        """
+                        INSERT INTO operation_checker_bindings(
+                            snapshot_revision, operation_id, binding_index,
+                            checker_id, manifest_digest
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            revision,
+                            operation_id,
+                            binding_index,
+                            checker_id,
+                            manifest_digest,
+                        ),
+                    )
             connection.execute(
                 """
                 INSERT INTO active_operation_catalog(id, snapshot_revision)
@@ -280,14 +289,22 @@ class OperationCatalog:
     def checker_binding(self, operation_id: str) -> OperationCheckerBinding | None:
         """Return the persisted checker authority for one operation, if any."""
 
-        return self._checker_bindings.get(operation_id)
+        bindings = self._checker_bindings.get(operation_id, ())
+        return bindings[0] if bindings else None
+
+    def checker_bindings(
+        self, operation_id: str
+    ) -> tuple[OperationCheckerBinding, ...]:
+        """Return every ordered checker authority for one operation."""
+
+        return self._checker_bindings.get(operation_id, ())
 
     def _load_active(
         self, expected_package_version: str
     ) -> tuple[
         CatalogHeader,
         tuple[OperationSearchCard, ...],
-        dict[str, OperationCheckerBinding],
+        dict[str, tuple[OperationCheckerBinding, ...]],
     ]:
         if not self.database_path.exists():
             raise OperationCatalogError(
@@ -329,21 +346,30 @@ class OperationCatalog:
                         (int(row["revision"]),),
                     )
                 )
-                checker_bindings = {
-                    str(item["operation_id"]): OperationCheckerBinding(
-                        operation_id=str(item["operation_id"]),
-                        checker_id=str(item["checker_id"]),
-                        manifest_digest=str(item["manifest_digest"]),
-                    )
-                    for item in connection.execute(
-                        """
-                        SELECT operation_id, checker_id, manifest_digest
+                binding_rows = connection.execute(
+                    """
+                        SELECT operation_id, binding_index, checker_id,
+                               manifest_digest
                         FROM operation_checker_bindings
                         WHERE snapshot_revision = ?
-                        ORDER BY operation_id
+                        ORDER BY operation_id, binding_index
                         """,
-                        (int(row["revision"]),),
+                    (int(row["revision"]),),
+                )
+                grouped_bindings: dict[str, list[OperationCheckerBinding]] = {}
+                for item in binding_rows:
+                    operation_id = str(item["operation_id"])
+                    grouped_bindings.setdefault(operation_id, []).append(
+                        OperationCheckerBinding(
+                            operation_id=operation_id,
+                            binding_index=int(item["binding_index"]),
+                            checker_id=str(item["checker_id"]),
+                            manifest_digest=str(item["manifest_digest"]),
+                        )
                     )
+                checker_bindings = {
+                    operation_id: tuple(bindings)
+                    for operation_id, bindings in grouped_bindings.items()
                 }
         except sqlite3.DatabaseError as exc:
             raise OperationCatalogError(

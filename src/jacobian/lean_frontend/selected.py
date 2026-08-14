@@ -23,7 +23,7 @@ from jacobian.lean_frontend.service import LeanService
 from jacobian.lean_frontend.statement import install_lean_statement_operations
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_catalog import OperationCatalog
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.providers.lean_runtime import lean_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry
@@ -153,10 +153,15 @@ def _lean_installations(
     schemas: SchemaRegistry,
     checkers: CheckerRegistry,
 ) -> dict[LeanEnvironment, Any]:
-    binding = catalog.checker_binding("lean.check")
-    checker_ids = () if binding is None else (binding.checker_id,)
+    checker_ids = tuple(
+        binding.checker_id for binding in catalog.checker_bindings("lean.check")
+    )
+    if checker_ids and len(checker_ids) != 2:
+        raise OperationCatalogError(
+            "Lean checker inventory is stale; run `jacobian update`"
+        )
     selected = {
-        environment: (checker_ids[0] if index == 0 and checker_ids else None)
+        environment: (checker_ids[index] if checker_ids else None)
         for index, environment in enumerate(
             (LeanEnvironment.CORE, LeanEnvironment.MATHLIB)
         )

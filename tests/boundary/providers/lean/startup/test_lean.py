@@ -338,6 +338,39 @@ def test_core_lean_check_runs_through_operation_mcp_surface(tmp_path: Path) -> N
     asyncio.run(scenario())
 
 
+@pytest.mark.skipif(
+    skip_unless_pinned_mathlib_runtime(),
+    reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
+)
+@pytest.mark.timeout(240)
+def test_mathlib_lean_check_uses_its_compiled_checker_binding(tmp_path: Path) -> None:
+    initialize_state(tmp_path)
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            response = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "lean.check",
+                    "payload": {
+                        "environment": "MATHLIB",
+                        "statement": "Irrational (Real.sqrt 2)",
+                        "proof": "exact irrational_sqrt_two",
+                    },
+                },
+            )
+
+            assert response.is_error is False
+            assert isinstance(response.structured_content, dict)
+            payload = response.structured_content
+            assert payload["output"]["conclusion"] == "TRUE"
+            assert payload["verification_record_uri"] is not None
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize(
     "proof",
     [

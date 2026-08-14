@@ -60,6 +60,8 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.map.inverse.verify",
         "polynomial.system.solution.verify",
         "polynomial.system.rational_solution.search",
+        "polynomial.jacobian_degree_slice.system.materialize",
+        "polynomial.nullstellensatz.infeasibility_certificate.verify",
     }
 )
 _SELECTED_DIRECT_OPERATIONS = frozenset(
@@ -357,7 +359,7 @@ class OperationRegistry:
             bind_selected_polynomial_system_operation,
         )
 
-        return bind_selected_polynomial_system_operation(
+        system_adapter = bind_selected_polynomial_system_operation(
             operation_id,
             self.binder.store,
             self.binder.schemas,
@@ -365,6 +367,26 @@ class OperationRegistry:
             self.verification,
             self.checkers,
             self.catalog,
+        )
+        if system_adapter is not None:
+            return system_adapter
+        from jacobian.domains.polynomial_nullstellensatz.core import (
+            bind_selected_nullstellensatz_operation,
+        )
+
+        if descriptor.provider_runtime is None:
+            raise OperationCatalogError(
+                "Nullstellensatz provider observation is missing; run `jacobian update`"
+            )
+        return bind_selected_nullstellensatz_operation(
+            operation_id,
+            self.binder.store,
+            self.binder.schemas,
+            self.binder.artifacts,
+            self.verification,
+            self.checkers,
+            self.catalog,
+            descriptor.provider_runtime,
         )
 
     def _bind_selected_sat_operation(

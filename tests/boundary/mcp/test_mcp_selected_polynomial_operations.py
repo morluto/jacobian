@@ -116,6 +116,8 @@ def test_polynomial_positivity_loads_only_the_selected_path(
                 "polynomial.map.inverse.verify",
                 "polynomial.system.solution.verify",
                 "polynomial.system.rational_solution.search",
+                "polynomial.jacobian_degree_slice.system.materialize",
+                "polynomial.nullstellensatz.infeasibility_certificate.verify",
             ):
                 invalid = await client.call_tool(
                     "math.run",

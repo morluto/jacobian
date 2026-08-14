@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Any
 
 from pydantic import ValidationError
 
+from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
@@ -32,15 +34,19 @@ from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
-from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
 from jacobian.operation_binding import BoundOperationGroup
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
 from jacobian.portfolio.context import PortfolioContext
-from jacobian.schema_registry import model_schema
+from jacobian.registry import CheckerRegistry
+from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
+from jacobian.storage.repository import ArtifactRepository
+from jacobian.verification.service import VerificationService
 
 MATERIALIZE_OPERATION_ID = "polynomial.jacobian_degree_slice.system.materialize"
 VERIFY_OPERATION_ID = "polynomial.nullstellensatz.infeasibility_certificate.verify"
@@ -56,6 +62,13 @@ class NullstellensatzCoreInstallation:
     certificate_bundle_schema_uri: str
     certificate_envelope_schema_uri: str
     checker_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class NullstellensatzResources:
+    store: ArtifactRepository
+    artifacts: ArtifactService
+    verification: VerificationService
 
 
 def _diagnostic(
@@ -106,11 +119,11 @@ def _request_value_summary(value: object) -> str:
 class JacobianDegreeSliceMaterializeAdapter:
     def __init__(
         self,
-        context: PortfolioContext,
+        resources: NullstellensatzResources,
         installation: NullstellensatzCoreInstallation,
         provider_runtime: ProviderObservation,
     ) -> None:
-        self.context = context
+        self.resources = resources
         self.installation = installation
         self._descriptor = OperationDescriptor(
             operation_id=MATERIALIZE_OPERATION_ID,
@@ -155,7 +168,7 @@ class JacobianDegreeSliceMaterializeAdapter:
     ) -> OperationProjection:
         started = time.monotonic()
         system = materialize_degree_23_system()
-        stored = self.context.artifacts.put(
+        stored = self.resources.artifacts.put(
             schema_uri=self.installation.system_schema_uri,
             semantics_uri=self.installation.semantics_uri,
             payload=system.model_dump(mode="json"),
@@ -183,11 +196,11 @@ class JacobianDegreeSliceMaterializeAdapter:
 class NullstellensatzVerificationAdapter:
     def __init__(
         self,
-        context: PortfolioContext,
+        resources: NullstellensatzResources,
         installation: NullstellensatzCoreInstallation,
         provider_runtime: ProviderObservation,
     ) -> None:
-        self.context = context
+        self.resources = resources
         self.installation = installation
         self._descriptor = OperationDescriptor(
             operation_id=VERIFY_OPERATION_ID,
@@ -261,8 +274,8 @@ class NullstellensatzVerificationAdapter:
     ) -> OperationProjection:
         actual_artifact_type: str | None = None
         try:
-            system_artifact = self.context.store.get(validated.system_uri)
-            bundle_artifact = self.context.store.get(validated.certificate_bundle_uri)
+            system_artifact = self.resources.store.get(validated.system_uri)
+            bundle_artifact = self.resources.store.get(validated.certificate_bundle_uri)
             if (
                 system_artifact.manifest.schema_uri
                 != self.installation.system_schema_uri
@@ -337,7 +350,7 @@ class NullstellensatzVerificationAdapter:
             "system_uri": system_artifact.artifact_uri,
             "certificate_bundle_uri": bundle_artifact.artifact_uri,
         }
-        semantics = self.context.store.get(self.installation.semantics_uri)
+        semantics = self.resources.store.get(self.installation.semantics_uri)
         envelope = CertificateEnvelope(
             certificate_type=CERTIFICATE_FORMAT,
             format_version="1",
@@ -350,7 +363,7 @@ class NullstellensatzVerificationAdapter:
             + hashlib.sha256(canonicalize_json(replay)).hexdigest(),
             payload=replay,
         )
-        evidence = self.context.artifacts.put(
+        evidence = self.resources.artifacts.put(
             schema_uri=self.installation.certificate_envelope_schema_uri,
             semantics_uri=self.installation.semantics_uri,
             payload=envelope.model_dump(mode="json"),
@@ -359,7 +372,7 @@ class NullstellensatzVerificationAdapter:
         )
         checker_id = self.installation.checker_id
         checked = (
-            self.context.verification.verify_certificate(
+            self.resources.verification.verify_certificate(
                 certificate_uri=evidence.artifact_uri,
                 checker_id=checker_id,
                 timeout_seconds=float(validated.timeout_seconds),
@@ -429,11 +442,13 @@ class NullstellensatzVerificationAdapter:
         )
 
 
-def install_nullstellensatz_core(
-    context: PortfolioContext,
-    provider_runtime: ProviderObservation,
-) -> BoundOperationGroup:
-    semantics_uri = context.store.register_descriptor(
+def register_nullstellensatz_resources(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+) -> NullstellensatzCoreInstallation:
+    """Register the fixed degree-slice contracts without installing a checker."""
+
+    semantics_uri = store.register_descriptor(
         kind="semantics",
         name="jacobian.normalized-bivariate-jacobian-degree-2-3",
         version="1",
@@ -448,23 +463,70 @@ def install_nullstellensatz_core(
             "certificate_identity": "sum(h_i*f_i)=1 in QQ[a20,...,b03,t]",
         },
     )
-    system_schema_uri = context.schemas.register_model(
-        name="jacobian.normalized-jacobian-degree-2-3-system",
-        version="1",
-        model=NormalizedJacobianDegreeSliceSystem,
-        producer_only=True,
+    return NullstellensatzCoreInstallation(
+        semantics_uri=semantics_uri,
+        system_schema_uri=schemas.register_model(
+            name="jacobian.normalized-jacobian-degree-2-3-system",
+            version="1",
+            model=NormalizedJacobianDegreeSliceSystem,
+            producer_only=True,
+        ),
+        certificate_bundle_schema_uri=schemas.register_model(
+            name="jacobian.nullstellensatz-chart-cover-certificate",
+            version="1",
+            model=NullstellensatzCertificateBundle,
+            producer_only=True,
+        ),
+        certificate_envelope_schema_uri=schemas.register_model(
+            name="jacobian.certificate-envelope",
+            version="1",
+            model=CertificateEnvelope,
+        ),
+        checker_id=None,
     )
-    bundle_schema_uri = context.schemas.register_model(
-        name="jacobian.nullstellensatz-chart-cover-certificate",
-        version="1",
-        model=NullstellensatzCertificateBundle,
-        producer_only=True,
+
+
+def bind_selected_nullstellensatz_operation(
+    operation_id: str,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+    provider_runtime: ProviderObservation,
+) -> OperationAdapter[Any] | None:
+    """Bind one fixed Nullstellensatz operation from persisted catalog state."""
+
+    if operation_id not in {MATERIALIZE_OPERATION_ID, VERIFY_OPERATION_ID}:
+        return None
+    installation = register_nullstellensatz_resources(store, schemas)
+    resources = NullstellensatzResources(store, artifacts, verification)
+    if operation_id == MATERIALIZE_OPERATION_ID:
+        return JacobianDegreeSliceMaterializeAdapter(
+            resources, installation, provider_runtime
+        )
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
     )
-    envelope_schema_uri = context.schemas.register_model(
-        name="jacobian.certificate-envelope",
-        version="1",
-        model=CertificateEnvelope,
+    return NullstellensatzVerificationAdapter(
+        resources,
+        replace(installation, checker_id=binding.checker_id),
+        provider_runtime,
     )
+
+
+def install_nullstellensatz_core(
+    context: PortfolioContext,
+    provider_runtime: ProviderObservation,
+) -> BoundOperationGroup:
+    contracts = register_nullstellensatz_resources(context.store, context.schemas)
     installed_checker = CheckerInstaller(context.checkers).install(
         CheckerOperation(
             name="exact bounded Nullstellensatz chart-cover checker",
@@ -472,37 +534,55 @@ def install_nullstellensatz_core(
             evidence_kind=EvidenceKind.CERTIFICATE,
             format_id=CERTIFICATE_FORMAT,
             format_version="1",
-            claim_schema_uris=(system_schema_uri,),
-            semantics_uris=(semantics_uri,),
-            candidate_schema_uris=(bundle_schema_uri,),
+            claim_schema_uris=(contracts.system_schema_uri,),
+            semantics_uris=(contracts.semantics_uri,),
+            candidate_schema_uris=(contracts.certificate_bundle_schema_uri,),
             reason=(
                 "bundled standard-library sparse QQ replay independent of Singular and Groebner generation"
             ),
         ),
         authorize=context.authorizes_bundled_checkers,
     )
-    installation = NullstellensatzCoreInstallation(
-        semantics_uri=semantics_uri,
-        system_schema_uri=system_schema_uri,
-        certificate_bundle_schema_uri=bundle_schema_uri,
-        certificate_envelope_schema_uri=envelope_schema_uri,
-        checker_id=installed_checker.checker_id,
+    installation = replace(contracts, checker_id=installed_checker.checker_id)
+    resources = NullstellensatzResources(
+        context.store,
+        context.artifacts,
+        context.verification,
+    )
+    verification_runtime = provider_runtime.model_copy(
+        update={
+            "checker_ids": (
+                (installed_checker.checker_id,)
+                if installed_checker.checker_id is not None
+                else ()
+            )
+        }
     )
     adapters = (
-        JacobianDegreeSliceMaterializeAdapter(context, installation, provider_runtime),
-        NullstellensatzVerificationAdapter(context, installation, provider_runtime),
+        JacobianDegreeSliceMaterializeAdapter(
+            resources, installation, provider_runtime
+        ),
+        NullstellensatzVerificationAdapter(
+            resources,
+            installation,
+            verification_runtime,
+        ),
     )
     return BoundOperationGroup(
         adapters=adapters,
-        semantics_uri=semantics_uri,
+        semantics_uri=contracts.semantics_uri,
         input_schema_uris={
-            JacobianDegreeSliceMaterializeRequest: system_schema_uri,
-            NullstellensatzVerificationRequest: envelope_schema_uri,
+            JacobianDegreeSliceMaterializeRequest: contracts.system_schema_uri,
+            NullstellensatzVerificationRequest: (
+                contracts.certificate_envelope_schema_uri
+            ),
         },
-        result_schema_uris={MATERIALIZE_OPERATION_ID: system_schema_uri},
+        result_schema_uris={MATERIALIZE_OPERATION_ID: contracts.system_schema_uri},
         named_schema_uris={
-            "nullstellensatz_certificate_bundle": bundle_schema_uri,
-            "certificate_envelope": envelope_schema_uri,
+            "nullstellensatz_certificate_bundle": (
+                contracts.certificate_bundle_schema_uri
+            ),
+            "certificate_envelope": contracts.certificate_envelope_schema_uri,
         },
     )
 

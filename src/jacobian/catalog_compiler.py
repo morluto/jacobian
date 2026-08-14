@@ -23,6 +23,7 @@ from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
+from jacobian.runtime.model import JacobianRuntime
 from jacobian.verification.service import VerificationService
 
 
@@ -34,6 +35,7 @@ def compile_operation_catalog(
     """Authorize checkers and atomically compile one catalog revision."""
 
     core = bootstrap_services(state_dir, operation_policy=OperationVisibilityPolicy())
+    runtime: JacobianRuntime | None = None
     resources = None
     try:
         verification = VerificationService(
@@ -43,8 +45,9 @@ def compile_operation_catalog(
             checker_timeout_seconds=105,
         )
         polytope = PolytopeService(core.store, core.schemas)
+        runtime = JacobianRuntime(core, verification, polytope)
         context = create_catalog_build_context(
-            core,
+            runtime.core,
             verification,
             authorize_bundled_checkers=authorize_bundled_checkers,
         )
@@ -78,7 +81,10 @@ def compile_operation_catalog(
             if resources is not None:
                 resources.close()
         finally:
-            core.close()
+            if runtime is None:
+                core.close()
+            else:
+                runtime.close()
 
 
 def _compiled_entries(

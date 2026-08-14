@@ -29,27 +29,34 @@ def create_execution_runtime(
         operation_policy=operation_policy,
         bind_existing_checkers=True,
     )
-    if checker_registry is not None:
-        core.checkers = checker_registry
-    verification = VerificationService(
-        core.store,
-        core.checkers,
-        core.schemas,
-        checker_timeout_seconds=105,
-    )
-    polytope = PolytopeService(core.store, core.schemas)
-    registry = OperationRegistry(
-        catalog,
-        core.binder,
-        verification,
-        core.checkers,
-        core.polynomial_expressions,
-        polytope,
-        core.sat,
-        core.smt,
-    )
-    core.operations = OperationDispatcher(catalog, registry)
-    return JacobianRuntime(core, verification, polytope)
+    try:
+        if checker_registry is not None:
+            core.checkers = checker_registry
+        verification = VerificationService(
+            core.store,
+            core.checkers,
+            core.schemas,
+            checker_timeout_seconds=105,
+        )
+        polytope = PolytopeService(core.store, core.schemas)
+        registry = OperationRegistry(
+            catalog,
+            core.binder,
+            verification,
+            core.checkers,
+            core.polynomial_expressions,
+            polytope,
+            core.sat,
+            core.smt,
+        )
+        core.operations = OperationDispatcher(catalog, registry)
+        return JacobianRuntime(core, verification, polytope)
+    except BaseException as exc:
+        try:
+            core.close()
+        except BaseException as cleanup_exc:
+            exc.add_note(f"runtime construction cleanup also failed: {cleanup_exc}")
+        raise
 
 
 __all__ = ["create_execution_runtime"]

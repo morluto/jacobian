@@ -21,7 +21,7 @@ def test_graph_resources_preserve_public_identity_without_checkers(
         assert services.graph.degree_sequence_checker_id is None
         assert services.graph.neighborhood_checker_id is None
 
-        descriptors = services.core.operations.catalog().operations
+        descriptors = services.core.operations.snapshot().operations
         graph_descriptors = tuple(
             descriptor
             for descriptor in descriptors

@@ -349,7 +349,7 @@ def test_modular_polynomial_residue_image_assignment_bound_is_exact() -> None:
 def test_modular_polynomial_residue_image_is_discoverable_by_intent(
     domain_services,
 ) -> None:
-    discovered = domain_services.core.operations.discover(
+    discovered = domain_services.core.operations.search(
         OperationDiscoveryRequest(
             query=(
                 "complete sparse polynomial residue image modulo an integer "

@@ -109,7 +109,7 @@ class CliState:
 
     def catalog_snapshot(self) -> OperationCatalogSnapshot:
         if self._runtime_opener is not None:
-            return self.runtime.core.operations.catalog()
+            return self.runtime.core.operations.snapshot()
         return self.catalog.snapshot()
 
     def inspect(self, operation_id: str) -> OperationDescriptor | None:

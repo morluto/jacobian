@@ -95,7 +95,7 @@ def test_polynomial_identity_descriptor_example_is_directly_invocable(
     runtime = authorized_polynomial_services
     descriptors = {
         descriptor.operation_id: descriptor
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }
     descriptor = descriptors["polynomial.identity.verify"]
     example = descriptor.examples[0]

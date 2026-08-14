@@ -50,7 +50,7 @@ def compile_operation_catalog(
         resources = build_catalog_operations(context, polytope)
         descriptors = tuple(
             sorted(
-                core.operations.catalog().operations,
+                core.operations.snapshot().operations,
                 key=lambda item: item.operation_id,
             )
         )

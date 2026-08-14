@@ -80,14 +80,14 @@ def service(tmp_path: Path) -> Iterator[CatalogOperationCollector]:
 def test_catalog_matches_installed_operations(
     service: CatalogOperationCollector,
 ) -> None:
-    catalog_ids = {d.operation_id for d in service.catalog().operations}
+    catalog_ids = {d.operation_id for d in service.snapshot().operations}
     expected = _all_operation_ids()
     assert catalog_ids == expected, (
         f"missing from catalog: {sorted(expected - catalog_ids)}\n"
         f"extra in catalog: {sorted(catalog_ids - expected)}"
     )
     by_id: dict[str, OperationDescriptor] = {
-        d.operation_id: d for d in service.catalog().operations
+        d.operation_id: d for d in service.snapshot().operations
     }
     for operations in ALL_OPERATION_GROUPS:
         for operation in operations:

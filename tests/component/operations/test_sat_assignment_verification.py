@@ -137,7 +137,7 @@ def test_sat_assignment_verifier_declares_its_typed_artifact_route(
 ) -> None:
     descriptor = next(
         descriptor
-        for descriptor in sat_assignment_services.core.operations.catalog().operations
+        for descriptor in sat_assignment_services.core.operations.snapshot().operations
         if descriptor.operation_id == "sat.model.verify"
     )
 
@@ -248,7 +248,7 @@ def test_sat_assignment_verify_requires_operator_authorized_checker(
     assert runtime.assignment.checker_id is None
     assert "sat.model.verify" not in {
         descriptor.operation_id
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }
 
 

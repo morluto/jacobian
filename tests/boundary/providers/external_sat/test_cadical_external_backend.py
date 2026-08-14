@@ -30,7 +30,7 @@ def test_pinned_cadical_produces_a_model_and_text_drat_proof(
     with open_cadical_services(tmp_path / "state") as runtime:
         operation_ids = {
             descriptor.operation_id
-            for descriptor in runtime.core.operations.catalog().operations
+            for descriptor in runtime.core.operations.snapshot().operations
         }
         assert {"sat.model.find", "sat.unsat_proof.find"}.issubset(operation_ids)
 

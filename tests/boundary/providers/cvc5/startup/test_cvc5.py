@@ -89,7 +89,7 @@ def test_pinned_cvc5_operation_is_discoverable(
     cvc5_provider: ProviderObservation,
 ) -> None:
     assert cvc5_provider.availability is ProviderAvailability.AVAILABLE
-    catalog = cvc5_services.core.operations.catalog().operations
+    catalog = cvc5_services.core.operations.snapshot().operations
     descriptor = next(
         descriptor
         for descriptor in catalog

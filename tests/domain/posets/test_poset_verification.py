@@ -128,7 +128,7 @@ def test_poset_checker_runtime_binds_only_independent_source(
 ) -> None:
     descriptor = next(
         item
-        for item in verified_poset_services.core.operations.catalog().operations
+        for item in verified_poset_services.core.operations.snapshot().operations
         if item.operation_id == "poset.width.verify"
     )
     assert descriptor.provider_runtime is not None

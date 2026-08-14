@@ -201,7 +201,7 @@ def test_solution_operation_is_only_available_with_checker(
 
     ids = {
         descriptor.operation_id
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }
 
     assert "polynomial.system.solution.verify" not in ids

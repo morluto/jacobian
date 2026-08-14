@@ -203,7 +203,7 @@ def test_equal_weight_ties_are_deterministic_under_input_reordering(
 def test_weighted_mst_intent_is_discoverable_and_example_is_valid(
     graph_optimization_services: DomainTestServices,
 ) -> None:
-    discovered = graph_optimization_services.core.operations.discover(
+    discovered = graph_optimization_services.core.operations.search(
         OperationDiscoveryRequest(
             query=(
                 "compute an exact weighted minimum spanning tree with total "
@@ -218,7 +218,7 @@ def test_weighted_mst_intent_is_discoverable_and_example_is_valid(
     assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
-        for descriptor in graph_optimization_services.core.operations.catalog().operations
+        for descriptor in graph_optimization_services.core.operations.snapshot().operations
         if descriptor.operation_id == "graph.spanning_tree.minimum.compute"
     )
     assert descriptor.examples[0].name == "four_vertex_weighted_graph"

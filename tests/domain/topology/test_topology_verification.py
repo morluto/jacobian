@@ -187,7 +187,7 @@ def test_topology_checker_runtime_binds_only_independent_source(
 ) -> None:
     descriptor = next(
         item
-        for item in topology_services.core.operations.catalog().operations
+        for item in topology_services.core.operations.snapshot().operations
         if item.operation_id == "topology.simplicial_homology.verify"
     )
     assert descriptor.provider_runtime is not None

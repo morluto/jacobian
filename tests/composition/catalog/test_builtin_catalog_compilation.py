@@ -29,7 +29,7 @@ def test_builtin_catalog_compiles_cleanly(
         expected_operation_ids.add(PRODUCE_OPERATION_ID)
     installed_operation_ids = {
         descriptor.operation_id
-        for descriptor in fresh_complete_runtime.core.operations.catalog().operations
+        for descriptor in fresh_complete_runtime.core.operations.snapshot().operations
     }
     assert expected_operation_ids <= installed_operation_ids
     assert (PRODUCE_OPERATION_ID in installed_operation_ids) is singular_available

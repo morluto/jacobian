@@ -133,7 +133,7 @@ def register_core_projection(
     )
 
     def operation_catalog() -> OperationCatalogSnapshot:
-        return cast(OperationCatalogSnapshot, state.operation_catalog.catalog())
+        return cast(OperationCatalogSnapshot, state.operation_catalog.snapshot())
 
     server.add_resource(
         FunctionResource.from_function(

@@ -17,7 +17,7 @@ from jacobian.runtime.resources import RuntimeResources
 def _verify_ids(core: RuntimeResources) -> set[str]:
     return {
         entry.operation_id
-        for entry in core.operations.catalog().operations
+        for entry in core.operations.snapshot().operations
         if ".verify" in entry.operation_id
     }
 

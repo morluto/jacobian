@@ -124,7 +124,7 @@ def test_synthetic_bundle_returns_an_inline_typed_result(
 
     descriptor = next(
         descriptor
-        for descriptor in operation_services.core.operations.catalog().operations
+        for descriptor in operation_services.core.operations.snapshot().operations
         if descriptor.operation_id == "synthetic.compute.double"
     )
     assert descriptor.provider == "built-in"
@@ -183,7 +183,7 @@ def test_declared_ports_publish_and_resolve_one_opaque_typed_value(
 
     descriptors = {
         descriptor.operation_id: descriptor
-        for descriptor in operation_services.core.operations.catalog().operations
+        for descriptor in operation_services.core.operations.snapshot().operations
     }
     assert descriptors[producer.operation_id].output_ports[0].model_dump() == {
         "name": "value",
@@ -419,7 +419,7 @@ def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
 
     descriptor = next(
         descriptor
-        for descriptor in operation_services.core.operations.catalog().operations
+        for descriptor in operation_services.core.operations.snapshot().operations
         if descriptor.operation_id == "synthetic.materialize.double"
     )
     assert descriptor.read_only is True
@@ -472,7 +472,7 @@ def test_catalog_effect_comes_from_operation_spec(
 
     descriptor = next(
         descriptor
-        for descriptor in operation_services.core.operations.catalog().operations
+        for descriptor in operation_services.core.operations.snapshot().operations
         if descriptor.operation_id == stateful.operation_id
     )
 

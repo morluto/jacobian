@@ -9,7 +9,7 @@ def test_advertised_inverse_example_uses_cold_worker_budget(
 ) -> None:
     descriptor = next(
         item
-        for item in authorized_polynomial_services.core.operations.catalog().operations
+        for item in authorized_polynomial_services.core.operations.snapshot().operations
         if item.operation_id == "polynomial.map.inverse.candidate_synthesize"
     )
     example = descriptor.examples[0]

@@ -95,7 +95,7 @@ def test_neighborhood_independence_reproduces_wowii_200_invariant(
 
     descriptor = next(
         item
-        for item in authorized_graph_services.core.operations.catalog().operations
+        for item in authorized_graph_services.core.operations.snapshot().operations
         if item.operation_id == "graph.compute.neighborhood_independence"
     )
     assert descriptor.accepted_input_kinds == (OperationInputKind.TYPED_ARTIFACT,)

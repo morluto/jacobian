@@ -37,7 +37,7 @@ def test_bernoulli_number_has_exact_rational_value(
 def test_binomial_is_discoverable_from_number_theory_language(
     domain_services: DomainTestServices,
 ) -> None:
-    discovered = domain_services.core.operations.discover(
+    discovered = domain_services.core.operations.search(
         OperationDiscoveryRequest(
             query="compute exact binomial coefficients for large integers",
             domain="number_theory",

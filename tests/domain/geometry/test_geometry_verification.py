@@ -45,7 +45,7 @@ def test_geometry_checker_availability_does_not_grant_authority(
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         catalog_ids = {
-            item.operation_id for item in services.core.operations.catalog().operations
+            item.operation_id for item in services.core.operations.snapshot().operations
         }
         assert any(
             item.endswith(".compute") or ".decide" in item for item in catalog_ids

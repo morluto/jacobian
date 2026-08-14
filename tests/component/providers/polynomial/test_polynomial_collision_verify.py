@@ -57,7 +57,7 @@ def test_collision_verifier_advertises_and_executes_bounded_example(
 ) -> None:
     descriptors = {
         item.operation_id: item
-        for item in authorized_polynomial_services.core.operations.catalog().operations
+        for item in authorized_polynomial_services.core.operations.snapshot().operations
     }
     descriptor = descriptors["polynomial.map.collision.verify"]
 
@@ -99,5 +99,5 @@ def test_direct_collision_verifier_requires_authorized_reference_checker(
     runtime = polynomial_services
 
     assert "polynomial.map.collision.verify" not in {
-        item.operation_id for item in runtime.core.operations.catalog().operations
+        item.operation_id for item in runtime.core.operations.snapshot().operations
     }

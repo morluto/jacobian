@@ -10,7 +10,7 @@ from jacobian.contracts.operations import OperationDiscoveryResult
 
 
 class _Catalog:
-    def discover(self, request: Any) -> OperationDiscoveryResult:
+    def search(self, request: Any) -> OperationDiscoveryResult:
         return OperationDiscoveryResult(
             query=request.query,
             matches=(),

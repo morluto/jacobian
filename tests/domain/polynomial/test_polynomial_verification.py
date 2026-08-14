@@ -78,7 +78,7 @@ def test_public_seam_verifies_exact_producer_result(
 ) -> None:
     provider_runtime = next(
         descriptor.provider_runtime
-        for descriptor in polynomial_verification_services.core.operations.catalog().operations
+        for descriptor in polynomial_verification_services.core.operations.snapshot().operations
         if descriptor.operation_id == "polynomial.gcd.verify"
     )
     assert provider_runtime is not None

@@ -377,5 +377,5 @@ def test_graph_isomorphism_is_unavailable_without_reference_checkers(
 
     assert "graph.isomorphism.verify" not in {
         descriptor.operation_id
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }

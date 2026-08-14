@@ -60,7 +60,7 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
 ) -> None:
     descriptor = next(
         item
-        for item in polynomial_services.core.operations.catalog().operations
+        for item in polynomial_services.core.operations.snapshot().operations
         if item.operation_id == "polynomial.jacobian_syzygy.minimum_degree.compute"
     )
     sparse_example = next(
@@ -118,7 +118,7 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
 
     verifier = next(
         descriptor
-        for descriptor in polynomial_services.core.operations.catalog().operations
+        for descriptor in polynomial_services.core.operations.snapshot().operations
         if descriptor.operation_id == "polynomial.jacobian_syzygy.minimum_degree.verify"
     )
     assert "complete, unmodified producer output.result object" in (

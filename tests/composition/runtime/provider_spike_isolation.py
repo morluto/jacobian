@@ -12,9 +12,9 @@ def assert_unavailable_spike_preserves_catalog(
 ) -> None:
     """Prove that an unavailable spike neither registers nor removes operations."""
 
-    before = runtime.core.operations.catalog().model_dump(mode="json")
+    before = runtime.core.operations.snapshot().model_dump(mode="json")
     report = run_spike()
-    after = runtime.core.operations.catalog().model_dump(mode="json")
+    after = runtime.core.operations.snapshot().model_dump(mode="json")
 
     assert report["status"] == "UNAVAILABLE"
     assert report["operation_ids_registered"] == []

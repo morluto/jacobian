@@ -43,7 +43,7 @@ def test_complete_portfolio_includes_authorized_external_proof_verifiers(
     ) as complete:
         operation_ids = {
             descriptor.operation_id
-            for descriptor in complete.core.operations.catalog().operations
+            for descriptor in complete.core.operations.snapshot().operations
         }
 
     assert {"sat.unsat_proof.verify", "smt.unsat_proof.verify"} <= operation_ids

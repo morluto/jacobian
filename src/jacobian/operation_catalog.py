@@ -417,11 +417,6 @@ class OperationCatalog:
             next_cursor=next_cursor,
         )
 
-    def discover(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
-        """Use the established service verb while callers migrate to ``search``."""
-
-        return self.search(request)
-
     def snapshot(self) -> OperationCatalogSnapshot:
         descriptors = tuple(
             descriptor
@@ -433,9 +428,6 @@ class OperationCatalog:
             policy_digest=self.policy.digest,
             operations=descriptors,
         )
-
-    def catalog(self) -> OperationCatalogSnapshot:
-        return self.snapshot()
 
 
 def declaration_digest(value: dict[str, Any]) -> str:

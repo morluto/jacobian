@@ -42,7 +42,7 @@ def _segment(
 def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None:
     descriptor = next(
         descriptor
-        for descriptor in domain_services.core.operations.catalog().operations
+        for descriptor in domain_services.core.operations.snapshot().operations
         if descriptor.operation_id == "geometry.segment.compute.midpoint"
     )
     example = descriptor.examples[0]

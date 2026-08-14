@@ -8,7 +8,7 @@ def test_runtime_catalog_uses_only_domain_owned_operation_ids(
 ) -> None:
     catalog_ids = {
         descriptor.operation_id
-        for descriptor in fresh_complete_runtime.core.operations.catalog().operations
+        for descriptor in fresh_complete_runtime.core.operations.snapshot().operations
     }
 
     assert {

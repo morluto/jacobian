@@ -89,7 +89,7 @@ def _unknown_operation_context(
     """Return bounded SDK-facing recovery without embedding the full catalog."""
 
     operations = getattr(getattr(runtime, "core", None), "operations", runtime)
-    discovered = operations.discover(
+    discovered = operations.search(
         OperationDiscoveryRequest(query=operation_id, limit=5)
     )
     return {

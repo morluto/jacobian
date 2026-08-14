@@ -218,7 +218,7 @@ def test_proof_verify_requires_runtime_and_operator_authorization(
         for services in (without_references, without_runtime):
             assert "sat.unsat_proof.verify" not in {
                 descriptor.operation_id
-                for descriptor in services.core.operations.catalog().operations
+                for descriptor in services.core.operations.snapshot().operations
             }
 
 

@@ -49,7 +49,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
 
     installed_ids = {
         descriptor.operation_id
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }
     assert {
         "polynomial.compute.gcd",
@@ -62,7 +62,7 @@ def test_polynomial_bundle_installs_and_computes_exact_invariants(
 
     groebner_descriptor = next(
         descriptor
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
         if descriptor.operation_id == "polynomial.groebner_basis.compute"
     )
     assert "commutative polynomial ring QQ[x_1,...,x_n]" in (

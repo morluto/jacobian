@@ -543,7 +543,7 @@ def test_graph_invariant_registry_is_fixed_and_discoverable(
     services, _installation = graph_core
     descriptor = next(
         item
-        for item in services.core.operations.catalog().operations
+        for item in services.core.operations.snapshot().operations
         if item.operation_id == "graph.compute.properties"
     )
 

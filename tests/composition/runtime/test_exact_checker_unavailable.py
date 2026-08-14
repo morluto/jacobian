@@ -36,7 +36,7 @@ def test_unavailable_flint_replay_preserves_runtime_and_reports_diagnostics(
     ) as services:
         operation_ids = {
             descriptor.operation_id
-            for descriptor in services.core.operations.catalog().operations
+            for descriptor in services.core.operations.snapshot().operations
         }
         assert "matrix.normal_form.rref.compute" in operation_ids
         assert "matrix.normal_form.rref.verify" not in operation_ids

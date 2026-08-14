@@ -37,7 +37,7 @@ class CatalogOperationCollector:
     def register(self, adapter: OperationAdapter[Any]) -> None:
         register_operation(adapter, self._adapters, self._descriptors)
 
-    def catalog(self) -> OperationCatalogSnapshot:
+    def snapshot(self) -> OperationCatalogSnapshot:
         projected = tuple(
             projected
             for operation_id in sorted(self._adapters)
@@ -54,8 +54,8 @@ class CatalogOperationCollector:
         descriptor = self._descriptors.get(operation_id)
         return None if descriptor is None else self.policy.project(descriptor)
 
-    def discover(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
-        return discover_operations(self.catalog(), request)
+    def search(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
+        return discover_operations(self.snapshot(), request)
 
     def invoke(self, request: OperationRequest) -> OperationResult:
         return dispatch_operation(self, request)

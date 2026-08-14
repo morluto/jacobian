@@ -167,7 +167,7 @@ def test_new_checker_operations_are_omitted_without_authorization(
 ) -> None:
     operation_ids = {
         item.operation_id
-        for item in polynomial_services.core.operations.catalog().operations
+        for item in polynomial_services.core.operations.snapshot().operations
     }
 
     assert "polynomial.map.keller_condition.verify" not in operation_ids

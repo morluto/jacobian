@@ -41,7 +41,7 @@ def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
     try:
         assert runtime.catalog_build_resources.lean is None
         operation_ids = {
-            item.operation_id for item in runtime.core.operations.catalog().operations
+            item.operation_id for item in runtime.core.operations.snapshot().operations
         }
         assert {
             "lean.check",
@@ -77,7 +77,7 @@ def test_unhealthy_lean_frontend_is_absent_from_catalog(
     )
     try:
         operation_ids = {
-            item.operation_id for item in runtime.core.operations.catalog().operations
+            item.operation_id for item in runtime.core.operations.snapshot().operations
         }
         assert {"lean.statement.propose", "lean.statement.compare"}.isdisjoint(
             operation_ids

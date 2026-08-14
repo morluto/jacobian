@@ -57,7 +57,7 @@ def test_countermodel_descriptor_publishes_a_model_valid_invocation_example(
     runtime = universal_algebra_services.services
     descriptors = {
         descriptor.operation_id: descriptor
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }
     descriptor = descriptors["universal_algebra.search.countermodel"]
 
@@ -74,7 +74,7 @@ def test_evaluate_laws_descriptor_example_encodes_idempotence(
     runtime = universal_algebra_services.services
     descriptor = next(
         descriptor
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
         if descriptor.operation_id == "universal_algebra.evaluate_laws"
     )
     example = descriptor.examples[0]

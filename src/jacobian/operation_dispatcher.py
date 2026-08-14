@@ -46,13 +46,13 @@ class OperationDispatcher:
             self.register(self._registry.resolve(request.operation_id))
         return dispatch_operation(self, request)
 
-    def discover(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
+    def search(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
         return self._catalog.search(request)
 
     def inspect(self, operation_id: str) -> OperationDescriptor | None:
         return self._catalog.inspect(operation_id)
 
-    def catalog(self) -> OperationCatalogSnapshot:
+    def snapshot(self) -> OperationCatalogSnapshot:
         return self._catalog.snapshot()
 
     def close(self) -> None:

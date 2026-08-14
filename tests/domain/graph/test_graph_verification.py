@@ -142,7 +142,7 @@ def test_maximum_matching_result_uses_independent_tutte_berge_replay(
     )
     provider_runtime = next(
         descriptor.provider_runtime
-        for descriptor in graph_verification_services.core.operations.catalog().operations
+        for descriptor in graph_verification_services.core.operations.snapshot().operations
         if descriptor.operation_id == "graph.invariant.maximum_matching.verify"
     )
     assert provider_runtime is not None
@@ -257,7 +257,7 @@ def test_graph_metric_result_uses_independent_all_sources_bfs_replay(
         )
         provider_runtime = next(
             descriptor.provider_runtime
-            for descriptor in graph_verification_services.core.operations.catalog().operations
+            for descriptor in graph_verification_services.core.operations.snapshot().operations
             if descriptor.operation_id == verifier_id
         )
         assert provider_runtime is not None, producer_id

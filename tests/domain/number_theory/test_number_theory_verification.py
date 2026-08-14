@@ -70,7 +70,7 @@ def test_prime_factorization_result_uses_independent_python_flint_replay(
         )
     provider_runtime = next(
         descriptor.provider_runtime
-        for descriptor in number_theory_services.core.operations.catalog().operations
+        for descriptor in number_theory_services.core.operations.snapshot().operations
         if descriptor.operation_id == verifier_id
     )
     assert provider_runtime is not None
@@ -206,7 +206,7 @@ def test_modular_residue_image_uses_independent_python_flint_replay(
     assert verified.output["verification_record_uri"] in verified.artifact_uris
     provider_runtime = next(
         descriptor.provider_runtime
-        for descriptor in number_theory_services.core.operations.catalog().operations
+        for descriptor in number_theory_services.core.operations.snapshot().operations
         if descriptor.operation_id == verifier_id
     )
     assert provider_runtime is not None

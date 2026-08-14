@@ -158,7 +158,7 @@ def test_runtime_can_ablate_lean_operations_without_removing_checker(
     )
     operation_ids = {
         descriptor.operation_id
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }
 
     assert "lean.check" in operation_ids

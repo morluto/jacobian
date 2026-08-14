@@ -75,7 +75,7 @@ def _operation_discovery_response(
     )
     try:
         operations = getattr(getattr(runtime, "core", None), "operations", runtime)
-        discovered = operations.discover(discovery_request)
+        discovered = operations.search(discovery_request)
     except OperationDiscoveryCursorError:
         return {
             "error": {

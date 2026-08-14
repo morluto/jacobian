@@ -294,7 +294,7 @@ def test_matrix_operations_report_sympy_provider_identity(
     runtime = matrix_services
     descriptors = {
         descriptor.operation_id: descriptor
-        for descriptor in runtime.core.operations.catalog().operations
+        for descriptor in runtime.core.operations.snapshot().operations
     }
 
     for operation_id in ("matrix.determinant.compute", "matrix.rank.compute"):

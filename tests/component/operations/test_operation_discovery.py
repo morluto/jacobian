@@ -79,8 +79,8 @@ def test_installed_operation_discovery_is_compact_deterministic_and_transparent(
         domain="fixture-algebra",
         limit=10,
     )
-    first = core.operations.discover(request)
-    second = core.operations.discover(request)
+    first = core.operations.search(request)
+    second = core.operations.search(request)
 
     assert first == second
     assert [match.operation_id for match in first.matches] == [
@@ -112,7 +112,7 @@ def test_discovery_applies_domain_filter_without_extra_status_prose(
         )
     )
 
-    discovered = operation_core_services.core.operations.discover(
+    discovered = operation_core_services.core.operations.search(
         OperationDiscoveryRequest(
             query="compute exact event probability",
             domain="arithmetic",
@@ -142,7 +142,7 @@ def test_discovery_does_not_infer_input_types_from_query_wording(
             )
         )
     )
-    discovered = operation_core_services.core.operations.discover(
+    discovered = operation_core_services.core.operations.search(
         OperationDiscoveryRequest(
             query=(
                 "Independently verify this natural-language proof trace: "
@@ -156,7 +156,7 @@ def test_discovery_does_not_infer_input_types_from_query_wording(
     assert discovered.matches[0].operation_id == "fixture_sat.proof.verify"
     assert discovered.matches[0].applicability == "NEEDS_MORE_TYPED_REQUIREMENTS"
 
-    formal_method = operation_core_services.core.operations.discover(
+    formal_method = operation_core_services.core.operations.search(
         OperationDiscoveryRequest(
             query="check a formal Lean proof by contradiction",
             limit=20,
@@ -164,7 +164,7 @@ def test_discovery_does_not_infer_input_types_from_query_wording(
     )
     assert formal_method.input_kind is None
 
-    written_formal_proof = operation_core_services.core.operations.discover(
+    written_formal_proof = operation_core_services.core.operations.search(
         OperationDiscoveryRequest(
             query="verify the written proof in Lean",
             limit=20,
@@ -172,7 +172,7 @@ def test_discovery_does_not_infer_input_types_from_query_wording(
     )
     assert written_formal_proof.input_kind is None
 
-    explicitly_structured = operation_core_services.core.operations.discover(
+    explicitly_structured = operation_core_services.core.operations.search(
         OperationDiscoveryRequest(
             query="formal UNSAT proof",
             input_kind=OperationInputKind.STRUCTURED_REQUEST,
@@ -186,7 +186,7 @@ def test_discovery_does_not_infer_input_types_from_query_wording(
         "NEEDS_MORE_TYPED_REQUIREMENTS"
     )
 
-    formal_intent = operation_core_services.core.operations.discover(
+    formal_intent = operation_core_services.core.operations.search(
         OperationDiscoveryRequest(
             query="formal UNSAT proof",
         )
@@ -196,7 +196,7 @@ def test_discovery_does_not_infer_input_types_from_query_wording(
         "fixture_sat.proof.verify"
     ]
 
-    formal_trace = operation_core_services.core.operations.discover(
+    formal_trace = operation_core_services.core.operations.search(
         OperationDiscoveryRequest(
             query="verify an LRAT proof trace",
         )
@@ -250,7 +250,7 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
     )
     service = operation_core_services.core.operations
 
-    formal = service.discover(
+    formal = service.search(
         OperationDiscoveryRequest(
             query="formal proposition",
             input_kind=OperationInputKind.FORMAL_PROPOSITION,
@@ -261,7 +261,7 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
     ]
     assert formal.matches[0].applicability == "NEEDS_MORE_TYPED_REQUIREMENTS"
 
-    typed = service.discover(
+    typed = service.search(
         OperationDiscoveryRequest(
             query="proof artifact",
             input_kind=OperationInputKind.TYPED_ARTIFACT,
@@ -271,7 +271,7 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
     assert [match.operation_id for match in typed.matches] == ["fixture_claim.replay"]
     assert typed.matches[0].applicability == "NEEDS_MORE_TYPED_REQUIREMENTS"
 
-    mismatched = service.discover(
+    mismatched = service.search(
         OperationDiscoveryRequest(
             query="proof artifact",
             input_kind=OperationInputKind.TYPED_ARTIFACT,
@@ -284,7 +284,7 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
     assert mismatched.matches[0].applicability == "INCOMPATIBLE"
     assert mismatched.matches[0].applicability_code == "ARTIFACT_TYPE_MISMATCH"
 
-    lexically_absent = service.discover(
+    lexically_absent = service.search(
         OperationDiscoveryRequest(
             query="quuxonium",
             input_kind=OperationInputKind.FORMAL_PROPOSITION,
@@ -292,7 +292,7 @@ def test_discovery_routes_only_declared_input_and_artifact_contracts(
     )
     assert lexically_absent.matches == ()
 
-    incompatible_lexical_match = service.discover(
+    incompatible_lexical_match = service.search(
         OperationDiscoveryRequest(
             query="formal proposition",
             input_kind=OperationInputKind.STRUCTURED_REQUEST,

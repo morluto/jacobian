@@ -23,7 +23,7 @@ def test_jacobian_descriptor_advertises_operation_budgets(
 ) -> None:
     descriptors = {
         item.operation_id: item
-        for item in authorized_polynomial_services.core.operations.catalog().operations
+        for item in authorized_polynomial_services.core.operations.snapshot().operations
     }
     descriptor = descriptors["polynomial.map.compute_jacobian"]
 

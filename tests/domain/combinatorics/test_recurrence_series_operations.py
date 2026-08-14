@@ -94,7 +94,7 @@ def test_discovery_overlap_keeps_named_and_generic_intents_distinct(
     query: str,
     expected: str,
 ) -> None:
-    discovered = combinatorics_services.core.operations.discover(
+    discovered = combinatorics_services.core.operations.search(
         OperationDiscoveryRequest(query=query, limit=5)
     )
     assert discovered.matches[0].operation_id == expected
@@ -189,7 +189,7 @@ def test_polynomial_coefficient_recurrence_is_discoverable_by_intuitive_domain(
     combinatorics_services,
     domain: str,
 ) -> None:
-    discovered = combinatorics_services.core.operations.discover(
+    discovered = combinatorics_services.core.operations.search(
         OperationDiscoveryRequest(
             query=(
                 "exactly compute terms of a sequence and residuals of a "

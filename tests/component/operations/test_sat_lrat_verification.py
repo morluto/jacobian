@@ -198,5 +198,5 @@ def test_operation_is_absent_without_operator_authorized_references(
     unauthorized_lrat_services: DomainTestServices,
 ) -> None:
     runtime = unauthorized_lrat_services
-    ids = {item.operation_id for item in runtime.core.operations.catalog().operations}
+    ids = {item.operation_id for item in runtime.core.operations.snapshot().operations}
     assert "sat.lrat.verify" not in ids

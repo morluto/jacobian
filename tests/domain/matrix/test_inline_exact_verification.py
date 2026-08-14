@@ -51,7 +51,8 @@ def test_smith_checker_consumes_the_producers_typed_candidate_reference(
 
     value_ref = computed.output["value_refs"]["smith_form"]
     descriptors = {
-        item.operation_id: item for item in runtime.core.operations.catalog().operations
+        item.operation_id: item
+        for item in runtime.core.operations.snapshot().operations
     }
     assert [
         port.model_dump(mode="json")

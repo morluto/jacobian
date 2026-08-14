@@ -94,7 +94,7 @@ def test_canonical_poset_is_directly_consumable_by_width(
     assert result.artifact_uris == ()
     descriptors = {
         descriptor.operation_id: descriptor
-        for descriptor in poset_services.core.operations.catalog().operations
+        for descriptor in poset_services.core.operations.snapshot().operations
     }
     assert descriptors["poset.width.compute"].accepted_artifact_types == ()
 

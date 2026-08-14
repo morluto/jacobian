@@ -243,7 +243,7 @@ def test_exact_matrix_domain_results_and_lineage(
 def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
     matrix_domain_services: DomainTestServices,
 ) -> None:
-    discovered = matrix_domain_services.core.operations.discover(
+    discovered = matrix_domain_services.core.operations.search(
         OperationDiscoveryRequest(
             query=(
                 "all exact rational dependencies among named vectors and a "
@@ -257,7 +257,7 @@ def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
     assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
-        for descriptor in matrix_domain_services.core.operations.catalog().operations
+        for descriptor in matrix_domain_services.core.operations.snapshot().operations
         if descriptor.operation_id == "matrix.nullspace.compute"
     )
     assert descriptor.version == "2"
@@ -284,7 +284,7 @@ def test_rational_relation_intent_reuses_the_exact_nullspace_operation(
 def test_matrix_multiplication_intent_is_discoverable(
     matrix_domain_services: DomainTestServices,
 ) -> None:
-    discovered = matrix_domain_services.core.operations.discover(
+    discovered = matrix_domain_services.core.operations.search(
         OperationDiscoveryRequest(
             query=(
                 "multiply an exact matrix by itself and inspect whether its square "
@@ -298,7 +298,7 @@ def test_matrix_multiplication_intent_is_discoverable(
     assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor
-        for descriptor in matrix_domain_services.core.operations.catalog().operations
+        for descriptor in matrix_domain_services.core.operations.snapshot().operations
         if descriptor.operation_id == "matrix.multiply.compute"
     )
     assert descriptor.examples[0].name == "multiply_rectangular_matrices"

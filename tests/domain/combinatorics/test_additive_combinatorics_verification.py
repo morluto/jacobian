@@ -142,7 +142,7 @@ def test_additive_checker_runtime_binds_both_independent_sources(
 ) -> None:
     descriptor = next(
         item
-        for item in combinatorics_services.core.operations.catalog().operations
+        for item in combinatorics_services.core.operations.snapshot().operations
         if item.operation_id == "combinatorics.integer_set.sidon.verify"
     )
     assert descriptor.provider_runtime is not None

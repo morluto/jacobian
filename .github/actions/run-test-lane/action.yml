@@ -1,0 +1,44 @@
+name: Run test lane evidence
+description: Run one semantic test lane and publish its JUnit and coverage evidence.
+inputs:
+  lane:
+    description: Make test lane to execute.
+    required: true
+  junit-artifact:
+    description: Artifact name for the JUnit report.
+    required: true
+  coverage-artifact:
+    description: Artifact name for the coverage database.
+    required: true
+  coverage-file:
+    description: Coverage database filename after the lane is isolated.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Run ${{ inputs.lane }} tests
+      shell: bash
+      env:
+        PYTEST_ARGS: >-
+          --junitxml=pytest.xml
+          --cov --cov-report= --cov-fail-under=0
+      run: make test-${{ inputs.lane }}
+    - if: ${{ !cancelled() }}
+      shell: bash
+      run: uv cache prune --ci
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      if: ${{ !cancelled() }}
+      with:
+        name: ${{ inputs.junit-artifact }}
+        path: pytest.xml
+        if-no-files-found: ignore
+        retention-days: 7
+    - if: ${{ !cancelled() }}
+      shell: bash
+      run: mv .coverage ${{ inputs.coverage-file }}
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      if: ${{ !cancelled() }}
+      with:
+        name: ${{ inputs.coverage-artifact }}
+        path: ${{ inputs.coverage-file }}
+        include-hidden-files: true

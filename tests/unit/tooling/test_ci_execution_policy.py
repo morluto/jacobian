@@ -95,9 +95,26 @@ def test_local_hook_commands_have_parseable_entrypoints_and_arguments(
 
 def test_process_lane_is_invoked_by_ci() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    action = (ROOT / ".github/actions/run-test-lane/action.yml").read_text(
+        encoding="utf-8"
+    )
 
     assert "lane: [storage, process, mcp]" in workflow
-    assert "run: make test-${{ matrix.lane }}" in workflow
+    assert "uses: ./.github/actions/run-test-lane" in workflow
+    assert "run: make test-${{ inputs.lane }}" in action
+
+
+def test_python_and_boundary_lanes_share_evidence_collection() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    action = (ROOT / ".github/actions/run-test-lane/action.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert workflow.count("uses: ./.github/actions/run-test-lane") == 2
+    assert "--junitxml=pytest.xml" in action
+    assert "--cov --cov-report= --cov-fail-under=0" in action
+    assert action.count("actions/upload-artifact@") == 2
+    assert "uv cache prune --ci" in action
 
 
 def test_lean_job_is_required_on_every_event_and_builds_semantic_targets() -> None:
@@ -135,7 +152,7 @@ def test_python_jobs_use_fixed_local_semantic_targets() -> None:
     assert "lane: composition" in workflow
     assert "lane: e2e" in workflow
     assert "lane: provider" in workflow
-    assert "run: make test-${{ matrix.lane }}" in workflow
+    assert "uses: ./.github/actions/run-test-lane" in workflow
     assert (
         "ORDINARY_TEST_LANES := unit component domain composition e2e provider"
         in makefile

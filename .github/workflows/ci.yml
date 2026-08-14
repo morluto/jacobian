@@ -76,28 +76,12 @@ jobs:
       - uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
-      - run: make test-${{ matrix.lane }}
-        env:
-          PYTEST_ARGS: >-
-            --junitxml=pytest.xml
-            --cov --cov-report= --cov-fail-under=0
-      - if: ${{ !cancelled() }}
-        run: uv cache prune --ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
+      - uses: ./.github/actions/run-test-lane
         with:
-          name: junit-python-${{ matrix.lane }}-3.12
-          path: pytest.xml
-          if-no-files-found: ignore
-          retention-days: 7
-      - if: ${{ !cancelled() }}
-        run: mv .coverage .coverage.python-${{ matrix.lane }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
-        with:
-          name: coverage-data-python-${{ matrix.lane }}
-          path: .coverage.python-${{ matrix.lane }}
-          include-hidden-files: true
+          lane: ${{ matrix.lane }}
+          junit-artifact: junit-python-${{ matrix.lane }}-3.12
+          coverage-artifact: coverage-data-python-${{ matrix.lane }}
+          coverage-file: .coverage.python-${{ matrix.lane }}
 
   boundaries:
     name: boundaries (${{ matrix.lane }})
@@ -114,28 +98,12 @@ jobs:
       - uses: ./.github/actions/setup-python-tests
         with:
           python-version: "3.12"
-      - run: make test-${{ matrix.lane }}
-        env:
-          PYTEST_ARGS: >-
-            --junitxml=pytest.xml
-            --cov --cov-report= --cov-fail-under=0
-      - if: ${{ !cancelled() }}
-        run: uv cache prune --ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
+      - uses: ./.github/actions/run-test-lane
         with:
-          name: junit-${{ matrix.lane }}-3.12
-          path: pytest.xml
-          if-no-files-found: ignore
-          retention-days: 7
-      - if: ${{ !cancelled() }}
-        run: mv .coverage .coverage.${{ matrix.lane }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: ${{ !cancelled() }}
-        with:
-          name: coverage-data-${{ matrix.lane }}
-          path: .coverage.${{ matrix.lane }}
-          include-hidden-files: true
+          lane: ${{ matrix.lane }}
+          junit-artifact: junit-${{ matrix.lane }}-3.12
+          coverage-artifact: coverage-data-${{ matrix.lane }}
+          coverage-file: .coverage.${{ matrix.lane }}
 
   subprocess_coverage:
     name: checker subprocess coverage

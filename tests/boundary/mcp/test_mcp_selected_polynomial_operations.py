@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from jacobian.adapters.mcp import server as server_module
+from jacobian.adapters.mcp.server import create_server
+from jacobian.checker_installation import CheckerInstaller
+
+
+def test_polynomial_positivity_loads_only_the_selected_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject_installation(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError(
+            "selected polynomial operations must not install portfolio"
+        )
+
+    monkeypatch.setattr(server_module, "assemble_portfolio", reject_installation)
+    monkeypatch.setattr(CheckerInstaller, "install", reject_installation)
+
+    polynomial = {
+        "polynomial_schema_version": "1",
+        "domain": "QQ",
+        "variable": "x",
+        "polynomial": {
+            "terms": [
+                {"coefficient": {"num": "2", "den": "1"}, "exponents": [1]},
+                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+            ]
+        },
+    }
+    interval = {
+        "interval_schema_version": "1",
+        "lo": {"num": "0", "den": "1"},
+        "hi": {"num": "1", "den": "1"},
+    }
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+            decided = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "polynomial.interval.positivity.decide",
+                    "payload": {"polynomial": polynomial, "interval": interval},
+                },
+            )
+            assert isinstance(decided.structured_content, dict)
+            decision = decided.structured_content["output"]
+            verified = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "polynomial.interval.positivity.verify",
+                    "payload": {
+                        "polynomial": polynomial,
+                        "interval": interval,
+                        "claimed_positive": decision["positive"],
+                        "claimed_sign_changes_at_lo": decision["sign_changes_at_lo"],
+                        "claimed_sign_changes_at_hi": decision["sign_changes_at_hi"],
+                        "claimed_roots_in_open_interval": decision[
+                            "roots_in_open_interval"
+                        ],
+                        "claimed_endpoint_root": decision["endpoint_root"],
+                    },
+                },
+            )
+            assert isinstance(verified.structured_content, dict)
+            assert verified.structured_content["output"]["conclusion"] == "TRUE"
+
+    asyncio.run(scenario())

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
@@ -60,6 +60,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
@@ -121,22 +122,11 @@ class PolynomialPositivityResources:
     installation: PolynomialPositivityInstallation
 
 
-def install_polynomial_positivity_operations(
+def register_polynomial_positivity_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-    artifacts: ArtifactService,
-    verification: VerificationService,
-    checkers: CheckerRegistry,
-    *,
-    authorize_checker: bool,
-) -> tuple[
-    tuple[
-        PolynomialIntervalPositivityDecideAdapter,
-        PolynomialIntervalPositivityVerifyAdapter | None,
-    ],
-    PolynomialPositivityInstallation,
-]:
-    """Register exact univariate polynomial strict positivity contracts."""
+) -> PolynomialPositivityInstallation:
+    """Register passive positivity contracts without checker installation."""
 
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -172,26 +162,93 @@ def install_polynomial_positivity_operations(
             "zero_terms": "omitted",
         },
     )
-    polynomial_schema_uri = schemas.register(
-        name="jacobian.univariate-rational-polynomial-positivity-source",
-        version="1",
-        schema=model_schema(UnivariateRationalPolynomial),
+    return PolynomialPositivityInstallation(
+        semantics_uri=semantics_uri,
+        polynomial_semantics_uri=polynomial_semantics_uri,
+        polynomial_schema_uri=schemas.register(
+            name="jacobian.univariate-rational-polynomial-positivity-source",
+            version="1",
+            schema=model_schema(UnivariateRationalPolynomial),
+        ),
+        decision_schema_uri=schemas.register(
+            name="jacobian.polynomial-interval-positivity-decision",
+            version="1",
+            schema=model_schema(PolynomialIntervalPositivityDecision),
+        ),
+        claim_schema_uri=schemas.register(
+            name="jacobian.polynomial-interval-positivity-claim",
+            version="1",
+            schema=model_schema(PolynomialIntervalPositivityClaim),
+        ),
+        certificate_schema_uri=schemas.register(
+            name="jacobian.polynomial-interval-positivity-certificate",
+            version="1",
+            schema=model_schema(CertificateEnvelope),
+        ),
+        checker_id=None,
     )
-    decision_schema_uri = schemas.register(
-        name="jacobian.polynomial-interval-positivity-decision",
-        version="1",
-        schema=model_schema(PolynomialIntervalPositivityDecision),
+
+
+def bind_selected_polynomial_positivity_operation(
+    operation_id: str,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> (
+    PolynomialIntervalPositivityDecideAdapter
+    | PolynomialIntervalPositivityVerifyAdapter
+    | None
+):
+    """Bind one positivity operation from passive resources and catalog authority."""
+
+    if operation_id not in {
+        "polynomial.interval.positivity.decide",
+        "polynomial.interval.positivity.verify",
+    }:
+        return None
+    installation = register_polynomial_positivity_resources(store, schemas)
+    binding = catalog.checker_binding("polynomial.interval.positivity.verify")
+    if binding is None:
+        raise OperationCatalogError(
+            "checker binding is missing; run `jacobian update`: "
+            "polynomial.interval.positivity.verify"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
     )
-    claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-interval-positivity-claim",
-        version="1",
-        schema=model_schema(PolynomialIntervalPositivityClaim),
+    resources = PolynomialPositivityResources(
+        store,
+        artifacts,
+        verification,
+        replace(installation, checker_id=binding.checker_id),
     )
-    certificate_schema_uri = schemas.register(
-        name="jacobian.polynomial-interval-positivity-certificate",
-        version="1",
-        schema=model_schema(CertificateEnvelope),
-    )
+    if operation_id == "polynomial.interval.positivity.decide":
+        return PolynomialIntervalPositivityDecideAdapter(resources)
+    return PolynomialIntervalPositivityVerifyAdapter(resources)
+
+
+def install_polynomial_positivity_operations(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    *,
+    authorize_checker: bool,
+) -> tuple[
+    tuple[
+        PolynomialIntervalPositivityDecideAdapter,
+        PolynomialIntervalPositivityVerifyAdapter | None,
+    ],
+    PolynomialPositivityInstallation,
+]:
+    """Register exact univariate polynomial strict positivity contracts."""
+
+    contracts = register_polynomial_positivity_resources(store, schemas)
     checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -201,24 +258,16 @@ def install_polynomial_positivity_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.interval_sturm_positivity_replay",
                 format_version="1",
-                claim_schema_uris=(claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(decision_schema_uri,),
+                claim_schema_uris=(contracts.claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.decision_schema_uri,),
                 reason="bundled independent Sturm-sequence positivity checker",
             ),
             authorize=authorize_checker,
         )
         .checker_id
     )
-    installation = PolynomialPositivityInstallation(
-        semantics_uri=semantics_uri,
-        polynomial_semantics_uri=polynomial_semantics_uri,
-        polynomial_schema_uri=polynomial_schema_uri,
-        decision_schema_uri=decision_schema_uri,
-        claim_schema_uri=claim_schema_uri,
-        certificate_schema_uri=certificate_schema_uri,
-        checker_id=checker_id,
-    )
+    installation = replace(contracts, checker_id=checker_id)
     resources = PolynomialPositivityResources(
         store=store,
         artifacts=artifacts,

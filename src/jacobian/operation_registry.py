@@ -42,6 +42,8 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
     {
         "polynomial.expression.normalize",
         "polynomial.expression_normalization.verify",
+        "polynomial.interval.positivity.decide",
+        "polynomial.interval.positivity.verify",
     }
 )
 _SELECTED_DIRECT_OPERATIONS = frozenset(
@@ -233,6 +235,23 @@ class OperationRegistry:
                 self.binder.schemas,
                 self.binder.artifacts,
                 self.polynomial_expressions,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        elif operation_id in {
+            "polynomial.interval.positivity.decide",
+            "polynomial.interval.positivity.verify",
+        }:
+            from jacobian.polynomial_positivity_operations import (
+                bind_selected_polynomial_positivity_operation,
+            )
+
+            adapter = bind_selected_polynomial_positivity_operation(
+                operation_id,
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
                 self.verification,
                 self.checkers,
                 self.catalog,

@@ -49,6 +49,23 @@ state directory. Serving neither discovers nor installs operations. Reserve
 `lean.check`. Ordinary maintained libraries such as SymPy, NetworkX, FLINT,
 and Z3 are private math backends, not operation-specific providers.
 
+**Deletion boundary.** Do not restore an artifact store, workspace, catalog
+overlay, checker registry, runtime router, publication/replay record, or
+installation and migration product. A caller may save an inline result in its
+own files or system, but Jacobian does not model, name, or manage that storage.
+Classify every new output as either a bounded inline domain value or a
+request-scoped temporary needed by one genuinely isolated process. If it needs
+durability, resumability, or cross-request identity, it is outside this
+kernel—not a reason to add a persistence abstraction.
+
+**Execution boundary.** Call a maintained Python backend directly whenever it
+can perform the bounded operation. A subprocess is allowed only when a direct
+binding cannot provide a concrete isolation, killability, or fixed-toolchain
+requirement (for example, the one-shot `lean.check` operation). It receives
+only the typed request through request-scoped temporary files, has a timeout,
+and returns one typed domain result. Do not create a private worker protocol,
+worker lifecycle, worker registry, or durable worker output.
+
 Tools stay atomic, searchable, and freely composable. No prescribed proof
 strategy or stopping criteria in discovery, ranking, prompts, or adapters.
 
@@ -172,8 +189,8 @@ Keep strategy out of the kernel and semantics out of generic contracts.
 ## Repository Gotchas
 
 - Before final validation, use `make check` plus the named lane that owns the
-  changed behavior on the final tree (`make check-external` for Lean/Mathlib,
-  `make test-provider` for optional or maintained Python providers). In a
+  changed behavior on the final tree (`make check-external` for the fixed Lean
+  boundary; the owning domain or unit lane for maintained Python backends). In a
   shared checkout, agents must own disjoint paths and must not switch
   branches, stage, commit, clean, or rewrite shared files until their work
   is integrated.
@@ -221,11 +238,13 @@ conjectures, use
 
 For remote MCP operation, use
 [Deploy the remote MCP server](docs/how-to/deploy-remote-mcp.md) and the
-checked-in files under `deploy/`. They define the reproducible systemd, Caddy,
-Tailscale Funnel, smoke, restart, and rollback baseline. Files under `tmp/` are
-ignored host-local evidence and are never deployment source of truth. Compare
-the MCP-advertised package version with the selected checkout during every
-redeploy; an unchanged catalog does not prove that the backend restarted.
+checked-in files under `deploy/`. They are example service and health-check
+templates for an immutable artifact, not a Jacobian installer, rollout system,
+or rollback engine. Deployment infrastructure owns provisioning, TLS, process
+supervision, rollout, rollback, configuration, and secrets. Do not add
+application-managed state migration, backup/restore, host setup/doctor,
+client-configuration mutation, or release-directory management. Files under
+`tmp/` are ignored host-local evidence and are never deployment source of truth.
 
 ## Cursor Cloud specific instructions
 

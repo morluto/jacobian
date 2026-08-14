@@ -141,7 +141,10 @@ class SchemaRegistry:
         """
 
         self._reconcile_pending()
-        compiled = SCHEMA_COMPILER.compile_model(model)
+        try:
+            compiled = SCHEMA_COMPILER.compile_model(model)
+        except SchemaCompilationError as exc:
+            raise SchemaRegistryError(str(exc)) from exc
         canonical_schema = compiled.canonical_schema
         schema = compiled.definition()
         self._ensure_model_contract_available(

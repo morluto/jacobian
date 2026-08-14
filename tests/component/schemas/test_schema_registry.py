@@ -108,7 +108,9 @@ def test_customized_model_schema_is_validated_before_persistence(
             model=model,
         )
 
-    schema = model_schema(model)
+    # Compute the rejected descriptor identity without passing the malformed
+    # schema through the public, validating model-schema boundary again.
+    schema = model.model_json_schema()
     uri = store.descriptor_uri(
         kind="schema",
         name="customized-invalid-schema",

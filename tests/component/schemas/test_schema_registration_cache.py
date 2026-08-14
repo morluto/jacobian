@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-import jacobian.schema_registry as schema_registry
+import jacobian.schema_compiler as schema_compiler
 from jacobian.schema_registry import SchemaRegistry, SchemaRegistryError
 from jacobian.storage.repository import ArtifactRepository
 
@@ -15,18 +15,27 @@ def test_existing_descriptor_reuses_cached_meta_validation(
 ) -> None:
     store = ArtifactRepository(tmp_path)
     first = SchemaRegistry(store)
-    schema = {"type": "object", "properties": {"value": {"type": "integer"}}}
-    uri = first.register(name="component.cache", version="1", schema=schema)
+    schema = {
+        "title": "component schema cache probe",
+        "type": "object",
+        "properties": {"value": {"type": "integer"}},
+    }
 
     calls = 0
-    original = schema_registry._validated_schema
+    original = schema_compiler.check_draft202012_schema
 
-    def count_validation(canonical_schema: bytes):
+    def count_validation(canonical_schema: bytes) -> None:
         nonlocal calls
         calls += 1
-        return original(canonical_schema)
+        original(canonical_schema)
 
-    monkeypatch.setattr(schema_registry, "_validated_schema", count_validation)
+    monkeypatch.setattr(
+        schema_compiler,
+        "check_draft202012_schema",
+        count_validation,
+    )
+    uri = first.register(name="component.cache", version="1", schema=schema)
+
     second = SchemaRegistry(store)
     assert second.register(name="component.cache", version="1", schema=schema) == uri
     assert calls == 1

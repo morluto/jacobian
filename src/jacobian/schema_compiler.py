@@ -80,6 +80,17 @@ def _compile(
     )
 
 
+@lru_cache(maxsize=2048)
+def _compile_model(
+    model: type[BaseModel],
+    dialect: SchemaDialect,
+) -> CompiledSchema:
+    schema = model.model_json_schema()
+    canonical_schema = canonicalize_json(schema)
+    digest = "sha256:" + sha256(canonical_schema).hexdigest()
+    return _compile(model, dialect, digest, canonical_schema)
+
+
 class SchemaCompiler:
     """Compile exact schemas once by model identity, dialect, and digest."""
 
@@ -100,7 +111,7 @@ class SchemaCompiler:
         *,
         dialect: SchemaDialect = SchemaDialect.DRAFT_2020_12,
     ) -> CompiledSchema:
-        return self.compile(model.model_json_schema(), model=model, dialect=dialect)
+        return _compile_model(model, dialect)
 
 
 SCHEMA_COMPILER = SchemaCompiler()

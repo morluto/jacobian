@@ -230,29 +230,16 @@ def install_selected_polynomial_catalog(
     """Compile polynomial map, system, search, Nullstellensatz, and interval ops."""
 
     del polytope, resources
-    from jacobian.contracts.operations import ProviderAvailability
-    from jacobian.domains.polynomial_nullstellensatz.core import (
-        install_nullstellensatz_core,
-    )
-    from jacobian.domains.polynomial_nullstellensatz.singular import (
-        install_singular_producer,
-    )
+    _install_polynomial_expressions(context)
+    _install_nullstellensatz(context)
+    _install_polynomial_maps_and_systems(context)
+    _install_polynomial_interval_and_positivity(context)
+
+
+def _install_polynomial_expressions(context: CatalogBuildContext) -> None:
     from jacobian.polynomial_expression_operations import (
         install_polynomial_expression_checker,
     )
-    from jacobian.polynomial_interval_operations import (
-        install_polynomial_interval_operations,
-    )
-    from jacobian.polynomial_positivity_operations import (
-        install_polynomial_positivity_operations,
-    )
-    from jacobian.polynomial_system_operations import (
-        install_polynomial_system_operations,
-    )
-    from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
-    from jacobian.polynomials import build_polynomial_operations
-    from jacobian.provider_runtime import known_provider_runtime
-    from jacobian.providers.singular_runtime import singular_provider_runtime
     from jacobian.providers.sympy_runtime import (
         sympy_polynomial_normalization_provider_runtime,
     )
@@ -260,24 +247,35 @@ def install_selected_polynomial_catalog(
         bind_sympy_polynomial_normalization,
     )
 
-    ctx = context
     verification_adapter, _ = install_polynomial_expression_checker(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
-        ctx.polynomial_expressions,
-        ctx.verification,
-        ctx.checkers,
-        authorize_checker=ctx.authorize_bundled_checkers,
+        context.store,
+        context.schemas,
+        context.artifacts,
+        context.polynomial_expressions,
+        context.verification,
+        context.checkers,
+        authorize_checker=context.authorize_bundled_checkers,
     )
     if verification_adapter is not None:
-        ctx.register_operation(verification_adapter)
-    ctx.register_operation(
+        context.register_operation(verification_adapter)
+    context.register_operation(
         bind_sympy_polynomial_normalization(
-            ctx.polynomial_expressions,
+            context.polynomial_expressions,
             sympy_polynomial_normalization_provider_runtime(),
         )
     )
+
+
+def _install_nullstellensatz(context: CatalogBuildContext) -> None:
+    from jacobian.contracts.operations import ProviderAvailability
+    from jacobian.domains.polynomial_nullstellensatz.core import (
+        install_nullstellensatz_core,
+    )
+    from jacobian.domains.polynomial_nullstellensatz.singular import (
+        install_singular_producer,
+    )
+    from jacobian.provider_runtime import known_provider_runtime
+    from jacobian.providers.singular_runtime import singular_provider_runtime
 
     core_runtime = known_provider_runtime(
         "jacobian.nullstellensatz-core",
@@ -287,60 +285,76 @@ def install_selected_polynomial_catalog(
             "independent-exact-replay",
         ),
     )
-    core = install_nullstellensatz_core(ctx, core_runtime)
+    core = install_nullstellensatz_core(context, core_runtime)
     for adapter in core.adapters:
-        ctx.register_operation(adapter)
+        context.register_operation(adapter)
     singular_runtime = singular_provider_runtime()
-    if singular_runtime.availability is ProviderAvailability.AVAILABLE:
-        singular = install_singular_producer(ctx, core, singular_runtime)
-        for adapter in singular.adapters:
-            ctx.register_operation(adapter)
+    if singular_runtime.availability is not ProviderAvailability.AVAILABLE:
+        return
+    singular = install_singular_producer(context, core, singular_runtime)
+    for adapter in singular.adapters:
+        context.register_operation(adapter)
+
+
+def _install_polynomial_maps_and_systems(context: CatalogBuildContext) -> None:
+    from jacobian.polynomial_system_operations import (
+        install_polynomial_system_operations,
+    )
+    from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
+    from jacobian.polynomials import build_polynomial_operations
 
     polynomial_adapters, _ = build_polynomial_operations(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
-        ctx.verification,
-        ctx.checkers,
-        authorize_checker=ctx.authorize_bundled_checkers,
+        context.store,
+        context.schemas,
+        context.artifacts,
+        context.verification,
+        context.checkers,
+        authorize_checker=context.authorize_bundled_checkers,
     )
     for polynomial_adapter in polynomial_adapters:
-        ctx.register_operation(polynomial_adapter)
-
+        context.register_operation(polynomial_adapter)
     polynomial_system_adapter, polynomial_system = install_polynomial_system_operations(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
-        ctx.verification,
-        ctx.checkers,
-        authorize_checker=ctx.authorize_bundled_checkers,
+        context.store,
+        context.schemas,
+        context.artifacts,
+        context.verification,
+        context.checkers,
+        authorize_checker=context.authorize_bundled_checkers,
     )
     if polynomial_system_adapter is not None:
-        ctx.register_operation(polynomial_system_adapter)
-    ctx.register_operation(
-        PolynomialSystemRationalSearchAdapter(ctx.artifacts, polynomial_system)
+        context.register_operation(polynomial_system_adapter)
+    context.register_operation(
+        PolynomialSystemRationalSearchAdapter(context.artifacts, polynomial_system)
+    )
+
+
+def _install_polynomial_interval_and_positivity(context: CatalogBuildContext) -> None:
+    from jacobian.polynomial_interval_operations import (
+        install_polynomial_interval_operations,
+    )
+    from jacobian.polynomial_positivity_operations import (
+        install_polynomial_positivity_operations,
     )
 
     interval_adapters, _ = install_polynomial_interval_operations(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
-        ctx.verification,
-        ctx.checkers,
-        authorize_checker=ctx.authorize_bundled_checkers,
+        context.store,
+        context.schemas,
+        context.artifacts,
+        context.verification,
+        context.checkers,
+        authorize_checker=context.authorize_bundled_checkers,
     )
     for interval_adapter in interval_adapters:
         if interval_adapter is not None:
-            ctx.register_operation(interval_adapter)
-
+            context.register_operation(interval_adapter)
     positivity_adapters, _ = install_polynomial_positivity_operations(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
-        ctx.verification,
-        ctx.checkers,
-        authorize_checker=ctx.authorize_bundled_checkers,
+        context.store,
+        context.schemas,
+        context.artifacts,
+        context.verification,
+        context.checkers,
+        authorize_checker=context.authorize_bundled_checkers,
     )
     for positivity_adapter in positivity_adapters:
         if positivity_adapter is not None:
-            ctx.register_operation(positivity_adapter)
+            context.register_operation(positivity_adapter)

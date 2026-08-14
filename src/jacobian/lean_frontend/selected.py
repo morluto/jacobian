@@ -238,32 +238,46 @@ def install_selected_lean_catalog(
     """Compile Lean statements, checkers, and exploration operations."""
 
     del polytope
+    _install_lean_statements(context)
+    if not (
+        context.authorize_bundled_checkers or context.checkers.bind_existing_when_omitted
+    ):
+        return
+    if resources is None:
+        raise TypeError("lean catalog install requires catalog build resources")
+    _install_authorized_lean_operations(
+        context, cast("CatalogBuildResources", resources)
+    )
+
+
+def _install_lean_statements(context: CatalogBuildContext) -> None:
+    from jacobian.contracts.operations import ProviderAvailability
+
+    lean_runtime = lean_frontend_provider_runtime()
+    lean_adapters, _ = install_lean_statement_operations(
+        context.store,
+        context.schemas,
+        context.artifacts,
+        provider_runtime=lean_runtime,
+    )
+    if lean_runtime.availability is not ProviderAvailability.AVAILABLE:
+        return
+    for lean_adapter in lean_adapters:
+        context.register_operation(lean_adapter)
+
+
+def _install_authorized_lean_operations(
+    context: CatalogBuildContext,
+    catalog_resources: CatalogBuildResources,
+) -> None:
     from jacobian.checker_authorization import install_lean_checkers
     from jacobian.contracts.operations import ProviderAvailability
     from jacobian.provider_runtime import jacobian_provider_runtime
 
-    ctx = context
-    lean_runtime = lean_frontend_provider_runtime()
-    lean_adapters, _ = install_lean_statement_operations(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
-        provider_runtime=lean_runtime,
-    )
-    if lean_runtime.availability is ProviderAvailability.AVAILABLE:
-        for lean_adapter in lean_adapters:
-            ctx.register_operation(lean_adapter)
-
-    if not (ctx.authorize_bundled_checkers or ctx.checkers.bind_existing_when_omitted):
-        return
-    if resources is None:
-        raise TypeError("lean catalog install requires catalog build resources")
-    catalog_resources = cast("CatalogBuildResources", resources)
-
     lean_checkers, checker_runtime = install_lean_checkers(
-        ctx.store,
-        ctx.schemas,
-        ctx.checkers,
+        context.store,
+        context.schemas,
+        context.checkers,
         resolve_provider_runtime=lambda profiles: lean_provider_runtime(
             profiles=profiles,
             checker_ids=(),
@@ -281,17 +295,18 @@ def install_selected_lean_catalog(
             )
         }
     )
-    inspect_adapter = install_lean_proof_state_inspect_only(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
-        lean_checkers,
-        jacobian_provider_runtime(
-            "jacobian.lean4",
-            features=("immutable-proof-state", "read-only-inspection"),
-        ),
+    context.register_operation(
+        install_lean_proof_state_inspect_only(
+            context.store,
+            context.schemas,
+            context.artifacts,
+            lean_checkers,
+            jacobian_provider_runtime(
+                "jacobian.lean4",
+                features=("immutable-proof-state", "read-only-inspection"),
+            ),
+        )
     )
-    ctx.register_operation(inspect_adapter)
     if runtime.availability is not ProviderAvailability.AVAILABLE:
         _LOGGER.warning("lean.check is not installed: %s", runtime.diagnostic)
         return
@@ -301,50 +316,50 @@ def install_selected_lean_catalog(
     try:
         catalog_resources.lean_declarations = installed_lean_declaration_service(
             runtime,
-            cache_root=ctx.store.root / "cache" / "lean-declarations",
+            cache_root=context.store.root / "cache" / "lean-declarations",
         )
     except (OSError, RuntimeError) as exc:
         _LOGGER.warning("Lean declaration discovery is not installed: %s", exc)
     if catalog_resources.lean_declarations is not None:
-        bound_queries = ctx.binder.bind(
+        bound_queries = context.binder.bind(
             lean_declaration_query_operations(catalog_resources.lean_declarations)
         )
         for adapter in bound_queries.adapters:
-            ctx.register_operation(adapter)
+            context.register_operation(adapter)
     catalog_resources.lean = LeanService(
-        ctx.store,
-        ctx.artifacts,
-        ctx.verification,
+        context.store,
+        context.artifacts,
+        context.verification,
         lean_checkers,
     )
-    ctx.register_operation(LeanCheckAdapter(catalog_resources.lean, runtime))
+    context.register_operation(LeanCheckAdapter(catalog_resources.lean, runtime))
     proof_axioms_adapter, _ = install_lean_proof_axioms_operation(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
+        context.store,
+        context.schemas,
+        context.artifacts,
         lean_checkers,
         runtime,
     )
-    ctx.register_operation(proof_axioms_adapter)
+    context.register_operation(proof_axioms_adapter)
     adapters, catalog_resources.lean_exploration = install_lean_exploration_operations(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
+        context.store,
+        context.schemas,
+        context.artifacts,
         lean_checkers,
         runtime,
     )
     for adapter in adapters:
         if adapter.descriptor.operation_id == "lean.proof_state.inspect":
             continue
-        ctx.register_operation(adapter)
+        context.register_operation(adapter)
     proof_edit_adapter, _ = install_lean_proof_edit_operation(
-        ctx.store,
-        ctx.schemas,
-        ctx.artifacts,
+        context.store,
+        context.schemas,
+        context.artifacts,
         catalog_resources.lean,
         runtime,
     )
-    ctx.register_operation(proof_edit_adapter)
+    context.register_operation(proof_edit_adapter)
 
 
 __all__ = [

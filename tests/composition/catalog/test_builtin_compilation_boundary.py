@@ -68,9 +68,7 @@ def _imported_names(path: Path) -> frozenset[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.Import):
+        if isinstance(node, (ast.ImportFrom, ast.Import)):
             names.update(alias.name for alias in node.names)
     return frozenset(names)
 

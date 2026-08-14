@@ -169,7 +169,40 @@ def test_discarded_complete_runtime_fixture_is_rejected(tmp_path: Path) -> None:
     ]
 
 
-def test_owned_composition_module_is_accepted(tmp_path: Path) -> None:
+def test_cli_projection_tests_cannot_cold_start_the_complete_portfolio(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "tests/composition/cli/test_cli.py",
+        "from jacobian.cli import app, create_cli_app\n"
+        "from tests.support.catalog_build_runtime import create_catalog_build_runtime\n"
+        "\n"
+        "def test_cli_catalog_lists_operations(tmp_path):\n"
+        "    create_catalog_build_runtime(tmp_path)\n"
+        "    create_cli_app()\n"
+        "    CliRunner().invoke(app, ['catalog'])\n",
+    )
+
+    messages = _ownership_messages(tmp_path)
+
+    assert any(
+        "CLI projection tests must use selected_runtime_opener" in message
+        for message in messages
+    )
+
+
+def test_cli_init_complete_smoke_may_use_the_default_app(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tests/composition/cli/test_cli.py",
+        "from jacobian.cli import app\n"
+        "\n"
+        "def test_cli_init_reports_installed_operation_count(tmp_path):\n"
+        "    CliRunner().invoke(app, ['init'])\n",
+    )
+
+    assert _ownership_messages(tmp_path) == []
     _write(tmp_path, "tests/composition/interoperability/test_value_handoff.py")
 
     assert _ownership_messages(tmp_path) == []

@@ -24,6 +24,7 @@ def test_cli_help_exposes_only_math_and_operator_commands() -> None:
 
 
 def test_cli_init_reports_installed_operation_count(tmp_path: Path) -> None:
+    """Complete-portfolio smoke: jacobian init compiles the built-in catalog."""
     result = CliRunner().invoke(
         app,
         ["--state-dir", str(tmp_path), "init"],

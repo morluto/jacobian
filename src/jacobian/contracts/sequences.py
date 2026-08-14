@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
 
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
+from jacobian.contracts.exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalInteger,
+    CanonicalRational,
+)
 
 _MAX_SEQUENCE_LENGTH = 256
+MAX_INTEGER_SEQUENCE_ITEM_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
 class IntegerSequenceRequest(ContractModel):
@@ -17,6 +24,18 @@ class IntegerSequenceRequest(ContractModel):
         min_length=1,
         max_length=_MAX_SEQUENCE_LENGTH,
     )
+
+    @model_validator(mode="after")
+    def require_bounded_items(self) -> Self:
+        if any(
+            len(value.lstrip("-")) > MAX_INTEGER_SEQUENCE_ITEM_DIGITS
+            for value in self.values
+        ):
+            raise ValueError(
+                "sequence item exceeds the "
+                f"{MAX_INTEGER_SEQUENCE_ITEM_DIGITS}-digit bound"
+            )
+        return self
 
 
 class IntegerSequenceValueResult(ContractModel):

@@ -62,7 +62,7 @@ def test_failure_cleanup_is_default_and_retention_is_opt_in(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        pytest_lifecycle, "run_process_tree", lambda *args, **kwargs: _tree_result(1)
+        pytest_lifecycle, "run_process_tree", lambda *_args, **_kwargs: _tree_result(1)
     )
 
     cleaned = pytest_lifecycle.run_pytest(
@@ -87,7 +87,7 @@ def test_timeout_reports_timed_out_status(
     monkeypatch.setattr(
         pytest_lifecycle,
         "run_process_tree",
-        lambda *args, **kwargs: _tree_result(1, timed_out=True),
+        lambda *_args, **_kwargs: _tree_result(1, timed_out=True),
     )
 
     result = pytest_lifecycle.run_pytest(

@@ -129,7 +129,7 @@ def test_validate_task_topology_ignores_gitignored_interpreter_caches(
     monkeypatch.setattr(
         harbor_suite,
         "run_operator_command",
-        lambda *args, **kwargs: ToolCommandResult(
+        lambda *_args, **_kwargs: ToolCommandResult(
             status=ToolCommandStatus.EXITED,
             exit_code=0,
             stdout=b"",

@@ -7,7 +7,7 @@ outcome, and explicit non-conclusions when its dedicated environment cannot be
 constructed.
 
 These tasks do not install providers into Jacobian's core environment, register
-capabilities, or authorize provider implementations as independent checkers.
+operations, or authorize provider implementations as independent checkers.
 Provider absence here is a task-environment failure and has no bearing on
 unrelated datasets or kernel startup.
 

@@ -1,4 +1,4 @@
-"""Probe pinned nauty gtools without registering production capabilities."""
+"""Probe pinned nauty gtools without registering production operations."""
 
 from __future__ import annotations
 

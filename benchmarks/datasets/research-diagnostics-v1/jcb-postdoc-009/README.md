@@ -11,7 +11,7 @@ lattice-theory
 - case_version: research-diagnostics-v1
 - contamination_class: public-answer-visible-diagnostic
 - fixture_digest: sha256:10bea127b1944406b2613fb3242daef82d1874ab08098bcfe342e4a657e36720
-- derivation: This unpublished expert problem requires a structural argument about decompositions in an integral lattice. It is suitable for testing theorem-level reasoning and highlights the absence of lattice-element decomposition and irreducibility capabilities.
+- derivation: This unpublished expert problem requires a structural argument about decompositions in an integral lattice. It is suitable for testing theorem-level reasoning and highlights the absence of lattice-element decomposition and irreducibility operations.
 
 ## Portfolio status
 

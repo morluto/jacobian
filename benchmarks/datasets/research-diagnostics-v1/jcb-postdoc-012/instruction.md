@@ -4,7 +4,7 @@ For a Noetherian local ring (R,m), call R quasi-complete if for every descending
 
 This is a public answer-visible diagnostic: the expected conclusion and oracle summary are
 public. Reproduce the answer-visible conclusion, state the relevant answer-visible facts, and
-report the operation boundary honestly. The mathematical portfolio lacks typed local-ring completions, descending ideal sequences, adic topology, and a domain checker. General Lean access is not a substitute for those semantic capabilities.
+report the operation boundary honestly. The mathematical portfolio lacks typed local-ring completions, descending ideal sequences, adic topology, and a domain checker. General Lean access is not a substitute for those semantic operations.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`, record your
 reasoning in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence

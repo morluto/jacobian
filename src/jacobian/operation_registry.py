@@ -20,6 +20,7 @@ from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.polytope import PolytopeService
 from jacobian.portfolio.builtin import load_builtin_operation_module
 from jacobian.registry import CheckerRegistry
+from jacobian.sat_smt.sat import SatArtifactService
 from jacobian.verification.service import VerificationService
 
 _SELECTED_GRAPH_OPERATIONS = frozenset(
@@ -50,6 +51,7 @@ _SELECTED_DIRECT_OPERATIONS = frozenset(
         "universal_algebra.evaluate_laws",
         "universal_algebra.search.countermodel",
         "universal_algebra.law_evaluation.verify",
+        "sat.cnf.materialize",
     }
 )
 _SELECTED_RESOURCE_OPERATIONS = (
@@ -76,6 +78,7 @@ class OperationRegistry:
         checkers: CheckerRegistry,
         polynomial_expressions: PolynomialExpressionArtifactService,
         polytope: PolytopeService,
+        sat: SatArtifactService,
     ) -> None:
         self.catalog = catalog
         self.binder = binder
@@ -83,6 +86,7 @@ class OperationRegistry:
         self.checkers = checkers
         self.polynomial_expressions = polynomial_expressions
         self.polytope = polytope
+        self.sat = sat
         self._adapters: dict[str, OperationAdapter[Any]] = {}
 
     def resolve(self, operation_id: str) -> OperationAdapter[Any]:
@@ -258,6 +262,10 @@ class OperationRegistry:
                 self.checkers,
                 self.catalog,
             )
+        elif operation_id == "sat.cnf.materialize":
+            from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
+
+            adapter = SatCnfMaterializationAdapter(self.sat)
         else:
             adapter = None
         return adapter

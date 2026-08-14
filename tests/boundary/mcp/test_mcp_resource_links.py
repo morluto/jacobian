@@ -4,6 +4,9 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
+from jacobian.adapters.mcp import server as server_module
 from jacobian.adapters.mcp.server import create_server
 from jacobian.domains.number_theory import number_theory_operations
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
@@ -41,7 +44,13 @@ def test_mcp_inline_results_do_not_emit_resource_links(
 
 def test_mcp_materialized_results_emit_readable_native_resource_links(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("SAT materialization must not assemble the portfolio")
+
+    monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
+
     async def scenario() -> None:
         from mcp import Client
 

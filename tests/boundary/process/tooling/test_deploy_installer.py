@@ -76,6 +76,7 @@ def test_installer_help_exposes_three_deployment_modes() -> None:
     assert "--mode tailscale" in completed.stdout
     assert "--install-root" in completed.stdout
     assert "--with-lean" in completed.stdout
+    assert "--retain-releases" in completed.stdout
 
 
 def test_lean_dry_run_uses_a_distinct_release_profile() -> None:
@@ -89,6 +90,17 @@ def test_lean_dry_run_uses_a_distinct_release_profile() -> None:
     )
     assert release_line.endswith("-lean")
     assert "lean:        pinned CORE + MATHLIB runtime" in completed.stdout
+    assert "retention:   2 completed releases including active" in completed.stdout
+    assert "free space:" in completed.stdout
+    assert "tools:       uv=" in completed.stdout
+
+
+@pytest.mark.parametrize("value", ("0", "-1", "all", "101"))
+def test_release_retention_rejects_invalid_counts(value: str) -> None:
+    completed = _run("--retain-releases", value, "--dry-run")
+
+    assert completed.returncode != 0
+    assert "--retain-releases" in completed.stderr
 
 
 def test_domain_dry_run_reports_connector_without_requiring_root() -> None:
@@ -321,6 +333,45 @@ def test_release_runtime_is_checked_before_current_symlink_is_changed() -> None:
     assert '"${RUNUSER_BIN}" --user jacobian -- "${entrypoint}" --version' in source
 
 
+def test_candidate_state_is_checked_before_rollback_or_activation_is_armed() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    state_preflight = source.index('"${RELEASE_DIR}/deploy/preflight_state.py"')
+    rollback_snapshot = source.index('ROLLBACK_ROOT="$(mktemp -d)"')
+    rollback_armed = source.index("ROLLBACK_ARMED=1")
+    current_link = source.index('ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"')
+
+    assert state_preflight < rollback_snapshot < rollback_armed < current_link
+
+
+def test_dry_run_validates_host_tools_and_disk_before_reporting_a_plan() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    uv = source.index('UV_BIN="$(find_executable uv')
+    systemd = source.index('SYSTEMCTL_BIN="$(find_executable systemctl')
+    disk = source.index('AVAILABLE_INSTALL_KIB="$(df -Pk')
+    dry_run = source.index("if ((DRY_RUN)); then")
+
+    assert uv < dry_run
+    assert systemd < dry_run
+    assert disk < dry_run
+
+
+def test_dry_run_waives_build_space_only_for_a_reusable_release() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    disk_block = source[
+        source.index("REQUIRED_INSTALL_KIB=$((2 * 1024 * 1024))") : source.index(
+            "if ((DRY_RUN)); then"
+        )
+    ]
+
+    assert 'cat "${RELEASE_DIR}/.git-revision"' in disk_block
+    assert '== "${REVISION}"' in disk_block
+    assert 'cat "${RELEASE_DIR}/.release-profile"' in disk_block
+    assert '== "${RELEASE_PROFILE}"' in disk_block
+    assert "REQUIRED_INSTALL_KIB=0" in disk_block
+
+
 def test_runtime_inputs_remain_service_readable_after_root_probes() -> None:
     source = INSTALLER.read_text(encoding="utf-8")
 
@@ -419,6 +470,27 @@ def test_lean_profile_requires_catalog_and_behavior_smokes() -> None:
         assert f"--require-operation {operation_id}" in smoke_block
     assert '--expect-revision "${REVISION}"' in smoke_block
     assert '"${RELEASE_DIR}/deploy/smoke_lean.py"' in smoke_block
+
+
+def test_smoke_retries_only_the_stable_transient_exit_code() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    smoke_block = source[source.index('log "running the read-only deployment smoke"') :]
+
+    assert "TRANSIENT_SMOKE_EXIT=75" in source
+    assert smoke_block.count("SMOKE_STATUS != TRANSIENT_SMOKE_EXIT") == 2
+    assert "failed deterministically; not retrying" in smoke_block
+    assert "transient deployment smoke failure; retrying" in smoke_block
+
+
+def test_release_retention_runs_only_after_deployment_is_accepted() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    accepted = source.index("DEPLOYMENT_ACCEPTED=1")
+    disarmed = source.index("ROLLBACK_ARMED=0", accepted)
+    retention = source.index('"${RELEASE_DIR}/deploy/release_retention.py"')
+
+    assert accepted < disarmed < retention
+    assert 'RETENTION_ARGS+=(--preserve-release "${PREVIOUS_RELEASE}")' in source
 
 
 def test_activation_arms_rollback_before_switching_current() -> None:

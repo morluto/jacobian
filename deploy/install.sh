@@ -27,9 +27,13 @@ CONFIRM_PUBLIC_ANONYMOUS=0
 SKIP_SMOKE=0
 DRY_RUN=0
 WITH_LEAN=0
+RETAIN_RELEASES=2
 
 BACKEND_PORT=8765
 INGRESS_PORT=8766
+AUTH_STATE_ROOT="/var/lib/jacobian-mcp"
+ANONYMOUS_STATE_ROOT="/var/lib/jacobian-mcp-test"
+TRANSIENT_SMOKE_EXIT=75
 INSTALL_ROOT="/opt/jacobian"
 CONFIG_ROOT="/etc/jacobian-mcp"
 CADDY_CONFIG_ROOT="/etc/caddy-jacobian"
@@ -88,8 +92,10 @@ Configuration:
                                 Python, and Lean (default: /opt/jacobian).
   --with-lean                   Build and require the pinned Lean CORE + MATHLIB
                                 provider and checker portfolio.
+  --retain-releases COUNT       Keep the active release plus the newest rollback
+                                releases (default: 2 total).
   --skip-smoke                  Do not run the read-only MCP deployment smoke.
-  --dry-run                     Validate arguments and print the deployment plan.
+  --dry-run                     Validate host prerequisites and print the plan.
   -h, --help                    Show this help.
 
 Examples:
@@ -219,6 +225,13 @@ validate_tenant_id() {
     local value="$1"
     [[ "${value}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || die \
         "tenant IDs must start with a letter or digit, use only letters, digits, '.', '_', or '-', and be at most 128 characters"
+}
+
+validate_retain_releases() {
+    local value="$1"
+    [[ "${value}" =~ ^[1-9][0-9]*$ ]] || die \
+        "--retain-releases must be a positive integer"
+    ((value <= 100)) || die "--retain-releases must not exceed 100"
 }
 
 validate_domain() {
@@ -413,6 +426,11 @@ while (($#)); do
             WITH_LEAN=1
             shift
             ;;
+        --retain-releases)
+            (($# >= 2)) || die "--retain-releases requires a value"
+            RETAIN_RELEASES="$2"
+            shift 2
+            ;;
         --skip-smoke)
             SKIP_SMOKE=1
             shift
@@ -448,6 +466,7 @@ esac
 
 validate_tenant_id "${TENANT_ID}"
 validate_tenant_id "${ANONYMOUS_TENANT_ID}"
+validate_retain_releases "${RETAIN_RELEASES}"
 
 if [[ "${MODE}" == "domain" ]]; then
     [[ -n "${DOMAIN}" ]] || die "--mode domain requires --domain"
@@ -529,34 +548,11 @@ elif [[ -n "${AUTH_TOKENS_FILE}" ]]; then
     AUTH_DESCRIPTION="static bearer tokens from ${AUTH_TOKENS_FILE}"
 fi
 
-if ((DRY_RUN)); then
-    cat <<EOF
-Jacobian deployment plan
-  revision:    ${REVISION}
-  install:     ${INSTALL_ROOT}
-  release:     ${RELEASE_DIR}
-  python:      ${PYTHON_INSTALL_ROOT}
-  mode:        ${MODE}
-  connector:   ${CONNECTOR_URL}
-  auth:        ${AUTH_DESCRIPTION}
-  backend:     jacobian-mcp.service on 127.0.0.1:${BACKEND_PORT}
-  caddy:       $([[ "${MODE}" == "local" ]] && printf 'disabled' || printf 'enabled')
-  funnel:      $([[ "${MODE}" == "tailscale" ]] && printf 'enabled' || printf 'disabled')
-  lean:        $(((WITH_LEAN)) && printf 'pinned CORE + MATHLIB runtime' || printf 'disabled')
-  smoke:       $(((SKIP_SMOKE)) && printf 'skipped' || printf 'required')
-EOF
-    exit 0
-fi
-
-((EUID == 0)) || die "run this installer with sudo"
-"${GIT[@]}" diff --quiet --ignore-submodules -- \
-    || die "tracked working-tree changes exist; commit or stash them before deployment"
-"${GIT[@]}" diff --cached --quiet --ignore-submodules -- \
-    || die "staged changes exist; commit or stash them before deployment"
-
 INVOKING_HOME=""
 if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
     INVOKING_HOME="$(getent passwd "${SUDO_USER}" | cut -d: -f6 || true)"
+elif [[ -n "${HOME:-}" ]]; then
+    INVOKING_HOME="${HOME}"
 fi
 
 UV_BIN="$(find_executable uv /usr/local/bin/uv /usr/bin/uv || true)"
@@ -564,7 +560,7 @@ if [[ -z "${UV_BIN}" && -n "${INVOKING_HOME}" ]]; then
     UV_BIN="$(find_executable uv "${INVOKING_HOME}/.local/bin/uv" || true)"
 fi
 [[ -n "${UV_BIN}" ]] || die \
-    "uv is required; install it first or make it available on root's PATH"
+    "uv is required; install it first or make it available on the operator path"
 
 SYSTEMCTL_BIN="$(find_executable systemctl /usr/bin/systemctl || true)"
 SYSTEMD_ANALYZE_BIN="$(find_executable systemd-analyze /usr/bin/systemd-analyze || true)"
@@ -594,6 +590,53 @@ if [[ "${MODE}" != "local" ]]; then
     [[ -n "${CADDY_BIN}" ]] || die \
         "caddy is required for public ingress; install it first"
 fi
+
+DISK_PROBE_PATH="${INSTALL_ROOT}"
+while [[ ! -e "${DISK_PROBE_PATH}" ]]; do
+    DISK_PROBE_PATH="${DISK_PROBE_PATH%/*}"
+    [[ -n "${DISK_PROBE_PATH}" ]] || DISK_PROBE_PATH="/"
+done
+AVAILABLE_INSTALL_KIB="$(df -Pk "${DISK_PROBE_PATH}" | awk 'NR == 2 {print $4}')"
+REQUIRED_INSTALL_KIB=$((2 * 1024 * 1024))
+if ((WITH_LEAN)); then
+    REQUIRED_INSTALL_KIB=$((12 * 1024 * 1024))
+fi
+if [[ -d "${RELEASE_DIR}" \
+    && "$(cat "${RELEASE_DIR}/.git-revision" 2>/dev/null || true)" == "${REVISION}" \
+    && "$(cat "${RELEASE_DIR}/.release-profile" 2>/dev/null || printf 'core')" \
+        == "${RELEASE_PROFILE}" ]]; then
+    REQUIRED_INSTALL_KIB=0
+fi
+((AVAILABLE_INSTALL_KIB >= REQUIRED_INSTALL_KIB)) || die \
+    "insufficient free space below ${DISK_PROBE_PATH}: need ${REQUIRED_INSTALL_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
+
+if ((DRY_RUN)); then
+    cat <<EOF
+Jacobian deployment plan
+  revision:    ${REVISION}
+  install:     ${INSTALL_ROOT}
+  release:     ${RELEASE_DIR}
+  python:      ${PYTHON_INSTALL_ROOT}
+  mode:        ${MODE}
+  connector:   ${CONNECTOR_URL}
+  auth:        ${AUTH_DESCRIPTION}
+  backend:     jacobian-mcp.service on 127.0.0.1:${BACKEND_PORT}
+  caddy:       $([[ "${MODE}" == "local" ]] && printf 'disabled' || printf 'enabled')
+  funnel:      $([[ "${MODE}" == "tailscale" ]] && printf 'enabled' || printf 'disabled')
+  lean:        $(((WITH_LEAN)) && printf 'pinned CORE + MATHLIB runtime' || printf 'disabled')
+  retention:   ${RETAIN_RELEASES} completed releases including active
+  smoke:       $(((SKIP_SMOKE)) && printf 'skipped' || printf 'required')
+  free space:  ${AVAILABLE_INSTALL_KIB} KiB at ${DISK_PROBE_PATH}
+  tools:       uv=${UV_BIN}, systemctl=${SYSTEMCTL_BIN}$(((WITH_LEAN)) && printf ', elan=%s' "${ELAN_BIN}")$([[ "${MODE}" != "local" ]] && printf ', caddy=%s' "${CADDY_BIN}")
+EOF
+    exit 0
+fi
+
+((EUID == 0)) || die "run this installer with sudo"
+"${GIT[@]}" diff --quiet --ignore-submodules -- \
+    || die "tracked working-tree changes exist; commit or stash them before deployment"
+"${GIT[@]}" diff --cached --quiet --ignore-submodules -- \
+    || die "staged changes exist; commit or stash them before deployment"
 
 install -d -m 0755 "$(dirname -- "${DEPLOY_LOCK_PATH}")"
 exec 9>"${DEPLOY_LOCK_PATH}"
@@ -707,6 +750,34 @@ validate_service_readability "${RUNTIME_READ_ROOTS[@]}"
 if ((RELEASE_WAS_BUILT)); then
     RELEASE_BUILD_DIR=""
 fi
+
+log "checking configured tenant state compatibility"
+STATE_PREFLIGHT_ARGS=()
+if ((ALLOW_ANONYMOUS)); then
+    STATE_PREFLIGHT_ARGS=(
+        --state-root "${ANONYMOUS_STATE_ROOT}"
+        --tenant-id "${ANONYMOUS_TENANT_ID}"
+    )
+elif [[ -n "${AUTH_TOKENS_FILE}" ]]; then
+    STATE_PREFLIGHT_ARGS=(
+        --state-root "${AUTH_STATE_ROOT}"
+        --auth-tokens-file "${AUTH_TOKENS_FILE}"
+    )
+elif [[ -f "${TOKEN_DESTINATION}" ]]; then
+    STATE_PREFLIGHT_ARGS=(
+        --state-root "${AUTH_STATE_ROOT}"
+        --auth-tokens-file "${TOKEN_DESTINATION}"
+    )
+else
+    STATE_PREFLIGHT_ARGS=(
+        --state-root "${AUTH_STATE_ROOT}"
+        --tenant-id "${TENANT_ID}"
+    )
+fi
+"${RELEASE_DIR}/.venv/bin/python" \
+    "${RELEASE_DIR}/deploy/preflight_state.py" \
+    "${STATE_PREFLIGHT_ARGS[@]}" \
+    || die "configured tenant state is incompatible with revision ${REVISION}"
 
 if [[ -e "${CURRENT_LINK}" && ! -L "${CURRENT_LINK}" ]]; then
     die "${CURRENT_LINK} exists and is not a symlink"
@@ -923,21 +994,34 @@ if ((!SKIP_SMOKE)); then
             --expect-revision "${REVISION}" \
             --expect-policy-profile DEFAULT \
             "${SMOKE_REQUIREMENTS[@]}"; then
-            if ((WITH_LEAN)) && ! \
-                JACOBIAN_MCP_AUTH_TOKENS_FILE="${SMOKE_TOKEN_FILE}" \
-                "${RELEASE_DIR}/.venv/bin/python" \
-                "${RELEASE_DIR}/deploy/smoke_lean.py" \
-                "${CONNECTOR_URL}"; then
-                if ((attempt < 12)); then
-                    sleep 5
-                    continue
+            if ((WITH_LEAN)); then
+                if JACOBIAN_MCP_AUTH_TOKENS_FILE="${SMOKE_TOKEN_FILE}" \
+                    "${RELEASE_DIR}/.venv/bin/python" \
+                    "${RELEASE_DIR}/deploy/smoke_lean.py" \
+                    "${CONNECTOR_URL}"; then
+                    SMOKE_SUCCEEDED=1
+                    break
+                else
+                    SMOKE_STATUS=$?
+                    if ((SMOKE_STATUS != TRANSIENT_SMOKE_EXIT)); then
+                        printf 'error: Lean deployment smoke failed deterministically; not retrying\n' >&2
+                        break
+                    fi
                 fi
+            else
+                SMOKE_SUCCEEDED=1
                 break
             fi
-            SMOKE_SUCCEEDED=1
-            break
+        else
+            SMOKE_STATUS=$?
+            if ((SMOKE_STATUS != TRANSIENT_SMOKE_EXIT)); then
+                printf 'error: deployment smoke failed deterministically; not retrying\n' >&2
+                break
+            fi
         fi
         if ((attempt < 12)); then
+            printf 'warning: transient deployment smoke failure; retrying (%s/12)\n' \
+                "${attempt}" >&2
             sleep 5
         fi
     done
@@ -951,6 +1035,21 @@ validate_service_readability "${RUNTIME_READ_ROOTS[@]}"
 
 DEPLOYMENT_ACCEPTED=1
 ROLLBACK_ARMED=0
+
+log "pruning completed releases beyond retention ${RETAIN_RELEASES}"
+RETENTION_ARGS=(
+    --release-root "${RELEASE_ROOT}"
+    --current-link "${CURRENT_LINK}"
+    --retain "${RETAIN_RELEASES}"
+)
+if [[ -n "${PREVIOUS_RELEASE}" ]]; then
+    RETENTION_ARGS+=(--preserve-release "${PREVIOUS_RELEASE}")
+fi
+if ! "${RELEASE_DIR}/.venv/bin/python" \
+    "${RELEASE_DIR}/deploy/release_retention.py" \
+    "${RETENTION_ARGS[@]}"; then
+    printf 'warning: deployment succeeded but release retention failed; prune old releases manually\n' >&2
+fi
 
 cat <<EOF
 

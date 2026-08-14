@@ -1,0 +1,188 @@
+"""Behavioral coverage for deployment preflight, smoke, and retention helpers."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import sqlite3
+import sys
+from pathlib import Path
+
+import httpx2
+import pytest
+from deploy.preflight_state import inspect_selected_state
+from deploy.preflight_state import main as preflight_main
+from deploy.release_retention import prune_releases
+
+from jacobian._deployment_smoke import (
+    TRANSIENT_SMOKE_EXIT,
+    TransientSmokeError,
+    exit_for_smoke_failure,
+    is_transient_transport_failure,
+)
+from jacobian.storage.repository import ArtifactRepository
+
+
+def _completed_release(root: Path, name: str, *, modified_ns: int) -> Path:
+    release = root / name
+    release.mkdir()
+    (release / ".git-revision").write_text("a" * 40 + "\n", encoding="utf-8")
+    (release / ".release-profile").write_text("lean\n", encoding="utf-8")
+    os.utime(release, ns=(modified_ns, modified_ns))
+    return release
+
+
+def test_state_preflight_accepts_missing_and_current_tenant_state(
+    tmp_path: Path,
+) -> None:
+    missing = inspect_selected_state(tmp_path, ("missing-tenant",))
+    assert missing[0]["status"] == "MISSING"
+    assert missing[0]["blocking"] is False
+
+    tenant_id = "current-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    with ArtifactRepository(tmp_path / "tenants" / tenant_key):
+        pass
+
+    current = inspect_selected_state(tmp_path, (tenant_id,))
+    assert current[0]["status"] == "COMPATIBLE"
+    assert current[0]["persisted_revision"] == 11
+    assert current[0]["blocking"] is False
+
+
+def test_state_preflight_rejects_state_below_the_supported_floor(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "legacy-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute("DELETE FROM jacobian_schema_migrations WHERE revision > 8")
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+    assert report["status"] == "UNSUPPORTED"
+    assert report["persisted_revision"] == 8
+    assert report["blocking"] is True
+
+
+def test_state_preflight_cli_does_not_print_bearer_tokens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    token = "sentinel-secret-token-that-must-stay-private"
+    token_file = tmp_path / "tokens.json"
+    token_file.write_text(
+        json.dumps(
+            {
+                "tokens": [
+                    {
+                        "tenant_id": "tenant-a",
+                        "token": token,
+                        "scopes": ["jacobian:use"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "preflight_state.py",
+            "--state-root",
+            str(tmp_path / "state"),
+            "--auth-tokens-file",
+            str(token_file),
+        ],
+    )
+    assert preflight_main() == 0
+    output = capsys.readouterr()
+
+    assert '"status": "MISSING"' in output.out
+    assert token not in output.out
+    assert token not in output.err
+
+
+def test_release_retention_keeps_active_and_explicit_previous_release(
+    tmp_path: Path,
+) -> None:
+    releases = tmp_path / "releases"
+    releases.mkdir()
+    oldest = _completed_release(releases, "111111111111-lean", modified_ns=1)
+    newest = _completed_release(releases, "222222222222-lean", modified_ns=3)
+    active = _completed_release(releases, "333333333333-lean", modified_ns=2)
+    unknown = releases / "operator-notes"
+    unknown.mkdir()
+    incomplete = releases / "444444444444-lean"
+    incomplete.mkdir()
+    current = tmp_path / "current"
+    current.symlink_to(active)
+
+    pruned = prune_releases(
+        releases,
+        current,
+        retain=2,
+        preserve_releases=(oldest,),
+    )
+
+    assert pruned == (newest,)
+    assert oldest.is_dir()
+    assert active.is_dir()
+    assert not newest.exists()
+    assert unknown.is_dir()
+    assert incomplete.is_dir()
+
+
+def test_release_retention_refuses_to_prune_without_the_active_release(
+    tmp_path: Path,
+) -> None:
+    releases = tmp_path / "releases"
+    releases.mkdir()
+    active = releases / "not-a-release"
+    active.mkdir()
+    current = tmp_path / "current"
+    current.symlink_to(active)
+
+    with pytest.raises(ValueError, match="active release is not a completed"):
+        prune_releases(releases, current, retain=1)
+
+
+def test_smoke_retry_classification_is_transport_only() -> None:
+    transient = ExceptionGroup(
+        "transport",
+        [httpx2.ConnectError("refused"), httpx2.ReadTimeout("cold start")],
+    )
+    deterministic = ExceptionGroup(
+        "contract",
+        [httpx2.ConnectError("refused"), RuntimeError("version mismatch")],
+    )
+
+    assert is_transient_transport_failure(transient) is True
+    assert is_transient_transport_failure(TransientSmokeError("cold worker")) is True
+    assert is_transient_transport_failure(deterministic) is False
+    assert is_transient_transport_failure(RuntimeError("catalog mismatch")) is False
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_code"),
+    (
+        (httpx2.ConnectError("refused"), TRANSIENT_SMOKE_EXIT),
+        (RuntimeError("revision mismatch"), 1),
+    ),
+)
+def test_smoke_failure_exit_codes_are_stable(
+    failure: Exception,
+    expected_code: int,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        exit_for_smoke_failure("smoke", failure)
+
+    assert exc_info.value.code == expected_code
+    assert str(failure) in capsys.readouterr().err

@@ -12,6 +12,8 @@ import httpx2
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
+from jacobian._deployment_smoke import TransientSmokeError, exit_for_smoke_failure
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -54,7 +56,12 @@ async def _run(
 
 
 def _require_verified(result: dict[str, Any], *, environment: str) -> None:
-    if result.get("execution", {}).get("status") != "COMPLETED":
+    status = result.get("execution", {}).get("status")
+    if status in {"TIMEOUT", "CANCELLED"}:
+        raise TransientSmokeError(
+            f"{environment} lean.check ended with transient status {status}"
+        )
+    if status != "COMPLETED":
         raise RuntimeError(f"{environment} lean.check did not complete")
     if result.get("output", {}).get("conclusion") != "TRUE":
         raise RuntimeError(f"{environment} lean.check did not accept True")
@@ -88,9 +95,7 @@ def _require_mathlib_declaration(result: dict[str, Any]) -> None:
     output = result.get("output", {})
     native_result = output.get("result") if isinstance(output, dict) else None
     declarations = (
-        native_result.get("declarations")
-        if isinstance(native_result, dict)
-        else None
+        native_result.get("declarations") if isinstance(native_result, dict) else None
     )
     if not isinstance(declarations, list) or not declarations:
         raise RuntimeError("MATHLIB declaration search returned no exact match")
@@ -175,5 +180,5 @@ async def _main() -> None:
 if __name__ == "__main__":
     try:
         asyncio.run(_main())
-    except RuntimeError as exc:
-        raise SystemExit(f"Lean smoke failed: {exc}") from None
+    except Exception as exc:
+        exit_for_smoke_failure("Lean smoke", exc)

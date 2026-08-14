@@ -49,7 +49,7 @@ create a session, cache, proof-state resource, or replay record.
 
 Documentation must describe the stateless two-tool surface consistently:
 
-- `math.find` discovers or inspects installed operation declarations;
+- `math.find` discovers or inspects immutable built-in operation declarations;
 - `math.run` executes one typed payload and returns one bounded result;
 - callers keep any value needed for a later operation; and
 - no page teaches SQLite state, artifact publication, value references,

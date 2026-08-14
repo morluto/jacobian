@@ -15,9 +15,9 @@ or verification-record product. Catalog entries are often still called
 and [architecture](explanation/architecture.md) define the contract.
 
 Jacobian is pre-stable. The product, architecture, operation-library, and tool
-documents define the current contract; the installed catalog defines which
-operations are available in a particular checkout. Evaluations guide portfolio
-quality and do not grant formal authority.
+documents define the current contract; the immutable catalog exposed by a
+server defines its available operations. Evaluations guide portfolio quality
+and do not grant formal authority.
 
 ## Project control documents
 
@@ -28,7 +28,7 @@ These documents define the current product contract:
 | What is Jacobian? | [Product model](explanation/product-blueprint.md) | Product and ownership model |
 | How is it structured? | [Architecture](explanation/architecture.md) | Dependencies and trust boundaries |
 | What does MCP expose? | [Tool surface](reference/tools.md) | Fixed MCP projection |
-| What operations are installed now? | Runtime `operation://catalog` | Current installation-specific inventory |
+| What operations are available? | Runtime `operation://catalog` | Current immutable server inventory |
 | What work is open? | GitHub issues (e.g. architecture epics) | Implementation priorities live in issues, not a parallel goals doc |
 
 ## How-to guides
@@ -69,8 +69,8 @@ operation contract.
 small mathematical workloads for documentation and testing; they are not
 runtime workflows.
 
-Use the runtime `operation://catalog` and `math.find` for the
-active operation inventory and exact operation schemas.
+Use the runtime `operation://catalog` and `math.find` for the immutable
+operation inventory and exact operation schemas.
 
 ## Explanation
 

@@ -11,6 +11,12 @@ integrity, dataset identity, Oracle validation, and Jacobian observation
 configuration; it does not prescribe the mathematical strategy an evaluated
 agent should use.
 
+Treat Jacobian as an optional public MCP surface: the agent decides whether to
+search, which operation to run, how to compose returned values, and when to
+stop. A control condition may expose no Jacobian server. Do not add a study
+workspace, artifact lifecycle, alternate assurance schema, or planner to make
+an evaluation easier to orchestrate.
+
 For detailed verifier design, adversarial fixture coverage, diagnostic scoring,
 and evaluation-integrity review, also use the repository's
 `verifier-evaluations` skill. Keep this skill focused on Harbor packaging,
@@ -365,10 +371,12 @@ For a control run, use `JACOBIAN_ENABLED=0`; it selects the matching Harbor
 job without the sidecar or MCP configuration. Keep the task filter, model,
 prompt, budget, and environment fixed when comparing the two modes. The
 external MCP configuration belongs to the treatment job, not task TOMLs.
+It makes `math.find` and `math.run` available; it must not require, order, or
+recommend their use.
 
 Inspect Harbor ATIF together with Jacobian telemetry for operation discovery
-and descriptions, invocation and parameter errors, artifact and verification
-record flow, repeated or irrelevant calls, shell/file activity, tokens, time,
+and descriptions, invocation and parameter errors, typed results or checker
+verdicts, repeated or irrelevant calls, shell/file activity, tokens, time,
 cost, and completion. Record the git tree, task digests, provider/runtime,
 model/settings, prompt, seeds, raw traces, and structured reports.
 

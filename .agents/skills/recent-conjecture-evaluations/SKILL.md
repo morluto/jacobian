@@ -90,8 +90,8 @@ Then:
 3. Inspect returned cards and exact IDs for schemas, examples, domains, bounds,
    and provider availability. Treat these as operation facts, not workflow advice.
 4. Inspect the producer and independent checker as separate operation contracts.
-   A checker-backed result is verified only when the top-level result envelope
-   contains a verification-record URI bound to the exact final claim.
+   A checker verdict must bind the exact claim and semantics; do not expect a
+   generic verification record or artifact URI from an ordinary operation.
 5. Execute the frozen input directly.
 6. Run the independent checker when installed.
 7. Replay relevant malformed, wrong-input, over-bound, and unsupported-domain cases.
@@ -114,7 +114,9 @@ evaluation harness to validate the applicable suite shape.
 
 Use fresh isolated contexts and identical settings except for Jacobian
 availability. The control must not see Jacobian tools, skills, catalog content,
-or routing hints.
+or routing hints. The treatment exposes the public surface only: the agent
+still decides whether discovery is useful, which operation to call, and when to
+stop.
 
 ### 6. Score observable evidence
 

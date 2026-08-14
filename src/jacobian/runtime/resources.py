@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.artifacts import ArtifactService
+from jacobian.catalog_operation_collector import CatalogOperationCollector
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_service import OperationService
+from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactService
@@ -29,7 +30,7 @@ class RuntimeResources:
     smt: SmtArtifactService
     polynomial_expressions: PolynomialExpressionArtifactService
     checkers: CheckerRegistry
-    operations: OperationService
+    operations: CatalogOperationCollector | OperationDispatcher
 
     def close(self) -> None:
         failures: list[Exception] = []

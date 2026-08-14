@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from jacobian.artifacts import ArtifactService
+from jacobian.catalog_operation_collector import CatalogOperationCollector
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_service import OperationService
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
@@ -42,7 +42,7 @@ def bootstrap_services(
             )
         checkers = CheckerRegistry(store)
         checkers.bind_existing_when_omitted = bind_existing_checkers
-        operations = OperationService(
+        operations = CatalogOperationCollector(
             store,
             policy=operation_policy,
         )

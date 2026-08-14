@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from jacobian.artifacts import ArtifactService
+from jacobian.catalog_operation_collector import CatalogOperationCollector
 from jacobian.contracts.operations import (
     OperationDescriptor,
 )
@@ -17,7 +18,6 @@ from jacobian.domains.finite_sets import finite_set_operations
 from jacobian.domains.number_theory import number_theory_operations
 from jacobian.domains.sequences import sequence_operations
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_service import OperationService
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -62,11 +62,11 @@ def test_no_id_in_two_declaration_groups() -> None:
 
 
 @pytest.fixture
-def service(tmp_path: Path) -> Iterator[OperationService]:
+def service(tmp_path: Path) -> Iterator[CatalogOperationCollector]:
     store = ArtifactRepository(tmp_path / "state")
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
-    service = OperationService(store)
+    service = CatalogOperationCollector(store)
     installer = OperationBinder(store, schemas, artifacts)
     for operations in ALL_OPERATION_GROUPS:
         for adapter in installer.bind(operations).adapters:
@@ -77,7 +77,9 @@ def service(tmp_path: Path) -> Iterator[OperationService]:
         store.close()
 
 
-def test_catalog_matches_installed_operations(service: OperationService) -> None:
+def test_catalog_matches_installed_operations(
+    service: CatalogOperationCollector,
+) -> None:
     catalog_ids = {d.operation_id for d in service.catalog().operations}
     expected = _all_operation_ids()
     assert catalog_ids == expected, (

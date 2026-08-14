@@ -25,7 +25,7 @@ _CAP = "capab" + "ility"
 def test_research_memory_import_in_src_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/operation_service.py",
+        "src/jacobian/operation_dispatcher.py",
         f"from jacobian.memory import {_RM}\n",
     )
     report = check_architecture(tmp_path)

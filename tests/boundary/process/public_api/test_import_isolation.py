@@ -90,7 +90,7 @@ def test_native_matrices_does_not_import_operations_or_provider_loading() -> Non
             "jacobian.adapters",
             "jacobian.artifact_repository",
             "jacobian.operation_dispatch",
-            "jacobian.operation_service",
+            "jacobian.catalog_operation_collector",
             "jacobian.operation_binding",
             "jacobian.provider_runtime",
             "jacobian.providers",

@@ -8,23 +8,23 @@ from tests.support.services import open_domain_services
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import loads_strict_json
+from jacobian.catalog_operation_collector import CatalogOperationCollector
 from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.number_theory import number_theory_operations
-from jacobian.operation_service import OperationService
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
 @pytest.fixture
-def number_theory_service(tmp_path: Path) -> Iterator[OperationService]:
+def number_theory_service(tmp_path: Path) -> Iterator[CatalogOperationCollector]:
     with open_domain_services(tmp_path, number_theory_operations()) as services:
         yield services.core.operations
 
 
 def test_jacobi_symbol_is_domain_owned_exact_computation(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
 ) -> None:
     result = number_theory_service.invoke(
         OperationRequest(
@@ -38,7 +38,7 @@ def test_jacobi_symbol_is_domain_owned_exact_computation(
 
 
 def test_even_jacobi_denominator_fails_before_artifact_writes(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
 ) -> None:
     result = number_theory_service.invoke(
         OperationRequest(
@@ -53,7 +53,7 @@ def test_even_jacobi_denominator_fails_before_artifact_writes(
 
 
 def test_chinese_remainder_returns_canonical_exact_solution(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
 ) -> None:
     result = number_theory_service.invoke(
         OperationRequest(
@@ -67,7 +67,7 @@ def test_chinese_remainder_returns_canonical_exact_solution(
 
 
 def test_chinese_remainder_reports_inconsistent_system_without_artifacts(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
 ) -> None:
     result = number_theory_service.invoke(
         OperationRequest(
@@ -82,7 +82,7 @@ def test_chinese_remainder_reports_inconsistent_system_without_artifacts(
 
 
 def test_discrete_logarithm_returns_typed_result(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
 ) -> None:
     result = number_theory_service.invoke(
         OperationRequest(
@@ -108,7 +108,7 @@ def test_discrete_logarithm_returns_typed_result(
 
 
 def test_discrete_logarithm_reports_unsolvable_without_false_witness(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
 ) -> None:
     result = number_theory_service.invoke(
         OperationRequest(
@@ -128,7 +128,7 @@ def test_discrete_logarithm_reports_unsolvable_without_false_witness(
 
 
 def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
     monkeypatch,
 ) -> None:
     observed: dict[str, object] = {}
@@ -177,7 +177,7 @@ def test_discrete_logarithm_timeout_is_an_artifact_free_non_conclusion(
 
 
 def test_factorization_is_complete_in_an_isolated_bounded_worker(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
 ) -> None:
     result = number_theory_service.invoke(
         OperationRequest(
@@ -223,7 +223,7 @@ def test_factorization_is_complete_in_an_isolated_bounded_worker(
     ),
 )
 def test_powerful_number_decision_preserves_a_complete_factor_witness(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
     value: str,
     is_powerful: bool,
     factors: list[dict[str, object]],
@@ -251,7 +251,7 @@ def test_powerful_number_decision_preserves_a_complete_factor_witness(
 
 @pytest.mark.parametrize("value", ["0", "-1", "-72"])
 def test_powerful_number_rejects_nonpositive_input_before_artifact_writes(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
     value: str,
 ) -> None:
     result = number_theory_service.invoke(
@@ -274,7 +274,7 @@ def test_powerful_number_rejects_nonpositive_input_before_artifact_writes(
     ),
 )
 def test_factorization_derived_operations_complete_in_the_worker(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
     operation_id: str,
     expected: dict[str, object],
 ) -> None:
@@ -290,7 +290,7 @@ def test_factorization_derived_operations_complete_in_the_worker(
 
 
 def test_factorization_timeout_is_an_artifact_free_non_conclusion(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
     monkeypatch,
 ) -> None:
     observed: dict[str, object] = {}
@@ -346,7 +346,7 @@ def test_factorization_timeout_is_an_artifact_free_non_conclusion(
     ),
 )
 def test_factorization_derived_timeout_is_a_non_conclusion(
-    number_theory_service: OperationService,
+    number_theory_service: CatalogOperationCollector,
     monkeypatch,
     operation_id: str,
     payload: dict[str, object],

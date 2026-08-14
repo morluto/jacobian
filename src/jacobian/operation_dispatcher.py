@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
     OperationDescriptor,
@@ -10,13 +12,15 @@ from jacobian.contracts.operations import (
     OperationRequest,
     OperationResult,
 )
+from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_catalog import OperationCatalog
+from jacobian.operation_dispatch import dispatch_operation
+from jacobian.operation_registration import register_operation
 from jacobian.operation_registry import OperationRegistry
-from jacobian.operation_service import OperationService
 from jacobian.operation_visibility import OperationVisibilityPolicy
 
 
-class OperationDispatcher(OperationService):
+class OperationDispatcher:
     """Resolve a visible operation only when its first request arrives."""
 
     def __init__(self, catalog: OperationCatalog, registry: OperationRegistry) -> None:
@@ -24,9 +28,15 @@ class OperationDispatcher(OperationService):
             raise TypeError(
                 "operation dispatcher requires an OperationVisibilityPolicy"
             )
-        super().__init__(registry.binder.store, policy=catalog.policy)
+        self.store = registry.binder.store
+        self.policy = catalog.policy
+        self._adapters: dict[str, OperationAdapter[Any]] = {}
+        self._descriptors: dict[str, OperationDescriptor] = {}
         self._catalog = catalog
         self._registry = registry
+
+    def register(self, adapter: OperationAdapter[Any]) -> None:
+        register_operation(adapter, self._adapters, self._descriptors)
 
     def invoke(self, request: OperationRequest) -> OperationResult:
         if (
@@ -34,7 +44,7 @@ class OperationDispatcher(OperationService):
             and self._catalog.inspect(request.operation_id) is not None
         ):
             self.register(self._registry.resolve(request.operation_id))
-        return super().invoke(request)
+        return dispatch_operation(self, request)
 
     def discover(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
         return self._catalog.search(request)

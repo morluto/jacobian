@@ -71,6 +71,12 @@ DISTANCE_MATRIX_OPERATION = OperationDeclaration(
     request_type=GraphDistanceMatrixRequest,
     result_type=GraphDistanceMatrixResult,
     execute=compute_distance_matrix,
+    invalid_request=OperationDiagnostic(
+        code="INVALID_GRAPH_DISTANCE_MATRIX_REQUEST",
+        stage="graph_distance_matrix_input_validation",
+        message="Input does not satisfy the bounded graph distance-matrix contract.",
+        hint="Supply a canonical simple graph with at most 64 vertices.",
+    ),
     publication=InlinePublication(),
     tags=("graph", "invariant", "distance", "matrix", "exact"),
     examples=(

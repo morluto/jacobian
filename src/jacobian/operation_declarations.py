@@ -9,7 +9,7 @@ requirements later.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from jacobian.contracts.base import ContractModel
@@ -130,6 +130,20 @@ class OperationDeclaration[RequestT: ContractModel, ResultT: ContractModel]:
 type OperationDeclarations = tuple[OperationDeclaration[Any, Any], ...]
 
 
+def with_invalid_request(
+    operations: OperationDeclarations,
+    diagnostic: OperationDiagnostic,
+) -> OperationDeclarations:
+    """Attach one domain-owned boundary diagnostic without wrapping execution."""
+
+    return tuple(
+        operation
+        if operation.invalid_request is not None
+        else replace(operation, invalid_request=diagnostic)
+        for operation in operations
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class InlineOperationFactory:
     """Declare inline operations with one provider and domain error policy."""
@@ -238,4 +252,5 @@ __all__ = [
     "PreflightResult",
     "PreflightStatus",
     "PublicationPolicy",
+    "with_invalid_request",
 ]

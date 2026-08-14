@@ -119,8 +119,8 @@ def test_rank_request_rejects_cross_field_values_before_execution(
     )
 
     assert result.execution.status.value == "ERROR"
-    assert result.diagnostics[0].code == "INVALID_REQUEST"
-    assert result.diagnostics[0].stage == "operation_input_validation"
+    assert result.diagnostics[0].code == "INVALID_FINITE_FIELD_REQUEST"
+    assert result.diagnostics[0].stage == "finite_field_input_validation"
     assert set(result.output) == {"error"}
     assert result.verification_record_uri is None
     assert result.artifact_uris == ()

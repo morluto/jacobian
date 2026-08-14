@@ -294,9 +294,7 @@ class DeclaredOperationAdapter:
                 hint="Inspect the operation schema and provide a strictly valid request.",
             )
             raise OperationInvocationError(
-                base
-                if invalid_request is not None
-                else enriched_invalid_request(base, exc)
+                enriched_invalid_request(base, exc)
             ) from exc
 
         return parsed_request

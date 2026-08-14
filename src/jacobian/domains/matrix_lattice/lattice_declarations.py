@@ -1,14 +1,26 @@
 """Bounded lattice-reduction operation declarations."""
 
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.matrix_lattice.lattice import (
     LATTICE_OPERATIONS,
 )
-from jacobian.operation_declarations import OperationDeclarations
+from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
 
 
 def lattice_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
-    return LATTICE_OPERATIONS
+    return with_invalid_request(
+        LATTICE_OPERATIONS,
+        OperationDiagnostic(
+            code="INVALID_LATTICE_REDUCTION_REQUEST",
+            stage="lattice_input_validation",
+            message="Input does not satisfy the bounded exact lattice contract.",
+            hint=(
+                "Use a 1..32 by 1..32 canonical integer row basis, entries of at "
+                "most 256 digits, and wall_seconds from 1 through 60."
+            ),
+        ),
+    )
 
 
 CHECKER_DECLARATIONS = ()

@@ -36,9 +36,9 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.matrix_lattice.domain_declarations import matrix_operations
 from jacobian.domains.matrix_lattice.lattice import reduce_lattice_basis
 from jacobian.domains.matrix_lattice.lattice_declarations import lattice_operations
+from jacobian.domains.matrix_lattice.operation_declarations import matrix_operation
 from jacobian.domains.matrix_lattice.operations import (
     compute_smith_normal_form,
-    matrix_operation,
 )
 from jacobian.operations import OperationAbortError
 from jacobian.process_policy import ProcessResult, ProcessTermination

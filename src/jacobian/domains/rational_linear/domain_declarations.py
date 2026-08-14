@@ -6,6 +6,7 @@ from jacobian.contracts.linear import (
     LinearRationalSolutionFindRequest,
     LinearRationalSolutionResult,
 )
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains._examples import example
 from jacobian.domains.rational_linear.checkers import (
     RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS,
@@ -15,7 +16,11 @@ from jacobian.domains.rational_linear.operations import (
     compute_rational_solution,
 )
 from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
+from jacobian.operation_declarations import (
+    OperationDeclaration,
+    OperationDeclarations,
+    with_invalid_request,
+)
 
 
 def rational_linear_operations() -> OperationDeclarations:
@@ -60,7 +65,15 @@ def rational_linear_operations() -> OperationDeclarations:
             ),
         ),
     )
-    return operations
+    return with_invalid_request(
+        operations,
+        OperationDiagnostic(
+            code="INVALID_RATIONAL_LINEAR_REQUEST",
+            stage="rational_linear_input_validation",
+            message="Input does not satisfy the exact rational-linear contract.",
+            hint="Use canonical rational components and bounded dimensions.",
+        ),
+    )
 
 
 __all__ = ["rational_linear_operations"]

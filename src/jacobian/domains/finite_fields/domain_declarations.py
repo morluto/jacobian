@@ -51,6 +51,7 @@ from jacobian.operation_declarations import (
     OperationDeclarations,
     PreflightResult,
     PreflightStatus,
+    with_invalid_request,
 )
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
@@ -436,16 +437,24 @@ def finite_field_operations() -> OperationDeclarations:
             OutputPort(name="permutation", value_type=PermutationCertificate),
         ),
     )
-    return (
-        projective_line_operation,
-        restrict_operation,
-        rank_operation,
-        ledger_operation,
-        orbit_operation,
-        table_operation,
-        fiber_operation,
-        collision_operation,
-        permutation_operation,
+    return with_invalid_request(
+        (
+            projective_line_operation,
+            restrict_operation,
+            rank_operation,
+            ledger_operation,
+            orbit_operation,
+            table_operation,
+            fiber_operation,
+            collision_operation,
+            permutation_operation,
+        ),
+        OperationDiagnostic(
+            code="INVALID_FINITE_FIELD_REQUEST",
+            stage="finite_field_input_validation",
+            message="Input does not satisfy the exact finite-field contract.",
+            hint="Use values with identical presentations, axes, and bases.",
+        ),
     )
 
 

@@ -64,20 +64,20 @@ def install_verified_domain_bundles(
 @contextmanager
 def open_exact_domain_services(
     root: str | Path,
-    *bundles: OperationDeclarations,
+    *operation_groups: OperationDeclarations,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
 ) -> Iterator[VerifiedDomainTestServices]:
     """Open domain services with explicitly selected verified operations.
 
-    Ordinary domain fixtures declare their bundles rather than assembling the
+    Ordinary domain fixtures declare their operations rather than assembling the
     checker and adapter registration recipe.
     """
 
     with open_domain_services(root, checker_authority=checker_authority) as services:
-        installed = install_verified_domain_bundles(services, *bundles)
+        installed = install_verified_domain_bundles(services, *operation_groups)
         yield VerifiedDomainTestServices(
             core=services.core,
             application=services.application,
             installation=services.installation,
-            groups=installed,
+            operation_groups=installed,
         )

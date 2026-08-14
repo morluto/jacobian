@@ -17,8 +17,7 @@ def test_open_exact_domain_services_installs_bundle_and_verifiers(
     bundle = matrix_operations()
     with open_exact_domain_services(tmp_path / "state", bundle) as services:
         catalog_ids = {
-            item.operation_id
-            for item in services.core.operations.catalog().operations
+            item.operation_id for item in services.core.operations.catalog().operations
         }
         assert "matrix.determinant.compute" in catalog_ids
         assert any(item.endswith(".verify") for item in catalog_ids)
@@ -34,8 +33,7 @@ def test_open_exact_domain_services_respects_absent_authority(
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         catalog_ids = {
-            item.operation_id
-            for item in services.core.operations.catalog().operations
+            item.operation_id for item in services.core.operations.catalog().operations
         }
         assert "matrix.determinant.compute" in catalog_ids
         assert not any(item.endswith(".verify") for item in catalog_ids)
@@ -46,7 +44,7 @@ def test_open_exact_domain_services_rejects_empty_selection(
     tmp_path: Path,
 ) -> None:
     with (
-        pytest.raises(ValueError, match="at least one verified domain"),
+        pytest.raises(ValueError, match="at least one verified operation group"),
         open_exact_domain_services(tmp_path / "state"),
     ):
         pass

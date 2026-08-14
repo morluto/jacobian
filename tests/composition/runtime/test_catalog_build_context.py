@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from jacobian.catalog_build_context import create_catalog_build_context
+from jacobian.catalog.build import create_catalog_build_context
 
 
 def _graphs() -> tuple[SimpleNamespace, object, list[object]]:

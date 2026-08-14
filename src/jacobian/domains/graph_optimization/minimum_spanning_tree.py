@@ -18,8 +18,11 @@ from jacobian.contracts.operations import (
     OperationDiagnostic,
     OperationExample,
 )
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import InlineOperation, OperationDeclaration
+from jacobian.operation_declarations import (
+    InlineOperation,
+    OperationDeclaration,
+    inline_operation,
+)
 from jacobian.operations import (
     OperationRefusalError,
 )

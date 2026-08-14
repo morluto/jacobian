@@ -18,8 +18,12 @@ from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
     LeanDeclarationService,
 )
-from jacobian.operation_bindings import durable_operation, inline_operation
-from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
+from jacobian.operation_declarations import (
+    OperationDeclaration,
+    OperationDeclarations,
+    durable_operation,
+    inline_operation,
+)
 from jacobian.operations import (
     OperationRefusalError,
 )

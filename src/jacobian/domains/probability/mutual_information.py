@@ -31,8 +31,7 @@ from jacobian.math.probability.values import (
     MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS,
     MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
 )
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, inline_operation
 from jacobian.operations import OperationRefusalError
 
 FiniteJointLabel = Annotated[

@@ -25,8 +25,11 @@ from jacobian.domains.graph_optimization.exact_search import (
     solve_minimum_maximal_matching,
 )
 from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import InlineOperation, OperationDeclaration
+from jacobian.operation_declarations import (
+    InlineOperation,
+    OperationDeclaration,
+    inline_operation,
+)
 from jacobian.operations import OperationAbortError
 
 

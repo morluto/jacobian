@@ -22,8 +22,7 @@ from jacobian.domains.polynomial.groebner_protocol import (
     GroebnerWorkerResultLimitExceeded,
     parse_groebner_worker_response,
 )
-from jacobian.operation_bindings import durable_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, durable_operation
 from jacobian.operations import OperationAbortError
 from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
 from jacobian.worker_environment import worker_environment

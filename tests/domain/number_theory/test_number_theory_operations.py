@@ -8,7 +8,7 @@ from tests.support.services import open_domain_services
 
 from jacobian.bounded_process import ProcessResourceLimits
 from jacobian.canonical import loads_strict_json
-from jacobian.catalog_operation_collector import CatalogOperationCollector
+from jacobian.catalog.collector import CatalogOperationCollector
 from jacobian.contracts.operations import (
     OperationRequest,
 )

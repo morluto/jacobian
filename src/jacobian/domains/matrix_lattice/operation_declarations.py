@@ -45,8 +45,11 @@ from jacobian.domains.matrix_lattice.operations import (
     compute_trace,
 )
 from jacobian.math.matrices.values import SmithNormalForm
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import InlineOperation, OperationDeclaration
+from jacobian.operation_declarations import (
+    InlineOperation,
+    OperationDeclaration,
+    inline_operation,
+)
 from jacobian.operation_ports import OutputPort
 from jacobian.operations import (
     OperationAbortError,

@@ -28,6 +28,7 @@ from jacobian.operation_declarations import (
     InlinePublication,
     OperationDeclaration,
     OperationDeclarations,
+    OperationSpec,
 )
 from jacobian.operation_errors import (
     OperationInvocationError,
@@ -40,14 +41,21 @@ from jacobian.operation_publication import (
     PublicationLimitError,
     publish_operation,
 )
-from jacobian.operation_runtime import (
-    DomainOperation,
-    OperationResources,
-)
 from jacobian.operations import Completed, Effect, Failed
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceError, ValueReferenceStore
+
+type DomainOperation = OperationSpec
+
+
+@dataclass(frozen=True, slots=True)
+class OperationResources:
+    artifacts: ArtifactService
+    values: ValueReferenceStore
+    semantics_uri: str
+    input_schema_uris: dict[type[ContractModel], str]
+    result_schema_uris: dict[str, str]
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jacobian.builtin_operation_modules import load_builtin_operation_modules
-from jacobian.catalog_operations import CatalogOperationBuilder
+from jacobian.catalog.build import CatalogOperationBuilder
 from jacobian.operation_binding import BoundOperationGroup
 from jacobian.operation_declarations import OperationDeclarations
 from tests.support.catalog_build_options import CheckerAuthorityMode

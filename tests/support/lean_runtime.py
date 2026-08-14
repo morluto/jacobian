@@ -13,7 +13,7 @@ from pathlib import Path
 from filelock import FileLock
 
 from jacobian.builtin_operations import LeanCheckAdapter
-from jacobian.catalog_build_context import (
+from jacobian.catalog.build import (
     CatalogBuildContext,
     create_catalog_build_context,
 )

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.catalog_build_context import CatalogBuildContext
+from jacobian.catalog.build import CatalogBuildContext
 from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind

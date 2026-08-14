@@ -38,8 +38,7 @@ from jacobian.domains._examples import example
 from jacobian.domains.probability.gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, inline_operation
 from jacobian.operations import (
     OperationRefusalError,
 )

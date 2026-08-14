@@ -112,7 +112,8 @@ def _build_catalog(
     state_dir: Path,
     checker_authorization: CheckerAuthorization,
 ) -> CatalogBuildResult:
-    from jacobian.catalog_compiler import compile_operation_catalog
+    # Compile-only import: operator command import must not assemble the catalog.
+    from jacobian.catalog.compiler import compile_operation_catalog
 
     return compile_operation_catalog(
         state_dir,

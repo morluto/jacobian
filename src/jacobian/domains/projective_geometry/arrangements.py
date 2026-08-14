@@ -18,8 +18,7 @@ from jacobian.contracts.projective_geometry import (
 )
 from jacobian.domains._examples import example
 from jacobian.math.arithmetic import primitive_integer_vector
-from jacobian.operation_bindings import durable_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, durable_operation
 from jacobian.operations import (
     OperationFailure,
     OperationRefusalError,

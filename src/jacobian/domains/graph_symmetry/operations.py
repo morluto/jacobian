@@ -12,10 +12,10 @@ from jacobian.contracts.graph_symmetry import (
 )
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import nx
-from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import (
     OperationDeclaration,
     OperationDeclarations,
+    inline_operation,
 )
 
 

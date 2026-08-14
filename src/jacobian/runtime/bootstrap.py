@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from jacobian.artifacts import ArtifactService
-from jacobian.catalog_operation_collector import CatalogOperationCollector
+from jacobian.catalog.collector import CatalogOperationCollector
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polynomial_expressions import (

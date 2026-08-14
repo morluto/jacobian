@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.catalog_build_context import CatalogBuildContext
+from jacobian.catalog.build import CatalogBuildContext
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.nullstellensatz import (
     BoundedRationalPolynomial,

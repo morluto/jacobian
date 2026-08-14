@@ -57,7 +57,7 @@ from jacobian.verification.service import VerificationService
 from jacobian.verification_operations import certificate_verification_adapter
 
 if TYPE_CHECKING:
-    from jacobian.catalog_build_context import CatalogBuildContext
+    from jacobian.catalog.build import CatalogBuildContext
 
 SELECTED_GRAPH_OPERATION_IDS = frozenset(
     {

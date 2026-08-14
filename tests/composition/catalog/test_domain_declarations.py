@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from jacobian.artifacts import ArtifactService
-from jacobian.catalog_operation_collector import CatalogOperationCollector
+from jacobian.catalog.collector import CatalogOperationCollector
 from jacobian.contracts.operations import (
     OperationDescriptor,
 )

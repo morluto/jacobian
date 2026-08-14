@@ -16,16 +16,16 @@ if __package__ in {None, ""} and str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 _FORBIDDEN_STARTUP_MODULES = (
-    "jacobian.catalog_build",
-    "jacobian.catalog_compiler",
+    "jacobian.catalog.build",
+    "jacobian.catalog.compiler",
     "jacobian.provider_inventory",
 )
 _FORBIDDEN_STARTUP_PREFIXES = ("jacobian.providers.",)
 _FORBIDDEN_CALLS = {
     ("jacobian.checker_identity", "batch_checker_manifest_measurement"),
     ("jacobian.checker_identity", "checker_manifest_measurement"),
-    ("jacobian.catalog_build", "build_catalog_operations"),
-    ("jacobian.catalog_compiler", "compile_operation_catalog"),
+    ("jacobian.catalog.build", "build_catalog_operations"),
+    ("jacobian.catalog.compiler", "compile_operation_catalog"),
 }
 
 

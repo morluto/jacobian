@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from jacobian.artifacts import ArtifactService
-from jacobian.catalog_operation_collector import CatalogOperationCollector
+from jacobian.catalog.collector import CatalogOperationCollector
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.polynomial_expressions import (

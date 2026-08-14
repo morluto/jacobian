@@ -10,8 +10,7 @@ from jacobian.contracts.certified_snf import (
 )
 from jacobian.domains._certified_snf import certificate_from_reduction, smith_reduce
 from jacobian.domains._examples import example
-from jacobian.operation_bindings import durable_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, durable_operation
 
 
 def _certified_smith(

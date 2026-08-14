@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.contracts.operations import (
+    OperationDescriptor,
     OperationDiagnostic,
     OperationRequest,
     OperationResult,
@@ -23,7 +24,7 @@ from jacobian.operation_errors import (
     enriched_invalid_request,
 )
 from jacobian.operation_projection import OperationProjection, project_operation_result
-from jacobian.operation_telemetry import log_invocation
+from jacobian.operation_validation import validate_payload, validator
 from jacobian.operation_verification import validate_verified_result
 from jacobian.operations import Failed
 from jacobian.provider_runtime import (
@@ -33,6 +34,60 @@ from jacobian.provider_runtime import (
 from jacobian.schema_registry import model_schema
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def register_operation(
+    adapter: OperationAdapter[Any],
+    adapters: dict[str, OperationAdapter[Any]],
+    descriptors: dict[str, OperationDescriptor],
+) -> None:
+    """Record one adapter after validating its advertised schemas and examples."""
+
+    descriptor = adapter.descriptor
+    if descriptor.operation_id in adapters:
+        raise OperationError(f"duplicate operation ID: {descriptor.operation_id}")
+    validator(descriptor.input_schema)
+    validator(descriptor.output_schema)
+    for example in descriptor.examples:
+        try:
+            validate_payload(descriptor.input_schema, example.input)
+        except OperationError as exc:
+            raise OperationError(
+                f"operation {descriptor.operation_id} invocation example "
+                f"{example.name!r} does not match its input schema"
+            ) from exc
+    descriptors[descriptor.operation_id] = descriptor.model_copy(deep=True)
+    adapters[descriptor.operation_id] = adapter
+
+
+def log_invocation(result: OperationResult, started: float) -> None:
+    elapsed_ms = round((time.monotonic() - started) * 1000)
+    diagnostic_codes = (
+        ",".join(diagnostic.code for diagnostic in result.diagnostics) or "-"
+    )
+    verification_record_uri_present = result.verification_record_uri is not None
+    _LOGGER.info(
+        (
+            "operation invocation operation_id=%s version=%s "
+            "status=%s verification_record_uri_present=%s elapsed_ms=%d diagnostics=%s"
+        ),
+        result.operation_id,
+        result.operation_version,
+        result.execution.status.value,
+        verification_record_uri_present,
+        elapsed_ms,
+        diagnostic_codes,
+        extra={
+            "jacobian_operation_id": result.operation_id,
+            "jacobian_operation_version": result.operation_version,
+            "jacobian_execution_status": result.execution.status.value,
+            "jacobian_verification_record_uri_present": verification_record_uri_present,
+            "jacobian_elapsed_ms": elapsed_ms,
+            "jacobian_diagnostic_codes": tuple(
+                diagnostic.code for diagnostic in result.diagnostics
+            ),
+        },
+    )
 
 
 def dispatch_operation(dispatch: Any, request: OperationRequest) -> OperationResult:
@@ -295,4 +350,4 @@ def _adapter_output_model_failure(descriptor: Any) -> OperationProjection:
     )
 
 
-__all__ = ["dispatch_operation"]
+__all__ = ["dispatch_operation", "log_invocation", "register_operation"]

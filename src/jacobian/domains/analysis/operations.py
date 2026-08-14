@@ -25,8 +25,7 @@ from jacobian.domains.analysis.protocol import (
     ArbPointEnclosureWorkerResponse,
     parse_arb_worker_response,
 )
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, inline_operation
 from jacobian.operations import OperationAbortError
 from jacobian.process_policy import (
     ProcessRequest,

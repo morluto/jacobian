@@ -9,10 +9,10 @@ from jacobian.contracts.formal_datasets import (
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains._examples import example
 from jacobian.formal_datasets import _materialize_operation
-from jacobian.operation_bindings import durable_operation
 from jacobian.operation_declarations import (
     OperationDeclaration,
     OperationDeclarations,
+    durable_operation,
     with_invalid_request,
 )
 from jacobian_checkers.lean4 import LEAN_VERSION

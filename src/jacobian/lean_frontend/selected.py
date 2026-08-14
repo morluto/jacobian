@@ -35,8 +35,7 @@ from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
 
 if TYPE_CHECKING:
-    from jacobian.catalog_build_context import CatalogBuildContext
-    from jacobian.catalog_build_resources import CatalogBuildResources
+    from jacobian.catalog.build import CatalogBuildContext, CatalogBuildResources
 
 _LOGGER = logging.getLogger(__name__)
 

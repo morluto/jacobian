@@ -15,10 +15,10 @@ from jacobian.domains.rational_linear.operations import (
     compute_rational_inconsistency,
     compute_rational_solution,
 )
-from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import (
     OperationDeclaration,
     OperationDeclarations,
+    inline_operation,
     with_invalid_request,
 )
 

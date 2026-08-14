@@ -7,8 +7,10 @@ from typing import Any
 
 from jacobian import __version__
 from jacobian.builtin_operation_modules import load_builtin_operation_modules
-from jacobian.catalog_build import build_catalog_operations
-from jacobian.catalog_build_context import create_catalog_build_context
+from jacobian.catalog.build import (
+    build_catalog_operations,
+    create_catalog_build_context,
+)
 from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_catalog import (
     CatalogBuildResult,

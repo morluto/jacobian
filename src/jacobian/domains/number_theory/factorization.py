@@ -44,8 +44,11 @@ from jacobian.domains.number_theory.factorization_protocol import (
     SquarefreeWorkerResponse,
     parse_factorization_worker_response,
 )
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import InlineOperation, OperationDeclaration
+from jacobian.operation_declarations import (
+    InlineOperation,
+    OperationDeclaration,
+    inline_operation,
+)
 from jacobian.operations import (
     OperationAbortError,
     OperationRefusalError,

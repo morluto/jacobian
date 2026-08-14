@@ -24,8 +24,7 @@ from jacobian.domains.matrix_lattice.hnf_protocol import (
     HermiteNormalFormWorkerRequest,
     parse_hnf_worker_response,
 )
-from jacobian.operation_bindings import durable_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, durable_operation
 from jacobian.operations import (
     OperationAbortError,
 )

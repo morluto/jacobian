@@ -14,10 +14,6 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_bindings import (
-    durable_operation,
-    inline_operation,
-)
 from jacobian.operation_declarations import (
     Effect,
     OperationAbortError,
@@ -26,6 +22,8 @@ from jacobian.operation_declarations import (
     OperationRefusalError,
     PreflightResult,
     PreflightStatus,
+    durable_operation,
+    inline_operation,
 )
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import Failed

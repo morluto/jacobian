@@ -9,8 +9,7 @@ from jacobian.math.graphs.independence import (
     IndependenceNumberResult,
     independence_number,
 )
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, inline_operation
 from jacobian.operations import OperationRefusalError
 
 _INVALID_REQUEST = OperationDiagnostic(

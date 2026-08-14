@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from jacobian.catalog_build_context import create_catalog_build_context
+from jacobian.catalog.build import create_catalog_build_context
 from jacobian.operation_declarations import OperationDeclarations
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.bootstrap import bootstrap_services

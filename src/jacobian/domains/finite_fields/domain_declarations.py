@@ -44,13 +44,13 @@ from jacobian.math.finite_fields.operations import (
     _InvalidDirectionRankLedgerError,
     _InvalidFiniteMapTableError,
 )
-from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import (
     SUPPORTED,
     OperationDeclaration,
     OperationDeclarations,
     PreflightResult,
     PreflightStatus,
+    inline_operation,
     with_invalid_request,
 )
 from jacobian.operation_ports import InputPort, OutputPort

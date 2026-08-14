@@ -13,7 +13,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.domains.matrix_lattice import matrix_operations
 from jacobian.domains.matrix_lattice.hnf import _parse_hnf_worker_result
-from jacobian.operation_bindings import DurablePublication
+from jacobian.operation_declarations import DurablePublication
 
 
 def _matrix(entries: list[list[int]]) -> dict[str, object]:

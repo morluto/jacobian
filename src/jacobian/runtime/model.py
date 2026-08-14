@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from jacobian.catalog_operation_collector import CatalogOperationCollector
+from jacobian.catalog.collector import CatalogOperationCollector
 from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.resources import RuntimeResources

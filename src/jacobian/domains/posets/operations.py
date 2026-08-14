@@ -30,13 +30,11 @@ from jacobian.contracts.posets import (
     linear_extension_memo_digest,
 )
 from jacobian.domains._examples import example
-from jacobian.operation_bindings import (
-    durable_operation,
-    inline_operation,
-)
 from jacobian.operation_declarations import (
     OperationDeclaration,
     OperationDeclarations,
+    durable_operation,
+    inline_operation,
 )
 
 

@@ -18,11 +18,14 @@ _DELETED_CATALOG_PHASE_MODULES = (
     "catalog_foundations.py",
     "catalog_resources.py",
     "catalog_checkers.py",
+    "catalog_build.py",
+    "catalog_build_context.py",
+    "catalog_build_resources.py",
+    "catalog_operations.py",
+    "catalog_compiler.py",
+    "catalog_operation_collector.py",
 )
-_CATALOG_OWNER_MODULES = (
-    SOURCE / "catalog_build.py",
-    SOURCE / "catalog_operations.py",
-)
+_CATALOG_OWNER_MODULES = (SOURCE / "catalog" / "build.py",)
 _FORBIDDEN_DOMAIN_INSTALL_NAMES = frozenset(
     {
         "build_graph_composition_operations",
@@ -104,6 +107,6 @@ def test_family_catalog_hooks_are_indexed_from_selected_family_specs() -> None:
         assert seen.isdisjoint(operation_ids)
         seen.update(operation_ids)
     assert "selected_family_catalog_installers" in _imported_names(
-        SOURCE / "catalog_build.py"
+        SOURCE / "catalog" / "build.py"
     )
-    assert "selected_family_specs" in _imported_names(SOURCE / "catalog_build.py")
+    assert "selected_family_specs" in _imported_names(SOURCE / "catalog" / "build.py")

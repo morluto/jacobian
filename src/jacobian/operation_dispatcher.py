@@ -15,8 +15,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_catalog import OperationCatalogView
-from jacobian.operation_dispatch import dispatch_operation
-from jacobian.operation_registration import register_operation
+from jacobian.operation_dispatch import dispatch_operation, register_operation
 from jacobian.operation_visibility import OperationVisibilityPolicy
 
 

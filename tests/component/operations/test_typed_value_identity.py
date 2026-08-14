@@ -9,8 +9,7 @@ from tests.support.services import DomainTestServices, open_domain_services
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, inline_operation
 from jacobian.operation_ports import InputPort, OutputPort
 
 

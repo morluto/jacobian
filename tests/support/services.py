@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from jacobian.catalog_build_context import (
+from jacobian.catalog.build import (
     CatalogBuildContext,
     create_catalog_build_context,
 )

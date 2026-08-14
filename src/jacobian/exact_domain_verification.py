@@ -36,9 +36,9 @@ from jacobian.exact_domain_checkers import (
 )
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
 from jacobian.operation_binding import BoundOperationGroup, OperationBinder
-from jacobian.operation_bindings import DurablePublication
 from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_declarations import (
+    DurablePublication,
     InlineOperation,
     OperationDeclaration,
     OperationDeclarations,

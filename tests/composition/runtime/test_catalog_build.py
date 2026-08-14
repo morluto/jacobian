@@ -3,8 +3,8 @@ from __future__ import annotations
 from contextlib import nullcontext
 from types import SimpleNamespace
 
-import jacobian.catalog_build as assembler
-from jacobian.catalog_build_resources import CatalogBuildResources
+import jacobian.catalog.build as assembler
+from jacobian.catalog.build import CatalogBuildResources
 
 
 class _RecordingContext:

@@ -8,9 +8,11 @@ from typing import Any, cast
 
 import pytest
 
-from jacobian.catalog_build_context import CatalogBuildContext
-from jacobian.catalog_build_resources import CatalogBuildResources
-from jacobian.catalog_operations import CatalogOperationBuilder
+from jacobian.catalog.build import (
+    CatalogBuildContext,
+    CatalogBuildResources,
+    CatalogOperationBuilder,
+)
 from jacobian.contracts.operations import ProviderAvailability
 from jacobian.lean_frontend.selected import install_selected_lean_catalog
 

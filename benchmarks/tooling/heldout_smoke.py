@@ -239,9 +239,7 @@ def create_bundle(root: Path) -> tuple[Path, Path]:
                 "source_sha": "a" * 40,
                 "platform": "linux/amd64",
                 "server_version": "0.0.0",
-                "policy_profile": "DEFAULT",
                 "catalog_digest": "sha256:" + "2" * 64,
-                "policy_digest": "sha256:" + "3" * 64,
             },
         ],
         "experiment": {

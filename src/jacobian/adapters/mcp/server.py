@@ -11,10 +11,6 @@ from mcp.server import MCPServer
 from jacobian import __version__
 from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.core import register_core_projection
-from jacobian.adapters.mcp.deployment_identity import (
-    DeploymentIdentity,
-    load_deployment_identity,
-)
 from jacobian.adapters.mcp.guidance import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS
 from jacobian.adapters.mcp.lifecycle import (
     runtime_lifespan,
@@ -35,7 +31,6 @@ def create_server() -> MCPServer[AppState]:
     return _build_server(
         state=state,
         close_owner=_noop,
-        deployment_identity=load_deployment_identity(),
     )
 
 
@@ -44,7 +39,6 @@ def create_server_from_state(
     *,
     close_owner: Callable[[], None],
     start_owner: Callable[[], None] | None = None,
-    deployment_identity: DeploymentIdentity | None = None,
     token_verifier: Any | None = None,
     auth: Any | None = None,
 ) -> MCPServer[AppState]:
@@ -54,7 +48,6 @@ def create_server_from_state(
         state=state,
         close_owner=close_owner,
         start_owner=start_owner,
-        deployment_identity=deployment_identity,
         token_verifier=token_verifier,
         auth=auth,
     )
@@ -65,7 +58,6 @@ def _build_server(
     state: AppState,
     close_owner: Callable[[], None],
     start_owner: Callable[[], None] | None = None,
-    deployment_identity: DeploymentIdentity | None = None,
     token_verifier: Any | None = None,
     auth: Any | None = None,
 ) -> MCPServer[AppState]:
@@ -91,7 +83,7 @@ def _build_server(
         token_verifier=token_verifier,
         auth=auth,
     )
-    register_core_projection(server, state, deployment_identity)
+    register_core_projection(server, state)
     return server
 
 

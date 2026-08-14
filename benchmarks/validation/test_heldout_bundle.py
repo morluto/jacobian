@@ -12,18 +12,21 @@ from benchmarks.tooling.heldout_bundle import (
     _AWS_ENVIRONMENT_VARS,
     _digest,
     _safe_extract,
-    _tree_digest,
     render_plan,
-    treatment_readiness_preflight,
     validate_manifest,
     verify_bundle,
 )
-from benchmarks.tooling.observation_comparison import compare_evidence
-from benchmarks.tooling.observation_results import (
+from benchmarks.tooling.heldout_observations import (
     _heldout_plan_failures,
     _mark_invoked_if_operation_used,
     collect_heldout_evidence,
 )
+from benchmarks.tooling.heldout_routing import (
+    control_routing_status,
+    treatment_readiness_preflight,
+)
+from benchmarks.tooling.observation_comparison import compare_evidence
+from benchmarks.validation.heldout_fixtures import _bundle, _manifest, _write
 
 ROOT = Path(__file__).parents[2]
 
@@ -47,181 +50,6 @@ def test_heldout_evidence_rejects_malformed_run_entries(runs: object) -> None:
 
     assert selected == []
     assert any("held-out plan runs" in failure for failure in failures)
-
-
-def _manifest() -> dict:
-    tasks = [
-        {
-            "id": f"held-out-{index}",
-            "family": "family-a" if index < 3 else "family-b",
-            "digest": "sha256:" + "a" * 64,
-            "verifier_root": f"dataset/held-out-{index}/tests",
-            "verifier_tree_digest": "sha256:" + "b" * 64,
-            "oracle_root": f"dataset/held-out-{index}/solution",
-            "oracle_tree_digest": "sha256:" + "c" * 64,
-        }
-        for index in range(5)
-    ]
-    snapshot_id = "sha256:" + "f" * 64
-    return {
-        "schema_version": "3",
-        "bundle_id": "operation-held-out-v1",
-        "bundle_version": "1.0.0",
-        "snapshot_lock": {
-            "lock_id": snapshot_id,
-            "lock_uri": "s3://private-bucket/snapshot-lock.json",
-            "lock_digest": "sha256:" + "0" * 64,
-        },
-        "archive": {
-            "uri": "s3://private-bucket/bundle.tar.gz",
-            "sha256": "sha256:" + "d" * 64,
-        },
-        "dataset": {
-            "id": "operation-held-out-v1",
-            "path": "dataset",
-            "manifest_digest": "sha256:" + "e" * 64,
-            "minimum_independent_families": 2,
-        },
-        "tasks": tasks,
-        "conditions": [
-            {"id": "C1", "role": "PRIMARY_CONTROL", "jacobian_enabled": False},
-            {
-                "id": "C2",
-                "role": "PRIMARY_TREATMENT",
-                "jacobian_enabled": True,
-                "image": "registry.invalid/jacobian@sha256:" + "4" * 64,
-                "source_sha": "b" * 40,
-                "platform": "linux/amd64",
-                "server_version": "1.2.3",
-                "policy_profile": "DEFAULT",
-                "catalog_digest": "sha256:" + "5" * 64,
-                "policy_digest": "sha256:" + "6" * 64,
-            },
-        ],
-        "experiment": {
-            "harbor_version": "0.20.0",
-            "agent": {"name": "codex", "version": "1.2.3"},
-            "model": "model",
-            "prompt_path": "prompts/heldout.md",
-            "prompt_digest": "sha256:" + "7" * 64,
-            "reasoning_effort": "high",
-            "randomization_seed": 104729,
-            "max_tokens": 100000,
-            "max_cost_usd": 100.0,
-            "stages": {
-                "pilot": {
-                    "task_ids": [item["id"] for item in tasks[:3]],
-                    "repetitions": 3,
-                },
-                "decision": {
-                    "task_ids": [item["id"] for item in tasks],
-                    "repetitions": 5,
-                },
-            },
-        },
-    }
-
-
-def _write(tmp_path: Path, value: dict) -> Path:
-    path = tmp_path / "manifest.json"
-    path.write_text(json.dumps(value), encoding="utf-8")
-    return path
-
-
-def _bundle(tmp_path: Path, value: dict) -> Path:
-    root = tmp_path / "bundle"
-    dataset = root / "dataset"
-    dataset.mkdir(parents=True)
-    prompt = root / "prompts" / "heldout.md"
-    prompt.parent.mkdir()
-    prompt.write_text("{instruction}\n", encoding="utf-8")
-    value["experiment"]["prompt_digest"] = _digest(prompt)
-    for task in value["tasks"]:
-        task_root = dataset / task["id"]
-        tests = task_root / "tests"
-        solution = task_root / "solution"
-        tests.mkdir(parents=True)
-        solution.mkdir()
-        (tests / "verifier.py").write_text("print('ok')\n", encoding="utf-8")
-        (solution / "submission.json").write_text("{}\n", encoding="utf-8")
-        task["verifier_tree_digest"] = _tree_digest(tests)
-        task["oracle_tree_digest"] = _tree_digest(solution)
-    dataset_entries = [
-        "[dataset]",
-        'name = "jacobian/operation-held-out-v1"',
-        "",
-    ]
-    for task in value["tasks"]:
-        dataset_entries.extend(
-            [
-                "[[tasks]]",
-                f'name = "jacobian/{task["id"]}"',
-                f'digest = "{task["digest"]}"',
-                "",
-            ]
-        )
-    (dataset / "dataset.toml").write_text("\n".join(dataset_entries), encoding="utf-8")
-    value["dataset"]["manifest_digest"] = _digest(dataset / "dataset.toml")
-    lock = {
-        "schema_version": "1",
-        "snapshot_id": value["snapshot_lock"]["lock_id"],
-        "lock_digest": "sha256:" + "0" * 64,
-        "suite": {
-            "id": "operation-held-out-v1",
-            "name": "jacobian/operation-held-out-v1",
-            "title": "Held-out",
-            "purpose": "Held-out evaluation",
-            "claim_class": "held-out-comparative-evaluation",
-            "answer_visibility": "hidden-at-runtime",
-            "default_execution_profile": "oracle-and-observation",
-            "evaluation_kind": "workflow",
-            "publication_status": "local",
-            "scored": True,
-            "required_provider": "core",
-            "runtime_profile": "core",
-            "suite_header_digest": "sha256:" + "0" * 64,
-        },
-        "harbor_version": "0.20.0",
-        "source": {
-            "tree_sha": "0" * 40,
-            "dirty": False,
-            "registry_digest": "sha256:" + "0" * 64,
-            "environment_profiles_digest": "sha256:" + "0" * 64,
-        },
-        "environment": {
-            "profiles": ["core"],
-            "summary_digest": "sha256:" + "0" * 64,
-        },
-        "tasks": [
-            {
-                "id": task["id"],
-                "name": f"jacobian/{task['id']}",
-                "digest": task["digest"],
-                "assurance_ceiling": "UNVERIFIED",
-                "required_provider": "core",
-                "environment_profile": "core",
-                "environment": {
-                    "profile": "core",
-                    "agent_image": "registry.invalid/agent@sha256:" + "0" * 64,
-                    "verifier_image": "registry.invalid/verifier@sha256:" + "0" * 64,
-                    "allow_apt": False,
-                },
-                "member_digest": "sha256:" + "0" * 64,
-            }
-            for task in value["tasks"]
-        ],
-        "evaluation": {
-            "task_ids": [task["id"] for task in value["tasks"]],
-            "oracle_job_digest": "sha256:" + "0" * 64,
-            "oracle_jobs_dir": "jobs/oracle.json",
-        },
-    }
-    lock_path = root / "snapshot-lock.json"
-    lock_path.write_text(
-        json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    value["snapshot_lock"]["lock_digest"] = _digest(lock_path)
-    return root
 
 
 def test_valid_manifest_freezes_c1_c2_and_budget_ladder(tmp_path: Path) -> None:
@@ -573,9 +401,7 @@ def test_bundle_rejects_snapshot_lock_task_disagreement(
         verify_bundle(value, root)
 
 
-def _ready_probe(
-    *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-):
+def _ready_probe(*, mcp_url, expected_version, timeout_seconds):
     return {
         "reachable": True,
         "report": {
@@ -584,9 +410,7 @@ def _ready_probe(
             "catalog": {
                 "catalog_version": "1",
                 "operations": 1,
-                "policy_profile": "DEFAULT",
                 "catalog_digest": "sha256:" + "5" * 64,
-                "policy_digest": "sha256:" + "6" * 64,
                 "sha256": "abc",
             },
             "discovery": {"bytes": 100, "matches": ["cap-1"]},
@@ -594,9 +418,7 @@ def _ready_probe(
     }
 
 
-def _unreachable_probe(
-    *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-):
+def _unreachable_probe(*, mcp_url, expected_version, timeout_seconds):
     return {"reachable": False, "diagnostic": "connection refused"}
 
 
@@ -617,12 +439,9 @@ def test_treatment_readiness_preflight_ready_with_successful_probe(
     assert contract["condition_id"] == "C2"
     assert contract["checks"]["image_digest_pinned"] is True
     assert contract["checks"]["catalog_digest_bound"] is True
-    assert contract["checks"]["policy_digest_bound"] is True
     assert contract["checks"]["server_version_bound"] is True
-    assert contract["checks"]["policy_profile_bound"] is True
     assert contract["checks"]["server_version_match"] is True
     assert contract["checks"]["catalog_digest_match"] is True
-    assert contract["checks"]["policy_digest_match"] is True
     assert contract["checks"]["required_tools_present"] is True
     assert contract["checks"]["describe_responded"] is True
     assert contract["failures"] == []
@@ -670,9 +489,7 @@ def test_treatment_readiness_preflight_retries_until_probe_succeeds(
     manifest_path = _write(tmp_path, value)
     call_count = 0
 
-    def eventually_ready(
-        *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-    ):
+    def eventually_ready(*, mcp_url, expected_version, timeout_seconds):
         nonlocal call_count
         call_count += 1
         if call_count < 3:
@@ -680,7 +497,6 @@ def test_treatment_readiness_preflight_retries_until_probe_succeeds(
         return _ready_probe(
             mcp_url=mcp_url,
             expected_version=expected_version,
-            expected_policy_profile=expected_policy_profile,
             timeout_seconds=timeout_seconds,
         )
 
@@ -705,9 +521,7 @@ def test_treatment_readiness_preflight_exhausts_retries_and_fails_closed(
     manifest_path = _write(tmp_path, value)
     call_count = 0
 
-    def always_unreachable(
-        *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-    ):
+    def always_unreachable(*, mcp_url, expected_version, timeout_seconds):
         nonlocal call_count
         call_count += 1
         return {"reachable": False, "diagnostic": "connection refused"}
@@ -732,9 +546,7 @@ def test_treatment_readiness_preflight_misconfigured_on_digest_mismatch(
     value = _manifest()
     manifest_path = _write(tmp_path, value)
 
-    def mismatched_probe(
-        *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-    ):
+    def mismatched_probe(*, mcp_url, expected_version, timeout_seconds):
         return {
             "reachable": True,
             "report": {
@@ -743,9 +555,7 @@ def test_treatment_readiness_preflight_misconfigured_on_digest_mismatch(
                 "catalog": {
                     "catalog_version": "1",
                     "operations": 1,
-                    "policy_profile": "DEFAULT",
                     "catalog_digest": "sha256:" + "9" * 64,
-                    "policy_digest": "sha256:" + "6" * 64,
                     "sha256": "abc",
                 },
                 "discovery": {"bytes": 100, "matches": ["cap-1"]},
@@ -765,8 +575,6 @@ def test_treatment_readiness_preflight_misconfigured_on_digest_mismatch(
 
 
 def test_control_routing_status_is_not_configured(tmp_path: Path) -> None:
-    from benchmarks.tooling.heldout_bundle import control_routing_status
-
     value = _manifest()
     manifest_path = _write(tmp_path, value)
     contract = control_routing_status(manifest_path)
@@ -829,17 +637,13 @@ def _c2_routing_contract(routing_status: str = "AVAILABLE_UNUSED") -> dict:
         "treatment": {
             "image": "registry.invalid/jacobian@sha256:" + "1" * 64,
             "server_version": "1.0.0",
-            "policy_profile": "DEFAULT",
             "catalog_digest": "sha256:" + "2" * 64,
-            "policy_digest": "sha256:" + "3" * 64,
         },
         "routing": {"compose_file": "c2.compose.json", "mcp_url": "http://x/mcp"},
         "probe": {
             "reachable": True,
             "server_version_observed": "1.0.0",
             "catalog_digest_observed": "sha256:" + "2" * 64,
-            "policy_digest_observed": "sha256:" + "3" * 64,
-            "policy_profile_observed": "DEFAULT",
             "tool_names": ["math.find", "math.run"],
             "discovery_matches": ["cap-1"],
             "probe_digest": "sha256:" + "0" * 64,
@@ -848,12 +652,9 @@ def _c2_routing_contract(routing_status: str = "AVAILABLE_UNUSED") -> dict:
         "checks": {
             "image_digest_pinned": True,
             "catalog_digest_bound": True,
-            "policy_digest_bound": True,
             "server_version_bound": True,
-            "policy_profile_bound": True,
             "server_version_match": True,
             "catalog_digest_match": True,
-            "policy_digest_match": True,
             "required_tools_present": True,
             "describe_responded": True,
         },

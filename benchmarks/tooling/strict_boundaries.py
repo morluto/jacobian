@@ -194,9 +194,7 @@ class HeldoutTreatmentCondition(_StrictModel):
     source_sha: StrictStr
     platform: StrictStr
     server_version: StrictStr
-    policy_profile: StrictStr
     catalog_digest: StrictStr
-    policy_digest: StrictStr
 
 
 class HeldoutAgent(_StrictModel):

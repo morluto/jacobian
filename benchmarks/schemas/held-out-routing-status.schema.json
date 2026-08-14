@@ -26,13 +26,11 @@
     "treatment": {
       "type": ["object", "null"],
       "additionalProperties": false,
-      "required": ["image", "server_version", "policy_profile", "catalog_digest", "policy_digest"],
+      "required": ["image", "server_version", "catalog_digest"],
       "properties": {
         "image": {"type": "string", "minLength": 1},
         "server_version": {"type": "string", "minLength": 1},
-        "policy_profile": {"type": "string", "minLength": 1},
-        "catalog_digest": {"$ref": "#/$defs/digest"},
-        "policy_digest": {"$ref": "#/$defs/digest"}
+        "catalog_digest": {"$ref": "#/$defs/digest"}
       }
     },
     "routing": {
@@ -52,8 +50,6 @@
         "reachable": {"type": "boolean"},
         "server_version_observed": {"type": ["string", "null"]},
         "catalog_digest_observed": {"type": ["string", "null"]},
-        "policy_digest_observed": {"type": ["string", "null"]},
-        "policy_profile_observed": {"type": ["string", "null"]},
         "tool_names": {
           "type": ["array", "null"],
           "items": {"type": "string"}
@@ -69,16 +65,13 @@
     "checks": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["image_digest_pinned", "catalog_digest_bound", "policy_digest_bound", "server_version_bound", "policy_profile_bound", "server_version_match", "catalog_digest_match", "policy_digest_match", "required_tools_present", "describe_responded"],
+      "required": ["image_digest_pinned", "catalog_digest_bound", "server_version_bound", "server_version_match", "catalog_digest_match", "required_tools_present", "describe_responded"],
       "properties": {
         "image_digest_pinned": {"type": "boolean"},
         "catalog_digest_bound": {"type": "boolean"},
-        "policy_digest_bound": {"type": "boolean"},
         "server_version_bound": {"type": "boolean"},
-        "policy_profile_bound": {"type": "boolean"},
         "server_version_match": {"type": ["boolean", "null"]},
         "catalog_digest_match": {"type": ["boolean", "null"]},
-        "policy_digest_match": {"type": ["boolean", "null"]},
         "required_tools_present": {"type": ["boolean", "null"]},
         "describe_responded": {"type": ["boolean", "null"]}
       }

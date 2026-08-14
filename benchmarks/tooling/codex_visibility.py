@@ -36,7 +36,6 @@ from jacobian.eval.telemetry import parse_agent_transcript
 _ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_CASES = _ROOT / "benchmarks/config/codex-visibility-v2.json"
 _REQUIRED_TOOLS = frozenset({"math.find", "math.run"})
-_LOCAL_VERIFICATION_URI_PREFIX = "artifact://"
 _CODEX_ENVIRONMENT = (
     "HOME",
     "PATH",
@@ -112,7 +111,6 @@ class VisibilityCase(BaseModel):
     expected_operation_ids: tuple[str, ...] = ()
     diagnostic_operation_ids: tuple[str, ...] = ()
     acceptable_output_outcomes: tuple[VisibilityOutputOutcome, ...] = ()
-    require_verified: bool = False
 
     @model_validator(mode="after")
     def _valid_expectation(self) -> VisibilityCase:
@@ -143,8 +141,6 @@ class VisibilityCase(BaseModel):
             or self.acceptable_output_outcomes
         ):
             raise ValueError("ABSTAIN cases cannot declare operations or outcomes")
-        if self.expectation is AdoptionExpectation.ABSTAIN and self.require_verified:
-            raise ValueError("ABSTAIN cases cannot require verification")
         return self
 
 
@@ -190,13 +186,6 @@ def surface_snapshot_digest(surface: Mapping[str, Any]) -> str:
     if any(field not in surface for field in fields):
         raise ValueError("MCP surface snapshot is incomplete")
     return _json_digest({field: surface[field] for field in fields})
-
-
-def _is_verified_invocation(invocation: object) -> bool:
-    if not isinstance(invocation, Mapping):
-        return False
-    uri = invocation.get("verification_record_uri")
-    return isinstance(uri, str) and uri.startswith(_LOCAL_VERIFICATION_URI_PREFIX)
 
 
 def _output_field(output: object, path: str) -> tuple[bool, object]:
@@ -278,13 +267,6 @@ def classify_visibility(
         for invocation in telemetry.get("operation_invocations", [])
         if isinstance(invocation, Mapping)
     )
-    verified = any(
-        isinstance(invocation, Mapping)
-        and isinstance(invocation.get("operation_id"), str)
-        and invocation.get("operation_id") in expected
-        and _is_verified_invocation(invocation)
-        for invocation in invocations
-    )
     matched_outcomes = tuple(
         outcome
         for outcome in case.acceptable_output_outcomes
@@ -304,7 +286,6 @@ def classify_visibility(
         "inspected": bool(telemetry.get("operation_describe_exact_calls", 0)),
         "invoked": bool(attempted),
         "completed": bool(completed),
-        "verified": verified,
         "discovery_free_invocation": bool(expected_attempted)
         and not discovery_call_count
         and not inspection_call_count,
@@ -325,10 +306,8 @@ def classify_visibility(
     if case.expectation is AdoptionExpectation.ABSTAIN:
         contract_satisfied = observed["abstained"]
     else:
-        contract_satisfied = (
-            not expected_observed["missing_completed"]
-            and (verified or not case.require_verified)
-            and (bool(matched_outcomes) or not case.acceptable_output_outcomes)
+        contract_satisfied = not expected_observed["missing_completed"] and (
+            bool(matched_outcomes) or not case.acceptable_output_outcomes
         )
     usage = telemetry.get("usage")
     uncached_input_tokens = None
@@ -377,8 +356,6 @@ def classify_visibility(
 async def inspect_surface(
     url: str,
     timeout_seconds: float,
-    *,
-    require_deployment_identity: bool = False,
 ) -> dict[str, Any]:
     """Snapshot the exact MCP surface used by a visibility run."""
 
@@ -429,27 +406,10 @@ async def inspect_surface(
             "catalog": {
                 "catalog_version": catalog["catalog_version"],
                 "catalog_digest": catalog_digest,
-                "policy_profile": catalog["policy_profile"],
-                "policy_digest": catalog["policy_digest"],
                 "operation_count": len(catalog["operations"]),
                 "content_sha256": _sha256_bytes(catalog_content.text.encode("utf-8")),
             },
         }
-        if require_deployment_identity:
-            deployment_result = await client.read_resource("deployment://identity")
-            deployment_content = deployment_result.contents[0]
-            if not isinstance(deployment_content, TextResourceContents):
-                raise RuntimeError("deployment identity is not text")
-            deployment = json.loads(deployment_content.text)
-            if (
-                not isinstance(deployment, dict)
-                or deployment.get("schema_version") != "1"
-                or deployment.get("evidence") != "release-marker"
-                or not isinstance(deployment.get("revision"), str)
-                or deployment.get("package_version") != server_info.version
-            ):
-                raise RuntimeError("MCP deployment identity is malformed")
-            snapshot["deployment"] = deployment
     return {**snapshot, "surface_digest": surface_snapshot_digest(snapshot)}
 
 
@@ -827,9 +787,6 @@ def _build_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "invoked_count": sum(
             run["classification"]["observed"]["invoked"] for run in runs
-        ),
-        "verified_count": sum(
-            run["classification"]["observed"]["verified"] for run in runs
         ),
         "discovery_free_invocation_count": sum(
             run["classification"]["observed"]["discovery_free_invocation"]

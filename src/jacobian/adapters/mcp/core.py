@@ -7,7 +7,6 @@ from mcp.server.mcpserver.resources import FunctionResource
 from mcp.types import ToolAnnotations
 
 from jacobian.adapters.mcp.context import AppState
-from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
 from jacobian.adapters.mcp.tools import math_find, math_run
 from jacobian.contracts.operations import OperationCatalogSnapshot
@@ -16,7 +15,6 @@ from jacobian.contracts.operations import OperationCatalogSnapshot
 def register_core_projection(
     server: MCPServer[AppState],
     state: AppState,
-    deployment_identity: DeploymentIdentity | None = None,
 ) -> None:
     """Register Jacobian's fixed tools and static resources directly with the SDK."""
 
@@ -61,24 +59,6 @@ def register_core_projection(
             mime_type="application/json",
         )
     )
-
-    if deployment_identity is not None:
-
-        async def managed_deployment_identity() -> DeploymentIdentity:
-            return deployment_identity
-
-        server.add_resource(
-            FunctionResource.from_function(
-                managed_deployment_identity,
-                uri="deployment://identity",
-                name="deployment-identity",
-                description=(
-                    "Immutable Git revision and package version for this managed "
-                    "Jacobian release."
-                ),
-                mime_type="application/json",
-            )
-        )
 
 
 __all__ = ["register_core_projection"]

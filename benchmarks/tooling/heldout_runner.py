@@ -318,7 +318,7 @@ def _setup_routing_contracts(
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
     """Run preflight and write routing contracts; return (treatment, control, failures)."""
 
-    from benchmarks.tooling.heldout_bundle import (
+    from benchmarks.tooling.heldout_routing import (
         control_routing_status,
         treatment_readiness_preflight,
     )

@@ -17,7 +17,6 @@ from jacobian.adapters.mcp.context import (
     AppState,
     AuthenticationError,
 )
-from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.serving_catalog import ServingCatalog
 
@@ -189,7 +188,6 @@ def create_remote_server(
     return _build_server(
         state=state,
         close_owner=_noop,
-        deployment_identity=load_deployment_identity(),
         token_verifier=token_verifier,
         auth=auth,
     )

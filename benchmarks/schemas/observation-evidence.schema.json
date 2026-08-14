@@ -160,7 +160,6 @@
         "max_cost_usd": {"type": "number", "exclusiveMinimum": 0},
         "jacobian_image": {"$ref": "#/$defs/jacobian_image"},
         "catalog_digest": {"$ref": "#/$defs/digest"},
-        "policy_digest": {"$ref": "#/$defs/digest"},
         "runtime_state": {"type": "string", "minLength": 1},
         "budget": {
           "type": "object",
@@ -376,9 +375,7 @@
         "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "platform": {"type": "string", "pattern": "^[a-z0-9_]+/[a-z0-9_]+$"},
         "server_version": {"type": "string", "minLength": 1},
-        "policy_profile": {"type": "string", "minLength": 1},
-        "catalog_digest": {"$ref": "#/$defs/digest"},
-        "policy_digest": {"$ref": "#/$defs/digest"}
+        "catalog_digest": {"$ref": "#/$defs/digest"}
       }
     },
     "runtime_invariants": {

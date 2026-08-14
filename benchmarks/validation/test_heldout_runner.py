@@ -56,9 +56,7 @@ def _manifest(tmp_path: Path) -> Path:
                 "source_sha": "a" * 40,
                 "platform": "linux/amd64",
                 "server_version": "1.0.0",
-                "policy_profile": "DEFAULT",
                 "catalog_digest": "sha256:" + "2" * 64,
-                "policy_digest": "sha256:" + "3" * 64,
             },
         ],
         "experiment": {
@@ -150,9 +148,7 @@ def _runner(*, missing_cost: bool = False):
     return calls, run
 
 
-def _ready_probe(
-    *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-):
+def _ready_probe(*, mcp_url, expected_version, timeout_seconds):
     return {
         "reachable": True,
         "report": {
@@ -161,9 +157,7 @@ def _ready_probe(
             "catalog": {
                 "catalog_version": "1",
                 "operations": 1,
-                "policy_profile": "DEFAULT",
                 "catalog_digest": "sha256:" + "2" * 64,
-                "policy_digest": "sha256:" + "3" * 64,
                 "sha256": "abc",
             },
             "discovery": {"bytes": 100, "matches": ["cap-1"]},
@@ -171,9 +165,7 @@ def _ready_probe(
     }
 
 
-def _unreachable_probe(
-    *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-):
+def _unreachable_probe(*, mcp_url, expected_version, timeout_seconds):
     return {"reachable": False, "diagnostic": "connection refused"}
 
 
@@ -277,7 +269,7 @@ def test_runner_persists_routing_status_contracts(tmp_path: Path) -> None:
 def test_runner_aborts_when_treatment_not_ready(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("benchmarks.tooling.heldout_bundle.time.sleep", lambda _: None)
+    monkeypatch.setattr("benchmarks.tooling.heldout_routing.time.sleep", lambda _: None)
     manifest_path = _manifest(tmp_path)
     plan = _plan(tmp_path)
     ledger_path = tmp_path / "ledger.json"
@@ -305,16 +297,14 @@ def test_runner_retries_probe_and_succeeds_when_container_becomes_ready(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("benchmarks.tooling.heldout_bundle.time.sleep", lambda _: None)
+    monkeypatch.setattr("benchmarks.tooling.heldout_routing.time.sleep", lambda _: None)
     manifest_path = _manifest(tmp_path)
     plan = _plan(tmp_path)
     ledger_path = tmp_path / "ledger.json"
     calls, runner = _runner()
     probe_calls = 0
 
-    def eventually_ready(
-        *, mcp_url, expected_version, expected_policy_profile, timeout_seconds
-    ):
+    def eventually_ready(*, mcp_url, expected_version, timeout_seconds):
         nonlocal probe_calls
         probe_calls += 1
         if probe_calls < 2:
@@ -322,7 +312,6 @@ def test_runner_retries_probe_and_succeeds_when_container_becomes_ready(
         return _ready_probe(
             mcp_url=mcp_url,
             expected_version=expected_version,
-            expected_policy_profile=expected_policy_profile,
             timeout_seconds=timeout_seconds,
         )
 

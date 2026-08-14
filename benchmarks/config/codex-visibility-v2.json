@@ -8,8 +8,7 @@
       "prompt": "Use available Jacobian mathematical tools to compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Return the determinant and the operation ID used.",
       "expected_operation_ids": [
         "matrix.determinant.compute"
-      ],
-      "require_verified": false
+      ]
     },
     {
       "case_id": "latent-determinant",
@@ -17,8 +16,7 @@
       "prompt": "Compute the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. Return only the determinant and a one-sentence method summary.",
       "expected_operation_ids": [
         "matrix.determinant.compute"
-      ],
-      "require_verified": false
+      ]
     },
     {
       "case_id": "latent-matrix-rank",
@@ -26,8 +24,7 @@
       "prompt": "Compute the exact rank and pivot columns of [[2, 4, 1, 3], [1, 2, 0, 1], [3, 6, 1, 4], [0, 0, 2, 2]]. Return the rank, pivot columns, and a one-sentence method summary.",
       "expected_operation_ids": [
         "matrix.rank.compute"
-      ],
-      "require_verified": false
+      ]
     },
     {
       "case_id": "latent-integer-gcd",
@@ -35,8 +32,7 @@
       "prompt": "Compute the exact greatest common divisor of 1234567890 and 987654321. Return only the gcd and a one-sentence method summary.",
       "expected_operation_ids": [
         "integer.compute.gcd"
-      ],
-      "require_verified": false
+      ]
     },
     {
       "case_id": "latent-euler-totient-fallback",
@@ -44,8 +40,7 @@
       "prompt": "Compute the exact Euler totient of 840. Return only the value and a one-sentence method summary.",
       "expected_operation_ids": [
         "integer.compute.euler_totient"
-      ],
-      "require_verified": false
+      ]
     },
     {
       "case_id": "latent-polynomial-gcd",
@@ -53,8 +48,7 @@
       "prompt": "Over the rational numbers, compute the monic polynomial gcd of x^4 - 1 and x^3 - x, including exact Bezout coefficients. Return the gcd and a one-sentence method summary.",
       "expected_operation_ids": [
         "polynomial.compute.gcd"
-      ],
-      "require_verified": false
+      ]
     },
     {
       "case_id": "latent-fixed-order-difference-set-extension",
@@ -62,24 +56,21 @@
       "prompt": "For the integer set {1,2,4,8,13}, decide exactly whether its reduced residues are contained in a cyclic perfect difference set of order 7, and report the exact candidate-space size covered by the decision.",
       "expected_operation_ids": [
         "combinatorics.cyclic_difference_set.extension.decide"
-      ],
-      "require_verified": false
+      ]
     },
     {
       "case_id": "negative-conceptual-matrix",
       "cue_level": "LATENT",
       "expectation": "ABSTAIN",
       "prompt": "In one sentence for a beginner, define what a square matrix is.",
-      "expected_operation_ids": [],
-      "require_verified": false
+      "expected_operation_ids": []
     },
     {
       "case_id": "negative-string-transform",
       "cue_level": "LATENT",
       "expectation": "ABSTAIN",
       "prompt": "Return the lowercase form of the string JACOBIAN and nothing else.",
-      "expected_operation_ids": [],
-      "require_verified": false
+      "expected_operation_ids": []
     }
   ]
 }

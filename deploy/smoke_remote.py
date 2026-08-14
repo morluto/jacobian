@@ -7,7 +7,6 @@ import asyncio
 import hashlib
 import json
 import os
-import re
 from typing import Any
 
 import httpx2
@@ -44,10 +43,6 @@ def _parser() -> argparse.ArgumentParser:
         "--expect-version",
         default=__version__,
         help="required MCP server version; defaults to this checkout's package version",
-    )
-    parser.add_argument(
-        "--expect-revision",
-        help="required full Git revision from deployment://identity",
     )
     parser.add_argument(
         "--require-operation",
@@ -106,34 +101,6 @@ def _validate_server_version(
         )
 
 
-async def _deployment_identity(
-    client: Any,
-    *,
-    expected_revision: str | None,
-    server_version: str,
-    failures: list[str],
-) -> dict[str, Any] | None:
-    if expected_revision is None:
-        return None
-    if re.fullmatch(r"[0-9a-f]{40}", expected_revision) is None:
-        raise RuntimeError("expected deployment revision is not canonical")
-    deployment_result = await client.read_resource("deployment://identity")
-    deployment_content = deployment_result.contents[0]
-    if not isinstance(deployment_content, TextResourceContents):
-        raise RuntimeError("deployed identity resource is not text")
-    deployment = json.loads(deployment_content.text)
-    if not isinstance(deployment, dict):
-        raise RuntimeError("deployed identity resource is malformed")
-    if (
-        deployment.get("schema_version") != "1"
-        or deployment.get("evidence") != "release-marker"
-        or deployment.get("package_version") != server_version
-        or deployment.get("revision") != expected_revision
-    ):
-        failures.append("deployed revision identity does not match the release")
-    return deployment
-
-
 async def inspect(
     *,
     url: str,
@@ -160,13 +127,6 @@ async def inspect(
         server_info = _require_server_info(client.server_info)
         server_version = server_info.version
         _validate_server_version(server_version, expected_version, failures)
-
-        deployment = await _deployment_identity(
-            client,
-            expected_revision=expected_revision,
-            server_version=server_version,
-            failures=failures,
-        )
 
         listed = await client.list_tools()
         tool_names = _validate_tool_surface(listed, failures)
@@ -224,7 +184,6 @@ async def inspect(
                 "name": server_info.name,
                 "version": server_version,
             },
-            "deployment": deployment,
             "tool_names": sorted(tool_names),
             "catalog": {
                 "catalog_version": catalog["catalog_version"],
@@ -250,7 +209,6 @@ async def _main() -> None:
     report = await inspect(
         url=args.url,
         expected_version=args.expect_version,
-        expected_revision=args.expect_revision,
         required_operations=set(args.require_operation),
         query=args.query,
         timeout_seconds=args.timeout_seconds,

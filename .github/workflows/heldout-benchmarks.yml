@@ -108,7 +108,7 @@ jobs:
         run: |
           for condition in C1 C2; do
             lower=$(printf '%s' "$condition" | tr '[:upper:]' '[:lower:]')
-            uv run --locked python -m benchmarks.tooling.observation_results collect-heldout \
+            uv run --locked python -m benchmarks.tooling.heldout_observations \
               --run-plan "$RUN_PLAN" \
               --manifest "$BUNDLE_ROOT/manifest.json" \
               --ledger "$BUNDLE_ROOT/rendered/execution-ledger.json" \

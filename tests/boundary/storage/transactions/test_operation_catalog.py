@@ -15,7 +15,7 @@ from jacobian.operation_catalog import (
     OperationCatalogError,
     OperationCatalogStore,
 )
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.registry import CheckerRegistry
 from jacobian.storage.repository import ArtifactRepository
 
@@ -99,7 +99,7 @@ def test_catalog_search_uses_cards_when_descriptors_are_not_materializable(
     _commit(store)
     catalog = OperationCatalog(
         tmp_path / "metadata.sqlite3",
-        OperationPolicy(),
+        OperationVisibilityPolicy(),
         expected_package_version="0.13.0",
     )
     with sqlite3.connect(tmp_path / "metadata.sqlite3") as connection:
@@ -121,7 +121,7 @@ def test_catalog_inspection_reads_one_active_indexed_entry(tmp_path: Path) -> No
     revision = _commit(store)
     catalog = OperationCatalog(
         tmp_path / "metadata.sqlite3",
-        OperationPolicy(),
+        OperationVisibilityPolicy(),
         expected_package_version="0.13.0",
     )
 
@@ -149,7 +149,7 @@ def test_catalog_reads_one_exact_declaration_locator(tmp_path: Path) -> None:
     _commit(store)
     catalog = OperationCatalog(
         tmp_path / "metadata.sqlite3",
-        OperationPolicy(),
+        OperationVisibilityPolicy(),
         expected_package_version="0.13.0",
     )
 
@@ -166,7 +166,7 @@ def test_catalog_loads_the_selected_checker_binding_index(tmp_path: Path) -> Non
     checker_id, implementation_digest = _commit_with_checker(store)
     catalog = OperationCatalog(
         tmp_path / "metadata.sqlite3",
-        OperationPolicy(),
+        OperationVisibilityPolicy(),
         expected_package_version="0.13.0",
     )
 
@@ -198,7 +198,7 @@ def test_failed_catalog_commit_leaves_previous_revision_active(tmp_path: Path) -
 
     catalog = OperationCatalog(
         tmp_path / "metadata.sqlite3",
-        OperationPolicy(),
+        OperationVisibilityPolicy(),
         expected_package_version="0.13.0",
     )
     assert catalog.header.revision == revision
@@ -212,7 +212,7 @@ def test_catalog_requires_init_or_update_with_exact_commands(tmp_path: Path) -> 
     ):
         OperationCatalog(
             tmp_path / "missing" / "metadata.sqlite3",
-            OperationPolicy(),
+            OperationVisibilityPolicy(),
             expected_package_version="0.13.0",
         )
 
@@ -220,7 +220,7 @@ def test_catalog_requires_init_or_update_with_exact_commands(tmp_path: Path) -> 
     with pytest.raises(OperationCatalogError, match="jacobian init"):
         OperationCatalog(
             tmp_path / "metadata.sqlite3",
-            OperationPolicy(),
+            OperationVisibilityPolicy(),
             expected_package_version="0.13.0",
         )
 
@@ -228,6 +228,6 @@ def test_catalog_requires_init_or_update_with_exact_commands(tmp_path: Path) -> 
     with pytest.raises(OperationCatalogError, match="jacobian update"):
         OperationCatalog(
             tmp_path / "metadata.sqlite3",
-            OperationPolicy(),
+            OperationVisibilityPolicy(),
             expected_package_version="0.13.1",
         )

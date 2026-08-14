@@ -27,7 +27,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_errors import OperationError
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 
 
 @pytest.fixture
@@ -152,7 +152,7 @@ def test_policy_denial_does_not_embed_the_policy_document(
 ) -> None:
     core = operation_core_services.core
     operation_core_services.installation.register_operation(ComputedAdapter())
-    core.operations.policy = OperationPolicy(
+    core.operations.policy = OperationVisibilityPolicy(
         denied_operation_ids=frozenset({"example.double"})
     )
 

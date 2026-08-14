@@ -13,7 +13,7 @@ from jacobian.operation_catalog import (
     OperationCatalog,
     OperationCatalogError,
 )
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.persistence.migrations import (
     CURRENT_STATE_FORMAT_REVISION,
     STATE_MIGRATIONS,
@@ -84,7 +84,7 @@ def _load_current_catalog(state_dir: Path) -> OperationCatalog | None:
     try:
         return OperationCatalog(
             state_dir / "metadata.sqlite3",
-            OperationPolicy(),
+            OperationVisibilityPolicy(),
             expected_package_version=__version__,
         )
     except OperationCatalogError:

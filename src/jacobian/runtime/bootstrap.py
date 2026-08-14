@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jacobian.artifacts import ArtifactService
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_service import OperationPolicy, OperationService
+from jacobian.operation_service import OperationService, OperationVisibilityPolicy
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.resources import RuntimeResources
@@ -20,7 +20,7 @@ from jacobian.value_references import ValueReferenceStore
 def bootstrap_services(
     root: str | Path,
     *,
-    operation_policy: OperationPolicy | None = None,
+    operation_policy: OperationVisibilityPolicy | None = None,
     bind_existing_checkers: bool = False,
 ) -> RuntimeResources:
     """Open storage and construct operation-independent resources."""

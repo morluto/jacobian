@@ -7,7 +7,7 @@ from pathlib import Path
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.operation_registry import OperationRegistry
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
@@ -19,7 +19,7 @@ def create_execution_runtime(
     root: str | Path,
     catalog: OperationCatalog,
     *,
-    operation_policy: OperationPolicy,
+    operation_policy: OperationVisibilityPolicy,
     checker_registry: CheckerRegistry | None = None,
 ) -> JacobianRuntime:
     """Open artifact state and defer implementation loading until selection."""

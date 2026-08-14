@@ -12,15 +12,17 @@ from jacobian.contracts.operations import (
 )
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_registry import OperationRegistry
-from jacobian.operation_service import OperationPolicy, OperationService
+from jacobian.operation_service import OperationService, OperationVisibilityPolicy
 
 
 class OperationDispatcher(OperationService):
     """Resolve a visible operation only when its first request arrives."""
 
     def __init__(self, catalog: OperationCatalog, registry: OperationRegistry) -> None:
-        if not isinstance(catalog.policy, OperationPolicy):
-            raise TypeError("operation dispatcher requires an OperationPolicy")
+        if not isinstance(catalog.policy, OperationVisibilityPolicy):
+            raise TypeError(
+                "operation dispatcher requires an OperationVisibilityPolicy"
+            )
         super().__init__(registry.binder.store, policy=catalog.policy)
         self._catalog = catalog
         self._registry = registry

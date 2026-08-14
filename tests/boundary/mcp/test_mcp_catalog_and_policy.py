@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 
 
 def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
@@ -16,7 +16,7 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
     async def scenario() -> None:
         from mcp import Client
 
-        policy = OperationPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
+        policy = OperationVisibilityPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
         async with Client(
             create_server(
                 tmp_path,

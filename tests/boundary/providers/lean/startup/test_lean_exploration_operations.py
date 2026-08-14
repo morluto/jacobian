@@ -15,7 +15,7 @@ from tests.support.provider_lean import (
 from jacobian.contracts.operations import (
     OperationRequest,
 )
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 
 pytestmark = [
     pytest.mark.skipif(
@@ -147,7 +147,7 @@ def test_runtime_can_ablate_lean_operations_without_removing_checker(
     runtime = create_catalog_build_runtime(
         tmp_path,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-        operation_policy=OperationPolicy(
+        operation_policy=OperationVisibilityPolicy(
             denied_operation_ids=frozenset(
                 {
                     "lean.proof_state.apply_tactic",

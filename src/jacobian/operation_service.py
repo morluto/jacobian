@@ -35,7 +35,7 @@ from jacobian.storage.repository import ArtifactRepository
 
 
 @dataclass(frozen=True, slots=True)
-class OperationPolicy:
+class OperationVisibilityPolicy:
     """Operator-controlled visibility policy, separate from checker authority."""
 
     profile: Literal["DEFAULT", "COMPUTE_VERIFY_NO_RETRIEVAL"] = "DEFAULT"
@@ -138,10 +138,10 @@ class OperationService:
         self,
         store: ArtifactRepository,
         *,
-        policy: OperationPolicy | None = None,
+        policy: OperationVisibilityPolicy | None = None,
     ) -> None:
         self.store = store
-        self.policy = policy or OperationPolicy()
+        self.policy = policy or OperationVisibilityPolicy()
         self._adapters: dict[str, OperationAdapter[Any]] = {}
         self._descriptors: dict[str, OperationDescriptor] = {}
 
@@ -195,6 +195,6 @@ class OperationService:
 
 
 __all__ = [
-    "OperationPolicy",
     "OperationService",
+    "OperationVisibilityPolicy",
 ]

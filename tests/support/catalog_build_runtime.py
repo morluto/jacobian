@@ -7,7 +7,7 @@ from pathlib import Path
 from jacobian.catalog_build import build_catalog_operations
 from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.catalog_build_resources import CatalogBuildResources
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.model import JacobianRuntime
@@ -40,7 +40,7 @@ def create_catalog_build_runtime(
     root: str | Path,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
-    operation_policy: OperationPolicy | None = None,
+    operation_policy: OperationVisibilityPolicy | None = None,
 ) -> JacobianRuntime:
     """Build all catalog adapters for integration and provider tests."""
 

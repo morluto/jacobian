@@ -30,7 +30,7 @@ from jacobian.adapters.mcp.lifecycle import (
 )
 from jacobian.adapters.mcp.resources import register_resources
 from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.runtime.execution import create_execution_runtime
 from jacobian.runtime.model import JacobianRuntime
 
@@ -38,12 +38,12 @@ from jacobian.runtime.model import JacobianRuntime
 def create_server(
     state_dir: str | Path | None = None,
     *,
-    operation_policy: OperationPolicy | None = None,
+    operation_policy: OperationVisibilityPolicy | None = None,
 ) -> MCPServer[AppState]:
     """Create a catalog-only host that lazily owns one execution runtime."""
 
     root = _configured_root(state_dir)
-    policy = operation_policy or OperationPolicy()
+    policy = operation_policy or OperationVisibilityPolicy()
     catalog = OperationCatalog(
         root / "metadata.sqlite3",
         policy,
@@ -71,7 +71,7 @@ class _LazyLocalRuntime:
         root: Path,
         catalog: OperationCatalog,
         *,
-        operation_policy: OperationPolicy,
+        operation_policy: OperationVisibilityPolicy,
     ) -> None:
         self.root = root
         self.catalog = catalog

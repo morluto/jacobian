@@ -18,7 +18,7 @@ from jacobian.operation_catalog import (
     exact_checker_declaration_digest,
     operation_declaration_digest,
 )
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
@@ -32,7 +32,7 @@ def compile_operation_catalog(
 ) -> CatalogBuildResult:
     """Authorize checkers and atomically compile one catalog revision."""
 
-    core = bootstrap_services(state_dir, operation_policy=OperationPolicy())
+    core = bootstrap_services(state_dir, operation_policy=OperationVisibilityPolicy())
     resources = None
     try:
         verification = VerificationService(

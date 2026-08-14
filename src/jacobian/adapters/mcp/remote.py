@@ -27,7 +27,7 @@ from jacobian.adapters.mcp.context import (
 from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.execution import create_execution_runtime
 from jacobian.runtime.model import JacobianRuntime
@@ -136,7 +136,7 @@ class TenantRuntimeRouter:
         *,
         allow_anonymous: bool = False,
         anonymous_tenant_id: str = "anonymous",
-        operation_policy: OperationPolicy | None = None,
+        operation_policy: OperationVisibilityPolicy | None = None,
         max_tenant_runtimes: int = DEFAULT_MAX_TENANT_RUNTIMES,
         idle_timeout_seconds: float = DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
         clock: Callable[[], float] = time.monotonic,
@@ -453,7 +453,7 @@ def create_remote_server(
     anonymous_tenant_id: str = "anonymous",
     token_verifier: Any | None = None,
     auth: Any | None = None,
-    operation_policy: OperationPolicy | None = None,
+    operation_policy: OperationVisibilityPolicy | None = None,
     max_tenant_runtimes: int | None = None,
     tenant_idle_timeout_seconds: float | None = None,
     runtime_factory: Callable[..., JacobianRuntime] | None = None,
@@ -463,7 +463,7 @@ def create_remote_server(
     from mcp.server.auth.middleware.auth_context import get_access_token
 
     root = _configured_root(state_dir)
-    policy = operation_policy or OperationPolicy()
+    policy = operation_policy or OperationVisibilityPolicy()
     catalog = OperationCatalog(
         root / "metadata.sqlite3",
         policy,
@@ -535,7 +535,7 @@ def _create_tenant_runtime(
     tenant_root: Path,
     catalog: OperationCatalog,
     shared_checkers: CheckerRegistry,
-    operation_policy: OperationPolicy,
+    operation_policy: OperationVisibilityPolicy,
 ) -> JacobianRuntime:
     """Create tenant-owned artifacts over deployment-owned mathematical state."""
 

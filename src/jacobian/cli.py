@@ -19,7 +19,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_service import OperationPolicy
+from jacobian.operation_service import OperationVisibilityPolicy
 from jacobian.operator_lifecycle import (
     CheckerAuthorization,
     initialize_state,
@@ -88,7 +88,7 @@ class CliState:
                 self._runtime = create_execution_runtime(
                     self.state_dir,
                     self.catalog,
-                    operation_policy=OperationPolicy(),
+                    operation_policy=OperationVisibilityPolicy(),
                 )
             else:
                 self._runtime = opener(
@@ -102,7 +102,7 @@ class CliState:
 
         return OperationCatalog(
             self.state_dir / "metadata.sqlite3",
-            OperationPolicy(),
+            OperationVisibilityPolicy(),
             expected_package_version=__version__,
         )
 

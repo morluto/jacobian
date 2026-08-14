@@ -100,7 +100,7 @@ def main() -> None:
         create_remote_server,
         load_static_token_file,
     )
-    from jacobian.operation_service import OperationPolicy
+    from jacobian.operation_service import OperationVisibilityPolicy
 
     token_verifier = None
     auth = None
@@ -125,7 +125,7 @@ def main() -> None:
         anonymous_tenant_id=args.anonymous_tenant_id,
         token_verifier=token_verifier,
         auth=auth,
-        operation_policy=OperationPolicy(
+        operation_policy=OperationVisibilityPolicy(
             profile=args.operation_policy_profile,
             allowed_operation_ids=frozenset(args.allowed_operation_ids),
             denied_operation_ids=frozenset(args.denied_operation_ids),

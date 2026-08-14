@@ -72,4 +72,33 @@ def test_polynomial_positivity_loads_only_the_selected_path(
             assert isinstance(verified.structured_content, dict)
             assert verified.structured_content["output"]["conclusion"] == "TRUE"
 
+            enclosed = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "polynomial.interval.enclose",
+                    "payload": {"polynomial": polynomial, "interval": interval},
+                },
+            )
+            assert isinstance(enclosed.structured_content, dict)
+            enclosure = enclosed.structured_content["output"]
+            enclosure_verified = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "polynomial.interval.enclosure.verify",
+                    "payload": {
+                        "polynomial": polynomial,
+                        "interval": interval,
+                        "claimed_bernstein_coefficients": enclosure[
+                            "bernstein_coefficients"
+                        ],
+                        "claimed_lo": enclosure["lo"],
+                        "claimed_hi": enclosure["hi"],
+                    },
+                },
+            )
+            assert isinstance(enclosure_verified.structured_content, dict)
+            assert (
+                enclosure_verified.structured_content["output"]["conclusion"] == "TRUE"
+            )
+
     asyncio.run(scenario())

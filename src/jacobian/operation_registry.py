@@ -44,6 +44,8 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.expression_normalization.verify",
         "polynomial.interval.positivity.decide",
         "polynomial.interval.positivity.verify",
+        "polynomial.interval.enclose",
+        "polynomial.interval.enclosure.verify",
     }
 )
 _SELECTED_DIRECT_OPERATIONS = frozenset(
@@ -212,50 +214,8 @@ class OperationRegistry:
                 self.checkers,
                 self.catalog,
             )
-        elif operation_id == "polynomial.expression.normalize":
-            from jacobian.sympy_polynomial_normalization import (
-                install_sympy_polynomial_normalization_operation,
-            )
-
-            if descriptor.provider_runtime is None:
-                raise OperationCatalogError(
-                    "polynomial provider observation is missing; run `jacobian update`"
-                )
-            adapter = install_sympy_polynomial_normalization_operation(
-                self.polynomial_expressions,
-                descriptor.provider_runtime,
-            )
-        elif operation_id == "polynomial.expression_normalization.verify":
-            from jacobian.polynomial_expression_operations import (
-                bind_selected_polynomial_expression_checker,
-            )
-
-            adapter = bind_selected_polynomial_expression_checker(
-                self.binder.store,
-                self.binder.schemas,
-                self.binder.artifacts,
-                self.polynomial_expressions,
-                self.verification,
-                self.checkers,
-                self.catalog,
-            )
-        elif operation_id in {
-            "polynomial.interval.positivity.decide",
-            "polynomial.interval.positivity.verify",
-        }:
-            from jacobian.polynomial_positivity_operations import (
-                bind_selected_polynomial_positivity_operation,
-            )
-
-            adapter = bind_selected_polynomial_positivity_operation(
-                operation_id,
-                self.binder.store,
-                self.binder.schemas,
-                self.binder.artifacts,
-                self.verification,
-                self.checkers,
-                self.catalog,
-            )
+        elif operation_id in _SELECTED_POLYNOMIAL_OPERATIONS:
+            adapter = self._bind_selected_polynomial_operation(operation_id, descriptor)
         elif operation_id == "polytope.separate":
             from jacobian.polytope_operations import PolytopeSeparationAdapter
 
@@ -296,6 +256,75 @@ class OperationRegistry:
         else:
             adapter = None
         return adapter
+
+    def _bind_selected_polynomial_operation(
+        self,
+        operation_id: str,
+        descriptor: OperationDescriptor,
+    ) -> OperationAdapter[Any] | None:
+        if operation_id == "polynomial.expression.normalize":
+            from jacobian.sympy_polynomial_normalization import (
+                install_sympy_polynomial_normalization_operation,
+            )
+
+            if descriptor.provider_runtime is None:
+                raise OperationCatalogError(
+                    "polynomial provider observation is missing; run `jacobian update`"
+                )
+            adapter = install_sympy_polynomial_normalization_operation(
+                self.polynomial_expressions,
+                descriptor.provider_runtime,
+            )
+            return adapter
+        if operation_id == "polynomial.expression_normalization.verify":
+            from jacobian.polynomial_expression_operations import (
+                bind_selected_polynomial_expression_checker,
+            )
+
+            return bind_selected_polynomial_expression_checker(
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.polynomial_expressions,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        if operation_id in {
+            "polynomial.interval.positivity.decide",
+            "polynomial.interval.positivity.verify",
+        }:
+            from jacobian.polynomial_positivity_operations import (
+                bind_selected_polynomial_positivity_operation,
+            )
+
+            return bind_selected_polynomial_positivity_operation(
+                operation_id,
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        if operation_id in {
+            "polynomial.interval.enclose",
+            "polynomial.interval.enclosure.verify",
+        }:
+            from jacobian.polynomial_interval_operations import (
+                bind_selected_polynomial_interval_operation,
+            )
+
+            return bind_selected_polynomial_interval_operation(
+                operation_id,
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        return None
 
     def _bind_selected_sat_operation(
         self,

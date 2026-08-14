@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import comb
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
@@ -60,6 +60,7 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.domains._examples import example
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import (
@@ -121,22 +122,11 @@ class PolynomialIntervalResources:
     installation: PolynomialIntervalInstallation
 
 
-def install_polynomial_interval_operations(
+def register_polynomial_interval_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-    artifacts: ArtifactService,
-    verification: VerificationService,
-    checkers: CheckerRegistry,
-    *,
-    authorize_checker: bool,
-) -> tuple[
-    tuple[
-        PolynomialIntervalEncloseAdapter,
-        PolynomialIntervalEnclosureVerifyAdapter | None,
-    ],
-    PolynomialIntervalInstallation,
-]:
-    """Register exact univariate polynomial interval enclosure contracts."""
+) -> PolynomialIntervalInstallation:
+    """Register passive enclosure contracts without checker installation."""
 
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -171,31 +161,97 @@ def install_polynomial_interval_operations(
             "zero_terms": "omitted",
         },
     )
-    interval_schema_uri = schemas.register(
-        name="jacobian.rational-interval",
-        version="1",
-        schema=model_schema(RationalInterval),
+    return PolynomialIntervalInstallation(
+        semantics_uri=semantics_uri,
+        polynomial_semantics_uri=polynomial_semantics_uri,
+        interval_schema_uri=schemas.register(
+            name="jacobian.rational-interval",
+            version="1",
+            schema=model_schema(RationalInterval),
+        ),
+        polynomial_schema_uri=schemas.register(
+            name="jacobian.univariate-rational-polynomial-interval-source",
+            version="1",
+            schema=model_schema(UnivariateRationalPolynomial),
+        ),
+        enclosure_schema_uri=schemas.register(
+            name="jacobian.polynomial-interval-enclosure",
+            version="1",
+            schema=model_schema(PolynomialIntervalEnclosure),
+        ),
+        claim_schema_uri=schemas.register(
+            name="jacobian.polynomial-interval-enclosure-claim",
+            version="1",
+            schema=model_schema(PolynomialIntervalEnclosureClaim),
+        ),
+        certificate_schema_uri=schemas.register(
+            name="jacobian.polynomial-interval-enclosure-certificate",
+            version="1",
+            schema=model_schema(CertificateEnvelope),
+        ),
+        checker_id=None,
     )
-    polynomial_schema_uri = schemas.register(
-        name="jacobian.univariate-rational-polynomial-interval-source",
-        version="1",
-        schema=model_schema(UnivariateRationalPolynomial),
+
+
+def bind_selected_polynomial_interval_operation(
+    operation_id: str,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> PolynomialIntervalEncloseAdapter | PolynomialIntervalEnclosureVerifyAdapter | None:
+    """Bind one enclosure operation from passive resources and catalog authority."""
+
+    if operation_id not in {
+        "polynomial.interval.enclose",
+        "polynomial.interval.enclosure.verify",
+    }:
+        return None
+    binding = catalog.checker_binding("polynomial.interval.enclosure.verify")
+    if binding is None:
+        raise OperationCatalogError(
+            "checker binding is missing; run `jacobian update`: "
+            "polynomial.interval.enclosure.verify"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
     )
-    enclosure_schema_uri = schemas.register(
-        name="jacobian.polynomial-interval-enclosure",
-        version="1",
-        schema=model_schema(PolynomialIntervalEnclosure),
+    installation = replace(
+        register_polynomial_interval_resources(store, schemas),
+        checker_id=binding.checker_id,
     )
-    claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-interval-enclosure-claim",
-        version="1",
-        schema=model_schema(PolynomialIntervalEnclosureClaim),
+    resources = PolynomialIntervalResources(
+        store,
+        artifacts,
+        verification,
+        installation,
     )
-    certificate_schema_uri = schemas.register(
-        name="jacobian.polynomial-interval-enclosure-certificate",
-        version="1",
-        schema=model_schema(CertificateEnvelope),
-    )
+    if operation_id == "polynomial.interval.enclose":
+        return PolynomialIntervalEncloseAdapter(resources)
+    return PolynomialIntervalEnclosureVerifyAdapter(resources)
+
+
+def install_polynomial_interval_operations(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    *,
+    authorize_checker: bool,
+) -> tuple[
+    tuple[
+        PolynomialIntervalEncloseAdapter,
+        PolynomialIntervalEnclosureVerifyAdapter | None,
+    ],
+    PolynomialIntervalInstallation,
+]:
+    """Register exact univariate polynomial interval enclosure contracts."""
+
+    contracts = register_polynomial_interval_resources(store, schemas)
     checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -205,25 +261,16 @@ def install_polynomial_interval_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.interval_bernstein_enclosure_replay",
                 format_version="1",
-                claim_schema_uris=(claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(enclosure_schema_uri,),
+                claim_schema_uris=(contracts.claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.enclosure_schema_uri,),
                 reason="bundled independent Bernstein-coefficient enclosure checker",
             ),
             authorize=authorize_checker,
         )
         .checker_id
     )
-    installation = PolynomialIntervalInstallation(
-        semantics_uri=semantics_uri,
-        polynomial_semantics_uri=polynomial_semantics_uri,
-        interval_schema_uri=interval_schema_uri,
-        polynomial_schema_uri=polynomial_schema_uri,
-        enclosure_schema_uri=enclosure_schema_uri,
-        claim_schema_uri=claim_schema_uri,
-        certificate_schema_uri=certificate_schema_uri,
-        checker_id=checker_id,
-    )
+    installation = replace(contracts, checker_id=checker_id)
     resources = PolynomialIntervalResources(
         store=store,
         artifacts=artifacts,

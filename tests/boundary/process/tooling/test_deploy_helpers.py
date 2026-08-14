@@ -80,9 +80,10 @@ def test_state_preflight_rejects_an_incomplete_existing_tenant(
     )
 
 
-@pytest.mark.parametrize("missing_blob", ("manifest", "payload"))
-def test_state_preflight_rejects_missing_referenced_blobs(
-    tmp_path: Path, missing_blob: str
+@pytest.mark.parametrize("blob_kind", ("manifest", "payload"))
+@pytest.mark.parametrize("damage", ("missing", "corrupt"))
+def test_state_preflight_rejects_damaged_referenced_blobs(
+    tmp_path: Path, blob_kind: str, damage: str
 ) -> None:
     tenant_id = "incomplete-blob-restore"
     tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
@@ -101,15 +102,20 @@ def test_state_preflight_rejects_missing_referenced_blobs(
             (artifact_uri,),
         ).fetchone()
     assert row is not None
-    digest = str(row[0 if missing_blob == "manifest" else 1]).removeprefix("sha256:")
-    (state / "blobs" / "sha256" / digest[:2] / digest[2:]).unlink()
+    digest = str(row[0 if blob_kind == "manifest" else 1]).removeprefix("sha256:")
+    blob_path = state / "blobs" / "sha256" / digest[:2] / digest[2:]
+    if damage == "missing":
+        blob_path.unlink()
+    else:
+        blob_path.write_bytes(b"incomplete restore")
 
     report = inspect_selected_state(tmp_path, (tenant_id,))[0]
 
     assert report["status"] == "CORRUPT"
     assert report["blocking"] is True
     assert report["diagnostic"] == (
-        "artifact metadata references a missing blob; restore the complete tenant state"
+        f"artifact metadata references a {damage} blob; restore the complete "
+        "tenant state"
     )
 
 

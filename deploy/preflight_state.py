@@ -35,6 +35,14 @@ def _blob_path(state_dir: Path, digest: str) -> Path | None:
     return state_dir / "blobs" / "sha256" / value[:2] / value[2:]
 
 
+def _blob_matches_digest(path: Path, digest: str) -> bool:
+    measured = hashlib.sha256()
+    with path.open("rb") as blob:
+        while chunk := blob.read(1024 * 1024):
+            measured.update(chunk)
+    return f"sha256:{measured.hexdigest()}" == digest
+
+
 def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
     database_path = state_dir / "metadata.sqlite3"
     try:
@@ -57,6 +65,11 @@ def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
                     if blob_path.is_symlink() or not blob_path.is_file():
                         return (
                             "artifact metadata references a missing blob; restore "
+                            "the complete tenant state"
+                        )
+                    if not _blob_matches_digest(blob_path, digest):
+                        return (
+                            "artifact metadata references a corrupt blob; restore "
                             "the complete tenant state"
                         )
     except (OSError, sqlite3.DatabaseError) as exc:

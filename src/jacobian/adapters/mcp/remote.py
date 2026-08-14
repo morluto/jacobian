@@ -31,9 +31,17 @@ from jacobian.adapters.mcp.lifecycle import (
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
+from jacobian.operation_dispatcher import OperationDispatcher
+from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_service import OperationPolicy
+from jacobian.registry import CheckerRegistry
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime.bootstrap import bootstrap_services
+from jacobian.runtime.config import RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.portfolio import PortfolioResources
+from jacobian.runtime.services import build_runtime_services
+from jacobian.storage.repository import ArtifactRepository
 
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 DEFAULT_MAX_TENANT_RUNTIMES = 32
@@ -469,12 +477,35 @@ def create_remote_server(
     from mcp.server.auth.middleware.auth_context import get_access_token
 
     root = _configured_root(state_dir)
+    policy = operation_policy or OperationPolicy()
+    catalog = OperationCatalog(
+        root / "metadata.sqlite3",
+        policy,
+        expected_package_version=__version__,
+    )
+    shared_store: ArtifactRepository | None = None
+    selected_factory = runtime_factory
+    if selected_factory is None:
+        shared_store = ArtifactRepository(root)
+        shared_checkers = CheckerRegistry(shared_store)
+
+        def selected_factory(
+            tenant_root: str | Path,
+            **_options: object,
+        ) -> JacobianRuntime:
+            return _create_tenant_runtime(
+                Path(tenant_root),
+                catalog,
+                shared_checkers,
+                policy,
+            )
+
     router = TenantRuntimeRouter(
         root,
         checker_authority=selected_checker_authority(checker_authority),
         allow_anonymous=allow_anonymous,
         anonymous_tenant_id=anonymous_tenant_id,
-        operation_policy=operation_policy,
+        operation_policy=policy,
         max_tenant_runtimes=(
             DEFAULT_MAX_TENANT_RUNTIMES
             if max_tenant_runtimes is None
@@ -485,7 +516,7 @@ def create_remote_server(
             if tenant_idle_timeout_seconds is None
             else tenant_idle_timeout_seconds
         ),
-        runtime_factory=create_runtime if runtime_factory is None else runtime_factory,
+        runtime_factory=selected_factory,
     )
 
     def acquire_runtime(_operation_id: str | None = None) -> RuntimeAccess:
@@ -496,17 +527,57 @@ def create_remote_server(
 
     state = AppState(
         acquire_runtime=acquire_runtime,
-        operation_catalog=OperationCatalog(
-            root / "metadata.sqlite3",
-            operation_policy or OperationPolicy(),
-            expected_package_version=__version__,
-        ),
+        operation_catalog=catalog,
         worker_registry=MCPBlockingWorkerRegistry(),
     )
+
+    def close_owner() -> None:
+        try:
+            router.close()
+        finally:
+            if shared_store is not None:
+                shared_store.close()
+
     return _build_server(
         state=state,
-        close_owner=router.close,
+        close_owner=close_owner,
         deployment_identity=load_deployment_identity(),
         token_verifier=token_verifier,
         auth=auth,
+    )
+
+
+def _create_tenant_runtime(
+    tenant_root: Path,
+    catalog: OperationCatalog,
+    shared_checkers: CheckerRegistry,
+    operation_policy: OperationPolicy,
+) -> JacobianRuntime:
+    """Create tenant-owned artifacts over deployment-owned mathematical state."""
+
+    core = bootstrap_services(
+        tenant_root,
+        RuntimeOptions(
+            checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
+            operation_policy=operation_policy,
+        ),
+    )
+    core.checkers = shared_checkers
+    services = build_runtime_services(core)
+    registry = OperationRegistry(
+        catalog,
+        core.binder,
+        services.verification,
+        shared_checkers,
+        core.polynomial_expressions,
+        services.polytope,
+        core.sat,
+        core.smt,
+    )
+    core.operations = OperationDispatcher(catalog, registry)
+    return JacobianRuntime(
+        core,
+        services,
+        PortfolioResources(),
+        start_lean_warmup=lambda: None,
     )

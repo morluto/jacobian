@@ -5,9 +5,9 @@
 - Status: Current product contract
 - Scope: MCP, CLI, and Python access to installed mathematical operations
 
-The accepted next-breaking-release target is described in the
-[operation runtime target](operation-runtime-target.md). This document remains
-the current supported product contract until that implementation lands.
+The implemented next-breaking-release design is recorded in the
+[operation runtime target](operation-runtime-target.md). This document is the
+current product contract for that architecture.
 
 ## Product definition
 

@@ -4,9 +4,9 @@
 
 - Status: Current architecture
 
-The accepted next-breaking-release target is described in the
+The implemented next-breaking-release design is recorded in the
 [operation runtime target](operation-runtime-target.md). The contracts below
-describe the current release until that implementation lands.
+describe that architecture.
 
 ## Purpose
 

@@ -91,7 +91,7 @@ installed operation inventory and exact operation schemas.
 - [Product model](explanation/product-blueprint.md) — what the product is
 - [Architecture](explanation/architecture.md) — host shape, search/execute,
   ownership and durable execution
-- [Operation runtime target](explanation/operation-runtime-target.md) — accepted
+- [Operation runtime target](explanation/operation-runtime-target.md) — implemented
   target architecture for the next breaking release
 
 Do not add parallel “direction”, “goals”, or portfolio-planning novels under

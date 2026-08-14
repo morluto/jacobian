@@ -2,18 +2,18 @@
 
 [Documentation home](../index.md)
 
-- Status: Accepted target for the next breaking release
-- Scope: planned operation declarations, compiled catalogs, and selected-operation execution
+- Status: Implemented target for the next breaking release
+- Scope: operation declarations, compiled catalogs, and selected-operation execution
 
-This document records the accepted target architecture. It is not a claim that
-the current pre-stable release already implements every lifecycle described
-below. The current supported behavior remains defined by the [product model](product-blueprint.md),
-[architecture](architecture.md), and the reference contracts.
+This document records the architecture implemented for the next pre-stable
+breaking release. The [product model](product-blueprint.md),
+[architecture](architecture.md), and reference contracts define its supported
+behavior.
 
 ## Vocabulary and wire cutover
 
 The public vocabulary is `operation` / `math operation`. The existing
-`math.find` and `math.run` tool names remain. In the next breaking release,
+`math.find` and `math.run` tool names remain. In this breaking release,
 `capability_id` becomes `operation_id`, `capability_version` becomes
 `operation_version`, and the complete inventory moves from
 `capability://catalog` to `operation://catalog`. There is no compatibility URI,
@@ -65,7 +65,7 @@ readiness observations required for reproducibility and fail-closed trust.
 There is no provider framework, entry-point discovery, or dependency-injection
 container.
 
-The intended execution path is:
+The execution path is:
 
 ```text
 OperationRequest
@@ -119,7 +119,7 @@ copied.
 
 ## Migration and non-goals
 
-The cutover is the next pre-1.0 breaking minor release (planned as `0.13.0`)
+The cutover ships in the next pre-1.0 breaking minor release (`0.13.0`)
 and uses the next state revision. Revision-11 artifacts remain readable during
 the update, while checker identity is remeasured rather than trusted from
 copied records. There are no compatibility aliases for the public wire

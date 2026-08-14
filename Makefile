@@ -30,8 +30,10 @@ help: ## Show the primary developer workflow.
 help-all: ## Show every low-level and lifecycle developer command.
 	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-test-unit: ## Pure contracts and models (4 workers, 10s).
-	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=10 \
+test-unit: ## Pure contracts and models (2 workers, 10s).
+	# Full catalog construction imports every maintained math backend; keep its
+	# covered unit lane within hosted-runner memory instead of crashing workers.
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=10 \
 		$(if $(TESTS),$(TESTS),tests/unit) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
@@ -138,9 +140,9 @@ quick: lint test-unit ## Cheap iteration: lint and unit tests.
 
 check: lint typecheck test-unit ## Routine local handoff: lint, types, and unit tests.
 
-check-all: lint typecheck test-ordinary ## Reproduce the six ordinary Python CI lanes locally.
+check-all: lint typecheck test-ordinary ## Reproduce the ordinary Python CI lanes locally.
 
-check-external: test-lean ## Pinned Lean/Mathlib specialist lane only.
+check-external: test-lean ## Pinned Lean specialist lane only.
 
 precommit: ## Apply safe fixes, then run lint, types, and unit tests (mutates the tree).
 	$(MAKE) fix

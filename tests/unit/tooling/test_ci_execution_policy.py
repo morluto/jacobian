@@ -208,13 +208,13 @@ def test_focused_unit_lane_skips_validation_lock() -> None:
     assert "_harbor-oracle-all: _harbor-check-all" in harbor
 
 
-def test_component_lane_uses_module_fixture_affinity() -> None:
+def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     unit = makefile.split("test-unit:", 1)[1].split("test-component:", 1)[0]
     component = makefile.split("test-component:", 1)[1].split("test-domain:", 1)[0]
     domain = makefile.split("test-domain:", 1)[1].split("test-composition:", 1)[0]
 
-    assert "pytest -n 4 --dist worksteal" in unit
+    assert "pytest -n 2 --dist worksteal" in unit
     assert "--dist loadscope" in component
     assert "--dist worksteal" in domain
 

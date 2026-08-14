@@ -27,7 +27,7 @@ from jacobian.operation_errors import OperationDiscoveryCursorError
 from jacobian.schema_registry import model_schema
 
 if TYPE_CHECKING:
-    from jacobian.checker_operations import ExactReplayCheckerDeclaration
+    from jacobian.checker_operations import AuthorizedChecker
 
 
 class OperationCatalogError(RuntimeError):
@@ -458,7 +458,7 @@ def operation_declaration_digest(
 
 
 def exact_checker_declaration_digest(
-    declaration: ExactReplayCheckerDeclaration,
+    declaration: AuthorizedChecker,
     descriptor: OperationDescriptor,
 ) -> str:
     """Bind one generated verifier descriptor to its pure checker declaration."""

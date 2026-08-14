@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.projective_geometry import ProjectiveLineArrangementRequest
 from jacobian.providers import flint_runtime
@@ -26,13 +26,13 @@ def _at_most_lines(maximum: int) -> Callable[[object], bool]:
 
 
 PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "geometry.projective_line_arrangement.flats.materialize",
         ProjectiveLineArrangementRequest,
         "check_projective_line_arrangement_flats",
         "geometry.projective-line-arrangement.flats.exhaustive-replay",
         entrypoint_module="jacobian_checkers.projective_arrangements",
-        provider_runtime_factory=_projective_runtime,
+        observation_loader=_projective_runtime,
         supports_input=_at_most_lines(64),
         replay_method="exact projective pair-incidence exhaustive replay",
         reason=(

@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.matrix_operations import MatrixDeterminantRequest
+from jacobian.providers.flint_runtime import exact_domain_checker_provider_runtime
 
 ROOT = Path(__file__).parents[3]
 
 
-def test_exact_replay_declaration_allows_unrealized_runtime_compatibility() -> None:
-    declaration = ExactReplayCheckerDeclaration(
+def test_authorized_checker_declaration_is_inert_data() -> None:
+    declaration = AuthorizedChecker(
         "matrix.determinant.compute",
         MatrixDeterminantRequest,
         "check_matrix_determinant",
         "matrix.determinant.flint-replay",
+        exact_domain_checker_provider_runtime,
     )
 
-    assert declaration.provider_runtime is None
+    assert declaration.observation_loader is exact_domain_checker_provider_runtime
 
 
 def test_exact_domain_checkers_has_no_central_semantic_maps() -> None:

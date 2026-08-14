@@ -1,6 +1,6 @@
 """Independent checker declarations owned by the number-theory domain."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.number_theory import (
     FactorizationRequest,
     IntegerPairRequest,
@@ -59,7 +59,7 @@ def _integer_lcm_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObserv
 
 
 NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "finite_abelian_group.exact_factorization.compute",
         FiniteAbelianGroupFactorizationRequest,
         "check_finite_abelian_group_exact_factorization",
@@ -70,7 +70,7 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library checker independently "
             "normalizes both factors and replays every group sum"
         ),
-        provider_runtime_factory=_finite_abelian_group_checker_runtime,
+        observation_loader=_finite_abelian_group_checker_runtime,
         verification_operation_id="finite_abelian_group.exact_factorization.verify",
         verification_title="Verify a finite abelian group factorization",
         verification_description=(
@@ -87,13 +87,13 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "unique-representation",
         ),
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "integer.compute.lcm",
         IntegerPairRequest,
         "check_integer_lcm",
         "integer.lcm.euclidean-replay",
         entrypoint_module="jacobian_checkers.integer_lcm",
-        provider_runtime_factory=_integer_lcm_runtime,
+        observation_loader=_integer_lcm_runtime,
         replay_method="standard-library Euclidean recurrence replay",
         reason=(
             "operator-authorized standard-library checker independently evaluates "
@@ -101,13 +101,13 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "calling math.lcm or importing producer code"
         ),
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "integer.compute.prime_factorization",
         FactorizationRequest,
         "check_integer_prime_factorization",
         "integer.prime-factorization.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
         replay_method="Python-FLINT prime-factorization replay",
         reason=(
@@ -128,13 +128,13 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "prime-factorization",
         ),
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "integer.decide.powerful",
         PowerfulNumberRequest,
         "check_integer_powerful_number",
         "integer.powerful.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
         replay_method="Python-FLINT powerful-number replay",
         reason=(
@@ -156,13 +156,13 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
             "powerful-number",
         ),
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "modular.polynomial_residue_image.compute",
         ModularPolynomialResidueImageRequest,
         "check_modular_polynomial_residue_image",
         "modular.polynomial-residue-image.flint-replay",
         entrypoint_module=_EXACT_DOMAIN_ENTRYPOINT,
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
         replay_method="Python-FLINT exhaustive modular-polynomial replay",
         reason=(

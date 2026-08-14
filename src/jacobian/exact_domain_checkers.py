@@ -13,7 +13,7 @@ from jacobian.artifacts import ArtifactService
 from jacobian.checker_artifacts import put_witness_envelope
 from jacobian.checker_identity import batch_checker_manifest_measurement
 from jacobian.checker_installation import CheckerInstaller
-from jacobian.checker_operations import CheckerOperation, ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker, CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope
 from jacobian.contracts.exact_domain_verification import (
@@ -64,7 +64,7 @@ _LOGGER = logging.getLogger(__name__)
 type ExactOperationGroup = tuple[
     OperationDeclarations,
     BoundOperationGroup,
-    tuple[ExactReplayCheckerDeclaration, ...],
+    tuple[AuthorizedChecker, ...],
 ]
 
 
@@ -81,7 +81,7 @@ class ExactDomainCheckerInstallation:
 
 @dataclass(frozen=True, slots=True)
 class _InstalledDeclaration:
-    declaration: ExactReplayCheckerDeclaration
+    declaration: AuthorizedChecker
     result_model: type[ContractModel]
     input_schema_uri: str
     result_schema_uri: str
@@ -92,26 +92,27 @@ class _InstalledDeclaration:
 @dataclass(frozen=True, slots=True)
 class _DeclaredRuntimeGroup:
     probe: ProviderObservation
-    members: tuple[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration], ...]
+    members: tuple[tuple[BoundOperationGroup, AuthorizedChecker], ...]
 
 
 def _declared_runtime_groups(
-    pairs: tuple[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration], ...],
+    pairs: tuple[tuple[BoundOperationGroup, AuthorizedChecker], ...],
 ) -> tuple[_DeclaredRuntimeGroup, ...]:
     grouped: dict[
         str,
         tuple[
             ProviderObservation,
-            list[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration]],
+            list[tuple[BoundOperationGroup, AuthorizedChecker]],
         ],
     ] = {}
     for installed, declaration in pairs:
-        factory = object.__getattribute__(declaration, "provider_runtime_factory")
-        probe = factory() if factory is not None else declaration.provider_runtime
-        if probe is None:
-            continue
+        probe = declaration.observation_loader()
         if not isinstance(probe, ProviderObservation):
-            raise TypeError("provider runtime factory must return ProviderObservation")
+            raise TypeError(
+                "checker observation loader must return ProviderObservation"
+            )
+        if probe.checker_ids:
+            raise ValueError("checker declarations must not pre-authorize checker IDs")
         current = grouped.get(probe.provider)
         if current is None:
             grouped[probe.provider] = (probe, [(installed, declaration)])
@@ -369,7 +370,7 @@ def bind_selected_exact_verification(
     catalog: OperationCatalog,
     operation_id: str,
     operations: OperationDeclarations,
-    declarations: tuple[ExactReplayCheckerDeclaration, ...],
+    declarations: tuple[AuthorizedChecker, ...],
     binder: OperationBinder,
     verification: VerificationService,
     checkers: CheckerRegistry,
@@ -452,10 +453,10 @@ def bind_selected_exact_verification(
 
 def _available_declaration_groups(
     groups: Mapping[str, ExactOperationGroup],
-) -> tuple[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration], ...]:
+) -> tuple[tuple[BoundOperationGroup, AuthorizedChecker], ...]:
     """Pair checker declarations with their unique bound producer."""
 
-    available: list[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration]] = []
+    available: list[tuple[BoundOperationGroup, AuthorizedChecker]] = []
     owners: dict[str, str] = {}
     for module_name, (operations, installed, declarations) in groups.items():
         producer_operation_ids = {
@@ -501,7 +502,7 @@ def _available_declaration_groups(
 
 def _installed_declaration(
     group: BoundOperationGroup,
-    declaration: ExactReplayCheckerDeclaration,
+    declaration: AuthorizedChecker,
     installation: ExactDomainCheckerInstallation,
     result_model: type[ContractModel],
 ) -> _InstalledDeclaration:

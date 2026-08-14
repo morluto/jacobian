@@ -1,6 +1,6 @@
 """Independent checker declarations owned by rational optimization."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.operations import (
     ProviderInstallTier,
     ProviderObservation,
@@ -22,13 +22,13 @@ def _rational_lp_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObserv
 
 
 RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "optimization.linear.rational_optimum.compute",
         RationalLinearProgramRequest,
         "check_rational_linear_optimum",
         "optimization.linear.rational-optimum.fraction-replay",
         entrypoint_module="jacobian_checkers.rational_lp",
-        provider_runtime_factory=_rational_lp_runtime,
+        observation_loader=_rational_lp_runtime,
         replay_method="standard-library Fraction primal/dual replay",
         reason=(
             "operator-authorized standard-library checker independently replays "

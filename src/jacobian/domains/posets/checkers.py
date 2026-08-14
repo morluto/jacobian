@@ -1,6 +1,6 @@
 """Independent checker declarations owned by the finite-poset domain."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.posets import (
     FinitePosetRequest,
@@ -22,43 +22,43 @@ def _poset_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
 
 
 FINITE_POSET_EXACT_REPLAY_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "poset.finite.compute",
         FinitePosetRequest,
         "check_finite_poset_materialization",
         "poset.finite.closure-reduction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_poset_runtime,
+        observation_loader=_poset_runtime,
         replay_method="independent closure and transitive-reduction replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "poset.width.compute",
         PosetRequest,
         "check_poset_width",
         "poset.width.dilworth-dual-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_poset_runtime,
+        observation_loader=_poset_runtime,
         replay_method="independent antichain and chain-partition replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "poset.linear_extensions.count",
         LinearExtensionRequest,
         "check_linear_extension_count",
         "poset.linear-extensions.complete-ideal-dp-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_poset_runtime,
+        observation_loader=_poset_runtime,
         replay_method="independent complete order-ideal recurrence replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "poset.mobius_function.compute",
         MobiusFunctionRequest,
         "check_poset_mobius_function",
         "poset.mobius.interval-convolution-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_poset_runtime,
+        observation_loader=_poset_runtime,
         replay_method="independent interval-convolution recurrence replay",
         reason=_REASON,
     ),

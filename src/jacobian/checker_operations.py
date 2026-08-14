@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.results import ContractModel
 
-ProviderRuntimeFactory = Callable[[], ProviderObservation]
+CheckerObservationLoader = Callable[[], ProviderObservation]
 
 # Producer operation verb segments stripped when deriving a verifier operation
 # ID. Each producer operation ID contains exactly one of these segments; the
@@ -84,7 +83,7 @@ def derive_verification_tags(producer_operation_id: str) -> tuple[str, ...]:
 
 
 @dataclass(frozen=True, slots=True)
-class ExactReplayCheckerDeclaration:
+class AuthorizedChecker:
     """Domain-owned declaration of an independently replayable exact result.
 
     Every declaration carries complete verification operation metadata after
@@ -100,6 +99,7 @@ class ExactReplayCheckerDeclaration:
     request_model: type[ContractModel]
     function: str
     format_id: str
+    observation_loader: CheckerObservationLoader
     entrypoint_module: str = "jacobian_checkers.exact_domain_operations"
     replay_method: str = "Python-FLINT exact replay"
     reason: str = (
@@ -110,16 +110,6 @@ class ExactReplayCheckerDeclaration:
     verification_title: str | None = None
     verification_description: str | None = None
     verification_tags: tuple[str, ...] = ()
-    provider_runtime: ProviderObservation | None = field(
-        default=None,
-        repr=False,
-        compare=False,
-    )
-    provider_runtime_factory: ProviderRuntimeFactory | None = field(
-        default=None,
-        repr=False,
-        compare=False,
-    )
     optional: bool = False
     supports_input: Callable[[object], bool] | None = None
 
@@ -136,17 +126,6 @@ class ExactReplayCheckerDeclaration:
                 raise ValueError(
                     f"exact replay checker declaration {field_name} must not be empty"
                 )
-        runtime = object.__getattribute__(self, "provider_runtime")
-        factory = object.__getattribute__(self, "provider_runtime_factory")
-        if runtime is not None and factory is not None:
-            raise ValueError(
-                "declaration must provide either provider_runtime or "
-                "provider_runtime_factory, not both"
-            )
-        if runtime is not None and runtime.checker_ids:
-            raise ValueError(
-                "declaration-owned provider runtime must not pre-authorize checker IDs"
-            )
         derived_id = derive_verification_operation_id(self.operation_id)
         explicit_text = (
             self.verification_title,
@@ -192,28 +171,6 @@ class ExactReplayCheckerDeclaration:
                 "verification_tags",
                 derive_verification_tags(self.operation_id),
             )
-
-    def __getattribute__(self, name: str) -> Any:
-        if name != "provider_runtime":
-            return object.__getattribute__(self, name)
-        runtime = object.__getattribute__(self, "provider_runtime")
-        if runtime is not None:
-            return runtime
-        factory = object.__getattribute__(self, "provider_runtime_factory")
-        if factory is None:
-            return None
-        realized = factory()
-        if not isinstance(realized, ProviderObservation):
-            raise TypeError(
-                "declaration-owned provider runtime factory must return "
-                "ProviderObservation"
-            )
-        if realized.checker_ids:
-            raise ValueError(
-                "declaration-owned provider runtime must not pre-authorize checker IDs"
-            )
-        object.__setattr__(self, "provider_runtime", realized)
-        return realized
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,7 +8,7 @@ from tests.support.artifacts import artifact_uri as _uri
 
 import jacobian.exact_domain_checkers as exact_domain_checkers
 from jacobian.builtin_operation_modules import load_builtin_operation_modules
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.graph_invariant_operations import (
     GraphInvariantRequest,
     GraphMaximumMatchingRequest,
@@ -128,14 +128,6 @@ def install_exact_domain_checkers(
         groups=bundles,
         authorize=authorize,
     )
-
-
-def _clear_matrix_factory_caches() -> None:
-    """Make monkeypatched provider-factory tests start from a fresh declaration."""
-
-    for declaration in _matrix_declarations():
-        if object.__getattribute__(declaration, "provider_runtime_factory") is not None:
-            object.__setattr__(declaration, "provider_runtime", None)
 
 
 def test_installer_authorizes_all_exact_domain_replays(tmp_path: Path) -> None:
@@ -335,7 +327,6 @@ def test_installer_omits_explicitly_optional_replay_when_provider_is_unavailable
     ``VERIFIED``; they stay producer-only. Installation must still complete.
     """
 
-    _clear_matrix_factory_caches()
     unavailable = exact_domain_checker_provider_runtime().model_copy(
         update={
             "availability": ProviderAvailability.UNAVAILABLE,
@@ -355,8 +346,7 @@ def test_installer_omits_explicitly_optional_replay_when_provider_is_unavailable
     )
     declaration = replace(
         declaration,
-        provider_runtime=unavailable,
-        provider_runtime_factory=None,
+        observation_loader=lambda: unavailable,
         optional=True,
     )
     bundles, operation_id = _single_matrix_declaration_bundle(declaration)
@@ -369,7 +359,6 @@ def test_installer_omits_explicitly_optional_replay_when_provider_is_unavailable
 
     assert installation.checker_ids == {operation_id: None}
     assert installation.diagnostics[0].code == "EXACT_REPLAY_PROVIDER_UNAVAILABLE"
-    _clear_matrix_factory_caches()
 
 
 def test_installer_fails_required_replay_when_provider_is_unavailable(
@@ -380,8 +369,7 @@ def test_installer_fails_required_replay_when_provider_is_unavailable(
         for declaration in _matrix_declarations()
         if declaration.operation_id == "matrix.normal_form.rref.compute"
     )
-    runtime = declaration.provider_runtime
-    assert runtime is not None
+    runtime = declaration.observation_loader()
     unavailable = runtime.model_copy(
         update={
             "availability": ProviderAvailability.UNAVAILABLE,
@@ -392,8 +380,7 @@ def test_installer_fails_required_replay_when_provider_is_unavailable(
     )
     declaration = replace(
         declaration,
-        provider_runtime=unavailable,
-        provider_runtime_factory=None,
+        observation_loader=lambda: unavailable,
         optional=False,
     )
     bundles, _ = _single_matrix_declaration_bundle(declaration)
@@ -410,7 +397,6 @@ def test_installer_does_not_omit_replay_when_bundled_source_is_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _clear_matrix_factory_caches()
     unavailable_source = exact_domain_checker_source_provider_runtime().model_copy(
         update={
             "availability": ProviderAvailability.UNAVAILABLE,
@@ -461,18 +447,17 @@ def test_installer_does_not_omit_replay_when_bundled_source_is_unavailable(
             ),
             authorize=True,
         )
-    _clear_matrix_factory_caches()
 
 
 def _single_matrix_declaration_bundle(
-    declaration: ExactReplayCheckerDeclaration,
+    declaration: AuthorizedChecker,
 ) -> tuple[
     dict[
         str,
         tuple[
             OperationDeclarations,
             BoundOperationGroup,
-            tuple[ExactReplayCheckerDeclaration, ...],
+            tuple[AuthorizedChecker, ...],
         ],
     ],
     str,
@@ -492,7 +477,7 @@ def _single_matrix_declaration_bundle(
     }, declaration.operation_id
 
 
-def test_installer_consumes_direct_declaration_runtime_and_binds_checker_id(
+def test_installer_consumes_declaration_observation_and_binds_checker_id(
     tmp_path: Path,
 ) -> None:
     declaration = next(
@@ -511,8 +496,7 @@ def test_installer_consumes_direct_declaration_runtime_and_binds_checker_id(
     )
     declaration = replace(
         declaration,
-        provider_runtime=runtime,
-        provider_runtime_factory=None,
+        observation_loader=lambda: runtime,
     )
     bundles, operation_id = _single_matrix_declaration_bundle(declaration)
 
@@ -527,27 +511,6 @@ def test_installer_consumes_direct_declaration_runtime_and_binds_checker_id(
     assert installation.provider_runtimes[runtime.provider].checker_ids == (checker_id,)
 
 
-def test_installer_skips_factory_free_compatibility_declaration(
-    tmp_path: Path,
-) -> None:
-    declaration = _matrix_declarations()[0]
-    declaration = replace(
-        declaration,
-        provider_runtime=None,
-        provider_runtime_factory=None,
-    )
-    bundles, operation_id = _single_matrix_declaration_bundle(declaration)
-
-    installation = _install_exact_domain_checkers(
-        CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-        groups=bundles,
-        authorize=True,
-    )
-
-    assert installation.checker_ids == {operation_id: None}
-    assert installation.provider_runtimes == {}
-
-
 def test_authority_disabled_does_not_realize_declaration_factory(
     tmp_path: Path,
 ) -> None:
@@ -558,8 +521,7 @@ def test_authority_disabled_does_not_realize_declaration_factory(
 
     declaration = replace(
         declaration,
-        provider_runtime=None,
-        provider_runtime_factory=fail_factory,
+        observation_loader=fail_factory,
     )
     bundles, operation_id = _single_matrix_declaration_bundle(declaration)
 
@@ -602,8 +564,7 @@ def test_installer_omits_unavailable_declaration_owned_runtime(
     )
     declaration = replace(
         declaration,
-        provider_runtime=None,
-        provider_runtime_factory=lambda: unavailable,
+        observation_loader=lambda: unavailable,
         optional=True,
     )
     bundles, operation_id = _single_matrix_declaration_bundle(declaration)
@@ -618,7 +579,7 @@ def test_installer_omits_unavailable_declaration_owned_runtime(
     assert installation.diagnostics[0].code == "EXACT_REPLAY_PROVIDER_UNAVAILABLE"
 
 
-def _matrix_declarations() -> tuple[ExactReplayCheckerDeclaration, ...]:
+def _matrix_declarations() -> tuple[AuthorizedChecker, ...]:
     return next(
         checkers
         for module_name, _operations, checkers in load_builtin_operation_modules()

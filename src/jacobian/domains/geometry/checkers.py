@@ -1,6 +1,6 @@
 """Per-producer independent replay declarations for exact geometry."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.geometry import (
     ConvexPolygonTriangulationRequest,
     PointPairRequest,
@@ -47,13 +47,13 @@ _OPERATIONS = (
 )
 
 GEOMETRY_EXACT_REPLAY_CHECKERS = tuple(
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         operation_id,
         request_model,
         "check_exact_geometry",
         "geometry.exact_rational_result",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_geometry_runtime,
+        observation_loader=_geometry_runtime,
         replay_method="standard-library exact-rational replay",
         reason=(
             "operator-authorized standard-library rational replay independent of "

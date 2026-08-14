@@ -1,6 +1,6 @@
 """Independent checker declarations owned by the matrix domain."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.matrix_lattice import HermiteNormalFormRequest
 from jacobian.contracts.matrix_operations import (
     IntegerMatrixRequest,
@@ -40,7 +40,7 @@ def _hnf_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
 
 
 MATRIX_EXACT_REPLAY_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.normal_form.hermite.materialize",
         HermiteNormalFormRequest,
         "check_hermite_normal_form",
@@ -58,62 +58,62 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
             "stored integer matrix input."
         ),
         verification_tags=("verification", "exact", "matrix", "hermite-normal-form"),
-        provider_runtime_factory=_hnf_runtime,
+        observation_loader=_hnf_runtime,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.determinant.compute",
         MatrixDeterminantRequest,
         "check_matrix_determinant",
         "matrix.determinant.flint-replay",
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.rank.compute",
         MatrixRankRequest,
         "check_matrix_rank",
         "matrix.rank.flint-replay",
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.multiply.compute",
         RationalMatrixProductRequest,
         "check_matrix_product",
         "matrix.product.flint-replay",
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.normal_form.rref.compute",
         RationalMatrixRequest,
         "check_matrix_rref",
         "matrix.rref.flint-replay",
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.nullspace.compute",
         RationalMatrixRequest,
         "check_matrix_nullspace",
         "matrix.nullspace.flint-replay",
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.characteristic_polynomial.compute",
         SquareRationalMatrixRequest,
         "check_matrix_characteristic_polynomial",
         "matrix.characteristic-polynomial.flint-replay",
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "matrix.normal_form.smith.compute",
         IntegerMatrixRequest,
         "check_matrix_smith_normal_form",
         "matrix.smith-normal-form.flint-replay",
-        provider_runtime_factory=_flint_exact_replay_runtime,
+        observation_loader=_flint_exact_replay_runtime,
         optional=True,
     ),
 )

@@ -5,14 +5,14 @@ from __future__ import annotations
 from importlib import import_module
 from typing import cast
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.operation_declarations import OperationDeclarations
 
 type BuiltinOperationModule = tuple[str, str]
 type LoadedOperationModule = tuple[
     str,
     OperationDeclarations,
-    tuple[ExactReplayCheckerDeclaration, ...],
+    tuple[AuthorizedChecker, ...],
 ]
 
 BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
@@ -85,7 +85,7 @@ def load_builtin_operation_module(module_name: str) -> LoadedOperationModule:
     factory = getattr(module, factory_name)
     operations = cast(OperationDeclarations, factory())
     checkers = cast(
-        tuple[ExactReplayCheckerDeclaration, ...],
+        tuple[AuthorizedChecker, ...],
         getattr(module, "CHECKER_DECLARATIONS", ()),
     )
     return module_name, operations, checkers

@@ -1,6 +1,6 @@
 """Typed real-quadratic order operation and checker declaration."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.operations import (
     ProviderInstallTier,
     ProviderObservation,
@@ -66,13 +66,13 @@ REAL_QUADRATIC_OPERATIONS = (
 )
 
 REAL_QUADRATIC_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "arithmetic.real_quadratic.order.compute",
         RealQuadraticOrderRequest,
         "check_real_quadratic_order",
         "arithmetic.real-quadratic.fraction-square-replay",
         entrypoint_module="jacobian_checkers.real_quadratic",
-        provider_runtime_factory=_real_quadratic_runtime,
+        observation_loader=_real_quadratic_runtime,
         replay_method="standard-library Fraction squared-magnitude replay",
         reason=(
             "operator-authorized standard-library checker independently compares "

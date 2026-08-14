@@ -1,6 +1,6 @@
 """Independent checker declarations owned by the probability domain."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.operations import (
     ProviderInstallTier,
     ProviderObservation,
@@ -53,7 +53,7 @@ def _probability_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObserv
 
 
 PROBABILITY_EXACT_REPLAY_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.joint.mutual_information.compute",
         FiniteJointTableMutualInformationRequest,
         "check_finite_joint_mutual_information",
@@ -64,7 +64,7 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
             "operator-authorized standard-library Fraction checker independently "
             "reconstructs marginals, likelihood ratios, and the scaled log product"
         ),
-        provider_runtime_factory=_mutual_information_checker_runtime,
+        observation_loader=_mutual_information_checker_runtime,
         verification_operation_id="probability.joint.mutual_information.verify",
         verification_title="Verify a finite-table mutual-information certificate",
         verification_description=(
@@ -80,73 +80,73 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
             "mutual-information",
         ),
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.finite_distribution.raw_moment.compute",
         FiniteRawMomentRequest,
         "check_finite_raw_moment",
         "probability.finite-raw-moment.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_probability_runtime,
+        observation_loader=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.finite_distribution.event_probability.compute",
         FiniteEventRequest,
         "check_finite_event_probability",
         "probability.finite-event.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_probability_runtime,
+        observation_loader=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.finite_distribution.condition.compute",
         FiniteEventRequest,
         "check_finite_condition",
         "probability.finite-condition.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_probability_runtime,
+        observation_loader=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.finite_distribution.pushforward.compute",
         FinitePushforwardRequest,
         "check_finite_pushforward",
         "probability.finite-pushforward.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_probability_runtime,
+        observation_loader=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.finite_distribution.convolution.compute",
         FiniteConvolutionRequest,
         "check_finite_convolution",
         "probability.finite-convolution.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_probability_runtime,
+        observation_loader=_probability_runtime,
         replay_method="standard-library Fraction replay",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.gaussian_polynomial.moment.compute",
         CanonicalGaussianPolynomialMomentRequest,
         "check_gaussian_polynomial_moment",
         "probability.gaussian-polynomial-moment.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_probability_runtime,
+        observation_loader=_probability_runtime,
         replay_method="independent standard-library coefficient contraction",
         reason=_REASON,
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "probability.graph_reliability.connection_probability.compute",
         GraphConnectionProbabilityRequest,
         "check_graph_connection_probability",
         "probability.graph-reliability-connection.fraction-replay",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_probability_runtime,
+        observation_loader=_probability_runtime,
         replay_method="independent exhaustive edge-subset replay",
         reason=_REASON,
         verification_operation_id=(

@@ -41,17 +41,6 @@ class BoundedWorker:
 
 
 @dataclass(frozen=True, slots=True)
-class AuthorizedChecker:
-    """An operation whose checker identity is bound by operator state."""
-
-    checker_id: str
-
-    def __post_init__(self) -> None:
-        if not self.checker_id.strip():
-            raise ValueError("checker ID must not be empty")
-
-
-@dataclass(frozen=True, slots=True)
 class InlinePublication:
     """Publish one bounded mathematical value inline."""
 
@@ -241,7 +230,6 @@ class DurableOperationFactory:
 
 __all__ = [
     "SUPPORTED",
-    "AuthorizedChecker",
     "BoundedWorker",
     "DurableOperationFactory",
     "DurablePublication",

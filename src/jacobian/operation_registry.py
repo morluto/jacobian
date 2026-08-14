@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from jacobian.builtin_operation_modules import load_builtin_operation_module
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
@@ -527,7 +527,7 @@ class OperationRegistry:
         descriptor: OperationDescriptor,
         record: OperationDeclarationRecord,
         operations: OperationDeclarations,
-        checker_declarations: tuple[ExactReplayCheckerDeclaration, ...],
+        checker_declarations: tuple[AuthorizedChecker, ...],
     ) -> OperationAdapter[Any]:
         from jacobian.exact_domain_checkers import bind_selected_exact_verification
 

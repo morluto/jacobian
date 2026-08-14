@@ -1,6 +1,6 @@
 """Independent checker declarations for inline rational-linear candidates."""
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.linear import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalSolutionFindRequest,
@@ -43,23 +43,23 @@ def _linear_inconsistency_runtime(
 
 
 RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "linear.rational_solution.compute",
         LinearRationalSolutionFindRequest,
         "check_rational_solution",
         "linear.rational_solution",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_linear_solution_runtime,
+        observation_loader=_linear_solution_runtime,
         replay_method="independent exact rational equation replay",
         reason="standard-library checker independently replays every equation",
     ),
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "linear.rational_inconsistency.compute",
         LinearRationalInconsistencyFindRequest,
         "check_rational_inconsistency",
         "linear.rational_inconsistency",
         entrypoint_module=_ENTRYPOINT,
-        provider_runtime_factory=_linear_inconsistency_runtime,
+        observation_loader=_linear_inconsistency_runtime,
         replay_method="independent exact rational left-nullspace replay",
         reason="standard-library checker independently replays the left witness",
     ),

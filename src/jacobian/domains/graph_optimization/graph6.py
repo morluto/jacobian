@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field, StrictStr
 
-from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.operations import (
     OperationDiagnostic,
@@ -81,13 +81,13 @@ GRAPH6_OPERATIONS = (
 )
 
 GRAPH6_CHECKER_DECLARATIONS = (
-    ExactReplayCheckerDeclaration(
+    AuthorizedChecker(
         "graph.encoding.graph6.decode.compute",
         Graph6DecodeRequest,
         "check_graph6_decode",
         "graph.graph6-decode.standard-library-v1",
         entrypoint_module="jacobian_checkers.graph6",
-        provider_runtime_factory=_graph6_runtime,
+        observation_loader=_graph6_runtime,
         replay_method="standard-library graph6 bitstream replay",
         reason=(
             "operator-authorized standard-library checker independently decodes "

@@ -36,9 +36,11 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
 
 CI always runs that ordinary Python surface plus storage/process/MCP,
-maintained Python provider boundaries, the wheel smoke, and Lean. You do not
-need to reproduce Lean locally for a routine change unless you edited Lean
-sources, fixtures, or provider identity.
+maintained Python provider boundaries, and the wheel smoke. Full Lean runs on
+merge-group candidates and on `main`, not on every pull request. That gate
+needs GitHub merge queue enabled on `main`; without a queue, Lean only runs
+after a push to `main`. You do not need to reproduce Lean locally for a
+routine change unless you edited Lean sources, fixtures, or provider identity.
 
 Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
 `make test-process`, `make test-mcp`, `make test-e2e`, `make test-domain`, and
@@ -66,7 +68,9 @@ and verifies child-process coverage collection.
   target is the pinned Lean specialist lane only (`test-lean`).
 - **Optional or maintained Python providers:** `make test-provider` when those
   trees change. `make check-all` already includes that lane; `check-external`
-  does not rerun it. CI owns the full Lean and optional-provider environments.
+  does not rerun it. Hosted CI runs full Lean on merge-group candidates and
+  `main` (and after a push to `main` if merge queue is not enabled); pull
+  requests skip that specialist job.
 - **Exhaustive local reproduction:** `make test-full` is an explicit exception
   path, not a routine gate. It takes this worktree's exhaustive validation
   lock; `make validation-status` shows whether that lock is held. Before it,

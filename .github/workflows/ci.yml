@@ -169,6 +169,11 @@ jobs:
 
   lean:
     name: Lean Runtime
+    # Full Lean is the merge-group/main gate. Pull requests skip it so
+    # intermediate commits are not blocked for the ~14 minute specialist suite.
+    # Enable GitHub merge queue on main; otherwise Lean only runs after a
+    # push to main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -235,6 +240,7 @@ jobs:
     steps:
       - name: Require static python boundaries wheel coverage and selected specialist lanes
         env:
+          EVENT_NAME: ${{ github.event_name }}
           STATIC_RESULT: ${{ needs.static.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           BOUNDARIES_RESULT: ${{ needs.boundaries.result }}
@@ -247,4 +253,8 @@ jobs:
           test "$BOUNDARIES_RESULT" = success
           test "$WHEEL_RESULT" = success
           test "$COVERAGE_RESULT" = success
-          test "$LEAN_RESULT" = success
+          if [ "$EVENT_NAME" = pull_request ]; then
+            test "$LEAN_RESULT" = skipped || test "$LEAN_RESULT" = success
+          else
+            test "$LEAN_RESULT" = success
+          fi

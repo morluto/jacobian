@@ -117,14 +117,14 @@ def test_python_and_boundary_lanes_share_evidence_collection() -> None:
     assert "uv cache prune --ci" in action
 
 
-def test_lean_job_is_required_on_every_event_and_builds_semantic_targets() -> None:
+def test_full_lean_runs_on_merge_group_and_main() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     action = (ROOT / ".github/actions/setup-lean/action.yml").read_text(
         encoding="utf-8"
     )
 
     lean = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
-    assert "if: >-" not in lean
+    assert "if: github.event_name != 'pull_request'" in lean
     assert "JACOBIAN_LEAN_REQUIRED" in lean
     assert "use-github-cache: false" in action
     assert "use-mathlib-cache: true" in action
@@ -360,10 +360,13 @@ def test_required_ci_gates_fail_closed_after_cancellation() -> None:
     assert "deployment-test:" not in workflow
     assert ("needs: [static, python, boundaries, wheel, coverage, lean]") in required
     assert "success|skipped" not in required
+    assert "EVENT_NAME: ${{ github.event_name }}" in required
+    assert 'if [ "$EVENT_NAME" = pull_request ]; then' in required
+    assert 'test "$LEAN_RESULT" = skipped || test "$LEAN_RESULT" = success' in required
     assert 'test "$LEAN_RESULT" = success' in required
     assert "needs.lean.result" in required
     lean_job = workflow.split("  lean:", 1)[1].split("  coverage:", 1)[0]
-    assert "github.event_name != 'pull_request'" not in lean_job
+    assert "if: github.event_name != 'pull_request'" in lean_job
     assert "JACOBIAN_LEAN_REQUIRED" in lean_job
 
 

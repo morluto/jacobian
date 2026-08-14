@@ -119,8 +119,11 @@ branch. Registrations whose files are gone, including historical
 the GitHub UI and retain their run history.
 `python tools/inventory_github_workflows.py` compares files to registrations
 and never disables workflows. Branch protection should require the CI job
-named `required`; that aggregate already fail-closes on static, python,
-boundaries, wheel, coverage, and Lean. Do not add no-op jobs that only
+named `required`; that aggregate fail-closes on static, python,
+boundaries, wheel, and coverage. Full Lean is required on merge-group
+candidates and `main`, not on every pull request. Enable GitHub merge queue
+on `main` so that gate still runs before landing; without a queue, Lean only
+runs after a push to `main`. Do not add no-op jobs that only
 mirror those results under older check names.
 
 Ordinary CI coverage instruments each pytest process but does not automatically

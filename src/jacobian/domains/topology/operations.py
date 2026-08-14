@@ -41,11 +41,7 @@ from jacobian.domains._certified_snf import (
 )
 from jacobian.domains._examples import example
 from jacobian.math import prime_field_linear_algebra as prime_field
-from jacobian.operation_declarations import (
-    InlineOperation,
-    OperationDeclaration,
-    inline_operation,
-)
+from jacobian.math_tools import MathTool
 
 
 def _canonical_complex(
@@ -524,174 +520,164 @@ _CANONICAL_CIRCLE = {
 }
 
 type TopologyOperation = (
-    InlineOperation[SimplicialComplexRequest, SimplicialComplexCanonicalizationResult]
-    | InlineOperation[ChainComplexRequest, ChainComplexResult]
-    | InlineOperation[SimplicialHomologyRequest, SimplicialHomologyResult]
-    | InlineOperation[
-        IntegralSimplicialHomologyRequest, IntegralSimplicialHomologyResult
-    ]
+    MathTool[SimplicialComplexRequest, SimplicialComplexCanonicalizationResult]
+    | MathTool[ChainComplexRequest, ChainComplexResult]
+    | MathTool[SimplicialHomologyRequest, SimplicialHomologyResult]
+    | MathTool[IntegralSimplicialHomologyRequest, IntegralSimplicialHomologyResult]
 )
 
 
 TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
-    inline_operation(
-        OperationDeclaration(
-            operation_id="topology.simplicial_complex.canonicalize",
-            title="Canonicalize a finite simplicial complex",
-            description=(
-                "Validate bounded maximal facets, close them under every non-empty "
-                "face, and return canonical oriented simplex bases and the exact "
-                "f-vector."
+    MathTool(
+        operation_id="topology.simplicial_complex.canonicalize",
+        version="4",
+        title="Canonicalize a finite simplicial complex",
+        description=(
+            "Validate bounded maximal facets, close them under every non-empty "
+            "face, and return canonical oriented simplex bases and the exact "
+            "f-vector."
+        ),
+        request_type=SimplicialComplexRequest,
+        result_type=SimplicialComplexCanonicalizationResult,
+        run=_canonicalize,
+        tags=(
+            "topology",
+            "simplicial-complex",
+            "facets",
+            "face-closure",
+            "f-vector",
+            "exact",
+        ),
+        examples=(
+            example(
+                "triangle_boundary",
+                "Canonicalize the three-edge simplicial model of a circle.",
+                _CIRCLE,
             ),
-            request_type=SimplicialComplexRequest,
-            result_type=SimplicialComplexCanonicalizationResult,
-            execute=_canonicalize,
-            tags=(
-                "topology",
-                "simplicial-complex",
-                "facets",
-                "face-closure",
-                "f-vector",
-                "exact",
-            ),
-            examples=(
-                example(
-                    "triangle_boundary",
-                    "Canonicalize the three-edge simplicial model of a circle.",
-                    _CIRCLE,
-                ),
-            ),
-            version="4",
-        )
+        ),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="topology.simplicial_complex.chain_complex.compute",
-            title="Compute an oriented simplicial chain complex",
-            description=(
-                "Construct every oriented sparse boundary matrix for one canonical "
-                "finite simplicial complex over the integers or a bounded prime field."
+    MathTool(
+        operation_id="topology.simplicial_complex.chain_complex.compute",
+        version="4",
+        title="Compute an oriented simplicial chain complex",
+        description=(
+            "Construct every oriented sparse boundary matrix for one canonical "
+            "finite simplicial complex over the integers or a bounded prime field."
+        ),
+        request_type=ChainComplexRequest,
+        result_type=ChainComplexResult,
+        run=_chain,
+        tags=(
+            "topology",
+            "simplicial-complex",
+            "chain-complex",
+            "boundary-matrix",
+            "exact",
+        ),
+        examples=(
+            example(
+                "circle_integer_chain_complex",
+                "Construct the oriented integer boundary matrices of a circle.",
+                {
+                    "complex": _CANONICAL_CIRCLE,
+                    "coefficient_ring": "INTEGER",
+                    "convention": "UNREDUCED",
+                },
             ),
-            request_type=ChainComplexRequest,
-            result_type=ChainComplexResult,
-            execute=_chain,
-            tags=(
-                "topology",
-                "simplicial-complex",
-                "chain-complex",
-                "boundary-matrix",
-                "exact",
-            ),
-            examples=(
-                example(
-                    "circle_integer_chain_complex",
-                    "Construct the oriented integer boundary matrices of a circle.",
-                    {
-                        "complex": _CANONICAL_CIRCLE,
-                        "coefficient_ring": "INTEGER",
-                        "convention": "UNREDUCED",
-                    },
-                ),
-            ),
-            version="4",
-        )
+        ),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="topology.simplicial_homology.compute",
-            title="Compute finite-field simplicial homology",
-            description=(
-                "Compute every Betti number and inspectable cycle, boundary, and "
-                "quotient basis of a bounded finite simplicial complex over F_p."
+    MathTool(
+        operation_id="topology.simplicial_homology.compute",
+        version="4",
+        title="Compute finite-field simplicial homology",
+        description=(
+            "Compute every Betti number and inspectable cycle, boundary, and "
+            "quotient basis of a bounded finite simplicial complex over F_p."
+        ),
+        request_type=SimplicialHomologyRequest,
+        result_type=SimplicialHomologyResult,
+        run=_homology,
+        tags=(
+            "topology",
+            "simplicial-homology",
+            "betti-number",
+            "cycle-basis",
+            "prime-field",
+            "exact",
+        ),
+        examples=(
+            example(
+                "circle_homology_mod_two",
+                "Compute H_0 and H_1 over F_2 for a triangle boundary.",
+                {
+                    "complex": _CANONICAL_CIRCLE,
+                    "prime": 2,
+                    "convention": "UNREDUCED",
+                },
             ),
-            request_type=SimplicialHomologyRequest,
-            result_type=SimplicialHomologyResult,
-            execute=_homology,
-            tags=(
-                "topology",
-                "simplicial-homology",
-                "betti-number",
-                "cycle-basis",
-                "prime-field",
-                "exact",
-            ),
-            examples=(
-                example(
-                    "circle_homology_mod_two",
-                    "Compute H_0 and H_1 over F_2 for a triangle boundary.",
-                    {
-                        "complex": _CANONICAL_CIRCLE,
-                        "prime": 2,
-                        "convention": "UNREDUCED",
-                    },
-                ),
-            ),
-            version="4",
-        )
+        ),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="topology.simplicial_homology.integral.compute",
-            title="Compute transformation-certified integral simplicial homology",
-            description=(
-                "Compute the free rank, torsion invariant factors, and simplex-basis "
-                "cycle generators of every integral homology group, with explicit "
-                "Smith transformations and bounding chains."
+    MathTool(
+        operation_id="topology.simplicial_homology.integral.compute",
+        version="4",
+        title="Compute transformation-certified integral simplicial homology",
+        description=(
+            "Compute the free rank, torsion invariant factors, and simplex-basis "
+            "cycle generators of every integral homology group, with explicit "
+            "Smith transformations and bounding chains."
+        ),
+        request_type=IntegralSimplicialHomologyRequest,
+        result_type=IntegralSimplicialHomologyResult,
+        run=_integral_homology,
+        tags=(
+            "topology",
+            "simplicial-homology",
+            "integer-homology",
+            "torsion",
+            "betti-number",
+            "cycle-generator",
+            "smith-normal-form",
+            "certificate",
+            "exact",
+        ),
+        examples=(
+            example(
+                "integral_circle_homology",
+                "Compute H_0 and H_1 over the integers for a triangle boundary.",
+                {
+                    "complex": {
+                        "vertices": ["a", "b", "c"],
+                        "maximal_simplices": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["b", "c"],
+                        ],
+                        "faces_by_dimension": [
+                            {
+                                "dimension": 0,
+                                "faces": [["a"], ["b"], ["c"]],
+                            },
+                            {
+                                "dimension": 1,
+                                "faces": [
+                                    ["a", "b"],
+                                    ["a", "c"],
+                                    ["b", "c"],
+                                ],
+                            },
+                        ],
+                        "dimension": 1,
+                        "f_vector": [3, 3],
+                        "closure_size": 6,
+                        "complex_digest": (
+                            "sha256:"
+                            "6f797991bac967e2a8e572707df487061655df0f094c"
+                            "bde0f52f82c5401fc043"
+                        ),
+                    }
+                },
             ),
-            request_type=IntegralSimplicialHomologyRequest,
-            result_type=IntegralSimplicialHomologyResult,
-            execute=_integral_homology,
-            tags=(
-                "topology",
-                "simplicial-homology",
-                "integer-homology",
-                "torsion",
-                "betti-number",
-                "cycle-generator",
-                "smith-normal-form",
-                "certificate",
-                "exact",
-            ),
-            examples=(
-                example(
-                    "integral_circle_homology",
-                    "Compute H_0 and H_1 over the integers for a triangle boundary.",
-                    {
-                        "complex": {
-                            "vertices": ["a", "b", "c"],
-                            "maximal_simplices": [
-                                ["a", "b"],
-                                ["a", "c"],
-                                ["b", "c"],
-                            ],
-                            "faces_by_dimension": [
-                                {
-                                    "dimension": 0,
-                                    "faces": [["a"], ["b"], ["c"]],
-                                },
-                                {
-                                    "dimension": 1,
-                                    "faces": [
-                                        ["a", "b"],
-                                        ["a", "c"],
-                                        ["b", "c"],
-                                    ],
-                                },
-                            ],
-                            "dimension": 1,
-                            "f_vector": [3, 3],
-                            "closure_size": 6,
-                            "complex_digest": (
-                                "sha256:"
-                                "6f797991bac967e2a8e572707df487061655df0f094c"
-                                "bde0f52f82c5401fc043"
-                            ),
-                        }
-                    },
-                ),
-            ),
-            version="4",
-        )
+        ),
     ),
 )
 

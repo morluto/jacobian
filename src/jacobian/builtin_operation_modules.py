@@ -1,59 +1,59 @@
-"""Explicit immutable inventory of built-in operation declaration modules."""
+"""Explicit immutable inventory of built-in mathematical tool modules."""
 
 from __future__ import annotations
 
 from importlib import import_module
 from typing import cast
 
-from jacobian.operation_declarations import OperationDeclarations
+from jacobian.math_tools import MathTools
 
 type BuiltinOperationModule = tuple[str, str]
-type LoadedOperationModule = tuple[str, OperationDeclarations]
+type LoadedOperationModule = tuple[str, MathTools]
 
 BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
-    ("jacobian.domains.arithmetic.domain_declarations", "arithmetic_operations"),
-    ("jacobian.domains.number_theory.domain_declarations", "number_theory_operations"),
-    ("jacobian.domains.combinatorics.domain_declarations", "combinatorics_operations"),
-    ("jacobian.domains.finite_sets.domain_declarations", "finite_set_operations"),
-    ("jacobian.domains.finite_fields.domain_declarations", "finite_field_operations"),
-    ("jacobian.domains.logic.domain_declarations", "logic_operations"),
-    ("jacobian.domains.sequences.domain_declarations", "sequence_operations"),
-    ("jacobian.domains.geometry.domain_declarations", "geometry_operations"),
+    ("jacobian.domains.arithmetic", "arithmetic_operations"),
+    ("jacobian.domains.number_theory", "number_theory_operations"),
+    ("jacobian.domains.combinatorics", "combinatorics_operations"),
+    ("jacobian.domains.finite_sets", "finite_set_operations"),
+    ("jacobian.domains.finite_fields", "finite_field_operations"),
+    ("jacobian.domains.logic", "logic_operations"),
+    ("jacobian.domains.sequences", "sequence_operations"),
+    ("jacobian.domains.geometry", "geometry_operations"),
     (
-        "jacobian.domains.projective_geometry.domain_declarations",
+        "jacobian.domains.projective_geometry",
         "projective_geometry_operations",
     ),
     (
-        "jacobian.domains.graph_optimization.domain_declarations",
+        "jacobian.domains.graph_optimization",
         "graph_optimization_operations",
     ),
     (
-        "jacobian.domains.graph_optimization.invariant_declarations",
+        "jacobian.domains.graph_optimization",
         "graph_invariant_operations",
     ),
     (
-        "jacobian.domains.graph_symmetry.domain_declarations",
+        "jacobian.domains.graph_symmetry",
         "graph_symmetry_operations",
     ),
-    ("jacobian.domains.certified_snf.domain_declarations", "certified_snf_operations"),
-    ("jacobian.domains.matrix_lattice.domain_declarations", "matrix_operations"),
+    ("jacobian.domains.certified_snf", "certified_snf_operations"),
+    ("jacobian.domains.matrices", "matrix_operations"),
     (
-        "jacobian.domains.rational_linear.domain_declarations",
+        "jacobian.domains.rational_linear",
         "rational_linear_operations",
     ),
-    ("jacobian.domains.matrix_lattice.lattice_declarations", "lattice_operations"),
-    ("jacobian.domains.polynomial.domain_declarations", "polynomial_operations"),
-    ("jacobian.domains.analysis.domain_declarations", "real_analysis_operations"),
+    ("jacobian.domains.lattices", "lattice_operations"),
+    ("jacobian.domains.polynomial", "polynomial_operations"),
+    ("jacobian.domains.analysis", "real_analysis_operations"),
     (
-        "jacobian.domains.probability.domain_declarations",
+        "jacobian.domains.probability",
         "finite_probability_operations",
     ),
     (
-        "jacobian.domains.optimization.domain_declarations",
+        "jacobian.domains.optimization",
         "rational_optimization_operations",
     ),
-    ("jacobian.domains.topology.domain_declarations", "topology_operations"),
-    ("jacobian.domains.posets.domain_declarations", "finite_poset_operations"),
+    ("jacobian.domains.topology", "topology_operations"),
+    ("jacobian.domains.posets", "finite_poset_operations"),
 )
 
 
@@ -75,7 +75,7 @@ def load_builtin_operation_module(module_name: str) -> LoadedOperationModule:
         raise ValueError(f"unknown built-in operation module: {module_name}") from exc
     module = import_module(module_name)
     factory = getattr(module, factory_name)
-    operations = cast(OperationDeclarations, factory())
+    operations = cast(MathTools, factory())
     return module_name, operations
 
 

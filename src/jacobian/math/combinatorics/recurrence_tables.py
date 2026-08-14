@@ -7,6 +7,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.combinatorics import (
     MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
     MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
@@ -15,7 +16,6 @@ from jacobian.contracts.combinatorics import (
     MAX_P_RECURSIVE_POLYNOMIAL_DEGREE,
 )
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
-from jacobian.contracts.results import ContractModel
 
 
 class IndexedRecurrenceResidual(ContractModel):

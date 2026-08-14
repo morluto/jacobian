@@ -32,8 +32,6 @@ def _result() -> dict[str, object]:
         "replay_scope_end": 3,
         "exactness": "EXACT_RATIONAL",
         "determinism": "DETERMINISTIC",
-        "backend": "sympy",
-        "backend_version": "1.14.0",
     }
 
 

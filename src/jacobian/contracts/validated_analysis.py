@@ -8,20 +8,19 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 from jacobian.contracts.probability import (
     FiniteDistributionAtom,
     require_input_distribution,
 )
-from jacobian.contracts.results import ContractModel
 
 MAX_RATIONAL_DIGITS = 128
 type RationalLinearProgramStatus = Literal[
-    "CERTIFICATE_PRODUCED",
-    "PRIMAL_ONLY",
-    "NO_CERTIFICATE",
-    "TIMEOUT",
-    "BACKEND_ERROR",
+    "OPTIMAL",
+    "PRIMAL_FEASIBLE",
+    "INFEASIBLE",
+    "UNBOUNDED",
 ]
 
 
@@ -37,7 +36,6 @@ class ArbPointEnclosureRequest(ContractModel):
     function: RealUnaryFunction
     argument: CanonicalRational
     precision_bits: StrictInt = Field(default=128, ge=32, le=4096)
-    wall_seconds: StrictInt = Field(default=10, ge=1, le=60)
 
     @model_validator(mode="after")
     def bound_argument_size(self) -> Self:
@@ -190,10 +188,11 @@ class StandardFormRationalLinearProgram(ContractModel):
 
 class RationalLinearProgramRequest(ContractModel):
     program: StandardFormRationalLinearProgram
-    wall_seconds: StrictInt = Field(default=10, ge=1, le=60)
 
 
 class RationalLinearProgramResult(ContractModel):
+    """The direct mathematical outcome of one rational linear program."""
+
     status: RationalLinearProgramStatus
     primal_candidate: tuple[CanonicalRational, ...] | None = None
     dual_candidate: tuple[CanonicalRational, ...] | None = None
@@ -201,86 +200,31 @@ class RationalLinearProgramResult(ContractModel):
     dual_objective: CanonicalRational | None = None
     primal_residuals: tuple[CanonicalRational, ...] | None = None
     dual_slacks: tuple[CanonicalRational, ...] | None = None
-    detail: str = Field(min_length=1, max_length=1024)
 
     @model_validator(mode="after")
-    def bind_certificate_fields(self) -> Self:
-        complete = self.status == "CERTIFICATE_PRODUCED"
-        certificate_fields = (
+    def bind_result_fields(self) -> Self:
+        optimal = self.status == "OPTIMAL"
+        primal_fields = (
             self.primal_candidate,
-            self.dual_candidate,
             self.primal_objective,
-            self.dual_objective,
             self.primal_residuals,
+        )
+        dual_fields = (
+            self.dual_candidate,
+            self.dual_objective,
             self.dual_slacks,
         )
-        if complete != all(value is not None for value in certificate_fields):
+        has_primal = self.status in {"OPTIMAL", "PRIMAL_FEASIBLE"}
+        if has_primal and not all(value is not None for value in primal_fields):
             raise ValueError(
-                "a produced certificate requires both candidates and replay data"
+                "a primal result requires a candidate, objective, and residuals"
             )
-        if self.status == "PRIMAL_ONLY":
-            if (
-                self.primal_candidate is None
-                or self.primal_objective is None
-                or self.primal_residuals is None
-                or self.dual_candidate is not None
-                or self.dual_objective is not None
-                or self.dual_slacks is not None
-            ):
-                raise ValueError("a primal-only result must carry only primal data")
-        elif not complete and any(value is not None for value in certificate_fields):
+        if not has_primal and any(value is not None for value in primal_fields):
+            raise ValueError("an infeasible or unbounded result cannot carry a point")
+        if optimal and not all(value is not None for value in dual_fields):
             raise ValueError(
-                "only certificate or primal-only results may carry candidates"
+                "an optimal result requires a dual candidate, objective, and slacks"
             )
-        return self
-
-
-class RationalLinearProgramObligation(ContractModel):
-    obligation_type: Literal["RATIONAL_LP_OPTIMALITY_REPLAY"] = (
-        "RATIONAL_LP_OPTIMALITY_REPLAY"
-    )
-    program: StandardFormRationalLinearProgram
-    status: RationalLinearProgramStatus
-    primal_candidate: tuple[CanonicalRational, ...] | None = None
-    dual_candidate: tuple[CanonicalRational, ...] | None = None
-    required_checks: tuple[
-        Literal[
-            "PRIMAL_FEASIBILITY",
-            "DUAL_FEASIBILITY",
-            "OBJECTIVE_EQUALITY",
-        ],
-        ...,
-    ] = (
-        "PRIMAL_FEASIBILITY",
-        "DUAL_FEASIBILITY",
-        "OBJECTIVE_EQUALITY",
-    )
-    required_checker: Literal["AUTHORIZED_INDEPENDENT_EXACT_RATIONAL"] = (
-        "AUTHORIZED_INDEPENDENT_EXACT_RATIONAL"
-    )
-
-    @model_validator(mode="after")
-    def bind_candidate_dimensions_to_program(self) -> Self:
-        if self.primal_candidate is not None and len(self.primal_candidate) != len(
-            self.program.variables
-        ):
-            raise ValueError("LP primal candidate length must equal the variable count")
-        if self.dual_candidate is not None and len(self.dual_candidate) != len(
-            self.program.coefficients
-        ):
-            raise ValueError(
-                "LP dual candidate length must equal the equality-constraint count"
-            )
-        if self.status == "CERTIFICATE_PRODUCED" and (
-            self.primal_candidate is None or self.dual_candidate is None
-        ):
-            raise ValueError(
-                "a produced LP certificate obligation requires both candidates"
-            )
-        if self.status not in {"CERTIFICATE_PRODUCED", "PRIMAL_ONLY"} and (
-            self.primal_candidate is not None or self.dual_candidate is not None
-        ):
-            raise ValueError(
-                "an LP non-candidate outcome cannot create candidate obligations"
-            )
+        if not optimal and any(value is not None for value in dual_fields):
+            raise ValueError("only an optimal result can carry dual data")
         return self

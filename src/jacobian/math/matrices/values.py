@@ -8,13 +8,13 @@ from typing import Literal, Self
 from pydantic import Field, field_validator, model_validator
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalInteger
 from jacobian.contracts.matrices import (
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     IntegerMatrix,
 )
-from jacobian.contracts.results import ContractModel
 
 
 class SmithNormalForm(ContractModel):

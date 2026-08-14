@@ -9,8 +9,8 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from jacobian.canonical import canonicalize_json
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.common import Sha256Digest
-from jacobian.contracts.results import ContractModel
 
 MAX_POSET_ELEMENTS = 64
 MAX_POSET_RELATIONS = MAX_POSET_ELEMENTS * MAX_POSET_ELEMENTS
@@ -418,8 +418,6 @@ class FinitePoset(ContractModel):
 class PosetExactResult(ContractModel):
     exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["networkx"] = "networkx"
-    backend_version: Literal["3.6.1"] = "3.6.1"
 
 
 class FinitePosetMaterializationResult(PosetExactResult):

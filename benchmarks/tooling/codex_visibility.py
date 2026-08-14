@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 import httpx2
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
-from mcp_types import TextResourceContents
+from mcp.types import TextResourceContents
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from benchmarks.tooling.command_runner import (

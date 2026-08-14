@@ -106,8 +106,7 @@ MODULAR_OPERATIONS = (
         (
             "Compute the bounded image of a sparse integer polynomial over declared "
             "finite residue domains modulo m, including multiplicities and first "
-            "witness assignments. The exhaustive assignment ledger is a separate "
-            "durable resource."
+            "witness assignments."
         ),
         ModularPolynomialResidueImageRequest,
         ModularPolynomialResidueImageResult,
@@ -137,9 +136,9 @@ MODULAR_OPERATIONS = (
     ),
     number_theory_operation(
         "modular.polynomial_residue_image.assignments.compute",
-        "Compute modular polynomial assignment ledger",
+        "Compute modular polynomial assignments",
         (
-            "Compute the complete bounded assignment-to-residue ledger for a sparse "
+            "Compute the complete bounded assignment-to-residue table for a sparse "
             "modular polynomial, including the image summary."
         ),
         ModularPolynomialResidueImageRequest,
@@ -149,8 +148,7 @@ MODULAR_OPERATIONS = (
         "modular",
         "polynomial",
         "residue",
-        "ledger",
-        "evidence",
+        "assignments",
         examples=(
             example(
                 "cubic_assignment_ledger_mod_7",

@@ -9,10 +9,9 @@ runtime.  It enforces nineteen focused invariants:
    files listed by exact path.  Product code and mathematical checkers must
    route through the bounded process gateway.
 
-2. **bounded-process-gateway**: ``run_bounded_process`` imports/calls are
-   allowed only in ``src/jacobian/process_policy.py`` (the product gateway)
-   and ``src/jacobian/bounded_process.py`` (the engine itself).  All other
-   product callers must use ``process_policy``.
+2. **bounded-process ownership**: ``run_bounded_process`` is allowed only in
+   the engine and explicitly named domain operations that genuinely require a
+   one-shot external command.
 
 3. **shutil-which-resolver**: ``shutil.which`` is allowed only in bootstrap
    resolver modules that discover operator-installed executables at startup.
@@ -114,8 +113,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # --- Explicit test fixtures where subprocess is the test mechanism ---
         # Process boundary tests directly exercise subprocess seams.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
-        PurePosixPath("tests/boundary/process/test_process_policy.py"),
-        PurePosixPath("tests/boundary/process/test_inline_no_state_dir.py"),
+        PurePosixPath("tests/boundary/process/test_stateless_math_tools.py"),
         PurePosixPath("tests/boundary/process/public_api/test_import_isolation.py"),
         # Tooling boundary tests invoke CI scripts and installers as subprocesses.
         PurePosixPath("tests/boundary/process/tooling/ci.py"),
@@ -202,28 +200,24 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
     }
 )
 
-# run_bounded_process gateway: only the engine and the product gateway.
+# run_bounded_process belongs only to the engine and concrete external tools.
 _RUN_BOUNDED_PROCESS_ALLOWED: frozenset[PurePosixPath] = frozenset(
     {
         PurePosixPath("src/jacobian/bounded_process.py"),
-        PurePosixPath("src/jacobian/process_policy.py"),
+        PurePosixPath("src/jacobian/domains/logic/operations.py"),
     }
 )
 
-# shutil.which: only bootstrap resolver modules and test skip-condition checks.
+# shutil.which: only concrete external-tool ownership and test skip checks.
 _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
     {
-        PurePosixPath("src/jacobian/process_policy.py"),
-        PurePosixPath("src/jacobian/providers/singular_runtime.py"),
-        PurePosixPath("src/jacobian/providers/external_solver_runtime.py"),
-        PurePosixPath("src/jacobian/provider_measurements.py"),
         PurePosixPath("src/jacobian/domains/logic/operations.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/doctor_external_tools.py"),
         PurePosixPath("tools/setup_lean.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
-        PurePosixPath("tests/boundary/process/test_inline_no_state_dir.py"),
+        PurePosixPath("tests/boundary/process/test_stateless_math_tools.py"),
     }
 )
 
@@ -233,12 +227,11 @@ _ENVIRON_SPREAD_ROOTS = (PurePosixPath("src"),)
 _OPERATION_REQUEST_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
     {
         PurePosixPath("src/jacobian/cli.py"),
-        PurePosixPath("src/jacobian/adapters/mcp/tooling.py"),
     }
 )
 
 _OPERATION_RESULT_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
-    {PurePosixPath("src/jacobian/operation_projection.py")}
+    {PurePosixPath("src/jacobian/operation_dispatcher.py")}
 )
 
 _LEGACY_ADAPTER_MODE_NAMES = frozenset({"TypedInputAdapter", "typed_input"})
@@ -614,7 +607,7 @@ def _operation_result_projection_violations(
         Violation(
             str(relative),
             "operation-result-projection",
-            "only operation_projection.py may construct the public "
+            "only operation_dispatcher.py may construct the public "
             "OperationResult envelope",
             node.lineno,
         )
@@ -725,16 +718,14 @@ def _bounded_process_import_violations(
         yield Violation(
             str(relative),
             "bounded-process-gateway",
-            "run_bounded_process must be called only from "
-            "process_policy.py (the product gateway)",
+            "run_bounded_process must be owned by a concrete external operation",
             node.lineno,
         )
     if isinstance(node, ast.Import) and module == "jacobian.bounded_process":
         yield Violation(
             str(relative),
             "bounded-process-gateway",
-            "jacobian.bounded_process must be imported only from "
-            "process_policy.py (the product gateway)",
+            "jacobian.bounded_process must be imported only by a concrete external operation",
             node.lineno,
         )
 
@@ -756,8 +747,7 @@ def _bounded_process_call_violations(
         yield Violation(
             str(relative),
             "bounded-process-gateway",
-            "run_bounded_process must be called only from "
-            "process_policy.py (the product gateway)",
+            "run_bounded_process must be owned by a concrete external operation",
             node.lineno,
         )
 
@@ -1028,8 +1018,6 @@ _CONTRACT_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.operation_binding",
     "jacobian.operation_catalog",
     "jacobian.operation_declarations",
-    "jacobian.operation_dispatch",
-    "jacobian.operation_projection",
     "jacobian.operation_registry",
     "jacobian.operation_installation",
     "jacobian.installation",
@@ -1045,8 +1033,6 @@ _NATIVE_MATH_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.operation_binding",
     "jacobian.operation_catalog",
     "jacobian.operation_declarations",
-    "jacobian.operation_dispatch",
-    "jacobian.operation_projection",
     "jacobian.operation_registry",
     "jacobian.operation_installation",
     "jacobian.installation",
@@ -1055,7 +1041,6 @@ _PRIVATE_MATH_BACKEND_PREFIXES = (
     "jacobian.math.finite_fields._flint",
     "jacobian.math.finite_fields._sympy",
     "jacobian.math.graphs._networkx",
-    "jacobian.math.matrices._sympy",
     "jacobian.math.polynomials._sympy",
 )
 _SUPERSEDED_MATRIX_CONTRACTS = frozenset(

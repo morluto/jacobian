@@ -4,21 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.number_theory import (
     ArithmeticFunctionRequest,
     BooleanResult,
     DivisorListResult,
-    FactorizationRequest,
     IntegerValueResult,
+    NonzeroFactorizationRequest,
     PowerfulNumberRequest,
     PowerfulNumberResult,
     PrimeFactorizationResult,
 )
-from jacobian.contracts.operations import (
-    OperationDiagnostic,
-    OperationExample,
-)
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.number_theory.factorization_kernels import (
     compute_radical,
@@ -28,51 +25,24 @@ from jacobian.domains.number_theory.factorization_kernels import (
     enumerate_proper_divisors,
     factorize_primes,
 )
-from jacobian.operation_declarations import (
-    InlineOperation,
-    OperationDeclaration,
-    inline_operation,
-)
-from jacobian.operations import OperationRefusalError
-
-
-def _diagnostic(code: str, message: str) -> OperationDiagnostic:
-    return OperationDiagnostic(
-        code=code,
-        stage="integer_factorization",
-        message=message,
-        hint="Reduce the integer size or increase the bounded wall time.",
-    )
-
-
-def _reject_zero(request: FactorizationRequest) -> None:
-    if int(request.value) == 0:
-        raise OperationRefusalError(
-            _diagnostic(
-                "INTEGER_FACTORIZATION_NOT_APPLICABLE",
-                "Zero has no finite factorization or divisor enumeration.",
-            )
-        )
+from jacobian.math_tools import MathTool
 
 
 def _compute_divisors(
-    request: FactorizationRequest,
+    request: NonzeroFactorizationRequest,
 ) -> DivisorListResult:
-    _reject_zero(request)
     return enumerate_divisors(request)
 
 
 def _compute_proper_divisors(
-    request: FactorizationRequest,
+    request: NonzeroFactorizationRequest,
 ) -> DivisorListResult:
-    _reject_zero(request)
     return enumerate_proper_divisors(request)
 
 
 def _compute_prime_factorization(
-    request: FactorizationRequest,
+    request: NonzeroFactorizationRequest,
 ) -> PrimeFactorizationResult:
-    _reject_zero(request)
     return factorize_primes(request)
 
 
@@ -104,19 +74,17 @@ def _operation[RequestT: ContractModel, ResultT: ContractModel](
     implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
     examples: tuple[OperationExample, ...] = (),
-) -> InlineOperation[RequestT, ResultT]:
-    return inline_operation(
-        OperationDeclaration(
-            operation_id=operation_id,
-            version="2",
-            title=title,
-            description=description,
-            request_type=request_model,
-            result_type=result_model,
-            execute=implementation,
-            tags=tags,
-            examples=examples,
-        )
+) -> MathTool[RequestT, ResultT]:
+    return MathTool(
+        operation_id=operation_id,
+        version="2",
+        title=title,
+        description=description,
+        request_type=request_model,
+        result_type=result_model,
+        run=implementation,
+        tags=tags,
+        examples=examples,
     )
 
 
@@ -125,7 +93,7 @@ FACTORIZATION_OPERATIONS = (
         operation_id="integer.compute.divisors",
         title="Enumerate positive divisors",
         description="Enumerate every positive divisor exactly.",
-        request_model=FactorizationRequest,
+        request_model=NonzeroFactorizationRequest,
         result_model=DivisorListResult,
         implementation=_compute_divisors,
         tags=("number-theory", "enumeration"),
@@ -139,7 +107,7 @@ FACTORIZATION_OPERATIONS = (
         operation_id="integer.compute.proper_divisors",
         title="Enumerate proper divisors",
         description="Enumerate every positive proper divisor exactly.",
-        request_model=FactorizationRequest,
+        request_model=NonzeroFactorizationRequest,
         result_model=DivisorListResult,
         implementation=_compute_proper_divisors,
         tags=("number-theory", "enumeration"),
@@ -155,7 +123,7 @@ FACTORIZATION_OPERATIONS = (
         operation_id="integer.compute.prime_factorization",
         title="Factor an integer",
         description="Compute a complete prime-power factorization.",
-        request_model=FactorizationRequest,
+        request_model=NonzeroFactorizationRequest,
         result_model=PrimeFactorizationResult,
         implementation=_compute_prime_factorization,
         tags=("number-theory", "factorization"),

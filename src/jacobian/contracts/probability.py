@@ -9,12 +9,12 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import (
     CanonicalInteger,
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian.contracts.results import ContractModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_FINITE_DISTRIBUTION_ATOMS = 256
@@ -232,8 +232,6 @@ class GaussianPolynomialMomentResult(ContractModel):
     completeness: Literal["COMPLETE_BOUNDED_EXPANSION"] = "COMPLETE_BOUNDED_EXPANSION"
     exactness: Literal["EXACT_COMPLEX_RATIONAL"] = "EXACT_COMPLEX_RATIONAL"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
 
     @model_validator(mode="after")
     def bind_complete_contraction_ledger(self) -> Self:
@@ -384,8 +382,6 @@ class GraphConnectionProbabilityResult(ContractModel):
     termination_reason: Literal["EXHAUSTED"] = "EXHAUSTED"
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-flint"] = "python-flint"
-    backend_version: Literal["0.9.0"] = "0.9.0"
 
     @model_validator(mode="after")
     def bind_complete_state_mass(self) -> Self:
@@ -533,6 +529,25 @@ class FiniteEventRequest(ContractModel):
             max_digits=MAX_RESULT_RATIONAL_DIGITS,
             label="finite event probability",
         )
+        return self
+
+
+class FiniteConditionRequest(FiniteEventRequest):
+    """A finite event known to have positive exact probability."""
+
+    @model_validator(mode="after")
+    def require_positive_event_mass(self) -> Self:
+        selected = {value.as_fraction() for value in self.event_values}
+        mass = sum(
+            (
+                atom.probability.as_fraction()
+                for atom in self.distribution.atoms
+                if atom.value.as_fraction() in selected
+            ),
+            start=Fraction(),
+        )
+        if mass <= 0:
+            raise ValueError("conditioning requires a positive-mass finite event")
         return self
 
 

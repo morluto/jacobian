@@ -58,22 +58,22 @@ class FiberPartitionRequest(ContractModel):
     table: FiniteMapTable
 
 
-class CollisionCertificateRequest(ContractModel):
+class CollisionRequest(ContractModel):
     table: FiniteMapTable
 
 
-class PermutationCertificateRequest(ContractModel):
+class PermutationRequest(ContractModel):
     table: FiniteMapTable
 
 
 __all__ = [
-    "CollisionCertificateRequest",
+    "CollisionRequest",
     "DirectionRankLedgerRequest",
     "FiberPartitionRequest",
     "FiniteMapTableRequest",
     "LinearMapRankRequest",
     "OrbitDistributionRequest",
-    "PermutationCertificateRequest",
+    "PermutationRequest",
     "ProjectiveLineRequest",
     "RestrictScalarsRequest",
 ]

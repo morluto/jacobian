@@ -35,8 +35,6 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             assert isinstance(described.structured_content, dict)
             contract = described.structured_content
             assert contract["operation"]["operation_id"] == "integer.compute.gcd"
-            assert contract["operation"]["provider"] == "built-in"
-            assert "provider_runtime" not in contract["operation"]
             assert "output_schema" in contract["operation"]
 
             result = await client.call_tool(
@@ -48,7 +46,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             )
             assert isinstance(result.structured_content, dict)
             response = json.loads(result.content[0].text)
-            assert response["execution"]["status"] == "COMPLETED"
+            assert response["runtime_ms"] >= 0
             assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
@@ -66,7 +64,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 },
             )
             assert isinstance(cnf_call.structured_content, dict)
-            cnf_result = cnf_call.structured_content["output"]["result"]["cnf"]
+            cnf_result = cnf_call.structured_content["output"]["cnf"]
             assert cnf_result == {
                 "variables": ["a", "b"],
                 "clauses": [[-1, 2], [1]],
@@ -80,7 +78,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 },
             )
             assert isinstance(assignment_call.structured_content, dict)
-            assert assignment_call.structured_content["output"]["result"] == {
+            assert assignment_call.structured_content["output"] == {
                 "satisfies": True,
                 "first_unsatisfied_clause": None,
             }
@@ -92,13 +90,8 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                     "payload": {"left": "84", "unexpected": "30"},
                 },
             )
-            assert isinstance(invalid.structured_content, dict)
-            invalid_result = invalid.structured_content
-            assert invalid_result["execution"]["status"] == "ERROR"
-            assert (
-                invalid_result["output"]["error"]["code"]
-                == "INVALID_NUMBER_THEORY_REQUEST"
-            )
+            assert invalid.is_error is True
+            assert invalid.structured_content is None
 
             matching_description = await client.call_tool(
                 "math.find",
@@ -123,20 +116,10 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                     "payload": {},
                 },
             )
-            unknown_result = json.loads(unknown.content[0].text)
-            assert unknown.is_error is False
-            assert unknown_result["execution"]["status"] == "ERROR"
-            assert unknown_result["output"]["error"]["code"] == "UNKNOWN_OPERATION"
-            assert "available_operation_ids" not in unknown_result["output"]
+            assert unknown.is_error is True
+            assert "unknown operation" in unknown.content[0].text
             assert len(unknown.content[0].text.encode("utf-8")) < 2_048
-            assert isinstance(unknown.structured_content, dict)
-            output = unknown.structured_content["output"]
-            assert "available_operation_ids" not in output
-            assert len(output["nearby_operation_ids"]) <= 5
-            assert output["available_recovery_paths"][-1] == {
-                "action": "inspect_catalog",
-                "resource_uri": "operation://catalog",
-            }
+            assert unknown.structured_content is None
 
     asyncio.run(scenario())
 
@@ -190,10 +173,10 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
                 },
             )
             assert isinstance(table_call.structured_content, dict)
-            assert table_call.structured_content["execution"]["status"] == "COMPLETED"
+            assert table_call.structured_content["runtime_ms"] >= 0
             table_output = table_call.structured_content["output"]
             assert "value_refs" not in table_output
-            table_value = table_output["result"]
+            table_value = table_output
 
             fibers_call = await client.call_tool(
                 "math.run",
@@ -204,9 +187,9 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
             )
             assert isinstance(fibers_call.structured_content, dict)
             fibers_output = fibers_call.structured_content["output"]
-            assert fibers_output["result"]["table"] == table_value
+            assert fibers_output["table"] == table_value
             assert sorted(
-                len(sources) for _image, sources in fibers_output["result"]["fibers"]
+                len(sources) for _image, sources in fibers_output["fibers"]
             ) == [1, 3]
 
             rows = Axis(name="b", labels=("b1", "b2"))
@@ -235,12 +218,10 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
                 },
             )
             assert isinstance(directions_call.structured_content, dict)
-            assert directions_call.structured_content["execution"]["status"] == (
-                "COMPLETED"
-            )
+            assert directions_call.structured_content["runtime_ms"] >= 0
             directions_output = directions_call.structured_content["output"]
             assert "value_refs" not in directions_output
-            directions_value = directions_output["result"]
+            directions_value = directions_output
 
             incomplete_call = await client.call_tool(
                 "math.run",
@@ -249,8 +230,8 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
                     "payload": {"directions": directions_value},
                 },
             )
-            assert isinstance(incomplete_call.structured_content, dict)
-            assert incomplete_call.structured_content["execution"]["status"] == "ERROR"
+            assert incomplete_call.is_error is True
+            assert incomplete_call.structured_content is None
 
             ledger_call = await client.call_tool(
                 "math.run",
@@ -264,7 +245,7 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
             )
             assert isinstance(ledger_call.structured_content, dict)
             ledger_output = ledger_call.structured_content["output"]
-            assert ledger_call.structured_content["execution"]["status"] == "COMPLETED"
-            assert len(ledger_output["result"]["entries"]) == 5
+            assert ledger_call.structured_content["runtime_ms"] >= 0
+            assert len(ledger_output["entries"]) == 5
 
     asyncio.run(scenario())

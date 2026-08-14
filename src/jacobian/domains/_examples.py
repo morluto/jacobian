@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jacobian.operation_declarations import OperationExample
+from jacobian.contracts.operations import OperationExample
 
 
 def example(

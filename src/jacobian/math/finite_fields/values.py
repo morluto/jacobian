@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 import rfc8785
 from pydantic import model_validator
@@ -641,16 +641,23 @@ class FiberPartition(ContractModel):
         )
 
 
-class CollisionCertificate(ContractModel):
-    """Two distinct domain elements with the same bound table image."""
+class CollisionResult(ContractModel):
+    """Whether a complete finite map table has a collision."""
 
     table: FiniteMapTable
-    left: FiniteFieldElement
-    right: FiniteFieldElement
-    image: FiniteFieldElement
+    status: Literal["COLLISION", "INJECTIVE"]
+    left: FiniteFieldElement | None = None
+    right: FiniteFieldElement | None = None
+    image: FiniteFieldElement | None = None
 
     @model_validator(mode="after")
     def validate_collision(self) -> Self:
+        if self.status == "INJECTIVE":
+            if any(value is not None for value in (self.left, self.right, self.image)):
+                raise ValueError("an injective table cannot carry collision values")
+            return self
+        if self.left is None or self.right is None or self.image is None:
+            raise ValueError("a collision result requires both inputs and their image")
         if self.left == self.right:
             raise ValueError("collision inputs must be distinct")
         evaluated = {source.digest: target for source, target in self.table.entries}
@@ -665,27 +672,34 @@ class CollisionCertificate(ContractModel):
     def digest(self) -> str:
         return _digest(
             {
-                "image": self.image.digest,
-                "left": self.left.digest,
-                "right": self.right.digest,
+                "image": self.image.digest if self.image is not None else None,
+                "left": self.left.digest if self.left is not None else None,
+                "right": self.right.digest if self.right is not None else None,
                 "table": self.table.digest,
-                "value_type": "collision-certificate-v1",
+                "status": self.status,
+                "value_type": "finite-map-collision-v1",
             }
         )
 
 
-class PermutationCertificate(ContractModel):
-    """The exact inverse table of a finite polynomial permutation."""
+class PermutationResult(ContractModel):
+    """Whether a complete finite map table is a permutation."""
 
     table: FiniteMapTable
-    inverse_entries: tuple[tuple[FiniteFieldElement, FiniteFieldElement], ...]
+    status: Literal["PERMUTATION", "NOT_PERMUTATION"]
+    inverse_entries: tuple[tuple[FiniteFieldElement, FiniteFieldElement], ...] = ()
 
     @model_validator(mode="after")
     def validate_permutation(self) -> Self:
-        if len({target.digest for _, target in self.table.entries}) != len(
+        injective = len({target.digest for _, target in self.table.entries}) == len(
             self.table.entries
-        ):
-            raise ValueError("finite map table is not injective")
+        )
+        if self.status == "NOT_PERMUTATION":
+            if injective or self.inverse_entries:
+                raise ValueError("a non-permutation result cannot carry an inverse")
+            return self
+        if not injective:
+            raise ValueError("a permutation result requires an injective table")
         expected = tuple(
             sorted(
                 ((target, source) for source, target in self.table.entries),
@@ -705,7 +719,8 @@ class PermutationCertificate(ContractModel):
                     for target, source in self.inverse_entries
                 ],
                 "table": self.table.digest,
-                "value_type": "permutation-certificate-v1",
+                "status": self.status,
+                "value_type": "finite-map-permutation-v1",
             }
         )
 

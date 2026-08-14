@@ -6,12 +6,12 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalInteger,
     CanonicalRational,
 )
-from jacobian.contracts.results import ContractModel
 
 MAX_MATRIX_DIMENSION = 32
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_coloring import ChromaticGraph
 from jacobian.contracts.graph_optimization import (
     GraphDominationMinimumOutput,
@@ -15,8 +16,6 @@ from jacobian.contracts.graph_optimization import (
     GraphOptimizationBudget,
     GraphOptimizationRequest,
 )
-from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains.graph_optimization.exact_search import (
     solve_domination,
     solve_induced_bipartite,
@@ -25,17 +24,7 @@ from jacobian.domains.graph_optimization.exact_search import (
     solve_minimum_maximal_matching,
 )
 from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.operation_declarations import (
-    InlineOperation,
-    OperationDeclaration,
-    inline_operation,
-)
-from jacobian.operations import OperationAbortError
-
-
-class _HasStatus(Protocol):
-    status: str
-    termination_reason: str
+from jacobian.math_tools import MathTool
 
 
 def _valid_witness(graph: Any, result: ContractModel) -> bool:
@@ -78,17 +67,6 @@ def _valid_witness(graph: Any, result: ContractModel) -> bool:
     return False
 
 
-_INVALID_GRAPH_OPTIMIZATION_REQUEST = OperationDiagnostic(
-    code="INVALID_GRAPH_OPTIMIZATION_REQUEST",
-    stage="graph_optimization_input_validation",
-    message="Input does not satisfy the bounded finite-graph optimization contract.",
-    hint=(
-        "Supply a canonical finite simple graph within max_order and explicit "
-        "wall-clock and solver-call budgets."
-    ),
-)
-
-
 def _execute[ResultT: ContractModel](
     request: GraphOptimizationRequest,
     solve: Callable[
@@ -98,33 +76,8 @@ def _execute[ResultT: ContractModel](
 ) -> ResultT:
     graph = cast(Any, build_simple_graph(request.graph))
     result = solve(graph, request.graph, request.resource_budget)
-    state = cast(_HasStatus, result)
     if not _valid_witness(graph, result):
-        raise OperationAbortError(
-            ExecutionStatus.ERROR,
-            OperationDiagnostic(
-                code="GRAPH_OPTIMIZATION_WITNESS_INVALID",
-                stage="graph_optimization_postcondition",
-                message=(
-                    "The solver returned an incumbent that does not satisfy "
-                    "the declared graph predicate."
-                ),
-            ),
-        )
-    if state.status == "EXACT":
-        return result
-    if state.termination_reason in {"WALL_TIME", "SOLVER_UNKNOWN"}:
-        raise OperationAbortError(
-            ExecutionStatus.TIMEOUT,
-            OperationDiagnostic(
-                code="GRAPH_OPTIMIZATION_TIMEOUT",
-                stage="graph_optimization_search",
-                message=(
-                    "The graph optimization search exhausted its wall-clock "
-                    "budget before establishing optimality."
-                ),
-            ),
-        )
+        raise RuntimeError("graph optimization backend returned an invalid witness")
     return result
 
 
@@ -135,19 +88,16 @@ def _operation[ResultT: ContractModel](
     result_type: type[ResultT],
     solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget], ResultT],
     *tags: str,
-) -> InlineOperation[GraphOptimizationRequest, ResultT]:
-    return inline_operation(
-        OperationDeclaration(
-            operation_id=operation_id,
-            version="1",
-            title=title,
-            description=description,
-            request_type=GraphOptimizationRequest,
-            result_type=result_type,
-            execute=lambda request: _execute(request, solve),
-            tags=("graph", *tags, "bounded", "z3"),
-            invalid_request=_INVALID_GRAPH_OPTIMIZATION_REQUEST,
-        )
+) -> MathTool[GraphOptimizationRequest, ResultT]:
+    return MathTool(
+        operation_id=operation_id,
+        version="1",
+        title=title,
+        description=description,
+        request_type=GraphOptimizationRequest,
+        result_type=result_type,
+        run=lambda request: _execute(request, solve),
+        tags=("graph", *tags, "bounded", "z3"),
     )
 
 

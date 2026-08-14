@@ -18,7 +18,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
 
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.base import ContractModel
 
 # ---------------------------------------------------------------------------
 # Shared bounds for the current bounded integer-domain contracts.
@@ -94,6 +94,16 @@ class FactorizationRequest(ContractModel):
     """One small integer for direct exact factorization in the server process."""
 
     value: FactorizationInteger
+
+
+class NonzeroFactorizationRequest(FactorizationRequest):
+    """One nonzero integer with a finite divisor and prime-factorization set."""
+
+    @model_validator(mode="after")
+    def require_nonzero_value(self) -> Self:
+        if int(self.value) == 0:
+            raise ValueError("zero has no finite factorization or divisor enumeration")
+        return self
 
 
 class PowerfulNumberRequest(FactorizationRequest):
@@ -324,21 +334,12 @@ class JacobiSymbolRequest(ContractModel):
         return self
 
 
-class DiscreteLogarithmBudget(ContractModel):
-    """Total wall-clock budget for one isolated SymPy computation."""
-
-    wall_seconds: StrictInt = Field(default=5, ge=1, le=30)
-
-
 class DiscreteLogarithmRequest(ContractModel):
     """A bounded modular discrete-logarithm problem."""
 
     base: StrictInt = Field(ge=0, le=_MAX_MODULUS)
     target: StrictInt = Field(ge=0, le=_MAX_MODULUS)
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
-    resource_budget: DiscreteLogarithmBudget = Field(
-        default_factory=DiscreteLogarithmBudget
-    )
 
     @model_validator(mode="after")
     def require_canonical_residues(self) -> Self:
@@ -494,7 +495,7 @@ class ModularPolynomialResidueTableRow(ContractModel):
 
 
 class ModularPolynomialResidueImageResult(ContractModel):
-    """Inline residue-image summary with an optional durable assignment ledger."""
+    """Exact residue-image summary with an optional complete assignment table."""
 
     semantics_version: Literal["modular-polynomial-residue-image.v1"]
     modulus: StrictInt = Field(ge=2, le=_MAX_POLYNOMIAL_RESIDUE_MODULUS)
@@ -668,7 +669,7 @@ class JacobiSymbolResult(ContractModel):
 
 
 class DiscreteLogarithmResult(ContractModel):
-    """A completed discrete-log result; interruption has a separate envelope."""
+    """The exact result of one bounded discrete-logarithm computation."""
 
     status: Literal["SOLVED", "UNSOLVABLE"]
     base: StrictInt = Field(ge=0, le=_MAX_MODULUS)

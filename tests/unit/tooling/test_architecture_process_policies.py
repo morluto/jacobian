@@ -220,26 +220,27 @@ def test_benign_string_without_subprocess_pattern_is_not_flagged(
     assert all(v.code != "subprocess-confined" for v in report.violations)
 
 
-def test_run_bounded_process_in_product_caller_is_flagged(tmp_path: Path) -> None:
+def test_run_bounded_process_in_concrete_external_operation_is_allowed(
+    tmp_path: Path,
+) -> None:
     _write(
         tmp_path,
         "src/jacobian/domains/logic/operations.py",
         "from jacobian.bounded_process import run_bounded_process\nrun_bounded_process(['echo'])\n",
     )
     report = check_architecture(tmp_path)
-    gateway = [v for v in report.violations if v.code == "bounded-process-gateway"]
-    assert len(gateway) >= 1
-    assert gateway[0].path == "src/jacobian/domains/logic/operations.py"
+    assert all(v.code != "bounded-process-gateway" for v in report.violations)
 
 
-def test_run_bounded_process_in_process_policy_is_allowed(tmp_path: Path) -> None:
+def test_run_bounded_process_in_unowned_domain_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/process_policy.py",
+        "src/jacobian/domains/other.py",
         "from jacobian.bounded_process import run_bounded_process\nrun_bounded_process(['echo'])\n",
     )
     report = check_architecture(tmp_path)
-    assert all(v.code != "bounded-process-gateway" for v in report.violations)
+    gateway = [v for v in report.violations if v.code == "bounded-process-gateway"]
+    assert len(gateway) >= 1
 
 
 def test_run_bounded_process_in_bounded_process_is_allowed(tmp_path: Path) -> None:
@@ -285,11 +286,11 @@ def test_shutil_which_in_product_is_flagged(tmp_path: Path) -> None:
     assert which[0].path == "src/jacobian/operation_dispatcher.py"
 
 
-def test_shutil_which_in_process_policy_is_allowed(tmp_path: Path) -> None:
+def test_shutil_which_in_concrete_external_operation_is_allowed(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/process_policy.py",
-        "import shutil\n\nshutil.which('prlimit')\n",
+        "src/jacobian/domains/logic/operations.py",
+        "import shutil\n\nshutil.which('lean')\n",
     )
     report = check_architecture(tmp_path)
     assert all(v.code != "shutil-which-resolver" for v in report.violations)

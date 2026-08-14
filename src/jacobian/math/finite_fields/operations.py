@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from jacobian.math.finite_fields.values import (
     Axis,
-    CollisionCertificate,
+    CollisionResult,
     DirectionRankLedger,
     FiberPartition,
     FiniteDimensionalSubspace,
@@ -15,7 +15,7 @@ from jacobian.math.finite_fields.values import (
     FinitePolynomial,
     FinitePolynomialMap,
     OrbitDistribution,
-    PermutationCertificate,
+    PermutationResult,
     ProjectiveLine,
     ProjectivePoint,
     RankResult,
@@ -329,37 +329,40 @@ def fiber_partition(table: FiniteMapTable) -> FiberPartition:
     return FiberPartition.from_table(table)
 
 
-def collision_certificate(table: FiniteMapTable) -> CollisionCertificate:
-    """Return the first canonical collision in a non-injective finite table."""
+def analyze_collisions(table: FiniteMapTable) -> CollisionResult:
+    """Return either the first canonical collision or an injectivity result."""
 
     _validate_finite_map_table(table)
     seen: dict[str, tuple[FiniteFieldElement, FiniteFieldElement]] = {}
     for source, target in table.entries:
         previous = seen.get(target.digest)
         if previous is not None:
-            return CollisionCertificate(
+            return CollisionResult(
                 table=table,
+                status="COLLISION",
                 left=previous[0],
                 right=source,
                 image=target,
             )
         seen[target.digest] = (source, target)
-    raise ValueError("finite map table has no collision")
+    return CollisionResult(table=table, status="INJECTIVE")
 
 
-def permutation_certificate(table: FiniteMapTable) -> PermutationCertificate:
-    """Return the exact inverse table of a finite polynomial permutation."""
+def analyze_permutation(table: FiniteMapTable) -> PermutationResult:
+    """Return either an inverse table or a non-permutation result."""
 
     _validate_finite_map_table(table)
-    return PermutationCertificate(
-        table=table,
-        inverse_entries=tuple(
-            sorted(
-                ((target, source) for source, target in table.entries),
-                key=lambda entry: sum(
-                    coordinate * table.map.codomain.characteristic**power
-                    for power, coordinate in enumerate(entry[0].coordinates)
-                ),
-            )
-        ),
+    inverse_entries = tuple(
+        sorted(
+            ((target, source) for source, target in table.entries),
+            key=lambda entry: sum(
+                coordinate * table.map.codomain.characteristic**power
+                for power, coordinate in enumerate(entry[0].coordinates)
+            ),
+        )
+    )
+    if len({target.digest for _, target in table.entries}) != len(table.entries):
+        return PermutationResult(table=table, status="NOT_PERMUTATION")
+    return PermutationResult(
+        table=table, status="PERMUTATION", inverse_entries=inverse_entries
     )

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
-from jacobian.contracts.results import ContractModel
 
 _MAX_SEQUENCE_LENGTH = 256
 

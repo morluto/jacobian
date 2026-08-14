@@ -12,8 +12,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalInteger
-from jacobian.contracts.results import ContractModel
 
 # ---------------------------------------------------------------------------
 # Shared bounds

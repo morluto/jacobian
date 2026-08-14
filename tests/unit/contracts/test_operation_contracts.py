@@ -5,12 +5,8 @@ from pydantic import ValidationError
 
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
-    OperationDescriptor,
     OperationDiscoveryResult,
 )
-from jacobian.provider_runtime import known_provider_runtime
-
-POLICY_DIGEST = "sha256:" + "b" * 64
 
 
 def _descriptor(operation_id: str) -> dict[str, object]:
@@ -19,7 +15,6 @@ def _descriptor(operation_id: str) -> dict[str, object]:
         "version": "1",
         "title": operation_id,
         "description": "A bounded test operation.",
-        "provider": "test",
         "input_schema": {"type": "object"},
         "output_schema": {"type": "object"},
     }
@@ -58,26 +53,9 @@ def test_catalog_rejects_duplicate_or_nondeterministic_operation_ids() -> None:
     with pytest.raises(ValidationError, match="unique and sorted"):
         OperationCatalogSnapshot.model_validate(
             {
-                "policy_profile": "DEFAULT",
-                "policy_digest": POLICY_DIGEST,
                 "operations": [
                     _descriptor("integer.compute.lcm"),
                     _descriptor("integer.compute.gcd"),
                 ],
             }
         )
-
-
-def test_operation_descriptor_does_not_publish_execution_identity() -> None:
-    descriptor = OperationDescriptor.model_validate(
-        {
-            **_descriptor("integer.compute.gcd"),
-            "provider": "test.runtime",
-            "provider_runtime": known_provider_runtime("test.runtime"),
-        }
-    )
-
-    assert "provider_runtime" not in descriptor.model_dump(mode="json")
-    assert (
-        "provider_runtime" not in OperationDescriptor.model_json_schema()["properties"]
-    )

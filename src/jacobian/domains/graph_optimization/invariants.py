@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from typing import Any, cast
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_invariant_operations import (
     GraphCliqueNumberResult,
     GraphCoreRequest,
@@ -30,38 +31,10 @@ from jacobian.contracts.graph_optimization import (
     OptimizationSearchStep,
     OptimizationTermination,
 )
-from jacobian.contracts.operations import (
-    OperationDiagnostic,
-    OperationExample,
-)
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
-from jacobian.domains.graph_optimization._providers import Z3_LOADER
 from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.operation_declarations import (
-    InlineOperation,
-    OperationDeclaration,
-    inline_operation,
-)
-from jacobian.operations import (
-    OperationRefusalError,
-)
-
-_INVALID_REQUEST = OperationDiagnostic(
-    code="INVALID_GRAPH_INVARIANT_REQUEST",
-    stage="graph_invariant_input_validation",
-    message="Input does not satisfy the bounded finite simple-graph contract.",
-    hint="Supply a canonical simple graph with at most 32 vertices.",
-)
-
-_INVALID_MAXIMUM_MATCHING_REQUEST = OperationDiagnostic(
-    code="INVALID_GRAPH_MAXIMUM_MATCHING_REQUEST",
-    stage="graph_maximum_matching_input_validation",
-    message=(
-        "Input does not satisfy the bounded finite simple-graph matching contract."
-    ),
-    hint="Supply a simple graph with at most 64 vertices and 2,016 edges.",
-)
+from jacobian.math_tools import MathTool
 
 
 def _computed[
@@ -75,38 +48,23 @@ def _computed[
     *tags: str,
     version: str = "1",
     examples: tuple[OperationExample, ...] = (),
-) -> InlineOperation[GraphInvariantRequest, ResultT]:
+) -> MathTool[GraphInvariantRequest, ResultT]:
     def implementation(
         request: GraphInvariantRequest,
     ) -> ResultT:
-        import networkx as nx
+        graph = cast(Any, build_simple_graph(request.graph))
+        return operation(graph)
 
-        try:
-            graph = cast(Any, build_simple_graph(request.graph))
-            return operation(graph)
-        except (ArithmeticError, nx.NetworkXError, TypeError, ValueError) as exc:
-            raise OperationRefusalError(
-                OperationDiagnostic(
-                    code="GRAPH_INVARIANT_NOT_APPLICABLE",
-                    stage="graph_invariant_computation",
-                    message=str(exc),
-                    hint="Check the invariant's graph preconditions.",
-                )
-            ) from exc
-
-    return inline_operation(
-        OperationDeclaration(
-            operation_id=operation_id,
-            version=version,
-            title=title,
-            description=description,
-            request_type=GraphInvariantRequest,
-            result_type=result_model,
-            execute=implementation,
-            tags=("graph", "invariant", *tags),
-            invalid_request=_INVALID_REQUEST,
-            examples=examples,
-        )
+    return MathTool(
+        operation_id=operation_id,
+        version=version,
+        title=title,
+        description=description,
+        request_type=GraphInvariantRequest,
+        result_type=result_model,
+        run=implementation,
+        tags=("graph", "invariant", *tags),
+        examples=examples,
     )
 
 
@@ -240,20 +198,8 @@ def _maximum_matching(graph: Any) -> GraphMaximumMatchingResult:
 def _maximum_matching_execute(
     request: GraphMaximumMatchingRequest,
 ) -> GraphMaximumMatchingResult:
-    import networkx as nx
-
-    try:
-        graph = cast(Any, build_simple_graph(request.graph))
-        return _maximum_matching(graph)
-    except (ArithmeticError, nx.NetworkXError, TypeError, ValueError) as exc:
-        raise OperationRefusalError(
-            OperationDiagnostic(
-                code="GRAPH_INVARIANT_NOT_APPLICABLE",
-                stage="graph_invariant_computation",
-                message=str(exc),
-                hint="Check the invariant's graph preconditions.",
-            )
-        ) from exc
+    graph = cast(Any, build_simple_graph(request.graph))
+    return _maximum_matching(graph)
 
 
 def _triangle_count(graph: Any) -> GraphTriangleCountResult:
@@ -285,22 +231,12 @@ def _k_core_execute(
 ) -> GraphCoreResult:
     import networkx as nx
 
-    try:
-        graph = cast(Any, build_simple_graph(request.graph))
-        core = nx.k_core(graph, k=request.k)
-        return GraphCoreResult(
-            k=request.k,
-            vertices=tuple(sorted(str(vertex) for vertex in core.nodes)),
-        )
-    except (nx.NetworkXError, TypeError, ValueError) as exc:
-        raise OperationRefusalError(
-            OperationDiagnostic(
-                code="GRAPH_INVARIANT_NOT_APPLICABLE",
-                stage="graph_invariant_computation",
-                message=str(exc),
-                hint="Check the invariant's graph preconditions.",
-            )
-        ) from exc
+    graph = cast(Any, build_simple_graph(request.graph))
+    core = nx.k_core(graph, k=request.k)
+    return GraphCoreResult(
+        k=request.k,
+        vertices=tuple(sorted(str(vertex) for vertex in core.nodes)),
+    )
 
 
 def _maximum_cardinality(
@@ -309,8 +245,8 @@ def _maximum_cardinality(
     independent: bool,
 ) -> GraphCliqueNumberResult | GraphIndependenceNumberResult:
     import networkx as nx
+    import z3  # type: ignore[import-untyped]
 
-    z3 = Z3_LOADER.get()
     source = cast(Any, build_simple_graph(request.graph))
     graph = nx.complement(source) if independent else source
     vertices = tuple(request.graph.vertices)
@@ -427,18 +363,15 @@ def _clique_execute(
     )
 
 
-CLIQUE_NUMBER_OPERATION = inline_operation(
-    OperationDeclaration(
-        operation_id="graph.invariant.clique_number.compute",
-        version="1",
-        title="Clique number",
-        description="Compute a maximum clique under explicit finite search budgets.",
-        request_type=GraphOptimizationRequest,
-        result_type=GraphCliqueNumberResult,
-        execute=_clique_execute,
-        tags=("graph", "invariant", "clique", "maximum", "bounded", "z3"),
-        invalid_request=_INVALID_REQUEST,
-    )
+CLIQUE_NUMBER_OPERATION = MathTool(
+    operation_id="graph.invariant.clique_number.compute",
+    version="1",
+    title="Clique number",
+    description="Compute a maximum clique under explicit finite search budgets.",
+    request_type=GraphOptimizationRequest,
+    result_type=GraphCliqueNumberResult,
+    run=_clique_execute,
+    tags=("graph", "invariant", "clique", "maximum", "bounded", "z3"),
 )
 
 EXACT_GRAPH_INVARIANT_OPERATIONS = (
@@ -485,31 +418,28 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
             ),
         ),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="graph.k_core.compute",
-            version="2",
-            title="Compute a graph k-core",
-            description="Return the unique maximal induced subgraph of minimum degree k.",
-            request_type=GraphCoreRequest,
-            result_type=GraphCoreResult,
-            execute=_k_core_execute,
-            tags=("graph", "invariant", "k-core", "exact"),
-            invalid_request=_INVALID_REQUEST,
-            examples=(
-                example(
-                    "triangle_two_core",
-                    "Compute the 2-core of a triangle.",
-                    {
-                        "graph": {
-                            "vertices": ["a", "b", "c"],
-                            "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
-                        },
-                        "k": 2,
+    MathTool(
+        operation_id="graph.k_core.compute",
+        version="2",
+        title="Compute a graph k-core",
+        description="Return the unique maximal induced subgraph of minimum degree k.",
+        request_type=GraphCoreRequest,
+        result_type=GraphCoreResult,
+        run=_k_core_execute,
+        tags=("graph", "invariant", "k-core", "exact"),
+        examples=(
+            example(
+                "triangle_two_core",
+                "Compute the 2-core of a triangle.",
+                {
+                    "graph": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
                     },
-                ),
+                    "k": 2,
+                },
             ),
-        )
+        ),
     ),
     _computed(
         "graph.invariant.girth.compute",
@@ -641,37 +571,34 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
             ),
         ),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="graph.invariant.maximum_matching.compute",
-            version="3",
-            title="Maximum matching",
-            description=(
-                "Compute an exact maximum-cardinality matching and a Tutte-Berge "
-                "upper-bound certificate for one simple graph of at most 64 vertices."
+    MathTool(
+        operation_id="graph.invariant.maximum_matching.compute",
+        version="3",
+        title="Maximum matching",
+        description=(
+            "Compute an exact maximum-cardinality matching and a Tutte-Berge "
+            "upper-bound certificate for one simple graph of at most 64 vertices."
+        ),
+        request_type=GraphMaximumMatchingRequest,
+        result_type=GraphMaximumMatchingResult,
+        run=_maximum_matching_execute,
+        tags=("graph", "invariant", "matching", "maximum", "exact"),
+        examples=(
+            example(
+                "triangle_with_tail",
+                "Compute and certify a maximum matching of a triangle with one tail.",
+                {
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["b", "c"],
+                            ["c", "d"],
+                        ],
+                    }
+                },
             ),
-            request_type=GraphMaximumMatchingRequest,
-            result_type=GraphMaximumMatchingResult,
-            execute=_maximum_matching_execute,
-            tags=("graph", "invariant", "matching", "maximum", "exact"),
-            invalid_request=_INVALID_MAXIMUM_MATCHING_REQUEST,
-            examples=(
-                example(
-                    "triangle_with_tail",
-                    "Compute and certify a maximum matching of a triangle with one tail.",
-                    {
-                        "graph": {
-                            "vertices": ["a", "b", "c", "d"],
-                            "edges": [
-                                ["a", "b"],
-                                ["a", "c"],
-                                ["b", "c"],
-                                ["c", "d"],
-                            ],
-                        }
-                    },
-                ),
-            ),
-        )
+        ),
     ),
 )

@@ -1,193 +1,146 @@
-"""FLINT conversion boundary for ordinary rational-linear values."""
+"""In-process Python-FLINT rational-linear operations."""
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from typing import Never
+from fractions import Fraction
+from typing import Any
 
-from pydantic import ValidationError
-
-from jacobian.bounded_process import ProcessResourceLimits
-from jacobian.canonical import canonicalize_json, loads_strict_json
+from jacobian.canonical import format_canonical_integer
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.linear import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalInconsistencyResult,
     LinearRationalSolutionFindRequest,
     LinearRationalSolutionResult,
 )
-from jacobian.contracts.operations import (
-    OperationDiagnostic,
-    ProviderAvailability,
-)
-from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.rational_linear.protocol import (
-    RationalLinearCertificateProduced,
-    RationalLinearInconsistencyWorkerRequest,
-    RationalLinearInconsistencyWorkerResponse,
-    RationalLinearNoCertificateProduced,
-    RationalLinearNoSolutionProduced,
-    RationalLinearSolutionProduced,
-    RationalLinearSolutionWorkerRequest,
-    RationalLinearSolutionWorkerResponse,
-    RationalLinearWorkerRequest,
-    parse_inconsistency_worker_response,
-    parse_solution_worker_response,
-)
-from jacobian.operations import (
-    OperationAbortError,
-)
-from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
-from jacobian.providers.flint_runtime import python_flint_provider_runtime
-from jacobian.worker_environment import worker_environment
-
-RUNTIME = python_flint_provider_runtime()
+from jacobian.domains._examples import example
+from jacobian.math_tools import MathTool, MathTools
 
 
-class _RuntimeChangedError(RuntimeError):
-    """The pinned FLINT runtime changed while the worker was running."""
+def _fmpq(value: Fraction, flint: Any) -> Any:
+    return flint.fmpq(value.numerator, value.denominator)
 
 
-def _failure(code: str, status: ExecutionStatus, message: str) -> Never:
-    raise OperationAbortError(
-        status,
-        OperationDiagnostic(
-            code=code,
-            stage="rational_linear_provider",
-            message=message,
-            hint="Install the pinned Python-FLINT rational-linear provider and retry.",
-        ),
+def _canonical_rational(value: Any) -> CanonicalRational:
+    """Convert a backend-native fmpq through the canonical wire representation."""
+
+    return CanonicalRational(
+        num=format_canonical_integer(int(value.numerator)),
+        den=format_canonical_integer(int(value.denominator)),
     )
 
 
-def _run(
-    worker_request: RationalLinearWorkerRequest,
-) -> (
-    RationalLinearSolutionWorkerResponse
-    | RationalLinearInconsistencyWorkerResponse
-    | None
-):
-    runtime = python_flint_provider_runtime(refresh=True)
-    if RUNTIME.availability is not ProviderAvailability.AVAILABLE or runtime != RUNTIME:
-        return None
-    budget = worker_request.request.resource_budget.wall_seconds
-    completed = execute_process(
-        ProcessRequest(
-            executable=sys.executable,
-            arguments=("-I", "-m", "jacobian.domains.rational_linear.worker"),
-            stdin_bytes=canonicalize_json(worker_request.model_dump(mode="json")),
-            timeout_seconds=float(budget),
-            environment=worker_environment(locale="C"),
-            cwd=str(Path.cwd()),
-            stdout_limit_bytes=1_000_000,
-            stderr_limit_bytes=64_000,
-            resource_limits=ProcessResourceLimits(
-                cpu_seconds=budget + 1,
-                address_space_bytes=1024 * 1024 * 1024,
-            ),
+def _solve(
+    coefficients: list[list[Fraction]], rhs: list[Fraction], flint: Any
+) -> list[Any] | None:
+    augmented = flint.fmpq_mat(
+        [
+            [_fmpq(value, flint) for value in row] + [_fmpq(bound, flint)]
+            for row, bound in zip(coefficients, rhs, strict=True)
+        ]
+    )
+    reduced, _ = augmented.rref()
+    columns = len(coefficients[0])
+    values = [flint.fmpq(0) for _ in range(columns)]
+    for row in range(reduced.nrows()):
+        pivot = next(
+            (column for column in range(columns) if reduced[row, column] != 0),
+            None,
         )
-    )
-    if completed.termination is ProcessTermination.TIMED_OUT:
-        raise TimeoutError
-    if (
-        completed.termination is ProcessTermination.START_FAILED
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("rational-linear worker failed")
-    if python_flint_provider_runtime(refresh=True) != RUNTIME:
-        raise _RuntimeChangedError
-    payload = loads_strict_json(completed.stdout)
-    if isinstance(worker_request, RationalLinearSolutionWorkerRequest):
-        return parse_solution_worker_response(
-            payload,
-            expected_value_count=len(worker_request.request.system.variables),
-        )
-    return parse_inconsistency_worker_response(
-        payload,
-        expected_witness_count=len(worker_request.request.system.rhs),
-    )
+        if pivot is None:
+            if reduced[row, columns] != 0:
+                return None
+            continue
+        values[pivot] = reduced[row, columns]
+    return values
 
 
 def compute_rational_solution(
     request: LinearRationalSolutionFindRequest,
 ) -> LinearRationalSolutionResult:
-    try:
-        response = _run(
-            RationalLinearSolutionWorkerRequest(
-                protocol="jacobian.rational-linear-solution-worker/v1",
-                request=request,
-            )
-        )
-        if response is None:
-            return _failure(
-                "FLINT_LINEAR_PROVIDER_UNAVAILABLE",
-                ExecutionStatus.ERROR,
-                "The pinned Python-FLINT rational-linear provider is unavailable.",
-            )
-        if isinstance(response, RationalLinearNoSolutionProduced):
-            return LinearRationalSolutionResult(status="NO_SOLUTION_PRODUCED")
-        if not isinstance(response, RationalLinearSolutionProduced):
-            raise ValueError("worker did not produce a solution")
-        return LinearRationalSolutionResult(values=response.values)
-    except TimeoutError:
-        return _failure(
-            "FLINT_LINEAR_TIMEOUT",
-            ExecutionStatus.TIMEOUT,
-            "The bounded rational-linear computation timed out.",
-        )
-    except _RuntimeChangedError:
-        return _failure(
-            "FLINT_LINEAR_RUNTIME_CHANGED",
-            ExecutionStatus.ERROR,
-            "The Python-FLINT rational-linear runtime changed during the bounded computation.",
-        )
-    except (RuntimeError, TypeError, ValueError, ValidationError):
-        return _failure(
-            "FLINT_LINEAR_WORKER_FAILED",
-            ExecutionStatus.ERROR,
-            "The rational-linear worker returned no usable result.",
-        )
+    system = request.system
+    coefficients = [
+        [value.as_fraction() for value in row] for row in system.coefficients.entries
+    ]
+    bounds = [value.as_fraction() for value in system.rhs]
+    import flint
+
+    values = _solve(coefficients, bounds, flint)
+    if values is None:
+        return LinearRationalSolutionResult(status="INCONSISTENT")
+    return LinearRationalSolutionResult(
+        values=tuple(_canonical_rational(value) for value in values)
+    )
 
 
 def compute_rational_inconsistency(
     request: LinearRationalInconsistencyFindRequest,
 ) -> LinearRationalInconsistencyResult:
-    try:
-        response = _run(
-            RationalLinearInconsistencyWorkerRequest(
-                protocol="jacobian.rational-linear-inconsistency-worker/v1",
-                request=request,
-            )
-        )
-        if response is None:
-            return _failure(
-                "FLINT_LINEAR_PROVIDER_UNAVAILABLE",
-                ExecutionStatus.ERROR,
-                "The pinned Python-FLINT rational-linear provider is unavailable.",
-            )
-        if isinstance(response, RationalLinearNoCertificateProduced):
-            return LinearRationalInconsistencyResult(status="NO_CERTIFICATE_PRODUCED")
-        if not isinstance(response, RationalLinearCertificateProduced):
-            raise ValueError("worker did not produce an inconsistency witness")
-        return LinearRationalInconsistencyResult(
-            left_witness=response.left_witness,
-            rhs_pairing=response.rhs_pairing,
-        )
-    except TimeoutError:
-        return _failure(
-            "FLINT_LINEAR_TIMEOUT",
-            ExecutionStatus.TIMEOUT,
-            "The bounded rational-linear computation timed out.",
-        )
-    except _RuntimeChangedError:
-        return _failure(
-            "FLINT_LINEAR_RUNTIME_CHANGED",
-            ExecutionStatus.ERROR,
-            "The Python-FLINT rational-linear runtime changed during the bounded computation.",
-        )
-    except (RuntimeError, TypeError, ValueError, ValidationError):
-        return _failure(
-            "FLINT_LINEAR_WORKER_FAILED",
-            ExecutionStatus.ERROR,
-            "The rational-linear worker returned no usable result.",
-        )
+    system = request.system
+    coefficients = [
+        [value.as_fraction() for value in row] for row in system.coefficients.entries
+    ]
+    bounds = [value.as_fraction() for value in system.rhs]
+    import flint
+
+    row_count = len(coefficients)
+    column_count = len(coefficients[0])
+    dual = [
+        [coefficients[row][column] for row in range(row_count)]
+        for column in range(column_count)
+    ]
+    dual.append(bounds)
+    values = _solve(dual, [Fraction(0)] * column_count + [Fraction(1)], flint)
+    if values is None:
+        return LinearRationalInconsistencyResult(status="CONSISTENT")
+    return LinearRationalInconsistencyResult(
+        left_witness=tuple(_canonical_rational(value) for value in values),
+        rhs_pairing=CanonicalRational(num="1", den="1"),
+    )
+
+
+def rational_linear_operations() -> MathTools:
+    """Return the two direct rational-linear operations."""
+
+    return (
+        MathTool(
+            operation_id="linear.rational_solution.compute",
+            version="2",
+            title="Compute an exact rational solution",
+            description="Return an exact rational solution or an inconsistent outcome.",
+            request_type=LinearRationalSolutionFindRequest,
+            result_type=LinearRationalSolutionResult,
+            run=compute_rational_solution,
+            tags=("linear-algebra", "rational", "solution", "exact"),
+            examples=(
+                example(
+                    "identity_solution",
+                    "Solve a one-variable identity system.",
+                    {
+                        "system": {
+                            "variables": ["x"],
+                            "coefficients": {"entries": [[{"num": "1", "den": "1"}]]},
+                            "rhs": [{"num": "2", "den": "1"}],
+                        }
+                    },
+                ),
+            ),
+        ),
+        MathTool(
+            operation_id="linear.rational_inconsistency.compute",
+            version="2",
+            title="Compute an exact rational inconsistency witness",
+            description="Return an inconsistency witness or a consistent outcome.",
+            request_type=LinearRationalInconsistencyFindRequest,
+            result_type=LinearRationalInconsistencyResult,
+            run=compute_rational_inconsistency,
+            tags=("linear-algebra", "rational", "inconsistency", "exact"),
+        ),
+    )
+
+
+__all__ = [
+    "compute_rational_inconsistency",
+    "compute_rational_solution",
+    "rational_linear_operations",
+]

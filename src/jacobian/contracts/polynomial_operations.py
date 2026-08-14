@@ -6,12 +6,12 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalInteger,
     CanonicalRational,
 )
-from jacobian.contracts.results import ContractModel
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
     MAX_POLYNOMIAL_VARIABLES,

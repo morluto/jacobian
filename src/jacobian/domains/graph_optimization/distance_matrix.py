@@ -8,10 +8,9 @@ from jacobian.contracts.graph_distance_matrix import (
     GraphDistanceMatrixRequest,
     GraphDistanceMatrixResult,
 )
-from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.operation_declarations import OperationDeclaration, OperationRefusalError
+from jacobian.math_tools import MathTool
 
 
 def compute_distance_matrix(
@@ -21,41 +20,31 @@ def compute_distance_matrix(
 
     import networkx as nx
 
-    try:
-        graph = cast(Any, build_simple_graph(request.graph))
-        vertices = tuple(sorted(graph.nodes))
-        shortest_paths = {
-            source: nx.single_source_shortest_path_length(graph, source)
-            for source in vertices
-        }
-        distances = tuple(
-            tuple(shortest_paths[source].get(target) for target in vertices)
-            for source in vertices
-        )
-        connected = bool(vertices) and all(
-            distance is not None for row in distances for distance in row
-        )
-        return GraphDistanceMatrixResult(
-            semantics_version="unweighted-shortest-path-distance-matrix.v1",
-            vertex_ordering="LEXICOGRAPHIC_ASCENDING",
-            pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
-            unreachable_representation="JSON_NULL",
-            vertices=vertices,
-            distances=distances,
-            connected=connected,
-        )
-    except (ArithmeticError, nx.NetworkXError, TypeError, ValueError) as exc:
-        raise OperationRefusalError(
-            OperationDiagnostic(
-                code="GRAPH_DISTANCE_MATRIX_NOT_APPLICABLE",
-                stage="graph_distance_matrix_computation",
-                message=str(exc),
-                hint="Check the distance matrix graph preconditions.",
-            )
-        ) from exc
+    graph = cast(Any, build_simple_graph(request.graph))
+    vertices = tuple(sorted(graph.nodes))
+    shortest_paths = {
+        source: nx.single_source_shortest_path_length(graph, source)
+        for source in vertices
+    }
+    distances = tuple(
+        tuple(shortest_paths[source].get(target) for target in vertices)
+        for source in vertices
+    )
+    connected = bool(vertices) and all(
+        distance is not None for row in distances for distance in row
+    )
+    return GraphDistanceMatrixResult(
+        semantics_version="unweighted-shortest-path-distance-matrix.v1",
+        vertex_ordering="LEXICOGRAPHIC_ASCENDING",
+        pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
+        unreachable_representation="JSON_NULL",
+        vertices=vertices,
+        distances=distances,
+        connected=connected,
+    )
 
 
-DISTANCE_MATRIX_OPERATION = OperationDeclaration(
+DISTANCE_MATRIX_OPERATION = MathTool(
     operation_id="graph.distance_matrix.compute",
     version="2",
     title="All-pairs distance matrix",
@@ -66,13 +55,7 @@ DISTANCE_MATRIX_OPERATION = OperationDeclaration(
     ),
     request_type=GraphDistanceMatrixRequest,
     result_type=GraphDistanceMatrixResult,
-    execute=compute_distance_matrix,
-    invalid_request=OperationDiagnostic(
-        code="INVALID_GRAPH_DISTANCE_MATRIX_REQUEST",
-        stage="graph_distance_matrix_input_validation",
-        message="Input does not satisfy the bounded graph distance-matrix contract.",
-        hint="Supply a canonical simple graph with at most 64 vertices.",
-    ),
+    run=compute_distance_matrix,
     tags=("graph", "invariant", "distance", "matrix", "exact"),
     examples=(
         example(

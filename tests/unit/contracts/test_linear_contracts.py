@@ -10,6 +10,7 @@ from jacobian.contracts.linear import (
     LinearRationalSolutionResult,
     LinearRationalSystem,
 )
+from jacobian.contracts.validated_analysis import RationalLinearProgramResult
 
 
 def _system() -> dict[str, object]:
@@ -40,16 +41,12 @@ def test_linear_find_request_rejects_ambiguous_or_oversized_rationals() -> None:
     noncanonical = _system()
     noncanonical["rhs"] = [{"num": "2", "den": "2"}, _q(1)]
     with pytest.raises(ValidationError, match="reduced"):
-        LinearRationalSolutionFindRequest.model_validate(
-            {"system": noncanonical, "resource_budget": {"wall_seconds": 5}}
-        )
+        LinearRationalSolutionFindRequest.model_validate({"system": noncanonical})
 
     oversized = _system()
     oversized["rhs"] = [{"num": "1" * 257, "den": "1"}, _q(1)]
     with pytest.raises(ValidationError, match="256-digit bound"):
-        LinearRationalSolutionFindRequest.model_validate(
-            {"system": oversized, "resource_budget": {"wall_seconds": 5}}
-        )
+        LinearRationalSolutionFindRequest.model_validate({"system": oversized})
 
 
 def test_inline_results_keep_only_mathematical_values() -> None:
@@ -60,28 +57,40 @@ def test_inline_results_keep_only_mathematical_values() -> None:
     )
 
     assert set(solution.model_dump()) == {
-        "result_schema_version",
         "status",
         "values",
-        "method",
     }
     assert set(inconsistency.model_dump()) == {
-        "result_schema_version",
         "status",
         "left_witness",
         "rhs_pairing",
-        "method",
     }
 
 
 def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:
-    solution = LinearRationalSolutionResult(status="NO_SOLUTION_PRODUCED")
-    inconsistency = LinearRationalInconsistencyResult(status="NO_CERTIFICATE_PRODUCED")
+    solution = LinearRationalSolutionResult(status="INCONSISTENT")
+    inconsistency = LinearRationalInconsistencyResult(status="CONSISTENT")
 
     assert solution.values is None
     assert inconsistency.left_witness is None
     with pytest.raises(ValidationError, match="agree with the result status"):
         LinearRationalSolutionResult(
-            status="NO_SOLUTION_PRODUCED",
+            status="INCONSISTENT",
             values=(_q(2), _q(1)),
+        )
+
+
+def test_linear_program_outcomes_only_carry_their_mathematical_data() -> None:
+    with pytest.raises(ValidationError, match="cannot carry a point"):
+        RationalLinearProgramResult(
+            status="INFEASIBLE",
+            primal_candidate=(_q(1),),
+        )
+    with pytest.raises(ValidationError, match="only an optimal"):
+        RationalLinearProgramResult(
+            status="PRIMAL_FEASIBLE",
+            primal_candidate=(_q(1),),
+            primal_objective=_q(1),
+            primal_residuals=(_q(0),),
+            dual_candidate=(_q(1),),
         )

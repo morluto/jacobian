@@ -7,8 +7,8 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalInteger
-from jacobian.contracts.results import ContractModel
 
 _MAX_SET_SIZE = 128
 _MAX_BINARY_SET_RESULT_SIZE = 2 * _MAX_SET_SIZE

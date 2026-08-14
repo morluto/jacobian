@@ -11,13 +11,10 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, field_validator, model_validator
 
+from jacobian.bounded_process import run_bounded_process
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains._examples import example
-from jacobian.operation_declarations import OperationDeclaration, inline_operation
-from jacobian.operations import OperationAbortError
-from jacobian.process_policy import ProcessRequest, ProcessTermination, execute_process
+from jacobian.math_tools import MathTool
 from jacobian.worker_environment import worker_environment
 
 _MAX_VARIABLES = 1_024
@@ -29,7 +26,7 @@ _LEAN_TOOLCHAIN = "leanprover/lean4:v4.31.0"
 
 
 class CanonicalCnf(ContractModel):
-    """A bounded, canonical propositional formula with inline identity."""
+    """A bounded canonical propositional formula value."""
 
     variables: tuple[str, ...] = Field(max_length=_MAX_VARIABLES)
     clauses: tuple[tuple[StrictInt, ...], ...] = Field(max_length=_MAX_CLAUSES)
@@ -268,8 +265,9 @@ class LeanCheckRequest(ContractModel):
 
 
 class LeanCheckResult(ContractModel):
-    outcome: Literal["ELABORATED", "REJECTED"]
+    outcome: Literal["ELABORATED", "REJECTED", "UNAVAILABLE", "TIMEOUT", "ERROR"]
     diagnostics: tuple[LeanDiagnostic, ...] = Field(max_length=64)
+    detail: str | None = Field(default=None, max_length=4_000)
 
     @model_validator(mode="after")
     def bind_diagnostics_to_outcome(self) -> Self:
@@ -281,7 +279,7 @@ class LeanCheckResult(ContractModel):
 
 
 def canonicalize_cnf(request: CnfCanonicalizeRequest) -> CnfCanonicalizeResult:
-    """Return the unique inline CNF for one named clause collection."""
+    """Return the unique canonical CNF for one named clause collection."""
 
     indexed_names = tuple(enumerate(request.variable_names, start=1))
     sorted_names = tuple(sorted(indexed_names, key=lambda item: item[1]))
@@ -307,7 +305,7 @@ def canonicalize_cnf(request: CnfCanonicalizeRequest) -> CnfCanonicalizeResult:
 def check_sat_assignment(
     request: SatAssignmentCheckRequest,
 ) -> SatAssignmentCheckResult:
-    """Evaluate a total Boolean assignment directly against one inline CNF."""
+    """Evaluate a total Boolean assignment directly against one canonical CNF."""
 
     for index, clause in enumerate(request.cnf.clauses):
         if not any(
@@ -323,7 +321,7 @@ def check_sat_assignment(
 
 
 def solve_sat(request: SatSolveRequest) -> SatSolveResult:
-    """Solve one bounded inline CNF through the maintained Z3 Python binding."""
+    """Solve one bounded canonical CNF through the maintained Z3 Python binding."""
 
     import z3  # type: ignore[import-untyped]
 
@@ -373,7 +371,7 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
         if len(model.encode("utf-8")) > _MAX_MODEL_BYTES:
             return SmtSolveResult(
                 outcome="UNKNOWN",
-                detail="the satisfying model exceeds the inline result limit",
+                detail="the satisfying model exceeds the bounded result limit",
             )
         return SmtSolveResult(outcome="SAT", model_smtlib=model)
     if outcome == z3.unsat:
@@ -386,20 +384,18 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
 
     executable = shutil.which("lean")
     if executable is None:
-        raise OperationAbortError(
-            ExecutionStatus.ERROR,
-            _diagnostic(
-                "LEAN_UNAVAILABLE", "The fixed Lean environment is not installed."
-            ),
+        return LeanCheckResult(
+            outcome="UNAVAILABLE",
+            diagnostics=(),
+            detail="The fixed Lean environment is not installed.",
         )
     with tempfile.TemporaryDirectory(prefix="jacobian-lean-") as directory:
         source_path = Path(directory) / "Snippet.lean"
         source_path.write_text(request.source, encoding="utf-8")
-        completed = execute_process(
-            ProcessRequest(
-                executable=executable,
-                arguments=(str(source_path),),
-                cwd=directory,
+        try:
+            completed = run_bounded_process(
+                [executable, str(source_path)],
+                input_bytes=b"",
                 timeout_seconds=float(request.timeout_seconds),
                 environment=worker_environment(
                     extra_variables=("PATH", "ELAN_HOME"),
@@ -411,19 +407,27 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
                     },
                     locale="C.UTF-8",
                 ),
-                stdout_limit_bytes=64_000,
-                stderr_limit_bytes=64_000,
+                stdout_limit=64_000,
+                stderr_limit=64_000,
+                cwd=directory,
             )
+        except OSError:
+            return LeanCheckResult(
+                outcome="UNAVAILABLE",
+                diagnostics=(),
+                detail="The fixed Lean environment could not be started.",
+            )
+    if completed.timed_out:
+        return LeanCheckResult(
+            outcome="TIMEOUT",
+            diagnostics=(),
+            detail="Lean exceeded the declared time limit.",
         )
-    if completed.termination is ProcessTermination.TIMED_OUT:
-        raise OperationAbortError(
-            ExecutionStatus.TIMEOUT,
-            _diagnostic("LEAN_TIMEOUT", "Lean exceeded the declared time limit."),
-        )
-    if completed.termination is not ProcessTermination.EXITED:
-        raise OperationAbortError(
-            ExecutionStatus.ERROR,
-            _diagnostic("LEAN_PROCESS_ERROR", "Lean did not complete normally."),
+    if completed.cancelled or completed.stdout_exceeded or completed.stderr_exceeded:
+        return LeanCheckResult(
+            outcome="ERROR",
+            diagnostics=(),
+            detail="Lean exceeded a process resource limit.",
         )
     diagnostics = _lean_diagnostics(completed.stdout + completed.stderr)
     if completed.returncode == 0:
@@ -473,77 +477,63 @@ def _clause_sort_key(clause: tuple[int, ...]) -> tuple[tuple[int, bool], ...]:
     return tuple((abs(literal), literal > 0) for literal in clause)
 
 
-def _diagnostic(code: str, message: str) -> OperationDiagnostic:
-    return OperationDiagnostic(code=code, stage="logic_execution", message=message)
-
-
 LOGIC_OPERATIONS = (
-    inline_operation(
-        OperationDeclaration(
-            operation_id="sat.cnf.canonicalize",
-            version="1",
-            title="Canonicalize a bounded named CNF",
-            description="Return one canonical inline CNF; no source, identifier, or artifact is retained.",
-            request_type=CnfCanonicalizeRequest,
-            result_type=CnfCanonicalizeResult,
-            execute=canonicalize_cnf,
-            tags=("sat", "cnf", "canonical", "inline"),
-            examples=(
-                example(
-                    "two_variables",
-                    "Normalize a small named CNF.",
-                    {"variable_names": ["b", "a"], "clauses": [[1, -2], [2]]},
-                ),
+    MathTool(
+        operation_id="sat.cnf.canonicalize",
+        version="1",
+        title="Canonicalize a bounded named CNF",
+        description="Return one canonical CNF; no source, identifier, or artifact is retained.",
+        request_type=CnfCanonicalizeRequest,
+        result_type=CnfCanonicalizeResult,
+        run=canonicalize_cnf,
+        tags=("sat", "cnf", "canonical"),
+        examples=(
+            example(
+                "two_variables",
+                "Normalize a small named CNF.",
+                {"variable_names": ["b", "a"], "clauses": [[1, -2], [2]]},
             ),
-        )
+        ),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="sat.assignment.check",
-            version="1",
-            title="Check a total SAT assignment",
-            description="Evaluate one complete Boolean assignment against one inline canonical CNF.",
-            request_type=SatAssignmentCheckRequest,
-            result_type=SatAssignmentCheckResult,
-            execute=check_sat_assignment,
-            tags=("sat", "cnf", "assignment", "predicate", "inline"),
-        )
+    MathTool(
+        operation_id="sat.assignment.check",
+        version="1",
+        title="Check a total SAT assignment",
+        description="Evaluate one complete Boolean assignment against one canonical CNF.",
+        request_type=SatAssignmentCheckRequest,
+        result_type=SatAssignmentCheckResult,
+        run=check_sat_assignment,
+        tags=("sat", "cnf", "assignment", "predicate"),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="sat.solve",
-            version="1",
-            title="Solve a bounded CNF",
-            description="Run the maintained Z3 Python binding on one inline canonical CNF.",
-            request_type=SatSolveRequest,
-            result_type=SatSolveResult,
-            execute=solve_sat,
-            tags=("sat", "cnf", "solve", "z3", "inline"),
-        )
+    MathTool(
+        operation_id="sat.solve",
+        version="1",
+        title="Solve a bounded CNF",
+        description="Run the maintained Z3 Python binding on one canonical CNF.",
+        request_type=SatSolveRequest,
+        result_type=SatSolveResult,
+        run=solve_sat,
+        tags=("sat", "cnf", "solve", "z3"),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="smt.solve",
-            version="1",
-            title="Solve a bounded SMT-LIB query",
-            description="Run the maintained Z3 Python binding on one inline QF SMT-LIB query.",
-            request_type=SmtSolveRequest,
-            result_type=SmtSolveResult,
-            execute=solve_smt,
-            tags=("smt", "solve", "smtlib", "z3", "inline"),
-        )
+    MathTool(
+        operation_id="smt.solve",
+        version="1",
+        title="Solve a bounded SMT-LIB query",
+        description="Run the maintained Z3 Python binding on one QF SMT-LIB query.",
+        request_type=SmtSolveRequest,
+        result_type=SmtSolveResult,
+        run=solve_smt,
+        tags=("smt", "solve", "smtlib", "z3"),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="lean.check",
-            version="1",
-            title="Check a bounded Lean source snippet",
-            description="Elaborate one source snippet in the fixed Lean service environment and return typed diagnostics.",
-            request_type=LeanCheckRequest,
-            result_type=LeanCheckResult,
-            execute=check_lean_source,
-            tags=("lean", "elaboration", "source", "bounded"),
-        )
+    MathTool(
+        operation_id="lean.check",
+        version="1",
+        title="Check a bounded Lean source snippet",
+        description="Elaborate one source snippet in the fixed Lean service environment and return typed diagnostics.",
+        request_type=LeanCheckRequest,
+        result_type=LeanCheckResult,
+        run=check_lean_source,
+        tags=("lean", "elaboration", "source", "bounded"),
     ),
 )
 

@@ -6,8 +6,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_coloring import ChromaticGraph, GraphVertex
-from jacobian.contracts.results import ContractModel
 
 MAX_GRAPH_DISTANCE_MATRIX_ORDER = 64
 MAX_GRAPH_DISTANCE_MATRIX_EDGES = 2_016

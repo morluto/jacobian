@@ -18,13 +18,12 @@ class _Catalog:
             truncated=False,
         )
 
+    def inspect(self, operation_id: str) -> None:
+        return None
+
 
 def test_math_find_does_not_acquire_an_execution_runtime() -> None:
-    def acquire_runtime(_operation_id: str | None = None) -> Any:
-        raise AssertionError("math.find acquired an execution runtime")
-
     state = AppState(
-        acquire_runtime=acquire_runtime,
         operation_catalog=_Catalog(),
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))

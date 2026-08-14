@@ -10,7 +10,7 @@ from jacobian.domains.finite_fields.contracts import (
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
-    CollisionCertificate,
+    CollisionResult,
     DirectionRankLedger,
     FiberPartition,
     FiniteDimensionalSubspace,
@@ -19,7 +19,7 @@ from jacobian.math.finite_fields import (
     FiniteMapTable,
     FinitePolynomialMap,
     OrbitDistribution,
-    PermutationCertificate,
+    PermutationResult,
     ProjectiveLine,
     ProjectivePoint,
     RankResult,
@@ -29,9 +29,7 @@ from jacobian.math.finite_fields import (
     finite_polynomial_map,
     projective_line,
 )
-from jacobian.operation_declarations import InlineOperation
-from jacobian.operation_execution import execute_operation
-from jacobian.operations import NonConclusion
+from jacobian.math_tools import MathTool
 
 
 def test_bundle_declares_atomic_inline_typed_operations() -> None:
@@ -45,8 +43,8 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.orbit_distribution.compute",
         "finite_field.polynomial_map.table.compute",
         "finite_field.polynomial_map.fibers.compute",
-        "finite_field.polynomial_map.collision.compute",
-        "finite_field.polynomial_map.permutation.compute",
+        "finite_field.polynomial_map.collision.analyze",
+        "finite_field.polynomial_map.permutation.analyze",
     )
     (
         projective,
@@ -60,7 +58,7 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         permutation,
     ) = bundle
     for operation in bundle:
-        assert isinstance(operation, InlineOperation)
+        assert isinstance(operation, MathTool)
         assert not hasattr(operation, "provider_binding")
     assert projective.request_type is ProjectiveLineRequest
     assert projective.result_type is ProjectiveLine
@@ -91,10 +89,8 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
     assert table.result_type is FiniteMapTable
     assert fibers.request_type.model_fields["table"].annotation is FiniteMapTable
     assert fibers.result_type is FiberPartition
-    assert collision.result_type is CollisionCertificate
-    assert permutation.result_type is PermutationCertificate
-    for consumer in (fibers, collision, permutation):
-        assert consumer.preflight is not None
+    assert collision.result_type is CollisionResult
+    assert permutation.result_type is PermutationResult
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:
@@ -107,10 +103,8 @@ def test_projective_enumeration_refuses_large_output_before_allocation() -> None
         axis=Axis(name="large", labels=tuple(f"x{index}" for index in range(7))),
     )
 
-    terminal = execute_operation(operation, request)
-
-    assert isinstance(terminal, NonConclusion)
-    assert terminal.diagnostic.code == "RESOURCE_LIMIT_EXCEEDED"
+    with pytest.raises(ValueError, match="directions; limit"):
+        operation.run(request)
 
 
 def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
@@ -123,10 +117,8 @@ def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
         )
     )
 
-    terminal = execute_operation(operation, request)
-
-    assert isinstance(terminal, NonConclusion)
-    assert terminal.diagnostic.code == "RESOURCE_LIMIT_EXCEEDED"
+    with pytest.raises(ValueError, match="finite map work"):
+        operation.run(request)
 
 
 def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
@@ -164,10 +156,8 @@ def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
         directions=projective_line(presentation, row_axis),
     )
 
-    terminal = execute_operation(operation, request)
-
-    assert isinstance(terminal, NonConclusion)
-    assert terminal.diagnostic.code == "RESOURCE_LIMIT_EXCEEDED"
+    with pytest.raises(ValueError, match="direction-rank work"):
+        operation.run(request)
 
 
 def test_oversized_presentation_rejects_during_request_parsing() -> None:

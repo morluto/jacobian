@@ -9,11 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 from jacobian.adapters.mcp.constants import (
     OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
 )
-from jacobian.contracts.operations import (
-    OperationDescriptor,
-    OperationDiscoveryRequest,
-)
-from jacobian.operation_errors import OperationDiscoveryCursorError
+from jacobian.contracts.operations import OperationDiscoveryRequest
+from jacobian.operation_discovery import OperationDiscoveryCursorError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,23 +21,6 @@ if TYPE_CHECKING:
 def _mcp_text_json_bytes(value: object) -> bytes:
     """Measure JSON as FastMCP renders structured tool results."""
     return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
-
-
-def _discovery_operation_card(
-    match: dict[str, Any],
-    descriptor: OperationDescriptor,
-) -> dict[str, Any]:
-    """Add installed availability to lexical search."""
-
-    runtime = descriptor.provider_runtime
-    return {
-        **match,
-        "provider_availability": (
-            runtime.availability.value
-            if runtime is not None
-            else ("AVAILABLE" if descriptor.provider == "built-in" else "UNKNOWN")
-        ),
-    }
 
 
 def _operation_discovery_response(
@@ -74,16 +54,6 @@ def _operation_discovery_response(
             }
         }
     discovered_payload = discovered.model_dump(mode="json")
-    discovered_payload["matches"] = [
-        _discovery_operation_card(
-            match,
-            cast(
-                OperationDescriptor,
-                operations.inspect(match["operation_id"]),
-            ),
-        )
-        for match in cast(list[dict[str, Any]], discovered_payload["matches"])
-    ]
     response = {
         "kind": "discovery",
         **discovered_payload,

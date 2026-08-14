@@ -11,7 +11,6 @@ from jacobian.contracts.operations import (
     OperationDescriptor,
     OperationDiscoveryMatch,
     OperationId,
-    ProviderAvailability,
 )
 
 
@@ -43,35 +42,11 @@ OperationFindRequest = Annotated[
 ]
 
 
-class OperationFindCallArguments(ContractModel):
-    request: OperationSearchRequest
-
-
-class OperationSearchRecoveryPath(ContractModel):
-    action: Literal["search"]
-    tool: Literal["math.find"] = "math.find"
-    arguments: OperationFindCallArguments
-
-
-class OperationCatalogPointer(ContractModel):
-    action: Literal["inspect_catalog"]
-    resource_uri: Literal["operation://catalog"] = "operation://catalog"
-
-
-OperationErrorRecoveryPath = OperationSearchRecoveryPath | OperationCatalogPointer
-
-
 class OperationDiscoveryErrorDetail(ContractModel):
     code: Literal["INVALID_CURSOR", "UNKNOWN_OPERATION"]
     stage: Literal["operation_discovery", "operation_resolution"]
     message: str
     hint: str
-    nearby_operation_ids: tuple[OperationId, ...] = ()
-    available_recovery_paths: tuple[OperationErrorRecoveryPath, ...] = ()
-
-
-class OperationDiscoveryCard(OperationDiscoveryMatch):
-    provider_availability: ProviderAvailability | Literal["UNKNOWN"]
 
 
 class OperationSearchResult(ContractModel):
@@ -79,7 +54,7 @@ class OperationSearchResult(ContractModel):
     discovery_version: Literal["1"]
     query: str
     domain: str | None = None
-    matches: tuple[OperationDiscoveryCard, ...]
+    matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: StrictInt
     truncated: bool
     next_cursor: str | None = None
@@ -113,15 +88,12 @@ class OperationFindResponse(
 
 
 __all__ = [
-    "OperationCatalogPointer",
-    "OperationDiscoveryCard",
     "OperationDiscoveryError",
     "OperationDiscoveryErrorDetail",
     "OperationFindRequest",
     "OperationFindResponse",
     "OperationInspectRequest",
     "OperationInspectionResult",
-    "OperationSearchRecoveryPath",
     "OperationSearchRequest",
     "OperationSearchResult",
 ]

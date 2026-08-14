@@ -1,7 +1,6 @@
 """Regression tests for malformed benchmark data and source-only imports."""
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -36,23 +35,3 @@ def test_usage_rejects_non_dict_stats(tmp_path: Path) -> None:
 
     with pytest.raises(HarborSuiteError, match="stats must be an object"):
         heldout_runner._usage(path)
-
-
-def test_source_only_importer_purges_sys_modules(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.implementation import install_source_only_importer
-
-    # Restore the finder-free list after the test.
-    monkeypatch.setattr(sys, "meta_path", list(sys.meta_path))
-
-    fake_module = type(sys)("fake_test_package")
-    fake_module.some_value = "stale"
-    monkeypatch.setitem(sys.modules, "fake_test_package", fake_module)
-    monkeypatch.setitem(
-        sys.modules, "fake_test_package.helper", type(sys)("fake_test_package.helper")
-    )
-
-    install_source_only_importer("fake_test_package:main")
-    assert "fake_test_package" not in sys.modules
-    assert "fake_test_package.helper" not in sys.modules

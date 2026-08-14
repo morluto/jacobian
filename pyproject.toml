@@ -16,13 +16,9 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
-    "cvc5==1.3.4",
-    "jsonschema>=4.23,<5",
     "mcp==2.0.0",
-    "mcp-types==2.0.0",
     "networkx==3.6.1",
     "pydantic>=2.12,<3",
-    "pydantic-core>=2.41,<3",
     "python-flint==0.9.0",
     "rfc8785==0.1.4",
     "sympy==1.14.0",
@@ -40,6 +36,7 @@ dev-core = [
     "deptry>=0.21,<1",
     "hypothesis>=6.130,<7",
     "import-linter>=2,<3",
+    "jsonschema>=4.23,<5",
     "mypy>=1.15,<3",
     "pip-audit>=2.9,<3",
     "pre-commit>=4.4,<5",
@@ -136,7 +133,7 @@ known_first_party = ["jacobian"]
 # exactly pinned MCP transport; deploy/ is not part of the Python wheel.
 # The Harbor manifest writer is repository tooling and uses the direct dev-only
 # tomli-w dependency; it is intentionally absent from the runtime wheel.
-per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["cvc5", "python-flint"], "DEP003" = ["httpx2"], "DEP004" = ["tomli_w"] }
+per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003" = ["httpx2"], "DEP004" = ["jsonschema", "tomli_w"] }
 
 [tool.importlinter]
 root_package = "jacobian"
@@ -151,8 +148,6 @@ forbidden_modules = [
     "jacobian.operation_binding",
     "jacobian.operation_catalog",
     "jacobian.operation_declarations",
-    "jacobian.operation_dispatch",
-    "jacobian.operation_projection",
     "jacobian.operation_registry",
     "jacobian.domains",
     "jacobian.installation",
@@ -177,7 +172,6 @@ forbidden_modules = [
     "jacobian.operation_binding",
     "jacobian.operation_catalog",
     "jacobian.operation_declarations",
-    "jacobian.operation_dispatch",
     "jacobian.operation_registry",
     "jacobian.checker_authorization",
     "jacobian.checker_operations",
@@ -186,7 +180,6 @@ forbidden_modules = [
     "jacobian.installation",
     "jacobian.catalog",
     "jacobian.operation_installation",
-    "jacobian.operation_projection",
     "jacobian.operation_publication",
     "jacobian.operations",
     "jacobian.portfolio",
@@ -207,7 +200,6 @@ forbidden_modules = [
     "jacobian.installation",
     "jacobian.catalog",
     "jacobian.operation_installation",
-    "jacobian.operation_projection",
     "jacobian.operation_publication",
     "jacobian.portfolio",
     "jacobian.runtime",
@@ -235,7 +227,6 @@ forbidden_modules = [
     "jacobian.math",
     "jacobian.catalog",
     "jacobian.operation_installation",
-    "jacobian.operation_projection",
     "jacobian.operation_publication",
     "jacobian.operations",
     "jacobian.portfolio",

@@ -33,5 +33,5 @@ def test_advertised_invocation_example_executes_successfully(operation) -> None:
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
     request = operation.request_type.model_validate(examples[0].input)
-    outcome = operation.execute(request)
+    outcome = operation.run(request)
     assert isinstance(outcome, operation.result_type), (operation_id, outcome)

@@ -14,7 +14,7 @@ from pydantic import (
     model_validator,
 )
 
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.base import ContractModel
 
 _MAX_INTEGER_DIGITS = 256
 _MAX_MODULUS = 1_000_000

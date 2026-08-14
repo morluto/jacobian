@@ -75,9 +75,9 @@ def test_clean_tree_passes(tmp_path: Path) -> None:
     _write(tmp_path, "src/jacobian/bounded_process.py", "import subprocess\n")
     _write(
         tmp_path,
-        "src/jacobian/process_policy.py",
+        "src/jacobian/domains/logic/operations.py",
         "from jacobian.bounded_process import run_bounded_process\n"
-        "import shutil\nshutil.which('prlimit')\n",
+        "import shutil\nshutil.which('lean')\n",
     )
     _write(
         tmp_path,

@@ -1,14 +1,36 @@
 """Number-theory operation declarations."""
 
-from jacobian.operation_declarations import (
-    InlineOperationFactory,
-    OperationFailure,
-)
+from collections.abc import Callable
 
-_NUMBER_THEORY_FAILURE = OperationFailure(
-    code="NUMBER_THEORY_OPERATION_NOT_APPLICABLE",
-    stage="number_theory_computation",
-    hint="Check divisibility, positivity, primality, and modular preconditions.",
-)
+from jacobian.contracts.base import ContractModel
+from jacobian.contracts.operations import OperationExample
+from jacobian.math_tools import MathTool
 
-number_theory_operation = InlineOperationFactory(_NUMBER_THEORY_FAILURE)
+
+def number_theory_operation[
+    RequestT: ContractModel,
+    ResultT: ContractModel,
+](
+    operation_id: str,
+    title: str,
+    description: str,
+    request_type: type[RequestT],
+    result_type: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+    version: str = "2",
+) -> MathTool[RequestT, ResultT]:
+    """Declare one number-theory math tool."""
+
+    return MathTool(
+        operation_id=operation_id,
+        version=version,
+        title=title,
+        description=description,
+        request_type=request_type,
+        result_type=result_type,
+        run=operation,
+        tags=tags,
+        examples=examples,
+    )

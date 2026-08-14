@@ -11,7 +11,11 @@ from jacobian.contracts.operations import (
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
 )
-from jacobian.operation_errors import OperationDiscoveryCursorError
+
+
+class OperationDiscoveryCursorError(ValueError):
+    """A continuation cursor does not belong to the filtered result."""
+
 
 _DISCOVERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _DISCOVERY_STOP_WORDS = frozenset(

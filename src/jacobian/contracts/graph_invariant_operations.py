@@ -6,13 +6,13 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_coloring import ChromaticGraph, GraphVertex
 from jacobian.contracts.graph_optimization import (
     OptimizationSearchStep,
     OptimizationStatus,
     OptimizationTermination,
 )
-from jacobian.contracts.results import ContractModel
 
 
 class GraphInvariantRequest(ContractModel):

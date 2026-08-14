@@ -1,49 +1,81 @@
-"""Immutable catalog of packaged inline operations."""
+"""Immutable catalog compiled directly from packaged mathematical functions."""
 
 from __future__ import annotations
 
+from typing import Any
+
+from jacobian.builtin_operation_modules import load_builtin_operation_modules
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
     OperationDescriptor,
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
+    OperationExample,
 )
+from jacobian.math_tools import MathTool
 from jacobian.operation_discovery import discover_operations
-from jacobian.operation_visibility import OperationVisibilityPolicy
-from jacobian.package_index import PackageIndex, load_package_index
 
 
 class ServingCatalog:
-    """Direct package-index view with no overlay or state directory."""
+    """Direct declaration view with no overlay or state directory."""
 
-    def __init__(self, index: PackageIndex, policy: OperationVisibilityPolicy) -> None:
-        self.index = index
-        self.policy = policy
+    def __init__(self, operations: dict[str, MathTool[Any, Any]]) -> None:
+        self._operations = operations
 
     @classmethod
-    def open(cls, *, policy: OperationVisibilityPolicy | None = None) -> ServingCatalog:
-        return cls(load_package_index(), policy or OperationVisibilityPolicy())
+    def open(cls) -> ServingCatalog:
+        operations = {
+            operation.operation_id: operation
+            for _module, declared in load_builtin_operation_modules()
+            for operation in declared
+            if isinstance(operation, MathTool)
+        }
+        return cls(operations)
+
+    def operation(self, operation_id: str) -> MathTool[Any, Any] | None:
+        """Return the mathematical function selected by a known operation ID."""
+
+        return self._operations.get(operation_id)
 
     def inspect(self, operation_id: str) -> OperationDescriptor | None:
-        entry = self.index.get(operation_id)
-        if entry is None:
+        operation = self.operation(operation_id)
+        if operation is None:
             return None
-        return self.policy.project(entry.descriptor())
+        return _descriptor(operation)
 
     def search(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
         return discover_operations(self.snapshot(), request)
 
     def snapshot(self) -> OperationCatalogSnapshot:
         operations = tuple(
-            descriptor
-            for entry in self.index.entries.values()
-            if (descriptor := self.policy.project(entry.descriptor())) is not None
+            _descriptor(operation) for operation in self._operations.values()
         )
         return OperationCatalogSnapshot(
-            policy_profile=self.policy.profile,
-            policy_digest=self.policy.digest,
             operations=tuple(sorted(operations, key=lambda item: item.operation_id)),
         )
+
+
+def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
+    """Describe one direct mathematical function for discovery."""
+
+    return OperationDescriptor(
+        operation_id=operation.operation_id,
+        version=operation.version,
+        title=operation.title,
+        description=operation.description,
+        input_schema=operation.request_type.model_json_schema(),
+        output_schema=operation.result_type.model_json_schema(),
+        read_only=True,
+        tags=operation.tags,
+        examples=tuple(
+            OperationExample(
+                name=example.name,
+                description=example.description,
+                input=dict(example.input),
+            )
+            for example in operation.examples
+        ),
+    )
 
 
 __all__ = ["ServingCatalog"]

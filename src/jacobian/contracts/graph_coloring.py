@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.base import ContractModel
 
 GraphVertex = Annotated[
     str,

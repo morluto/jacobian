@@ -13,7 +13,7 @@ import pytest
 from jacobian.adapters.mcp.remote import (
     StaticTokenGrant,
     StaticTokenVerifier,
-    _SharedRuntimeOwner,
+    _resolve_tenant,
     load_static_token_file,
 )
 
@@ -48,19 +48,18 @@ def test_remote_configuration_errors_name_the_rule_and_recovery(
     ):
         StaticTokenGrant(tenant_id="bad subject", token="a" * 32)
 
-    router = _SharedRuntimeOwner(
-        lambda: pytest.fail("authentication must precede runtime construction"),
-    )
     with pytest.raises(
         PermissionError,
         match="Authenticate with a configured bearer token and retry",
     ):
-        router.acquire(None)
+        _resolve_tenant(None, allow_anonymous=False, anonymous_tenant_id="anonymous")
     with pytest.raises(
         PermissionError,
         match="Check the server token configuration",
     ):
-        router.acquire("bad subject")
+        _resolve_tenant(
+            "bad subject", allow_anonymous=False, anonymous_tenant_id="anonymous"
+        )
 
     missing = tmp_path / "missing-tokens.json"
     with pytest.raises(

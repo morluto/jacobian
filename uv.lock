@@ -282,25 +282,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cvc5"
-version = "1.3.4"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/60/dd7697865dfa711efa1ac579bba30eaba20517441b5516ea67a4e3b603f3/cvc5-1.3.4-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:217e67ed2c4c912a7c417f63d2cde7743c8cae4add4f9b8bab5e00a4fdcf8b56", size = 11508795, upload-time = "2026-05-07T16:56:26.556Z" },
-    { url = "https://files.pythonhosted.org/packages/03/bb/0c501adef14b9f2fca845019ce6687bd3d77c36aeaee7f9e283af9bc009c/cvc5-1.3.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c782cbccedb08a4aadd075f42af0b3a961dc65c9c8c5eeef0ef66e854e378f0c", size = 10107767, upload-time = "2026-05-07T16:22:06.482Z" },
-    { url = "https://files.pythonhosted.org/packages/c6/0c/837a0030d3b669b070228aafaef144c4c90036ce8f266466a876c76671cd/cvc5-1.3.4-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:dc0a0e52b5ff47cf650f056078cb1fead13e2aca8bf32ae6ff3ca46b41bccc15", size = 13070122, upload-time = "2026-05-07T15:52:37.476Z" },
-    { url = "https://files.pythonhosted.org/packages/b5/6f/37102afe027709232ad54993d4c231a0a4614cb74fbffe0bb7bb1062ac96/cvc5-1.3.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:86831656be24ea8232161d5d5ccf4726d09865c888191c366a9c39d450ac0ebe", size = 13700116, upload-time = "2026-05-07T15:53:35.843Z" },
-    { url = "https://files.pythonhosted.org/packages/0c/4f/3ef2a3c930c0a670193432fa14e2fd215fd37b1bd2df7a2ddb173be6a395/cvc5-1.3.4-cp312-cp312-win_amd64.whl", hash = "sha256:72557ccc3d39ca418581043739a7b05d533d3614ffc74e37510cdd421c57793d", size = 11451371, upload-time = "2026-05-07T16:24:13.412Z" },
-    { url = "https://files.pythonhosted.org/packages/59/be/99a9839cf7629a82fd426147a300766b91c27c5f833219bff1d3a613636a/cvc5-1.3.4-cp312-cp312-win_arm64.whl", hash = "sha256:c6abe7be1313655c284bd4a120f7ba7c2a08c3016f0348c4b07170ce5139be33", size = 10621287, upload-time = "2026-05-07T15:50:02.702Z" },
-    { url = "https://files.pythonhosted.org/packages/19/97/2031d96ced7106a8ab6fdfae14185428f195d5a6bbf70a833a30ffce7d99/cvc5-1.3.4-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:f62c87b041ff98a8807e4cc3f28d09dc732242ce6581b62b8db6fc0216b87edc", size = 11508033, upload-time = "2026-05-07T16:56:29.794Z" },
-    { url = "https://files.pythonhosted.org/packages/6a/7f/c3d95b7dce19aed58f65f59dfa27718e27a6121dd4ff6e3a6cab17b368c1/cvc5-1.3.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:05493cd167fdddae1eda4f0f142bf6cfd101fac3bc9f35012ea026976a0559ae", size = 10106498, upload-time = "2026-05-07T16:22:09.681Z" },
-    { url = "https://files.pythonhosted.org/packages/fc/82/cbf76057616a2eca2cb8c2f9f10181c2acdf7b61864225d16b9c7b69da95/cvc5-1.3.4-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:482b77a86e71114a24e7da0e04b8c9725c7329546061c157c101791230dee3d2", size = 13047554, upload-time = "2026-05-07T15:52:40.757Z" },
-    { url = "https://files.pythonhosted.org/packages/03/58/e481927c642196bbf93b80a7d5e85c71fb3afa5e77413f0cd9e4ecd793d5/cvc5-1.3.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:35453ffbdd8b351cd7e2009993dd56f49e465e9e9d4ff4b613ae589514430243", size = 13686333, upload-time = "2026-05-07T15:53:39.152Z" },
-    { url = "https://files.pythonhosted.org/packages/f4/5d/a56b7919bb7bcb1b6ed458713154a6d17e8c8a0165913582d565d508419c/cvc5-1.3.4-cp313-cp313-win_amd64.whl", hash = "sha256:fff8d7944d373e6efa1248c761717037e82215140116bcbd238139d16b5b6006", size = 11454627, upload-time = "2026-05-07T16:24:17.842Z" },
-    { url = "https://files.pythonhosted.org/packages/67/fd/f214d04cb0995631c1fe32fe00b5839ea20c0865c9d6cd7964de55575339/cvc5-1.3.4-cp313-cp313-win_arm64.whl", hash = "sha256:be051c1bbef64ce5a279370c0879c794e96ec470f12d2d23c5708bff660e3db5", size = 10624408, upload-time = "2026-05-07T15:50:06.457Z" },
-]
-
-[[package]]
 name = "cyclonedx-python-lib"
 version = "11.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -534,13 +515,9 @@ name = "jacobian"
 version = "0.12.0"
 source = { editable = "." }
 dependencies = [
-    { name = "cvc5" },
-    { name = "jsonschema" },
     { name = "mcp" },
-    { name = "mcp-types" },
     { name = "networkx" },
     { name = "pydantic" },
-    { name = "pydantic-core" },
     { name = "python-flint" },
     { name = "rfc8785" },
     { name = "sympy" },
@@ -553,6 +530,7 @@ dev = [
     { name = "deptry" },
     { name = "hypothesis" },
     { name = "import-linter" },
+    { name = "jsonschema" },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -574,6 +552,7 @@ dev-core = [
     { name = "deptry" },
     { name = "hypothesis" },
     { name = "import-linter" },
+    { name = "jsonschema" },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -594,13 +573,9 @@ dev-core = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cvc5", specifier = "==1.3.4" },
-    { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mcp", specifier = "==2.0.0" },
-    { name = "mcp-types", specifier = "==2.0.0" },
     { name = "networkx", specifier = "==3.6.1" },
     { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "pydantic-core", specifier = ">=2.41,<3" },
     { name = "python-flint", specifier = "==0.9.0" },
     { name = "rfc8785", specifier = "==0.1.4" },
     { name = "sympy", specifier = "==1.14.0" },
@@ -613,6 +588,7 @@ dev = [
     { name = "deptry", specifier = ">=0.21,<1" },
     { name = "hypothesis", specifier = ">=6.130,<7" },
     { name = "import-linter", specifier = ">=2,<3" },
+    { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mypy", specifier = ">=1.15,<3" },
     { name = "pip-audit", specifier = ">=2.9,<3" },
     { name = "pre-commit", specifier = ">=4.4,<5" },
@@ -634,6 +610,7 @@ dev-core = [
     { name = "deptry", specifier = ">=0.21,<1" },
     { name = "hypothesis", specifier = ">=6.130,<7" },
     { name = "import-linter", specifier = ">=2,<3" },
+    { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mypy", specifier = ">=1.15,<3" },
     { name = "pip-audit", specifier = ">=2.9,<3" },
     { name = "pre-commit", specifier = ">=4.4,<5" },

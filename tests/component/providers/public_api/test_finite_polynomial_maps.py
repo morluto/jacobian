@@ -4,19 +4,19 @@ import pytest
 
 from jacobian.domains.finite_fields import finite_field_operations
 from jacobian.math.finite_fields import (
-    CollisionCertificate,
+    CollisionResult,
     FiberPartition,
     FiniteMapTable,
     FinitePolynomialMap,
-    PermutationCertificate,
-    collision_certificate,
+    PermutationResult,
+    analyze_collisions,
+    analyze_permutation,
     element,
     fiber_partition,
     finite_field,
     finite_map_table,
     finite_polynomial,
     finite_polynomial_map,
-    permutation_certificate,
 )
 
 pytestmark = pytest.mark.requires_provider("flint")
@@ -35,7 +35,7 @@ def test_complete_table_and_fibers_reuse_exact_slice_a_field_identity() -> None:
 
     table = finite_map_table(polynomial_map)
     partition = fiber_partition(table)
-    collision = collision_certificate(table)
+    collision = analyze_collisions(table)
 
     assert len(table.entries) == polynomial_map.domain.order == 4
     assert all(
@@ -53,14 +53,15 @@ def test_complete_table_and_fibers_reuse_exact_slice_a_field_identity() -> None:
     assert type(table).model_validate(table.model_dump(mode="json")) == table
 
 
-def test_frobenius_map_produces_bound_permutation_certificate() -> None:
+def test_frobenius_map_is_a_permutation() -> None:
     table = finite_map_table(_map(2))
 
-    certificate = permutation_certificate(table)
+    result = analyze_permutation(table)
 
-    assert len(certificate.inverse_entries) == 4
+    assert result.status == "PERMUTATION"
+    assert len(result.inverse_entries) == 4
     assert {target.digest for _, target in table.entries} == {
-        source.digest for source, _ in certificate.inverse_entries
+        source.digest for source, _ in result.inverse_entries
     }
 
 
@@ -93,19 +94,21 @@ def test_slice_b_values_reject_wrong_parent_incomplete_table_and_forged_fiber() 
 def test_certificates_reject_values_not_bound_to_the_exact_table() -> None:
     collision_table = finite_map_table(_map(3))
     permutation_table = finite_map_table(_map(2))
-    collision = collision_certificate(collision_table)
-    permutation = permutation_certificate(permutation_table)
+    collision = analyze_collisions(collision_table)
+    permutation = analyze_permutation(permutation_table)
 
     with pytest.raises(ValueError, match="exact bound table"):
-        CollisionCertificate(
+        CollisionResult(
             table=collision_table,
+            status="COLLISION",
             left=collision.left,
             right=collision.right,
             image=collision_table.entries[0][1],
         )
     with pytest.raises(ValueError, match="exact permutation"):
-        PermutationCertificate(
+        PermutationResult(
             table=permutation_table,
+            status="PERMUTATION",
             inverse_entries=tuple(reversed(permutation.inverse_entries)),
         )
 
@@ -120,8 +123,8 @@ def test_table_consumers_reject_unevaluated_targets() -> None:
 
     for consumer in (
         fiber_partition,
-        collision_certificate,
-        permutation_certificate,
+        analyze_collisions,
+        analyze_permutation,
     ):
         with pytest.raises(ValueError, match="bound polynomial"):
             consumer(forged)
@@ -133,14 +136,14 @@ def test_slice_b_reuses_one_table_for_fiber_and_certificate_handoff() -> None:
         finite_field_operations()
     )
 
-    table = table_operation.execute(
+    table = table_operation.run(
         table_operation.request_type.model_validate({"polynomial_map": polynomial_map})
     )
 
-    partition = fiber_operation.execute(
+    partition = fiber_operation.run(
         fiber_operation.request_type.model_validate({"table": table})
     )
-    collision = collision_operation.execute(
+    collision = collision_operation.run(
         collision_operation.request_type.model_validate({"table": table})
     )
 

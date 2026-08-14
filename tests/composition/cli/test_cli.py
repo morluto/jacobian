@@ -45,7 +45,7 @@ def test_cli_catalog_inspect_and_run_are_inline(tmp_path: Path) -> None:
     assert catalog_call.exit_code == inspect_call.exit_code == run_call.exit_code == 0
     descriptor = json.loads(inspect_call.stdout)
     assert descriptor in json.loads(catalog_call.stdout)["operations"]
-    assert json.loads(run_call.stdout)["output"]["result"]["determinant"] == {
+    assert json.loads(run_call.stdout)["output"]["determinant"] == {
         "num": "1",
         "den": "1",
     }
@@ -59,9 +59,9 @@ def test_cli_run_requires_exactly_one_payload_source(
     result = CliRunner().invoke(app, ["run", "integer.compute.gcd", *arguments])
 
     assert result.exit_code == 1
-    assert json.loads(result.stderr)["error"]["message"] == (
-        "pass exactly one of --json or --file"
-    )
+    error = json.loads(result.stderr)["error"]
+    assert error["code"] == "INVALID_ARGUMENT"
+    assert error["message"] == ("pass exactly one of --json or --file")
 
 
 def test_cli_cleanup_failure_propagates_after_successful_command(

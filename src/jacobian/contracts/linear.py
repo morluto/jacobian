@@ -1,14 +1,14 @@
-"""Exact rational linear-system and inline-result contracts."""
+"""Exact rational linear-system contracts."""
 
 from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 from jacobian.contracts.matrices import RationalMatrix
-from jacobian.contracts.results import ContractModel
 
 MAX_LINEAR_DIMENSION = 32
 MAX_RATIONAL_DIGITS = 256
@@ -66,69 +66,50 @@ class LinearRationalSystem(ContractModel):
         return self
 
 
-class LinearRationalResourceBudget(ContractModel):
-    """Wall-clock bound enforced around one isolated Python-FLINT attempt."""
-
-    budget_version: Literal["1"] = "1"
-    wall_seconds: StrictInt = Field(default=10, ge=1, le=60)
-
-
 class LinearRationalSolutionFindRequest(ContractModel):
-    """Ask the pinned provider for one candidate vector."""
+    """Ask for one exact solution of a rational linear system."""
 
     system: LinearRationalSystem
-    resource_budget: LinearRationalResourceBudget = Field(
-        default_factory=LinearRationalResourceBudget
-    )
 
 
 class LinearRationalSolutionResult(ContractModel):
-    """Inline total rational solution candidate for ordinary composition."""
+    """Whether a rational linear system has an exact solution."""
 
-    result_schema_version: Literal["1"] = "1"
-    status: Literal["SOLUTION_PRODUCED", "NO_SOLUTION_PRODUCED"] = "SOLUTION_PRODUCED"
+    status: Literal["SOLUTION", "INCONSISTENT"] = "SOLUTION"
     values: tuple[CanonicalRational, ...] | None = Field(
         default=None,
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,
     )
-    method: Literal["RREF_FREE_VARIABLES_ZERO"] = "RREF_FREE_VARIABLES_ZERO"
 
     @model_validator(mode="after")
     def bind_values_to_status(self) -> Self:
-        produced = self.status == "SOLUTION_PRODUCED"
+        produced = self.status == "SOLUTION"
         if produced != (self.values is not None):
             raise ValueError("solution values must agree with the result status")
         return self
 
 
 class LinearRationalInconsistencyResult(ContractModel):
-    """Inline normalized left witness for an inconsistent rational system."""
+    """Whether a rational linear system is inconsistent."""
 
-    result_schema_version: Literal["1"] = "1"
-    status: Literal["CERTIFICATE_PRODUCED", "NO_CERTIFICATE_PRODUCED"] = (
-        "CERTIFICATE_PRODUCED"
-    )
+    status: Literal["INCONSISTENT", "CONSISTENT"] = "INCONSISTENT"
     left_witness: tuple[CanonicalRational, ...] | None = Field(
         default=None,
         min_length=1,
         max_length=MAX_LINEAR_DIMENSION,
     )
     rhs_pairing: CanonicalRational | None = None
-    method: Literal["DUAL_RREF_PAIRING_ONE"] = "DUAL_RREF_PAIRING_ONE"
 
     @model_validator(mode="after")
     def bind_witness_to_status(self) -> Self:
-        produced = self.status == "CERTIFICATE_PRODUCED"
+        produced = self.status == "INCONSISTENT"
         if produced != (self.left_witness is not None and self.rhs_pairing is not None):
             raise ValueError("inconsistency witness must agree with the result status")
         return self
 
 
 class LinearRationalInconsistencyFindRequest(ContractModel):
-    """Ask the pinned provider for one normalized inconsistency witness."""
+    """Ask whether a rational linear system is inconsistent."""
 
     system: LinearRationalSystem
-    resource_budget: LinearRationalResourceBudget = Field(
-        default_factory=LinearRationalResourceBudget
-    )

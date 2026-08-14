@@ -7,10 +7,10 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.common import Sha256Digest
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.projective_geometry import RationalProjectiveLine
-from jacobian.contracts.results import ContractModel
 from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
 
 ExponentTriple = tuple[int, int, int]

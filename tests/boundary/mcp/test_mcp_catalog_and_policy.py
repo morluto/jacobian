@@ -6,26 +6,21 @@ import asyncio
 import json
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.operation_visibility import OperationVisibilityPolicy
 
 
-def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed() -> None:
+def test_mcp_catalog_is_the_complete_static_operation_library() -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        policy = OperationVisibilityPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
         async with Client(
-            create_server(operation_policy=policy),
+            create_server(),
             raise_exceptions=True,
         ) as client:
             resource = await client.read_resource("operation://catalog")
             catalog = json.loads(resource.contents[0].text)
-            assert catalog["policy_profile"] == "COMPUTE_VERIFY_NO_RETRIEVAL"
-            assert catalog["policy_digest"] == policy.digest
-            assert all(
-                "retrieval" not in descriptor["tags"]
-                for descriptor in catalog["operations"]
-            )
+            assert catalog["operations"]
+            assert "policy_profile" not in catalog
+            assert "policy_digest" not in catalog
 
     asyncio.run(scenario())
 

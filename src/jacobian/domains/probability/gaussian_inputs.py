@@ -8,6 +8,7 @@ from typing import Annotated, Self
 from pydantic import BeforeValidator, Field, StrictInt, ValidationError, model_validator
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 from jacobian.contracts.probability import (
     MAX_GAUSSIAN_POLYNOMIAL_TERMS,
@@ -19,7 +20,6 @@ from jacobian.contracts.probability import (
     GaussianPolynomialMomentRequest,
     GaussianPolynomialTerm,
 )
-from jacobian.contracts.results import ContractModel
 
 
 class RawGaussianPolynomialTerm(ContractModel):

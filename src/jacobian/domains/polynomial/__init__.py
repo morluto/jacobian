@@ -5,16 +5,28 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from jacobian.operation_declarations import OperationDeclarations
+    from jacobian.math_tools import MathTools
 
 __all__ = ["polynomial_operations"]
 
 
-def polynomial_operations() -> OperationDeclarations:
-    """Construct the optional operations without polluting native imports."""
-
-    from jacobian.domains.polynomial.domain_declarations import (
-        polynomial_operations as _build,
+def polynomial_operations() -> MathTools:
+    from jacobian.domains.polynomial.elementary import (
+        INTEGER_POLYNOMIAL_OPERATIONS,
+        RATIONAL_POLYNOMIAL_OPERATIONS,
+    )
+    from jacobian.domains.polynomial.invariants import (
+        POLYNOMIAL_INVARIANT_OPERATIONS,
+    )
+    from jacobian.domains.polynomial.jacobian_syzygy import (
+        GRADED_JACOBIAN_SYZYGY_OPERATION,
+        JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
     )
 
-    return _build()
+    return (
+        *POLYNOMIAL_INVARIANT_OPERATIONS,
+        GRADED_JACOBIAN_SYZYGY_OPERATION,
+        JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
+        *INTEGER_POLYNOMIAL_OPERATIONS,
+        *RATIONAL_POLYNOMIAL_OPERATIONS,
+    )

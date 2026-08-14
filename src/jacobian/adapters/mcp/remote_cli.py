@@ -50,26 +50,6 @@ def _parser() -> argparse.ArgumentParser:
         default="anonymous",
         help="fixed operator-chosen tenant namespace for anonymous mode",
     )
-    parser.add_argument(
-        "--operation-policy-profile",
-        choices=("DEFAULT", "COMPUTE_VERIFY_NO_RETRIEVAL"),
-        default="DEFAULT",
-    )
-    for option, destination, help_text in (
-        ("--allow-operation", "allowed_operation_ids", "allow this operation ID"),
-        ("--deny-operation", "denied_operation_ids", "deny this operation ID"),
-        ("--allow-domain", "allowed_domains", "allow this domain"),
-        ("--deny-domain", "denied_domains", "deny this domain"),
-        ("--allow-tag", "allowed_tags", "allow operations with this tag"),
-        ("--deny-tag", "denied_tags", "deny operations with this tag"),
-    ):
-        parser.add_argument(
-            option,
-            dest=destination,
-            action="append",
-            default=[],
-            help=help_text,
-        )
     return parser
 
 
@@ -89,7 +69,6 @@ def main() -> None:
         create_remote_server,
         load_static_token_file,
     )
-    from jacobian.operation_visibility import OperationVisibilityPolicy
 
     token_verifier = None
     auth = None
@@ -113,15 +92,6 @@ def main() -> None:
         anonymous_tenant_id=args.anonymous_tenant_id,
         token_verifier=token_verifier,
         auth=auth,
-        operation_policy=OperationVisibilityPolicy(
-            profile=args.operation_policy_profile,
-            allowed_operation_ids=frozenset(args.allowed_operation_ids),
-            denied_operation_ids=frozenset(args.denied_operation_ids),
-            allowed_domains=frozenset(args.allowed_domains),
-            denied_domains=frozenset(args.denied_domains),
-            allowed_tags=frozenset(args.allowed_tags),
-            denied_tags=frozenset(args.denied_tags),
-        ),
     )
     if args.transport == "streamable-http":
         server.run(

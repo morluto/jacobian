@@ -15,9 +15,7 @@ from jacobian.canonical import loads_strict_json
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
     OperationDescriptor,
-    OperationRequest,
 )
-from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.serving_catalog import ServingCatalog
 
 
@@ -30,11 +28,14 @@ class JacobianGroup(TyperGroup):
         except (_click.ClickException, typer.Abort, typer.Exit):
             raise
         except Exception as exc:
+            code = (
+                "INVALID_ARGUMENT" if isinstance(exc, ValueError) else "COMMAND_FAILED"
+            )
             typer.echo(
                 json.dumps(
                     {
                         "error": {
-                            "code": type(exc).__name__.upper(),
+                            "code": code,
                             "message": str(exc),
                         }
                     },
@@ -60,21 +61,12 @@ class CliState:
     def __init__(
         self,
     ) -> None:
-        self._runtime: Any | None = None
         self._catalog: ServingCatalog | None = None
-
-    @property
-    def runtime(self) -> Any:
-        if self._runtime is None:
-            from jacobian.runtime.execution import create_inline_serving_runtime
-
-            self._runtime = create_inline_serving_runtime(self.catalog)
-        return self._runtime
 
     @property
     def catalog(self) -> ServingCatalog:
         if self._catalog is None:
-            self._catalog = ServingCatalog.open(policy=OperationVisibilityPolicy())
+            self._catalog = ServingCatalog.open()
         return self._catalog
 
     def catalog_snapshot(self) -> OperationCatalogSnapshot:
@@ -84,9 +76,7 @@ class CliState:
         return self.catalog.inspect(operation_id)
 
     def close(self) -> None:
-        if self._runtime is not None:
-            self._runtime.close()
-            self._runtime = None
+        pass
 
 
 def catalog(context: typer.Context) -> None:
@@ -129,8 +119,13 @@ def run_operation(
     payload = loads_strict_json(source)
     if not isinstance(payload, dict):
         raise ValueError("operation payload must be a JSON object")
-    result = _state(context).runtime.operations.invoke(
-        OperationRequest(operation_id=operation_id, input=payload)
+    state = _state(context)
+    from jacobian.operation_dispatcher import invoke_operation
+
+    result = invoke_operation(
+        operation_id,
+        payload,
+        state.catalog,
     )
     _emit(result.model_dump(mode="json"))
 

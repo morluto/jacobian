@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from pydantic import ValidationError
 
-from jacobian.contracts.operations import OperationRequest
-from jacobian.domains.logic import operations
-from jacobian.domains.logic.domain_declarations import logic_operations
+from jacobian.domains.logic import logic_operations, operations
 from jacobian.domains.logic.operations import (
     CanonicalCnf,
     CnfCanonicalizeRequest,
@@ -20,10 +20,7 @@ from jacobian.domains.logic.operations import (
     solve_sat,
     solve_smt,
 )
-from jacobian.inline_execution import InlineOperationAdapter
-from jacobian.operation_errors import OperationInvocationError
-from jacobian.operations import OperationAbortError
-from jacobian.process_policy import ProcessResult, ProcessTermination
+from jacobian.operation_adapters import parse_operation_input
 
 
 def test_logic_bundle_exposes_only_atomic_inline_operations() -> None:
@@ -57,23 +54,14 @@ def test_tautological_cnf_is_a_typed_invalid_request() -> None:
     with pytest.raises(ValidationError, match="non-tautological"):
         CanonicalCnf(variables=("x",), clauses=((1, -1),))
 
-    operation = next(
-        operation
-        for operation in logic_operations()
-        if operation.operation_id == "sat.assignment.check"
-    )
-    with pytest.raises(OperationInvocationError) as raised:
-        InlineOperationAdapter(operation).prepare(
-            OperationRequest(
-                operation_id=operation.operation_id,
-                input={
-                    "cnf": {"variables": ["x"], "clauses": [[1, -1]]},
-                    "assignment": [True],
-                },
-            )
+    with pytest.raises(ValidationError, match="non-tautological"):
+        parse_operation_input(
+            SatAssignmentCheckRequest,
+            {
+                "cnf": {"variables": ["x"], "clauses": [[1, -1]]},
+                "assignment": [True],
+            },
         )
-
-    assert raised.value.diagnostic.code == "INVALID_LOGIC_REQUEST"
 
 
 def test_assignment_reports_the_first_unsatisfied_clause() -> None:
@@ -136,14 +124,15 @@ def test_lean_check_returns_typed_rejection_without_retaining_source(
     monkeypatch.setattr(operations.shutil, "which", lambda _name: "/usr/bin/lean")
     monkeypatch.setattr(
         operations,
-        "execute_process",
-        lambda _request: ProcessResult(
-            termination=ProcessTermination.EXITED,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: SimpleNamespace(
             returncode=1,
             stdout=b"",
             stderr=b"Snippet.lean:1:20: error: invalid proof\n",
             stdout_exceeded=False,
             stderr_exceeded=False,
+            timed_out=False,
+            cancelled=False,
         ),
     )
 
@@ -157,14 +146,9 @@ def test_lean_check_returns_typed_rejection_without_retaining_source(
     )
 
 
-def test_lean_check_elaborates_a_bounded_inline_source() -> None:
-    try:
-        result = check_lean_source(
-            LeanCheckRequest(source="example : True := by trivial")
-        )
-    except OperationAbortError as exc:
-        if exc.diagnostic.code != "LEAN_UNAVAILABLE":
-            raise
+def test_lean_check_elaborates_a_bounded_source() -> None:
+    result = check_lean_source(LeanCheckRequest(source="example : True := by trivial"))
+    if result.outcome == "UNAVAILABLE":
         pytest.skip("the fixed Lean toolchain is not installed")
 
     assert result.outcome == "ELABORATED"

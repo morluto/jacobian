@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 from mcp.server import MCPServer
 from mcp.server.mcpserver.resources import FunctionResource
+from mcp.types import ToolAnnotations
 
 from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.deployment_identity import DeploymentIdentity
 from jacobian.adapters.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
-from jacobian.adapters.mcp.tooling import _tool_annotations
 from jacobian.adapters.mcp.tools import math_find, math_run
 from jacobian.contracts.operations import OperationCatalogSnapshot
 
@@ -27,7 +25,12 @@ def register_core_projection(
         name="math.find",
         title="Search installed Jacobian math tools",
         description=MATH_FIND_DESCRIPTION,
-        annotations=_tool_annotations(read_only=True, idempotent=True),
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
         structured_output=True,
     )
     server.add_tool(
@@ -35,12 +38,17 @@ def register_core_projection(
         name="math.run",
         title="Run one installed Jacobian math tool",
         description=MATH_RUN_DESCRIPTION,
-        annotations=_tool_annotations(),
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
+        ),
         structured_output=True,
     )
 
     def operation_catalog() -> OperationCatalogSnapshot:
-        return cast(OperationCatalogSnapshot, state.operation_catalog.snapshot())
+        return state.operation_catalog.snapshot()
 
     server.add_resource(
         FunctionResource.from_function(

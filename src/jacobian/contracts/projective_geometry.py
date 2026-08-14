@@ -8,8 +8,8 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational
-from jacobian.contracts.results import ContractModel
 
 ProjectiveLabel = Annotated[
     str,

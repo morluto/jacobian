@@ -6,7 +6,7 @@ import asyncio
 import importlib.metadata
 import inspect
 
-from mcp_types.methods import serialize_server_result
+from mcp.types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.server import create_server
@@ -16,7 +16,6 @@ from jacobian.contracts.operations import OperationCatalogSnapshot, OperationRes
 
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
     assert importlib.metadata.version("mcp") == "2.0.0"
-    assert importlib.metadata.version("mcp-types") == "2.0.0"
     assert not inspect.iscoroutinefunction(math_run)
 
 

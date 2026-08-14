@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.base import ContractModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
@@ -231,8 +231,6 @@ class GraphSymmetryOrbitResult(ContractModel):
     )
     exactness: Literal["EXACT_COMBINATORIAL"] = "EXACT_COMBINATORIAL"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["networkx"] = "networkx"
-    backend_version: str = Field(min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def bind_complete_canonical_partitions(self) -> Self:

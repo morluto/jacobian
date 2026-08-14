@@ -1,4 +1,4 @@
-"""Authentication and shared runtime ownership for remote MCP transports."""
+"""Authentication and stateless serving for remote MCP transports."""
 
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ import hashlib
 import hmac
 import json
 import re
-import threading
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,83 +16,12 @@ from mcp.server.auth.provider import AccessToken
 from jacobian.adapters.mcp.context import (
     AppState,
     AuthenticationError,
-    RuntimeAccess,
 )
 from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
 from jacobian.adapters.mcp.server import _build_server
-from jacobian.operation_visibility import OperationVisibilityPolicy
-from jacobian.runtime.execution import create_inline_serving_runtime
-from jacobian.runtime.model import JacobianRuntime
 from jacobian.serving_catalog import ServingCatalog
 
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-
-
-class _SharedRuntimeOwner:
-    """Compile-safe seam owning one shared immutable runtime for all requests.
-
-    Authentication and request-scoped tenant identity/scopes are resolved on
-    every ``acquire`` from the MCP access token before any runtime is
-    constructed. The runtime is built lazily on the first authenticated
-    request and then shared immutably; there is no per-tenant state rooting,
-    LRU, idle eviction, quarantine, or coordinated shutdown. ``release`` is a
-    no-op because the runtime is shared and immutable for the host lifetime.
-    """
-
-    def __init__(
-        self,
-        runtime_factory: Callable[[], JacobianRuntime],
-        *,
-        allow_anonymous: bool = False,
-        anonymous_tenant_id: str = "anonymous",
-    ) -> None:
-        if not _TENANT_PATTERN.fullmatch(anonymous_tenant_id):
-            raise ValueError(
-                "anonymous_tenant_id must start with a letter or digit, contain only "
-                "letters, digits, '.', '_', or '-', and be at most 128 characters"
-            )
-        self._runtime_factory = runtime_factory
-        self._allow_anonymous = allow_anonymous
-        self._anonymous_tenant_id = anonymous_tenant_id
-        self._runtime: JacobianRuntime | None = None
-        self._lock = threading.Lock()
-
-    def acquire(self, subject: str | None) -> RuntimeAccess:
-        """Resolve request-scoped tenant identity, then return the shared runtime."""
-
-        self._resolve_tenant(subject)
-        return RuntimeAccess(self._ensure_runtime())
-
-    def _resolve_tenant(self, subject: str | None) -> str:
-        tenant = subject
-        if tenant is None:
-            if not self._allow_anonymous:
-                raise AuthenticationError(
-                    "Authentication is required for this server. "
-                    "Authenticate with a configured bearer token and retry."
-                )
-            tenant = self._anonymous_tenant_id
-        if not _TENANT_PATTERN.fullmatch(tenant):
-            raise AuthenticationError(
-                "The authenticated subject cannot be used for tenant isolation. "
-                "Check the server token configuration, then authenticate again."
-            )
-        return tenant
-
-    def _ensure_runtime(self) -> JacobianRuntime:
-        with self._lock:
-            if self._runtime is None:
-                self._runtime = self._runtime_factory()
-            return self._runtime
-
-    def close(self) -> None:
-        """Close the shared runtime, if one was constructed."""
-
-        with self._lock:
-            runtime = self._runtime
-            self._runtime = None
-        if runtime is not None:
-            runtime.close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,52 +129,71 @@ def _parse_token_record(index: int, record: Any) -> StaticTokenGrant:
         raise ValueError(f"token grant {index}: {exc}") from exc
 
 
+def _resolve_tenant(
+    subject: str | None,
+    *,
+    allow_anonymous: bool,
+    anonymous_tenant_id: str,
+) -> str:
+    """Validate the authenticated subject for request-scoped tenant identity."""
+
+    tenant = subject
+    if tenant is None:
+        if not allow_anonymous:
+            raise AuthenticationError(
+                "Authentication is required for this server. "
+                "Authenticate with a configured bearer token and retry."
+            )
+        tenant = anonymous_tenant_id
+    if not _TENANT_PATTERN.fullmatch(tenant):
+        raise AuthenticationError(
+            "The authenticated subject cannot be used for tenant isolation. "
+            "Check the server token configuration, then authenticate again."
+        )
+    return tenant
+
+
 def create_remote_server(
     *,
     allow_anonymous: bool = False,
     anonymous_tenant_id: str = "anonymous",
     token_verifier: Any | None = None,
     auth: Any | None = None,
-    operation_policy: OperationVisibilityPolicy | None = None,
-    runtime_factory: Callable[[], JacobianRuntime] | None = None,
 ) -> MCPServer[AppState]:
-    """Create one stateless remote host serving a shared operation runtime."""
+    """Create one stateless remote host serving the immutable operation library."""
 
     from mcp.server.auth.middleware.auth_context import get_access_token
 
-    policy = operation_policy or OperationVisibilityPolicy()
-    catalog = ServingCatalog.open(policy=policy)
+    if not _TENANT_PATTERN.fullmatch(anonymous_tenant_id):
+        raise ValueError(
+            "anonymous_tenant_id must start with a letter or digit, contain only "
+            "letters, digits, '.', '_', or '-', and be at most 128 characters"
+        )
 
-    if runtime_factory is not None:
+    catalog = ServingCatalog.open()
 
-        def build_runtime() -> JacobianRuntime:
-            return runtime_factory()
-
-    else:
-
-        def build_runtime() -> JacobianRuntime:
-            return create_inline_serving_runtime(catalog)
-
-    owner = _SharedRuntimeOwner(
-        build_runtime,
-        allow_anonymous=allow_anonymous,
-        anonymous_tenant_id=anonymous_tenant_id,
-    )
-
-    def acquire_runtime(_operation_id: str | None = None) -> RuntimeAccess:
+    def authorize() -> None:
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
-        return owner.acquire(subject)
+        _resolve_tenant(
+            subject,
+            allow_anonymous=allow_anonymous,
+            anonymous_tenant_id=anonymous_tenant_id,
+        )
 
     state = AppState(
-        acquire_runtime=acquire_runtime,
         operation_catalog=catalog,
+        authorize=authorize,
     )
 
     return _build_server(
         state=state,
-        close_owner=owner.close,
+        close_owner=_noop,
         deployment_identity=load_deployment_identity(),
         token_verifier=token_verifier,
         auth=auth,
     )
+
+
+def _noop() -> None:
+    pass

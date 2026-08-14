@@ -17,18 +17,7 @@ from jacobian.contracts.projective_geometry import (
 )
 from jacobian.domains._examples import example
 from jacobian.math.arithmetic import primitive_integer_vector
-from jacobian.operation_declarations import InlineOperation
-from jacobian.operations import (
-    OperationFailure,
-    OperationRefusalError,
-)
-
-_FAILURE = OperationFailure(
-    code="PROJECTIVE_ARRANGEMENT_NOT_APPLICABLE",
-    stage="projective_arrangement_computation",
-    hint="Supply distinct labelled nonzero rational homogeneous line coefficients.",
-    exceptions=(ArithmeticError, RuntimeError, TypeError, ValueError),
-)
+from jacobian.math_tools import MathTool
 
 
 def _primitive(values: tuple[Fraction, Fraction, Fraction]) -> tuple[int, int, int]:
@@ -142,19 +131,10 @@ def compute_projective_line_flats(
     )
 
 
-def _execute(
-    request: ProjectiveLineArrangementRequest,
-) -> ProjectiveLineArrangementResult:
-    try:
-        return compute_projective_line_flats(request)
-    except _FAILURE.exceptions as exc:
-        raise OperationRefusalError(_FAILURE.diagnostic(exc)) from exc
-
-
-PROJECTIVE_LINE_ARRANGEMENT_OPERATION: InlineOperation[
+PROJECTIVE_LINE_ARRANGEMENT_OPERATION: MathTool[
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
-] = InlineOperation(
+] = MathTool(
     operation_id="geometry.projective_line_arrangement.flats.compute",
     version="5",
     title="Compute projective line-arrangement flats",
@@ -165,7 +145,7 @@ PROJECTIVE_LINE_ARRANGEMENT_OPERATION: InlineOperation[
     ),
     request_type=ProjectiveLineArrangementRequest,
     result_type=ProjectiveLineArrangementResult,
-    run=_execute,
+    run=compute_projective_line_flats,
     tags=(
         "geometry",
         "projective",

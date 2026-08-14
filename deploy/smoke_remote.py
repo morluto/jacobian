@@ -13,7 +13,7 @@ from typing import Any
 import httpx2
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
-from mcp_types import Implementation, TextContent, TextResourceContents
+from mcp.types import Implementation, TextContent, TextResourceContents
 
 from jacobian import __version__
 from jacobian._deployment_smoke import exit_for_smoke_failure, raise_for_http_error
@@ -44,11 +44,6 @@ def _parser() -> argparse.ArgumentParser:
         "--expect-version",
         default=__version__,
         help="required MCP server version; defaults to this checkout's package version",
-    )
-    parser.add_argument(
-        "--expect-policy-profile",
-        default="DEFAULT",
-        help="required catalog policy profile",
     )
     parser.add_argument(
         "--expect-revision",
@@ -144,7 +139,6 @@ async def inspect(
     url: str,
     expected_version: str,
     expected_revision: str | None = None,
-    expected_policy_profile: str,
     required_operations: set[str],
     query: str,
     timeout_seconds: float,
@@ -202,13 +196,6 @@ async def inspect(
             failures.append(
                 f"deployed catalog is missing required operations: {missing!r}"
             )
-        policy_profile = catalog["policy_profile"]
-        if policy_profile != expected_policy_profile:
-            failures.append(
-                "deployed operation policy mismatch: "
-                f"expected {expected_policy_profile!r}, got {policy_profile!r}"
-            )
-
         discovery_result = await client.call_tool(
             "math.find",
             {"request": {"op": "search", "query": query, "limit": 5}},
@@ -242,9 +229,7 @@ async def inspect(
             "catalog": {
                 "catalog_version": catalog["catalog_version"],
                 "operations": len(operation_ids),
-                "policy_profile": policy_profile,
                 "catalog_digest": catalog_digest,
-                "policy_digest": catalog["policy_digest"],
                 "sha256": hashlib.sha256(catalog_text.encode("utf-8")).hexdigest(),
             },
             "discovery": {
@@ -266,7 +251,6 @@ async def _main() -> None:
         url=args.url,
         expected_version=args.expect_version,
         expected_revision=args.expect_revision,
-        expected_policy_profile=args.expect_policy_profile,
         required_operations=set(args.require_operation),
         query=args.query,
         timeout_seconds=args.timeout_seconds,

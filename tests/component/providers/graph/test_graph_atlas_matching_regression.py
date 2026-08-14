@@ -30,7 +30,7 @@ def _assert_gallai_edmonds_certificate(graphs: list[nx.Graph[int]]) -> None:
         request = operation.request_type.model_validate(
             {"graph": _graph_payload(graph)}
         )
-        result = operation.execute(request)
+        result = operation.run(request)
         assert isinstance(result, operation.result_type)
         barrier = set(result.certificate.barrier_vertices)
         reduced = graph.subgraph(set(graph) - barrier)

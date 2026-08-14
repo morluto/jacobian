@@ -22,7 +22,7 @@ def test_contracts_cannot_import_runtime_or_domains(tmp_path: Path) -> None:
         tmp_path,
         "src/jacobian/contracts/value.py",
         "from jacobian.runtime.model import JacobianRuntime\n"
-        "from jacobian.domains.matrix_lattice import kernels\n",
+        "from jacobian.domains.matrices import kernels\n",
     )
 
     assert "contract-dependency-leaf" in _codes(tmp_path)
@@ -125,12 +125,12 @@ def test_result_envelope_ratchet_resolves_relative_imports(tmp_path: Path) -> No
     }
 
 
-def test_final_projection_may_construct_public_result_envelopes(
+def test_dispatcher_may_construct_public_result_envelopes(
     tmp_path: Path,
 ) -> None:
     _write(
         tmp_path,
-        "src/jacobian/operation_projection.py",
+        "src/jacobian/operation_dispatcher.py",
         "from jacobian.contracts.operations import OperationResult\n"
         "result = OperationResult(operation_id='x', operation_version='1', "
         "execution={}, output={})\n",
@@ -169,7 +169,7 @@ def test_contracts_can_import_canonical_and_contract_modules(tmp_path: Path) -> 
         tmp_path,
         "src/jacobian/contracts/value.py",
         "from jacobian.canonical import canonicalize_json\n"
-        "from jacobian.contracts.results import ContractModel\n",
+        "from jacobian.contracts.base import ContractModel\n",
     )
 
     assert "contract-dependency-leaf" not in _codes(tmp_path)
@@ -181,7 +181,7 @@ def test_contracts_cannot_bypass_leaf_policy_with_relative_imports(
     _write(
         tmp_path,
         "src/jacobian/contracts/value.py",
-        "from ..domains import matrix_lattice\n",
+        "from ..domains import lattices\n",
     )
 
     assert "contract-dependency-leaf" in _codes(tmp_path)
@@ -205,7 +205,7 @@ def test_migrated_matrix_math_cannot_import_legacy_domain_kernels(
     _write(
         tmp_path,
         "src/jacobian/math/matrices/operations.py",
-        "from jacobian.domains.matrix_lattice import kernels\n",
+        "from jacobian.domains.matrices import kernels\n",
     )
 
     assert "native-math-boundary" in _codes(tmp_path)
@@ -227,7 +227,7 @@ def test_native_math_cannot_import_domain_operations(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "src/jacobian/math/matrices.py",
-        "from jacobian.domains.matrix_lattice import operations\n",
+        "from jacobian.domains.matrices import operations\n",
     )
 
     assert "native-math-boundary" in _codes(tmp_path)
@@ -257,7 +257,7 @@ def test_checker_cannot_import_producer_conversions_or_kernels(tmp_path: Path) -
     _write(
         tmp_path,
         "src/jacobian_checkers/matrix.py",
-        "from jacobian.domains.matrix_lattice import conversions, kernels\n",
+        "from jacobian.domains.matrices import conversions, kernels\n",
     )
 
     assert "checker-producer-isolation" in _codes(tmp_path)
@@ -267,7 +267,7 @@ def test_checker_cannot_import_a_symbol_below_a_producer_kernel(tmp_path: Path) 
     _write(
         tmp_path,
         "src/jacobian_checkers/matrix.py",
-        "from jacobian.domains.matrix_lattice.kernels.linear import solve\n",
+        "from jacobian.domains.matrices.kernels.linear import solve\n",
     )
 
     assert "checker-producer-isolation" in _codes(tmp_path)
@@ -280,7 +280,7 @@ def test_concrete_contract_generics_are_not_erased_to_contract_model(
         tmp_path,
         "src/jacobian/domains/operation.py",
         "from collections.abc import Callable\n"
-        "from jacobian.contracts.results import ContractModel\n"
+        "from jacobian.contracts.base import ContractModel\n"
         "operation: Callable[[ContractModel], ContractModel]\n",
     )
 
@@ -294,7 +294,7 @@ def test_qualified_callable_cannot_erase_operation_contract_types(
         tmp_path,
         "src/jacobian/domains/operation.py",
         "import typing\n"
-        "from jacobian.contracts.results import ContractModel\n"
+        "from jacobian.contracts.base import ContractModel\n"
         "operation: typing.Callable[[ContractModel], ContractModel]\n",
     )
 

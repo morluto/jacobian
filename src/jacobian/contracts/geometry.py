@@ -7,8 +7,8 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational
-from jacobian.contracts.results import ContractModel
 
 
 class RationalPoint2D(ContractModel):

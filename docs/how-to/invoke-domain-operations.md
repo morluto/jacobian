@@ -8,6 +8,6 @@ model. For example:
 {"operation_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}
 ```
 
-The result is returned inline. To continue a calculation, pass the relevant
+The result is returned directly. To continue a calculation, pass the relevant
 typed value in the next operation's payload. Jacobian does not retain caller
 values, workflow state, artifacts, ports, or workspace documents.

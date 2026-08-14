@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
 from jacobian.contracts.matrices import (
     MAX_MATRIX_DIMENSION,
@@ -14,7 +15,6 @@ from jacobian.contracts.matrices import (
     RationalMatrix,
     require_matrix_scalar_digits,
 )
-from jacobian.contracts.results import ContractModel
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 64
@@ -176,17 +176,6 @@ class RationalLinearSolveRequest(ContractModel):
         return self
 
 
-class LatticeReductionRequest(ContractModel):
-    basis: IntegerMatrix
-
-    @model_validator(mode="after")
-    def require_lattice_input_budget(self) -> Self:
-        require_matrix_scalar_digits(
-            self.basis.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="basis input"
-        )
-        return self
-
-
 class RrefResult(ContractModel):
     reduced_matrix: RationalMatrix
     rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
@@ -297,25 +286,3 @@ class RationalLinearSolveResult(ContractModel):
 class MatrixAdjugateResult(ContractModel):
     adjugate: IntegerMatrix
     convention: Literal["CLASSICAL_ADJUGATE"] = "CLASSICAL_ADJUGATE"
-
-
-class LatticeReductionResult(ContractModel):
-    reduced_basis: IntegerMatrix
-    transformation: IntegerMatrix
-    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    relation: Literal["REDUCED_BASIS_EQUALS_TRANSFORMATION_TIMES_BASIS"] = (
-        "REDUCED_BASIS_EQUALS_TRANSFORMATION_TIMES_BASIS"
-    )
-    representation: Literal["INTEGER_ROW_BASIS"] = "INTEGER_ROW_BASIS"
-    gram_mode: Literal["EXACT"] = "EXACT"
-    delta: Literal["0.99"] = "0.99"
-    eta: Literal["0.51"] = "0.51"
-
-    @model_validator(mode="after")
-    def require_transformation_shape(self) -> Self:
-        rows = len(self.reduced_basis.entries)
-        if len(self.transformation.entries) != rows:
-            raise ValueError("LLL transformation must have one row per basis row")
-        if len(self.transformation.entries[0]) != rows:
-            raise ValueError("LLL transformation must be square by basis row count")
-        return self

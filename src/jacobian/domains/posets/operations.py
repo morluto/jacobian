@@ -28,11 +28,7 @@ from jacobian.contracts.posets import (
     finite_poset_digest,
 )
 from jacobian.domains._examples import example
-from jacobian.operation_declarations import (
-    OperationDeclaration,
-    OperationDeclarations,
-    inline_operation,
-)
+from jacobian.math_tools import MathTool, MathTools
 
 
 def _networkx() -> Any:
@@ -305,101 +301,91 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
-FINITE_POSET_OPERATIONS: OperationDeclarations = (
-    inline_operation(
-        OperationDeclaration(
-            operation_id="poset.finite.compute",
-            version="4",
-            title="Compute a canonical finite poset",
-            description=(
-                "Validate exact cover edges or a complete comparable relation and "
-                "return canonical closure, Hasse reduction, incomparability, extrema, "
-                "and ranks exactly when the poset is graded."
-            ),
-            request_type=FinitePosetRequest,
-            result_type=FinitePosetMaterializationResult,
-            execute=_materialize,
-            tags=(
-                "poset",
-                "partial-order",
-                "partially-ordered-set",
-                "hasse-diagram",
-                "transitive-closure",
-                "exact",
-            ),
-            examples=(
-                example(
-                    "diamond",
-                    "Materialize the four-element diamond from its cover relation.",
-                    _DIAMOND,
-                ),
-            ),
-        )
-    ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="poset.width.compute",
-            version="4",
-            title="Compute finite-poset width with dual witnesses",
-            description=(
-                "Return an exact maximum antichain and a same-size minimum chain "
-                "partition, with the bipartite matching intermediate."
-            ),
-            request_type=PosetRequest,
-            result_type=PosetWidthResult,
-            execute=_width,
-            tags=(
-                "poset",
-                "partial-order",
-                "partially-ordered-set",
-                "width",
-                "maximum-antichain",
-                "minimum-chain-cover",
-                "dilworth",
-                "exact",
-            ),
-        )
-    ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="poset.linear_extensions.count",
-            version="4",
-            title="Count linear extensions of a bounded finite poset",
-            description=(
-                "Count every linear extension of a bounded finite poset exactly."
-            ),
-            request_type=LinearExtensionRequest,
-            result_type=LinearExtensionCountResult,
-            execute=_linear_extensions,
-            tags=(
-                "poset",
-                "linear-extension",
-                "exact-count",
-                "order-ideal",
-                "dynamic-programming",
+FINITE_POSET_OPERATIONS: MathTools = (
+    MathTool(
+        operation_id="poset.finite.compute",
+        version="4",
+        title="Compute a canonical finite poset",
+        description=(
+            "Validate exact cover edges or a complete comparable relation and "
+            "return canonical closure, Hasse reduction, incomparability, extrema, "
+            "and ranks exactly when the poset is graded."
+        ),
+        request_type=FinitePosetRequest,
+        result_type=FinitePosetMaterializationResult,
+        run=_materialize,
+        tags=(
+            "poset",
+            "partial-order",
+            "partially-ordered-set",
+            "hasse-diagram",
+            "transitive-closure",
+            "exact",
+        ),
+        examples=(
+            example(
+                "diamond",
+                "Materialize the four-element diamond from its cover relation.",
+                _DIAMOND,
             ),
         ),
     ),
-    inline_operation(
-        OperationDeclaration(
-            operation_id="poset.mobius_function.compute",
-            version="3",
-            title="Compute finite-poset Möbius values",
-            description=(
-                "Return exact incidence-algebra Möbius values for either every "
-                "interval or an explicit selected interval scope."
-            ),
-            request_type=MobiusFunctionRequest,
-            result_type=MobiusFunctionResult,
-            execute=_mobius,
-            tags=(
-                "poset",
-                "mobius-function",
-                "incidence-algebra",
-                "interval",
-                "exact",
-            ),
-        )
+    MathTool(
+        operation_id="poset.width.compute",
+        version="4",
+        title="Compute finite-poset width with dual witnesses",
+        description=(
+            "Return an exact maximum antichain and a same-size minimum chain "
+            "partition, with the bipartite matching intermediate."
+        ),
+        request_type=PosetRequest,
+        result_type=PosetWidthResult,
+        run=_width,
+        tags=(
+            "poset",
+            "partial-order",
+            "partially-ordered-set",
+            "width",
+            "maximum-antichain",
+            "minimum-chain-cover",
+            "dilworth",
+            "exact",
+        ),
+    ),
+    MathTool(
+        operation_id="poset.linear_extensions.count",
+        version="4",
+        title="Count linear extensions of a bounded finite poset",
+        description=("Count every linear extension of a bounded finite poset exactly."),
+        request_type=LinearExtensionRequest,
+        result_type=LinearExtensionCountResult,
+        run=_linear_extensions,
+        tags=(
+            "poset",
+            "linear-extension",
+            "exact-count",
+            "order-ideal",
+            "dynamic-programming",
+        ),
+    ),
+    MathTool(
+        operation_id="poset.mobius_function.compute",
+        version="3",
+        title="Compute finite-poset Möbius values",
+        description=(
+            "Return exact incidence-algebra Möbius values for either every "
+            "interval or an explicit selected interval scope."
+        ),
+        request_type=MobiusFunctionRequest,
+        result_type=MobiusFunctionResult,
+        run=_mobius,
+        tags=(
+            "poset",
+            "mobius-function",
+            "incidence-algebra",
+            "interval",
+            "exact",
+        ),
     ),
 )
 

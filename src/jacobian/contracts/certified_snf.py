@@ -9,8 +9,8 @@ from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalInteger
-from jacobian.contracts.results import ContractModel
 
 MAX_CERTIFIED_SNF_DIMENSION = 32
 MAX_CERTIFIED_SNF_INPUT_DIMENSION = 16
@@ -163,10 +163,6 @@ class CertifiedSmithNormalFormResult(ContractModel):
     certificate: SmithNormalFormCertificate
     exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["jacobian-sympy-smith-normal-decomposition"] = (
-        "jacobian-sympy-smith-normal-decomposition"
-    )
-    backend_version: Literal["1"] = "1"
     completeness: Literal["FULL_MATRIX_TRANSFORMATIONS"] = "FULL_MATRIX_TRANSFORMATIONS"
 
 

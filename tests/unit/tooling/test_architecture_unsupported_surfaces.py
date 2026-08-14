@@ -109,7 +109,7 @@ def test_generic_memory_word_is_not_flagged(tmp_path: Path) -> None:
     """Legitimate generic words like 'memory limits' must not trigger."""
     _write(
         tmp_path,
-        "src/jacobian/process_policy.py",
+        "src/jacobian/bounded_process.py",
         "import os\n\n# Configure memory limits for child processes.\n",
     )
     report = check_architecture(tmp_path)

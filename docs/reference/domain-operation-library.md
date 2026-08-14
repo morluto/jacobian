@@ -2,8 +2,13 @@
 
 Every built-in operation is a direct typed mathematical function with one
 domain owner. Declaration modules export immutable tuples of
-`InlineOperation` values. `math.find` reads those declarations and `math.run`
+`MathTool` values. `math.find` reads those entries and `math.run`
 validates then executes exactly one of them.
+
+The ordinary path is: select declaration, parse its Pydantic request once,
+call the domain function, and return its concrete result. A domain function may
+use a maintained library privately for its algorithm; callers see Jacobian's
+typed mathematical values, not backend/provider objects.
 
 Keep values, codecs, invariants, and backend conversions with their domain.
 Shared contracts are limited to passive cross-domain primitives. A bounded
@@ -12,7 +17,7 @@ it does not add a generic assurance, artifact, publication, replay, or
 verification wrapper.
 
 Use maintained backends through thin private adapters. Direct bounded results
-stay inline and compose by being supplied as the next operation's typed
+compose by being supplied as the next operation's typed
 payload.
 
 The logic family illustrates the boundary. `sat.cnf.canonicalize` returns a

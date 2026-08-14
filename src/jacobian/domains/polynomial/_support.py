@@ -1,36 +1,10 @@
 """Polynomial operation declarations."""
 
 from collections.abc import Callable
-from dataclasses import replace
-from typing import cast
 
-from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.contracts.results import ContractModel, ExecutionStatus
-from jacobian.domains.polynomial.operations import PolynomialOutputBudgetError
-from jacobian.operation_declarations import (
-    InlineOperation,
-    InlineOperationFactory,
-    OperationAbortError,
-    OperationExample,
-    OperationFailure,
-    OperationRefusalError,
-)
-
-_POLYNOMIAL_FAILURE = OperationFailure(
-    code="POLYNOMIAL_OPERATION_NOT_APPLICABLE",
-    stage="polynomial_computation",
-    hint="Check the declared ring, variable, and operation budgets.",
-    exceptions=(TypeError, ValueError),
-)
-_polynomial_operation_factory = InlineOperationFactory(_POLYNOMIAL_FAILURE)
-
-
-def _polynomial_error() -> type[Exception]:
-    """Load SymPy's polynomial error class only while handling an invocation."""
-
-    from sympy.polys.polyerrors import PolynomialError
-
-    return cast(type[Exception], PolynomialError)
+from jacobian.contracts.base import ContractModel
+from jacobian.contracts.operations import OperationExample
+from jacobian.math_tools import MathTool
 
 
 def polynomial_operation[
@@ -46,55 +20,17 @@ def polynomial_operation[
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
     version: str = "2",
-) -> InlineOperation[RequestT, ResultT]:
-    """Declare an exact polynomial operation with bounded-output failure semantics."""
+) -> MathTool[RequestT, ResultT]:
+    """Declare an exact polynomial math tool."""
 
-    declared = _polynomial_operation_factory(
-        operation_id,
-        title,
-        description,
-        request_model,
-        result_model,
-        operation,
-        *tags,
-        examples=examples,
+    return MathTool(
+        operation_id=operation_id,
         version=version,
+        title=title,
+        description=description,
+        request_type=request_model,
+        result_type=result_model,
+        run=operation,
+        tags=tags,
+        examples=examples,
     )
-    return replace(
-        declared,
-        run=_with_polynomial_output_budget(declared.run),
-    )
-
-
-def _with_polynomial_output_budget[
-    RequestT: ContractModel,
-    ResultT: ContractModel,
-](
-    implementation: Callable[[RequestT], ResultT],
-) -> Callable[[RequestT], ResultT]:
-    """Add polynomial-specific bounded-output handling to an operation."""
-
-    def execute(request: RequestT) -> ResultT:
-        try:
-            return implementation(request)
-        except PolynomialOutputBudgetError as error:
-            raise OperationAbortError(
-                ExecutionStatus.ERROR,
-                OperationDiagnostic(
-                    code="POLYNOMIAL_OUTPUT_LIMIT_EXCEEDED",
-                    stage="polynomial_output_validation",
-                    message=str(error),
-                    hint=(
-                        "Use a smaller polynomial input or an operation with an "
-                        "explicitly larger output budget."
-                    ),
-                ),
-            ) from error
-        except Exception as error:
-            if isinstance(error, _polynomial_error()):
-                raise OperationRefusalError(
-                    _polynomial_operation_factory.failure.diagnostic(error)
-                ) from error
-            raise
-
-    return execute

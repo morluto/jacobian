@@ -6,9 +6,9 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 from jacobian.contracts.graph_coloring import ChromaticGraph, GraphVertex
-from jacobian.contracts.results import ContractModel
 
 OptimizationStatus = Literal["EXACT", "UNKNOWN"]
 OptimizationTermination = Literal[

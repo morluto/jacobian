@@ -30,7 +30,6 @@ forbidden = (
     "jacobian.domains",
     "jacobian.lean_frontend.service",
     "sympy",
-    "cvc5",
     "flint",
     "z3",
 )

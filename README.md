@@ -44,7 +44,7 @@ jacobian-mcp
 ```
 
 That package includes Jacobian's exact maintained Python backend stack: SymPy,
-NetworkX, Z3, Python-FLINT, and cvc5. A normal Python or npm installation
+NetworkX, Z3, and Python-FLINT. A normal Python or npm installation
 therefore exposes the same built-in Python-backed operation portfolio. The
 tested binary-install contract is CPython 3.12 or 3.13 on glibc Linux x86-64;
 the release gate installs the built wheel and starts Jacobian on both Python
@@ -60,7 +60,7 @@ its exact package version to the corresponding `uvx` invocation.
 
 An ordinary operation returns mathematics first. For example,
 `matrix.determinant.compute` accepts one exact rational matrix and returns its
-determinant inline. Callers compose results by passing their typed values to a
+determinant directly. Callers compose results by passing their typed values to a
 subsequent operation; Jacobian retains no project state or artifact store.
 
 ## Available mathematics

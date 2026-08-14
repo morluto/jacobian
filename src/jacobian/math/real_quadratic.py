@@ -8,8 +8,8 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
-from jacobian.contracts.results import ContractModel
 
 _MAX_RADICAND = 1_000_000
 _MAX_DIGITS = 256

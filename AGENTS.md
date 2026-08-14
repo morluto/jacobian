@@ -29,9 +29,24 @@ project. Avoid speculative policy, tenant isolation, secret management, and
 other security scaffolding in the kernel; preserve an explicit transport
 boundary only when the task actually changes one.
 
+The ordinary execution path is deliberately this small:
+
+```text
+math.run(operation ID, JSON)
+  -> select the immutable declaration
+  -> parse its Pydantic request once
+  -> call the domain-owned function
+  -> return its concrete typed mathematical result
+```
+
+The domain function may use SymPy, FLINT, NetworkX, Z3, or another
+maintained library as a private computational engine. Jacobian owns the public
+mathematical semantics and types; the library does not become a provider,
+runtime, worker, or second operation surface.
+
 ## Non-negotiable boundaries
 
-- Return bounded mathematical values inline. Results may report their own exact,
+- Return bounded mathematical values directly. Results may report their own exact,
   incomplete, or unknown status, but do not add generic assurance, obligation,
   verification, or completeness wrappers.
 - Do not restore a workspace, SQLite/catalog overlay, artifact store,
@@ -41,16 +56,17 @@ boundary only when the task actually changes one.
 - A value that needs durability, resumability, or cross-request identity is out
   of scope. The only temporary state permitted is request-scoped data required
   for one genuinely isolated process.
-- Built-in declarations are explicit immutable `InlineOperation` tuples. Do not
-  add import-time registration, recursive discovery, generic registries,
-  runtime services, installer callbacks, or declaration bundles.
+- Built-in tools are explicit immutable `MathTool` tuples: discovery metadata
+  plus one direct typed domain function. Do not add import-time registration,
+  recursive discovery, generic registries, runtime services, installer
+  callbacks, or declaration bundles.
 - Keep operations composable and domain-owned. Discovery must not prescribe a
   proof strategy, next step, or stopping rule.
 
 ## Implement mathematics directly
 
 - Prefer a thin typed adapter to maintained backends such as SymPy, FLINT,
-  NetworkX, Z3, or cvc5. They are private implementation details, not
+  NetworkX or Z3. They are private implementation details, not
   operation-specific providers. Do not reimplement their kernels.
 - Use a direct Python binding whenever it can perform the bounded computation.
   A subprocess needs a concrete isolation, killability, or fixed-toolchain
@@ -74,11 +90,13 @@ boundary only when the task actually changes one.
   canonical parse/format helpers—never direct `int()` or `str()`—and test above
   4,300 digits whenever the contract permits it.
 - Construct MCP envelopes only at the final boundary. With MCP Python SDK 2.0,
-  return Pydantic result models directly and use `structured_output=True`; use
-  an explicit result only for a deliberate text projection.
-- `TIMEOUT`, `CANCELLED`, `ERROR`, incomplete enumeration, and no witness are
-  non-conclusions. Keep input validity, execution status, and mathematical
-  conclusion separate.
+  return Pydantic result models directly and use `structured_output=True`: the
+  SDK derives structured output and reports request/result validation failures.
+  Do not add a Jacobian error envelope, schema rewrite, or second validation
+  pass. Use an explicit result only for a deliberate content projection.
+- MCP owns malformed-argument and host-failure reporting. A domain result owns
+  its own timeout, incompleteness, or missing-witness outcome; none is a
+  mathematical conclusion by itself.
 
 ## Service and deployment
 

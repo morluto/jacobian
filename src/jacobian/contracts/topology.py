@@ -15,16 +15,15 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import canonicalize_json
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.certified_snf import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
 from jacobian.contracts.common import Sha256Digest
 from jacobian.contracts.exact import CanonicalInteger
-from jacobian.contracts.results import ContractModel
 
 MAX_TOPOLOGY_VERTICES = 64
 MAX_TOPOLOGY_FACETS = 128
@@ -110,10 +109,7 @@ def _require_request_complex(
         )
     for left, right in combinations(canonical, 2):
         if set(left) < set(right) or set(right) < set(left):
-            raise PydanticCustomError(
-                "topology_non_maximal_facets",
-                "facet input must contain only maximal simplices",
-            )
+            raise ValueError("facet input must contain only maximal simplices")
     closure = face_closure(tuple(canonical))
     if sum(map(len, closure)) > MAX_TOPOLOGY_FACES:
         raise ValueError(
@@ -297,8 +293,6 @@ class FiniteSimplicialComplex(ContractModel):
 class TopologyExactResult(ContractModel):
     exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["jacobian.topology"] = "jacobian.topology"
-    backend_version: Literal["1"] = "1"
 
 
 class SimplicialComplexCanonicalizationResult(TopologyExactResult):

@@ -18,12 +18,12 @@ from jacobian.canonical import (
     format_canonical_integer,
     parse_canonical_integer,
 )
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import (
     CanonicalInteger,
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian.contracts.results import ContractModel
 
 _MAX_N = 1_000
 MAX_BINOMIAL_N = 10_000
@@ -118,7 +118,7 @@ def _validate_result_inline_size(payload: dict[str, object]) -> None:
         )
     except ValueError as exc:
         raise ValueError(
-            "the exact combinatorics result exceeds the inline result limit"
+            "the exact combinatorics result exceeds the bounded result limit"
         ) from exc
 
 
@@ -160,7 +160,7 @@ def _validate_recurrence_result_budget(
     )
     if minimum_size + 1_024 > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
         raise ValueError(
-            "the exact combinatorics result exceeds the inline result limit"
+            "the exact combinatorics result exceeds the bounded result limit"
         )
     for value in replay:
         if any(
@@ -178,8 +178,6 @@ def _validate_recurrence_result_budget(
         )
     _validate_result_inline_size(
         {
-            "backend": "sympy",
-            "backend_version": "1.14.0",
             "coefficient_convention": coefficient_convention,
             "determinism": "DETERMINISTIC",
             "exactness": "EXACT_RATIONAL",
@@ -264,7 +262,7 @@ def _validate_p_recursive_result_budget(
         minimum_size += 32
         if minimum_size > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
             raise ValueError(
-                "the exact combinatorics result exceeds the inline result limit"
+                "the exact combinatorics result exceeds the bounded result limit"
             )
         replay.append(next_value)
         residuals.append(
@@ -281,8 +279,6 @@ def _validate_p_recursive_result_budget(
         )
     _validate_result_inline_size(
         {
-            "backend": "sympy",
-            "backend_version": "1.14.0",
             "coefficient_convention": coefficient_convention,
             "polynomial_convention": polynomial_convention,
             "determinism": "DETERMINISTIC",
@@ -347,12 +343,10 @@ def _validate_series_result_budget(
     minimum_size += truncation_order * _minimum_fraction_wire_bytes(Fraction())
     if minimum_size + 1_024 > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
         raise ValueError(
-            "the exact combinatorics result exceeds the inline result limit"
+            "the exact combinatorics result exceeds the bounded result limit"
         )
     _validate_result_inline_size(
         {
-            "backend": "sympy",
-            "backend_version": "1.14.0",
             "coefficient_convention": coefficient_convention,
             "coefficients": [_fraction_wire(value) for value in coefficients],
             "determinism": "DETERMINISTIC",
@@ -429,7 +423,6 @@ class IntegerSidonResult(ContractModel):
     is_sidon: StrictBool
     exactness: Literal["EXACT_INTEGER"] = "EXACT_INTEGER"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-stdlib"] = "python-stdlib"
 
     @model_validator(mode="after")
     def bind_complete_ordered_difference_profile(self) -> Self:
@@ -537,7 +530,6 @@ class CyclicPerfectDifferenceSetResult(ContractModel):
     is_perfect: StrictBool
     exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-stdlib"] = "python-stdlib"
 
     @model_validator(mode="after")
     def bind_complete_cyclic_profile(self) -> Self:
@@ -688,7 +680,6 @@ class CyclicDifferenceSetExtensionResult(ContractModel):
     coverage: Literal["WITNESS", "ALL_CANDIDATES"]
     exactness: Literal["EXACT_FINITE"] = "EXACT_FINITE"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["python-stdlib"] = "python-stdlib"
 
     @model_validator(mode="after")
     def bind_fixed_order_scope_and_decision_shape(self) -> Self:
@@ -895,8 +886,6 @@ class LinearRecurrenceEvaluationResult(ContractModel):
     replay_scope_end: StrictInt = Field(ge=0, le=MAX_LINEAR_RECURRENCE_INDEX)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: Literal["1.14.0"] = "1.14.0"
 
     @model_validator(mode="after")
     def require_complete_replay_prefix(self) -> Self:
@@ -1019,8 +1008,6 @@ class PolynomialCoefficientRecurrenceEvaluationResult(ContractModel):
     replay_scope_end: StrictInt = Field(ge=0, le=MAX_LINEAR_RECURRENCE_INDEX)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: Literal["1.14.0"] = "1.14.0"
 
     @model_validator(mode="after")
     def require_complete_replay(self) -> Self:
@@ -1112,8 +1099,6 @@ class RationalGeneratingFunctionCoefficientsResult(ContractModel):
     )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
     determinism: Literal["DETERMINISTIC"] = "DETERMINISTIC"
-    backend: Literal["sympy"] = "sympy"
-    backend_version: Literal["1.14.0"] = "1.14.0"
 
     @model_validator(mode="after")
     def require_exact_finite_truncation(self) -> Self:

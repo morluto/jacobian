@@ -13,11 +13,7 @@ from jacobian.contracts.graph_symmetry import (
     GraphVertexOrbit,
 )
 from jacobian.domains._examples import example
-from jacobian.operation_declarations import (
-    OperationDeclaration,
-    OperationDeclarations,
-    inline_operation,
-)
+from jacobian.math_tools import MathTool, MathTools
 
 
 def _canonical_edge(left: str, right: str) -> tuple[str, str]:
@@ -106,62 +102,59 @@ def _generator_orbits(
         edge_orbit_count=len(edge_orbits),
         vertex_color_mode=("DECLARED" if request.vertex_colors else "UNCOLORED"),
         edge_color_mode="DECLARED" if request.edge_colors else "UNCOLORED",
-        backend_version=nx.__version__,
     )
 
 
-GRAPH_SYMMETRY_OPERATIONS: OperationDeclarations = (
-    inline_operation(
-        OperationDeclaration(
-            operation_id="graph.symmetry.generator_orbits.compute",
-            version="5",
-            title="Exact declared graph-symmetry orbit partitions",
-            description=(
-                "Validate explicit color-preserving graph automorphism generators and "
-                "compute the complete vertex and edge orbits of their generated subgroup."
-            ),
-            request_type=GraphSymmetryOrbitRequest,
-            result_type=GraphSymmetryOrbitResult,
-            execute=_generator_orbits,
-            tags=(
-                "graph",
-                "symmetry",
-                "automorphism",
-                "group-action",
-                "orbit",
-                "compression",
-                "exact",
-                "bounded",
-            ),
-            examples=(
-                example(
-                    "cycle_rotation_orbits",
-                    "Compute vertex and edge orbits of one declared quarter-turn of C4.",
-                    {
-                        "graph": {
-                            "vertices": ["a", "b", "c", "d"],
-                            "edges": [
-                                ["a", "b"],
-                                ["a", "d"],
-                                ["b", "c"],
-                                ["c", "d"],
-                            ],
-                        },
-                        "generators": [
-                            {
-                                "generator_id": "quarter_turn",
-                                "mapping": {
-                                    "a": "b",
-                                    "b": "c",
-                                    "c": "d",
-                                    "d": "a",
-                                },
-                            }
+GRAPH_SYMMETRY_OPERATIONS: MathTools = (
+    MathTool(
+        operation_id="graph.symmetry.generator_orbits.compute",
+        version="5",
+        title="Exact declared graph-symmetry orbit partitions",
+        description=(
+            "Validate explicit color-preserving graph automorphism generators and "
+            "compute the complete vertex and edge orbits of their generated subgroup."
+        ),
+        request_type=GraphSymmetryOrbitRequest,
+        result_type=GraphSymmetryOrbitResult,
+        run=_generator_orbits,
+        tags=(
+            "graph",
+            "symmetry",
+            "automorphism",
+            "group-action",
+            "orbit",
+            "compression",
+            "exact",
+            "bounded",
+        ),
+        examples=(
+            example(
+                "cycle_rotation_orbits",
+                "Compute vertex and edge orbits of one declared quarter-turn of C4.",
+                {
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["c", "d"],
                         ],
                     },
-                ),
+                    "generators": [
+                        {
+                            "generator_id": "quarter_turn",
+                            "mapping": {
+                                "a": "b",
+                                "b": "c",
+                                "c": "d",
+                                "d": "a",
+                            },
+                        }
+                    ],
+                },
             ),
-        )
+        ),
     ),
 )
 

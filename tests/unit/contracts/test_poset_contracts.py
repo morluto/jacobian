@@ -17,7 +17,7 @@ def _materialize(elements: list[str], relation: list[tuple[str, str]]):
         for operation in finite_poset_operations()
         if operation.operation_id == "poset.finite.compute"
     )
-    outcome = operation.execute(
+    outcome = operation.run(
         FinitePosetRequest(
             elements=elements,
             relation=[{"lower": lower, "upper": upper} for lower, upper in relation],

@@ -8,7 +8,7 @@ from typing import Annotated, Self
 from pydantic import StringConstraints, model_validator
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.contracts.results import ContractModel
+from jacobian.contracts.base import ContractModel
 
 CanonicalInteger = Annotated[
     str,

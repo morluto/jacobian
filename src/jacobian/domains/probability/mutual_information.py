@@ -9,13 +9,12 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import (
     CanonicalInteger,
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.contracts.results import ContractModel
 from jacobian.domains._examples import example
 from jacobian.math.probability.mutual_information import (
     FiniteJointTable,
@@ -31,8 +30,7 @@ from jacobian.math.probability.values import (
     MAX_MUTUAL_INFORMATION_MARGINAL_DIGITS,
     MAX_MUTUAL_INFORMATION_PRODUCT_DIGITS,
 )
-from jacobian.operation_declarations import OperationDeclaration, inline_operation
-from jacobian.operations import OperationRefusalError
+from jacobian.math_tools import MathTool
 
 FiniteJointLabel = Annotated[
     str,
@@ -404,77 +402,53 @@ class FiniteJointTableMutualInformationResult(ContractModel):
         )
 
 
-_INVALID_REQUEST = OperationDiagnostic(
-    code="INVALID_FINITE_JOINT_TABLE_REQUEST",
-    stage="finite_joint_table_input_validation",
-    message="Input does not satisfy the bounded normalized rational joint-table contract.",
-    hint=(
-        "Supply unique ordered labels, a nonnegative rational table with at most "
-        "64 cells summing exactly to one, and a log base from 2 to 36."
-    ),
-)
-
-
-def _execute(
+def compute_mutual_information(
     request: FiniteJointTableMutualInformationRequest,
 ) -> FiniteJointTableMutualInformationResult:
-    try:
-        return FiniteJointTableMutualInformationResult.from_native(
-            mutual_information(request.as_native())
-        )
-    except (ArithmeticError, OverflowError, TypeError, ValueError) as exc:
-        raise OperationRefusalError(
-            OperationDiagnostic(
-                code="MUTUAL_INFORMATION_CERTIFICATE_BOUND_EXCEEDED",
-                stage="finite_joint_mutual_information",
-                message=str(exc),
-                hint="Reduce rational denominator sizes or the positive support.",
-            )
-        ) from exc
+    return FiniteJointTableMutualInformationResult.from_native(
+        mutual_information(request.as_native())
+    )
 
 
-MUTUAL_INFORMATION_OPERATION = inline_operation(
-    OperationDeclaration(
-        operation_id="probability.joint.mutual_information.compute",
-        version="1",
-        title="Exact finite-table mutual information certificate",
-        description=(
-            "Compute ordered marginals and every positive-support likelihood "
-            "ratio for one bounded normalized rational joint table. Return the "
-            "exact identity scale*I=log_base(product), without floating point."
-        ),
-        request_type=FiniteJointTableMutualInformationRequest,
-        result_type=FiniteJointTableMutualInformationResult,
-        execute=_execute,
-        tags=(
-            "probability",
-            "information-theory",
-            "mutual-information",
-            "finite",
-            "exact",
-            "certificate",
-        ),
-        invalid_request=_INVALID_REQUEST,
-        examples=(
-            example(
-                "perfectly_correlated_fair_bits",
-                "Compute exact base-two mutual information for two identical fair bits.",
-                {
-                    "row_labels": ["0", "1"],
-                    "column_labels": ["0", "1"],
-                    "probabilities": [
-                        [
-                            {"num": "1", "den": "2"},
-                            {"num": "0", "den": "1"},
-                        ],
-                        [
-                            {"num": "0", "den": "1"},
-                            {"num": "1", "den": "2"},
-                        ],
+MUTUAL_INFORMATION_OPERATION = MathTool(
+    operation_id="probability.joint.mutual_information.compute",
+    version="1",
+    title="Exact finite-table mutual information certificate",
+    description=(
+        "Compute ordered marginals and every positive-support likelihood "
+        "ratio for one bounded normalized rational joint table. Return the "
+        "exact identity scale*I=log_base(product), without floating point."
+    ),
+    request_type=FiniteJointTableMutualInformationRequest,
+    result_type=FiniteJointTableMutualInformationResult,
+    run=compute_mutual_information,
+    tags=(
+        "probability",
+        "information-theory",
+        "mutual-information",
+        "finite",
+        "exact",
+        "certificate",
+    ),
+    examples=(
+        example(
+            "perfectly_correlated_fair_bits",
+            "Compute exact base-two mutual information for two identical fair bits.",
+            {
+                "row_labels": ["0", "1"],
+                "column_labels": ["0", "1"],
+                "probabilities": [
+                    [
+                        {"num": "1", "den": "2"},
+                        {"num": "0", "den": "1"},
                     ],
-                    "log_base": 2,
-                },
-            ),
+                    [
+                        {"num": "0", "den": "1"},
+                        {"num": "1", "den": "2"},
+                    ],
+                ],
+                "log_base": 2,
+            },
         ),
     ),
 )

@@ -187,13 +187,13 @@ def test_slice_a_composes_restriction_into_rank_without_wire_conversion() -> Non
     direction = directions.points[0]
     _, restrict_operation, rank_operation, *_ = finite_field_operations()
 
-    linear_map = restrict_operation.execute(
+    linear_map = restrict_operation.run(
         restrict_operation.request_type.model_validate(
             {"subspace": subspace, "direction": direction}
         )
     )
 
-    result = rank_operation.execute(
+    result = rank_operation.run(
         rank_operation.request_type.model_validate(
             {"direction": direction, "linear_map": linear_map}
         )
@@ -208,19 +208,19 @@ def test_slice_a_composes_projective_line_into_orbit_distribution() -> None:
     subspace, _ = _slice_a_values()
     projective, _, _, ledger_operation, orbit_operation, *_ = finite_field_operations()
 
-    line = projective.execute(
+    line = projective.run(
         projective.request_type.model_validate(
             {"presentation": subspace.presentation, "axis": subspace.row_axis}
         )
     )
 
-    ledger = ledger_operation.execute(
+    ledger = ledger_operation.run(
         ledger_operation.request_type.model_validate(
             {"subspace": subspace, "directions": line}
         )
     )
 
-    distribution = orbit_operation.execute(
+    distribution = orbit_operation.run(
         orbit_operation.request_type.model_validate({"ledger": ledger})
     )
 

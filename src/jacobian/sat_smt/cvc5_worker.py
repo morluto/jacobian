@@ -95,8 +95,6 @@ def _validate_query_profile(
 ) -> str:
     """Validate the command sequence and return the mapped solver status."""
 
-    if status_text is None:
-        raise Cvc5WorkerError("CVC5_QUERY_OUTSIDE_PROFILE")
     if (
         not command_names
         or command_names[0] != "set-logic"
@@ -106,6 +104,7 @@ def _validate_query_profile(
         or status_text not in _STATUS_MAP
     ):
         raise Cvc5WorkerError("CVC5_QUERY_OUTSIDE_PROFILE")
+    assert status_text is not None
     return _STATUS_MAP[status_text]
 
 

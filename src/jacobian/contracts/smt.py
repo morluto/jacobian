@@ -159,8 +159,7 @@ def _close_smtlib_command(
     if depth == 0:
         raise ValueError("SMT-LIB input contains an unmatched closing parenthesis")
     if depth == 1:
-        if direct_atoms is None:
-            raise ValueError("SMT-LIB parser state is inconsistent")
+        assert direct_atoms is not None
         if not direct_atoms:
             raise ValueError("SMT-LIB top-level command cannot be empty")
         commands.append(tuple(direct_atoms))
@@ -183,8 +182,7 @@ def _top_level_commands(text: str) -> tuple[tuple[str, ...], ...]:
         if depth == 0:
             raise ValueError("SMT-LIB input must contain only top-level commands")
         if depth == 1:
-            if direct_atoms is None:
-                raise ValueError("SMT-LIB parser state is inconsistent")
+            assert direct_atoms is not None
             direct_atoms.append(token)
     if depth:
         raise ValueError("SMT-LIB input contains an unmatched opening parenthesis")

@@ -43,10 +43,6 @@ def test_lean_catalog_omits_checkers_without_authority(
         "jacobian.lean_frontend.selected.lean_frontend_provider_runtime",
         lambda: SimpleNamespace(availability=ProviderAvailability.UNAVAILABLE),
     )
-    monkeypatch.setattr(
-        "jacobian.lean_frontend.selected.install_lean_statement_operations",
-        lambda *_args, **_kwargs: ((), None),
-    )
     context = _UnauthorizedContext()
     install_selected_lean_catalog(
         cast(CatalogBuildContext, context),

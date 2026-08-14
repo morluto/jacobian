@@ -255,14 +255,14 @@ def _install_lean_statements(context: CatalogBuildContext) -> None:
     from jacobian.contracts.operations import ProviderAvailability
 
     lean_runtime = lean_frontend_provider_runtime()
+    if lean_runtime.availability is not ProviderAvailability.AVAILABLE:
+        return
     lean_adapters, _ = install_lean_statement_operations(
         context.store,
         context.schemas,
         context.artifacts,
         provider_runtime=lean_runtime,
     )
-    if lean_runtime.availability is not ProviderAvailability.AVAILABLE:
-        return
     for lean_adapter in lean_adapters:
         context.register_operation(lean_adapter)
 

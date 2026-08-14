@@ -9,10 +9,8 @@ from __future__ import annotations
 BENCHMARK_CONTROL_PATHS = frozenset(
     {
         ".github/scripts/_ci_paths.py",
-        ".github/scripts/emit-plan-receipt",
         ".github/scripts/plan-benchmarks",
         ".github/scripts/manage-test-timings",
-        ".github/scripts/validate-benchmark-plan",
         ".github/workflows/benchmarks.yml",
         ".github/workflows/heldout-benchmarks.yml",
         "Makefile",
@@ -21,6 +19,7 @@ BENCHMARK_CONTROL_PATHS = frozenset(
         "tools/benchmark_plan/__init__.py",
         "tools/benchmark_plan/compiler.py",
         "tools/benchmark_plan/control_paths.py",
+        "tools/benchmark_plan/model.py",
         "tools/benchmark_plan/paths.py",
         "tools/benchmark_plan/validation.py",
         "tools/benchmark_pr_status.py",
@@ -29,6 +28,7 @@ BENCHMARK_CONTROL_PATHS = frozenset(
         "tools/check_benchmark_static.py",
         "tools/check_harbor_dataset.py",
         "tools/harbor_task_workflow.py",
+        "tools/process_supervisor.py",
         "tools/pytest_lifecycle.py",
         "tools/sync_harbor_verifier_support.py",
     }

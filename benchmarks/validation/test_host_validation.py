@@ -25,7 +25,6 @@ PROVENANCE = ExecutionProvenance(
     planner_digest=DIGEST,
     topology_digest=DIGEST,
     plan_digest=DIGEST,
-    plan_receipt_digest=DIGEST,
 )
 
 

@@ -98,11 +98,13 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/bounded_process.py"),
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
-        PurePosixPath("tools/development_profiles.py"),
+        PurePosixPath("tools/setup_lean.py"),
+        PurePosixPath("tools/doctor_external_tools.py"),
+        PurePosixPath("tools/process_supervisor.py"),
+        PurePosixPath("tools/with_validation_lock.py"),
         # Developer helpers that shell out to git, gh, or Make. They are not
         # product process callers.
         PurePosixPath("tools/inventory_github_workflows.py"),
-        PurePosixPath("tools/worktree_admission.py"),
         # This clean-room verifier must independently replay the pinned Lean
         # protocol inside its isolated verifier image.  It cannot import the
         # repository command runner without widening the verifier build
@@ -169,7 +171,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_unsupported_surfaces.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),
-        PurePosixPath("tests/unit/tooling/test_worktree_admission.py"),
+        PurePosixPath("tests/unit/tooling/test_validation_lock.py"),
         # Benchmark regressions spawn task-owned solution or Oracle entrypoints.
         PurePosixPath(
             "benchmarks/validation/mathematical_benchmarks_v1/"
@@ -252,7 +254,8 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("src/jacobian/lean_frontend/exploration.py"),
         PurePosixPath("src/jacobian_checkers/lean4.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
-        PurePosixPath("tools/development_profiles.py"),
+        PurePosixPath("tools/doctor_external_tools.py"),
+        PurePosixPath("tools/setup_lean.py"),
         PurePosixPath("tools/source_agent_doctor.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),

@@ -60,7 +60,7 @@ class PullRequestStatus:
     tasks: tuple[str, ...]
     unresolved_threads: int
     preparation: str
-    receipt_digest: str | None
+    plan_digest: str | None
     ci: str
     merge_ready: bool
     blockers: tuple[str, ...]
@@ -156,7 +156,7 @@ class GitHubReader:
             if not isinstance(after, str) or not after:
                 raise StatusError(f"PR {number} review-thread pagination is malformed")
 
-    def plan_receipt(self, run_id: int) -> str | None:
+    def plan_digest(self, run_id: int) -> str | None:
         payload = _json(
             self.runner(
                 ("api", f"repos/{self.repository}/actions/runs/{run_id}/artifacts")
@@ -168,7 +168,7 @@ class GitHubReader:
             (
                 item
                 for item in artifacts
-                if item.get("name") == "benchmark-plan-receipt"
+                if item.get("name") == "benchmark-plan"
                 and not item.get("expired", False)
             ),
             None,
@@ -184,20 +184,16 @@ class GitHubReader:
         try:
             with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
                 members = [
-                    name
-                    for name in bundle.namelist()
-                    if name.endswith("plan-receipt.json")
+                    name for name in bundle.namelist() if name.endswith("plan.json")
                 ]
                 if len(members) != 1:
-                    raise StatusError(
-                        "benchmark plan receipt archive has an invalid shape"
-                    )
-                receipt = json.loads(bundle.read(members[0]))
+                    raise StatusError("benchmark plan archive has an invalid shape")
+                plan = json.loads(bundle.read(members[0]))
         except (KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
-            raise StatusError("benchmark plan receipt artifact is invalid") from exc
-        digest = receipt.get("receipt_digest") if isinstance(receipt, dict) else None
+            raise StatusError("benchmark plan artifact is invalid") from exc
+        digest = plan.get("planner_digest") if isinstance(plan, dict) else None
         if not isinstance(digest, str) or not digest.startswith("sha256:"):
-            raise StatusError("benchmark plan receipt has no valid receipt_digest")
+            raise StatusError("benchmark plan has no valid planner_digest")
         return digest
 
 
@@ -255,11 +251,11 @@ def build_status(
     validation = next(
         (check for check in checks if check.name == _VALIDATION_CHECK), None
     )
-    receipt_digest: str | None = None
+    plan_digest: str | None = None
     if validation is not None:
         match = _RUN_ID.search(validation.link)
         if match is not None:
-            receipt_digest = reader.plan_receipt(int(match.group(1)))
+            plan_digest = reader.plan_digest(int(match.group(1)))
     ci = _check_state(checks, tuple(check.name for check in checks))
 
     blockers = _merge_blockers(
@@ -267,7 +263,7 @@ def build_status(
         unresolved=unresolved,
         preparation=preparation,
         ci=ci,
-        receipt_digest=receipt_digest,
+        plan_digest=plan_digest,
     )
 
     return PullRequestStatus(
@@ -277,7 +273,7 @@ def build_status(
         tasks=tasks,
         unresolved_threads=unresolved,
         preparation=preparation,
-        receipt_digest=receipt_digest,
+        plan_digest=plan_digest,
         ci=ci,
         merge_ready=not blockers,
         blockers=blockers,
@@ -290,7 +286,7 @@ def _merge_blockers(
     unresolved: int,
     preparation: str,
     ci: str,
-    receipt_digest: str | None,
+    plan_digest: str | None,
 ) -> tuple[str, ...]:
     blockers: list[str] = []
     if payload.get("state") != "OPEN":
@@ -307,8 +303,8 @@ def _merge_blockers(
         blockers.append(f"preparation={preparation}")
     if ci != "passed":
         blockers.append(f"ci={ci}")
-    if receipt_digest is None:
-        blockers.append("validation-receipt=missing")
+    if plan_digest is None:
+        blockers.append("validation-plan=missing")
 
     return tuple(blockers)
 
@@ -321,7 +317,7 @@ def render_human(statuses: Sequence[PullRequestStatus]) -> str:
         lines.append(f"  tasks: {', '.join(status.tasks) or 'none'}")
         lines.append(
             f"  threads={status.unresolved_threads} preparation={status.preparation} "
-            f"ci={status.ci} receipt={status.receipt_digest or 'missing'}"
+            f"ci={status.ci} plan={status.plan_digest or 'missing'}"
         )
         if status.blockers:
             lines.append(f"  blockers: {', '.join(status.blockers)}")

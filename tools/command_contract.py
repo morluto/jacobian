@@ -18,7 +18,7 @@ class CommandContract:
 PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
     CommandContract(
         name="setup",
-        help="Install the locked contributor environment and diagnose Python backends.",
+        help="Install the locked Python environment.",
         mutates_checkout=False,
         scope="environment",
         ci_relationship="local setup only; CI uses its own setup actions",

@@ -1,20 +1,16 @@
-"""OS-locked admission for exhaustive local validation in one worktree."""
+"""Hold an exclusive worktree lock while a command runs."""
 
 from __future__ import annotations
 
 import argparse
 import fcntl
-import hashlib
-import hmac
 import json
 import os
-import secrets
 import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
-TOKEN_ENV = "JACOBIAN_WORKTREE_ADMISSION_TOKEN"
 LOCK_NAME = ".jacobian-validation.lock"
 
 
@@ -31,10 +27,6 @@ def _lock_path(root: Path) -> Path:
     return root / LOCK_NAME
 
 
-def _token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode("ascii")).hexdigest()
-
-
 def _read_payload(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -45,36 +37,11 @@ def _read_payload(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _assert_reentry(token: str, path: Path) -> None:
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            payload = _read_payload(path)
-            expected = payload.get("token_hash")
-            if not isinstance(expected, str) or not hmac.compare_digest(
-                expected, _token_hash(token)
-            ):
-                raise SystemExit("invalid worktree admission token") from None
-            return
-        fcntl.flock(fd, fcntl.LOCK_UN)
-    finally:
-        os.close(fd)
-    raise SystemExit("stale worktree admission token; the exhaustive lease is free")
-
-
 def _run(target: str, command: list[str]) -> int:
     if not command:
-        raise SystemExit("worktree admission run requires a command")
+        raise SystemExit("validation lock run requires a command")
     root = _repo_root()
     path = _lock_path(root)
-    existing = os.environ.get(TOKEN_ENV)
-    if existing:
-        _assert_reentry(existing, path)
-        return subprocess.call(command)
-
-    token = secrets.token_hex(32)
     fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
     try:
         try:
@@ -86,20 +53,15 @@ def _run(target: str, command: list[str]) -> int:
             raise SystemExit(
                 f"worktree already running exhaustive validation {holder!r} (pid {pid})"
             ) from exc
-        payload = {
-            "token_hash": _token_hash(token),
-            "target": target,
-            "pid": os.getpid(),
-            "started": time.time(),
-        }
-        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        encoded = json.dumps(
+            {"target": target, "pid": os.getpid(), "started": time.time()},
+            sort_keys=True,
+        ).encode("utf-8")
         os.ftruncate(fd, 0)
         os.lseek(fd, 0, os.SEEK_SET)
         os.write(fd, encoded)
         os.fsync(fd)
-        env = os.environ.copy()
-        env[TOKEN_ENV] = token
-        return subprocess.call(command, env=env)
+        return subprocess.call(command)
     finally:
         os.close(fd)
 
@@ -130,10 +92,10 @@ def _status() -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    run_parser = subparsers.add_parser("run", help="Hold the lease while a command runs")
+    run_parser = subparsers.add_parser("run", help="Hold the lock while a command runs")
     run_parser.add_argument("--target", required=True)
     run_parser.add_argument("command", nargs=argparse.REMAINDER)
-    subparsers.add_parser("status", help="Print whether this worktree holds the lease")
+    subparsers.add_parser("status", help="Print whether this worktree holds the lock")
     args = parser.parse_args(argv)
     if args.command == "status":
         return _status()

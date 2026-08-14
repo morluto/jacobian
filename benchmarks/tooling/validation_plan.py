@@ -36,13 +36,9 @@ def _discover_conjecture_host_tests() -> tuple[str, ...]:
 
 
 CONTROL_PLANE_HOST_TESTS = {
-    ".github/scripts/emit-plan-receipt": (),
     ".github/scripts/manage-test-timings": (),
     ".github/scripts/plan-benchmarks": (
         "benchmarks/validation/test_benchmark_planner.py",
-        "benchmarks/validation/test_benchmark_plan_validation.py",
-    ),
-    ".github/scripts/validate-benchmark-plan": (
         "benchmarks/validation/test_benchmark_plan_validation.py",
     ),
     ".github/workflows/benchmarks.yml": (
@@ -60,6 +56,11 @@ CONTROL_PLANE_HOST_TESTS = {
     "tools/benchmark_plan/compiler.py": (
         "benchmarks/validation/test_benchmark_planner.py",
         "benchmarks/validation/test_benchmark_planner_extraction.py",
+    ),
+    "tools/benchmark_plan/model.py": (
+        "benchmarks/validation/test_benchmark_planner.py",
+        "benchmarks/validation/test_benchmark_planner_extraction.py",
+        "benchmarks/validation/test_benchmark_plan_validation.py",
     ),
     "tools/benchmark_plan/control_paths.py": (
         "benchmarks/validation/test_benchmark_planner.py",

@@ -34,7 +34,7 @@ endef
 .PHONY: harbor-plan harbor-prepare-task harbor-validate-task harbor-sync harbor-contracts harbor-execution-check harbor-adapter-checks harbor-validation-tests harbor-host-validation harbor-validate harbor-check harbor-check-all harbor-check-task benchmark-inventory benchmark-snapshot benchmark-snapshot-validate benchmark-publish harbor-oracle harbor-oracle-task harbor-oracle-run harbor-oracle-all harbor-adapter-check heldout-validate heldout-render heldout-smoke
 
 harbor-plan: export JACOBIAN_HARBOR_PATHS := $(PATHS)
-harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
+harbor-plan: ## Write one canonical Harbor plan.json for the current changes.
 	@set -eu; \
 	tmp_dir=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
@@ -56,30 +56,10 @@ harbor-plan: ## Print the independent Harbor benchmark plan (BASE=... optional).
 	fi; \
 	$(UV_RUN) python .github/scripts/normalize-ci-paths --file "$$tmp_dir/raw-paths.txt" > "$$tmp_dir/changed-paths.txt"; \
 	$(HARBOR_PYTHON) .github/scripts/plan-benchmarks \
-		$$base_arg --head "$$head_sha" --paths-file "$$tmp_dir/changed-paths.txt" > "$$tmp_dir/plan.txt"; \
-	$(UV_RUN) python .github/scripts/validate-benchmark-plan < "$$tmp_dir/plan.txt"; \
-	$(UV_RUN) python .github/scripts/emit-plan-receipt \
-		--kind benchmark --event pull_request \
-		--base "$$base_sha" --head "$$head_sha" \
-		--planner .github/scripts/plan-benchmarks \
-		--config .github/scripts/_ci_paths.py \
-		--config .github/scripts/validate-benchmark-plan \
-		--config benchmarks/registry.toml \
-		--config benchmarks/environment-profiles.toml \
-		--config .github/workflows/benchmarks.yml \
-		--config Makefile \
-		--config make/harbor.mk \
-		--config tools/check_benchmark_adapters.py \
-		--config tools/check_benchmark_contracts.py \
-		--config tools/check_harbor_dataset.py \
-		--config tools/sync_harbor_verifier_support.py \
-		--plan-file "$$tmp_dir/plan.txt" \
-		--paths-file "$$tmp_dir/changed-paths.txt" \
-		--output "$$tmp_dir/receipt.json" >/dev/null; \
+		$$base_arg --head "$$head_sha" --paths-file "$$tmp_dir/changed-paths.txt" \
+		--output "$$tmp_dir/plan.json"; \
 	echo "Benchmark plan:"; \
-	cat "$$tmp_dir/plan.txt"; \
-	echo "Plan receipt:"; \
-	cat "$$tmp_dir/receipt.json"
+	cat "$$tmp_dir/plan.json"
 
 harbor-prepare-task: ## Format and sync selected Harbor tasks (DATASET=..., TASKS="...").
 	@test -n "$(DATASET)" || { echo "DATASET is required" >&2; exit 2; }
@@ -121,15 +101,18 @@ harbor-validation-tests: ## Run Harbor's host-side validation test suite.
 		$(PYTEST_DIAGNOSTIC_ARGS) $(if $(TESTS),$(TESTS),benchmarks/validation) $(PYTEST_ARGS)
 
 harbor-host-validation: ## Run the full host suite in timing-balanced local shards.
-	$(WORKTREE_ADMISSION) run --target harbor-host-validation -- $(UV_RUN) python -m benchmarks.tooling.host_validation run-full \
+	$(VALIDATION_LOCK) run --target harbor-host-validation -- $(MAKE) _harbor-host-validation
+
+_harbor-host-validation:
+	$(UV_RUN) python -m benchmarks.tooling.host_validation run-full \
 		--total-workers $(HARBOR_VALIDATION_TOTAL_WORKERS) --max-parallel 4
 
 harbor-check: harbor-execution-check harbor-adapter-checks ## Check Harbor contracts and control-plane behavior.
 
 harbor-check-all: ## Explicitly run every repository-owned Harbor host regression.
-	$(WORKTREE_ADMISSION) run --target harbor-check-all -- $(MAKE) _harbor-check-all-unlocked
+	$(VALIDATION_LOCK) run --target harbor-check-all -- $(MAKE) _harbor-check-all
 
-_harbor-check-all-unlocked: harbor-check harbor-host-validation
+_harbor-check-all: harbor-check _harbor-host-validation
 
 harbor-validate: harbor-check-all ## Backward-compatible exhaustive Harbor validation alias.
 
@@ -230,9 +213,9 @@ harbor-oracle-run: ## Run a dataset Oracle after an already-successful contract 
 		$(if $(TASKS),--tasks $(TASKS),)
 
 harbor-oracle-all: ## Run every registered dataset Oracle with tasks.
-	$(WORKTREE_ADMISSION) run --target harbor-oracle-all -- $(MAKE) _harbor-oracle-all-unlocked
+	$(VALIDATION_LOCK) run --target harbor-oracle-all -- $(MAKE) _harbor-oracle-all
 
-_harbor-oracle-all-unlocked: harbor-check-all
+_harbor-oracle-all: _harbor-check-all
 	@set -e; for dataset in mathematical-benchmarks-v1 symbolic-coordination-v1 public-reproductions-v1 conjecture-probes-v1 research-diagnostics-v1 provider-feasibility-v1; do \
 		$(MAKE) --no-print-directory harbor-oracle-run DATASET=$$dataset FULL=1 EVAL_ARGS="$(EVAL_ARGS)"; \
 	done

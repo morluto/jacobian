@@ -88,11 +88,11 @@ def test_subprocess_in_unlisted_tool_is_flagged(tmp_path: Path) -> None:
     assert sub[0].path == "tools/unlisted_runner.py"
 
 
-def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
+def test_subprocess_in_setup_lean_is_allowed(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "tools/development_profiles.py",
-        "import subprocess\n\nsubprocess.run(['uv', 'sync'])\n",
+        "tools/setup_lean.py",
+        "import subprocess\n\nsubprocess.run(['elan', 'toolchain', 'install'])\n",
     )
     report = check_architecture(tmp_path)
     assert all(v.code != "subprocess-confined" for v in report.violations)
@@ -102,8 +102,8 @@ def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
     "relative",
     [
         "tools/inventory_github_workflows.py",
-        "tools/worktree_admission.py",
-        "tests/unit/tooling/test_worktree_admission.py",
+        "tools/with_validation_lock.py",
+        "tests/unit/tooling/test_validation_lock.py",
     ],
 )
 def test_subprocess_in_listed_developer_tooling_is_allowed(

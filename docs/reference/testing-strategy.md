@@ -93,7 +93,9 @@ make test-mcp
 make test-provider
 make test-lean
 make test-e2e
+make test
 make test-exhaustive
+make test-full
 make test-checker-subprocess-coverage
 make quick
 make check
@@ -102,14 +104,14 @@ make check-external
 make check-static
 ```
 
-`make test-all-ci` is an explicit exhaustive reproduction, not a routine gate.
+`make test-full` is an explicit exhaustive reproduction, not a routine gate.
 Before starting it, confirm that no other pytest job from this checkout is
 running. Concurrent runtime/store/subprocess suites can turn per-test
 timeouts into host-contention noise. Exhaustive local targets
-(`test-all-ci`, `test-exhaustive`, `harbor-check-all`,
-`harbor-host-validation`, `harbor-oracle-all`) take an OS-locked lease in
+(`test-full`, `test-exhaustive`, `harbor-check-all`,
+`harbor-host-validation`, `harbor-oracle-all`) take an OS lock in
 this worktree; focused `make test-unit` stays free. `make validation-status`
-reports whether the lease is held.
+reports whether the lock is held.
 
 GitHub Actions identity is the YAML under `.github/workflows` on the default
 branch. Registrations whose files are gone, including historical

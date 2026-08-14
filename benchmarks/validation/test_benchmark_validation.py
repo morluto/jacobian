@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from benchmarks.tooling.benchmark_validation import LaneResult, validate_aggregate
@@ -12,11 +13,10 @@ from benchmarks.tooling.host_validation import (
     ExecutionProvenance,
     ShardResult,
     build_receipt,
-    load_plan_receipt,
+    load_plan,
 )
 from benchmarks.tooling.receipts import digest_bytes, receipt_digest
-from benchmarks.tooling.validation_plan import full_host_validation
-from tests.boundary.process.tooling.ci import run_ci_script
+from benchmarks.tooling.validation_plan import HostValidation, full_host_validation
 
 DIGEST = "sha256:" + "a" * 64
 SHA = "1" * 40
@@ -27,49 +27,66 @@ def _digest(value: object) -> str:
     return receipt_digest(value)
 
 
-def _plan_digest(plan: dict[str, str]) -> str:
-    payload = "".join(f"{key}={plan[key]}\n" for key in sorted(plan)).encode()
-    return digest_bytes(payload)
-
-
-def _plan_receipt(tmp_path: Path) -> tuple[Path, ExecutionProvenance]:
-    entries = full_host_validation()
-    plan = {
-        "benchmark-plan-head-sha": SHA,
-        "benchmark-planner-digest": DIGEST,
-        "benchmark-topology-digest": DIGEST,
-        "benchmark-host-validation-matrix": json.dumps(
-            [entry.as_matrix_entry() for entry in entries]
-        ),
-        "run-benchmark-check": "true",
-        "run-benchmark-record-schema": "true",
-        "run-benchmark-host-validation": "true",
-        "run-benchmark-inventory": "false",
-        "run-benchmark-oracle": "false",
-    }
-    receipt = {
-        "receipt_version": "1",
-        "plan_kind": "benchmark",
+def _plan_payload(
+    entries: tuple[HostValidation, ...],
+    *,
+    selected: bool = True,
+) -> dict[str, Any]:
+    if selected:
+        return {
+            "schema_version": 1,
+            "event": "pull_request",
+            "base_sha": SHA,
+            "head_sha": SHA,
+            "changed_paths_digest": DIGEST,
+            "planner_digest": DIGEST,
+            "topology_digest": DIGEST,
+            "mode": "changed",
+            "run_check": True,
+            "record_schema": True,
+            "prospective_digest": False,
+            "inventory": False,
+            "host_matrix": [entry.as_matrix_entry() for entry in entries],
+            "oracle_scope": "none",
+            "oracle_matrix": [],
+            "reasons": ["host validation"],
+        }
+    return {
+        "schema_version": 1,
+        "event": "pull_request",
+        "base_sha": SHA,
         "head_sha": SHA,
-        "plan_digest": _plan_digest(plan),
-        "plan": plan,
+        "changed_paths_digest": "",
+        "planner_digest": DIGEST,
+        "topology_digest": "",
+        "mode": "none",
+        "run_check": False,
+        "record_schema": False,
+        "prospective_digest": False,
+        "inventory": False,
+        "host_matrix": [],
+        "oracle_scope": "none",
+        "oracle_matrix": [],
+        "reasons": [],
     }
-    receipt["receipt_digest"] = _digest(receipt)
-    path = tmp_path / "plan-receipt.json"
-    path.write_text(json.dumps(receipt), encoding="utf-8")
-    provenance = ExecutionProvenance(
-        plan_head_sha=SHA,
-        execution_sha=EXECUTION_SHA,
-        planner_digest=DIGEST,
-        topology_digest=DIGEST,
-        plan_digest=receipt["plan_digest"],
-        plan_receipt_digest=receipt["receipt_digest"],
-    )
+
+
+def _write_plan(tmp_path: Path, payload: dict[str, Any]) -> Path:
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _plan_file(tmp_path: Path) -> tuple[Path, ExecutionProvenance]:
+    entries = full_host_validation()
+    path = _write_plan(tmp_path, _plan_payload(entries))
+    provenance, observed = load_plan(path, execution_sha=EXECUTION_SHA)
+    assert observed == entries
     return path, provenance
 
 
 def _evidence(tmp_path: Path) -> tuple[Path, Path, Path]:
-    plan_path, provenance = _plan_receipt(tmp_path)
+    plan_path, provenance = _plan_file(tmp_path)
     timings = tmp_path / "benchmark-test-durations.json"
     timings.write_text("{}\n", encoding="utf-8")
     timing_digest = digest_bytes(b"{}\n")
@@ -106,7 +123,7 @@ def test_aggregate_accepts_exact_successful_shard_receipts(tmp_path: Path) -> No
 
     validate_aggregate(
         plan_result="success",
-        plan_receipt=plan,
+        plan_path=plan,
         execution_sha=EXECUTION_SHA,
         lanes=_lanes(),
         receipt_root=receipts,
@@ -114,80 +131,24 @@ def test_aggregate_accepts_exact_successful_shard_receipts(tmp_path: Path) -> No
     )
 
 
-def test_real_plan_receipt_round_trips_through_consumer(tmp_path: Path) -> None:
+def test_canonical_plan_round_trips_through_consumer(tmp_path: Path) -> None:
     entries = full_host_validation()
-    plan = {
-        "benchmark-plan-head-sha": SHA,
-        "benchmark-planner-digest": DIGEST,
-        "benchmark-topology-digest": DIGEST,
-        "benchmark-host-validation-matrix": json.dumps(
-            [entry.as_matrix_entry() for entry in entries]
-        ),
-        "run-benchmark-check": "true",
-        "run-benchmark-record-schema": "true",
-        "run-benchmark-host-validation": "true",
-        "run-benchmark-inventory": "false",
-        "run-benchmark-oracle": "false",
-    }
-    plan_file = tmp_path / "plan.txt"
-    plan_file.write_text(
-        "".join(f"{key}={plan[key]}\n" for key in sorted(plan)), encoding="utf-8"
-    )
-    paths_file = tmp_path / "paths.txt"
-    paths_file.write_text("README.md\n", encoding="utf-8")
-    output = tmp_path / "receipt.json"
+    path = _write_plan(tmp_path, _plan_payload(entries))
 
-    run_ci_script(
-        "emit-plan-receipt",
-        "--kind",
-        "benchmark",
-        "--event",
-        "pull_request",
-        "--head",
-        SHA,
-        "--planner",
-        ".github/scripts/plan-benchmarks",
-        "--plan-file",
-        plan_file,
-        "--paths-file",
-        paths_file,
-        "--output",
-        output,
-        check=True,
-    )
+    provenance, observed = load_plan(path, execution_sha=EXECUTION_SHA)
 
-    provenance, observed = load_plan_receipt(output, execution_sha=EXECUTION_SHA)
     assert observed == entries
     assert provenance.plan_head_sha == SHA
+    assert provenance.planner_digest == DIGEST
 
 
 def test_aggregate_accepts_consistent_empty_plan(tmp_path: Path) -> None:
-    plan = {
-        "benchmark-plan-head-sha": SHA,
-        "benchmark-planner-digest": DIGEST,
-        "benchmark-topology-digest": "",
-        "benchmark-host-validation-matrix": "[]",
-        "run-benchmark-check": "false",
-        "run-benchmark-record-schema": "false",
-        "run-benchmark-host-validation": "false",
-        "run-benchmark-inventory": "false",
-        "run-benchmark-oracle": "false",
-    }
-    receipt = {
-        "receipt_version": "1",
-        "plan_kind": "benchmark",
-        "head_sha": SHA,
-        "plan_digest": _plan_digest(plan),
-        "plan": plan,
-    }
-    receipt["receipt_digest"] = receipt_digest(receipt)
-    path = tmp_path / "plan-receipt.json"
-    path.write_text(json.dumps(receipt), encoding="utf-8")
+    path = _write_plan(tmp_path, _plan_payload((), selected=False))
     lanes = {name: LaneResult(False, "skipped") for name in _lanes()}
 
     validate_aggregate(
         plan_result="success",
-        plan_receipt=path,
+        plan_path=path,
         execution_sha=EXECUTION_SHA,
         lanes=lanes,
         receipt_root=None,
@@ -216,7 +177,7 @@ def test_aggregate_rejects_invalid_host_evidence(tmp_path: Path, failure: str) -
     with pytest.raises(HarborSuiteError):
         validate_aggregate(
             plan_result="success",
-            plan_receipt=plan,
+            plan_path=plan,
             execution_sha=EXECUTION_SHA,
             lanes=_lanes(),
             receipt_root=receipts,
@@ -232,7 +193,7 @@ def test_aggregate_rejects_selected_lane_that_was_skipped(tmp_path: Path) -> Non
     with pytest.raises(HarborSuiteError, match="static expected success"):
         validate_aggregate(
             plan_result="success",
-            plan_receipt=plan,
+            plan_path=plan,
             execution_sha=EXECUTION_SHA,
             lanes=lanes,
             receipt_root=receipts,

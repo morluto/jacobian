@@ -280,9 +280,9 @@ Non-obvious caveats:
   proof-artifact operations.
 - `make test-unit` is the cheap unit lane. `make quick` adds lint; `make check`
   adds lint and typecheck. `make check-all` explicitly reproduces the Lean-free
-  ordinary CI matrix. Use `make test-all-ci` only
+  ordinary CI matrix. Use `make test-full` only
   for an explicit exhaustive local reproduction; it takes this worktree's
-  exhaustive validation lease (`make validation-status`). Default `uv run pytest` does
+  exhaustive validation lock (`make validation-status`). Default `uv run pytest` does
   not collect Lean, storage, process, or MCP; use the matching `make test-*`
   target for those trees. Never run bare `uv run pytest` as a substitute for
   the complete specialist matrix.

@@ -67,9 +67,9 @@ and verifies child-process coverage collection.
 - **Optional or maintained Python providers:** `make test-provider` when those
   trees change. `make check-all` already includes that lane; `check-external`
   does not rerun it. CI owns the full Lean and optional-provider environments.
-- **Exhaustive local reproduction:** `make test-all-ci` is an explicit exception
+- **Exhaustive local reproduction:** `make test-full` is an explicit exception
   path, not a routine gate. It takes this worktree's exhaustive validation
-  lease; `make validation-status` shows whether that lease is held. Before it,
+  lock; `make validation-status` shows whether that lock is held. Before it,
   verify that no other pytest or delegated-agent validation is running on the
   host, and never assign it to a parallel agent sharing the checkout. The
   manually dispatched Python Debug and Lean Debug workflows reproduce one
@@ -152,9 +152,9 @@ Oracle or model.
 config, job-level Compose overlays, adapters, and execution helpers) and the
 unit tests that own them; it deliberately excludes unrelated task-specific
 verifier regressions. `make harbor-check-all` is the explicit full integration
-reproduction and takes the same worktree admission lease as other exhaustive
-local targets. `make harbor-plan` normalizes changed paths once and feeds that
-canonical file to the planner, validator, and receipt; temps live only inside
+reproduction and takes the same worktree validation lock as other exhaustive
+local targets. `make harbor-plan` writes one canonical `plan.json` from the
+normalized changed-path list; temps live only inside
 the recipe. Task `environment/docker-compose.yaml` files are
 executable benchmark input, not job overlays, and remain gated by
 `make harbor-check-task` and `make harbor-oracle-task`. Use

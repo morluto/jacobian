@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.contracts.operations import ProviderAvailability
 from jacobian.graphs.composition import (
-    install_graph_composition_operations,
+    build_graph_composition_operations,
 )
-from jacobian.graphs.installation import GraphInstallation
+from jacobian.graphs.operation_resources import GraphOperationResources
 from jacobian.lean_frontend.statement import install_lean_statement_operations
 from jacobian.polynomial_interval_operations import (
     install_polynomial_interval_operations,
@@ -29,9 +29,9 @@ class CatalogResourceBuilder:
         default_factory=ProviderInventoryLoader
     )
 
-    def bind(self, graph: GraphInstallation) -> None:
+    def bind(self, graph: GraphOperationResources) -> None:
         ctx = self.context
-        graph_adapters, _ = install_graph_composition_operations(
+        graph_adapters = build_graph_composition_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,

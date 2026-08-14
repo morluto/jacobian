@@ -11,7 +11,7 @@ from jacobian.finite_coverage import (
     FiniteCoverageInstallation,
     install_finite_coverage,
 )
-from jacobian.graphs import GraphInstallation, install_graph_operations
+from jacobian.graphs import GraphOperationResources, build_graph_operations
 from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
 from jacobian.universal_algebra_operations import (
     UniversalAlgebraInstallation,
@@ -100,12 +100,12 @@ def open_universal_algebra_services(
 @contextmanager
 def open_graph_core_services(
     root: str | Path,
-) -> Iterator[tuple[DomainTestServices, GraphInstallation]]:
-    """Install core graph construction/search/property operations only."""
+) -> Iterator[tuple[DomainTestServices, GraphOperationResources]]:
+    """Build core graph construction/search/property operations only."""
 
     with open_domain_services(root) as services:
         with atomic_installation(services.core):
-            adapters, installation = install_graph_operations(
+            adapters, graph_resources = build_graph_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
@@ -115,7 +115,7 @@ def open_graph_core_services(
             )
             for adapter in adapters:
                 services.installation.register_operation(adapter)
-        yield services, installation
+        yield services, graph_resources
 
 
 @contextmanager

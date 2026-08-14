@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.component.operations.graph_operations_support import open_graph_services
 
-from jacobian.graphs import GraphInstallation
+from jacobian.graphs import GraphOperationResources
 
 _GRAPH_OPERATION_VERSIONS = {
     "graph.construct.explicit": "1",
@@ -13,11 +13,11 @@ _GRAPH_OPERATION_VERSIONS = {
 }
 
 
-def test_graph_installation_preserves_public_identity_without_checkers(
+def test_graph_resources_preserve_public_identity_without_checkers(
     tmp_path,
 ) -> None:
     with open_graph_services(tmp_path / "state") as services:
-        assert isinstance(services.graph, GraphInstallation)
+        assert isinstance(services.graph, GraphOperationResources)
         assert services.graph.degree_sequence_checker_id is None
         assert services.graph.neighborhood_checker_id is None
 

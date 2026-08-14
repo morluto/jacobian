@@ -79,16 +79,6 @@ _ENUMERATION_BACKEND_BOUNDARY = (
 )
 
 
-@dataclass(frozen=True, slots=True)
-class GraphCompositionInstallation:
-    """Installation record for graph composition and enumeration contracts."""
-
-    semantics_uri: str
-    graph_schema_uri: str
-    composition_result_schema_uri: str
-    enumeration_scope_schema_uri: str
-
-
 @dataclass(frozen=True)
 class GraphCompositionResources:
     """Shared resources for graph composition and enumeration adapters."""
@@ -101,26 +91,20 @@ class GraphCompositionResources:
     enumeration_scope_schema_uri: str
 
 
-def install_graph_composition_operations(
+def build_graph_composition_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
     *,
     semantics_uri: str,
     graph_schema_uri: str,
-) -> tuple[
-    tuple[
-        GraphComposeAdapter,
-        GraphEnumerateNonisomorphicAdapter,
-    ],
-    GraphCompositionInstallation,
-]:
+) -> tuple[GraphComposeAdapter, GraphEnumerateNonisomorphicAdapter]:
     """Register composition and enumeration schemas and return adapters.
 
-    This installer reuses the ``jacobian.simple-undirected-graph`` semantics
-    and graph payload schema already registered by the graph installation.
+    This builder reuses the ``jacobian.simple-undirected-graph`` semantics
+    and graph payload schema already registered in the shared graph resources.
     The caller must pass the existing ``semantics_uri`` and
-    ``graph_schema_uri`` from ``GraphInstallation``.
+    ``graph_schema_uri`` from ``GraphOperationResources``.
     """
 
     composition_result_schema_uri = schemas.register(
@@ -133,12 +117,6 @@ def install_graph_composition_operations(
         version="1",
         schema=model_schema(GraphEnumerationScopeArtifact),
     )
-    installation = GraphCompositionInstallation(
-        semantics_uri=semantics_uri,
-        graph_schema_uri=graph_schema_uri,
-        composition_result_schema_uri=composition_result_schema_uri,
-        enumeration_scope_schema_uri=enumeration_scope_schema_uri,
-    )
     resources = GraphCompositionResources(
         store=store,
         artifacts=artifacts,
@@ -148,11 +126,8 @@ def install_graph_composition_operations(
         enumeration_scope_schema_uri=enumeration_scope_schema_uri,
     )
     return (
-        (
-            GraphComposeAdapter(resources),
-            GraphEnumerateNonisomorphicAdapter(resources),
-        ),
-        installation,
+        GraphComposeAdapter(resources),
+        GraphEnumerateNonisomorphicAdapter(resources),
     )
 
 

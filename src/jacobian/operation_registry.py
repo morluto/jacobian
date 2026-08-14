@@ -274,7 +274,9 @@ class OperationRegistry:
                 self._own,
             )
         elif operation_id in _SELECTED_GRAPH_OPERATIONS:
-            from jacobian.graphs.installation import bind_selected_graph_operation
+            from jacobian.graphs.operation_resources import (
+                bind_selected_graph_operation,
+            )
 
             adapter = bind_selected_graph_operation(
                 operation_id,

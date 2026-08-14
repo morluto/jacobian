@@ -20,8 +20,11 @@ from jacobian.exact_domain_checkers import (
     install_exact_domain_verification,
 )
 from jacobian.finite_coverage import install_finite_coverage
-from jacobian.graphs.installation import GraphInstallation, install_graph_operations
-from jacobian.graphs.isomorphism import install_graph_isomorphism
+from jacobian.graphs.isomorphism import build_graph_isomorphism_operation
+from jacobian.graphs.operation_resources import (
+    GraphOperationResources,
+    build_graph_operations,
+)
 from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
 )
@@ -45,10 +48,10 @@ class CatalogOperationBuilder:
     def _bind_graph_operations(
         self,
         ctx: CatalogBuildContext,
-    ) -> GraphInstallation:
-        """Install retained graph operations."""
+    ) -> GraphOperationResources:
+        """Build retained graph operation descriptors and resources."""
 
-        graph_adapters, graph = install_graph_operations(
+        graph_adapters, graph = build_graph_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
@@ -92,7 +95,7 @@ class CatalogOperationBuilder:
     def bind(
         self,
         polytope: PolytopeService,
-    ) -> GraphInstallation:
+    ) -> GraphOperationResources:
         """Build core catalog entries in explicit dependency order."""
 
         ctx = self.context
@@ -129,7 +132,7 @@ class CatalogOperationBuilder:
         self.bind_domain_verification(exact_groups)
         self._bind_nullstellensatz()
 
-        graph_isomorphism_adapter, _ = install_graph_isomorphism(
+        graph_isomorphism_adapter, _ = build_graph_isomorphism_operation(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,

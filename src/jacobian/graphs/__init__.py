@@ -1,20 +1,19 @@
 """Graph construction, property, and composition operations."""
 
-from jacobian.graphs.composition import (
-    GraphCompositionInstallation,
-    install_graph_composition_operations,
-)
-from jacobian.graphs.installation import GraphInstallation, install_graph_operations
+from jacobian.graphs.composition import build_graph_composition_operations
 from jacobian.graphs.isomorphism import (
-    GraphIsomorphismInstallation,
-    install_graph_isomorphism,
+    GraphIsomorphismResources,
+    build_graph_isomorphism_operation,
+)
+from jacobian.graphs.operation_resources import (
+    GraphOperationResources,
+    build_graph_operations,
 )
 
 __all__ = [
-    "GraphCompositionInstallation",
-    "GraphInstallation",
-    "GraphIsomorphismInstallation",
-    "install_graph_composition_operations",
-    "install_graph_isomorphism",
-    "install_graph_operations",
+    "GraphIsomorphismResources",
+    "GraphOperationResources",
+    "build_graph_composition_operations",
+    "build_graph_isomorphism_operation",
+    "build_graph_operations",
 ]

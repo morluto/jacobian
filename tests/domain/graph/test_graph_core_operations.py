@@ -10,26 +10,26 @@ from tests.support.services import DomainTestServices
 from jacobian.artifacts import ArtifactValidationError
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.graphs import GraphInstallation
+from jacobian.graphs import GraphOperationResources
 
 
 @pytest.fixture
 def graph_core(
     tmp_path: Path,
-) -> Iterator[tuple[DomainTestServices, GraphInstallation]]:
+) -> Iterator[tuple[DomainTestServices, GraphOperationResources]]:
     with open_graph_core_services(tmp_path / "state") as services_and_installation:
         yield services_and_installation
 
 
 def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
-    services, installation = graph_core
+    services, resources = graph_core
     vertices = [f"v{index:03d}" for index in range(256)]
 
     accepted = services.core.artifacts.put(
-        schema_uri=installation.graph_schema_uri,
-        semantics_uri=installation.semantics_uri,
+        schema_uri=resources.graph_schema_uri,
+        semantics_uri=resources.semantics_uri,
         payload={
             "graph_schema_version": "1",
             "vertices": vertices,
@@ -42,8 +42,8 @@ def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
     )
     with pytest.raises(ArtifactValidationError, match="does not match its schema"):
         services.core.artifacts.put(
-            schema_uri=installation.graph_schema_uri,
-            semantics_uri=installation.semantics_uri,
+            schema_uri=resources.graph_schema_uri,
+            semantics_uri=resources.semantics_uri,
             payload={
                 "graph_schema_version": "1",
                 "vertices": [*vertices, "v256"],
@@ -78,26 +78,26 @@ def test_generic_graph_artifacts_use_the_authoritative_bounded_model(
     ],
 )
 def test_generic_graph_artifacts_reject_noncanonical_simple_graphs(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
     payload: dict[str, object],
 ) -> None:
-    services, installation = graph_core
+    services, resources = graph_core
 
     with pytest.raises(ArtifactValidationError, match="does not match its schema"):
         services.core.artifacts.put(
-            schema_uri=installation.graph_schema_uri,
-            semantics_uri=installation.semantics_uri,
+            schema_uri=resources.graph_schema_uri,
+            semantics_uri=resources.semantics_uri,
             payload=payload,
         )
 
 
 def test_graph_consumers_reject_forged_malformed_payloads(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
-    services, installation = graph_core
+    services, resources = graph_core
     forged = services.core.store.put(
-        schema_uri=installation.graph_schema_uri,
-        semantics_uri=installation.semantics_uri,
+        schema_uri=resources.graph_schema_uri,
+        semantics_uri=resources.semantics_uri,
         payload={
             "graph_schema_version": "1",
             "vertices": ["a", "b"],
@@ -118,9 +118,9 @@ def test_graph_consumers_reject_forged_malformed_payloads(
 
 
 def test_explicit_graph_construction_canonicalizes_and_feeds_graph_operations(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
-    services, installation = graph_core
+    services, resources = graph_core
 
     constructed = services.core.operations.invoke(
         OperationRequest(
@@ -141,8 +141,8 @@ def test_explicit_graph_construction_canonicalizes_and_feeds_graph_operations(
     graph_uri = constructed.output["graph_uri"]
     stored = services.core.store.get(graph_uri)
     assert stored.payload == constructed.output["graph"]
-    assert stored.manifest.schema_uri == installation.graph_schema_uri
-    assert stored.manifest.semantics_uri == installation.semantics_uri
+    assert stored.manifest.schema_uri == resources.graph_schema_uri
+    assert stored.manifest.semantics_uri == resources.semantics_uri
     assert stored.manifest.object_digest == constructed.output["graph_object_digest"]
 
     properties = services.core.operations.invoke(
@@ -166,7 +166,7 @@ def test_explicit_graph_construction_canonicalizes_and_feeds_graph_operations(
     ],
 )
 def test_explicit_graph_construction_fails_before_artifact_writes(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
     input_payload: dict[str, object],
 ) -> None:
     services, _installation = graph_core
@@ -185,7 +185,7 @@ def test_explicit_graph_construction_fails_before_artifact_writes(
 
 
 def test_graph_atlas_search_is_bounded_complete_and_replayable(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
     services, _installation = graph_core
 
@@ -222,7 +222,7 @@ def test_graph_atlas_search_is_bounded_complete_and_replayable(
 
 
 def test_graph_atlas_search_reports_no_match_without_a_truth_claim(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
     services, _installation = graph_core
 
@@ -246,7 +246,7 @@ def test_graph_atlas_search_reports_no_match_without_a_truth_claim(
 
 
 def test_graph_operations_return_actionable_parameter_and_artifact_errors(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
     services, _installation = graph_core
 
@@ -280,7 +280,7 @@ def test_graph_operations_return_actionable_parameter_and_artifact_errors(
 
 
 def test_graph_property_batch_materializes_exact_computed_artifact(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
     services, _installation = graph_core
     searched = services.core.operations.invoke(
@@ -377,14 +377,14 @@ def test_graph_property_batch_materializes_exact_computed_artifact(
     [(24, "COMPUTED"), (25, "NOT_COMPUTED")],
 )
 def test_exact_independence_number_stops_at_the_order_boundary(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
     order: int,
     expected_status: str,
 ) -> None:
-    services, installation = graph_core
+    services, resources = graph_core
     graph = services.core.artifacts.put(
-        schema_uri=installation.graph_schema_uri,
-        semantics_uri=installation.semantics_uri,
+        schema_uri=resources.graph_schema_uri,
+        semantics_uri=resources.semantics_uri,
         payload={
             "graph_schema_version": "1",
             "vertices": [f"v{index:02d}" for index in range(order)],
@@ -412,7 +412,7 @@ def test_exact_independence_number_stops_at_the_order_boundary(
 
 
 def test_graph_counterexample_invariant_batch_reproduces_path_five(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
     services, _installation = graph_core
     searched = services.core.operations.invoke(
@@ -465,7 +465,7 @@ def test_graph_counterexample_invariant_batch_reproduces_path_five(
 
 
 def test_graph_invariant_batch_preserves_unsupported_and_not_applicable_results(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
     services, _installation = graph_core
     searched = services.core.operations.invoke(
@@ -538,7 +538,7 @@ def test_graph_invariant_batch_preserves_unsupported_and_not_applicable_results(
 
 
 def test_graph_invariant_registry_is_fixed_and_discoverable(
-    graph_core: tuple[DomainTestServices, GraphInstallation],
+    graph_core: tuple[DomainTestServices, GraphOperationResources],
 ) -> None:
     services, _installation = graph_core
     descriptor = next(

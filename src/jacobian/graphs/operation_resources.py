@@ -1,4 +1,4 @@
-"""Installation and composition for the core graph operations."""
+"""Shared resources and operator-only assembly for graph operations."""
 
 from __future__ import annotations
 
@@ -52,7 +52,9 @@ from jacobian.verification_operations import certificate_verification_adapter
 
 
 @dataclass(frozen=True, slots=True)
-class GraphInstallation:
+class GraphOperationResources:
+    """Schemas, semantics, and checker bindings shared by graph operations."""
+
     semantics_uri: str
     graph_schema_uri: str
     scope_schema_uri: str
@@ -70,7 +72,7 @@ class GraphInstallation:
 def register_graph_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-) -> GraphInstallation:
+) -> GraphOperationResources:
     """Register passive graph contracts without constructing checker manifests."""
 
     semantics_uri = store.register_descriptor(
@@ -149,7 +151,7 @@ def register_graph_resources(
         version="1",
         schema=model_schema(CertificateEnvelope),
     )
-    return GraphInstallation(
+    return GraphOperationResources(
         semantics_uri=semantics_uri,
         graph_schema_uri=graph_schema_uri,
         scope_schema_uri=scope_schema_uri,
@@ -206,9 +208,9 @@ def bind_selected_graph_operation(
         "graph.construct.compose",
         "graph.enumerate.nonisomorphic",
     }:
-        from jacobian.graphs.composition import install_graph_composition_operations
+        from jacobian.graphs.composition import build_graph_composition_operations
 
-        composition_adapters, _installation = install_graph_composition_operations(
+        composition_adapters = build_graph_composition_operations(
             store,
             schemas,
             artifacts,
@@ -288,7 +290,7 @@ def _active_checker_id(
     return binding.checker_id
 
 
-def install_graph_operations(
+def build_graph_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
@@ -296,7 +298,7 @@ def install_graph_operations(
     checkers: CheckerRegistry,
     *,
     authorize_checker: bool,
-) -> tuple[tuple[OperationAdapter[Any], ...], GraphInstallation]:
+) -> tuple[tuple[OperationAdapter[Any], ...], GraphOperationResources]:
     """Register graph artifact contracts and return the bundled adapters."""
 
     resources = register_graph_resources(store, schemas)
@@ -344,7 +346,7 @@ def install_graph_operations(
         ),
         authorize=authorize_checker,
     ).checker_id
-    installation = GraphInstallation(
+    resources = GraphOperationResources(
         semantics_uri=semantics_uri,
         graph_schema_uri=graph_schema_uri,
         scope_schema_uri=scope_schema_uri,
@@ -358,7 +360,7 @@ def install_graph_operations(
         degree_sequence_checker_id=degree_sequence_checker_id,
         neighborhood_checker_id=neighborhood_checker_id,
     )
-    adapters = _graph_operation_adapters(store, artifacts, installation)
+    adapters = _graph_operation_adapters(store, artifacts, resources)
     for adapter in (
         certificate_verification_adapter(
             operation_id="graph.degree_sequence.verify",
@@ -384,45 +386,45 @@ def install_graph_operations(
     ):
         if adapter is not None:
             adapters += (adapter,)
-    return adapters, installation
+    return adapters, resources
 
 
 def _graph_operation_adapters(
     store: ArtifactRepository,
     artifacts: ArtifactService,
-    installation: GraphInstallation,
+    resources: GraphOperationResources,
 ) -> tuple[OperationAdapter[Any], ...]:
     common_resources = GraphArtifactResources(
         store=store,
         artifacts=artifacts,
-        semantics_uri=installation.semantics_uri,
-        graph_schema_uri=installation.graph_schema_uri,
+        semantics_uri=resources.semantics_uri,
+        graph_schema_uri=resources.graph_schema_uri,
     )
     construction_resources = GraphConstructionResources(
         graph=common_resources,
     )
     atlas_resources = GraphAtlasSearchResources(
         graph=common_resources,
-        scope_schema_uri=installation.scope_schema_uri,
+        scope_schema_uri=resources.scope_schema_uri,
     )
     invariant_resources = GraphInvariantResources(
         graph=common_resources,
-        property_schema_uri=installation.property_schema_uri,
-        invariant_result_schema_uri=installation.invariant_result_schema_uri,
+        property_schema_uri=resources.property_schema_uri,
+        invariant_result_schema_uri=resources.invariant_result_schema_uri,
     )
     degree_sequence_resources = GraphDegreeSequenceResources(
         graph=common_resources,
-        degree_sequence_claim_schema_uri=installation.degree_sequence_claim_schema_uri,
-        degree_sequence_result_schema_uri=installation.degree_sequence_result_schema_uri,
-        certificate_schema_uri=installation.certificate_schema_uri,
-        degree_sequence_checker_id=installation.degree_sequence_checker_id,
+        degree_sequence_claim_schema_uri=resources.degree_sequence_claim_schema_uri,
+        degree_sequence_result_schema_uri=resources.degree_sequence_result_schema_uri,
+        certificate_schema_uri=resources.certificate_schema_uri,
+        degree_sequence_checker_id=resources.degree_sequence_checker_id,
     )
     neighborhood_resources = GraphNeighborhoodIndependenceResources(
         graph=common_resources,
-        neighborhood_schema_uri=installation.neighborhood_schema_uri,
-        neighborhood_claim_schema_uri=installation.neighborhood_claim_schema_uri,
-        certificate_schema_uri=installation.certificate_schema_uri,
-        neighborhood_checker_id=installation.neighborhood_checker_id,
+        neighborhood_schema_uri=resources.neighborhood_schema_uri,
+        neighborhood_claim_schema_uri=resources.neighborhood_claim_schema_uri,
+        certificate_schema_uri=resources.certificate_schema_uri,
+        neighborhood_checker_id=resources.neighborhood_checker_id,
     )
     return (
         GraphExplicitConstructionAdapter(construction_resources),

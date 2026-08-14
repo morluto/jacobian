@@ -17,17 +17,20 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.graphs.installation import GraphInstallation, install_graph_operations
 from jacobian.graphs.isomorphism import (
-    GraphIsomorphismInstallation,
-    install_graph_isomorphism,
+    GraphIsomorphismResources,
+    build_graph_isomorphism_operation,
+)
+from jacobian.graphs.operation_resources import (
+    GraphOperationResources,
+    build_graph_operations,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class GraphIsomorphismTestServices(DomainTestServices):
-    graph: GraphInstallation
-    isomorphism: GraphIsomorphismInstallation
+    graph: GraphOperationResources
+    isomorphism: GraphIsomorphismResources
 
 
 @contextmanager
@@ -43,7 +46,7 @@ def _open_graph_isomorphism_services(
     )
     with open_domain_services(root, checker_authority=authority) as services:
         with atomic_installation(services.core):
-            graph_adapters, graph = install_graph_operations(
+            graph_adapters, graph = build_graph_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
@@ -53,7 +56,7 @@ def _open_graph_isomorphism_services(
             )
             for adapter in graph_adapters:
                 services.installation.register_operation(adapter)
-            adapter, isomorphism = install_graph_isomorphism(
+            adapter, isomorphism = build_graph_isomorphism_operation(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,

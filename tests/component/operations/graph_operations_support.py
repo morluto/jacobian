@@ -12,12 +12,15 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.graphs.installation import GraphInstallation, install_graph_operations
+from jacobian.graphs.operation_resources import (
+    GraphOperationResources,
+    build_graph_operations,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class GraphTestServices(DomainTestServices):
-    graph: GraphInstallation
+    graph: GraphOperationResources
 
 
 @contextmanager
@@ -26,7 +29,7 @@ def open_graph_services(
     *,
     authorize_checker: bool = False,
 ) -> Iterator[GraphTestServices]:
-    """Install the production core graph graph with optional checker authority."""
+    """Build the core graph operations with optional checker authority."""
 
     authority = (
         CheckerAuthorityMode.INSTALL_BUNDLED
@@ -35,7 +38,7 @@ def open_graph_services(
     )
     with open_domain_services(root, checker_authority=authority) as services:
         with atomic_installation(services.core):
-            adapters, graph = install_graph_operations(
+            adapters, graph_resources = build_graph_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
@@ -50,5 +53,5 @@ def open_graph_services(
             verification=services.verification,
             polytope=services.polytope,
             installation=services.installation,
-            graph=graph,
+            graph=graph_resources,
         )

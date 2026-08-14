@@ -23,7 +23,8 @@ from jacobian.lean_frontend.service import LeanService
 from jacobian.lean_frontend.statement import install_lean_statement_operations
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
+from jacobian.operation_catalog import OperationCatalog
+from jacobian.providers.lean_runtime import lean_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
@@ -60,14 +61,25 @@ def bind_selected_lean_operation(
 ) -> OperationAdapter[Any] | None:
     """Construct only the Lean service family selected by ``operation_id``."""
 
-    runtime = descriptor.provider_runtime
-    if runtime is None and operation_id in _DECLARATION_OPERATIONS:
-        frontend = catalog.inspect("lean.statement.propose")
-        runtime = frontend.provider_runtime if frontend is not None else None
-    if runtime is None:
-        raise OperationCatalogError(
-            f"Lean provider observation is missing; run `jacobian update`: {operation_id}"
-        )
+    installations = _lean_installations(catalog, store, schemas, checkers)
+    profiles = {
+        environment.value: {
+            "semantics_uri": installation.semantics_uri,
+            "lean_version": installation.lean_version,
+            "lean_commit": installation.lean_commit,
+            "import_name": installation.import_name,
+            "mathlib_commit": installation.mathlib_commit,
+            "allowed_axioms": list(installation.allowed_axioms),
+            "checker_timeout_seconds": installation.checker_timeout_seconds,
+        }
+        for environment, installation in installations.items()
+    }
+    checker_ids = tuple(
+        installation.checker_id
+        for installation in installations.values()
+        if installation.checker_id is not None
+    )
+    runtime = lean_provider_runtime(profiles=profiles, checker_ids=checker_ids)
     if operation_id in _STATEMENT_OPERATIONS:
         statement_adapters, _ = install_lean_statement_operations(
             store,
@@ -87,7 +99,6 @@ def bind_selected_lean_operation(
             operation_id,
         )
 
-    installations = _lean_installations(catalog, store, schemas, checkers)
     if operation_id == "lean.proof_state.inspect":
         return install_lean_proof_state_inspect_only(
             store,
@@ -142,19 +153,10 @@ def _lean_installations(
     schemas: SchemaRegistry,
     checkers: CheckerRegistry,
 ) -> dict[LeanEnvironment, Any]:
-    check_descriptor = catalog.inspect("lean.check")
-    checker_ids = (
-        check_descriptor.provider_runtime.checker_ids
-        if check_descriptor is not None
-        and check_descriptor.provider_runtime is not None
-        else ()
-    )
-    if checker_ids and len(checker_ids) != 2:
-        raise OperationCatalogError(
-            "Lean checker inventory is stale; run `jacobian update`"
-        )
+    binding = catalog.checker_binding("lean.check")
+    checker_ids = () if binding is None else (binding.checker_id,)
     selected = {
-        environment: (str(checker_ids[index]) if checker_ids else None)
+        environment: (checker_ids[0] if index == 0 and checker_ids else None)
         for index, environment in enumerate(
             (LeanEnvironment.CORE, LeanEnvironment.MATHLIB)
         )

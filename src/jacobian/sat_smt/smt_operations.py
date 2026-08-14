@@ -123,14 +123,19 @@ def bind_selected_smt_unsat_proof_checker(
 
     operation_id = "smt.unsat_proof.verify"
     binding = catalog.checker_binding(operation_id)
-    if binding is None or descriptor.provider_runtime is None:
+    if binding is None:
         raise OperationCatalogError(
             f"checker binding is incomplete; run `jacobian update`: {operation_id}"
         )
-    checkers.require_catalog_binding(
+    registration = checkers.require_catalog_binding(
         binding.checker_id,
         implementation_digest=binding.manifest_digest,
     )
+    runtime = registration.implementation.provider_runtime
+    if runtime is None:
+        raise OperationCatalogError(
+            f"checker binding is incomplete; run `jacobian update`: {operation_id}"
+        )
     return SmtUnsatProofVerificationAdapter(
         store=store,
         artifacts=artifacts,
@@ -144,7 +149,7 @@ def bind_selected_smt_unsat_proof_checker(
             ),
             checker_id=binding.checker_id,
         ),
-        runtime=descriptor.provider_runtime,
+        runtime=runtime,
     )
 
 

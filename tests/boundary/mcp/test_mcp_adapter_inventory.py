@@ -188,7 +188,7 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
             }
             assert all(
                 descriptor["provider"] == "built-in"
-                or descriptor["provider_runtime"]["availability"] == "AVAILABLE"
+                and "provider_runtime" not in descriptor
                 for descriptor in catalog["operations"]
             )
             if "lean.check" in operation_ids:
@@ -203,14 +203,7 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 )
                 assert isinstance(lean_result.structured_content, dict)
                 lean_contract = lean_result.structured_content
-                lean_runtime = lean_contract["operation"]["provider_runtime"]
-                assert lean_runtime["install_tier"] == "T3"
-                assert (
-                    lean_runtime["configuration"]["profiles"]["MATHLIB"][
-                        "mathlib_commit"
-                    ]
-                    == "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
-                )
+                assert "provider_runtime" not in lean_contract["operation"]
                 assert "runtime" not in lean_contract
 
     asyncio.run(scenario())

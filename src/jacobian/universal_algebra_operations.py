@@ -190,13 +190,14 @@ def bind_selected_universal_algebra_operation(
     if operation_id == "universal_algebra.evaluate_laws":
         return UniversalAlgebraEvaluateLawsAdapter(resources)
     if operation_id == "universal_algebra.search.countermodel":
-        if descriptor.provider_runtime is None:
-            raise OperationCatalogError(
-                "countermodel provider observation is missing; run `jacobian update`"
-            )
+        from jacobian.provider_runtime import known_provider_runtime
+
         return UniversalAlgebraSearchCountermodelAdapter(
             resources,
-            descriptor.provider_runtime,
+            known_provider_runtime(
+                "jacobian.z3",
+                features=("finite-magma-countermodel-search",),
+            ),
         )
     return certificate_verification_adapter(
         operation_id=operation_id,

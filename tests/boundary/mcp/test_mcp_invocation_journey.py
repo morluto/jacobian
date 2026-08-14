@@ -36,7 +36,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             contract = described.structured_content
             assert contract["operation"]["operation_id"] == "integer.compute.gcd"
             assert contract["operation"]["provider"] == "built-in"
-            assert contract["operation"]["provider_runtime"] is None
+            assert "provider_runtime" not in contract["operation"]
             assert "output_schema" in contract["operation"]
 
             result = await client.call_tool(

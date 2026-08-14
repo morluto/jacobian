@@ -81,9 +81,9 @@ def test_operation_descriptor_does_not_publish_execution_identity() -> None:
     )
 
     assert "provider_runtime" not in descriptor.model_dump(mode="json")
-    assert "provider_runtime" not in OperationDescriptor.model_json_schema()[
-        "properties"
-    ]
+    assert (
+        "provider_runtime" not in OperationDescriptor.model_json_schema()["properties"]
+    )
 
 
 def test_noncompleted_execution_cannot_carry_a_verification_record() -> None:

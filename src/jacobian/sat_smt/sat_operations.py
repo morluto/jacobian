@@ -361,7 +361,7 @@ def bind_selected_sat_verification(
         raise OperationCatalogError(
             f"checker binding is missing; run `jacobian update`: {operation_id}"
         )
-    checkers.require_catalog_binding(
+    registration = checkers.require_catalog_binding(
         binding.checker_id,
         implementation_digest=binding.manifest_digest,
     )
@@ -381,7 +381,8 @@ def bind_selected_sat_verification(
             verification=verification,
             installation=installation,
         )
-    if descriptor.provider_runtime is None:
+    runtime = registration.implementation.provider_runtime
+    if runtime is None:
         raise OperationCatalogError(
             "SAT proof checker provider observation is missing; run `jacobian update`"
         )
@@ -399,7 +400,7 @@ def bind_selected_sat_verification(
         sat=sat,
         verification=verification,
         installation=proof_installation,
-        runtime=descriptor.provider_runtime,
+        runtime=runtime,
     )
 
 

@@ -17,6 +17,19 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def _provide_optional_host_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tool_directory = tmp_path / "deployment-tools"
+    tool_directory.mkdir()
+    for tool_name in ("caddy", "elan"):
+        tool = tool_directory / tool_name
+        tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool_directory}:{os.environ['PATH']}")
+
+
 def _run(
     *arguments: str,
     environment: dict[str, str] | None = None,

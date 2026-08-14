@@ -101,4 +101,25 @@ def test_polynomial_positivity_loads_only_the_selected_path(
                 enclosure_verified.structured_content["output"]["conclusion"] == "TRUE"
             )
 
+            for operation_id in (
+                "polynomial.map.evaluate",
+                "polynomial.map.compute_jacobian",
+                "polynomial.map.keller_condition.verify",
+                "polynomial.map.collision_witness",
+                "polynomial.map.collision.search",
+                "polynomial.map.collision.verify",
+                "polynomial.map.collision_evidence.verify",
+                "polynomial.map.inverse.refute_by_collision",
+                "polynomial.identity.verify",
+                "polynomial.rational_function.identity.verify",
+                "polynomial.map.inverse.candidate_synthesize",
+                "polynomial.map.inverse.verify",
+            ):
+                invalid = await client.call_tool(
+                    "math.run",
+                    {"operation_id": operation_id, "payload": {}},
+                )
+                assert isinstance(invalid.structured_content, dict)
+                assert invalid.structured_content["operation_id"] == operation_id
+
     asyncio.run(scenario())

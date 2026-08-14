@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from dataclasses import replace
+from typing import Any, cast
+
+from pydantic import BaseModel
 
 from jacobian.artifacts import ArtifactService
 from jacobian.checker_installation import CheckerInstaller
@@ -27,6 +31,7 @@ from jacobian.contracts.polynomials import (
     RationalPolynomialMap,
 )
 from jacobian.operation_adapters import OperationAdapter
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.polynomials.collision import (
     PolynomialCollisionAdapter,
     PolynomialCollisionSearchAdapter,
@@ -52,16 +57,11 @@ from jacobian.verification.service import VerificationService
 from jacobian.verification_operations import witness_verification_adapter
 
 
-def install_polynomial_operations(
+def register_polynomial_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-    artifacts: ArtifactService,
-    verification: VerificationService,
-    checkers: CheckerRegistry,
-    *,
-    authorize_checker: bool,
-) -> tuple[tuple[OperationAdapter[Any], ...], PolynomialInstallation]:
-    """Register exact polynomial-map schemas, adapters, and optional checker."""
+) -> PolynomialInstallation:
+    """Register passive polynomial-map contracts without checker installation."""
 
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -134,96 +134,213 @@ def install_polynomial_operations(
             "rational_map_inverses": "unsupported",
         },
     )
-    map_schema_uri = schemas.register(
-        name="jacobian.rational-polynomial-map",
-        version="1",
-        schema=model_schema(RationalPolynomialMap),
+    models: dict[str, tuple[str, type[BaseModel]]] = {
+        "map_schema_uri": ("jacobian.rational-polynomial-map", RationalPolynomialMap),
+        "evaluation_schema_uri": (
+            "jacobian.polynomial-map-evaluation",
+            PolynomialMapEvaluation,
+        ),
+        "jacobian_schema_uri": ("jacobian.polynomial-jacobian", PolynomialJacobian),
+        "claim_schema_uri": (
+            "jacobian.polynomial-map-injectivity-claim",
+            PolynomialInjectivityClaim,
+        ),
+        "jacobian_claim_schema_uri": (
+            "jacobian.polynomial-jacobian-claim",
+            PolynomialJacobianClaim,
+        ),
+        "right_polynomial_schema_uri": (
+            "jacobian.sparse-rational-polynomial-right",
+            RationalPolynomial,
+        ),
+        "left_polynomial_schema_uri": (
+            "jacobian.sparse-rational-polynomial-left",
+            RationalPolynomial,
+        ),
+        "identity_claim_schema_uri": (
+            "jacobian.polynomial-identity-claim",
+            PolynomialIdentityClaim,
+        ),
+        "rational_function_left_schema_uri": (
+            "jacobian.sparse-rational-function-left",
+            RationalFunctionArtifact,
+        ),
+        "rational_function_right_schema_uri": (
+            "jacobian.sparse-rational-function-right",
+            RationalFunctionArtifact,
+        ),
+        "rational_function_identity_claim_schema_uri": (
+            "jacobian.rational-function-identity-claim",
+            RationalFunctionIdentityClaim,
+        ),
+        "keller_claim_schema_uri": (
+            "jacobian.polynomial-map-keller-condition-claim",
+            PolynomialKellerConditionClaim,
+        ),
+        "inverse_collision_claim_schema_uri": (
+            "jacobian.polynomial-map-no-two-sided-inverse-claim",
+            PolynomialNoTwoSidedInverseClaim,
+        ),
+        "inverse_claim_schema_uri": (
+            "jacobian.polynomial-map-inverse-claim",
+            PolynomialMapInverseClaim,
+        ),
+        "inverse_residual_schema_uri": (
+            "jacobian.polynomial-map-composition-residuals",
+            PolynomialMapCompositionResiduals,
+        ),
+        "inverse_synthesis_schema_uri": (
+            "jacobian.polynomial-map-inverse-synthesis",
+            PolynomialMapInverseSynthesisArtifact,
+        ),
+        "witness_schema_uri": ("jacobian.witness-envelope", WitnessEnvelope),
+        "certificate_schema_uri": (
+            "jacobian.certificate-envelope",
+            CertificateEnvelope,
+        ),
+    }
+    schema_uris = {
+        field: schemas.register(name=name, version="1", schema=model_schema(model))
+        for field, (name, model) in models.items()
+    }
+    return PolynomialInstallation(
+        semantics_uri=semantics_uri,
+        identity_semantics_uri=identity_semantics_uri,
+        rational_function_identity_semantics_uri=(
+            rational_function_identity_semantics_uri
+        ),
+        inverse_semantics_uri=inverse_semantics_uri,
+        **schema_uris,
+        collision_checker_id=None,
+        jacobian_checker_id=None,
+        keller_checker_id=None,
+        identity_checker_id=None,
+        rational_function_identity_checker_id=None,
+        inverse_checker_id=None,
+        inverse_collision_checker_id=None,
     )
-    evaluation_schema_uri = schemas.register(
-        name="jacobian.polynomial-map-evaluation",
-        version="1",
-        schema=model_schema(PolynomialMapEvaluation),
+
+
+def bind_selected_polynomial_operation(
+    operation_id: str,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[Any] | None:
+    """Bind one polynomial-map operation from passive resources and catalog state."""
+
+    adapter_types: dict[str, Callable[[PolynomialResources], OperationAdapter[Any]]] = {
+        "polynomial.map.evaluate": PolynomialMapEvaluationAdapter,
+        "polynomial.map.compute_jacobian": PolynomialJacobianAdapter,
+        "polynomial.map.keller_condition.verify": PolynomialKellerConditionVerifyAdapter,
+        "polynomial.map.collision_witness": PolynomialCollisionAdapter,
+        "polynomial.map.collision.search": PolynomialCollisionSearchAdapter,
+        "polynomial.map.collision.verify": PolynomialCollisionVerifyAdapter,
+        "polynomial.map.inverse.refute_by_collision": (
+            PolynomialMapInverseCollisionVerifyAdapter
+        ),
+        "polynomial.identity.verify": PolynomialIdentityAdapter,
+        "polynomial.rational_function.identity.verify": RationalFunctionIdentityAdapter,
+        "polynomial.map.inverse.candidate_synthesize": (
+            PolynomialMapInverseSynthesizeAdapter
+        ),
+        "polynomial.map.inverse.verify": PolynomialMapInverseVerifyAdapter,
+    }
+    if operation_id == "polynomial.map.collision_evidence.verify":
+        checker_id = _catalog_checker_id(
+            catalog,
+            checkers,
+            "polynomial.map.collision_evidence.verify",
+        )
+        return witness_verification_adapter(
+            operation_id=operation_id,
+            title="Verify stored polynomial-map collision evidence",
+            description=(
+                "Independently replay one exact stored collision witness against "
+                "its bound map and injectivity claim."
+            ),
+            checker_id=checker_id,
+            tags=("polynomial", "map", "collision"),
+            verification=verification,
+        )
+    adapter_type = adapter_types.get(operation_id)
+    if adapter_type is None:
+        return None
+    checker_fields: dict[str, str | None] = {}
+    if operation_id in {
+        "polynomial.map.collision_witness",
+        "polynomial.map.collision.search",
+        "polynomial.map.collision.verify",
+    }:
+        checker_fields["collision_checker_id"] = _catalog_checker_id(
+            catalog, checkers, "polynomial.map.collision.verify"
+        )
+    if operation_id == "polynomial.map.compute_jacobian":
+        checker_fields["jacobian_checker_id"] = _catalog_checker_id(
+            catalog, checkers, operation_id
+        )
+    if operation_id == "polynomial.map.keller_condition.verify":
+        checker_fields["keller_checker_id"] = _catalog_checker_id(
+            catalog, checkers, operation_id
+        )
+    if operation_id == "polynomial.identity.verify":
+        checker_fields["identity_checker_id"] = _catalog_checker_id(
+            catalog, checkers, operation_id
+        )
+    if operation_id == "polynomial.rational_function.identity.verify":
+        checker_fields["rational_function_identity_checker_id"] = _catalog_checker_id(
+            catalog, checkers, operation_id
+        )
+    if operation_id == "polynomial.map.inverse.refute_by_collision":
+        checker_fields["inverse_collision_checker_id"] = _catalog_checker_id(
+            catalog, checkers, operation_id
+        )
+    if operation_id == "polynomial.map.inverse.verify":
+        checker_fields["inverse_checker_id"] = _catalog_checker_id(
+            catalog, checkers, operation_id
+        )
+        checker_fields["identity_checker_id"] = _catalog_checker_id(
+            catalog, checkers, "polynomial.identity.verify"
+        )
+    installation = replace(
+        register_polynomial_resources(store, schemas),
+        **cast(dict[str, Any], checker_fields),
     )
-    jacobian_schema_uri = schemas.register(
-        name="jacobian.polynomial-jacobian",
-        version="1",
-        schema=model_schema(PolynomialJacobian),
+    resources = PolynomialResources(store, artifacts, verification, installation)
+    return adapter_type(resources)
+
+
+def _catalog_checker_id(
+    catalog: OperationCatalog,
+    checkers: CheckerRegistry,
+    operation_id: str,
+) -> str:
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
     )
-    claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-map-injectivity-claim",
-        version="1",
-        schema=model_schema(PolynomialInjectivityClaim),
-    )
-    jacobian_claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-jacobian-claim",
-        version="1",
-        schema=model_schema(PolynomialJacobianClaim),
-    )
-    right_polynomial_schema_uri = schemas.register(
-        name="jacobian.sparse-rational-polynomial-right",
-        version="1",
-        schema=model_schema(RationalPolynomial),
-    )
-    left_polynomial_schema_uri = schemas.register(
-        name="jacobian.sparse-rational-polynomial-left",
-        version="1",
-        schema=model_schema(RationalPolynomial),
-    )
-    identity_claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-identity-claim",
-        version="1",
-        schema=model_schema(PolynomialIdentityClaim),
-    )
-    rational_function_left_schema_uri = schemas.register(
-        name="jacobian.sparse-rational-function-left",
-        version="1",
-        schema=model_schema(RationalFunctionArtifact),
-    )
-    rational_function_right_schema_uri = schemas.register(
-        name="jacobian.sparse-rational-function-right",
-        version="1",
-        schema=model_schema(RationalFunctionArtifact),
-    )
-    rational_function_identity_claim_schema_uri = schemas.register(
-        name="jacobian.rational-function-identity-claim",
-        version="1",
-        schema=model_schema(RationalFunctionIdentityClaim),
-    )
-    keller_claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-map-keller-condition-claim",
-        version="1",
-        schema=model_schema(PolynomialKellerConditionClaim),
-    )
-    inverse_collision_claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-map-no-two-sided-inverse-claim",
-        version="1",
-        schema=model_schema(PolynomialNoTwoSidedInverseClaim),
-    )
-    inverse_claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-map-inverse-claim",
-        version="1",
-        schema=model_schema(PolynomialMapInverseClaim),
-    )
-    inverse_residual_schema_uri = schemas.register(
-        name="jacobian.polynomial-map-composition-residuals",
-        version="1",
-        schema=model_schema(PolynomialMapCompositionResiduals),
-    )
-    inverse_synthesis_schema_uri = schemas.register(
-        name="jacobian.polynomial-map-inverse-synthesis",
-        version="1",
-        schema=model_schema(PolynomialMapInverseSynthesisArtifact),
-    )
-    witness_schema_uri = schemas.register(
-        name="jacobian.witness-envelope",
-        version="1",
-        schema=model_schema(WitnessEnvelope),
-    )
-    certificate_schema_uri = schemas.register(
-        name="jacobian.certificate-envelope",
-        version="1",
-        schema=model_schema(CertificateEnvelope),
-    )
+    return binding.checker_id
+
+
+def install_polynomial_operations(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    *,
+    authorize_checker: bool,
+) -> tuple[tuple[OperationAdapter[Any], ...], PolynomialInstallation]:
+    """Register exact polynomial-map schemas, adapters, and optional checker."""
+    contracts = register_polynomial_resources(store, schemas)
     collision_checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -233,9 +350,9 @@ def install_polynomial_operations(
                 evidence_kind=EvidenceKind.WITNESS,
                 format_id="polynomial.map_collision",
                 format_version="1",
-                claim_schema_uris=(claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(map_schema_uri,),
+                claim_schema_uris=(contracts.claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.map_schema_uri,),
                 reason="bundled polynomial-map reference checker",
             ),
             authorize=authorize_checker,
@@ -251,9 +368,9 @@ def install_polynomial_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.jacobian_replay",
                 format_version="1",
-                claim_schema_uris=(jacobian_claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(jacobian_schema_uri,),
+                claim_schema_uris=(contracts.jacobian_claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.jacobian_schema_uri,),
                 reason="bundled independent sparse-polynomial Jacobian checker",
             ),
             authorize=authorize_checker,
@@ -269,9 +386,9 @@ def install_polynomial_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.map.keller_condition.replay",
                 format_version="1",
-                claim_schema_uris=(keller_claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(jacobian_schema_uri,),
+                claim_schema_uris=(contracts.keller_claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.jacobian_schema_uri,),
                 reason=(
                     "bundled independent exact checker for a nonzero constant "
                     "polynomial-map Jacobian determinant"
@@ -290,9 +407,9 @@ def install_polynomial_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.identity_replay",
                 format_version="1",
-                claim_schema_uris=(identity_claim_schema_uri,),
-                semantics_uris=(identity_semantics_uri,),
-                candidate_schema_uris=(right_polynomial_schema_uri,),
+                claim_schema_uris=(contracts.identity_claim_schema_uri,),
+                semantics_uris=(contracts.identity_semantics_uri,),
+                candidate_schema_uris=(contracts.right_polynomial_schema_uri,),
                 reason="bundled independent sparse-polynomial identity checker",
             ),
             authorize=authorize_checker,
@@ -311,9 +428,11 @@ def install_polynomial_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.rational_function.identity_replay",
                 format_version="1",
-                claim_schema_uris=(rational_function_identity_claim_schema_uri,),
-                semantics_uris=(rational_function_identity_semantics_uri,),
-                candidate_schema_uris=(rational_function_right_schema_uri,),
+                claim_schema_uris=(
+                    contracts.rational_function_identity_claim_schema_uri,
+                ),
+                semantics_uris=(contracts.rational_function_identity_semantics_uri,),
+                candidate_schema_uris=(contracts.rational_function_right_schema_uri,),
                 reason="bundled independent sparse cross-multiplication checker",
             ),
             authorize=authorize_checker,
@@ -329,9 +448,9 @@ def install_polynomial_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.map.inverse.two_sided_replay",
                 format_version="1",
-                claim_schema_uris=(inverse_claim_schema_uri,),
-                semantics_uris=(inverse_semantics_uri,),
-                candidate_schema_uris=(inverse_residual_schema_uri,),
+                claim_schema_uris=(contracts.inverse_claim_schema_uri,),
+                semantics_uris=(contracts.inverse_semantics_uri,),
+                candidate_schema_uris=(contracts.inverse_residual_schema_uri,),
                 reason=("bundled independent two-sided sparse-polynomial map checker"),
             ),
             authorize=authorize_checker,
@@ -349,9 +468,9 @@ def install_polynomial_operations(
                 evidence_kind=EvidenceKind.WITNESS,
                 format_id="polynomial.map_collision_refutes_inverse",
                 format_version="1",
-                claim_schema_uris=(inverse_collision_claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(map_schema_uri,),
+                claim_schema_uris=(contracts.inverse_collision_claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.map_schema_uri,),
                 reason=(
                     "bundled independent exact collision replay whose logical "
                     "consequence is absence of a two-sided polynomial inverse"
@@ -361,33 +480,8 @@ def install_polynomial_operations(
         )
         .checker_id
     )
-    installation = PolynomialInstallation(
-        semantics_uri=semantics_uri,
-        identity_semantics_uri=identity_semantics_uri,
-        rational_function_identity_semantics_uri=(
-            rational_function_identity_semantics_uri
-        ),
-        inverse_semantics_uri=inverse_semantics_uri,
-        map_schema_uri=map_schema_uri,
-        evaluation_schema_uri=evaluation_schema_uri,
-        jacobian_schema_uri=jacobian_schema_uri,
-        claim_schema_uri=claim_schema_uri,
-        jacobian_claim_schema_uri=jacobian_claim_schema_uri,
-        right_polynomial_schema_uri=right_polynomial_schema_uri,
-        left_polynomial_schema_uri=left_polynomial_schema_uri,
-        identity_claim_schema_uri=identity_claim_schema_uri,
-        rational_function_left_schema_uri=rational_function_left_schema_uri,
-        rational_function_right_schema_uri=rational_function_right_schema_uri,
-        rational_function_identity_claim_schema_uri=(
-            rational_function_identity_claim_schema_uri
-        ),
-        keller_claim_schema_uri=keller_claim_schema_uri,
-        inverse_collision_claim_schema_uri=inverse_collision_claim_schema_uri,
-        inverse_claim_schema_uri=inverse_claim_schema_uri,
-        inverse_residual_schema_uri=inverse_residual_schema_uri,
-        inverse_synthesis_schema_uri=inverse_synthesis_schema_uri,
-        witness_schema_uri=witness_schema_uri,
-        certificate_schema_uri=certificate_schema_uri,
+    installation = replace(
+        contracts,
         collision_checker_id=collision_checker_id,
         jacobian_checker_id=jacobian_checker_id,
         keller_checker_id=keller_checker_id,

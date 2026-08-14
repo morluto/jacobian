@@ -46,6 +46,18 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.interval.positivity.verify",
         "polynomial.interval.enclose",
         "polynomial.interval.enclosure.verify",
+        "polynomial.map.evaluate",
+        "polynomial.map.compute_jacobian",
+        "polynomial.map.keller_condition.verify",
+        "polynomial.map.collision_witness",
+        "polynomial.map.collision.search",
+        "polynomial.map.collision.verify",
+        "polynomial.map.collision_evidence.verify",
+        "polynomial.map.inverse.refute_by_collision",
+        "polynomial.identity.verify",
+        "polynomial.rational_function.identity.verify",
+        "polynomial.map.inverse.candidate_synthesize",
+        "polynomial.map.inverse.verify",
     }
 )
 _SELECTED_DIRECT_OPERATIONS = frozenset(
@@ -324,7 +336,19 @@ class OperationRegistry:
                 self.checkers,
                 self.catalog,
             )
-        return None
+        from jacobian.polynomials.installation import (
+            bind_selected_polynomial_operation,
+        )
+
+        return bind_selected_polynomial_operation(
+            operation_id,
+            self.binder.store,
+            self.binder.schemas,
+            self.binder.artifacts,
+            self.verification,
+            self.checkers,
+            self.catalog,
+        )
 
     def _bind_selected_sat_operation(
         self,

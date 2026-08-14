@@ -254,7 +254,7 @@ def test_state_preflight_rejects_duplicate_quota_without_schema_constraints(
             CREATE TABLE blob_quota (
                 id INTEGER,
                 size_bytes INTEGER NOT NULL,
-                reconciliation_required INTEGER NOT NULL
+                reconciliation_required INTEGER NOT NULL DEFAULT 1
             )
             """
         )
@@ -296,7 +296,7 @@ def test_state_preflight_does_not_accept_check_text_in_a_default_literal(
             CREATE TABLE blob_quota (
                 id INTEGER PRIMARY KEY,
                 size_bytes INTEGER NOT NULL,
-                reconciliation_required INTEGER NOT NULL,
+                reconciliation_required INTEGER NOT NULL DEFAULT 1,
                 decoy TEXT DEFAULT 'CHECK (id = 0) CHECK (size_bytes >= 0)
                     CHECK (reconciliation_required IN (0, 1))'
             )
@@ -412,6 +412,56 @@ def test_state_preflight_rejects_a_missing_catalog_foreign_key(
     assert report["blocking"] is True
     assert report["diagnostic"] == (
         "tenant database is missing required schema constraints"
+    )
+
+
+def test_state_preflight_rejects_a_missing_artifact_timestamp_default(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "column-damaged-artifact-default"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute("DROP TABLE artifact_parents")
+        connection.execute("ALTER TABLE artifacts RENAME TO damaged_artifacts")
+        connection.execute(
+            """
+            CREATE TABLE artifacts (
+                artifact_uri TEXT PRIMARY KEY,
+                manifest_digest TEXT NOT NULL UNIQUE,
+                object_digest TEXT NOT NULL,
+                payload_digest TEXT NOT NULL,
+                schema_uri TEXT NOT NULL,
+                semantics_uri TEXT NOT NULL,
+                canonicalizer_digest TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                committed_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute("DROP TABLE damaged_artifacts")
+        connection.execute(
+            """
+            CREATE TABLE artifact_parents (
+                artifact_uri TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                parent_uri TEXT NOT NULL,
+                PRIMARY KEY (artifact_uri, position),
+                FOREIGN KEY (artifact_uri)
+                    REFERENCES artifacts(artifact_uri)
+                    ON DELETE RESTRICT
+            )
+            """
+        )
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "tenant database has incompatible required column definitions"
     )
 
 

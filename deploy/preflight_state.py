@@ -39,66 +39,89 @@ from jacobian.storage.models import StorageLimits
 
 _MAX_BLOB_BYTES = StorageLimits().max_artifact_bytes
 _MAX_TOTAL_BLOB_BYTES = StorageLimits().max_total_blob_bytes
+_INTEGER_PRIMARY = ("INTEGER", 0, None)
+_TEXT_PRIMARY = ("TEXT", 0, None)
+_INTEGER_REQUIRED = ("INTEGER", 1, None)
+_TEXT_REQUIRED = ("TEXT", 1, None)
+_BLOB_REQUIRED = ("BLOB", 1, None)
+_TIMESTAMPED_TEXT = ("TEXT", 1, "current_timestamp")
 _COMMON_STATE_SCHEMA = {
-    "jacobian_schema_migrations": frozenset(
-        {"revision", "name", "checksum", "applied_at"}
-    ),
-    "jacobian_state_format": frozenset({"id", "format_revision", "recorded_at"}),
-    "artifacts": frozenset(
-        {
-            "artifact_uri",
-            "manifest_digest",
-            "object_digest",
-            "payload_digest",
-            "schema_uri",
-            "semantics_uri",
-            "canonicalizer_digest",
-            "summary",
-            "committed_at",
-        }
-    ),
-    "artifact_parents": frozenset({"artifact_uri", "position", "parent_uri"}),
-    "blob_quota": frozenset({"id", "size_bytes", "reconciliation_required"}),
-    "checkers": frozenset(
-        {"checker_id", "registration_json", "authorized", "implementation_digest"}
-    ),
-    "checker_audit": frozenset(
-        {"sequence", "checker_id", "action", "reason", "recorded_at"}
-    ),
+    "jacobian_schema_migrations": {
+        "revision": _INTEGER_PRIMARY,
+        "name": _TEXT_REQUIRED,
+        "checksum": _TEXT_REQUIRED,
+        "applied_at": _TIMESTAMPED_TEXT,
+    },
+    "jacobian_state_format": {
+        "id": _INTEGER_PRIMARY,
+        "format_revision": _INTEGER_REQUIRED,
+        "recorded_at": _TIMESTAMPED_TEXT,
+    },
+    "artifacts": {
+        "artifact_uri": _TEXT_PRIMARY,
+        "manifest_digest": _TEXT_REQUIRED,
+        "object_digest": _TEXT_REQUIRED,
+        "payload_digest": _TEXT_REQUIRED,
+        "schema_uri": _TEXT_REQUIRED,
+        "semantics_uri": _TEXT_REQUIRED,
+        "canonicalizer_digest": _TEXT_REQUIRED,
+        "summary": _TEXT_REQUIRED,
+        "committed_at": _TIMESTAMPED_TEXT,
+    },
+    "artifact_parents": {
+        "artifact_uri": _TEXT_REQUIRED,
+        "position": _INTEGER_REQUIRED,
+        "parent_uri": _TEXT_REQUIRED,
+    },
+    "blob_quota": {
+        "id": _INTEGER_PRIMARY,
+        "size_bytes": _INTEGER_REQUIRED,
+        "reconciliation_required": ("INTEGER", 1, "1"),
+    },
+    "checkers": {
+        "checker_id": _TEXT_PRIMARY,
+        "registration_json": _BLOB_REQUIRED,
+        "authorized": _INTEGER_REQUIRED,
+        "implementation_digest": _TEXT_REQUIRED,
+    },
+    "checker_audit": {
+        "sequence": _INTEGER_PRIMARY,
+        "checker_id": _TEXT_REQUIRED,
+        "action": _TEXT_REQUIRED,
+        "reason": _TEXT_REQUIRED,
+        "recorded_at": _TIMESTAMPED_TEXT,
+    },
 }
 _CURRENT_STATE_SCHEMA = {
-    "operation_catalog_snapshots": frozenset(
-        {
-            "revision",
-            "package_version",
-            "format_version",
-            "checker_binding_digest",
-            "diagnostics_json",
-            "created_at",
-        }
-    ),
-    "operation_catalog_entries": frozenset(
-        {
-            "snapshot_revision",
-            "operation_id",
-            "search_card_json",
-            "descriptor_json",
-            "input_schema_json",
-            "output_schema_json",
-            "declaration_module",
-            "declaration_digest",
-        }
-    ),
-    "active_operation_catalog": frozenset({"id", "snapshot_revision"}),
-    "operation_checker_bindings": frozenset(
-        {
-            "snapshot_revision",
-            "operation_id",
-            "binding_index",
-            "checker_id",
-            "manifest_digest",
-        }
-    ),
+    "operation_catalog_snapshots": {
+        "revision": _INTEGER_PRIMARY,
+        "package_version": _TEXT_REQUIRED,
+        "format_version": _INTEGER_REQUIRED,
+        "checker_binding_digest": _TEXT_REQUIRED,
+        "diagnostics_json": _BLOB_REQUIRED,
+        "created_at": _TIMESTAMPED_TEXT,
+    },
+    "operation_catalog_entries": {
+        "snapshot_revision": _INTEGER_REQUIRED,
+        "operation_id": _TEXT_REQUIRED,
+        "search_card_json": _BLOB_REQUIRED,
+        "descriptor_json": _BLOB_REQUIRED,
+        "input_schema_json": _BLOB_REQUIRED,
+        "output_schema_json": _BLOB_REQUIRED,
+        "declaration_module": _TEXT_REQUIRED,
+        "declaration_digest": _TEXT_REQUIRED,
+    },
+    "active_operation_catalog": {
+        "id": _INTEGER_PRIMARY,
+        "snapshot_revision": _INTEGER_REQUIRED,
+    },
+    "operation_checker_bindings": {
+        "snapshot_revision": _INTEGER_REQUIRED,
+        "operation_id": _TEXT_REQUIRED,
+        "binding_index": _INTEGER_REQUIRED,
+        "checker_id": _TEXT_REQUIRED,
+        "manifest_digest": _TEXT_REQUIRED,
+    },
 }
 _COMMON_PRIMARY_KEYS = {
     "jacobian_schema_migrations": ("revision",),
@@ -514,6 +537,37 @@ def _table_check_expressions(
     return frozenset(expressions)
 
 
+def _column_definition(column: sqlite3.Row) -> tuple[str, int, str | None]:
+    declared_type = " ".join(str(column["type"]).split()).upper()
+    default = column["dflt_value"]
+    normalized_default = (
+        None if default is None else "".join(str(default).split()).casefold()
+    )
+    return declared_type, int(column["notnull"]), normalized_default
+
+
+def _schema_column_diagnostic(
+    connection: sqlite3.Connection,
+    required_schema: dict[str, dict[str, tuple[str, int, str | None]]],
+) -> str | None:
+    for table, required_columns in required_schema.items():
+        actual_columns = {
+            str(column["name"]): _column_definition(column)
+            for column in connection.execute(
+                'SELECT name, type, "notnull", dflt_value FROM pragma_table_info(?)',
+                (table,),
+            )
+        }
+        if not required_columns.keys() <= actual_columns.keys():
+            return "tenant database is missing required schema"
+        if any(
+            actual_columns[name] != definition
+            for name, definition in required_columns.items()
+        ):
+            return "tenant database has incompatible required column definitions"
+    return None
+
+
 def _schema_constraint_diagnostic(
     connection: sqlite3.Connection, *, current: bool
 ) -> str | None:
@@ -567,13 +621,9 @@ def _schema_diagnostic(
     current = persisted_revision >= CURRENT_STATE_FORMAT_REVISION
     if current:
         required_schema.update(_CURRENT_STATE_SCHEMA)
-    for table, required_columns in required_schema.items():
-        actual_columns = {
-            str(column["name"])
-            for column in connection.execute(f'PRAGMA table_info("{table}")')
-        }
-        if not required_columns.issubset(actual_columns):
-            return "tenant database is missing required schema"
+    column_diagnostic = _schema_column_diagnostic(connection, required_schema)
+    if column_diagnostic is not None:
+        return column_diagnostic
 
     constraint_diagnostic = _schema_constraint_diagnostic(connection, current=current)
     if constraint_diagnostic is not None:

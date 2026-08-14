@@ -9,11 +9,10 @@ working beyond a small local change.
 
 ## What we are building
 
-Jacobian gives agents a reliable computational vocabulary for higher
-mathematics. An agent can discover and compose small typed operations while it
-investigates conjectures, builds examples, calculates invariants, and checks
-bounded mathematical claims. Jacobian supplies the mathematical primitives; the
-agent remains responsible for the proof strategy, decomposition, and decision
+Jacobian gives agents atomic, composable tools for higher mathematics:
+discovering, running, and combining typed computations to investigate
+conjectures, build examples, calculate invariants, and check bounded claims.
+Jacobian supplies primitives; the agent owns strategy, decomposition, and when
 to stop.
 
 It is a **stateless MCP server for atomic, composable mathematics** with two

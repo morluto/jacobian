@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from jacobian.checker_identity import batch_checker_manifest_measurement
 from jacobian.contracts.operations import ProviderAvailability
-from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.polynomial_nullstellensatz.core import (
     install_nullstellensatz_core,
 )
@@ -15,22 +14,20 @@ from jacobian.domains.polynomial_nullstellensatz.singular import (
 )
 from jacobian.exact_domain_checkers import (
     ExactDomainCheckerInstallation,
+    ExactOperationGroup,
     install_exact_domain_verification,
 )
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
-from jacobian.operation_binding import BoundDomainOperations
 from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
 from jacobian.polynomials import install_polynomial_capabilities
 from jacobian.polytope_operations import PolytopeSeparationAdapter
-from jacobian.portfolio.builtin import build_builtin_portfolio
+from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.portfolio.context import PortfolioContext
-from jacobian.portfolio.domain_binding import DomainBundleBinder
-from jacobian.portfolio.model import PortfolioPlan
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.services import RuntimeServices
@@ -68,8 +65,8 @@ class CoreOperationBinder:
 
         This family has an artifact-producing core and an optional Singular
         producer that depends on that core. It is deliberately not represented
-        as a generic portfolio callback: ordinary portfolio plans contain only
-        :class:`DomainBundle` declarations.
+        as a generic portfolio callback: ordinary mathematical operations come
+        from the fixed built-in module inventory.
         """
 
         ctx = self.context
@@ -114,9 +111,22 @@ class CoreOperationBinder:
 
         graph = self._bind_graph_operations(ctx)
 
-        portfolio = build_builtin_portfolio()
-        bundle_result = DomainBundleBinder(ctx).bind(portfolio)
-        self.bind_domain_verification(bundle_result, portfolio)
+        exact_groups = {}
+        for (
+            module_name,
+            operations,
+            checker_declarations,
+        ) in load_builtin_operation_modules():
+            bound = ctx.binder.bind(operations)
+            for adapter in bound.adapters:
+                ctx.register_operation(adapter)
+            if checker_declarations:
+                exact_groups[module_name] = (
+                    operations,
+                    bound,
+                    checker_declarations,
+                )
+        self.bind_domain_verification(exact_groups)
         self._bind_nullstellensatz()
 
         graph_isomorphism_adapter, _ = install_graph_isomorphism(
@@ -175,18 +185,10 @@ class CoreOperationBinder:
 
     def bind_domain_verification(
         self,
-        bundles: dict[str, BoundDomainOperations],
-        plan: PortfolioPlan,
+        operation_groups: dict[str, ExactOperationGroup],
     ) -> ExactDomainCheckerInstallation | None:
         ctx = self.context
-        exact_bundles = {
-            bundle.domain_id: (bundle, bundles[bundle.domain_id])
-            for bundle in plan.components
-            if isinstance(bundle, DomainBundle)
-            and bundle.checker_declarations
-            and bundle.domain_id in bundles
-        }
-        if not exact_bundles:
+        if not operation_groups:
             return None
         # Batch identity material across the complete declaration set while the
         # exact-domain installer resolves both legacy and declaration-owned
@@ -199,7 +201,7 @@ class CoreOperationBinder:
                 ctx.values,
                 ctx.verification,
                 ctx.checkers,
-                bundles=exact_bundles,
+                bundles=operation_groups,
                 authorize=ctx.authorizes_bundled_checkers,
             )
         for adapter in adapters:

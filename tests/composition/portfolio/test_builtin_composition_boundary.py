@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from jacobian.portfolio.builtin import BUILTIN_DOMAIN_BUNDLE_FACTORIES
+from jacobian.portfolio.builtin import BUILTIN_OPERATION_MODULES
 
 ROOT = Path(__file__).parents[3]
 SOURCE = ROOT / "src" / "jacobian"
@@ -22,13 +22,13 @@ def _imports(path: Path) -> tuple[str, ...]:
     return tuple(modules)
 
 
-def test_only_explicit_builtin_composition_imports_every_domain_factory() -> None:
-    factories = BUILTIN_DOMAIN_BUNDLE_FACTORIES
-    assert factories, "expected explicit builtin domain factories"
-    assert len(factories) == len(set(factories)), "duplicate domain factories"
+def test_builtin_inventory_is_explicit_without_importing_domain_modules() -> None:
+    modules = BUILTIN_OPERATION_MODULES
+    assert modules, "expected explicit built-in operation modules"
+    assert len(modules) == len(set(modules)), "duplicate operation modules"
+    assert all(module.startswith("jacobian.domains.") for module, _factory in modules)
     central_installers = (
         SOURCE / "portfolio" / "assembler.py",
-        SOURCE / "portfolio" / "domain_binding.py",
         SOURCE / "portfolio" / "foundation_binding.py",
     )
     assert all(

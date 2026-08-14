@@ -1,7 +1,5 @@
 """Installation bundle for exact rational polynomial operations."""
 
-from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
 from jacobian.domains.polynomial.elementary import (
     INTEGER_POLYNOMIAL_OPERATIONS,
@@ -15,61 +13,21 @@ from jacobian.domains.polynomial.jacobian_syzygy import (
     GRADED_JACOBIAN_SYZYGY_OPERATION,
     JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
 )
-from jacobian.operations import DomainDiagnostics, DomainSemantics
+from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_polynomial_bundle() -> DomainBundle:
+def build_polynomial_bundle() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
-    return DomainBundle(
-        domain_id="polynomial",
-        schema_namespace="jacobian.polynomial",
-        semantics=DomainSemantics(
-            name="jacobian.sparse-rational-polynomial-operations",
-            version="1",
-            definition={
-                "coefficient_field": "QQ",
-                "wire_term_order": "descending lexicographic",
-                "zero_terms": "omitted",
-                "gcd_normalization": "monic with an exact Bezout identity",
-                "resultant": "Sylvester determinant in the named variable",
-                "discriminant": (
-                    "standard univariate convention: linear is 1; constant and zero are 0"
-                ),
-                "square_free_normalization": "separate coefficient and monic factors",
-                "factorization": (
-                    "univariate content and monic irreducible factors over QQ; "
-                    "irreducibility is computed, not independently certified"
-                ),
-                "integer_polynomials": (
-                    "dense canonical descending-degree coefficient strings over ZZ"
-                ),
-                "elementary_rational_polynomials": (
-                    "sparse descending-lexicographic terms over QQ"
-                ),
-                "graded_jacobian_syzygies": (
-                    "three-variable homogeneous coefficient maps use descending "
-                    "lexicographic monomial bases and bounded exact rank search"
-                ),
-            },
-        ),
-        operations=(
-            *POLYNOMIAL_INVARIANT_OPERATIONS,
-            POLYNOMIAL_GROEBNER_OPERATION,
-            GRADED_JACOBIAN_SYZYGY_OPERATION,
-            JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
-            *INTEGER_POLYNOMIAL_OPERATIONS,
-            *RATIONAL_POLYNOMIAL_OPERATIONS,
-        ),
-        diagnostics=DomainDiagnostics(
-            invalid_request=OperationDiagnostic(
-                code="INVALID_POLYNOMIAL_REQUEST",
-                stage="polynomial_input_validation",
-                message="Input does not satisfy the bounded rational-polynomial contract.",
-                hint="Use canonical sparse QQ polynomials and inspect the operation limits.",
-            )
-        ),
-        checker_declarations=POLYNOMIAL_EXACT_REPLAY_CHECKERS,
+    return (
+        *POLYNOMIAL_INVARIANT_OPERATIONS,
+        POLYNOMIAL_GROEBNER_OPERATION,
+        GRADED_JACOBIAN_SYZYGY_OPERATION,
+        JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
+        *INTEGER_POLYNOMIAL_OPERATIONS,
+        *RATIONAL_POLYNOMIAL_OPERATIONS,
     )
 
 
 __all__ = ["build_polynomial_bundle"]
+
+CHECKER_DECLARATIONS = POLYNOMIAL_EXACT_REPLAY_CHECKERS

@@ -5,37 +5,25 @@ from jacobian.domains.optimization import build_rational_optimization_bundle
 from jacobian.domains.probability import build_finite_probability_bundle
 
 
-def test_subject_bundles_preserve_wire_contracts() -> None:
-    assert {
-        bundle.domain_id: (
-            bundle.schema_namespace,
-            tuple(operation.operation_id for operation in bundle.operations),
-        )
-        for bundle in (
+def test_subject_operation_groups_preserve_wire_contracts() -> None:
+    assert tuple(
+        tuple(operation.operation_id for operation in operations)
+        for operations in (
             build_real_analysis_bundle(),
             build_finite_probability_bundle(),
             build_rational_optimization_bundle(),
         )
-    } == {
-        "analysis": (
-            "jacobian.validated-analysis",
-            ("analysis.real_function.point_enclosure.compute",),
+    ) == (
+        ("analysis.real_function.point_enclosure.compute",),
+        (
+            "probability.joint.mutual_information.compute",
+            "probability.finite_distribution.raw_moment.compute",
+            "probability.finite_distribution.event_probability.compute",
+            "probability.finite_distribution.condition.compute",
+            "probability.finite_distribution.pushforward.compute",
+            "probability.finite_distribution.convolution.compute",
+            "probability.gaussian_polynomial.moment.compute",
+            "probability.graph_reliability.connection_probability.compute",
         ),
-        "probability": (
-            "jacobian.validated-analysis",
-            (
-                "probability.joint.mutual_information.compute",
-                "probability.finite_distribution.raw_moment.compute",
-                "probability.finite_distribution.event_probability.compute",
-                "probability.finite_distribution.condition.compute",
-                "probability.finite_distribution.pushforward.compute",
-                "probability.finite_distribution.convolution.compute",
-                "probability.gaussian_polynomial.moment.compute",
-                "probability.graph_reliability.connection_probability.compute",
-            ),
-        ),
-        "optimization": (
-            "jacobian.validated-analysis",
-            ("optimization.linear.rational_optimum.compute",),
-        ),
-    }
+        ("optimization.linear.rational_optimum.compute",),
+    )

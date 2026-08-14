@@ -6,14 +6,12 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.contracts.operations import OperationDiagnostic, OperationRequest
+from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ContractModel, ExecutionStatus
-from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_ports import InputPort, OutputPort
-from jacobian.operations import DomainDiagnostics, DomainSemantics
 
 
 class _SourceRequest(ContractModel):
@@ -80,29 +78,13 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
             ),
         ),
     )
-    bundle = DomainBundle(
-        domain_id="typed-identity",
-        schema_namespace="jacobian.typed-identity",
-        semantics=DomainSemantics(
-            name="jacobian.typed-identity",
-            version="1",
-            definition={"description": "typed identity regression semantics"},
-        ),
-        operations=(producer, consumer),
-        diagnostics=DomainDiagnostics(
-            invalid_request=OperationDiagnostic(
-                code="INVALID_TYPED_IDENTITY_REQUEST",
-                stage="typed_identity_input_validation",
-                message="Input does not satisfy the typed identity contract.",
-            )
-        ),
-    )
+    operations = (producer, consumer)
     installation = OperationBinder(
         typed_value_services.core.store,
         typed_value_services.core.schemas,
         typed_value_services.core.artifacts,
         typed_value_services.core.values,
-    ).bind(bundle)
+    ).bind(operations)
     for adapter in installation.adapters:
         typed_value_services.core.operations.register(adapter)
 

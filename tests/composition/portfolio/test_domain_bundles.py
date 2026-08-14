@@ -1,4 +1,4 @@
-"""Portfolio-level tests for the DomainBundle architecture."""
+"""Composition tests for explicit mathematical operation groups."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from jacobian.operation_service import OperationService
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
-ALL_BUNDLES = (
+ALL_OPERATION_GROUPS = (
     build_arithmetic_bundle(),
     build_combinatorics_bundle(),
     build_finite_set_bundle(),
@@ -32,40 +32,33 @@ ALL_BUNDLES = (
 
 def _all_operation_ids() -> set[str]:
     ids: set[str] = set()
-    for bundle in ALL_BUNDLES:
-        for operation in bundle.operations:
+    for operations in ALL_OPERATION_GROUPS:
+        for operation in operations:
             ids.add(operation.operation_id)
     return ids
 
 
-def test_installed_bundles_expose_operations() -> None:
+def test_declared_groups_expose_operations() -> None:
     actual = _all_operation_ids()
-    assert actual, "expected at least one DomainBundle operation"
-    assert len(actual) == sum(len(bundle.operations) for bundle in ALL_BUNDLES)
+    assert actual, "expected at least one declared operation"
+    assert len(actual) == sum(len(operations) for operations in ALL_OPERATION_GROUPS)
 
 
 def test_unique_ids_within_each_bundle() -> None:
-    for bundle in ALL_BUNDLES:
-        ids = [op.operation_id for op in bundle.operations]
-        assert len(ids) == len(set(ids)), (
-            f"{bundle.domain_id}: duplicates {[i for i in ids if ids.count(i) > 1]}"
-        )
+    for operations in ALL_OPERATION_GROUPS:
+        ids = [op.operation_id for op in operations]
+        assert len(ids) == len(set(ids)), f"duplicates: {ids}"
 
 
 def test_no_id_in_two_bundles() -> None:
     seen: dict[str, str] = {}
-    for bundle in ALL_BUNDLES:
-        for operation in bundle.operations:
+    for group_index, operations in enumerate(ALL_OPERATION_GROUPS):
+        for operation in operations:
             cap_id = operation.operation_id
             assert cap_id not in seen, (
-                f"{cap_id!r} in both {seen[cap_id]!r} and {bundle.domain_id!r}"
+                f"{cap_id!r} in both {seen[cap_id]!r} and group {group_index!r}"
             )
-            seen[cap_id] = bundle.domain_id
-
-
-def test_unique_domain_ids() -> None:
-    domain_ids = [b.domain_id for b in ALL_BUNDLES]
-    assert len(domain_ids) == len(set(domain_ids)), f"duplicates: {domain_ids}"
+            seen[cap_id] = str(group_index)
 
 
 @pytest.fixture
@@ -75,8 +68,8 @@ def service(tmp_path: Path) -> Iterator[OperationService]:
     artifacts = ArtifactService(store, schemas)
     service = OperationService(store)
     installer = OperationBinder(store, schemas, artifacts)
-    for bundle in ALL_BUNDLES:
-        for adapter in installer.bind(bundle).adapters:
+    for operations in ALL_OPERATION_GROUPS:
+        for adapter in installer.bind(operations).adapters:
             service.register(adapter)
     try:
         yield service
@@ -94,8 +87,8 @@ def test_catalog_matches_installed_operations(service: OperationService) -> None
     by_id: dict[str, OperationDescriptor] = {
         d.operation_id: d for d in service.catalog().operations
     }
-    for bundle in ALL_BUNDLES:
-        for operation in bundle.operations:
+    for operations in ALL_OPERATION_GROUPS:
+        for operation in operations:
             desc = by_id[operation.operation_id]
             assert desc.version == operation.version
             assert desc.title == operation.title

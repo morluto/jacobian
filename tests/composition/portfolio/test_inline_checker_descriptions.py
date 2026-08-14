@@ -2,14 +2,12 @@
 
 import pytest
 
-from jacobian.domain_bundles import DomainBundle
-from jacobian.portfolio.builtin import build_builtin_portfolio_components
+from jacobian.portfolio.builtin import load_builtin_operation_modules
 
 _INLINE_REPLAY_CHECKERS = tuple(
     declaration
-    for component in build_builtin_portfolio_components()
-    if isinstance(component, DomainBundle)
-    for declaration in component.checker_declarations
+    for _module_name, _operations, checker_declarations in load_builtin_operation_modules()
+    for declaration in checker_declarations
     if ".materialize" not in declaration.operation_id
 )
 

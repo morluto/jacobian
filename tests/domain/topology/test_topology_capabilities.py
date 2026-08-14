@@ -27,7 +27,7 @@ def test_every_topology_operation_advertises_an_executable_example(
 ) -> None:
     bundle = build_topology_bundle()
 
-    for operation in bundle.operations:
+    for operation in bundle:
         spec = operation
         assert spec.examples, spec.operation_id
         example = spec.examples[0]

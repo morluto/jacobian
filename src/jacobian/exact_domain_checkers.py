@@ -37,11 +37,10 @@ from jacobian.contracts.results import (
     ContractModel,
     ExecutionStatus,
 )
-from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
-from jacobian.operation_binding import BoundDomainOperations
+from jacobian.operation_binding import BoundOperationGroup
 from jacobian.operation_bindings import DurablePublication
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
 from jacobian.operation_errors import OperationError, OperationInvocationError
 from jacobian.operation_ports import InputPort
 from jacobian.operation_projection import OperationProjection
@@ -60,6 +59,12 @@ from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 from jacobian.verification.service import VerificationService
 
 _LOGGER = logging.getLogger(__name__)
+
+type ExactOperationGroup = tuple[
+    OperationDeclarations,
+    BoundOperationGroup,
+    tuple[ExactReplayCheckerDeclaration, ...],
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,17 +91,17 @@ class _InstalledDeclaration:
 @dataclass(frozen=True, slots=True)
 class _DeclaredRuntimeGroup:
     probe: ProviderObservation
-    members: tuple[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration], ...]
+    members: tuple[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration], ...]
 
 
 def _declared_runtime_groups(
-    pairs: tuple[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration], ...],
+    pairs: tuple[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration], ...],
 ) -> tuple[_DeclaredRuntimeGroup, ...]:
     grouped: dict[
         str,
         tuple[
             ProviderObservation,
-            list[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration]],
+            list[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration]],
         ],
     ] = {}
     for installed, declaration in pairs:
@@ -105,9 +110,7 @@ def _declared_runtime_groups(
         if probe is None:
             continue
         if not isinstance(probe, ProviderObservation):
-            raise TypeError(
-                "provider runtime factory must return ProviderObservation"
-            )
+            raise TypeError("provider runtime factory must return ProviderObservation")
         current = grouped.get(probe.provider)
         if current is None:
             grouped[probe.provider] = (probe, [(installed, declaration)])
@@ -195,7 +198,7 @@ def _authorized_provider_runtimes(
 def install_exact_domain_checkers(
     checkers: CheckerRegistry,
     *,
-    bundles: Mapping[str, tuple[DomainBundle, BoundDomainOperations]],
+    bundles: Mapping[str, ExactOperationGroup],
     authorize: bool,
 ) -> ExactDomainCheckerInstallation:
     """Install independent exact replay against dynamically registered schemas."""
@@ -271,7 +274,7 @@ def install_exact_domain_verification(
     verification: VerificationService,
     checkers: CheckerRegistry,
     *,
-    bundles: Mapping[str, tuple[DomainBundle, BoundDomainOperations]],
+    bundles: Mapping[str, ExactOperationGroup],
     authorize: bool,
 ) -> tuple[tuple[OperationAdapter[Any], ...], ExactDomainCheckerInstallation]:
     """Authorize exact replay and expose per-producer verification operations.
@@ -308,19 +311,19 @@ def install_exact_domain_verification(
     adapters: list[OperationAdapter[Any]] = []
     result_models = {
         _operation_spec(operation).operation_id: _operation_spec(operation).result_type
-        for bundle, _installed_bundle in bundles.values()
-        for operation in bundle.operations
+        for operations, _installed_bundle, _declarations in bundles.values()
+        for operation in operations
     }
     stored_producers = {
         _operation_spec(operation).operation_id
-        for bundle, _installed_bundle in bundles.values()
-        for operation in bundle.operations
+        for operations, _installed_bundle, _declarations in bundles.values()
+        for operation in operations
         if isinstance(operation.publication, DurablePublication)
     }
     referenceable_results = {
         _operation_spec(operation).operation_id: _operation_spec(operation).result_type
-        for bundle, _installed_bundle in bundles.values()
-        for operation in bundle.operations
+        for operations, _installed_bundle, _declarations in bundles.values()
+        for operation in operations
         if operation.output_ports
         and any(
             port.value_type is _operation_spec(operation).result_type
@@ -360,24 +363,24 @@ def install_exact_domain_verification(
 
 
 def _available_declaration_bundles(
-    bundles: Mapping[str, tuple[DomainBundle, BoundDomainOperations]],
-) -> tuple[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration], ...]:
-    """Pair domain-owned declarations with their unique installed producer."""
+    bundles: Mapping[str, ExactOperationGroup],
+) -> tuple[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration], ...]:
+    """Pair checker declarations with their unique bound producer."""
 
-    available: list[tuple[BoundDomainOperations, ExactReplayCheckerDeclaration]] = []
+    available: list[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration]] = []
     owners: dict[str, str] = {}
-    for domain_id, (bundle, installed) in bundles.items():
+    for module_name, (operations, installed, declarations) in bundles.items():
         producer_operation_ids = {
-            _operation_spec(operation).operation_id for operation in bundle.operations
+            _operation_spec(operation).operation_id for operation in operations
         }
         installed_producer_ids = {
             adapter.descriptor.operation_id for adapter in installed.adapters
         }
-        for declaration in bundle.checker_declarations:
+        for declaration in declarations:
             if declaration.operation_id not in producer_operation_ids:
                 raise ValueError(
                     "exact replay declaration is not backed by a domain producer "
-                    f"schema: {domain_id}/{declaration.operation_id}"
+                    f"schema: {module_name}/{declaration.operation_id}"
                 )
             if declaration.operation_id not in installed.result_schema_uris:
                 continue
@@ -386,8 +389,8 @@ def _available_declaration_bundles(
                 and declaration.operation_id not in installed_producer_ids
             ):
                 continue
-            previous = owners.setdefault(declaration.operation_id, domain_id)
-            if previous != domain_id:
+            previous = owners.setdefault(declaration.operation_id, module_name)
+            if previous != module_name:
                 raise ValueError(
                     "exact replay declaration is owned by multiple bundles: "
                     f"{declaration.operation_id}"
@@ -408,7 +411,7 @@ def _available_declaration_bundles(
 
 
 def _installed_declaration(
-    bundle: BoundDomainOperations,
+    bundle: BoundOperationGroup,
     declaration: ExactReplayCheckerDeclaration,
     installation: ExactDomainCheckerInstallation,
     result_model: type[ContractModel],
@@ -911,5 +914,7 @@ __all__ = [
     "install_exact_domain_checkers",
     "install_exact_domain_verification",
 ]
+
+
 def _operation_spec(operation: Any) -> Any:
     return operation if isinstance(operation, OperationDeclaration) else operation.spec

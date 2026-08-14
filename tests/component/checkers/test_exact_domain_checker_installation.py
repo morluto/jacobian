@@ -42,7 +42,6 @@ from jacobian.contracts.polynomial_operations import (
 )
 from jacobian.contracts.projective_geometry import ProjectiveLineArrangementRequest
 from jacobian.contracts.results import ContractModel
-from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.graph_optimization.bundle import (
     build_graph_optimization_bundle,
 )
@@ -59,7 +58,9 @@ from jacobian.domains.projective_geometry.bundle import (
 from jacobian.exact_domain_checkers import (
     install_exact_domain_checkers as _install_exact_domain_checkers,
 )
-from jacobian.operation_binding import BoundDomainOperations
+from jacobian.operation_binding import BoundOperationGroup
+from jacobian.operation_declarations import OperationDeclarations
+from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.provider_runtime import source_provider_runtime
 from jacobian.providers.flint_runtime import (
     exact_domain_checker_provider_runtime,
@@ -74,8 +75,8 @@ def _installed(
     operation_ids: tuple[str, ...],
     *,
     character: str,
-) -> BoundDomainOperations:
-    return BoundDomainOperations(
+) -> BoundOperationGroup:
+    return BoundOperationGroup(
         adapters=(),
         semantics_uri=_uri(character),
         input_schema_uris={
@@ -93,7 +94,7 @@ def install_exact_domain_checkers(
     registry: CheckerRegistry,
     *,
     authorize: bool,
-    **installed: BoundDomainOperations,
+    **installed: BoundOperationGroup,
 ):
     domain_ids = {
         "graph": "graph_optimization",
@@ -112,8 +113,14 @@ def install_exact_domain_checkers(
     bundles = {}
     for name, installation in installed.items():
         domain_id = domain_ids.get(name, name)
-        bundle = bundle_builders[domain_id]()
-        bundles[domain_id] = (bundle, installation)
+        operations = bundle_builders[domain_id]()
+        operation_ids = tuple(operation.operation_id for operation in operations)
+        module_name, _declared_operations, checker_declarations = next(
+            loaded
+            for loaded in load_builtin_operation_modules()
+            if tuple(operation.operation_id for operation in loaded[1]) == operation_ids
+        )
+        bundles[module_name] = (operations, installation, checker_declarations)
     return _install_exact_domain_checkers(
         registry,
         bundles=bundles,
@@ -124,7 +131,7 @@ def install_exact_domain_checkers(
 def _clear_matrix_factory_caches() -> None:
     """Make monkeypatched provider-factory tests start from a fresh declaration."""
 
-    for declaration in build_matrix_bundle().checker_declarations:
+    for declaration in _matrix_declarations():
         if object.__getattribute__(declaration, "provider_runtime_factory") is not None:
             object.__setattr__(declaration, "provider_runtime", None)
 
@@ -341,7 +348,7 @@ def test_installer_omits_explicitly_optional_replay_when_provider_is_unavailable
     )
     declaration = next(
         declaration
-        for declaration in build_matrix_bundle().checker_declarations
+        for declaration in _matrix_declarations()
         if declaration.operation_id == "matrix.normal_form.rref.compute"
     )
     declaration = replace(
@@ -368,7 +375,7 @@ def test_installer_fails_required_replay_when_provider_is_unavailable(
 ) -> None:
     declaration = next(
         declaration
-        for declaration in build_matrix_bundle().checker_declarations
+        for declaration in _matrix_declarations()
         if declaration.operation_id == "matrix.normal_form.rref.compute"
     )
     runtime = declaration.provider_runtime
@@ -457,21 +464,41 @@ def test_installer_does_not_omit_replay_when_bundled_source_is_unavailable(
 
 def _single_matrix_declaration_bundle(
     declaration: ExactReplayCheckerDeclaration,
-) -> tuple[dict[str, tuple[DomainBundle, BoundDomainOperations]], str]:
-    bundle = build_matrix_bundle()
-    bundle = replace(bundle, checker_declarations=(declaration,))
+) -> tuple[
+    dict[
+        str,
+        tuple[
+            OperationDeclarations,
+            BoundOperationGroup,
+            tuple[ExactReplayCheckerDeclaration, ...],
+        ],
+    ],
+    str,
+]:
+    operations = build_matrix_bundle()
     installed = _installed(
         (declaration.request_model,),
         (declaration.operation_id,),
         character="d",
     )
-    return {"matrix": (bundle, installed)}, declaration.operation_id
+    return {
+        "jacobian.domains.matrix_lattice.bundle": (
+            operations,
+            installed,
+            (declaration,),
+        )
+    }, declaration.operation_id
 
 
 def test_installer_consumes_direct_declaration_runtime_and_binds_checker_id(
     tmp_path: Path,
 ) -> None:
-    declaration = build_matrix_bundle().checker_declarations[0]
+    declaration = next(
+        checker
+        for module_name, _operations, checkers in load_builtin_operation_modules()
+        if module_name == "jacobian.domains.matrix_lattice.bundle"
+        for checker in checkers
+    )
     runtime = source_provider_runtime(
         "jacobian.test-direct-declaration-checker",
         version="1",
@@ -501,7 +528,7 @@ def test_installer_consumes_direct_declaration_runtime_and_binds_checker_id(
 def test_installer_skips_factory_free_compatibility_declaration(
     tmp_path: Path,
 ) -> None:
-    declaration = build_matrix_bundle().checker_declarations[0]
+    declaration = _matrix_declarations()[0]
     declaration = replace(
         declaration,
         provider_runtime=None,
@@ -522,7 +549,7 @@ def test_installer_skips_factory_free_compatibility_declaration(
 def test_authority_disabled_does_not_realize_declaration_factory(
     tmp_path: Path,
 ) -> None:
-    declaration = build_matrix_bundle().checker_declarations[0]
+    declaration = _matrix_declarations()[0]
 
     def fail_factory():
         raise AssertionError("declaration runtime was realized without authority")
@@ -548,7 +575,7 @@ def test_installer_omits_unavailable_declaration_owned_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    declaration = build_matrix_bundle().checker_declarations[0]
+    declaration = _matrix_declarations()[0]
     available_source = exact_domain_checker_source_provider_runtime()
     unavailable = source_provider_runtime(
         "jacobian.test-optional-declaration-checker",
@@ -587,3 +614,11 @@ def test_installer_omits_unavailable_declaration_owned_runtime(
 
     assert installation.checker_ids == {operation_id: None}
     assert installation.diagnostics[0].code == "EXACT_REPLAY_PROVIDER_UNAVAILABLE"
+
+
+def _matrix_declarations() -> tuple[ExactReplayCheckerDeclaration, ...]:
+    return next(
+        checkers
+        for module_name, _operations, checkers in load_builtin_operation_modules()
+        if module_name == "jacobian.domains.matrix_lattice.bundle"
+    )

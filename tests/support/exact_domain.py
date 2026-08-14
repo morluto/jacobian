@@ -7,11 +7,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from jacobian.domain_bundles import DomainBundle
-from jacobian.operation_binding import BoundDomainOperations
+from jacobian.operation_binding import BoundOperationGroup
+from jacobian.operation_declarations import OperationDeclarations
+from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.portfolio.core_binding import CoreOperationBinder
-from jacobian.portfolio.domain_binding import DomainBundleBinder
-from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.config import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
@@ -24,39 +23,48 @@ from tests.support.services import (
 class VerifiedDomainTestServices(DomainTestServices):
     """Focused services plus the exact installed bundle resources."""
 
-    bundles: dict[str, BoundDomainOperations]
+    bundles: dict[str, BoundOperationGroup]
 
 
 def install_verified_domain_bundles(
     services: DomainTestServices,
-    *bundles: DomainBundle,
-) -> dict[str, BoundDomainOperations]:
+    *operation_groups: OperationDeclarations,
+) -> dict[str, BoundOperationGroup]:
     """Install selected bundles through the production portfolio path."""
 
-    if not bundles:
-        raise ValueError("at least one verified domain bundle is required")
+    if not operation_groups:
+        raise ValueError("at least one verified operation group is required")
+    builtin = {
+        tuple(operation.operation_id for operation in operations): (
+            module_name,
+            checker_declarations,
+        )
+        for module_name, operations, checker_declarations in (
+            load_builtin_operation_modules()
+        )
+    }
+    bound_by_name: dict[str, BoundOperationGroup] = {}
+    exact_groups = {}
     with atomic_installation(services.core):
-        bound = DomainBundleBinder(services.installation).bind(
-            PortfolioPlan(components=bundles)
-        )
-        missing = tuple(
-            bundle.domain_id for bundle in bundles if bundle.domain_id not in bound
-        )
-        if missing:
-            raise ValueError(
-                "verified domain installation omitted bundle(s): " + ", ".join(missing)
-            )
+        for operations in operation_groups:
+            operation_ids = tuple(operation.operation_id for operation in operations)
+            module_name, checker_declarations = builtin[operation_ids]
+            bound = services.installation.binder.bind(operations)
+            for adapter in bound.adapters:
+                services.installation.register_operation(adapter)
+            name = operation_ids[0].split(".", maxsplit=1)[0]
+            bound_by_name[name] = bound
+            exact_groups[module_name] = operations, bound, checker_declarations
         CoreOperationBinder(services.installation).bind_domain_verification(
-            bound,
-            PortfolioPlan(components=bundles),
+            exact_groups
         )
-    return bound
+    return bound_by_name
 
 
 @contextmanager
 def open_exact_domain_services(
     root: str | Path,
-    *bundles: DomainBundle,
+    *bundles: OperationDeclarations,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
 ) -> Iterator[VerifiedDomainTestServices]:
     """Open domain services with explicitly selected verified domain bundles.

@@ -1,7 +1,6 @@
 """Installed finite-field operations over the authoritative native values."""
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.finite_fields.checkers import (
     FINITE_FIELD_EXACT_REPLAY_CHECKERS,
 )
@@ -49,13 +48,12 @@ from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import (
     SUPPORTED,
     OperationDeclaration,
+    OperationDeclarations,
     PreflightResult,
     PreflightStatus,
 )
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
-    DomainDiagnostics,
-    DomainSemantics,
     OperationRefusalError,
 )
 
@@ -244,7 +242,7 @@ def _finite_map_replay_preflight(
     return SUPPORTED
 
 
-def build_finite_field_bundle() -> DomainBundle:
+def build_finite_field_bundle() -> OperationDeclarations:
     projective_line_operation = inline_operation(
         OperationDeclaration(
             operation_id="finite_field.projective_line.enumerate",
@@ -438,38 +436,19 @@ def build_finite_field_bundle() -> DomainBundle:
             OutputPort(name="permutation", value_type=PermutationCertificate),
         ),
     )
-    return DomainBundle(
-        domain_id="finite_fields",
-        schema_namespace="jacobian.finite-fields",
-        semantics=DomainSemantics(
-            name="jacobian.exact-finite-field-linear-algebra",
-            version="1",
-            definition={
-                "field_identity": "exact modulus, generator, and ordered power basis",
-                "linear_map": "explicit restriction of scalars to the prime field",
-            },
-        ),
-        operations=(
-            projective_line_operation,
-            restrict_operation,
-            rank_operation,
-            ledger_operation,
-            orbit_operation,
-            table_operation,
-            fiber_operation,
-            collision_operation,
-            permutation_operation,
-        ),
-        checker_declarations=FINITE_FIELD_EXACT_REPLAY_CHECKERS,
-        diagnostics=DomainDiagnostics(
-            invalid_request=OperationDiagnostic(
-                code="INVALID_FINITE_FIELD_REQUEST",
-                stage="finite_field_input_validation",
-                message="Input does not satisfy the exact finite-field contract.",
-                hint="Use values with identical presentations, axes, and bases.",
-            )
-        ),
+    return (
+        projective_line_operation,
+        restrict_operation,
+        rank_operation,
+        ledger_operation,
+        orbit_operation,
+        table_operation,
+        fiber_operation,
+        collision_operation,
+        permutation_operation,
     )
 
 
 __all__ = ["build_finite_field_bundle"]
+
+CHECKER_DECLARATIONS = FINITE_FIELD_EXACT_REPLAY_CHECKERS

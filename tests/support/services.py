@@ -7,14 +7,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from jacobian.domain_bundles import DomainBundle
 from jacobian.implementation import cached_package_digests
+from jacobian.operation_declarations import OperationDeclarations
 from jacobian.portfolio.context import (
     PortfolioContext,
     create_portfolio_context,
 )
-from jacobian.portfolio.domain_binding import DomainBundleBinder
-from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.services import (
@@ -48,7 +46,7 @@ def atomic_installation(core: CoreServices) -> Iterator[None]:
 @contextmanager
 def open_domain_services(
     root: str | Path,
-    *bundles: DomainBundle,
+    *operation_groups: OperationDeclarations,
     options: RuntimeOptions | None = None,
     checker_authority: CheckerAuthorityMode | None = None,
 ) -> Iterator[DomainTestServices]:
@@ -71,11 +69,12 @@ def open_domain_services(
             application,
             resolved_options,
         )
-        if bundles:
+        if operation_groups:
             with atomic_installation(core):
-                DomainBundleBinder(installation).bind(
-                    PortfolioPlan(components=tuple(bundles))
-                )
+                for operations in operation_groups:
+                    bound = installation.binder.bind(operations)
+                    for adapter in bound.adapters:
+                        installation.register_operation(adapter)
         yield DomainTestServices(
             core=core,
             application=application,

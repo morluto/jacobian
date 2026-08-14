@@ -6,8 +6,6 @@ from jacobian.contracts.linear import (
     LinearRationalSolutionFindRequest,
     LinearRationalSolutionResult,
 )
-from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domain_bundles import DomainBundle
 from jacobian.domains._examples import example
 from jacobian.domains.rational_linear.checkers import (
     RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS,
@@ -17,15 +15,10 @@ from jacobian.domains.rational_linear.operations import (
     compute_rational_solution,
 )
 from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
-from jacobian.operations import (
-    DomainDiagnostics,
-    DomainSemantics,
-)
-from jacobian.provider_runtime import PYTHON_FLINT_VERSION
+from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
 
 
-def build_rational_linear_bundle() -> DomainBundle:
+def build_rational_linear_bundle() -> OperationDeclarations:
     operations = (
         inline_operation(
             OperationDeclaration(
@@ -67,29 +60,9 @@ def build_rational_linear_bundle() -> DomainBundle:
             ),
         ),
     )
-    return DomainBundle(
-        domain_id="rational_linear",
-        schema_namespace="jacobian.rational-linear",
-        semantics=DomainSemantics(
-            name="jacobian.exact-rational-linear",
-            version="1",
-            definition={
-                "domain": "bounded rational linear systems",
-                "producer": f"Python-FLINT {PYTHON_FLINT_VERSION}",
-                "results": "ordinary solution and inconsistency candidates are inline",
-            },
-        ),
-        operations=operations,
-        diagnostics=DomainDiagnostics(
-            invalid_request=OperationDiagnostic(
-                code="INVALID_RATIONAL_LINEAR_REQUEST",
-                stage="rational_linear_input_validation",
-                message="Input does not satisfy the exact rational-linear contract.",
-                hint="Use canonical rational components and bounded dimensions.",
-            )
-        ),
-        checker_declarations=RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS,
-    )
+    return operations
 
 
 __all__ = ["build_rational_linear_bundle"]
+
+CHECKER_DECLARATIONS = RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS

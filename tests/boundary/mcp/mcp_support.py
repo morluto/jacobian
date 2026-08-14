@@ -10,7 +10,7 @@ from mcp.server import MCPServer
 
 from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.server import create_server_from_runtime
-from jacobian.domain_bundles import DomainBundle
+from jacobian.operation_declarations import OperationDeclarations
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.runtime.portfolio import PortfolioResources
@@ -20,7 +20,7 @@ from tests.support.services import open_domain_services
 @contextmanager
 def open_focused_mcp_server(
     root: Path,
-    *bundles: DomainBundle,
+    *bundles: OperationDeclarations,
 ) -> Iterator[MCPServer[AppState]]:
     """Open the real MCP projection over selected production domain bundles."""
 

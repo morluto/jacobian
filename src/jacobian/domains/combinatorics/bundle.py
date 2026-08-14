@@ -2,48 +2,22 @@
 
 from __future__ import annotations
 
-from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.combinatorics.checkers import COMBINATORICS_EXACT_REPLAY_CHECKERS
 from jacobian.domains.combinatorics.counting import COUNTING_OPERATIONS
 from jacobian.domains.combinatorics.difference_sets import DIFFERENCE_SET_OPERATIONS
 from jacobian.domains.combinatorics.partitions import PARTITION_OPERATIONS
 from jacobian.domains.combinatorics.recurrence import RECURRENCE_OPERATIONS
-from jacobian.operations import (
-    DomainDiagnostics,
-    DomainSemantics,
-)
+from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_combinatorics_bundle() -> DomainBundle:
+def build_combinatorics_bundle() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
-    return DomainBundle(
-        domain_id="combinatorics",
-        schema_namespace="jacobian.combinatorics",
-        semantics=DomainSemantics(
-            name="jacobian.exact-combinatorics",
-            version="2",
-            definition={
-                "description": (
-                    "Exact finite combinatorics, bounded linear recurrences, and "
-                    "finite rational-series truncations"
-                ),
-                "arithmetic": "exact integer and rational via maintained SymPy and stdlib APIs",
-            },
-        ),
-        operations=(
-            *COUNTING_OPERATIONS,
-            *PARTITION_OPERATIONS,
-            *RECURRENCE_OPERATIONS,
-            *DIFFERENCE_SET_OPERATIONS,
-        ),
-        diagnostics=DomainDiagnostics(
-            invalid_request=OperationDiagnostic(
-                code="INVALID_COMBINATORICS_REQUEST",
-                stage="combinatorics_input_validation",
-                message="Input does not satisfy the exact combinatorics contract.",
-                hint="Provide bounded non-negative integers within each operation's limits.",
-            )
-        ),
-        checker_declarations=COMBINATORICS_EXACT_REPLAY_CHECKERS,
+    return (
+        *COUNTING_OPERATIONS,
+        *PARTITION_OPERATIONS,
+        *RECURRENCE_OPERATIONS,
+        *DIFFERENCE_SET_OPERATIONS,
     )
+
+
+CHECKER_DECLARATIONS = COMBINATORICS_EXACT_REPLAY_CHECKERS

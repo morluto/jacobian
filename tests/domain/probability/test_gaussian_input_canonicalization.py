@@ -4,7 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.contracts.probability import GaussianPolynomial
-from jacobian.domains.probability.bundle import build_finite_probability_bundle
+from jacobian.domains.probability.bundle import (
+    CHECKER_DECLARATIONS,
+    build_finite_probability_bundle,
+)
 from jacobian.domains.probability.gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
@@ -126,13 +129,13 @@ def test_producer_and_checker_share_the_canonical_request_owner() -> None:
     bundle = build_finite_probability_bundle()
     producer = next(
         operation
-        for operation in bundle.operations
+        for operation in bundle
         if operation.operation_id
         == "probability.gaussian_polynomial.moment.compute"
     )
     checker = next(
         declaration
-        for declaration in bundle.checker_declarations
+        for declaration in CHECKER_DECLARATIONS
         if declaration.operation_id == "probability.gaussian_polynomial.moment.compute"
     )
     assert producer.request_type is CanonicalGaussianPolynomialMomentRequest

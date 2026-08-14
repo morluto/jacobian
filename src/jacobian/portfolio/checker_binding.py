@@ -18,7 +18,6 @@ from jacobian.checker_authorization import (
 )
 from jacobian.contracts.operations import (
     ProviderAvailability,
-    ProviderObservation,
 )
 from jacobian.lean_frontend.declaration_operations import (
     build_lean_declaration_query_bundle,
@@ -123,7 +122,7 @@ class CheckerPortfolioBinder:
             )
         except (OSError, RuntimeError) as exc:
             _LOGGER.warning("Lean declaration discovery is not installed: %s", exc)
-        self._bind_lean_declaration_adapters(resources.lean_declarations, runtime)
+        self._bind_lean_declaration_adapters(resources.lean_declarations)
         resources.lean = LeanService(
             ctx.store,
             ctx.artifacts,
@@ -162,13 +161,12 @@ class CheckerPortfolioBinder:
     def _bind_lean_declaration_adapters(
         self,
         declarations: LeanDeclarationService | None,
-        runtime: ProviderObservation,
     ) -> None:
         if declarations is None:
             return
         ctx = self.context
         bound_queries = ctx.binder.bind(
-            build_lean_declaration_query_bundle(declarations, runtime)
+            build_lean_declaration_query_bundle(declarations)
         )
         for adapter in bound_queries.adapters:
             ctx.register_operation(adapter)

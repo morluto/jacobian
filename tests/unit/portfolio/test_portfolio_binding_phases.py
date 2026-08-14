@@ -19,7 +19,6 @@ from jacobian.portfolio.checker_binding import CheckerPortfolioBinder
 from jacobian.portfolio.context import PortfolioContext
 from jacobian.portfolio.core_binding import CoreOperationBinder
 from jacobian.portfolio.foundation_binding import FoundationBinder
-from jacobian.portfolio.model import PortfolioPlan
 from jacobian.portfolio.provider_resolution import (
     ProviderAvailabilityResolver,
     ProviderRuntimePlan,
@@ -92,7 +91,7 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
 def test_core_domain_verification_phase_accepts_empty_bundle_result() -> None:
     assert (
         CoreOperationBinder(cast(PortfolioContext, object())).bind_domain_verification(
-            {}, PortfolioPlan(components=())
+            {}
         )
         is None
     )

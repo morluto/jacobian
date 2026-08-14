@@ -39,7 +39,7 @@ def test_hnf_is_domain_owned_and_explicitly_durable() -> None:
     bundle = build_matrix_bundle()
     operation = next(
         operation
-        for operation in bundle.operations
+        for operation in bundle
         if operation.operation_id == "matrix.normal_form.hermite.materialize"
     )
     assert isinstance(operation.publication, DurablePublication)

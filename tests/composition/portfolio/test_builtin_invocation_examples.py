@@ -19,7 +19,7 @@ _CORE_OPERATIONS = tuple(
         build_number_theory_bundle(),
         build_sequence_bundle(),
     )
-    for operation in bundle.operations
+    for operation in bundle
 )
 
 

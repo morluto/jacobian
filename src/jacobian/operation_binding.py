@@ -1,4 +1,4 @@
-"""Install typed domain operations into Jacobian's runtime protocol."""
+"""Bind declared mathematical operations to runtime-owned resources."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from jacobian.contracts.operations import (
     OperationValuePort,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
-from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
 from jacobian.operation_declarations import (
     Effect as DeclarationEffect,
@@ -26,6 +25,7 @@ from jacobian.operation_declarations import (
 from jacobian.operation_declarations import (
     InlinePublication,
     OperationDeclaration,
+    OperationDeclarations,
 )
 from jacobian.operation_errors import (
     OperationInvocationError,
@@ -49,8 +49,8 @@ from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 
 
 @dataclass(frozen=True, slots=True)
-class BoundDomainOperations:
-    """Execution bindings and durable schemas for one domain bundle."""
+class BoundOperationGroup:
+    """Runtime-owned schemas and adapters for declared operations."""
 
     adapters: tuple[OperationAdapter[Any], ...]
     semantics_uri: str
@@ -96,18 +96,27 @@ class OperationBinder:
         self.artifacts = artifacts
         self.values = values or ValueReferenceStore()
 
-    def bind(self, bundle: DomainBundle) -> BoundDomainOperations:
-        self._validate_bundle(bundle)
+    def bind(self, operations: OperationDeclarations) -> BoundOperationGroup:
+        self._validate_operations(operations)
+        namespace = self._schema_namespace(operations)
         semantics_uri = self.store.register_descriptor(
             kind="semantics",
-            name=bundle.semantics.name,
-            version=bundle.semantics.version,
-            definition=bundle.semantics.definition,
+            name=f"jacobian.operations.{namespace}",
+            version="1",
+            definition={
+                "operations": [
+                    {
+                        "operation_id": operation.operation_id,
+                        "version": operation.version,
+                    }
+                    for operation in operations
+                ]
+            },
         )
-        request_models = {_request_type(operation) for operation in bundle.operations}
+        request_models = {_request_type(operation) for operation in operations}
         input_schema_uris = {
             model: self.schemas.register_model(
-                name=f"{bundle.schema_namespace}-input.{model.__name__}",
+                name=f"{namespace}-input.{model.__name__}",
                 version="1",
                 model=model,
             )
@@ -115,11 +124,11 @@ class OperationBinder:
         }
         result_schema_uris = {
             _operation_id(operation): self.schemas.register_model(
-                name=(f"{bundle.schema_namespace}-result.{_operation_id(operation)}"),
+                name=(f"{namespace}-result.{_operation_id(operation)}"),
                 version=_operation_version(operation),
                 model=_result_type(operation),
             )
-            for operation in bundle.operations
+            for operation in operations
         }
         resources = OperationResources(
             artifacts=self.artifacts,
@@ -129,10 +138,9 @@ class OperationBinder:
             result_schema_uris=result_schema_uris,
         )
         adapters = tuple(
-            self._adapter(operation, bundle, resources)
-            for operation in bundle.operations
+            self._adapter(operation, resources) for operation in operations
         )
-        return BoundDomainOperations(
+        return BoundOperationGroup(
             adapters=adapters,
             semantics_uri=semantics_uri,
             input_schema_uris=input_schema_uris,
@@ -143,18 +151,22 @@ class OperationBinder:
     @staticmethod
     def _adapter(
         operation: DomainOperation,
-        bundle: DomainBundle,
         resources: OperationResources,
     ) -> OperationAdapter[Any]:
-        return DeclaredOperationAdapter(operation, bundle, resources)
+        return DeclaredOperationAdapter(operation, resources)
 
     @staticmethod
-    def _validate_bundle(bundle: DomainBundle) -> None:
-        if not bundle.operations:
-            raise ValueError("operation bundle must not be empty")
-        ids = tuple(_operation_id(operation) for operation in bundle.operations)
+    def _validate_operations(operations: OperationDeclarations) -> None:
+        if not operations:
+            raise ValueError("operation declarations must not be empty")
+        ids = tuple(_operation_id(operation) for operation in operations)
         if len(ids) != len(set(ids)):
-            raise ValueError(f"duplicate operation ID in bundle {bundle.domain_id}")
+            raise ValueError("operation declarations contain duplicate IDs")
+
+    @staticmethod
+    def _schema_namespace(operations: OperationDeclarations) -> str:
+        first_id = operations[0].operation_id
+        return first_id.split(".", maxsplit=1)[0].replace("_", "-")
 
 
 class DeclaredOperationAdapter:
@@ -163,12 +175,10 @@ class DeclaredOperationAdapter:
     def __init__(
         self,
         operation: DomainOperation,
-        bundle: DomainBundle,
         resources: OperationResources,
     ) -> None:
         self.operation = operation
         self.spec = _spec(operation)
-        self.bundle = bundle
         self.resources = resources
         publication = operation.publication
         if isinstance(publication, InlinePublication):
@@ -277,7 +287,12 @@ class DeclaredOperationAdapter:
             )
         except ValidationError as exc:
             invalid_request = self.spec.invalid_request
-            base = invalid_request or self.bundle.diagnostics.invalid_request
+            base = invalid_request or OperationDiagnostic(
+                code="INVALID_REQUEST",
+                stage="operation_input_validation",
+                message="The operation request is invalid.",
+                hint="Inspect the operation schema and provide a strictly valid request.",
+            )
             raise OperationInvocationError(
                 base
                 if invalid_request is not None

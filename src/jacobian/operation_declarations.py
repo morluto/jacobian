@@ -127,6 +127,9 @@ class OperationDeclaration[RequestT: ContractModel, ResultT: ContractModel]:
         )
 
 
+type OperationDeclarations = tuple[OperationDeclaration[Any, Any], ...]
+
+
 @dataclass(frozen=True, slots=True)
 class InlineOperationFactory:
     """Declare inline operations with one provider and domain error policy."""
@@ -228,6 +231,7 @@ __all__ = [
     "InlinePublication",
     "OperationAbortError",
     "OperationDeclaration",
+    "OperationDeclarations",
     "OperationExample",
     "OperationFailure",
     "OperationRefusalError",

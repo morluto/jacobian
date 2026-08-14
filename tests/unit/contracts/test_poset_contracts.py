@@ -14,7 +14,7 @@ from jacobian.domains.posets import build_finite_poset_bundle
 def _materialize(elements: list[str], relation: list[tuple[str, str]]):
     operation = next(
         operation
-        for operation in build_finite_poset_bundle().operations
+        for operation in build_finite_poset_bundle()
         if operation.operation_id == "poset.finite.compute"
     )
     outcome = operation.execute(

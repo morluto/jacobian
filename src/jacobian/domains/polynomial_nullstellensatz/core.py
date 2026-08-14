@@ -33,7 +33,7 @@ from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
 from jacobian.operation_adapters import parse_operation_input
-from jacobian.operation_binding import BoundDomainOperations
+from jacobian.operation_binding import BoundOperationGroup
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -432,7 +432,7 @@ class NullstellensatzVerificationAdapter:
 def install_nullstellensatz_core(
     context: PortfolioContext,
     provider_runtime: ProviderObservation,
-) -> BoundDomainOperations:
+) -> BoundOperationGroup:
     semantics_uri = context.store.register_descriptor(
         kind="semantics",
         name="jacobian.normalized-bivariate-jacobian-degree-2-3",
@@ -492,7 +492,7 @@ def install_nullstellensatz_core(
         JacobianDegreeSliceMaterializeAdapter(context, installation, provider_runtime),
         NullstellensatzVerificationAdapter(context, installation, provider_runtime),
     )
-    return BoundDomainOperations(
+    return BoundOperationGroup(
         adapters=adapters,
         semantics_uri=semantics_uri,
         input_schema_uris={

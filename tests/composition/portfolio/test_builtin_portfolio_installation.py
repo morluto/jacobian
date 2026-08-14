@@ -8,7 +8,7 @@ from jacobian.domains.polynomial_nullstellensatz.core import (
 from jacobian.domains.polynomial_nullstellensatz.singular import (
     PRODUCE_OPERATION_ID,
 )
-from jacobian.portfolio.builtin import build_builtin_portfolio
+from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.model import JacobianRuntime
 
@@ -17,13 +17,12 @@ def test_builtin_portfolio_installs_cleanly(
     fresh_complete_runtime: JacobianRuntime,
 ) -> None:
     singular_available = (
-        singular_provider_runtime().availability
-        is ProviderAvailability.AVAILABLE
+        singular_provider_runtime().availability is ProviderAvailability.AVAILABLE
     )
     expected_operation_ids = {
         operation_id
-        for bundle in build_builtin_portfolio().components
-        for operation_id in bundle.operation_ids
+        for _module_name, operations, _checkers in load_builtin_operation_modules()
+        for operation_id in (operation.operation_id for operation in operations)
     }
     expected_operation_ids.update((MATERIALIZE_OPERATION_ID, VERIFY_OPERATION_ID))
     if singular_available:

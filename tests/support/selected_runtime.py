@@ -5,10 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from jacobian.domain_bundles import DomainBundle
+from jacobian.operation_declarations import OperationDeclarations
 from jacobian.portfolio.context import create_portfolio_context
-from jacobian.portfolio.domain_binding import DomainBundleBinder
-from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
@@ -19,7 +17,7 @@ from tests.support.services import atomic_installation
 
 def create_selected_runtime(
     root: str | Path,
-    bundles: Sequence[DomainBundle] = (),
+    bundles: Sequence[OperationDeclarations] = (),
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
     **_kwargs: object,
@@ -33,9 +31,10 @@ def create_selected_runtime(
         installation = create_portfolio_context(core, services, options)
         if bundles:
             with atomic_installation(core):
-                DomainBundleBinder(installation).bind(
-                    PortfolioPlan(components=tuple(bundles))
-                )
+                for operations in bundles:
+                    bound = installation.binder.bind(operations)
+                    for adapter in bound.adapters:
+                        installation.register_operation(adapter)
         return JacobianRuntime(
             core,
             services,
@@ -56,7 +55,7 @@ def create_selected_runtime(
         raise
 
 
-def selected_runtime_opener(*bundles: DomainBundle):
+def selected_runtime_opener(*bundles: OperationDeclarations):
     """Return a ``create_runtime``-shaped opener for the supplied bundles."""
 
     def opener(

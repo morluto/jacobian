@@ -31,7 +31,6 @@ class CatalogBuildRuntime(JacobianRuntime):
             verification,
             polytope,
             close_resources=resources.close,
-            start_lean_warmup=lambda: _start_lean_warmup(resources),
         )
         self.catalog_build_resources = resources
 
@@ -76,11 +75,6 @@ def create_catalog_build_runtime(
                 "catalog-build runtime cleanup also failed: " + str(cleanup_error)
             )
         raise
-
-
-def _start_lean_warmup(resources: CatalogBuildResources) -> None:
-    if resources.lean is not None:
-        resources.lean.start_mathlib_warmup()
 
 
 __all__ = ["create_catalog_build_runtime"]

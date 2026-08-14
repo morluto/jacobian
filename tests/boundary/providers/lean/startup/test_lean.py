@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 from pathlib import Path
 from typing import Any, cast
 
@@ -509,25 +508,3 @@ def test_lean_cache_does_not_reuse_a_revoked_checker_result(
     assert first.result.verification_record_uri is not None
     assert repeated.cache_hit is False
     assert repeated.result.verification_record_uri is None
-
-
-@pytest.mark.skipif(
-    skip_unless_pinned_mathlib_runtime(),
-    reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
-)
-def test_mathlib_warmup_starts_only_once(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
-    warmed = threading.Event()
-    monkeypatch.setattr(
-        runtime.catalog_build_resources.lean, "_warm_mathlib", warmed.set
-    )
-
-    assert runtime.catalog_build_resources.lean.start_mathlib_warmup() is True
-    assert warmed.wait(timeout=2)
-    assert runtime.catalog_build_resources.lean.start_mathlib_warmup() is False

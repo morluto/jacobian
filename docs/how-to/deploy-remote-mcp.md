@@ -389,22 +389,12 @@ a release that changes stored artifact formats, and verify
 backward compatibility before starting older code against newer state. Do not
 use `git reset --hard` as a deployment or rollback mechanism.
 
-## Warm the Mathlib profile when serving `lean.check`
-
-Set `JACOBIAN_LEAN_WARMUP=1` on a host that serves `lean.check`. Jacobian then
-checks a small pinned Mathlib theorem in the background when each tenant runtime
-is first used. This warms Lean and filesystem caches without delaying MCP
-startup.
-
 Lean results are cached only for an exact content-addressed certificate and
 the currently active checker implementation digest. The bounded in-memory cache holds 128
 entries; a changed proof, statement, environment, checker, or authorization
-state cannot reuse an entry. `math.find` for `lean.check` reports the
-cache policy and the MATHLIB warm-up state (`RUNNING`, `HEALTHY`, or
-`UNHEALTHY`). Before advertising a deployment, wait for `HEALTHY` and invoke a
-deployed smoke check with `statement: "True"`, `proof: "by trivial"`, and
-`environment: "MATHLIB"`. An unhealthy deployment must not recommend the
-MATHLIB profile.
+state cannot reuse an entry. Before advertising a deployment, invoke a deployed
+smoke check with `statement: "True"`, `proof: "by trivial"`, and
+`environment: "MATHLIB"`.
 
 Lean declaration discovery keeps its rebuildable catalog indexes below
 `<state-root>/cache/lean-declarations`; the installer derives that location from

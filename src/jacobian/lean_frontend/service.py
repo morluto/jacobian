@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import threading
 import weakref
 from collections import OrderedDict
@@ -31,7 +30,6 @@ from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
 
-_LOGGER = logging.getLogger(__name__)
 _RESULT_CACHE_SIZE = 128
 
 
@@ -54,9 +52,6 @@ class LeanService:
         self._certificate_locks: weakref.WeakValueDictionary[str, threading.Lock] = (
             weakref.WeakValueDictionary()
         )
-        self._warmup_started = False
-        self._warmup_thread: threading.Thread | None = None
-        self._closing = False
 
     def verify(
         self,
@@ -185,53 +180,12 @@ class LeanService:
             cache_hit=cache_hit,
         )
 
-    def start_mathlib_warmup(self) -> bool:
-        """Warm the pinned Mathlib runtime once without delaying server startup."""
+    def close(self) -> None:
+        """Discard request-local verification caches."""
 
-        thread = threading.Thread(
-            target=self._warm_mathlib,
-            name="jacobian-lean-mathlib-warmup",
-            daemon=True,
-        )
         with self._cache_lock:
-            if self._warmup_started or self._closing:
-                return False
-            self._warmup_started = True
-            self._warmup_thread = thread
-            thread.start()
-        return True
-
-    def close(self, *, timeout_seconds: float = 120) -> None:
-        """Wait for the optional warm-up before releasing its shared store."""
-
-        if timeout_seconds < 0:
-            raise ValueError("timeout_seconds must be non-negative")
-        with self._cache_lock:
-            self._closing = True
-            thread = self._warmup_thread
-        try:
-            if thread is not None:
-                thread.join(timeout=timeout_seconds)
-                if thread.is_alive():
-                    raise RuntimeError("Lean Mathlib warm-up did not quiesce")
-            with self._cache_lock:
-                self._warmup_thread = None
-                self._cache.clear()
-                self._certificate_locks.clear()
-        except BaseException:
-            with self._cache_lock:
-                self._closing = False
-            raise
-
-    def _warm_mathlib(self) -> None:
-        try:
-            self.verify(
-                statement="True",
-                proof="by trivial",
-                environment=LeanEnvironment.MATHLIB,
-            )
-        except Exception:
-            _LOGGER.exception("Lean Mathlib warm-up failed")
+            self._cache.clear()
+            self._certificate_locks.clear()
 
     def _cached_result(
         self,

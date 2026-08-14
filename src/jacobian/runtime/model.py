@@ -23,19 +23,12 @@ class JacobianRuntime:
         polytope: PolytopeService,
         *,
         close_resources: Callable[[], None] | None = None,
-        start_lean_warmup: Callable[[], None] | None = None,
     ) -> None:
         self._closed = False
         self.core = core
         self.verification = verification
         self.polytope = polytope
         self._close_resources = close_resources or (lambda: None)
-        self._start_lean_warmup = start_lean_warmup or (lambda: None)
-
-    def start_lean_warmup(self) -> None:
-        """Run an explicitly configured optional warmup hook."""
-
-        self._start_lean_warmup()
 
     def close(self) -> None:
         """Release every runtime-owned resource."""

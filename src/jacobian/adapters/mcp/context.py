@@ -95,17 +95,11 @@ def _runtime_scope(
     access = state.acquire_runtime(operation_id)
     token: Token[JacobianRuntime | None] = _active_runtime.set(access.runtime)
     try:
-        _start_lean_warmup(access.runtime)
         yield access.runtime
     finally:
         _active_runtime.reset(token)
         if access.release is not None:
             access.release()
-
-
-def _start_lean_warmup(runtime: JacobianRuntime) -> None:
-    if os.environ.get("JACOBIAN_LEAN_WARMUP") == "1":
-        runtime.start_lean_warmup()
 
 
 def _configured_root(state_dir: str | Path | None) -> Path:

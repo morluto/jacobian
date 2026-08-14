@@ -314,6 +314,35 @@ def test_benchmark_plan_is_shown_as_json_in_the_job_summary() -> None:
     assert "Plan receipt:" not in workflow
 
 
+def test_coverage_report_lives_in_the_job_summary_not_a_pr_comment() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    coverage = workflow.split("  coverage:", 1)[1].split("  required:", 1)[0]
+
+    assert "$GITHUB_STEP_SUMMARY" in coverage
+    assert "jacobian-coverage-report" not in workflow
+    assert "issues/$PR_NUMBER/comments" not in workflow
+    assert "pull-requests: write" not in coverage
+
+
+def test_benchmark_job_outputs_are_only_if_projections() -> None:
+    workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
+    outputs = workflow.split("    outputs:", 1)[1].split("    steps:", 1)[0]
+
+    assert "run-benchmark-check:" in outputs
+    assert "run-benchmark-record-schema:" in outputs
+    assert "run-benchmark-inventory:" in outputs
+    assert "run-benchmark-host-validation:" in outputs
+    assert "benchmark-host-validation-matrix:" in outputs
+    assert "run-benchmark-oracle:" in outputs
+    assert "benchmark-oracle-matrix:" in outputs
+    assert "benchmark-plan-version:" not in outputs
+    assert "benchmark-planner-digest:" not in outputs
+    assert "benchmark-plan-reasons:" not in outputs
+    assert "run-benchmark-prospective-digest:" not in outputs
+    assert "benchmark-oracle-scope:" not in outputs
+    assert "PROSPECTIVE_DIGEST_FLAG" not in workflow
+
+
 def test_required_ci_gates_fail_closed_after_cancellation() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     required = workflow.split("  required:", 1)[1]

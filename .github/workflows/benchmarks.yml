@@ -28,23 +28,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     outputs:
-      benchmark-plan-version: ${{ steps.plan.outputs.benchmark-plan-version }}
-      benchmark-plan-event: ${{ steps.plan.outputs.benchmark-plan-event }}
-      benchmark-plan-base-sha: ${{ steps.plan.outputs.benchmark-plan-base-sha }}
-      benchmark-plan-head-sha: ${{ steps.plan.outputs.benchmark-plan-head-sha }}
-      benchmark-planner-digest: ${{ steps.plan.outputs.benchmark-planner-digest }}
-      benchmark-topology-digest: ${{ steps.plan.outputs.benchmark-topology-digest }}
-      benchmark-plan-mode: ${{ steps.plan.outputs.benchmark-plan-mode }}
       run-benchmark-check: ${{ steps.plan.outputs.run-benchmark-check }}
       run-benchmark-record-schema: ${{ steps.plan.outputs.run-benchmark-record-schema }}
-      run-benchmark-prospective-digest: ${{ steps.plan.outputs.run-benchmark-prospective-digest }}
       run-benchmark-inventory: ${{ steps.plan.outputs.run-benchmark-inventory }}
       run-benchmark-host-validation: ${{ steps.plan.outputs.run-benchmark-host-validation }}
       benchmark-host-validation-matrix: ${{ steps.plan.outputs.benchmark-host-validation-matrix }}
       run-benchmark-oracle: ${{ steps.plan.outputs.run-benchmark-oracle }}
-      benchmark-oracle-scope: ${{ steps.plan.outputs.benchmark-oracle-scope }}
       benchmark-oracle-matrix: ${{ steps.plan.outputs.benchmark-oracle-matrix }}
-      benchmark-plan-reasons: ${{ steps.plan.outputs.benchmark-plan-reasons }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -326,7 +316,6 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           PLAN_CHECK: ${{ needs.plan.outputs.run-benchmark-check }}
           RECORD_SCHEMA_FLAG: ${{ needs.plan.outputs.run-benchmark-record-schema }}
-          PROSPECTIVE_DIGEST_FLAG: ${{ needs.plan.outputs.run-benchmark-prospective-digest }}
           INVENTORY_FLAG: ${{ needs.plan.outputs.run-benchmark-inventory }}
           HOST_VALIDATION_FLAG: ${{ needs.plan.outputs.run-benchmark-host-validation }}
           ORACLE_FLAG: ${{ needs.plan.outputs.run-benchmark-oracle }}

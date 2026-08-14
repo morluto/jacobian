@@ -103,23 +103,13 @@ class BenchmarkPlan:
         """Project ``if:`` conditions and matrices for GitHub Actions."""
 
         return {
-            "benchmark-plan-version": str(self.schema_version),
-            "benchmark-plan-event": self.event,
-            "benchmark-plan-base-sha": self.base_sha,
-            "benchmark-plan-head-sha": self.head_sha,
-            "benchmark-planner-digest": self.planner_digest,
-            "benchmark-topology-digest": self.topology_digest,
-            "benchmark-plan-mode": self.mode,
             "run-benchmark-check": str(self.run_check).lower(),
             "run-benchmark-record-schema": str(self.record_schema).lower(),
-            "run-benchmark-prospective-digest": str(self.prospective_digest).lower(),
             "run-benchmark-inventory": str(self.inventory).lower(),
             "run-benchmark-host-validation": str(self.run_host_validation).lower(),
             "benchmark-host-validation-matrix": _json(list(self.host_matrix)),
             "run-benchmark-oracle": str(self.run_oracle).lower(),
-            "benchmark-oracle-scope": self.oracle_scope,
             "benchmark-oracle-matrix": _json(list(self.oracle_matrix)),
-            "benchmark-plan-reasons": _json(list(self.reasons)),
         }
 
 

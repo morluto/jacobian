@@ -334,8 +334,7 @@ verifier workspace, and malformed or unbound evidence must fail closed.
 
 The independent benchmark planner writes one canonical `plan.json`. GitHub
 `if:` conditions are projections of that object (`run-benchmark-check`,
-`run-benchmark-oracle`, `benchmark-oracle-scope`, and the exact dataset/task
-matrix). README-only task changes run contract checks without
+`run-benchmark-oracle`, and the host/Oracle matrices). README-only task changes run contract checks without
 Docker. Executable task changes run the exact task Oracle on pull requests.
 Large multi-task edits are capped on the pull-request critical path and defer
 their Oracle matrix to the merge queue.

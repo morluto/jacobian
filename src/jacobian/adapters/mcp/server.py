@@ -142,6 +142,7 @@ class _LazyLocalRuntime:
                 core.binder,
                 services.verification,
                 core.checkers,
+                core.polynomial_expressions,
             )
             core.operations = OperationDispatcher(self.catalog, registry)
             self._selected_runtime = JacobianRuntime(

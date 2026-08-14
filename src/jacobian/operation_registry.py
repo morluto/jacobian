@@ -16,11 +16,12 @@ from jacobian.operation_catalog import (
     operation_declaration_digest,
 )
 from jacobian.operation_declarations import OperationDeclarations
+from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.portfolio.builtin import load_builtin_operation_module
 from jacobian.registry import CheckerRegistry
 from jacobian.verification.service import VerificationService
 
-_SELECTED_RESOURCE_OPERATIONS = frozenset(
+_SELECTED_GRAPH_OPERATIONS = frozenset(
     {
         "graph.construct.explicit",
         "graph.search.atlas",
@@ -33,6 +34,10 @@ _SELECTED_RESOURCE_OPERATIONS = frozenset(
         "graph.neighborhood_independence.verify",
         "graph.isomorphism.verify",
     }
+)
+_SELECTED_POLYNOMIAL_OPERATIONS = frozenset({"polynomial.expression.normalize"})
+_SELECTED_RESOURCE_OPERATIONS = (
+    _SELECTED_GRAPH_OPERATIONS | _SELECTED_POLYNOMIAL_OPERATIONS
 )
 
 
@@ -51,11 +56,13 @@ class OperationRegistry:
         binder: OperationBinder,
         verification: VerificationService,
         checkers: CheckerRegistry,
+        polynomial_expressions: PolynomialExpressionArtifactService,
     ) -> None:
         self.catalog = catalog
         self.binder = binder
         self.verification = verification
         self.checkers = checkers
+        self.polynomial_expressions = polynomial_expressions
         self._adapters: dict[str, OperationAdapter[Any]] = {}
 
     def resolve(self, operation_id: str) -> OperationAdapter[Any]:
@@ -133,17 +140,34 @@ class OperationRegistry:
     ) -> OperationAdapter[Any] | None:
         if not supports_selected_operation(operation_id):
             return None
-        from jacobian.graphs.installation import bind_selected_graph_operation
+        adapter: OperationAdapter[Any] | None
+        if operation_id in _SELECTED_GRAPH_OPERATIONS:
+            from jacobian.graphs.installation import bind_selected_graph_operation
 
-        adapter = bind_selected_graph_operation(
-            operation_id,
-            self.binder.store,
-            self.binder.schemas,
-            self.binder.artifacts,
-            self.verification,
-            self.checkers,
-            self.catalog,
-        )
+            adapter = bind_selected_graph_operation(
+                operation_id,
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        elif operation_id == "polynomial.expression.normalize":
+            from jacobian.sympy_polynomial_normalization import (
+                install_sympy_polynomial_normalization_operation,
+            )
+
+            if descriptor.provider_runtime is None:
+                raise OperationCatalogError(
+                    "polynomial provider observation is missing; run `jacobian update`"
+                )
+            adapter = install_sympy_polynomial_normalization_operation(
+                self.polynomial_expressions,
+                descriptor.provider_runtime,
+            )
+        else:
+            adapter = None
         if adapter is None:
             raise OperationCatalogError(
                 f"selected operation binder is missing: {operation_id}"

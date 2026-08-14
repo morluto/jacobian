@@ -25,6 +25,11 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
 ) -> None:
     monkeypatch.delattr(server_module, "Context", raising=False)
 
+    def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("selected operation must not assemble the portfolio")
+
+    monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
+
     async def scenario() -> None:
         from mcp import Client
         from mcp.shared.exceptions import MCPError

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from jacobian.artifacts import ArtifactService
@@ -43,6 +43,7 @@ from jacobian.graphs.neighborhood_independence import (
     GraphNeighborhoodIndependenceResources,
 )
 from jacobian.operation_adapters import OperationAdapter
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
@@ -169,6 +170,9 @@ def bind_selected_graph_operation(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
 ) -> OperationAdapter[Any] | None:
     """Bind one ordinary graph operation without checker or portfolio setup."""
 
@@ -176,15 +180,79 @@ def bind_selected_graph_operation(
         "graph.construct.explicit",
         "graph.search.atlas",
         "graph.compute.properties",
+        "graph.realize.degree_sequence",
+        "graph.compute.neighborhood_independence",
+        "graph.degree_sequence.verify",
+        "graph.neighborhood_independence.verify",
     }:
         return None
     resources = register_graph_resources(store, schemas)
+    if operation_id in {
+        "graph.realize.degree_sequence",
+        "graph.degree_sequence.verify",
+    }:
+        resources = replace(
+            resources,
+            degree_sequence_checker_id=_active_checker_id(
+                "graph.degree_sequence.verify", catalog, checkers
+            ),
+        )
+    if operation_id in {
+        "graph.compute.neighborhood_independence",
+        "graph.neighborhood_independence.verify",
+    }:
+        resources = replace(
+            resources,
+            neighborhood_checker_id=_active_checker_id(
+                "graph.neighborhood_independence.verify", catalog, checkers
+            ),
+        )
+    if operation_id == "graph.degree_sequence.verify":
+        return certificate_verification_adapter(
+            operation_id=operation_id,
+            title="Verify a graph degree-sequence realization",
+            description=(
+                "Independently replay one exact realization or Erdos-Gallai "
+                "obstruction with the installed graph checker."
+            ),
+            checker_id=resources.degree_sequence_checker_id,
+            tags=("graph", "degree-sequence"),
+            verification=verification,
+        )
+    if operation_id == "graph.neighborhood_independence.verify":
+        return certificate_verification_adapter(
+            operation_id=operation_id,
+            title="Verify graph neighborhood independence values",
+            description=(
+                "Independently replay one exact neighborhood-independence ledger."
+            ),
+            checker_id=resources.neighborhood_checker_id,
+            tags=("graph", "neighborhood-independence"),
+            verification=verification,
+        )
     adapters = _graph_operation_adapters(store, artifacts, resources)
     return next(
         adapter
         for adapter in adapters
         if adapter.descriptor.operation_id == operation_id
     )
+
+
+def _active_checker_id(
+    operation_id: str,
+    catalog: OperationCatalog,
+    checkers: CheckerRegistry,
+) -> str:
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    return binding.checker_id
 
 
 def install_graph_operations(

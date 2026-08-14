@@ -70,4 +70,48 @@ def test_graph_resource_operations_do_not_assemble_the_portfolio(
                 },
             }
 
+            realized = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.realize.degree_sequence",
+                    "payload": {"degree_sequence": [2, 2, 2]},
+                },
+            )
+            assert realized.structured_content is not None
+            certificate_uri = realized.structured_content["output"]["certificate_uri"]
+            verified = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.degree_sequence.verify",
+                    "payload": {"certificate_uri": certificate_uri},
+                },
+            )
+            assert verified.structured_content is not None
+            assert verified.structured_content["output"]["conclusion"] == "TRUE"
+            assert verified.structured_content["verification_record_uri"] is not None
+
+            neighborhood = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.compute.neighborhood_independence",
+                    "payload": {"graph_uri": graph_uri},
+                },
+            )
+            assert neighborhood.structured_content is not None
+            neighborhood_certificate = neighborhood.structured_content["output"][
+                "certificate_uri"
+            ]
+            neighborhood_verified = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.neighborhood_independence.verify",
+                    "payload": {"certificate_uri": neighborhood_certificate},
+                },
+            )
+            assert neighborhood_verified.structured_content is not None
+            assert (
+                neighborhood_verified.structured_content["output"]["conclusion"]
+                == "TRUE"
+            )
+
     asyncio.run(scenario())

@@ -25,6 +25,10 @@ _SELECTED_RESOURCE_OPERATIONS = frozenset(
         "graph.construct.explicit",
         "graph.search.atlas",
         "graph.compute.properties",
+        "graph.realize.degree_sequence",
+        "graph.compute.neighborhood_independence",
+        "graph.degree_sequence.verify",
+        "graph.neighborhood_independence.verify",
     }
 )
 
@@ -133,6 +137,9 @@ class OperationRegistry:
             self.binder.store,
             self.binder.schemas,
             self.binder.artifacts,
+            self.verification,
+            self.checkers,
+            self.catalog,
         )
         if adapter is None:
             raise OperationCatalogError(

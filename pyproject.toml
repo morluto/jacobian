@@ -272,7 +272,7 @@ type = "forbidden"
 source_modules = [
     "jacobian.runtime.bootstrap",
     "jacobian.runtime.model",
-    "jacobian.runtime.services",
+    "jacobian.runtime.resources",
 ]
 forbidden_modules = ["jacobian.portfolio"]
 

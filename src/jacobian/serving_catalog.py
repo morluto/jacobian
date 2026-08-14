@@ -13,6 +13,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.operation_catalog import (
     OperationCatalog,
+    OperationCatalogError,
     OperationCheckerBinding,
     OperationDeclarationRecord,
     OperationSearchCard,
@@ -20,6 +21,7 @@ from jacobian.operation_catalog import (
     public_operation_descriptor,
 )
 from jacobian.operation_discovery import discover_operations
+from jacobian.operation_locators import FamilyLocator, encode_locator
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.package_index import PackageIndex, load_package_index
 
@@ -55,7 +57,9 @@ class ServingCatalog:
                 visibility,
                 expected_package_version=expected_package_version or __version__,
             )
-        return cls(load_package_index(), overlay, visibility)
+        catalog = cls(load_package_index(), overlay, visibility)
+        _reject_packaged_descriptor_mirrors(catalog.index, overlay)
+        return catalog
 
     def inspect(self, operation_id: str) -> OperationDescriptor | None:
         entry = self.index.get(operation_id)
@@ -70,9 +74,12 @@ class ServingCatalog:
     ) -> OperationDeclarationRecord | None:
         entry = self.index.get(operation_id)
         if entry is not None:
+            module = entry.module
+            if entry.family is not None:
+                module = encode_locator(FamilyLocator(family=entry.family))
             return OperationDeclarationRecord(
                 operation_id=entry.operation_id,
-                module=entry.module,
+                module=module,
                 declaration_digest="package-index",
             )
         if self.overlay is None:
@@ -117,6 +124,21 @@ class ServingCatalog:
             OperationSearchCard.from_descriptor(descriptor)
             for descriptor in self.snapshot().operations
         )
+
+
+def _reject_packaged_descriptor_mirrors(
+    index: PackageIndex,
+    overlay: OperationCatalog | None,
+) -> None:
+    """Refuse SQLite copies of packaged built-in descriptors."""
+
+    if overlay is None:
+        return
+    for operation_id in index.entries:
+        if overlay.declaration_record(operation_id) is not None:
+            raise OperationCatalogError(
+                "operation catalog overlay is stale; run `jacobian update`"
+            )
 
 
 __all__ = ["ServingCatalog"]

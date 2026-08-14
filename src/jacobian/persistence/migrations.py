@@ -604,6 +604,14 @@ def _install_operation_catalog_boundary(connection: sqlite3.Connection) -> None:
     )
 
 
+def _install_overlay_only_catalog_boundary(connection: sqlite3.Connection) -> None:
+    """Advance serving so packaged built-in descriptors are not SQLite mirrors."""
+
+    connection.execute(
+        "UPDATE jacobian_state_format SET format_revision = 13 WHERE id = 0"
+    )
+
+
 STATE_MIGRATIONS = (
     Migration(
         revision=1,
@@ -704,7 +712,17 @@ STATE_MIGRATIONS = (
         apply=_install_operation_catalog_boundary,
         requires_foreign_keys_off=True,
     ),
+    Migration(
+        revision=13,
+        name="overlay-only-operation-catalog-v1",
+        definition=(
+            "Treat packaged built-in descriptors as index truth and SQLite as "
+            "overlay state for checkers, executables, and artifacts; advance "
+            "the state format to revision 13."
+        ),
+        apply=_install_overlay_only_catalog_boundary,
+    ),
 )
 
-SUPPORTED_STATE_FLOOR = 11
-CURRENT_STATE_FORMAT_REVISION = 12
+SUPPORTED_STATE_FLOOR = 12
+CURRENT_STATE_FORMAT_REVISION = 13

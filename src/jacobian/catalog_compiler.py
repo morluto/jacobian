@@ -22,6 +22,7 @@ from jacobian.operation_catalog import (
 )
 from jacobian.operation_locators import FamilyLocator, ModuleLocator, encode_locator
 from jacobian.operation_visibility import OperationVisibilityPolicy
+from jacobian.package_index import load_package_index
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
@@ -69,7 +70,8 @@ def compile_operation_catalog(
             public_operation_descriptor(descriptor) for descriptor in bound_descriptors
         )
         entries = _compiled_entries(descriptors)
-        return OperationCatalogStore(state_dir / "metadata.sqlite3").commit(
+        packaged = load_package_index()
+        result = OperationCatalogStore(state_dir / "metadata.sqlite3").commit(
             package_version=__version__,
             checker_binding_digest=declaration_digest(
                 {
@@ -81,6 +83,12 @@ def compile_operation_catalog(
             ),
             entries=entries,
             checker_bindings=checker_bindings,
+        )
+        return CatalogBuildResult(
+            revision=result.revision,
+            operation_count=len(packaged.entries) + result.operation_count,
+            omitted_operations=result.omitted_operations,
+            diagnostics=result.diagnostics,
         )
     finally:
         try:
@@ -108,6 +116,7 @@ def _compiled_entries(
         for declaration in checker_declarations
         if declaration.verification_operation_id is not None
     }
+    packaged = load_package_index()
     return tuple(
         CompiledCatalogEntry(
             descriptor=descriptor,
@@ -128,6 +137,7 @@ def _compiled_entries(
             ),
         )
         for descriptor in descriptors
+        if not packaged.contains(descriptor.operation_id)
     )
 
 

@@ -1,6 +1,6 @@
 # Persistent state format
 
-The current state format is revision 12. Revision 11 is the minimum supported
+The current state format is revision 13. Revision 12 is the minimum supported
 update source; older stores are rejected before any migration code runs.
 
 To recover data from an older store, keep that directory unchanged and open it
@@ -16,13 +16,16 @@ a versioned per-checker manifest that separates checker and worker source,
 records exact Python distributions, and produces one implementation digest;
 existing checker authorization rows are deliberately not reinterpreted. The
 operation-catalog boundary in revision 12 retires the generic experiment,
-search, installed-plugin, and reasoning-log tables. New stores apply the
-complete ordered schema and record revision 12.
+search, installed-plugin, and reasoning-log tables. Revision 13 makes SQLite
+overlay-only: packaged built-in descriptors live in the wheel index, and
+revision-12 built-in descriptor rows are overlay-stale until `jacobian update`.
+New stores apply the complete ordered schema and record revision 13.
 
 Verification records are immutable artifacts rather than state-table rows.
 Record schema v4 payloads snapshot the accepting checker's full manifest.
-Revision 11 is the minimum accepted migration source: revision-10 stores and
-their v3 records remain readable with a matching older checkout, but are not
-reinterpreted by the current runtime. Revision-11 stores must be updated to
-revision 12 before serving. There is no legacy checker-authorization or record
-import path.
+Revision 12 is the minimum accepted migration source: revision-11 stores and
+their earlier records remain readable with a matching older checkout, but are
+not reinterpreted by the current runtime. Revision-12 stores must be updated to
+revision 13 before serving. There is no legacy checker-authorization or record
+import path. `jacobian init` and `jacobian update` authorize checkers and write
+overlay bindings; they do not fail closed on packaged built-in title drift.

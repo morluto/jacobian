@@ -19,6 +19,7 @@ from jacobian.persistence.migrations import (
     SUPPORTED_STATE_FLOOR,
 )
 from jacobian.persistence.state_health import StateHealth, inspect_state_health
+from jacobian.serving_catalog import ServingCatalog
 
 
 class CheckerAuthorization(StrEnum):
@@ -41,9 +42,10 @@ def initialize_state(
     if health.status == "COMPATIBLE":
         current = _load_current_catalog(state_dir)
         if current is not None:
+            serving = _load_serving_catalog(state_dir)
             return CatalogBuildResult(
                 revision=current.header.revision,
-                operation_count=len(current.snapshot().operations),
+                operation_count=len(serving.snapshot().operations),
                 omitted_operations=(),
                 diagnostics=current.header.diagnostics,
             )
@@ -88,6 +90,22 @@ def _load_current_catalog(state_dir: Path) -> OperationCatalog | None:
         )
     except OperationCatalogError:
         return None
+
+
+def _load_serving_catalog(state_dir: Path) -> ServingCatalog:
+    try:
+        return ServingCatalog.open(
+            state_dir / "metadata.sqlite3",
+            OperationVisibilityPolicy(),
+            expected_package_version=__version__,
+        )
+    except OperationCatalogError as exc:
+        if "overlay is stale" in str(exc):
+            raise OperationCatalogError(
+                "STATE_UPDATE_REQUIRED: operation catalog overlay is stale; "
+                "run `jacobian update`"
+            ) from exc
+        raise
 
 
 def _build_catalog(

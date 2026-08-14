@@ -1,7 +1,8 @@
-"""Read-only package index for ordinary inline mathematical operations.
+"""Read-only package index for built-in mathematical operations.
 
-The index is generated from ``InlineOperation`` declarations at wheel build.
-Editable checkouts reconstruct it in memory when the packaged JSON is absent.
+The index is generated from ``InlineOperation`` declarations and family cards
+at wheel build. Editable checkouts reconstruct it in memory when the packaged
+JSON is absent.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ class PackageIndexEntry:
     output_schema: dict[str, Any]
     module: str
     symbol: str
+    family: str | None = None
 
     def descriptor(self) -> OperationDescriptor:
         return OperationDescriptor(
@@ -52,14 +54,14 @@ class PackageIndexEntry:
             provider="built-in",
             input_schema=self.input_schema,
             output_schema=self.output_schema,
-            read_only=True,
+            read_only=self.family is None,
             tags=self.tags,
             produced_artifact_types=(),
             examples=self.examples,
         )
 
     def as_json(self) -> dict[str, Any]:
-        return {
+        payload = {
             "operation_id": self.operation_id,
             "version": self.version,
             "title": self.title,
@@ -78,6 +80,9 @@ class PackageIndexEntry:
             "module": self.module,
             "symbol": self.symbol,
         }
+        if self.family is not None:
+            payload["family"] = self.family
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +117,10 @@ class PackageIndex:
         entry = self.entries.get(operation_id)
         if entry is None:
             raise KeyError(operation_id)
+        if entry.family is not None:
+            raise OperationCatalogError(
+                f"family operation requires overlay catalog state: {operation_id}"
+            )
         return load_inline_operation(entry)
 
 
@@ -145,11 +154,47 @@ def collect_inline_index_entries() -> tuple[PackageIndexEntry, ...]:
     return tuple(sorted(entries, key=lambda item: item.operation_id))
 
 
+def collect_family_index_entries() -> tuple[PackageIndexEntry, ...]:
+    """Compile family discovery cards without constructing adapters."""
+
+    # Generate-only import: serving loads JSON and must not import family contracts.
+    from jacobian.family_catalog import family_index_payloads
+
+    entries: list[PackageIndexEntry] = []
+    for payload in family_index_payloads():
+        entries.append(
+            PackageIndexEntry(
+                operation_id=str(payload["operation_id"]),
+                version=str(payload["version"]),
+                title=str(payload["title"]),
+                description=str(payload["description"]),
+                tags=tuple(str(tag) for tag in payload["tags"]),
+                examples=(),
+                input_schema=dict(payload["input_schema"]),
+                output_schema=dict(payload["output_schema"]),
+                module="",
+                symbol="",
+                family=str(payload["family"]),
+            )
+        )
+    return tuple(sorted(entries, key=lambda item: item.operation_id))
+
+
+def collect_package_index_entries() -> tuple[PackageIndexEntry, ...]:
+    """Return packaged inline and family discovery cards."""
+
+    combined = {
+        entry.operation_id: entry
+        for entry in (*collect_inline_index_entries(), *collect_family_index_entries())
+    }
+    return tuple(sorted(combined.values(), key=lambda item: item.operation_id))
+
+
 def generate_package_index() -> PackageIndex:
     """Build the in-memory index from live inline declarations."""
 
     return PackageIndex(
-        {entry.operation_id: entry for entry in collect_inline_index_entries()}
+        {entry.operation_id: entry for entry in collect_package_index_entries()}
     )
 
 
@@ -165,7 +210,7 @@ def load_package_index() -> PackageIndex:
 def write_package_index(path: Any) -> None:
     """Write the generated index JSON for a wheel or local package data file."""
 
-    payload = [entry.as_json() for entry in collect_inline_index_entries()]
+    payload = [entry.as_json() for entry in collect_package_index_entries()]
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -287,8 +332,9 @@ def _entry_from_json(item: object) -> PackageIndexEntry:
         examples=examples,
         input_schema=dict(payload["input_schema"]),
         output_schema=dict(payload["output_schema"]),
-        module=str(payload["module"]),
-        symbol=str(payload["symbol"]),
+        module=str(payload.get("module") or ""),
+        symbol=str(payload.get("symbol") or ""),
+        family=(str(payload["family"]) if payload.get("family") is not None else None),
     )
 
 
@@ -296,7 +342,9 @@ __all__ = [
     "PackageIndex",
     "PackageIndexEntry",
     "PackageIndexRegistry",
+    "collect_family_index_entries",
     "collect_inline_index_entries",
+    "collect_package_index_entries",
     "generate_package_index",
     "load_inline_operation",
     "load_package_index",

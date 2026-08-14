@@ -20,17 +20,21 @@ def test_serving_catalog_inspects_determinant_without_sqlite(tmp_path: Path) -> 
     assert catalog.overlay is None
 
 
-def test_serving_catalog_hides_family_ids_without_overlay() -> None:
+def test_serving_catalog_inspects_family_ids_from_the_package_index() -> None:
     catalog = ServingCatalog.open(
         None,
         OperationVisibilityPolicy(),
     )
 
-    assert catalog.inspect("graph.construct.explicit") is None
-    assert catalog.declaration_record("graph.construct.explicit") is None
+    descriptor = catalog.inspect("graph.construct.explicit")
+    assert descriptor is not None
+    assert descriptor.operation_id == "graph.construct.explicit"
+    record = catalog.declaration_record("graph.construct.explicit")
+    assert record is not None
+    assert record.declaration_digest == "package-index"
     snapshot_ids = {item.operation_id for item in catalog.snapshot().operations}
     assert "matrix.determinant.compute" in snapshot_ids
-    assert "graph.construct.explicit" not in snapshot_ids
+    assert "graph.construct.explicit" in snapshot_ids
 
 
 def test_inline_serving_runtime_runs_determinant_without_state() -> None:

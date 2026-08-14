@@ -83,13 +83,14 @@ declarations live outside `jacobian.math`.
 
 Domain declaration modules export immutable operation tuples and perform no
 installation. Ordinary inline operations are indexed at wheel build; serving
-loads one declaration symbol and runs it without a state directory.
-`jacobian init` and `jacobian update` compile overlay state for visibility,
-checkers, executables, artifacts, and family-backed operations. Serving
-resolves either the packaged locator or an explicit family binding origin
-selected by `math.run`. Graph, polynomial, Lean, and SAT/SMT families own
-their selected IDs and binding logic; the runtime-local resolver only chooses
-that fixed family seam, validates identity, caches the adapter, and
+loads one declaration symbol and runs it without a state directory. Family
+operations are also indexed at wheel build for discovery. `jacobian init` and
+`jacobian update` compile overlay state for visibility, checkers, executables,
+and artifacts. SQLite overlay must not mirror packaged built-in descriptors.
+Serving resolves either the packaged locator or an explicit family binding
+origin selected by `math.run`. Graph, polynomial, Lean, and SAT/SMT families
+own their selected IDs and binding logic; the runtime-local resolver only
+chooses that fixed family seam, validates identity, caches the adapter, and
 participates in shutdown. An operation may call a private computational
 backend, but that backend owns no runtime, storage, publication,
 installation, or checker authority.

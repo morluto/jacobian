@@ -42,9 +42,10 @@ third-party plugin discovery and a domain-bundle framework are not part of the
 architecture.
 
 `jacobian init` and `jacobian update` compile overlay state for checkers,
-executables, artifacts, and family-backed operations. Ordinary inline
-operations such as `matrix.determinant.compute` are served from the packaged
-index and do not require a state directory. The persisted overlay has an
+executables, artifacts, and family-backed resources. Built-in inline and family
+operations are served from the packaged index. Overlay SQLite must not mirror
+those packaged descriptors; revision-12 catalogs that still do are stale until
+`jacobian update`. The persisted overlay has an
 active revision, compact search cards for non-indexed operations, exact
 descriptors, declaration locators and digests, and checker-binding identity.
 Search reads the package index plus overlay cards; exact inspection reads one
@@ -59,8 +60,10 @@ typed JSON locator: a declaration-module locator or a family locator such as
 fail closed until `jacobian update`. The runtime-local `OperationRegistry`
 decodes that locator only after an operation is selected. Each family has one
 `FamilyResolver` with shared resources, an adapter cache, and a close
-boundary. Inline IDs skip SQLite digest comparison. Family adapters still
-validate persisted identity, schemas, and digest. Graph, polynomial, Lean, and
+boundary. Inline IDs skip SQLite digest comparison. Packaged family IDs skip
+built-in title and schema digest drift against SQLite mirrors; they still
+fail closed on missing checkers, missing executables, and revoked authority.
+Graph, polynomial, Lean, and
 SAT/SMT modules own their selected IDs and binding logic. The runtime owns any
 closeable resources acquired by those binders and releases them at shutdown.
 

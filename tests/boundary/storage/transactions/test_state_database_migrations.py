@@ -105,7 +105,9 @@ def test_revision_twelve_preserves_artifacts_and_retires_runtime_tables(
 
     connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
     try:
-        connection.execute("DELETE FROM jacobian_schema_migrations WHERE revision = 12")
+        connection.execute(
+            "DELETE FROM jacobian_schema_migrations WHERE revision >= 12"
+        )
         connection.execute(
             "UPDATE jacobian_state_format SET format_revision = 11 WHERE id = 0"
         )
@@ -152,6 +154,43 @@ def test_revision_twelve_preserves_artifacts_and_retires_runtime_tables(
         }
         assert "reasoning_runs" not in tables
         assert "operation_catalog_snapshots" in tables
+        assert connection.execute(
+            "SELECT format_revision FROM jacobian_state_format WHERE id = 0"
+        ).fetchone() == (CURRENT_STATE_FORMAT_REVISION,)
+    finally:
+        connection.close()
+
+
+def test_revision_thirteen_records_overlay_only_catalog_boundary(
+    tmp_path: Path,
+) -> None:
+    with ArtifactRepository(tmp_path):
+        pass
+
+    connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
+    try:
+        connection.execute("DELETE FROM jacobian_schema_migrations WHERE revision = 13")
+        connection.execute(
+            "UPDATE jacobian_state_format SET format_revision = 12 WHERE id = 0"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    database = StateDatabase(tmp_path / "metadata.sqlite3", synchronous="FULL")
+    try:
+        database.migrate(STATE_MIGRATIONS)
+    finally:
+        database.close(checkpoint=False)
+
+    connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
+    try:
+        assert connection.execute(
+            "SELECT format_revision FROM jacobian_state_format WHERE id = 0"
+        ).fetchone() == (CURRENT_STATE_FORMAT_REVISION,)
+        assert connection.execute(
+            "SELECT revision FROM jacobian_schema_migrations WHERE revision = 13"
+        ).fetchone() == (13,)
     finally:
         connection.close()
 
@@ -424,7 +463,28 @@ def test_record_v3_state_requires_its_matching_checkout(tmp_path: Path) -> None:
     with pytest.raises(UnsupportedStateVersionError) as exc_info:
         ArtifactRepository(tmp_path)
     assert exc_info.value.detected_revision == 10
-    assert exc_info.value.minimum_revision == 11
+    assert exc_info.value.minimum_revision == SUPPORTED_STATE_FLOOR
+
+
+def test_revision_eleven_requires_matching_checkout(tmp_path: Path) -> None:
+    with ArtifactRepository(tmp_path):
+        pass
+    connection = sqlite3.connect(tmp_path / "metadata.sqlite3")
+    try:
+        connection.execute(
+            "DELETE FROM jacobian_schema_migrations WHERE revision >= 12"
+        )
+        connection.execute(
+            "UPDATE jacobian_state_format SET format_revision = 11 WHERE id = 0"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(UnsupportedStateVersionError) as exc_info:
+        ArtifactRepository(tmp_path)
+    assert exc_info.value.detected_revision == 11
+    assert exc_info.value.minimum_revision == SUPPORTED_STATE_FLOOR
 
 
 def test_checker_distribution_identity_rejects_existing_authorizations(

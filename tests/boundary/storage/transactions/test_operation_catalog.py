@@ -18,6 +18,7 @@ from jacobian.operation_catalog import (
 )
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.registry import CheckerRegistry
+from jacobian.serving_catalog import ServingCatalog
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -222,6 +223,20 @@ def test_catalog_reads_one_exact_declaration_locator(tmp_path: Path) -> None:
     assert record.module == "jacobian.domains.synthetic.domain_declarations"
     assert record.declaration_digest == "sha256:" + "a" * 64
     assert catalog.declaration_record("missing.operation") is None
+
+
+def test_serving_catalog_rejects_packaged_builtin_mirrors(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    _commit(store)
+
+    with pytest.raises(
+        OperationCatalogError, match="operation catalog overlay is stale"
+    ):
+        ServingCatalog.open(
+            tmp_path / "metadata.sqlite3",
+            OperationVisibilityPolicy(),
+            expected_package_version="0.13.0",
+        )
 
 
 def test_catalog_loads_the_selected_checker_binding_index(tmp_path: Path) -> None:

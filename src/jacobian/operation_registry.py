@@ -76,6 +76,20 @@ class OperationRegistry:
         if cached is not None:
             return cached
         if self._package_index.contains(operation_id):
+            entry = self._package_index.get(operation_id)
+            if entry is not None and entry.family is not None:
+                descriptor = self.catalog.inspect(operation_id)
+                record = self.catalog.declaration_record(operation_id)
+                if descriptor is None or record is None:
+                    raise OperationCatalogError(
+                        f"unknown or hidden operation: {operation_id}"
+                    )
+                return self._resolve_selected_family(
+                    operation_id,
+                    descriptor,
+                    record,
+                    FamilyLocator(family=entry.family),
+                )
             return self._resolve_package_index(operation_id)
         descriptor = self.catalog.inspect(operation_id)
         record = self.catalog.declaration_record(operation_id)
@@ -181,7 +195,8 @@ class OperationRegistry:
             raise OperationCatalogError(
                 f"selected operation binder is missing: {operation_id}"
             )
-        self._validate_selected_binding(operation_id, descriptor, record, binding)
+        if record.declaration_digest != "package-index":
+            self._validate_selected_binding(operation_id, descriptor, record, binding)
         for resource in binding.resources:
             self._resource_owner.own(resource)
         adapter = binding.adapter

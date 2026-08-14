@@ -1,6 +1,0 @@
-{
-  "task_id": "jacobian/lean-repl",
-  "provider": "lean-repl",
-  "contract": "leanprover-community/repl@v4.31.0",
-  "pin_sha256": "sha256:7910ac2367d19cd57fc0d4ea6152605e8e085228c4083c6b1a0ed37ee0b18209"
-}

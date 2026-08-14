@@ -1,7 +1,0 @@
-{
-  "repository": "https://github.com/leanprover-community/repl.git",
-  "tag": "v4.31.0",
-  "commit": "0cc60263319308000bbaa5354427f775fe3dc7d0",
-  "lean_version": "4.31.0",
-  "lean_commit": "68218e876d2a38b1985b8590fff244a83c321783"
-}

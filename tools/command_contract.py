@@ -42,15 +42,15 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
     ),
     CommandContract(
         name="check-all",
-        help="Reproduce the six ordinary Python CI lanes locally.",
+        help="Reproduce the ordinary Python CI lanes locally.",
         mutates_checkout=False,
-        scope="lint + typecheck + unit/component/domain/composition/e2e/provider",
+        scope="lint + typecheck + unit/component/domain/composition",
         ci_relationship="local equivalent of the python matrix, not all CI jobs",
         cost_class="broad",
     ),
     CommandContract(
         name="check-external",
-        help="Pinned Lean/Mathlib specialist lane only.",
+        help="Pinned Lean specialist lane only.",
         mutates_checkout=False,
         scope="tests/boundary/providers/lean",
         ci_relationship="local equivalent of the Lean job when the toolchain exists",

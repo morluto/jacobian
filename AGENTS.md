@@ -24,6 +24,10 @@ tools:
 Jacobian supplies bounded typed operations and immutable discovery; it is not a
 workflow engine, planner, project manager, or durable mathematical system.
 Use “operation” or “math tool,” not “product” or “provider,” for built-ins.
+It is local-first: do not turn ordinary mathematical tool work into a security
+project. Avoid speculative policy, tenant isolation, secret management, and
+other security scaffolding in the kernel; preserve an explicit transport
+boundary only when the task actually changes one.
 
 ## Non-negotiable boundaries
 

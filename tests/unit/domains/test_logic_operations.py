@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import shutil
-
 import pytest
 from pydantic import ValidationError
 
@@ -24,6 +22,7 @@ from jacobian.domains.logic.operations import (
 )
 from jacobian.inline_execution import InlineOperationAdapter
 from jacobian.operation_errors import OperationInvocationError
+from jacobian.operations import OperationAbortError
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
@@ -151,10 +150,14 @@ def test_lean_check_returns_typed_rejection_without_retaining_source(
 
 
 def test_lean_check_elaborates_a_bounded_inline_source() -> None:
-    if shutil.which("lean") is None:
+    try:
+        result = check_lean_source(
+            LeanCheckRequest(source="example : True := by trivial")
+        )
+    except OperationAbortError as exc:
+        if exc.diagnostic.code != "LEAN_UNAVAILABLE":
+            raise
         pytest.skip("the fixed Lean toolchain is not installed")
-
-    result = check_lean_source(LeanCheckRequest(source="example : True := by trivial"))
 
     assert result.outcome == "ELABORATED"
     assert result.diagnostics == ()

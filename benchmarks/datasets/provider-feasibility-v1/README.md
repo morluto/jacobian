@@ -1,8 +1,8 @@
 # Jacobian provider-feasibility-v1
 
-This Oracle-only dataset reproduces six optional-backend feasibility spikes in
-provider-specific pinned environments: cddlib, CGAL, GUDHI, Lean REPL, nauty,
-and Regina. Each task reports pin fidelity, the expected bounded provider
+This Oracle-only dataset reproduces five optional-backend feasibility spikes in
+provider-specific pinned environments: cddlib, CGAL, GUDHI, nauty, and Regina.
+Each task reports pin fidelity, the expected bounded provider
 outcome, and explicit non-conclusions when its dedicated environment cannot be
 constructed.
 

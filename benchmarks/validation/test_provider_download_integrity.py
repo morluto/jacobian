@@ -106,17 +106,6 @@ def test_provider_downloads_are_sha256_verified_before_use() -> None:
             )
 
 
-def test_lean_separate_verifier_receives_both_bound_inputs() -> None:
-    task = PROVIDERS / "lean-repl"
-    assert (task / "tests" / "input.json").read_bytes() == (
-        task / "environment" / "input.json"
-    ).read_bytes()
-    assert '"/app/input.json"' in (task / "task.toml").read_text(encoding="utf-8")
-    assert "COPY expected.json input.json " in (
-        task / "tests" / "Dockerfile"
-    ).read_text(encoding="utf-8")
-
-
 def test_checksum_must_follow_the_latest_download() -> None:
     target = "/opt/provider/pkg.tgz"
     verification = f"{target} | sha256sum -c -"

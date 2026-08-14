@@ -64,9 +64,7 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
         assembler,
         "selected_family_catalog_installers",
         lambda: {
-            origin: (
-                lambda *_args, origin=origin, **_kwargs: events.append(origin)
-            )
+            origin: (lambda *_args, origin=origin, **_kwargs: events.append(origin))
             for origin in family_origins
         },
     )

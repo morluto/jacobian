@@ -240,7 +240,8 @@ def install_selected_lean_catalog(
     del polytope
     _install_lean_statements(context)
     if not (
-        context.authorize_bundled_checkers or context.checkers.bind_existing_when_omitted
+        context.authorize_bundled_checkers
+        or context.checkers.bind_existing_when_omitted
     ):
         return
     if resources is None:

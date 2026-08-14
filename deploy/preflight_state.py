@@ -38,6 +38,67 @@ from jacobian.storage.models import StorageLimits
 
 _MAX_BLOB_BYTES = StorageLimits().max_artifact_bytes
 _MAX_TOTAL_BLOB_BYTES = StorageLimits().max_total_blob_bytes
+_COMMON_STATE_SCHEMA = {
+    "jacobian_schema_migrations": frozenset(
+        {"revision", "name", "checksum", "applied_at"}
+    ),
+    "jacobian_state_format": frozenset({"id", "format_revision", "recorded_at"}),
+    "artifacts": frozenset(
+        {
+            "artifact_uri",
+            "manifest_digest",
+            "object_digest",
+            "payload_digest",
+            "schema_uri",
+            "semantics_uri",
+            "canonicalizer_digest",
+            "summary",
+            "committed_at",
+        }
+    ),
+    "artifact_parents": frozenset({"artifact_uri", "position", "parent_uri"}),
+    "blob_quota": frozenset({"id", "size_bytes", "reconciliation_required"}),
+    "checkers": frozenset(
+        {"checker_id", "registration_json", "authorized", "implementation_digest"}
+    ),
+    "checker_audit": frozenset(
+        {"sequence", "checker_id", "action", "reason", "recorded_at"}
+    ),
+}
+_CURRENT_STATE_SCHEMA = {
+    "operation_catalog_snapshots": frozenset(
+        {
+            "revision",
+            "package_version",
+            "format_version",
+            "checker_binding_digest",
+            "diagnostics_json",
+            "created_at",
+        }
+    ),
+    "operation_catalog_entries": frozenset(
+        {
+            "snapshot_revision",
+            "operation_id",
+            "search_card_json",
+            "descriptor_json",
+            "input_schema_json",
+            "output_schema_json",
+            "declaration_module",
+            "declaration_digest",
+        }
+    ),
+    "active_operation_catalog": frozenset({"id", "snapshot_revision"}),
+    "operation_checker_bindings": frozenset(
+        {
+            "snapshot_revision",
+            "operation_id",
+            "binding_index",
+            "checker_id",
+            "manifest_digest",
+        }
+    ),
+}
 
 
 def _blob_path(state_dir: Path, digest: str) -> Path | None:
@@ -273,12 +334,47 @@ def _quota_diagnostic(connection: sqlite3.Connection, state_dir: Path) -> str | 
     return None
 
 
-def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
+def _schema_diagnostic(
+    connection: sqlite3.Connection, persisted_revision: int
+) -> str | None:
+    quick_check = connection.execute("PRAGMA quick_check(1)").fetchone()
+    if quick_check is None or str(quick_check[0]) != "ok":
+        return "tenant database failed the SQLite integrity check"
+    if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        return "tenant database contains broken foreign-key references"
+
+    required_schema = dict(_COMMON_STATE_SCHEMA)
+    if persisted_revision >= CURRENT_STATE_FORMAT_REVISION:
+        required_schema.update(_CURRENT_STATE_SCHEMA)
+    for table, required_columns in required_schema.items():
+        actual_columns = {
+            str(column["name"])
+            for column in connection.execute(f'PRAGMA table_info("{table}")')
+        }
+        if not required_columns.issubset(actual_columns):
+            return "tenant database is missing required schema"
+
+    format_rows = connection.execute(
+        "SELECT id, format_revision FROM jacobian_state_format LIMIT 2"
+    ).fetchall()
+    if (
+        len(format_rows) != 1
+        or format_rows[0]["id"] != 0
+        or format_rows[0]["format_revision"] != persisted_revision
+    ):
+        return "tenant state-format metadata does not match the migration ledger"
+    return None
+
+
+def _referenced_blob_diagnostic(state_dir: Path, persisted_revision: int) -> str | None:
     database_path = state_dir / "metadata.sqlite3"
     try:
         uri = f"file:{quote(str(database_path.resolve()), safe='/')}?mode=ro"
         with sqlite3.connect(uri, uri=True) as connection:
             connection.row_factory = sqlite3.Row
+            diagnostic = _schema_diagnostic(connection, persisted_revision)
+            if diagnostic is not None:
+                return diagnostic
             rows = connection.execute("SELECT * FROM artifacts")
             for row in rows:
                 diagnostic = _artifact_binding_diagnostic(connection, state_dir, row)
@@ -345,7 +441,14 @@ def inspect_selected_state(
             "COMPATIBLE",
             "MIGRATION_PENDING",
         }:
-            blob_diagnostic = _referenced_blob_diagnostic(state_dir)
+            persisted_revision = health.persisted_revision
+            blob_diagnostic: str | None
+            if persisted_revision is None:
+                blob_diagnostic = "the migration ledger has no persisted revision"
+            else:
+                blob_diagnostic = _referenced_blob_diagnostic(
+                    state_dir, persisted_revision
+                )
             if blob_diagnostic is not None:
                 report.update(
                     status="CORRUPT",

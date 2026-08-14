@@ -220,6 +220,75 @@ def test_state_preflight_rejects_unreconciled_blob_quota(
     assert report["diagnostic"] == diagnostic
 
 
+@pytest.mark.parametrize("missing_table", ("blob_quota", "operation_catalog_snapshots"))
+def test_state_preflight_rejects_an_incomplete_current_schema(
+    tmp_path: Path, missing_table: str
+) -> None:
+    tenant_id = "incomplete-current-schema"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute(f'DROP TABLE "{missing_table}"')
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == "tenant database is missing required schema"
+
+
+def test_state_preflight_binds_state_format_to_the_migration_ledger(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "mismatched-state-format"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute(
+            "UPDATE jacobian_state_format SET format_revision = 11 WHERE id = 0"
+        )
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "tenant state-format metadata does not match the migration ledger"
+    )
+
+
+def test_state_preflight_accepts_the_supported_migration_source_schema(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "revision-eleven-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        for table in (
+            "operation_checker_bindings",
+            "active_operation_catalog",
+            "operation_catalog_entries",
+            "operation_catalog_snapshots",
+        ):
+            connection.execute(f'DROP TABLE "{table}"')
+        connection.execute("DELETE FROM jacobian_schema_migrations WHERE revision = 12")
+        connection.execute(
+            "UPDATE jacobian_state_format SET format_revision = 11 WHERE id = 0"
+        )
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "MIGRATION_PENDING"
+    assert report["persisted_revision"] == 11
+    assert report["blocking"] is False
+
+
 def test_state_preflight_rejects_state_below_the_supported_floor(
     tmp_path: Path,
 ) -> None:

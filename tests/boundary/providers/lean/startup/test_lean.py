@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from mcp import Client
 from tests.support.catalog_build_options import CheckerAuthorityMode
-from tests.support.catalog_build_runtime import create_catalog_build_runtime
+from tests.support.lean_runtime import LeanRuntime, create_lean_runtime
 from tests.support.provider_lean import (
     PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
@@ -47,37 +48,39 @@ pytestmark = [
 
 def test_core_declaration_catalog_matches_a_fresh_scan_and_detects_tampering(
     tmp_path: Path,
-    authorized_portfolio_template: Path,
+    lean_authorized_template: Path,
 ) -> None:
     indexed_root = tmp_path / "indexed"
     fresh_root = tmp_path / "fresh"
-    copy_template(authorized_portfolio_template, indexed_root)
-    copy_template(authorized_portfolio_template, fresh_root)
-    indexed_runtime = create_catalog_build_runtime(
-        indexed_root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+    copy_template(lean_authorized_template, indexed_root)
+    copy_template(lean_authorized_template, fresh_root)
+    indexed_runtime = create_lean_runtime(
+        indexed_root,
+        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
     )
-    fresh_runtime = create_catalog_build_runtime(
-        fresh_root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    indexed = indexed_runtime.catalog_build_resources.lean_declarations
-    fresh = fresh_runtime.catalog_build_resources.lean_declarations
-    assert indexed is not None
-    assert fresh is not None
-    indexed_backend = indexed.backend
-    fresh_backend = fresh.backend
-    assert isinstance(indexed_backend, LeanSubprocessDeclarationBackend)
-    assert isinstance(fresh_backend, LeanSubprocessDeclarationBackend)
-    seed = LeanDeclarationSearchRequest(
-        environment=LeanEnvironment.CORE,
-        name_contains="Nat.add",
-        result_limit=2,
-    )
-    target = LeanDeclarationSearchRequest(
-        environment=LeanEnvironment.CORE,
-        name_contains="Nat.mul",
-        result_limit=2,
+    fresh_runtime = create_lean_runtime(
+        fresh_root,
+        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
     )
     try:
+        indexed = indexed_runtime.lean_declarations
+        fresh = fresh_runtime.lean_declarations
+        assert indexed is not None
+        assert fresh is not None
+        indexed_backend = indexed.backend
+        fresh_backend = fresh.backend
+        assert isinstance(indexed_backend, LeanSubprocessDeclarationBackend)
+        assert isinstance(fresh_backend, LeanSubprocessDeclarationBackend)
+        seed = LeanDeclarationSearchRequest(
+            environment=LeanEnvironment.CORE,
+            name_contains="Nat.add",
+            result_limit=2,
+        )
+        target = LeanDeclarationSearchRequest(
+            environment=LeanEnvironment.CORE,
+            name_contains="Nat.mul",
+            result_limit=2,
+        )
         indexed.search(seed)
         reused = indexed.search(target)
         baseline = fresh.search(target)
@@ -96,16 +99,14 @@ def test_core_declaration_catalog_matches_a_fresh_scan_and_detects_tampering(
         assert raised.value.code == "LEAN_QUERY_INDEX_CHANGED"
         assert LeanEnvironment.CORE not in indexed_backend._sessions
     finally:
-        indexed_backend.close()
-        fresh_backend.close()
+        indexed_runtime.close()
+        fresh_runtime.close()
 
 
-def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-
-    result = runtime.core.operations.invoke(
+def test_core_dependency_graph_is_bounded_and_materialized(
+    lean_runtime: LeanRuntime,
+) -> None:
+    result = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.declaration.dependencies",
             input={
@@ -125,7 +126,7 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
     }
     assert len(preview["nodes"]) <= 40
     assert result.output["result_uri"] in result.artifact_uris
-    artifact = runtime.core.store.get(result.output["result_uri"])
+    artifact = lean_runtime.core.store.get(result.output["result_uri"])
     assert artifact.payload["nodes"][0]["name"] == "Nat.add_comm"
     assert artifact.payload["query"]["max_depth"] == 1
 
@@ -136,15 +137,12 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
 )
 @pytest.mark.timeout(240)
 def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
-    assert runtime.catalog_build_resources.lean_declarations is not None
+    assert lean_runtime.lean is not None
+    assert lean_runtime.lean_declarations is not None
 
-    searched = runtime.core.operations.invoke(
+    searched = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.declaration.search",
             input={
@@ -154,7 +152,7 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
             },
         )
     )
-    inspected = runtime.core.operations.invoke(
+    inspected = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.declaration.inspect",
             input={
@@ -173,7 +171,7 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
         == searched.output["result"]["environment_digest"]
     )
 
-    verified = runtime.catalog_build_resources.lean.verify(
+    verified = lean_runtime.lean.verify(
         environment=LeanEnvironment.MATHLIB,
         statement="Irrational (Real.sqrt 2)",
         proof="exact irrational_sqrt_two",
@@ -181,7 +179,7 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
 
     assert verified.result.conclusion is Conclusion.TRUE, verified.result.input.errors
     assert verified.result.verification_record_uri is not None
-    certificate = runtime.core.store.get(verified.certificate_uri)
+    certificate = lean_runtime.core.store.get(verified.certificate_uri)
     assert certificate.payload["payload"]["environment"] == "MATHLIB"
     assert certificate.payload["payload"]["allowed_axioms"] == [
         "Classical.choice",
@@ -194,14 +192,11 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
 
 
 def test_core_lean_induction_proof_creates_bound_verification_record(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
+    assert lean_runtime.lean is not None
 
-    inspected = runtime.core.operations.invoke(
+    inspected = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.declaration.inspect",
             input={
@@ -210,7 +205,7 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
             },
         )
     )
-    outside_profile = runtime.core.operations.invoke(
+    outside_profile = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.declaration.search",
             input={
@@ -224,7 +219,7 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
     assert outside_profile.output["result"]["declarations"] == []
     assert outside_profile.output["result"]["stop_reason"] == "EXHAUSTED"
 
-    verified = runtime.catalog_build_resources.lean.verify(
+    verified = lean_runtime.lean.verify(
         statement="∀ n : Nat, n + 0 = n",
         proof=(
             "intro n\n"
@@ -236,9 +231,8 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
 
     assert verified.result.conclusion is Conclusion.TRUE
     assert verified.result.verification_record_uri is not None
-    assert verified.result.verification_record_uri is not None
-    record = runtime.core.store.get(verified.result.verification_record_uri)
-    certificate = runtime.core.store.get(verified.certificate_uri)
+    record = lean_runtime.core.store.get(verified.result.verification_record_uri)
+    certificate = lean_runtime.core.store.get(verified.certificate_uri)
     assert record.payload["evidence_uri"] == verified.certificate_uri
     assert record.payload["bindings"] == certificate.payload["bindings"]
     assert set(certificate.manifest.parents) == {
@@ -247,16 +241,13 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
     }
 
 
-def test_core_lean_checker_binds_the_measured_runtime(tmp_path: Path) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
-    installation = runtime.catalog_build_resources.lean.installations[
-        LeanEnvironment.CORE
-    ]
+def test_core_lean_checker_binds_the_measured_runtime(
+    lean_runtime: LeanRuntime,
+) -> None:
+    assert lean_runtime.lean is not None
+    installation = lean_runtime.lean.installations[LeanEnvironment.CORE]
     assert installation.checker_id is not None
-    registration = runtime.core.checkers.require_active(installation.checker_id)
+    registration = lean_runtime.core.checkers.require_active(installation.checker_id)
 
     assert registration.implementation.provider_runtime is not None
     assert registration.implementation.provider_runtime.provider == "jacobian.lean4"
@@ -272,18 +263,13 @@ def test_core_lean_checker_binds_the_measured_runtime(tmp_path: Path) -> None:
     ),
 )
 def test_core_lean_accepts_single_expression_witness_forms(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
     statement: str,
     proof: str,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
+    assert lean_runtime.lean is not None
 
-    verified = runtime.catalog_build_resources.lean.verify(
-        statement=statement, proof=proof
-    )
+    verified = lean_runtime.lean.verify(statement=statement, proof=proof)
 
     assert verified.result.conclusion is Conclusion.TRUE
     assert verified.result.verification_record_uri is not None
@@ -293,8 +279,6 @@ def test_core_lean_check_runs_through_operation_mcp_surface(tmp_path: Path) -> N
     initialize_state(tmp_path)
 
     async def scenario() -> None:
-        from mcp import Client
-
         async with Client(
             create_server(tmp_path),
             raise_exceptions=True,
@@ -347,8 +331,6 @@ def test_mathlib_lean_check_uses_its_compiled_checker_binding(tmp_path: Path) ->
     initialize_state(tmp_path)
 
     async def scenario() -> None:
-        from mcp import Client
-
         async with Client(create_server(tmp_path), raise_exceptions=True) as client:
             response = await client.call_tool(
                 "math.run",
@@ -381,22 +363,18 @@ def test_mathlib_lean_check_uses_its_compiled_checker_binding(tmp_path: Path) ->
     ],
 )
 def test_core_lean_rejects_untrusted_or_invalid_proofs(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
     proof: str,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
+    assert lean_runtime.lean is not None
 
-    rejected = runtime.catalog_build_resources.lean.verify(
+    rejected = lean_runtime.lean.verify(
         statement="∀ n : Nat, n + 0 = n",
         proof=proof,
     )
 
     assert rejected.result.input.status is InputStatus.REJECTED
     assert rejected.result.conclusion is Conclusion.UNKNOWN
-    assert rejected.result.verification_record_uri is None
     assert rejected.result.verification_record_uri is None
     assert rejected.diagnostics
     diagnostic = rejected.diagnostics[0]
@@ -406,13 +384,10 @@ def test_core_lean_rejects_untrusted_or_invalid_proofs(
 
 
 def test_lean_reuses_only_an_exact_active_checker_result(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
+    assert lean_runtime.lean is not None
     calls = 0
 
     def accept(**_: object) -> CheckerDecision:
@@ -430,17 +405,13 @@ def test_lean_reuses_only_an_exact_active_checker_result(
     def unexpected_selector(**_: object) -> object:
         raise AssertionError("Lean must use its explicitly installed checker")
 
-    monkeypatch.setattr(runtime.verification._checker_executor, "execute", accept)
-    monkeypatch.setattr(runtime.core.checkers, "select_compatible", unexpected_selector)
-    first = runtime.catalog_build_resources.lean.verify(
-        statement="1 + 1 = 2", proof="rfl"
+    monkeypatch.setattr(lean_runtime.verification._checker_executor, "execute", accept)
+    monkeypatch.setattr(
+        lean_runtime.core.checkers, "select_compatible", unexpected_selector
     )
-    repeated = runtime.catalog_build_resources.lean.verify(
-        statement="1 + 1 = 2", proof="rfl"
-    )
-    changed = runtime.catalog_build_resources.lean.verify(
-        statement="2 + 2 = 4", proof="rfl"
-    )
+    first = lean_runtime.lean.verify(statement="1 + 1 = 2", proof="rfl")
+    repeated = lean_runtime.lean.verify(statement="1 + 1 = 2", proof="rfl")
+    changed = lean_runtime.lean.verify(statement="2 + 2 = 4", proof="rfl")
 
     assert calls == 2
     assert first.cache_hit is False
@@ -452,13 +423,10 @@ def test_lean_reuses_only_an_exact_active_checker_result(
 
 
 def test_lean_cache_never_reuses_a_rejected_checker_input(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
+    assert lean_runtime.lean is not None
     decisions = iter(
         (
             CheckerDecision(
@@ -486,17 +454,11 @@ def test_lean_cache_never_reuses_a_rejected_checker_input(
         calls += 1
         return next(decisions)
 
-    monkeypatch.setattr(runtime.verification._checker_executor, "execute", recover)
+    monkeypatch.setattr(lean_runtime.verification._checker_executor, "execute", recover)
 
-    first = runtime.catalog_build_resources.lean.verify(
-        statement="True", proof="by trivial"
-    )
-    recovered = runtime.catalog_build_resources.lean.verify(
-        statement="True", proof="by trivial"
-    )
-    repeated = runtime.catalog_build_resources.lean.verify(
-        statement="True", proof="by trivial"
-    )
+    first = lean_runtime.lean.verify(statement="True", proof="by trivial")
+    recovered = lean_runtime.lean.verify(statement="True", proof="by trivial")
+    repeated = lean_runtime.lean.verify(statement="True", proof="by trivial")
 
     assert first.result.input.status is InputStatus.REJECTED
     assert first.cache_hit is False
@@ -507,15 +469,12 @@ def test_lean_cache_never_reuses_a_rejected_checker_input(
 
 
 def test_lean_cache_does_not_reuse_a_revoked_checker_result(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-    assert runtime.catalog_build_resources.lean is not None
+    assert lean_runtime.lean is not None
     monkeypatch.setattr(
-        runtime.verification._checker_executor,
+        lean_runtime.verification._checker_executor,
         "execute",
         lambda **_: CheckerDecision(
             accepted=True,
@@ -526,17 +485,13 @@ def test_lean_cache_does_not_reuse_a_revoked_checker_result(
             detail="accepted by test checker",
         ),
     )
-    first = runtime.catalog_build_resources.lean.verify(
-        statement="1 + 1 = 2", proof="rfl"
-    )
+    first = lean_runtime.lean.verify(statement="1 + 1 = 2", proof="rfl")
     record_uri = first.result.verification_record_uri
     assert record_uri is not None
-    checker_id = runtime.core.store.get(record_uri).payload["checker_id"]
-    runtime.core.checkers.revoke(checker_id, reason="cache trust-boundary test")
+    checker_id = lean_runtime.core.store.get(record_uri).payload["checker_id"]
+    lean_runtime.core.checkers.revoke(checker_id, reason="cache trust-boundary test")
 
-    repeated = runtime.catalog_build_resources.lean.verify(
-        statement="1 + 1 = 2", proof="rfl"
-    )
+    repeated = lean_runtime.lean.verify(statement="1 + 1 = 2", proof="rfl")
 
     assert first.result.verification_record_uri is not None
     assert repeated.cache_hit is False

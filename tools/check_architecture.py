@@ -1612,6 +1612,12 @@ def _discarded_expensive_runtime_fixtures(node: ast.FunctionDef) -> frozenset[st
     return frozenset(discarded)
 
 
+_LEAN_BEHAVIOR_TEST_MODULES = frozenset(
+    {
+        "tests/boundary/providers/lean/startup/test_lean.py",
+        "tests/boundary/providers/lean/startup/test_lean_exploration_operations.py",
+    }
+)
 _HISTORICAL_TEST_BUCKET_WORDS = frozenset(
     {"frontier", "migration", "regression", "release"}
 )
@@ -1677,6 +1683,18 @@ def _test_ownership_violations(
     focused_suite = len(parts) >= 2 and parts[1] in {"component", "domain", "unit"}
     imports_complete_runtime = _imports_complete_runtime_fixtures(tree)
     imports_runtime = _imports_jacobian_runtime(tree)
+    if str(relative) in _LEAN_BEHAVIOR_TEST_MODULES and (
+        imports_runtime or imports_complete_runtime
+    ):
+        violations.append(
+            Violation(
+                str(relative),
+                "test-ownership",
+                "Lean behavior tests must use tests.support.lean_runtime "
+                "instead of the complete catalog-build runtime",
+            )
+        )
+
     if focused_suite and (imports_runtime or imports_complete_runtime):
         violations.append(
             Violation(

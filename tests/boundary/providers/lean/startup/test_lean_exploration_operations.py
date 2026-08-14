@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from tests.support.catalog_build_options import CheckerAuthorityMode
-from tests.support.catalog_build_runtime import create_catalog_build_runtime
+from tests.support.lean_runtime import LeanRuntime, create_lean_runtime
 from tests.support.provider_lean import (
     PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
@@ -25,12 +25,10 @@ pytestmark = [
 ]
 
 
-def test_apply_tactic_exposes_child_goals_and_replay_source(tmp_path: Path) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-
-    result = runtime.core.operations.invoke(
+def test_apply_tactic_exposes_child_goals_and_replay_source(
+    lean_runtime: LeanRuntime,
+) -> None:
+    result = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.proof_state.apply_tactic",
             input={
@@ -64,13 +62,9 @@ def test_apply_tactic_exposes_child_goals_and_replay_source(tmp_path: Path) -> N
 
 
 def test_apply_tactic_returns_structured_failure_without_conclusion(
-    tmp_path: Path,
+    lean_runtime: LeanRuntime,
 ) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-
-    result = runtime.core.operations.invoke(
+    result = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.proof_state.apply_tactic",
             input={
@@ -94,12 +88,10 @@ def test_apply_tactic_returns_structured_failure_without_conclusion(
     skip_unless_pinned_mathlib_runtime(),
     reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
 )
-def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> None:
-    runtime = create_catalog_build_runtime(
-        tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
-    )
-
-    suggested = runtime.core.operations.invoke(
+def test_retrieve_premises_returns_exact_mathlib_suggestion(
+    lean_runtime: LeanRuntime,
+) -> None:
+    suggested = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.retrieve.premises",
             input={
@@ -111,7 +103,7 @@ def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> N
         )
     )
 
-    empty = runtime.core.operations.invoke(
+    empty = lean_runtime.core.operations.invoke(
         OperationRequest(
             operation_id="lean.retrieve.premises",
             input={
@@ -144,7 +136,7 @@ def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> N
 def test_runtime_can_ablate_lean_operations_without_removing_checker(
     tmp_path: Path,
 ) -> None:
-    runtime = create_catalog_build_runtime(
+    with create_lean_runtime(
         tmp_path,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
         operation_policy=OperationVisibilityPolicy(
@@ -155,12 +147,12 @@ def test_runtime_can_ablate_lean_operations_without_removing_checker(
                 }
             )
         ),
-    )
-    operation_ids = {
-        descriptor.operation_id
-        for descriptor in runtime.core.operations.snapshot().operations
-    }
+    ) as runtime:
+        operation_ids = {
+            descriptor.operation_id
+            for descriptor in runtime.core.operations.snapshot().operations
+        }
 
-    assert "lean.check" in operation_ids
-    assert "lean.proof_state.apply_tactic" not in operation_ids
-    assert "lean.retrieve.premises" not in operation_ids
+        assert "lean.check" in operation_ids
+        assert "lean.proof_state.apply_tactic" not in operation_ids
+        assert "lean.retrieve.premises" not in operation_ids

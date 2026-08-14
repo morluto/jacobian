@@ -169,6 +169,21 @@ def test_discarded_complete_runtime_fixture_is_rejected(tmp_path: Path) -> None:
     ]
 
 
+def test_lean_behavior_module_cannot_import_catalog_build_runtime(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "tests/boundary/providers/lean/startup/test_lean.py",
+        "from tests.support.catalog_build_runtime import create_catalog_build_runtime\n",
+    )
+
+    assert _ownership_messages(tmp_path) == [
+        "Lean behavior tests must use tests.support.lean_runtime "
+        "instead of the complete catalog-build runtime"
+    ]
+
+
 def test_owned_composition_module_is_accepted(tmp_path: Path) -> None:
     _write(tmp_path, "tests/composition/interoperability/test_value_handoff.py")
 

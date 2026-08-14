@@ -16,14 +16,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from tools.benchmark_plan.model import plan_from_mapping
+from tools.benchmark_plan.validation import validate_plan
+
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.receipts import canonical_json, digest_bytes, receipt_digest
 from benchmarks.tooling.validation_plan import (
     HostValidation,
     full_host_validation,
 )
-from tools.benchmark_plan.model import plan_from_mapping
-from tools.benchmark_plan.validation import validate_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 TIMING_PATH = ROOT / ".ci" / "benchmark-test-durations.json"
@@ -648,9 +649,7 @@ def _selected_entries(
     if args.command == "run-entry":
         entry = _entry(json.loads(args.entry_json))
         if entry not in planned:
-            raise HarborSuiteError(
-                "requested host entry is absent from the plan"
-            )
+            raise HarborSuiteError("requested host entry is absent from the plan")
         return (entry,)
     entries = full_host_validation()
     if args.plan is not None and tuple(planned) != entries:

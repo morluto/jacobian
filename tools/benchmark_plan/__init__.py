@@ -8,8 +8,8 @@ from tools.benchmark_plan.model import PLAN_VERSION, BenchmarkPlan
 
 __all__ = [
     "BENCHMARK_CONTROL_PATHS",
-    "BenchmarkPlan",
     "PLANNER_DIGEST_SOURCES",
     "PLAN_VERSION",
+    "BenchmarkPlan",
     "plan",
 ]

@@ -801,10 +801,7 @@ def test_two_unrelated_synthetic_additions_yield_independent_matrices(
     # both plans see the same tree, so they share one topology digest while
     # their Oracle matrices remain independent.
     assert addition_alpha.topology_digest.startswith("sha256:")
-    assert (
-        addition_alpha.topology_digest
-        == (addition_beta.topology_digest)
-    )
+    assert addition_alpha.topology_digest == (addition_beta.topology_digest)
     _assert_plan_valid(addition_alpha)
     _assert_plan_valid(addition_beta)
 

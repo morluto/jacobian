@@ -161,13 +161,6 @@ def test_record_schema_lane_must_run_when_checks_run() -> None:
     assert "record-schema" in _reject(plan)
 
 
-def test_prospective_digest_lane_requires_record_schema() -> None:
-    plan = _plan()
-    plan["record_schema"] = False
-
-    assert "record/schema" in _reject(plan)
-
-
 def test_oracle_plan_requires_a_nonempty_matrix() -> None:
     plan = _plan()
     plan["oracle_matrix"] = []

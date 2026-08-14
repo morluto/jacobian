@@ -56,6 +56,7 @@ from jacobian.providers.lean_runtime import lean_frontend_provider_runtime  # no
 from jacobian.providers.sympy_runtime import (  # noqa: E402
     sympy_polynomial_normalization_provider_runtime,
 )
+
 PROFILE_NAMES = ("core", "lean", "external-proof")
 _CORE_PROVIDERS = (
     "networkx",

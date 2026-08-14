@@ -144,7 +144,9 @@ def plan_from_mapping(payload: Mapping[str, Any]) -> BenchmarkPlan:
         inventory=bool(payload.get("inventory", False)),
         host_matrix=tuple(host_matrix) if isinstance(host_matrix, Sequence) else (),
         oracle_scope=str(payload.get("oracle_scope", "none")),
-        oracle_matrix=tuple(oracle_matrix) if isinstance(oracle_matrix, Sequence) else (),
+        oracle_matrix=tuple(oracle_matrix)
+        if isinstance(oracle_matrix, Sequence)
+        else (),
         reasons=tuple(reasons) if isinstance(reasons, Sequence) else (),
     )
 

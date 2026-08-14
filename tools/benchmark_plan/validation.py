@@ -222,10 +222,7 @@ def _payload(plan: BenchmarkPlan | Mapping[str, Any]) -> dict[str, Any]:
     return dict(plan)
 
 
-def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
-    """Validate a complete canonical benchmark plan."""
-
-    payload = _payload(plan)
+def _validate_identities(payload: Mapping[str, Any]) -> None:
     if set(payload) != set(PLAN_KEYS):
         fail(
             f"benchmark plan keys differ: expected {sorted(PLAN_KEYS)}, "
@@ -235,9 +232,8 @@ def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
         fail(f"unsupported benchmark plan version: {payload['schema_version']}")
     if payload["event"] not in EVENTS:
         fail(f"invalid benchmark plan event: {payload['event']}")
-    mode = payload["mode"]
-    if mode not in MODES:
-        fail(f"invalid benchmark plan mode: {mode}")
+    if payload["mode"] not in MODES:
+        fail(f"invalid benchmark plan mode: {payload['mode']}")
     _require_sha(str(payload["base_sha"]), "base-sha")
     _require_sha(str(payload["head_sha"]), "head-sha")
     planner_digest = payload["planner_digest"]
@@ -249,24 +245,15 @@ def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
     ):
         fail(f"invalid changed_paths_digest: {changed}")
 
-    run_check = _require_bool(payload["run_check"], "run_check")
-    record_schema = _require_bool(payload["record_schema"], "record_schema")
-    prospective_digest = _require_bool(
-        payload["prospective_digest"], "prospective_digest"
-    )
-    inventory = _require_bool(payload["inventory"], "inventory")
-    host_matrix = _require_list(payload["host_matrix"], "host_matrix")
-    oracle_matrix = _require_list(payload["oracle_matrix"], "oracle_matrix")
-    reasons = _require_list(payload["reasons"], "reasons")
-    scope = payload["oracle_scope"]
-    topology = payload["topology_digest"]
-    host_validation = bool(host_matrix)
-    run_oracle = bool(oracle_matrix)
-    if not all(isinstance(reason, str) and reason for reason in reasons):
-        fail("benchmark plan reasons must be non-empty strings")
-    if host_validation and not run_check:
-        fail("benchmark host validation requires benchmark checks")
-    _validate_host_matrix(host_matrix)
+
+def _validate_check_topology(
+    *,
+    run_check: bool,
+    record_schema: bool,
+    mode: str,
+    topology: object,
+    reasons: list[Any],
+) -> None:
     if run_check:
         if not isinstance(topology, str) or DIGEST.fullmatch(topology) is None:
             fail("topology-digest must be a sha256 digest when checks run")
@@ -276,8 +263,19 @@ def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
             fail("record-schema must run when benchmark checks run")
         if not reasons:
             fail("a benchmark plan with work must record reasons")
-    elif topology != "":
+        return
+    if topology != "":
         fail("topology-digest must be empty when checks are skipped")
+
+
+def _validate_inventory_and_mode(
+    *,
+    run_check: bool,
+    prospective_digest: bool,
+    inventory: bool,
+    record_schema: bool,
+    mode: str,
+) -> None:
     if prospective_digest and not run_check:
         fail("prospective-digest requires benchmark checks")
     if inventory and not run_check:
@@ -288,6 +286,62 @@ def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
         fail("integration or full mode requires benchmark checks")
     if mode == "none" and run_check:
         fail("benchmark plan mode none conflicts with running checks")
+    if prospective_digest and not record_schema:
+        fail("prospective-digest requires record/schema checks")
+
+
+def _validate_oracle_scope(
+    *,
+    run_check: bool,
+    record_schema: bool,
+    run_oracle: bool,
+    scope: object,
+    oracle_matrix: list[Any],
+) -> None:
+    if scope not in SCOPES:
+        fail(f"invalid benchmark Oracle scope: {scope}")
+    if run_oracle:
+        if not (run_check and record_schema):
+            fail("benchmark Oracle work requires checks and record/schema lanes")
+        if scope == "none":
+            fail("benchmark Oracle work requires a scope and a non-empty matrix")
+        return
+    if scope != "none" or oracle_matrix:
+        fail("disabled benchmark Oracle work must have none scope and empty matrix")
+
+
+def _validate_lane_consistency(
+    *,
+    run_check: bool,
+    record_schema: bool,
+    prospective_digest: bool,
+    inventory: bool,
+    host_validation: bool,
+    run_oracle: bool,
+    mode: str,
+    scope: object,
+    topology: object,
+    reasons: list[Any],
+    oracle_matrix: list[Any],
+) -> None:
+    if not all(isinstance(reason, str) and reason for reason in reasons):
+        fail("benchmark plan reasons must be non-empty strings")
+    if host_validation and not run_check:
+        fail("benchmark host validation requires benchmark checks")
+    _validate_check_topology(
+        run_check=run_check,
+        record_schema=record_schema,
+        mode=mode,
+        topology=topology,
+        reasons=reasons,
+    )
+    _validate_inventory_and_mode(
+        run_check=run_check,
+        prospective_digest=prospective_digest,
+        inventory=inventory,
+        record_schema=record_schema,
+        mode=mode,
+    )
     if not run_check and (
         record_schema
         or prospective_digest
@@ -297,17 +351,43 @@ def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
         or reasons
     ):
         fail("a skipped benchmark plan cannot contain work or reasons")
-    if prospective_digest and not record_schema:
-        fail("prospective-digest requires record/schema checks")
-    if scope not in SCOPES:
-        fail(f"invalid benchmark Oracle scope: {scope}")
-    if run_oracle:
-        if not (run_check and record_schema):
-            fail("benchmark Oracle work requires checks and record/schema lanes")
-        if scope == "none":
-            fail("benchmark Oracle work requires a scope and a non-empty matrix")
-    elif scope != "none" or oracle_matrix:
-        fail("disabled benchmark Oracle work must have none scope and empty matrix")
+    _validate_oracle_scope(
+        run_check=run_check,
+        record_schema=record_schema,
+        run_oracle=run_oracle,
+        scope=scope,
+        oracle_matrix=oracle_matrix,
+    )
+
+
+def validate_plan(plan: BenchmarkPlan | Mapping[str, Any]) -> None:
+    """Validate a complete canonical benchmark plan."""
+
+    payload = _payload(plan)
+    _validate_identities(payload)
+    run_check = _require_bool(payload["run_check"], "run_check")
+    record_schema = _require_bool(payload["record_schema"], "record_schema")
+    prospective_digest = _require_bool(
+        payload["prospective_digest"], "prospective_digest"
+    )
+    inventory = _require_bool(payload["inventory"], "inventory")
+    host_matrix = _require_list(payload["host_matrix"], "host_matrix")
+    oracle_matrix = _require_list(payload["oracle_matrix"], "oracle_matrix")
+    reasons = _require_list(payload["reasons"], "reasons")
+    _validate_host_matrix(host_matrix)
+    _validate_lane_consistency(
+        run_check=run_check,
+        record_schema=record_schema,
+        prospective_digest=prospective_digest,
+        inventory=inventory,
+        host_validation=bool(host_matrix),
+        run_oracle=bool(oracle_matrix),
+        mode=str(payload["mode"]),
+        scope=payload["oracle_scope"],
+        topology=payload["topology_digest"],
+        reasons=reasons,
+        oracle_matrix=oracle_matrix,
+    )
     _validate_matrix(oracle_matrix)
 
 

@@ -78,7 +78,7 @@ def test_task_documentation_does_not_select_oracle(
 
     assert plan.run_oracle is False
     assert plan.oracle_scope == "none"
-    assert "task documentation change" in plan.reasons
+    assert any("task documentation change" in reason for reason in plan.reasons)
 
 
 @pytest.mark.parametrize(

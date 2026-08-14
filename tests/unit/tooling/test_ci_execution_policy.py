@@ -212,8 +212,8 @@ def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> 
     assert "workflow_dispatch:" in workflow
     assert "EVENT_NAME: ${{ github.event_name }}" in workflow
     assert '--event "$EVENT_NAME"' in workflow
-    assert "--output \"$plan_dir/plan.json\"" in workflow
-    assert "--github-output \"$GITHUB_OUTPUT\"" in workflow
+    assert '--output "$plan_dir/plan.json"' in workflow
+    assert '--github-output "$GITHUB_OUTPUT"' in workflow
     assert "validate-benchmark-plan" not in workflow
     assert "ci:benchmark-full" in workflow
 
@@ -286,7 +286,7 @@ def test_paths_file_stays_on_harbor_planning() -> None:
     assert "$(shell mktemp)" not in harbor
     assert "tr '\\n' ' '" not in harbor
     assert '--paths-file "$$tmp_dir/changed-paths.txt"' in harbor
-    assert "--output \"$$tmp_dir/plan.json\"" in harbor
+    assert '--output "$$tmp_dir/plan.json"' in harbor
     assert "validate-benchmark-plan" not in harbor
     assert "emit-plan-receipt" not in harbor
     assert "PATHS_FILE" not in workflow

@@ -76,7 +76,10 @@ def run_pytest(
         )
         elapsed = time.monotonic() - started
         if tree.timed_out:
-            print(f"[{name}] process tree timed out after {timeout_seconds}s", file=sys.stderr)
+            print(
+                f"[{name}] process tree timed out after {timeout_seconds}s",
+                file=sys.stderr,
+            )
         retained = bool(tree.exit_code and retain_on_failure)
         result = PytestResult(
             exit_code=tree.exit_code,

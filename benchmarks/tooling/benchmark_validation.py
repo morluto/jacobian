@@ -7,14 +7,15 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.benchmark_plan.model import plan_from_mapping
+from tools.benchmark_plan.validation import validate_plan
+
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.host_validation import (
     load_plan,
     timing_digest,
     validate_receipts,
 )
-from tools.benchmark_plan.model import plan_from_mapping
-from tools.benchmark_plan.validation import validate_plan
 
 
 @dataclass(frozen=True, slots=True)

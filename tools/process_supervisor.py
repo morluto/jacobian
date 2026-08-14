@@ -25,17 +25,17 @@ def kill_process_tree(process: subprocess.Popen[bytes]) -> None:
     """Terminate a child and every descendant in its process group or job."""
 
     if os.name == "posix":
-        with suppress(ProcessLookupError):
+        with suppress(ProcessLookupError, PermissionError):
             os.killpg(process.pid, signal.SIGTERM)
-        try:
+        with suppress(subprocess.TimeoutExpired):
             process.wait(timeout=_GRACEFUL_SHUTDOWN_SECONDS)
-            return
-        except subprocess.TimeoutExpired:
-            with suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-            with suppress(subprocess.TimeoutExpired):
-                process.wait(timeout=_GRACEFUL_SHUTDOWN_SECONDS)
-            return
+        # The root process can exit after SIGTERM while a descendant that
+        # ignored the signal remains. Always SIGKILL the group.
+        with suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, signal.SIGKILL)
+        with suppress(subprocess.TimeoutExpired, ProcessLookupError):
+            process.wait(timeout=_GRACEFUL_SHUTDOWN_SECONDS)
+        return
     process.terminate()
     try:
         process.wait(timeout=_GRACEFUL_SHUTDOWN_SECONDS)

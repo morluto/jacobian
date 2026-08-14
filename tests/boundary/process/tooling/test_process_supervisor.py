@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import signal
 import sys
 import time
 from pathlib import Path
@@ -24,7 +23,10 @@ def test_timeout_kills_a_descendant_that_ignores_sigterm(tmp_path: Path) -> None
                 "child = os.fork()",
                 "if child == 0:",
                 "    signal.signal(signal.SIGTERM, signal.SIG_IGN)",
-                "    open(sys.argv[1], 'w').write(str(os.getpid()))",
+                "    with open(sys.argv[1], 'w', encoding='utf-8') as handle:",
+                "        handle.write(str(os.getpid()))",
+                "        handle.flush()",
+                "        os.fsync(handle.fileno())",
                 "    time.sleep(30)",
                 "    os._exit(0)",
                 "time.sleep(30)",
@@ -49,11 +51,11 @@ def test_timeout_kills_a_descendant_that_ignores_sigterm(tmp_path: Path) -> None
             child_pid = int(marker.read_text(encoding="utf-8"))
             break
         time.sleep(0.05)
-    if child_pid is None:
-        return
-    try:
-        os.kill(child_pid, 0)
-        still_alive = True
-    except OSError:
-        still_alive = False
-    assert still_alive is False
+        if child_pid is None:
+            raise AssertionError("descendant did not record its pid before timeout")
+        try:
+            os.kill(child_pid, 0)
+            still_alive = True
+        except OSError:
+            still_alive = False
+        assert still_alive is False

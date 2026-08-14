@@ -346,7 +346,7 @@ def test_visibility_classification_records_adoption_without_grading_shell(
         "discovery_free_invocation": False,
         "abstained": False,
     }
-    assert result["expected_capabilities"]["missing_completed"] == []
+    assert result["expected_operations"]["missing_completed"] == []
     assert result["contract_satisfied"] is True
     assert result["shell_call_count"] == 1
     assert result["mcp_call_count"] == 3
@@ -478,9 +478,9 @@ def test_diagnostic_operation_observation_does_not_gate_outcome_contract() -> No
     result = classify_visibility(case, telemetry)
 
     assert result["contract_satisfied"] is True
-    assert result["expected_capabilities"]["missing_completed"] == []
-    assert result["diagnostic_capabilities"]["not_completed"] == ["lean.term.apply"]
-    assert result["unexpected_capabilities"]["completed"] == []
+    assert result["expected_operations"]["missing_completed"] == []
+    assert result["diagnostic_operations"]["not_completed"] == ["lean.term.apply"]
+    assert result["unexpected_operations"]["completed"] == []
 
 
 def test_declaration_outcome_accepts_native_inline_search_without_inspect() -> None:
@@ -531,8 +531,8 @@ def test_declaration_outcome_accepts_native_inline_search_without_inspect() -> N
     result = classify_visibility(case, telemetry)
 
     assert result["contract_satisfied"] is True
-    assert result["expected_capabilities"]["missing_completed"] == []
-    assert result["diagnostic_capabilities"]["not_completed"] == [
+    assert result["expected_operations"]["missing_completed"] == []
+    assert result["diagnostic_operations"]["not_completed"] == [
         "lean.declaration.inspect"
     ]
     assert result["output_outcomes"] == {

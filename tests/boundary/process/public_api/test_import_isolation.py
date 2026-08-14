@@ -108,7 +108,7 @@ if children:
     assert completed.returncode == 0, completed.stderr
 
 
-def test_native_matrices_does_not_import_capabilities_or_provider_loading() -> None:
+def test_native_matrices_does_not_import_operations_or_provider_loading() -> None:
     _assert_not_imported(
         _imported_modules("jacobian.math.matrices"),
         (

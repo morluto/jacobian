@@ -14,8 +14,8 @@ from tests.support.services import (
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.graphs.composition import install_graph_composition_capabilities
-from jacobian.graphs.installation import install_graph_capabilities
+from jacobian.graphs.composition import install_graph_composition_operations
+from jacobian.graphs.installation import install_graph_operations
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def graph_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
     with open_domain_services(tmp_path / "state") as services:
         with atomic_installation(services.core):
-            graph_adapters, graph = install_graph_capabilities(
+            graph_adapters, graph = install_graph_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
@@ -34,14 +34,12 @@ def graph_services(tmp_path: Path) -> Iterator[DomainTestServices]:
             )
             for adapter in graph_adapters:
                 services.installation.register_operation(adapter)
-            composition_adapters, _installation = (
-                install_graph_composition_capabilities(
-                    services.core.store,
-                    services.core.schemas,
-                    services.core.artifacts,
-                    semantics_uri=graph.semantics_uri,
-                    graph_schema_uri=graph.graph_schema_uri,
-                )
+            composition_adapters, _installation = install_graph_composition_operations(
+                services.core.store,
+                services.core.schemas,
+                services.core.artifacts,
+                semantics_uri=graph.semantics_uri,
+                graph_schema_uri=graph.graph_schema_uri,
             )
             for adapter in composition_adapters:
                 services.installation.register_operation(adapter)

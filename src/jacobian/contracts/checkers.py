@@ -270,9 +270,8 @@ def _require_exact_external_runtime(
             "checker provider runtime must identify an available executable, "
             "Python distribution, remeasurable source tree, or fully bound composite"
         )
-    if (
-        runtime.digest_kind is ProviderDigestKind.EXECUTABLE
-        and not isinstance(runtime.configuration.get("executable"), str)
+    if runtime.digest_kind is ProviderDigestKind.EXECUTABLE and not isinstance(
+        runtime.configuration.get("executable"), str
     ):
         raise ValueError("checker executable runtime must name its executable")
     if runtime.digest_kind is ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD:

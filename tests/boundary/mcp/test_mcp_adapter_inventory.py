@@ -62,7 +62,7 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
         async with Client(server, raise_exceptions=True) as client:
             assert client.instructions == server.instructions
             assert client.server_info.version == version("jacobian")
-            assert client.server_capabilities.extensions is None
+            assert client.server_operations.extensions is None
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
             assert set(tools) == MCP_TOOL_NAMES

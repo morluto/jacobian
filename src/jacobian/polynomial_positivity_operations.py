@@ -311,9 +311,7 @@ class PolynomialIntervalPositivityDecideAdapter:
     def descriptor(self) -> OperationDescriptor:
         return self._descriptor
 
-    def prepare(
-        self, request: OperationRequest
-    ) -> PolynomialIntervalPositivityRequest:
+    def prepare(self, request: OperationRequest) -> PolynomialIntervalPositivityRequest:
         return _validate_request(
             PolynomialIntervalPositivityRequest,
             request.input,

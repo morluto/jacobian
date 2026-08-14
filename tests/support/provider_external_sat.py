@@ -29,10 +29,7 @@ def cadical_runtime_available() -> bool:
     from jacobian.contracts.operations import ProviderAvailability
     from jacobian.providers.external_solver_runtime import cadical_provider_runtime
 
-    return (
-        cadical_provider_runtime().availability
-        is ProviderAvailability.AVAILABLE
-    )
+    return cadical_provider_runtime().availability is ProviderAvailability.AVAILABLE
 
 
 def drat_trim_runtime_available() -> bool:
@@ -41,7 +38,4 @@ def drat_trim_runtime_available() -> bool:
     from jacobian.contracts.operations import ProviderAvailability
     from jacobian.providers.external_solver_runtime import drat_trim_provider_runtime
 
-    return (
-        drat_trim_provider_runtime().availability
-        is ProviderAvailability.AVAILABLE
-    )
+    return drat_trim_provider_runtime().availability is ProviderAvailability.AVAILABLE

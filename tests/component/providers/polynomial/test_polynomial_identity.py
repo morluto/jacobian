@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from tests.component.providers.polynomial.polynomial_capabilities_support import (
+from tests.component.providers.polynomial.polynomial_operations_support import (
     identity_input as _identity_input,
 )
-from tests.component.providers.polynomial.polynomial_capabilities_support import (
+from tests.component.providers.polynomial.polynomial_operations_support import (
     rational_function_identity_input as _rational_function_identity_input,
 )
 

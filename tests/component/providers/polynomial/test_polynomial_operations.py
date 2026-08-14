@@ -5,13 +5,13 @@ from typing import Any
 
 import pytest
 from sympy import Poly, symbols
-from tests.component.providers.polynomial.polynomial_capabilities_support import (
+from tests.component.providers.polynomial.polynomial_operations_support import (
     jacobian_counterexample_map as _jacobian_counterexample_map,
 )
-from tests.component.providers.polynomial.polynomial_capabilities_support import (
+from tests.component.providers.polynomial.polynomial_operations_support import (
     point as _point,
 )
-from tests.component.providers.polynomial.polynomial_capabilities_support import (
+from tests.component.providers.polynomial.polynomial_operations_support import (
     poly_payload as _poly_payload,
 )
 

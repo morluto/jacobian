@@ -535,7 +535,7 @@ class _Resources:
     lean_executable: str | None
 
 
-def install_lean_statement_capabilities(
+def install_lean_statement_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,

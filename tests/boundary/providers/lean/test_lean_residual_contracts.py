@@ -26,7 +26,7 @@ from jacobian.lean_frontend.exploration import (
 )
 from jacobian.lean_frontend.exploration import (
     _Resources,
-    install_lean_exploration_capabilities,
+    install_lean_exploration_operations,
 )
 from jacobian.lean_frontend.helper_protocol import (
     LeanMetavariableFieldsHelperPayload,
@@ -87,7 +87,7 @@ def _adapters(
     installations = {
         environment: _installation(environment) for environment in LeanEnvironment
     }
-    all_adapters, _ = install_lean_exploration_capabilities(
+    all_adapters, _ = install_lean_exploration_operations(
         store,
         schemas,
         artifacts,

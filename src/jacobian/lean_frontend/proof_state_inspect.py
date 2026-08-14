@@ -116,9 +116,7 @@ class LeanProofStateInspectAdapter:
             validated.state_uri,
             expected_environment=validated.environment,
             expected_environment_digest=environment_digest,
-            invalid_state_hint=(
-                "Use a state URI returned by a proof-state operation."
-            ),
+            invalid_state_hint=("Use a state URI returned by a proof-state operation."),
         )
         output = LeanProofStateInspectOutput(
             state_uri=validated.state_uri,

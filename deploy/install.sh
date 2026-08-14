@@ -345,7 +345,7 @@ validate_lean_release_runtime() {
             "PATH=${LEAN_SERVICE_PATH}" \
             "${release_dir}/.venv/bin/python" - <<'PY'
 from jacobian_checkers import lean4
-from jacobian.contracts.capabilities import OperationProviderAvailability
+from jacobian.contracts.operations import ProviderAvailability
 from jacobian.providers.lean_runtime import lean_provider_runtime
 
 executable, mathlib_runtime = lean4.inspect_runtime(require_mathlib=True)
@@ -358,7 +358,7 @@ runtime = lean_provider_runtime(
     },
     checker_ids=(),
 )
-if runtime.availability is not OperationProviderAvailability.AVAILABLE:
+if runtime.availability is not ProviderAvailability.AVAILABLE:
     raise SystemExit(runtime.diagnostic or "pinned Lean provider is unavailable")
 PY
     ) || die "pinned Lean provider failed its release readiness probe"

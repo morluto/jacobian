@@ -13,13 +13,11 @@ _LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
-    with open_domain_services(
-        tmp_path / "state", arithmetic_operations()
-    ) as services:
+    with open_domain_services(tmp_path / "state", arithmetic_operations()) as services:
         yield services
 
 
-def test_arithmetic_capabilities_return_exact_results(
+def test_arithmetic_operations_return_exact_results(
     domain_services: DomainTestServices,
 ) -> None:
     cases = (

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from tests.component.operations.graph_capabilities_support import (
+from tests.component.operations.graph_operations_support import (
     GraphTestServices,
     open_graph_services,
 )

@@ -31,17 +31,16 @@ _ROOT = Path(__file__).resolve().parents[2]
 if __package__ in {None, ""} and str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from jacobian.contracts.capabilities import (  # noqa: E402
-    OperationProviderAvailability,
-    OperationProviderRuntime,
-)
-
 from benchmarks.tooling.command_runner import (  # noqa: E402
     git_head_sha,
     git_tracked_worktree_is_clean,
 )
 from jacobian.canonical import canonicalize_json  # noqa: E402
 from jacobian.contracts.lean import LeanEnvironment  # noqa: E402
+from jacobian.contracts.operations import (  # noqa: E402
+    ProviderAvailability,
+    ProviderObservation,
+)
 from jacobian.lean_frontend.declaration_protocol import (  # noqa: E402
     LeanDeclarationInspectPayload,
     LeanDeclarationInspectQuery,
@@ -83,7 +82,7 @@ def _setting(name: str) -> str:
     return value
 
 
-def _runtime() -> tuple[Path, Path, OperationProviderRuntime]:
+def _runtime() -> tuple[Path, Path, ProviderObservation]:
     lean_executable, mathlib_runtime = lean4.inspect_runtime(require_mathlib=True)
     profiles: dict[str, dict[str, Any]] = {
         LeanEnvironment.CORE.value: {
@@ -98,7 +97,7 @@ def _runtime() -> tuple[Path, Path, OperationProviderRuntime]:
         },
     }
     runtime = lean_provider_runtime(profiles=profiles, checker_ids=())
-    if runtime.availability is not OperationProviderAvailability.AVAILABLE:
+    if runtime.availability is not ProviderAvailability.AVAILABLE:
         raise SystemExit("the pinned Lean/Mathlib runtime is unavailable")
     if mathlib_runtime is None:
         raise SystemExit("the pinned Mathlib project is unavailable")

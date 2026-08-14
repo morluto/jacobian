@@ -15,9 +15,7 @@ from tests.support.services import DomainTestServices, open_domain_services
 def polynomial_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install only the polynomial operations exercised by this module."""
 
-    with open_domain_services(
-        tmp_path / "state", polynomial_operations()
-    ) as services:
+    with open_domain_services(tmp_path / "state", polynomial_operations()) as services:
         yield services
 
 

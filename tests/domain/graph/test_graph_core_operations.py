@@ -117,7 +117,7 @@ def test_graph_consumers_reject_forged_malformed_payloads(
     assert result.diagnostics[0].code == "INCOMPATIBLE_GRAPH_ARTIFACT"
 
 
-def test_explicit_graph_construction_canonicalizes_and_feeds_graph_capabilities(
+def test_explicit_graph_construction_canonicalizes_and_feeds_graph_operations(
     graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
     services, installation = graph_core
@@ -245,7 +245,7 @@ def test_graph_atlas_search_reports_no_match_without_a_truth_claim(
     assert "conclusion" not in result.output
 
 
-def test_graph_capabilities_return_actionable_parameter_and_artifact_errors(
+def test_graph_operations_return_actionable_parameter_and_artifact_errors(
     graph_core: tuple[DomainTestServices, GraphInstallation],
 ) -> None:
     services, _installation = graph_core

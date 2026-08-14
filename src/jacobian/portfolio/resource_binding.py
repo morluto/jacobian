@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 
 from jacobian.contracts.operations import ProviderAvailability
 from jacobian.graphs.composition import (
-    install_graph_composition_capabilities,
+    install_graph_composition_operations,
 )
 from jacobian.graphs.installation import GraphInstallation
-from jacobian.lean_frontend.statement import install_lean_statement_capabilities
+from jacobian.lean_frontend.statement import install_lean_statement_operations
 from jacobian.polynomial_interval_operations import (
     install_polynomial_interval_operations,
 )
@@ -31,7 +31,7 @@ class ResourceOperationBinder:
 
     def bind(self, graph: GraphInstallation) -> None:
         ctx = self.context
-        graph_adapters, _ = install_graph_composition_capabilities(
+        graph_adapters, _ = install_graph_composition_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
@@ -66,7 +66,7 @@ class ResourceOperationBinder:
                 ctx.register_operation(positivity_adapter)
 
         lean_runtime = self.provider_resolver.resolve_lean_frontend()
-        lean_adapters, _ = install_lean_statement_capabilities(
+        lean_adapters, _ = install_lean_statement_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,

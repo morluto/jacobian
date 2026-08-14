@@ -12,7 +12,7 @@ from jacobian.contracts.lean_exploration import LeanProofStateRequest, LeanTyped
 from jacobian.contracts.operations import OperationRequest
 from jacobian.lean_frontend.exploration import (
     _Resources,
-    install_lean_exploration_capabilities,
+    install_lean_exploration_operations,
 )
 from jacobian.lean_frontend.proof_state import LeanProofStateAdapter
 from jacobian.lean_frontend.repl_protocol import (
@@ -60,7 +60,7 @@ def _adapter(tmp_path: Path) -> LeanProofStateAdapter:
     installations = {
         environment: _installation(environment) for environment in LeanEnvironment
     }
-    adapters, _ = install_lean_exploration_capabilities(
+    adapters, _ = install_lean_exploration_operations(
         store,
         schemas,
         artifacts,

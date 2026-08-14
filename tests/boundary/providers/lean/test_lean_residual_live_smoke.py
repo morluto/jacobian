@@ -19,7 +19,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
     ProviderAvailability,
 )
-from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
+from jacobian.lean_frontend.exploration import install_lean_exploration_operations
 from jacobian.operation_projection import project_operation_result
 from jacobian.providers.lean_runtime import lean_provider_runtime
 from jacobian.schema_registry import SchemaRegistry
@@ -75,7 +75,7 @@ def _live_adapters(tmp_path: Path):
     )
     if runtime.availability is not ProviderAvailability.AVAILABLE:
         pytest.skip(f"pinned Lean runtime unavailable: {runtime.diagnostic}")
-    adapters, _ = install_lean_exploration_capabilities(
+    adapters, _ = install_lean_exploration_operations(
         store,
         schemas,
         artifacts,

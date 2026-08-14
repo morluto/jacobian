@@ -20,7 +20,7 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.lean_frontend.statement import (
     LeanStatementCompareAdapter,
     LeanStatementProposalAdapter,
-    install_lean_statement_capabilities,
+    install_lean_statement_operations,
 )
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import project_operation_result
@@ -45,7 +45,7 @@ def _build_adapters(
     store = ArtifactRepository(tmp_path)
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
-    adapters, _installation = install_lean_statement_capabilities(
+    adapters, _installation = install_lean_statement_operations(
         store, schemas, artifacts
     )
     return adapters

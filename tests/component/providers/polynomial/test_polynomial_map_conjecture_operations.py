@@ -162,7 +162,7 @@ def test_collision_inverse_obstruction_fails_closed_for_wrong_image(
     assert result.output["verification_record_uri"] is None
 
 
-def test_new_checker_capabilities_are_omitted_without_authorization(
+def test_new_checker_operations_are_omitted_without_authorization(
     polynomial_services,
 ) -> None:
     operation_ids = {

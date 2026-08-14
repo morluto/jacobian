@@ -57,9 +57,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
-        server = create_server(
-            tmp_path
-        )
+        server = create_server(tmp_path)
         async with Client(server, raise_exceptions=True) as client:
             operation_ids = await _catalog(client)
             assert {
@@ -104,9 +102,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
                 record["payload"]["semantics_uri"],
             ]
 
-        restarted = create_server(
-            tmp_path
-        )
+        restarted = create_server(tmp_path)
         async with Client(restarted, raise_exceptions=True) as client:
             replayed = await _tool(
                 client,
@@ -129,9 +125,7 @@ def test_polynomial_factor_result_verifies_through_mcp(
 ) -> None:
     async def scenario() -> None:
         state = copy_template(authorized_portfolio_template, tmp_path / "state")
-        server = create_server(
-            state
-        )
+        server = create_server(state)
         async with Client(server, raise_exceptions=True) as client:
             factor_input = {"polynomial": _polynomial(-1, 0, 1)}
             computed = await _tool(
@@ -268,9 +262,7 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
         )
 
     async def scenario() -> None:
-        server = create_server(
-            tmp_path
-        )
+        server = create_server(tmp_path)
         async with Client(server, raise_exceptions=True) as client:
             verified = await validate(client)
             assert verified["output"]["accepted"] is True
@@ -281,9 +273,7 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
             assert record["artifact_uri"] == record_uri
             assert record["payload"]["evidence_uri"] in verified["artifact_uris"]
 
-        restarted = create_server(
-            tmp_path
-        )
+        restarted = create_server(tmp_path)
         async with Client(restarted, raise_exceptions=True) as client:
             replayed = await validate(client)
             assert replayed["output"]["accepted"] is True

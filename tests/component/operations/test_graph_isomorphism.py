@@ -16,7 +16,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
+from jacobian.graphs.installation import GraphInstallation, install_graph_operations
 from jacobian.graphs.isomorphism import (
     GraphIsomorphismInstallation,
     install_graph_isomorphism,
@@ -43,7 +43,7 @@ def _open_graph_isomorphism_services(
     )
     with open_domain_services(root, checker_authority=authority) as services:
         with atomic_installation(services.core):
-            graph_adapters, graph = install_graph_capabilities(
+            graph_adapters, graph = install_graph_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,

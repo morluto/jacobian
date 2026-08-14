@@ -290,12 +290,8 @@ def test_agent_telemetry_records_empty_payload_and_exact_repeated_errors(
         },
     }
     events = [
-        _tool_event(
-            "math.run", {"operation_id": "lean.check", "payload": {}}, invalid
-        ),
-        _tool_event(
-            "math.run", {"operation_id": "lean.check", "payload": {}}, invalid
-        ),
+        _tool_event("math.run", {"operation_id": "lean.check", "payload": {}}, invalid),
+        _tool_event("math.run", {"operation_id": "lean.check", "payload": {}}, invalid),
         _tool_event(
             "math.run",
             {

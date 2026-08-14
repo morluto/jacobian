@@ -6,7 +6,7 @@ from jacobian.lean_frontend.declarations import (
 )
 from jacobian.lean_frontend.exploration import (
     LeanExplorationInstallation,
-    install_lean_exploration_capabilities,
+    install_lean_exploration_operations,
 )
 from jacobian.lean_frontend.metavariable_fields import (
     LeanMetavariableFieldsAdapter,
@@ -27,7 +27,7 @@ from jacobian.lean_frontend.proof_state_inspect import (
 from jacobian.lean_frontend.service import LeanService
 from jacobian.lean_frontend.statement import (
     LeanStatementInstallation,
-    install_lean_statement_capabilities,
+    install_lean_statement_operations,
 )
 from jacobian.lean_frontend.term_apply import (
     LeanTermApplyAdapter,
@@ -44,12 +44,12 @@ __all__ = [
     "LeanService",
     "LeanStatementInstallation",
     "LeanTermApplyAdapter",
-    "install_lean_exploration_capabilities",
+    "install_lean_exploration_operations",
     "install_lean_metavariable_fields_operation",
     "install_lean_proof_axioms_operation",
     "install_lean_proof_edit_operation",
     "install_lean_proof_state_inspect_operation",
-    "install_lean_statement_capabilities",
+    "install_lean_statement_operations",
     "install_lean_term_apply_operation",
     "installed_lean_declaration_service",
 ]

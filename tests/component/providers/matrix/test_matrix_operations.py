@@ -288,7 +288,7 @@ def test_matrix_determinant_matches_independent_bounded_oracle(
             )
 
 
-def test_matrix_capabilities_report_sympy_provider_identity(
+def test_matrix_operations_report_sympy_provider_identity(
     matrix_services: Any,
 ) -> None:
     runtime = matrix_services
@@ -302,7 +302,6 @@ def test_matrix_capabilities_report_sympy_provider_identity(
         assert descriptor.provider == "jacobian.sympy"
         assert descriptor.provider_runtime.provider == "jacobian.sympy"
         assert (
-            descriptor.provider_runtime.availability
-            is ProviderAvailability.AVAILABLE
+            descriptor.provider_runtime.availability is ProviderAvailability.AVAILABLE
         )
         assert descriptor.provider_runtime.version == sympy.__version__

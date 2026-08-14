@@ -124,7 +124,7 @@ def _verify(runtime: DomainTestServices, proof_uri: str) -> OperationResult:
     )
 
 
-def test_invalid_proof_diagnostic_routes_through_public_capabilities(
+def test_invalid_proof_diagnostic_routes_through_public_operations(
     tmp_path: Path,
 ) -> None:
     executable = fake_carcara(

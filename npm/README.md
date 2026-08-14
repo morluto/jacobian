@@ -2,14 +2,14 @@
 
 A thin Node launcher and MCP client installer for
 [Jacobian](https://github.com/morluto/jacobian) — the MCP server, CLI, and
-Python library that exposes a portfolio of composable capabilities with
+Python library that exposes a portfolio of composable operations with
 mathematically atomic, agent-visible outcomes to AI agents investigating
 conjectures and other mathematical problems.
 
 This package does not implement the kernel itself. It bootstraps the Python
 distribution (`jacobian`) and provides commands to register
 Jacobian with MCP clients, verify the handshake, and forward to the full CLI.
-Agents compose capabilities into their own workflows; this launcher only
+Agents compose operations into their own workflows; this launcher only
 installs, registers, and forwards.
 
 ## Requirements

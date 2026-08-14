@@ -18,7 +18,7 @@ MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
 
 
-def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
+def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
     async def scenario() -> None:
         from mcp import Client
 

@@ -144,7 +144,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
             "tests/boundary/providers/flint/startup/test_required_provider_startup.py"
         ),
         PurePosixPath(
-            "tests/boundary/providers/lean/test_lean_statement_capabilities.py"
+            "tests/boundary/providers/lean/test_lean_statement_operations.py"
         ),
         # Storage recovery/transaction boundary tests crash and recover processes.
         PurePosixPath(
@@ -160,7 +160,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # Lean provider component tests spawn lean checker.
         PurePosixPath("tests/component/providers/lean/test_lean_checker_errors.py"),
         # Matrix provider component tests spawn matrix executables.
-        PurePosixPath("tests/component/providers/matrix/test_matrix_capabilities.py"),
+        PurePosixPath("tests/component/providers/matrix/test_matrix_operations.py"),
         # Real analysis domain test uses external analysis executables.
         PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
         # Untrusted plugin entrypoints manage their own process lifecycle.

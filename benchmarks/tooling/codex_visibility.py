@@ -340,8 +340,8 @@ def classify_visibility(
     return {
         "expectation": case.expectation,
         "observed": observed,
-        "expected_capabilities": expected_observed,
-        "diagnostic_capabilities": diagnostic_observed,
+        "expected_operations": expected_observed,
+        "diagnostic_operations": diagnostic_observed,
         "output_outcomes": {
             "required": bool(case.acceptable_output_outcomes),
             "satisfied": bool(matched_outcomes),
@@ -349,7 +349,7 @@ def classify_visibility(
                 {outcome.operation_id for outcome in matched_outcomes}
             ),
         },
-        "unexpected_capabilities": {
+        "unexpected_operations": {
             "attempted": sorted(attempted - tracked),
             "completed": sorted(completed - tracked),
         },
@@ -416,7 +416,7 @@ async def inspect_surface(
             canonicalize_json(
                 {
                     "catalog_version": catalog["catalog_version"],
-                    "capabilities": catalog["capabilities"],
+                    "operations": catalog["operations"],
                 }
             )
         )
@@ -431,7 +431,7 @@ async def inspect_surface(
                 "catalog_digest": catalog_digest,
                 "policy_profile": catalog["policy_profile"],
                 "policy_digest": catalog["policy_digest"],
-                "operation_count": len(catalog["capabilities"]),
+                "operation_count": len(catalog["operations"]),
                 "content_sha256": _sha256_bytes(catalog_content.text.encode("utf-8")),
             },
         }

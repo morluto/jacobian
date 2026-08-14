@@ -342,8 +342,7 @@ class CheckerRegistry:
         if scope_error is not None:
             raise CheckerRegistryError(scope_error)
         if provider_runtime is not None and (
-            provider_runtime.availability
-            is not ProviderAvailability.AVAILABLE
+            provider_runtime.availability is not ProviderAvailability.AVAILABLE
             or provider_runtime.digest is None
             or provider_runtime.digest_kind is None
         ):

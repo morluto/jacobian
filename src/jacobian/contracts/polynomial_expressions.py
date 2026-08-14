@@ -428,8 +428,7 @@ class PolynomialExpressionNormalizationArtifact(ContractModel):
             )
         if (
             self.producer.provider != "jacobian.sympy"
-            or self.producer.availability
-            is not ProviderAvailability.AVAILABLE
+            or self.producer.availability is not ProviderAvailability.AVAILABLE
             or self.producer.version != "1.14.0"
             or self.producer.configuration
             != SYMPY_POLYNOMIAL_NORMALIZATION_CONFIGURATION

@@ -329,8 +329,7 @@ class SmtAletheProofArtifact(ContractModel):
         if (
             self.producer.provider != "cvc5"
             or self.producer.version != "1.3.4"
-            or self.producer.availability
-            is not ProviderAvailability.AVAILABLE
+            or self.producer.availability is not ProviderAvailability.AVAILABLE
             or self.producer.digest is None
             or self.producer.digest_kind
             is not ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD

@@ -101,7 +101,7 @@ class GraphCompositionResources:
     enumeration_scope_schema_uri: str
 
 
-def install_graph_composition_capabilities(
+def install_graph_composition_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,

@@ -160,7 +160,7 @@ def _ready_probe(
             "tool_names": ["math.find", "math.run"],
             "catalog": {
                 "catalog_version": "1",
-                "capabilities": 1,
+                "operations": 1,
                 "policy_profile": "DEFAULT",
                 "catalog_digest": "sha256:" + "2" * 64,
                 "policy_digest": "sha256:" + "3" * 64,

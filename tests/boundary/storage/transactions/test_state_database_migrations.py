@@ -74,13 +74,16 @@ def test_fresh_store_records_immutable_ordered_migrations(tmp_path: Path) -> Non
             "active_operation_catalog",
             "operation_checker_bindings",
         } <= tables
-        assert not {
-            "experiments",
-            "search_experiments",
-            "installed_plugins",
-            "reasoning_runs",
-            "reasoning_events",
-        } & tables
+        assert (
+            not {
+                "experiments",
+                "search_experiments",
+                "installed_plugins",
+                "reasoning_runs",
+                "reasoning_events",
+            }
+            & tables
+        )
         assert connection.execute(
             "SELECT format_revision FROM jacobian_state_format WHERE id = 0"
         ).fetchone() == (CURRENT_STATE_FORMAT_REVISION,)

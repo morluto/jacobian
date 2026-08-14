@@ -146,7 +146,7 @@ def test_sat_assignment_verifier_declares_its_typed_artifact_route(
     )
 
 
-def test_invalid_assignment_diagnostic_routes_through_public_capabilities(
+def test_invalid_assignment_diagnostic_routes_through_public_operations(
     sat_assignment_services,
 ) -> None:
     result = _verify(

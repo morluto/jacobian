@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from tests.component.providers.polynomial.polynomial_capabilities_support import (
-    PolynomialTestServices,
-    open_polynomial_services,
-)
 from tests.component.providers.polynomial.polynomial_normalization_support import (
     PolynomialNormalizationTestServices,
     open_polynomial_normalization_services,
+)
+from tests.component.providers.polynomial.polynomial_operations_support import (
+    PolynomialTestServices,
+    open_polynomial_services,
 )
 
 from jacobian.runtime.config import CheckerAuthorityMode

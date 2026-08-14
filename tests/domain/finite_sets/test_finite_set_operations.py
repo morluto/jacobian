@@ -11,9 +11,7 @@ from jacobian.domains.finite_sets import finite_set_operations
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
-    with open_domain_services(
-        tmp_path / "state", finite_set_operations()
-    ) as services:
+    with open_domain_services(tmp_path / "state", finite_set_operations()) as services:
         yield services
 
 

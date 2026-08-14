@@ -133,7 +133,7 @@ class _Resources:
     repl: LeanExplorationReplRuntime
 
 
-def install_lean_exploration_capabilities(
+def install_lean_exploration_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,

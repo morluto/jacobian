@@ -20,9 +20,9 @@ from benchmarks.tooling.command_runner import (  # noqa: E402
     ToolCommandStatus,
     run_operator_command,
 )
-from jacobian.contracts.capabilities import (  # noqa: E402
+from jacobian.contracts.operations import (  # noqa: E402
     OperationCatalog,
-    OperationProviderAvailability,
+    ProviderAvailability,
 )
 
 import jacobian  # noqa: E402
@@ -50,9 +50,9 @@ _PROFILE_PROVIDERS = {name: selected.providers for name, selected in PROFILES.it
 def _catalog_digest(catalog: OperationCatalog) -> str:
     payload = {
         "catalog_version": catalog.catalog_version,
-        "capabilities": [
+        "operations": [
             descriptor.model_dump(mode="json")
-            for descriptor in catalog.capabilities
+            for descriptor in catalog.operations
         ],
     }
     return f"sha256:{hashlib.sha256(canonicalize_json(payload)).hexdigest()}"
@@ -209,7 +209,7 @@ def inspect_installation(
         state_dir,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as runtime:
-        catalog = runtime.core.capabilities.catalog()
+        catalog = runtime.core.operations.catalog()
         providers = _provider_report(runtime)
         digest = _catalog_digest(catalog)
         diagnostics = [
@@ -226,7 +226,7 @@ def inspect_installation(
         provider
         for provider in _PROFILE_PROVIDERS[profile]
         if providers.get(provider, {}).get("availability")
-        != OperationProviderAvailability.AVAILABLE.value
+        != ProviderAvailability.AVAILABLE.value
     ]
     effective_provider_path = os.environ.get("PATH", "")
     effective_project_environment = os.environ.get("UV_PROJECT_ENVIRONMENT", "")
@@ -268,7 +268,7 @@ def inspect_installation(
         "lean_runtime": effective_lean_runtime,
         "launcher_lean_runtime": launcher_lean_runtime,
         "catalog_digest": digest,
-        "catalog_size": len(catalog.capabilities),
+        "catalog_size": len(catalog.operations),
         "policy_profile": catalog.policy_profile,
         "policy_digest": catalog.policy_digest,
         "providers": providers,
@@ -402,7 +402,7 @@ def main() -> int:
             )
         print(
             f"{marker} catalog: {report['catalog_digest']} "
-            f"({report['catalog_size']} capabilities)"
+            f"({report['catalog_size']} operations)"
         )
         for provider, status in report["providers"].items():
             available = status["availability"] == "AVAILABLE"

@@ -75,9 +75,6 @@ class ProviderMeasurement(ContractModel):
 
     @model_validator(mode="after")
     def require_available_provider(self) -> Self:
-        if (
-            self.provider_runtime.availability
-            is not ProviderAvailability.AVAILABLE
-        ):
+        if self.provider_runtime.availability is not ProviderAvailability.AVAILABLE:
             raise ValueError("only an available provider runtime can be measured")
         return self

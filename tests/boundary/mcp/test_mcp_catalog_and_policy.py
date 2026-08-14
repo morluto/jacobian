@@ -49,12 +49,10 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
             resource_result = await client.read_resource("operation://catalog")
             full_catalog = json.loads(resource_result.contents[0].text)
             all_ids = {
-                descriptor["operation_id"]
-                for descriptor in full_catalog["operations"]
+                descriptor["operation_id"] for descriptor in full_catalog["operations"]
             }
             discoverable_ids = {
-                descriptor["operation_id"]
-                for descriptor in full_catalog["operations"]
+                descriptor["operation_id"] for descriptor in full_catalog["operations"]
             }
 
             listed = await client.call_tool(
@@ -151,8 +149,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
             assert isinstance(materialize_description.structured_content, dict)
             materialize = materialize_description.structured_content
             assert (
-                materialize["operation"]["examples"][0]["name"]
-                == "finite-coloring-cnf"
+                materialize["operation"]["examples"][0]["name"] == "finite-coloring-cnf"
             )
 
             first_page = await client.call_tool(
@@ -178,9 +175,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
             second = second_page.structured_content
             assert {
                 descriptor["operation_id"] for descriptor in first["matches"]
-            }.isdisjoint(
-                descriptor["operation_id"] for descriptor in second["matches"]
-            )
+            }.isdisjoint(descriptor["operation_id"] for descriptor in second["matches"])
 
             invalid_cursor = await client.call_tool(
                 "math.find",

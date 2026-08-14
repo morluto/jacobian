@@ -16,7 +16,7 @@ assignees: []
 <!-- What single agent-visible result should the operation produce? Include representative inputs and outputs when possible. -->
 
 **Existing tools and backends**
-<!-- Which current Jacobian capabilities, maintained libraries, proof assistants, CASs, solvers, or databases were considered? -->
+<!-- Which current Jacobian operations, maintained libraries, proof assistants, CASs, solvers, or databases were considered? -->
 
 **Evidence and verification boundary**
 <!-- Is the result heuristic, approximate, bounded, exhaustive, exact, or independently checkable? What certificate or checker can verify it? -->

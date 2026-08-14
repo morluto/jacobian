@@ -18,7 +18,7 @@ from jacobian.providers.external_solver_runtime import (
     drat_trim_provider_runtime,
 )
 from jacobian.runtime import CheckerAuthorityMode
-from jacobian.sat_smt.cadical import install_cadical_capabilities
+from jacobian.sat_smt.cadical import install_cadical_operations
 from jacobian.sat_smt.sat_operations import (
     install_sat_assignment_checker,
     install_sat_unsat_proof_checker,
@@ -202,7 +202,7 @@ def _open_external_sat_services(
     with open_domain_services(root, checker_authority=authority) as services:
         with atomic_installation(services.core):
             cadical = cadical_provider_runtime()
-            for adapter in install_cadical_capabilities(services.core.sat, cadical):
+            for adapter in install_cadical_operations(services.core.sat, cadical):
                 services.installation.register_operation(adapter)
 
             if install_assignment_checker:

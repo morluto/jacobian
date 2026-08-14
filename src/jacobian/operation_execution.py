@@ -28,7 +28,7 @@ def execute_operation[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    spec: OperationDeclaration[RequestT, ResultT] | OperationDeclaration[RequestT, ResultT],
+    spec: OperationDeclaration[RequestT, ResultT],
     request: RequestT,
 ) -> OperationTerminal[ResultT]:
     """Run preflight, execution, result parsing, and postcondition exactly once."""

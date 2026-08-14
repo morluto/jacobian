@@ -112,9 +112,7 @@ def test_published_model_instance_must_satisfy_its_contract(
     operation_core_services: DomainTestServices,
 ) -> None:
     core = operation_core_services.core
-    operation_core_services.installation.register_operation(
-        InvalidOutputValueAdapter()
-    )
+    operation_core_services.installation.register_operation(InvalidOutputValueAdapter())
 
     result = core.operations.invoke(
         OperationRequest(operation_id="example.invalid-output-value", input={})

@@ -477,8 +477,7 @@ def _component_runtimes(
         )
     try:
         return tuple(
-            ProviderObservation.model_validate(component)
-            for component in components
+            ProviderObservation.model_validate(component) for component in components
         )
     except ValidationError as exc:
         raise ProviderRuntimeError(

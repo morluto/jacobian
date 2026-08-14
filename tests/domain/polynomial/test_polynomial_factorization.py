@@ -11,9 +11,7 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 @pytest.fixture
 def polynomial_services(tmp_path: Path) -> Iterator[DomainTestServices]:
-    with open_domain_services(
-        tmp_path / "state", polynomial_operations()
-    ) as services:
+    with open_domain_services(tmp_path / "state", polynomial_operations()) as services:
         yield services
 
 

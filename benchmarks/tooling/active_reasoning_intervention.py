@@ -915,9 +915,7 @@ def _tool_action(
     if event.get("tool") == "math.find":
         return "FIND"
     attempt = attempts.get(str(event.get("request_digest")))
-    operation_id = (
-        attempt.get("operation_id") if isinstance(attempt, Mapping) else None
-    )
+    operation_id = attempt.get("operation_id") if isinstance(attempt, Mapping) else None
     return (
         "RUN_CHECKER"
         if isinstance(operation_id, str) and operation_id.endswith(".verify")

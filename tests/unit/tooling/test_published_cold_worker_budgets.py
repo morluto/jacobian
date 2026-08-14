@@ -24,8 +24,8 @@ def test_arb_example_and_vocabulary_match_supported_functions() -> None:
 
 def test_groebner_example_preserves_cold_worker_startup_budget() -> None:
     assert (
-        POLYNOMIAL_GROEBNER_OPERATION.examples[0].input[
-            "resource_budget"
-        ]["wall_seconds"]
+        POLYNOMIAL_GROEBNER_OPERATION.examples[0].input["resource_budget"][
+            "wall_seconds"
+        ]
         == 10
     )

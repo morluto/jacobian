@@ -20,7 +20,7 @@ const NPM_UPGRADE_HANDOFF = "JACOBIAN_NPM_UPGRADE_HANDOFF";
  * Everything else is forwarded to the Python `jacobian` CLI.
  */
 
-const HELP = `Jacobian — composable mathematical capabilities for AI agents
+const HELP = `Jacobian — composable mathematical operations for AI agents
 
 Usage:
   jacobian setup [--client <id>...] [--all] [--yes] [--dry-run] [--json] [--plain]

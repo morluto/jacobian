@@ -67,11 +67,8 @@ def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None
     }
 
 
-def test_geometry_capabilities_have_distinct_ids() -> None:
-    ids = [
-        operation.operation_id
-        for operation in geometry_operations()
-    ]
+def test_geometry_operations_have_distinct_ids() -> None:
+    ids = [operation.operation_id for operation in geometry_operations()]
 
     assert ids, "expected geometry operations"
     assert len(ids) == len(set(ids))

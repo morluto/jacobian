@@ -18,13 +18,13 @@ from jacobian.exact_domain_checkers import (
     install_exact_domain_verification,
 )
 from jacobian.finite_coverage import install_finite_coverage
-from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
+from jacobian.graphs.installation import GraphInstallation, install_graph_operations
 from jacobian.graphs.isomorphism import install_graph_isomorphism
 from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
-from jacobian.polynomials import install_polynomial_capabilities
+from jacobian.polynomials import install_polynomial_operations
 from jacobian.polytope_operations import PolytopeSeparationAdapter
 from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.portfolio.context import PortfolioContext
@@ -48,7 +48,7 @@ class CoreOperationBinder:
     ) -> GraphInstallation:
         """Install retained graph operations."""
 
-        graph_adapters, graph = install_graph_capabilities(
+        graph_adapters, graph = install_graph_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
@@ -141,7 +141,7 @@ class CoreOperationBinder:
         if graph_isomorphism_adapter is not None:
             self.context.register_operation(graph_isomorphism_adapter)
 
-        polynomial_adapters, _ = install_polynomial_capabilities(
+        polynomial_adapters, _ = install_polynomial_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,

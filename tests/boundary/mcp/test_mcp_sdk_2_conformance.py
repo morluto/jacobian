@@ -149,9 +149,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 "math.run",
                 {
                     "operation_id": "polynomial.expression.normalize",
-                    "payload": contract["operation"]["examples"][0][
-                        "input"
-                    ],
+                    "payload": contract["operation"]["examples"][0]["input"],
                 },
             )
             assert isinstance(result.structured_content, dict)

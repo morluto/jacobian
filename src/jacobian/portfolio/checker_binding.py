@@ -26,7 +26,7 @@ from jacobian.lean_frontend.declarations import (
     LeanDeclarationService,
     installed_lean_declaration_service,
 )
-from jacobian.lean_frontend.exploration import install_lean_exploration_capabilities
+from jacobian.lean_frontend.exploration import install_lean_exploration_operations
 from jacobian.lean_frontend.proof_axioms import install_lean_proof_axioms_operation
 from jacobian.lean_frontend.proof_edit import install_lean_proof_edit_operation
 from jacobian.lean_frontend.proof_state_inspect import (
@@ -138,7 +138,7 @@ class CheckerPortfolioBinder:
             runtime,
         )
         ctx.register_operation(proof_axioms_adapter)
-        adapters, resources.lean_exploration = install_lean_exploration_capabilities(
+        adapters, resources.lean_exploration = install_lean_exploration_operations(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
@@ -165,8 +165,6 @@ class CheckerPortfolioBinder:
         if declarations is None:
             return
         ctx = self.context
-        bound_queries = ctx.binder.bind(
-            lean_declaration_query_operations(declarations)
-        )
+        bound_queries = ctx.binder.bind(lean_declaration_query_operations(declarations))
         for adapter in bound_queries.adapters:
             ctx.register_operation(adapter)

@@ -139,7 +139,7 @@ def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> N
     assert empty.output["exhaustive"] is False
 
 
-def test_runtime_can_ablate_lean_capabilities_without_removing_checker(
+def test_runtime_can_ablate_lean_operations_without_removing_checker(
     tmp_path: Path,
 ) -> None:
     runtime = create_runtime(

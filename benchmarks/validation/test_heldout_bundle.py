@@ -583,7 +583,7 @@ def _ready_probe(
             "tool_names": ["math.find", "math.run"],
             "catalog": {
                 "catalog_version": "1",
-                "capabilities": 1,
+                "operations": 1,
                 "policy_profile": "DEFAULT",
                 "catalog_digest": "sha256:" + "5" * 64,
                 "policy_digest": "sha256:" + "6" * 64,
@@ -742,7 +742,7 @@ def test_treatment_readiness_preflight_misconfigured_on_digest_mismatch(
                 "tool_names": ["math.find", "math.run"],
                 "catalog": {
                     "catalog_version": "1",
-                    "capabilities": 1,
+                    "operations": 1,
                     "policy_profile": "DEFAULT",
                     "catalog_digest": "sha256:" + "9" * 64,
                     "policy_digest": "sha256:" + "6" * 64,

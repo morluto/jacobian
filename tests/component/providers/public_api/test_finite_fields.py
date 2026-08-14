@@ -194,9 +194,7 @@ def test_slice_a_ports_compose_restriction_into_rank_without_wire_conversion() -
         strict=True,
     ):
         restrict_payload = port.bind_to_request(restrict_payload, value)
-    restrict_request = restrict_operation.request_type.model_validate(
-        restrict_payload
-    )
+    restrict_request = restrict_operation.request_type.model_validate(restrict_payload)
     linear_map = restrict_operation.execute(restrict_request)
     carried_map = restrict_operation.output_ports[0].extract_from_result(linear_map)
 
@@ -217,9 +215,7 @@ def test_slice_a_ports_compose_restriction_into_rank_without_wire_conversion() -
 
 def test_slice_a_ports_compose_projective_line_into_orbit_distribution() -> None:
     subspace, _ = _slice_a_values()
-    projective, _, _, ledger_operation, orbit_operation, *_ = (
-        finite_field_operations()
-    )
+    projective, _, _, ledger_operation, orbit_operation, *_ = finite_field_operations()
 
     projective_payload: dict[str, object] = {}
     for port, value in zip(

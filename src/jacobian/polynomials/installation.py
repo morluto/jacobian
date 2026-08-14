@@ -52,7 +52,7 @@ from jacobian.verification.service import VerificationService
 from jacobian.verification_operations import witness_verification_adapter
 
 
-def install_polynomial_capabilities(
+def install_polynomial_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,

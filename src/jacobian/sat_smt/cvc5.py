@@ -77,8 +77,7 @@ def install_cvc5_operation(
         or runtime.availability is not ProviderAvailability.AVAILABLE
         or runtime.version != CVC5_VERSION
         or runtime.digest is None
-        or runtime.digest_kind
-        is not ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
+        or runtime.digest_kind is not ProviderDigestKind.PYTHON_DISTRIBUTION_RECORD
     ):
         raise ValueError("cvc5 operation requires the pinned available runtime")
     return Cvc5UnsatProofFindAdapter(

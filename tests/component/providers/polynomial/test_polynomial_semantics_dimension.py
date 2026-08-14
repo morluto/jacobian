@@ -1,6 +1,6 @@
 """Polynomial-map semantics must reflect the public value contract."""
 
-from tests.component.providers.polynomial.polynomial_capabilities_support import (
+from tests.component.providers.polynomial.polynomial_operations_support import (
     PolynomialTestServices,
 )
 

@@ -24,7 +24,7 @@ from jacobian.polynomial_expression_operations import (
 from jacobian.portfolio.context import PortfolioContext
 from jacobian.portfolio.provider_resolution import ProviderRuntimePlan
 from jacobian.runtime.services import CoreServices
-from jacobian.sat_smt.cadical import install_cadical_capabilities
+from jacobian.sat_smt.cadical import install_cadical_operations
 from jacobian.sat_smt.cvc5 import install_cvc5_operation
 from jacobian.sat_smt.sat_lrat import install_sat_lrat_verifier
 from jacobian.sat_smt.sat_operations import (
@@ -120,7 +120,7 @@ class FoundationBinder:
 
         if runtimes.cadical.availability is ProviderAvailability.AVAILABLE:
             try:
-                cadical_adapters = install_cadical_capabilities(
+                cadical_adapters = install_cadical_operations(
                     core.sat,
                     runtimes.cadical,
                 )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.component.operations.graph_capabilities_support import open_graph_services
+from tests.component.operations.graph_operations_support import open_graph_services
 
 from jacobian.graphs import GraphInstallation
 

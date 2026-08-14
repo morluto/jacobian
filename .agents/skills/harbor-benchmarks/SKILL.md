@@ -110,7 +110,7 @@ separate-verifier mode support this boundary but do not prove it.
 
 Check that verifier timeout, network, CPU, memory, storage, and dependency
 behavior agree with the published task contract. Harbor applies configured
-limits subject to provider capabilities; Jacobian owns contract consistency and
+limits subject to provider operations; Jacobian owns contract consistency and
 validation.
 
 Before choosing the mutating workflow, confirm that the dataset uses the

@@ -335,7 +335,7 @@ async function run(options = {}) {
       method: "initialize",
       params: {
         protocolVersion: PROTOCOL_VERSION,
-        capabilities: {},
+        operations: {},
         clientInfo: {
           name: "jacobian-doctor",
           version,

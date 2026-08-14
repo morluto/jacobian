@@ -35,7 +35,7 @@ def _validate_descriptor_input_contract(
     accepted_artifact_types: tuple[ArtifactUri, ...],
 ) -> None:
     if not accepted_input_kinds:
-        raise ValueError("a operation must accept at least one input kind")
+        raise ValueError("an operation must accept at least one input kind")
     if len(set(accepted_input_kinds)) != len(accepted_input_kinds):
         raise ValueError("accepted input kinds must be unique")
     if len(set(accepted_artifact_types)) != len(accepted_artifact_types):
@@ -356,9 +356,7 @@ class OperationDescriptor(ContractModel):
             names = tuple(port.name for port in ports)
             if len(names) != len(set(names)):
                 raise ValueError(f"{label} port names must be unique")
-        if len({example.name for example in self.examples}) != len(
-            self.examples
-        ):
+        if len({example.name for example in self.examples}) != len(self.examples):
             raise ValueError("operation invocation example names must be unique")
         canonicalize_json(self.input_schema)
         canonicalize_json(self.output_schema)
@@ -444,10 +442,8 @@ class OperationCatalogSnapshot(ContractModel):
     operations: tuple[OperationDescriptor, ...]
 
     @model_validator(mode="after")
-    def require_unique_sorted_capabilities(self) -> Self:
-        operation_ids = tuple(
-            descriptor.operation_id for descriptor in self.operations
-        )
+    def require_unique_sorted_operations(self) -> Self:
+        operation_ids = tuple(descriptor.operation_id for descriptor in self.operations)
         if operation_ids != tuple(sorted(set(operation_ids))):
             raise ValueError("catalog operation IDs must be unique and sorted")
         return self

@@ -72,7 +72,7 @@ class _CadicalDurableProofLimitError(OverflowError):
     pass
 
 
-def install_cadical_capabilities(
+def install_cadical_operations(
     sat: SatArtifactService,
     runtime: ProviderObservation,
     *,

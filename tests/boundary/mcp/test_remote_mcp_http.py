@@ -93,7 +93,7 @@ def test_default_authority_remote_mcp_matches_deployment_identity(
                 expected_version=version("jacobian"),
                 expected_revision=revision,
                 expected_policy_profile="DEFAULT",
-                required_capabilities={"matrix.determinant.compute"},
+                required_operations={"matrix.determinant.compute"},
                 query="exact matrix determinant",
                 timeout_seconds=60,
             )

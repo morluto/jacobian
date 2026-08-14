@@ -66,7 +66,7 @@ class GraphInstallation:
     neighborhood_checker_id: str | None
 
 
-def install_graph_capabilities(
+def install_graph_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,

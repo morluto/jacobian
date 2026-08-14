@@ -11,7 +11,7 @@ from jacobian.finite_coverage import (
     FiniteCoverageInstallation,
     install_finite_coverage,
 )
-from jacobian.graphs import GraphInstallation, install_graph_capabilities
+from jacobian.graphs import GraphInstallation, install_graph_operations
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
 from jacobian.universal_algebra_operations import (
@@ -105,7 +105,7 @@ def open_graph_core_services(
 
     with open_domain_services(root) as services:
         with atomic_installation(services.core):
-            adapters, installation = install_graph_capabilities(
+            adapters, installation = install_graph_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,

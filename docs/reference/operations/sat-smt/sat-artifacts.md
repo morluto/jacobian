@@ -141,7 +141,7 @@ equal `variable_count`; partial assignments are not part of version 1. It also
 records:
 
 - declared scope `FULL_CNF`;
-- an available `OperationProviderRuntime`, including provider version and
+- an available `ProviderObservation`, including provider version and
   exact runtime digest; and
 - the search resource budget, with a required wall-clock bound and optional
   memory and conflict bounds.

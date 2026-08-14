@@ -149,7 +149,7 @@ def _operation_resolution_failure(
                     "operator-controlled operation policy."
                 ),
                 hint=(
-                    "Choose a operation visible in math.find, or ask "
+                    "Choose an operation visible in math.find, or ask "
                     "the operator to change the evaluation/runtime policy."
                 ),
                 details={

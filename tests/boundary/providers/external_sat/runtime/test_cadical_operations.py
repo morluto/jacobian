@@ -26,7 +26,7 @@ from jacobian.providers.external_solver_runtime import (
     drat_trim_provider_runtime,
 )
 from jacobian.runtime import CheckerAuthorityMode
-from jacobian.sat_smt.cadical import install_cadical_capabilities
+from jacobian.sat_smt.cadical import install_cadical_operations
 from jacobian.sat_smt.sat_operations import (
     install_sat_assignment_checker,
     install_sat_unsat_proof_checker,
@@ -61,7 +61,7 @@ def _install_fake_cadical(
     provider = cadical_provider_runtime(executable)
     assert provider.availability is ProviderAvailability.AVAILABLE
     with atomic_installation(services.core):
-        for adapter in install_cadical_capabilities(
+        for adapter in install_cadical_operations(
             services.core.sat,
             provider,
             executable=executable,

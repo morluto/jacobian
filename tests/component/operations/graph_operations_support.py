@@ -11,7 +11,7 @@ from tests.support.services import (
     open_domain_services,
 )
 
-from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
+from jacobian.graphs.installation import GraphInstallation, install_graph_operations
 from jacobian.runtime.config import CheckerAuthorityMode
 
 
@@ -35,7 +35,7 @@ def open_graph_services(
     )
     with open_domain_services(root, checker_authority=authority) as services:
         with atomic_installation(services.core):
-            adapters, graph = install_graph_capabilities(
+            adapters, graph = install_graph_operations(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,

@@ -37,7 +37,7 @@ def _load_cases() -> list[dict[str, Any]]:
                 "variable_names": request["variables"],
                 "clauses": request["clauses"],
                 "expected_status": expected["expected_status"],
-                "required_capabilities": [
+                "required_operations": [
                     (
                         "sat.model.find"
                         if expected["expected_status"] == "SATISFIABLE"
@@ -99,4 +99,4 @@ def test_sat_public_reproductions_reach_checker_bound_results(
             assert verified.output["cnf_uri"] == cnf.artifact_uri
             assert verified.output[evidence_field] == evidence_uri
             assert verified.verification_record_uri is not None
-            assert case["required_capabilities"] == [find_id, verify_id]
+            assert case["required_operations"] == [find_id, verify_id]

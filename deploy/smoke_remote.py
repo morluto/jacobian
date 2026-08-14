@@ -144,7 +144,7 @@ async def inspect(
     expected_version: str,
     expected_revision: str | None = None,
     expected_policy_profile: str,
-    required_capabilities: set[str],
+    required_operations: set[str],
     query: str,
     timeout_seconds: float,
 ) -> dict[str, Any]:
@@ -195,10 +195,10 @@ async def inspect(
         operation_ids = {
             operation["operation_id"] for operation in catalog["operations"]
         }
-        missing = sorted(required_capabilities - operation_ids)
+        missing = sorted(required_operations - operation_ids)
         if missing:
             failures.append(
-                f"deployed catalog is missing required capabilities: {missing!r}"
+                f"deployed catalog is missing required operations: {missing!r}"
             )
         policy_profile = catalog["policy_profile"]
         if policy_profile != expected_policy_profile:
@@ -265,7 +265,7 @@ async def _main() -> None:
         expected_version=args.expect_version,
         expected_revision=args.expect_revision,
         expected_policy_profile=args.expect_policy_profile,
-        required_capabilities=set(args.require_operation),
+        required_operations=set(args.require_operation),
         query=args.query,
         timeout_seconds=args.timeout_seconds,
     )

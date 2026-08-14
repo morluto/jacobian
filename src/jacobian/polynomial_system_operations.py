@@ -181,9 +181,7 @@ class PolynomialSystemSolutionAdapter:
 
     def prepare(self, request: OperationRequest) -> PolynomialSystemSolutionRequest:
         try:
-            return parse_operation_input(
-                PolynomialSystemSolutionRequest, request.input
-            )
+            return parse_operation_input(PolynomialSystemSolutionRequest, request.input)
         except (ValidationError, ValueError) as exc:
             raise OperationInvocationError(
                 OperationDiagnostic(

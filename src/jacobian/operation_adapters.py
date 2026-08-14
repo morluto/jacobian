@@ -29,8 +29,8 @@ def parse_operation_input[ModelT: BaseModel](
     """Parse one bounded request into its owning model.
 
     Canonical JSON is enforced once for size and wire shape. Typed port values
-    stay as already-validated objects. Tuple fields accept JSON arrays through
-    the owning ContractModel constructor.
+    stay as already-validated objects. JSON arrays, enums, and nested objects
+    are decoded by the owning model; advertised integers remain strict.
     """
 
     try:
@@ -43,7 +43,6 @@ def parse_operation_input[ModelT: BaseModel](
             for key, value in payload.items()
         }
         encoded = encode_strict_json(jsonable)
-        decoded = loads_strict_json(encoded)
     except CanonicalizationError as exc:
         raise OperationInvocationError(
             OperationDiagnostic(
@@ -56,6 +55,9 @@ def parse_operation_input[ModelT: BaseModel](
                 ),
             )
         ) from exc
+    if not any(isinstance(value, ContractModel) for value in payload.values()):
+        return model.model_validate_json(encoded)
+    decoded = loads_strict_json(encoded)
     if not isinstance(decoded, dict):
         raise OperationInvocationError(
             OperationDiagnostic(
@@ -73,7 +75,7 @@ def parse_operation_input[ModelT: BaseModel](
         )
         for key in decoded
     }
-    return model.model_validate(assembled, strict=True)
+    return model.model_validate(assembled)
 
 
 class OperationAdapter(Protocol[PreparedT]):

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, get_args, get_origin
+from types import UnionType
+from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -15,8 +16,20 @@ def _unwrap_annotation(annotation: Any) -> Any:
     return annotation
 
 
-def _is_tuple_annotation(annotation: Any) -> bool:
-    return get_origin(_unwrap_annotation(annotation)) is tuple
+def _tuple_annotation(annotation: Any) -> Any | None:
+    annotation = _unwrap_annotation(annotation)
+    origin = get_origin(annotation)
+    if origin is tuple:
+        return annotation
+    if origin in {Union, UnionType}:
+        tuple_args = [
+            arg
+            for arg in get_args(annotation)
+            if arg is not type(None) and get_origin(_unwrap_annotation(arg)) is tuple
+        ]
+        if len(tuple_args) == 1:
+            return tuple_args[0]
+    return None
 
 
 def _lists_to_tuples(value: Any) -> Any:
@@ -42,6 +55,9 @@ class ContractModel(BaseModel):
             if name not in coerced:
                 continue
             value = coerced[name]
-            if _is_tuple_annotation(field.annotation) and isinstance(value, list):
-                coerced[name] = _lists_to_tuples(value)
+            if _tuple_annotation(field.annotation) is None or not isinstance(
+                value, list
+            ):
+                continue
+            coerced[name] = _lists_to_tuples(value)
         return coerced

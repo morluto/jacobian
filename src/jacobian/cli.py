@@ -22,6 +22,7 @@ from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.operator_lifecycle import (
     CheckerAuthorization,
+    active_catalog_revision,
     initialize_state,
     update_state,
 )
@@ -132,12 +133,19 @@ def initialize(
     """Initialize storage and report the installed operation count."""
 
     state = _state(context)
+    previous_revision = active_catalog_revision(state.state_dir)
     result = initialize_state(
         state.state_dir,
         checker_authorization=checker_authorization,
     )
-    typer.echo(f"Initialized Jacobian state in {state.state_dir.resolve()}")
-    typer.echo(f"Compiled {result.operation_count} mathematical operations.")
+    if previous_revision == result.revision:
+        typer.echo(f"Jacobian state is already current in {state.state_dir.resolve()}")
+        typer.echo(
+            f"Catalog contains {result.operation_count} mathematical operations."
+        )
+    else:
+        typer.echo(f"Initialized Jacobian state in {state.state_dir.resolve()}")
+        typer.echo(f"Compiled {result.operation_count} mathematical operations.")
 
 
 def update(

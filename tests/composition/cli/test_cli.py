@@ -34,6 +34,18 @@ def test_cli_init_reports_installed_operation_count(tmp_path: Path) -> None:
     assert "Compiled " in result.stdout
     assert " mathematical operations." in result.stdout
 
+    repeated = CliRunner().invoke(
+        app,
+        ["--state-dir", str(tmp_path), "init"],
+    )
+
+    assert repeated.exit_code == 0, repeated.stderr
+    assert (
+        f"Jacobian state is already current in {tmp_path.resolve()}" in repeated.stdout
+    )
+    assert "Catalog contains " in repeated.stdout
+    assert "Compiled " not in repeated.stdout
+
 
 def test_cli_catalog_and_inspect_share_installed_declaration(tmp_path: Path) -> None:
     runner = CliRunner()

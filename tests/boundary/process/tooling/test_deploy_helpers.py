@@ -239,6 +239,182 @@ def test_state_preflight_rejects_an_incomplete_current_schema(
     assert report["diagnostic"] == "tenant database is missing required schema"
 
 
+def test_state_preflight_rejects_duplicate_quota_without_schema_constraints(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "constraint-damaged-quota"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute("ALTER TABLE blob_quota RENAME TO damaged_blob_quota")
+        connection.execute(
+            """
+            CREATE TABLE blob_quota (
+                id INTEGER,
+                size_bytes INTEGER NOT NULL,
+                reconciliation_required INTEGER NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO blob_quota(id, size_bytes, reconciliation_required)
+            SELECT id, size_bytes, reconciliation_required FROM damaged_blob_quota
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO blob_quota(id, size_bytes, reconciliation_required)
+            SELECT id, size_bytes, reconciliation_required FROM damaged_blob_quota
+            """
+        )
+        connection.execute("DROP TABLE damaged_blob_quota")
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "tenant database is missing required schema constraints"
+    )
+
+
+def test_state_preflight_does_not_accept_check_text_in_a_default_literal(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "constraint-damaged-quota-checks"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute("ALTER TABLE blob_quota RENAME TO damaged_blob_quota")
+        connection.execute(
+            """
+            CREATE TABLE blob_quota (
+                id INTEGER PRIMARY KEY,
+                size_bytes INTEGER NOT NULL,
+                reconciliation_required INTEGER NOT NULL,
+                decoy TEXT DEFAULT 'CHECK (id = 0) CHECK (size_bytes >= 0)
+                    CHECK (reconciliation_required IN (0, 1))'
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO blob_quota(id, size_bytes, reconciliation_required)
+            SELECT id, size_bytes, reconciliation_required FROM damaged_blob_quota
+            """
+        )
+        connection.execute("DROP TABLE damaged_blob_quota")
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "tenant database is missing required schema constraints"
+    )
+
+
+def test_state_preflight_rejects_a_missing_migration_name_unique_key(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "constraint-damaged-migration-ledger"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute(
+            "ALTER TABLE jacobian_schema_migrations RENAME TO damaged_schema_migrations"
+        )
+        connection.execute(
+            """
+            CREATE TABLE jacobian_schema_migrations (
+                revision INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                checksum TEXT NOT NULL,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO jacobian_schema_migrations(
+                revision, name, checksum, applied_at
+            )
+            SELECT revision, name, checksum, applied_at
+            FROM damaged_schema_migrations
+            """
+        )
+        connection.execute("DROP TABLE damaged_schema_migrations")
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "tenant database is missing required schema constraints"
+    )
+
+
+def test_state_preflight_rejects_a_missing_catalog_foreign_key(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "constraint-damaged-catalog-foreign-key"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        connection.execute(
+            "ALTER TABLE operation_checker_bindings "
+            "RENAME TO damaged_operation_checker_bindings"
+        )
+        connection.execute(
+            """
+            CREATE TABLE operation_checker_bindings (
+                snapshot_revision INTEGER NOT NULL,
+                operation_id TEXT NOT NULL,
+                binding_index INTEGER NOT NULL CHECK (binding_index >= 0),
+                checker_id TEXT NOT NULL,
+                manifest_digest TEXT NOT NULL,
+                PRIMARY KEY (snapshot_revision, operation_id, binding_index)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO operation_checker_bindings(
+                snapshot_revision,
+                operation_id,
+                binding_index,
+                checker_id,
+                manifest_digest
+            )
+            SELECT
+                snapshot_revision,
+                operation_id,
+                binding_index,
+                checker_id,
+                manifest_digest
+            FROM damaged_operation_checker_bindings
+            """
+        )
+        connection.execute("DROP TABLE damaged_operation_checker_bindings")
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "tenant database is missing required schema constraints"
+    )
+
+
 def test_state_preflight_binds_state_format_to_the_migration_ledger(
     tmp_path: Path,
 ) -> None:

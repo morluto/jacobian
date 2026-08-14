@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 import sqlite3
 import stat
 from collections.abc import Iterator
@@ -99,6 +100,102 @@ _CURRENT_STATE_SCHEMA = {
         }
     ),
 }
+_COMMON_PRIMARY_KEYS = {
+    "jacobian_schema_migrations": ("revision",),
+    "jacobian_state_format": ("id",),
+    "artifacts": ("artifact_uri",),
+    "artifact_parents": ("artifact_uri", "position"),
+    "blob_quota": ("id",),
+    "checkers": ("checker_id",),
+    "checker_audit": ("sequence",),
+}
+_CURRENT_PRIMARY_KEYS = {
+    "operation_catalog_snapshots": ("revision",),
+    "operation_catalog_entries": ("snapshot_revision", "operation_id"),
+    "active_operation_catalog": ("id",),
+    "operation_checker_bindings": (
+        "snapshot_revision",
+        "operation_id",
+        "binding_index",
+    ),
+}
+_COMMON_UNIQUE_KEYS = {
+    "jacobian_schema_migrations": frozenset({("name",)}),
+    "artifacts": frozenset({("manifest_digest",)}),
+}
+_CURRENT_UNIQUE_KEYS = {
+    "active_operation_catalog": frozenset({("snapshot_revision",)}),
+}
+_COMMON_FOREIGN_KEYS = {
+    "artifact_parents": frozenset(
+        {("artifact_uri", "artifacts", "artifact_uri", "RESTRICT")}
+    ),
+    "checker_audit": frozenset({("checker_id", "checkers", "checker_id", "RESTRICT")}),
+}
+_CURRENT_FOREIGN_KEYS = {
+    "operation_catalog_entries": frozenset(
+        {
+            (
+                "snapshot_revision",
+                "operation_catalog_snapshots",
+                "revision",
+                "RESTRICT",
+            )
+        }
+    ),
+    "active_operation_catalog": frozenset(
+        {
+            (
+                "snapshot_revision",
+                "operation_catalog_snapshots",
+                "revision",
+                "RESTRICT",
+            )
+        }
+    ),
+    "operation_checker_bindings": frozenset(
+        {
+            (
+                "snapshot_revision",
+                "operation_catalog_snapshots",
+                "revision",
+                "RESTRICT",
+            ),
+            ("checker_id", "checkers", "checker_id", "RESTRICT"),
+        }
+    ),
+}
+_COMMON_CHECK_EXPRESSIONS = {
+    "jacobian_state_format": frozenset({("id", "=", "0")}),
+    "blob_quota": frozenset(
+        {
+            ("id", "=", "0"),
+            ("size_bytes", ">=", "0"),
+            ("reconciliation_required", "in", "(", "0", ",", "1", ")"),
+        }
+    ),
+    "checkers": frozenset({("authorized", "in", "(", "0", ",", "1", ")")}),
+    "checker_audit": frozenset(
+        {("action", "in", "(", "'AUTHORIZED'", ",", "'REVOKED'", ")")}
+    ),
+}
+_CURRENT_CHECK_EXPRESSIONS = {
+    "active_operation_catalog": frozenset({("id", "=", "0")}),
+    "operation_checker_bindings": frozenset({("binding_index", ">=", "0")}),
+}
+_SQL_TOKEN = re.compile(
+    r"""
+    (?P<space>\s+)
+    |(?P<comment>--[^\r\n]*|/\*.*?\*/)
+    |(?P<string>'(?:''|[^'])*')
+    |(?P<quoted_identifier>"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^]]*\])
+    |(?P<word>[A-Za-z_][A-Za-z0-9_]*)
+    |(?P<number>[0-9]+)
+    |(?P<operator>>=|<=|<>|!=|==|[(),=<>+*/%-])
+    |(?P<invalid>.)
+    """,
+    re.DOTALL | re.VERBOSE,
+)
 
 
 def _blob_path(state_dir: Path, digest: str) -> Path | None:
@@ -309,11 +406,12 @@ def _blob_tree_measurement(state_dir: Path) -> tuple[int | None, str | None]:
 
 
 def _quota_diagnostic(connection: sqlite3.Connection, state_dir: Path) -> str | None:
-    row = connection.execute(
-        "SELECT size_bytes, reconciliation_required FROM blob_quota WHERE id = 0"
-    ).fetchone()
-    if row is None:
+    rows = connection.execute(
+        "SELECT id, size_bytes, reconciliation_required FROM blob_quota LIMIT 2"
+    ).fetchall()
+    if len(rows) != 1 or rows[0]["id"] != 0:
         return "artifact blob quota metadata is missing"
+    row = rows[0]
     size_bytes = row["size_bytes"]
     reconciliation_required = row["reconciliation_required"]
     if (
@@ -334,6 +432,128 @@ def _quota_diagnostic(connection: sqlite3.Connection, state_dir: Path) -> str | 
     return None
 
 
+def _unique_keys(
+    connection: sqlite3.Connection, table: str
+) -> frozenset[tuple[str, ...]]:
+    keys: set[tuple[str, ...]] = set()
+    for index in connection.execute(
+        'SELECT name, "unique" FROM pragma_index_list(?)', (table,)
+    ):
+        if int(index["unique"]) != 1:
+            continue
+        columns = tuple(
+            str(column["name"])
+            for column in connection.execute(
+                "SELECT name FROM pragma_index_info(?)", (str(index["name"]),)
+            )
+            if column["name"] is not None
+        )
+        if columns:
+            keys.add(columns)
+    return frozenset(keys)
+
+
+def _foreign_keys(
+    connection: sqlite3.Connection, table: str
+) -> frozenset[tuple[str, str, str, str]]:
+    return frozenset(
+        (
+            str(row["from"]),
+            str(row["table"]),
+            str(row["to"]),
+            str(row["on_delete"]),
+        )
+        for row in connection.execute(
+            "SELECT * FROM pragma_foreign_key_list(?)", (table,)
+        )
+    )
+
+
+def _schema_tokens(schema_sql: str) -> tuple[str, ...]:
+    tokens: list[str] = []
+    for match in _SQL_TOKEN.finditer(schema_sql):
+        kind = match.lastgroup
+        if kind in {"space", "comment"}:
+            continue
+        if kind == "invalid" or kind is None:
+            return ()
+        token = match.group()
+        if kind == "word":
+            token = token.casefold()
+        elif kind == "quoted_identifier":
+            token = token[1:-1].casefold()
+        tokens.append(token)
+    return tuple(tokens)
+
+
+def _table_check_expressions(
+    connection: sqlite3.Connection, table: str
+) -> frozenset[tuple[str, ...]]:
+    row = connection.execute(
+        "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    if row is None or not isinstance(row["sql"], str):
+        return frozenset()
+    tokens = _schema_tokens(row["sql"])
+    expressions: set[tuple[str, ...]] = set()
+    for start in range(len(tokens) - 1):
+        if tokens[start] != "check" or tokens[start + 1] != "(":
+            continue
+        depth = 1
+        expression: list[str] = []
+        for token in tokens[start + 2 :]:
+            if token == "(":
+                depth += 1
+            elif token == ")":
+                depth -= 1
+                if depth == 0:
+                    expressions.add(tuple(expression))
+                    break
+            expression.append(token)
+    return frozenset(expressions)
+
+
+def _schema_constraint_diagnostic(
+    connection: sqlite3.Connection, *, current: bool
+) -> str | None:
+    primary_keys = dict(_COMMON_PRIMARY_KEYS)
+    unique_keys = dict(_COMMON_UNIQUE_KEYS)
+    foreign_keys = dict(_COMMON_FOREIGN_KEYS)
+    check_expressions = dict(_COMMON_CHECK_EXPRESSIONS)
+    if current:
+        primary_keys.update(_CURRENT_PRIMARY_KEYS)
+        unique_keys.update(_CURRENT_UNIQUE_KEYS)
+        foreign_keys.update(_CURRENT_FOREIGN_KEYS)
+        check_expressions.update(_CURRENT_CHECK_EXPRESSIONS)
+
+    for table, expected_key in primary_keys.items():
+        actual_key = tuple(
+            str(column["name"])
+            for column in sorted(
+                connection.execute(
+                    "SELECT name, pk FROM pragma_table_info(?)", (table,)
+                ),
+                key=lambda column: int(column["pk"]),
+            )
+            if int(column["pk"]) > 0
+        )
+        if actual_key != expected_key:
+            return "tenant database is missing required schema constraints"
+    for table, expected_keys in unique_keys.items():
+        if not expected_keys.issubset(_unique_keys(connection, table)):
+            return "tenant database is missing required schema constraints"
+    for table, expected_keys in foreign_keys.items():
+        if not expected_keys.issubset(_foreign_keys(connection, table)):
+            return "tenant database is missing required schema constraints"
+    for table, expected_expressions in check_expressions.items():
+        if not expected_expressions.issubset(
+            _table_check_expressions(connection, table)
+        ):
+            return "tenant database is missing required schema constraints"
+    return None
+
+
 def _schema_diagnostic(
     connection: sqlite3.Connection, persisted_revision: int
 ) -> str | None:
@@ -344,7 +564,8 @@ def _schema_diagnostic(
         return "tenant database contains broken foreign-key references"
 
     required_schema = dict(_COMMON_STATE_SCHEMA)
-    if persisted_revision >= CURRENT_STATE_FORMAT_REVISION:
+    current = persisted_revision >= CURRENT_STATE_FORMAT_REVISION
+    if current:
         required_schema.update(_CURRENT_STATE_SCHEMA)
     for table, required_columns in required_schema.items():
         actual_columns = {
@@ -353,6 +574,10 @@ def _schema_diagnostic(
         }
         if not required_columns.issubset(actual_columns):
             return "tenant database is missing required schema"
+
+    constraint_diagnostic = _schema_constraint_diagnostic(connection, current=current)
+    if constraint_diagnostic is not None:
+        return constraint_diagnostic
 
     format_rows = connection.execute(
         "SELECT id, format_revision FROM jacobian_state_format LIMIT 2"
@@ -363,6 +588,12 @@ def _schema_diagnostic(
         or format_rows[0]["format_revision"] != persisted_revision
     ):
         return "tenant state-format metadata does not match the migration ledger"
+    if current:
+        active_rows = connection.execute(
+            "SELECT id FROM active_operation_catalog LIMIT 2"
+        ).fetchall()
+        if len(active_rows) > 1 or (active_rows and active_rows[0]["id"] != 0):
+            return "active operation catalog metadata is invalid"
     return None
 
 

@@ -10,7 +10,7 @@ def _certified_snf_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObse
     return flint_runtime.certified_snf_checker_provider_runtime(checker_ids=checker_ids)
 
 
-CERTIFIED_SNF_EXACT_REPLAY_CHECKERS = (
+CERTIFIED_SNF_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "matrix.normal_form.smith.certified.compute",
         CertifiedSmithNormalFormRequest,
@@ -40,4 +40,4 @@ CERTIFIED_SNF_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["CERTIFIED_SNF_EXACT_REPLAY_CHECKERS"]
+__all__ = ["CERTIFIED_SNF_AUTHORIZED_CHECKERS"]

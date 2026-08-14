@@ -21,7 +21,7 @@ def _rational_lp_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObserv
     )
 
 
-RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
+RATIONAL_OPTIMIZATION_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "optimization.linear.rational_optimum.compute",
         RationalLinearProgramRequest,
@@ -38,4 +38,4 @@ RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS"]
+__all__ = ["RATIONAL_OPTIMIZATION_AUTHORIZED_CHECKERS"]

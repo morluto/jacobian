@@ -10,7 +10,7 @@ def _graph_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.graph_exact_checker_provider_runtime(checker_ids=checker_ids)
 
 
-GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS = (
+GRAPH_SYMMETRY_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "graph.symmetry.generator_orbits.compute",
         GraphSymmetryOrbitRequest,
@@ -40,4 +40,4 @@ GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS"]
+__all__ = ["GRAPH_SYMMETRY_AUTHORIZED_CHECKERS"]

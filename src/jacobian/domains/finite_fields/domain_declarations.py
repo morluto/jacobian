@@ -2,7 +2,7 @@
 
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.finite_fields.checkers import (
-    FINITE_FIELD_EXACT_REPLAY_CHECKERS,
+    FINITE_FIELD_AUTHORIZED_CHECKERS,
 )
 from jacobian.domains.finite_fields.contracts import (
     CollisionCertificateRequest,
@@ -460,4 +460,4 @@ def finite_field_operations() -> OperationDeclarations:
 
 __all__ = ["finite_field_operations"]
 
-CHECKER_DECLARATIONS = FINITE_FIELD_EXACT_REPLAY_CHECKERS
+AUTHORIZED_CHECKERS = FINITE_FIELD_AUTHORIZED_CHECKERS

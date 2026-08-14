@@ -7,7 +7,7 @@ from jacobian.domains.projective_geometry.arrangements import (
     PROJECTIVE_LINE_ARRANGEMENT_OPERATION,
 )
 from jacobian.domains.projective_geometry.checkers import (
-    PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
+    PROJECTIVE_GEOMETRY_AUTHORIZED_CHECKERS,
 )
 from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
 
@@ -30,4 +30,4 @@ def projective_geometry_operations() -> OperationDeclarations:
 
 __all__ = ["projective_geometry_operations"]
 
-CHECKER_DECLARATIONS = PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS
+AUTHORIZED_CHECKERS = PROJECTIVE_GEOMETRY_AUTHORIZED_CHECKERS

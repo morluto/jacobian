@@ -52,7 +52,7 @@ def _probability_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObserv
     )
 
 
-PROBABILITY_EXACT_REPLAY_CHECKERS = (
+PROBABILITY_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "probability.joint.mutual_information.compute",
         FiniteJointTableMutualInformationRequest,
@@ -170,4 +170,4 @@ PROBABILITY_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["PROBABILITY_EXACT_REPLAY_CHECKERS"]
+__all__ = ["PROBABILITY_AUTHORIZED_CHECKERS"]

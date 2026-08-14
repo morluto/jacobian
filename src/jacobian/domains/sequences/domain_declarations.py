@@ -32,4 +32,4 @@ def sequence_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = ()
+AUTHORIZED_CHECKERS = ()

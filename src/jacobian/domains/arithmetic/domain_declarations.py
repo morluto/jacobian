@@ -35,4 +35,4 @@ def arithmetic_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = REAL_QUADRATIC_CHECKERS
+AUTHORIZED_CHECKERS = REAL_QUADRATIC_CHECKERS

@@ -68,7 +68,7 @@ def _finite_field_polynomial_runtime(
     )
 
 
-FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
+FINITE_FIELD_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "finite_field.restrict_scalars.compute",
         RestrictScalarsRequest,
@@ -135,4 +135,4 @@ FINITE_FIELD_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["FINITE_FIELD_EXACT_REPLAY_CHECKERS"]
+__all__ = ["FINITE_FIELD_AUTHORIZED_CHECKERS"]

@@ -4,7 +4,7 @@ from fractions import Fraction
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.domains.polynomial.checkers import (
-    POLYNOMIAL_EXACT_REPLAY_CHECKERS,
+    POLYNOMIAL_AUTHORIZED_CHECKERS,
     _materialized_syzygy_supports,
 )
 from jacobian_checkers.jacobian_syzygy import (
@@ -17,7 +17,7 @@ from jacobian_checkers.jacobian_syzygy import (
 def test_materialized_syzygy_verifier_is_domain_owned() -> None:
     declaration = next(
         declaration
-        for declaration in POLYNOMIAL_EXACT_REPLAY_CHECKERS
+        for declaration in POLYNOMIAL_AUTHORIZED_CHECKERS
         if declaration.operation_id
         == "polynomial.jacobian_syzygy.coefficients.materialize"
     )

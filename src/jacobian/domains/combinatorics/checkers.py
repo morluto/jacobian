@@ -27,7 +27,7 @@ def _combinatorics_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObse
     )
 
 
-COMBINATORICS_EXACT_REPLAY_CHECKERS = (
+COMBINATORICS_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "combinatorics.compute.binomial",
         BinomialRequest,
@@ -123,4 +123,4 @@ COMBINATORICS_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["COMBINATORICS_EXACT_REPLAY_CHECKERS"]
+__all__ = ["COMBINATORICS_AUTHORIZED_CHECKERS"]

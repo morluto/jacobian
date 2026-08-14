@@ -82,4 +82,4 @@ def formal_dataset_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = ()
+AUTHORIZED_CHECKERS = ()

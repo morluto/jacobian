@@ -86,7 +86,7 @@ def load_builtin_operation_module(module_name: str) -> LoadedOperationModule:
     operations = cast(OperationDeclarations, factory())
     checkers = cast(
         tuple[AuthorizedChecker, ...],
-        getattr(module, "CHECKER_DECLARATIONS", ()),
+        getattr(module, "AUTHORIZED_CHECKERS", ()),
     )
     return module_name, operations, checkers
 

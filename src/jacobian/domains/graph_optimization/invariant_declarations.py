@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.graph_optimization.checkers import (
-    GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS,
+    GRAPH_INVARIANT_AUTHORIZED_CHECKERS,
 )
 from jacobian.domains.graph_optimization.distance_matrix import (
     DISTANCE_MATRIX_OPERATION,
 )
 from jacobian.domains.graph_optimization.graph6 import (
-    GRAPH6_CHECKER_DECLARATIONS,
+    GRAPH6_AUTHORIZED_CHECKERS,
     GRAPH6_OPERATIONS,
 )
 from jacobian.domains.graph_optimization.invariants import (
@@ -36,7 +36,7 @@ def graph_invariant_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = (
-    *GRAPH6_CHECKER_DECLARATIONS,
-    *GRAPH_INVARIANT_EXACT_REPLAY_CHECKERS,
+AUTHORIZED_CHECKERS = (
+    *GRAPH6_AUTHORIZED_CHECKERS,
+    *GRAPH_INVARIANT_AUTHORIZED_CHECKERS,
 )

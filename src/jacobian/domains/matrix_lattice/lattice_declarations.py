@@ -23,4 +23,4 @@ def lattice_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = ()
+AUTHORIZED_CHECKERS = ()

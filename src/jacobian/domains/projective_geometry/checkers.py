@@ -25,7 +25,7 @@ def _at_most_lines(maximum: int) -> Callable[[object], bool]:
     return supports
 
 
-PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS = (
+PROJECTIVE_GEOMETRY_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "geometry.projective_line_arrangement.flats.materialize",
         ProjectiveLineArrangementRequest,
@@ -57,4 +57,4 @@ PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS"]
+__all__ = ["PROJECTIVE_GEOMETRY_AUTHORIZED_CHECKERS"]

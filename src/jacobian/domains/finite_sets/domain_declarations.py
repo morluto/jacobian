@@ -26,4 +26,4 @@ def finite_set_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = ()
+AUTHORIZED_CHECKERS = ()

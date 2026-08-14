@@ -20,4 +20,4 @@ def real_analysis_operations() -> OperationDeclarations:
 
 __all__ = ["real_analysis_operations"]
 
-CHECKER_DECLARATIONS = ()
+AUTHORIZED_CHECKERS = ()

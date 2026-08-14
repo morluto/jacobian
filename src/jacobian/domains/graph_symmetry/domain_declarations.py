@@ -2,7 +2,7 @@
 
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.graph_symmetry.checkers import (
-    GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS,
+    GRAPH_SYMMETRY_AUTHORIZED_CHECKERS,
 )
 from jacobian.domains.graph_symmetry.operations import GRAPH_SYMMETRY_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
@@ -26,4 +26,4 @@ def graph_symmetry_operations() -> OperationDeclarations:
 
 __all__ = ["graph_symmetry_operations"]
 
-CHECKER_DECLARATIONS = GRAPH_SYMMETRY_EXACT_REPLAY_CHECKERS
+AUTHORIZED_CHECKERS = GRAPH_SYMMETRY_AUTHORIZED_CHECKERS

@@ -23,7 +23,7 @@ def _topology_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservati
     )
 
 
-TOPOLOGY_EXACT_REPLAY_CHECKERS = (
+TOPOLOGY_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "topology.simplicial_complex.canonicalize",
         SimplicialComplexRequest,
@@ -87,4 +87,4 @@ TOPOLOGY_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["TOPOLOGY_EXACT_REPLAY_CHECKERS"]
+__all__ = ["TOPOLOGY_AUTHORIZED_CHECKERS"]

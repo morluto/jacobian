@@ -161,7 +161,7 @@ def _materialized_syzygy_supports(payload: object) -> bool:
     )
 
 
-POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
+POLYNOMIAL_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "polynomial.jacobian_syzygy.minimum_degree.compute",
         GradedJacobianSyzygyRequest,
@@ -266,4 +266,4 @@ POLYNOMIAL_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["POLYNOMIAL_EXACT_REPLAY_CHECKERS"]
+__all__ = ["POLYNOMIAL_AUTHORIZED_CHECKERS"]

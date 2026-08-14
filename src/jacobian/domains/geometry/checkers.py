@@ -46,7 +46,7 @@ _OPERATIONS = (
     ("geometry.triangle.compute.centroid", PointTripleRequest),
 )
 
-GEOMETRY_EXACT_REPLAY_CHECKERS = tuple(
+GEOMETRY_AUTHORIZED_CHECKERS = tuple(
     AuthorizedChecker(
         operation_id,
         request_model,
@@ -63,4 +63,4 @@ GEOMETRY_EXACT_REPLAY_CHECKERS = tuple(
     for operation_id, request_model in _OPERATIONS
 )
 
-__all__ = ["GEOMETRY_EXACT_REPLAY_CHECKERS"]
+__all__ = ["GEOMETRY_AUTHORIZED_CHECKERS"]

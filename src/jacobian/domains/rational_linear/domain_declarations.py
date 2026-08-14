@@ -9,7 +9,7 @@ from jacobian.contracts.linear import (
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains._examples import example
 from jacobian.domains.rational_linear.checkers import (
-    RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS,
+    RATIONAL_LINEAR_AUTHORIZED_CHECKERS,
 )
 from jacobian.domains.rational_linear.operations import (
     compute_rational_inconsistency,
@@ -78,4 +78,4 @@ def rational_linear_operations() -> OperationDeclarations:
 
 __all__ = ["rational_linear_operations"]
 
-CHECKER_DECLARATIONS = RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS
+AUTHORIZED_CHECKERS = RATIONAL_LINEAR_AUTHORIZED_CHECKERS

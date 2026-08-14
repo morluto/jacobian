@@ -80,7 +80,7 @@ GRAPH6_OPERATIONS = (
     ),
 )
 
-GRAPH6_CHECKER_DECLARATIONS = (
+GRAPH6_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "graph.encoding.graph6.decode.compute",
         Graph6DecodeRequest,
@@ -103,4 +103,4 @@ GRAPH6_CHECKER_DECLARATIONS = (
     ),
 )
 
-__all__ = ["GRAPH6_CHECKER_DECLARATIONS", "GRAPH6_OPERATIONS"]
+__all__ = ["GRAPH6_AUTHORIZED_CHECKERS", "GRAPH6_OPERATIONS"]

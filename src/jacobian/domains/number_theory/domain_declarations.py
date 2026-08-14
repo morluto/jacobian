@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.number_theory.checkers import NUMBER_THEORY_EXACT_REPLAY_CHECKERS
+from jacobian.domains.number_theory.checkers import NUMBER_THEORY_AUTHORIZED_CHECKERS
 from jacobian.domains.number_theory.derived import DERIVED_NUMBER_THEORY_OPERATIONS
 from jacobian.domains.number_theory.divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.domains.number_theory.finite_abelian_groups import (
@@ -41,7 +41,7 @@ def number_theory_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = (
-    *NUMBER_THEORY_EXACT_REPLAY_CHECKERS,
+AUTHORIZED_CHECKERS = (
+    *NUMBER_THEORY_AUTHORIZED_CHECKERS,
     *MODULAR_IDENTITY_CHECKERS,
 )

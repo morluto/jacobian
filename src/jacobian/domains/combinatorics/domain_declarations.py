@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.combinatorics.checkers import COMBINATORICS_EXACT_REPLAY_CHECKERS
+from jacobian.domains.combinatorics.checkers import COMBINATORICS_AUTHORIZED_CHECKERS
 from jacobian.domains.combinatorics.counting import COUNTING_OPERATIONS
 from jacobian.domains.combinatorics.difference_sets import DIFFERENCE_SET_OPERATIONS
 from jacobian.domains.combinatorics.partitions import PARTITION_OPERATIONS
@@ -29,4 +29,4 @@ def combinatorics_operations() -> OperationDeclarations:
     )
 
 
-CHECKER_DECLARATIONS = COMBINATORICS_EXACT_REPLAY_CHECKERS
+AUTHORIZED_CHECKERS = COMBINATORICS_AUTHORIZED_CHECKERS

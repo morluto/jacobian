@@ -39,7 +39,7 @@ def _hnf_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     )
 
 
-MATRIX_EXACT_REPLAY_CHECKERS = (
+MATRIX_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "matrix.normal_form.hermite.materialize",
         HermiteNormalFormRequest,
@@ -118,4 +118,4 @@ MATRIX_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["MATRIX_EXACT_REPLAY_CHECKERS"]
+__all__ = ["MATRIX_AUTHORIZED_CHECKERS"]

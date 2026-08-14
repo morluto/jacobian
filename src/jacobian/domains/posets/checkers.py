@@ -21,7 +21,7 @@ def _poset_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.poset_exact_checker_provider_runtime(checker_ids=checker_ids)
 
 
-FINITE_POSET_EXACT_REPLAY_CHECKERS = (
+FINITE_POSET_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "poset.finite.compute",
         FinitePosetRequest,
@@ -64,4 +64,4 @@ FINITE_POSET_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["FINITE_POSET_EXACT_REPLAY_CHECKERS"]
+__all__ = ["FINITE_POSET_AUTHORIZED_CHECKERS"]

@@ -2,7 +2,7 @@
 
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.optimization.checkers import (
-    RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
+    RATIONAL_OPTIMIZATION_AUTHORIZED_CHECKERS,
 )
 from jacobian.domains.optimization.operations import RATIONAL_LINEAR_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
@@ -23,4 +23,4 @@ def rational_optimization_operations() -> OperationDeclarations:
 
 __all__ = ["rational_optimization_operations"]
 
-CHECKER_DECLARATIONS = RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS
+AUTHORIZED_CHECKERS = RATIONAL_OPTIMIZATION_AUTHORIZED_CHECKERS

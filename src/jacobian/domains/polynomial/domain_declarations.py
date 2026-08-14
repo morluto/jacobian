@@ -1,7 +1,7 @@
 """Exact rational-polynomial operation declarations."""
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
+from jacobian.domains.polynomial.checkers import POLYNOMIAL_AUTHORIZED_CHECKERS
 from jacobian.domains.polynomial.elementary import (
     INTEGER_POLYNOMIAL_OPERATIONS,
     RATIONAL_POLYNOMIAL_OPERATIONS,
@@ -39,4 +39,4 @@ def polynomial_operations() -> OperationDeclarations:
 
 __all__ = ["polynomial_operations"]
 
-CHECKER_DECLARATIONS = POLYNOMIAL_EXACT_REPLAY_CHECKERS
+AUTHORIZED_CHECKERS = POLYNOMIAL_AUTHORIZED_CHECKERS

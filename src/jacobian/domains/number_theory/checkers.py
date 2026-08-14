@@ -58,7 +58,7 @@ def _integer_lcm_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObserv
     )
 
 
-NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
+NUMBER_THEORY_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "finite_abelian_group.exact_factorization.compute",
         FiniteAbelianGroupFactorizationRequest,
@@ -189,4 +189,4 @@ NUMBER_THEORY_EXACT_REPLAY_CHECKERS = (
 )
 
 
-__all__ = ["NUMBER_THEORY_EXACT_REPLAY_CHECKERS"]
+__all__ = ["NUMBER_THEORY_AUTHORIZED_CHECKERS"]

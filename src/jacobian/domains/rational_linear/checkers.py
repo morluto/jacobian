@@ -42,7 +42,7 @@ def _linear_inconsistency_runtime(
     )
 
 
-RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS = (
+RATIONAL_LINEAR_AUTHORIZED_CHECKERS = (
     AuthorizedChecker(
         "linear.rational_solution.compute",
         LinearRationalSolutionFindRequest,
@@ -65,4 +65,4 @@ RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS = (
     ),
 )
 
-__all__ = ["RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS"]
+__all__ = ["RATIONAL_LINEAR_AUTHORIZED_CHECKERS"]

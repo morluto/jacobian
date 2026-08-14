@@ -8,6 +8,7 @@ import pytest
 
 from jacobian.adapters.mcp import server as server_module
 from jacobian.adapters.mcp.server import create_server
+from jacobian.checker_installation import CheckerInstaller
 from jacobian.domains.number_theory import number_theory_operations
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
@@ -50,6 +51,7 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
         raise AssertionError("SAT materialization must not assemble the portfolio")
 
     monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
+    monkeypatch.setattr(CheckerInstaller, "install", reject_portfolio_assembly)
 
     async def scenario() -> None:
         from mcp import Client
@@ -79,5 +81,19 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
             envelope = json.loads(resource.contents[0].text)
             assert envelope["artifact_uri"] == artifact_uris[0]
             assert envelope["payload"]["clauses"] == [{"literals": [1]}]
+
+            for operation_id, payload in (
+                ("sat.model.verify", {}),
+                ("sat.unsat_proof.verify", {}),
+            ):
+                invalid_verification = await client.call_tool(
+                    "math.run",
+                    {"operation_id": operation_id, "payload": payload},
+                )
+                assert isinstance(invalid_verification.structured_content, dict)
+                assert (
+                    invalid_verification.structured_content["operation_id"]
+                    == operation_id
+                )
 
     asyncio.run(scenario())

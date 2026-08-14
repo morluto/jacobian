@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -45,6 +45,7 @@ from jacobian.contracts.sat import (
     canonicalize_cnf,
 )
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_execution import execute_operation
@@ -345,6 +346,68 @@ def install_sat_unsat_proof_checker(
             runtime=runtime,
         )
     return adapter, installation
+
+
+def bind_selected_sat_verification(
+    operation_id: str,
+    descriptor: OperationDescriptor,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    sat: SatArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[Any] | None:
+    """Bind one SAT verifier from passive schemas and catalog authority."""
+
+    if operation_id not in {"sat.model.verify", "sat.unsat_proof.verify"}:
+        return None
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    if operation_id == "sat.model.verify":
+        installation = SatAssignmentCheckerInstallation(
+            witness_schema_uri=schemas.register_model(
+                name="jacobian.witness-envelope",
+                version="1",
+                model=WitnessEnvelope,
+            ),
+            checker_id=binding.checker_id,
+        )
+        return SatAssignmentVerificationAdapter(
+            store=store,
+            artifacts=artifacts,
+            sat=sat,
+            verification=verification,
+            installation=installation,
+        )
+    if descriptor.provider_runtime is None:
+        raise OperationCatalogError(
+            "SAT proof checker provider observation is missing; run `jacobian update`"
+        )
+    proof_installation = SatUnsatProofCheckerInstallation(
+        certificate_schema_uri=schemas.register_model(
+            name="jacobian.certificate-envelope",
+            version="1",
+            model=CertificateEnvelope,
+        ),
+        checker_id=binding.checker_id,
+    )
+    return SatUnsatProofVerificationAdapter(
+        store=store,
+        artifacts=artifacts,
+        sat=sat,
+        verification=verification,
+        installation=proof_installation,
+        runtime=descriptor.provider_runtime,
+    )
 
 
 class SatAssignmentVerificationAdapter:

@@ -52,6 +52,8 @@ _SELECTED_DIRECT_OPERATIONS = frozenset(
         "universal_algebra.search.countermodel",
         "universal_algebra.law_evaluation.verify",
         "sat.cnf.materialize",
+        "sat.model.verify",
+        "sat.unsat_proof.verify",
     }
 )
 _SELECTED_RESOURCE_OPERATIONS = (
@@ -266,6 +268,22 @@ class OperationRegistry:
             from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
 
             adapter = SatCnfMaterializationAdapter(self.sat)
+        elif operation_id in {"sat.model.verify", "sat.unsat_proof.verify"}:
+            from jacobian.sat_smt.sat_operations import (
+                bind_selected_sat_verification,
+            )
+
+            adapter = bind_selected_sat_verification(
+                operation_id,
+                descriptor,
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.sat,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
         else:
             adapter = None
         return adapter

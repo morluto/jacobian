@@ -823,7 +823,7 @@ snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
 snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
     jacobian-funnel.service
 ROLLBACK_ARMED=1
-if [[ -f "${ROLLBACK_ROOT}/jacobian-mcp.service.active" ]]; then
+if [[ -f "${ROLLBACK_ROOT}/mcp-service.present" ]]; then
     "${SYSTEMCTL_BIN}" stop jacobian-mcp.service
 fi
 

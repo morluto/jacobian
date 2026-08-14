@@ -378,12 +378,16 @@ def test_candidate_state_is_checked_with_writers_stopped_and_rollback_armed() ->
     state_preflight = source.index('"${RELEASE_DIR}/deploy/preflight_state.py"')
     rollback_snapshot = source.index('ROLLBACK_ROOT="$(mktemp -d)"')
     rollback_armed = source.index("ROLLBACK_ARMED=1")
+    writer_stop_guard = source.index(
+        'if [[ -f "${ROLLBACK_ROOT}/mcp-service.present" ]]'
+    )
     writer_stop = source.index('"${SYSTEMCTL_BIN}" stop jacobian-mcp.service')
     state_snapshot = source.index('snapshot_file state "${STATE_DIR}"')
     current_link = source.index('ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"')
 
-    assert rollback_snapshot < rollback_armed < writer_stop
+    assert rollback_snapshot < rollback_armed < writer_stop_guard < writer_stop
     assert writer_stop < state_preflight < state_snapshot < current_link
+    assert 'jacobian-mcp.service.active" ]]' not in source[rollback_armed:writer_stop]
     assert "--run-as-user jacobian" in source
 
 

@@ -127,10 +127,12 @@ After reviewing and pulling a new revision, run the same command to upgrade.
 Before activation, the candidate release performs a read-only compatibility
 check against every tenant selected by the configured token file, or against
 the selected anonymous tenant. It first records the existing service state,
-arms rollback, and stops an active MCP writer so the SQLite/CAS scan observes a
-quiescent snapshot. After stopping the writer, it remeasures both the state and
-the rollback filesystem before scanning or copying state, so writes received
-during a long release build cannot stale the earlier capacity plan.
+arms rollback, and stops any existing MCP unit without relying on its active
+state, including a unit waiting for an automatic restart. The SQLite/CAS scan
+therefore observes a quiescent snapshot. After stopping the writer, the
+installer remeasures both the state and the rollback filesystem before scanning
+or copying state, so writes received during a long release build cannot stale
+the earlier capacity plan.
 Unsupported, corrupt, unreadable, or migration-incompatible state stops the
 deployment without changing the active release and restores the prior service
 state. A missing tenant store is valid and remains uncreated until first use.

@@ -46,7 +46,7 @@ def _linear_program(
     coefficients = sympy.Matrix(
         [[_rational(value) for value in row] for row in program.coefficients]
     )
-    rhs = sympy.Matrix([[_rational(value) for value in program.rhs]])
+    rhs = sympy.Matrix([_rational(value) for value in program.rhs])
     try:
         primal_value, primal_values = linprog(
             objective,

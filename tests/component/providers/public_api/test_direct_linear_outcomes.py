@@ -76,3 +76,23 @@ def test_rational_linear_program_returns_an_optimum_not_a_certificate() -> None:
         "primal_residuals": [q(0)],
         "dual_slacks": [q(0)],
     }
+
+
+def test_rational_linear_program_handles_multiple_equalities() -> None:
+    operation = rational_optimization_operations()[0]
+    result = operation.run(
+        RationalLinearProgramRequest.model_validate(
+            {
+                "program": {
+                    "variables": ["x", "y"],
+                    "objective": [q(1), q(1)],
+                    "coefficients": [[q(1), q(0)], [q(0), q(1)]],
+                    "rhs": [q(1), q(2)],
+                }
+            }
+        )
+    )
+
+    assert result.status == "OPTIMAL"
+    assert result.model_dump(mode="json")["primal_candidate"] == [q(1), q(2)]
+    assert result.model_dump(mode="json")["primal_residuals"] == [q(0), q(0)]

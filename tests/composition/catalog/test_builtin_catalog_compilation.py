@@ -1,4 +1,4 @@
-"""Whole-portfolio installation coverage belongs to the integration lane."""
+"""Complete built-in catalog compilation coverage for the integration lane."""
 
 from jacobian.builtin_operation_modules import load_builtin_operation_modules
 from jacobian.contracts.operations import ProviderAvailability
@@ -13,7 +13,7 @@ from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.model import JacobianRuntime
 
 
-def test_builtin_portfolio_installs_cleanly(
+def test_builtin_catalog_compiles_cleanly(
     fresh_complete_runtime: JacobianRuntime,
 ) -> None:
     singular_available = (

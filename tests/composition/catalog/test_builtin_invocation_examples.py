@@ -12,14 +12,14 @@ from jacobian.domains.sequences import sequence_operations
 
 _CORE_OPERATIONS = tuple(
     operation
-    for bundle in (
+    for declarations in (
         arithmetic_operations(),
         combinatorics_operations(),
         finite_set_operations(),
         number_theory_operations(),
         sequence_operations(),
     )
-    for operation in bundle
+    for operation in declarations
 )
 
 

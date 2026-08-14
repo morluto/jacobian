@@ -1,4 +1,4 @@
-"""Whole-portfolio discovery and catalog projection contracts."""
+"""Compiled-catalog discovery and projection contracts."""
 
 from __future__ import annotations
 

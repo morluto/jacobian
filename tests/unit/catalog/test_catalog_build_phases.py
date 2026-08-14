@@ -1,4 +1,4 @@
-"""Direct seam tests for explicit portfolio binding phases."""
+"""Direct seam tests for explicit catalog build phases."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
     assert registered == [adapter]
 
 
-def test_core_domain_verification_phase_accepts_empty_bundle_result() -> None:
+def test_core_domain_verification_phase_accepts_empty_declarations() -> None:
     assert (
         CatalogOperationBuilder(
             cast(CatalogBuildContext, object())
@@ -123,7 +123,7 @@ def test_checker_phase_derives_authority_from_its_context() -> None:
     assert context.registered == []
 
 
-def test_portfolio_close_releases_every_owned_lean_resource_once() -> None:
+def test_catalog_close_releases_every_owned_lean_resource_once() -> None:
     closed: list[str] = []
 
     class Resource:
@@ -147,7 +147,7 @@ def test_portfolio_close_releases_every_owned_lean_resource_once() -> None:
     assert closed == ["declarations", "exploration", "verification"]
 
 
-def test_portfolio_close_continues_after_keyboard_interrupt() -> None:
+def test_catalog_close_continues_after_keyboard_interrupt() -> None:
     closed: list[str] = []
 
     class InterruptingResource:

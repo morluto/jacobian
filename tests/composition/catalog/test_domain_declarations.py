@@ -44,13 +44,13 @@ def test_declared_groups_expose_operations() -> None:
     assert len(actual) == sum(len(operations) for operations in ALL_OPERATION_GROUPS)
 
 
-def test_unique_ids_within_each_bundle() -> None:
+def test_unique_ids_within_each_declaration_group() -> None:
     for operations in ALL_OPERATION_GROUPS:
         ids = [op.operation_id for op in operations]
         assert len(ids) == len(set(ids)), f"duplicates: {ids}"
 
 
-def test_no_id_in_two_bundles() -> None:
+def test_no_id_in_two_declaration_groups() -> None:
     seen: dict[str, str] = {}
     for group_index, operations in enumerate(ALL_OPERATION_GROUPS):
         for operation in operations:

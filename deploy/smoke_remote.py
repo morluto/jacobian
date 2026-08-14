@@ -16,6 +16,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp_types import Implementation, TextContent, TextResourceContents
 
 from jacobian import __version__
+from jacobian._deployment_smoke import exit_for_smoke_failure, raise_for_http_error
 from jacobian.canonical import canonicalize_json
 
 REQUIRED_TOOLS = {
@@ -153,6 +154,7 @@ async def inspect(
     async with (
         httpx2.AsyncClient(
             headers=headers,
+            event_hooks={"response": [raise_for_http_error]},
             trust_env=False,
             timeout=timeout_seconds,
         ) as http,
@@ -275,5 +277,5 @@ async def _main() -> None:
 if __name__ == "__main__":
     try:
         asyncio.run(_main())
-    except RuntimeError as exc:
-        raise SystemExit(f"smoke failed: {exc}") from None
+    except Exception as exc:
+        exit_for_smoke_failure("smoke", exc)

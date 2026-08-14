@@ -124,9 +124,139 @@ environment, and atomically selects it through `/opt/jacobian/current`.
 Tracked or staged changes fail closed; commit them or deploy a clean checkout.
 Untracked files are not archived. Re-running the same revision is idempotent.
 After reviewing and pulling a new revision, run the same command to upgrade.
+Before activation, the candidate release performs a read-only compatibility
+check against every tenant selected by the configured token file, or against
+the selected anonymous tenant. It first records the existing service state,
+arms rollback, and stops any existing MCP unit without relying on its active
+state, including a unit waiting for an automatic restart. The SQLite/CAS scan
+therefore observes a quiescent snapshot. After stopping the writer, the
+installer remeasures both the state and the rollback filesystem before scanning
+or copying state, so writes received during a long release build cannot stale
+the earlier capacity plan. Rollback records active, activating (including
+automatic-restart delay), and reloading services as running services and
+restarts them if candidate validation or activation fails.
+Unsupported, corrupt, unreadable, or migration-incompatible state stops the
+deployment without changing the active release and restores the prior service
+state. A missing tenant store is valid and remains uncreated until first use.
+
+After the deployment smoke and final permission audit succeed, the installer
+keeps the active release and prioritizes the release that was active immediately
+before the switch as its rollback. Additional retained slots use the newest
+completed releases. Override the total retained count when the host has a
+different rollback policy:
+
+```sh
+sudo ./deploy/install.sh --retain-releases 3
+```
+
+Only recognized release directories with complete revision and profile markers
+are eligible for pruning. The active release, incomplete directories, and
+operator-created paths are never pruned. A cleanup failure is reported as a
+warning after the accepted deployment and does not roll back healthy traffic.
 Use `--skip-smoke` only when the endpoint cannot yet be reached from the host,
 then run [`deploy/smoke_remote.py`](../../deploy/smoke_remote.py) before
 advertising it.
+
+`--dry-run` is a host preflight as well as a plan. It resolves the required
+`uv`, systemd, Caddy, Tailscale, and optional elan executables and checks free
+space at the installation filesystem. A new Lean release requires at least 12
+GiB free; a new core release requires at least 2 GiB. Existing complete release
+directories do not require that build-space reserve. The rollback temporary
+filesystem must also retain the full current state snapshot plus 64 MiB for
+configuration and metadata; when it shares the installation filesystem, both
+reserves are added before deployment work begins. A non-root dry-run that
+cannot read an existing protected state directory reports rollback capacity as
+unverified and tells the operator to repeat the preflight with `sudo`; the real
+deployment never proceeds without the measurement.
+
+## Migrate to another VPS
+
+Application releases are reproducible; persistent tenant state and
+authentication secrets are separate host data. Use this sequence when the new
+VPS must preserve them. The maintained authenticated unit uses
+`/var/lib/jacobian-mcp`; the anonymous test override uses
+`/var/lib/jacobian-mcp-test`:
+
+1. Install Git, Python, `uv`, systemd, the selected ingress dependencies, and
+   elan for `--with-lean` on the destination. Check out the exact revision to be
+   deployed and run the final installer command with `--dry-run`.
+2. Securely transfer the existing token file when authentication is enabled.
+   Do not place it in the repository, shell history, or an unencrypted archive.
+3. Run the installer once on the destination with `--mode local`, the final
+   install root, profile, tenant options, and `--skip-smoke`. For authenticated
+   operation, pass the transferred file with `--auth-tokens-file`. Omit
+   ingress-only options such as `--domain` until the final deployment. Local
+   mode provisions the service users, immutable release, units, and destination
+   directories while disabling Caddy and Funnel. Do not use `--mode domain` or
+   `--mode tailscale` for this staging pass: `--skip-smoke` skips validation but
+   still starts the selected services.
+4. Stop `jacobian-mcp.service` on the destination. Stop it on the source, or
+   quiesce all writers and take a storage-level snapshot, before the final copy.
+   Copy the complete selected state root, including `metadata.sqlite3`, blobs,
+   manifests, and tenant directories. Do not copy a live SQLite database and
+   its blobs independently.
+5. On the destination, restore state ownership to `jacobian:jacobian`. Keep
+   `/etc/jacobian-mcp` owned by root with mode `0700` and its token file at mode
+   `0600`. Rebuildable `cache/lean-declarations` data may be omitted. Restore
+   tenant state as real directories and regular files, not symbolic links;
+   links can resolve outside the filesystem view allowed by the hardened unit.
+6. Choose the final activation sequence for the ingress mode while the source
+   service remains stopped:
+
+   - For `--mode domain`, run the final domain-mode command once with
+     `--skip-smoke` after state restoration. Switch DNS to the destination, wait
+     until the domain resolves to it from the destination host, then rerun the
+     same command without `--skip-smoke`. This lets Caddy establish the
+     destination endpoint before the revision-bound smoke follows the public
+     hostname.
+   - For `--mode tailscale`, run the final command without `--skip-smoke`, then
+     update clients if the destination node has a different Tailscale DNS name.
+   - For `--mode local`, rerun the final local command without `--skip-smoke`.
+
+   The candidate-state preflight reads the token mapping while privileged,
+   drops permanently to the `jacobian` service identity, and then checks every
+   selected tenant. In that identity it verifies that SQLite and its runtime
+   files are readable and writable, every persisted manifest and payload blob
+   reference resolves to a local regular file whose SHA-256 matches its content
+   address, and each manifest remains bound to its committed metadata, parents,
+   descriptors, and mathematical object digest. Existing blob files must be
+   readable and match their content addresses, and the persisted blob quota must
+   match the full restored CAS tree without a pending recovery marker. SQLite
+   integrity, foreign keys, required schema, and the state-format row must agree
+   with the migration ledger. The tenant, staging, blob, and existing
+   blob-prefix directories must be readable, writable, and traversable. It may
+   report `MISSING` only when
+   the selected tenant directory does not exist; an existing directory with
+   missing or uninitialized metadata is a blocking partial restore. Every
+   selected tenant must report `MISSING`, `COMPATIBLE`, or a supported
+   `MIGRATION_PENDING` state before activation. Do not bypass an `UNSUPPORTED`,
+   `INCOMPATIBLE`, `CORRUPT`, or `UNREADABLE` result; an access failure means
+   destination ownership or mode restoration is incomplete.
+7. Verify `deployment://identity`, the two-tool surface, catalog policy,
+   required capabilities, and any provider-specific smoke before updating
+   remaining client configuration. Keep the source VPS and its unchanged state
+   available, but stopped, until the destination has passed these checks.
+
+Current Jacobian writes state revision 12 and accepts revision 11 for an
+in-place migration. Earlier revisions have no direct import bridge; retain the
+old state unchanged with a compatible checkout and start fresh state on current
+Jacobian as described in
+[Persistent state format](../reference/state-format.md).
+
+Migration reminders:
+
+- `/etc/jacobian-mcp/tokens.json` is not part of an immutable release. Copying
+  only `/opt/jacobian` will leave existing authenticated clients unable to
+  connect.
+- An anonymous tenant's directory key is derived from its tenant ID. Reuse the
+  exact `--anonymous-tenant-id` to preserve copied state, or deliberately choose
+  a new ID for disposable fresh state.
+- A Tailscale Funnel connector is derived from the destination node's Tailscale
+  DNS name and may differ after a VPS move. Update clients explicitly, or use a
+  stable operator-owned domain and perform a DNS cutover.
+- Never allow the source and destination to accept writes against independently
+  copied state after the final snapshot. Jacobian does not merge divergent
+  stores.
 
 ## Create the auth secret
 

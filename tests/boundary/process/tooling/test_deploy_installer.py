@@ -17,6 +17,23 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def _provide_optional_host_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    tool_directory = tmp_path / "deployment-tools"
+    tool_directory.mkdir()
+    for tool_name in ("caddy", "elan"):
+        tool = tool_directory / tool_name
+        tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        tool.chmod(0o755)
+    du = tool_directory / "du"
+    du.write_text("#!/bin/sh\nprintf '0\\t%s\\n' \"$3\"\n", encoding="utf-8")
+    du.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool_directory}:{os.environ['PATH']}")
+    return tool_directory
+
+
 def _run(
     *arguments: str,
     environment: dict[str, str] | None = None,
@@ -76,6 +93,7 @@ def test_installer_help_exposes_three_deployment_modes() -> None:
     assert "--mode tailscale" in completed.stdout
     assert "--install-root" in completed.stdout
     assert "--with-lean" in completed.stdout
+    assert "--retain-releases" in completed.stdout
 
 
 def test_lean_dry_run_uses_a_distinct_release_profile() -> None:
@@ -89,6 +107,17 @@ def test_lean_dry_run_uses_a_distinct_release_profile() -> None:
     )
     assert release_line.endswith("-lean")
     assert "lean:        pinned CORE + MATHLIB runtime" in completed.stdout
+    assert "retention:   2 completed releases including active" in completed.stdout
+    assert "free space:" in completed.stdout
+    assert "tools:       uv=" in completed.stdout
+
+
+@pytest.mark.parametrize("value", ("0", "-1", "all", "101", "18446744073709551616"))
+def test_release_retention_rejects_invalid_counts(value: str) -> None:
+    completed = _run("--retain-releases", value, "--dry-run")
+
+    assert completed.returncode != 0
+    assert "--retain-releases" in completed.stderr
 
 
 def test_domain_dry_run_reports_connector_without_requiring_root() -> None:
@@ -106,6 +135,28 @@ def test_domain_dry_run_reports_connector_without_requiring_root() -> None:
     assert "python:      /opt/jacobian/python" in completed.stdout
     assert "caddy:       enabled" in completed.stdout
     assert "funnel:      disabled" in completed.stdout
+
+
+def test_public_skip_smoke_warns_that_ingress_still_starts() -> None:
+    completed = _run(
+        "--mode",
+        "domain",
+        "--domain",
+        "math.example.org",
+        "--skip-smoke",
+        "--dry-run",
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "--skip-smoke does not keep public ingress offline" in completed.stderr
+    assert "use --mode local while staging a VPS migration" in completed.stderr
+
+
+def test_local_skip_smoke_does_not_emit_a_public_ingress_warning() -> None:
+    completed = _run("--mode", "local", "--skip-smoke", "--dry-run")
+
+    assert completed.returncode == 0, completed.stderr
+    assert "public ingress offline" not in completed.stderr
 
 
 def test_dry_run_derives_every_runtime_path_from_custom_install_root() -> None:
@@ -321,6 +372,105 @@ def test_release_runtime_is_checked_before_current_symlink_is_changed() -> None:
     assert '"${RUNUSER_BIN}" --user jacobian -- "${entrypoint}" --version' in source
 
 
+def test_candidate_state_is_checked_with_writers_stopped_and_rollback_armed() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    state_preflight = source.index('"${RELEASE_DIR}/deploy/preflight_state.py"')
+    rollback_snapshot = source.index('ROLLBACK_ROOT="$(mktemp -d)"')
+    rollback_armed = source.index("ROLLBACK_ARMED=1")
+    writer_stop_guard = source.index(
+        'if [[ -f "${ROLLBACK_ROOT}/mcp-service.present" ]]'
+    )
+    writer_stop = source.index('"${SYSTEMCTL_BIN}" stop jacobian-mcp.service')
+    state_snapshot = source.index('snapshot_file state "${STATE_DIR}"')
+    current_link = source.index('ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"')
+
+    assert rollback_snapshot < rollback_armed < writer_stop_guard < writer_stop
+    assert writer_stop < state_preflight < state_snapshot < current_link
+    assert 'jacobian-mcp.service.active" ]]' not in source[rollback_armed:writer_stop]
+    assert "--run-as-user jacobian" in source
+
+
+def test_rollback_capacity_is_rechecked_after_writers_stop_before_snapshot() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    writer_stop = source.index('"${SYSTEMCTL_BIN}" stop jacobian-mcp.service')
+    fresh_free_space = source.index('df -Pk "${ROLLBACK_ROOT}"', writer_stop)
+    fresh_state_size = source.index('du -sk -- "${STATE_DIR}"', writer_stop)
+    state_preflight = source.index('"${RELEASE_DIR}/deploy/preflight_state.py"')
+    state_snapshot = source.index('snapshot_file state "${STATE_DIR}"')
+
+    assert writer_stop < fresh_free_space < fresh_state_size
+    assert fresh_state_size < state_preflight < state_snapshot
+    assert "QUIESCENT_REQUIRED_ROLLBACK_KIB" in source[fresh_state_size:state_preflight]
+    assert (
+        "insufficient rollback space after stopping writers"
+        in source[fresh_state_size:state_preflight]
+    )
+
+
+def test_dry_run_validates_host_tools_and_disk_before_reporting_a_plan() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    uv = source.index('UV_BIN="$(find_executable uv')
+    systemd = source.index('SYSTEMCTL_BIN="$(find_executable systemctl')
+    disk = source.index('INSTALL_DISK_INFO="$(')
+    dry_run = source.index("if ((DRY_RUN)); then")
+
+    assert uv < dry_run
+    assert systemd < dry_run
+    assert disk < dry_run
+
+
+def test_dry_run_waives_build_space_only_for_a_reusable_release() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    disk_block = source[
+        source.index("REQUIRED_INSTALL_KIB=$((2 * 1024 * 1024))") : source.index(
+            "if ((DRY_RUN)); then"
+        )
+    ]
+
+    assert 'cat "${RELEASE_DIR}/.git-revision"' in disk_block
+    assert '== "${REVISION}"' in disk_block
+    assert 'cat "${RELEASE_DIR}/.release-profile"' in disk_block
+    assert '== "${RELEASE_PROFILE}"' in disk_block
+    assert "REQUIRED_INSTALL_KIB=0" in disk_block
+
+
+def test_disk_preflight_reserves_state_snapshot_space_before_dry_run() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    disk_block = source[
+        source.index('INSTALL_DISK_INFO="$(') : source.index("if ((DRY_RUN)); then")
+    ]
+
+    assert 'du -sk -- "${STATE_DIR}"' in disk_block
+    assert "REQUIRED_ROLLBACK_KIB=$((STATE_SIZE_KIB + 64 * 1024))" in disk_block
+    assert "REQUIRED_SHARED_KIB=$((REQUIRED_INSTALL_KIB + REQUIRED_ROLLBACK_KIB))" in (
+        disk_block
+    )
+    assert 'AVAILABLE_ROLLBACK_KIB="${ROLLBACK_DISK_INFO##* }"' in disk_block
+
+
+def test_non_root_dry_run_marks_protected_state_capacity_unverified() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    disk_block = source[
+        source.index("STATE_SIZE_KIB=0") : source.index("if ((DRY_RUN)); then")
+    ]
+
+    assert "if ((DRY_RUN && EUID != 0)); then" in disk_block
+    assert "rollback capacity is unverified" in disk_block
+    assert "rerun the dry-run with sudo before deployment" in disk_block
+    assert "required capacity unverified" in disk_block
+
+
+def test_anonymous_deployment_snapshots_the_anonymous_state_root() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    state_selection = source.index('STATE_DIR="${ANONYMOUS_STATE_ROOT}"')
+    rollback_snapshot = source.index('snapshot_file state "${STATE_DIR}"')
+
+    assert state_selection < rollback_snapshot
+
+
 def test_runtime_inputs_remain_service_readable_after_root_probes() -> None:
     source = INSTALLER.read_text(encoding="utf-8")
 
@@ -421,6 +571,27 @@ def test_lean_profile_requires_catalog_and_behavior_smokes() -> None:
     assert '"${RELEASE_DIR}/deploy/smoke_lean.py"' in smoke_block
 
 
+def test_smoke_retries_only_the_stable_transient_exit_code() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    smoke_block = source[source.index('log "running the read-only deployment smoke"') :]
+
+    assert "TRANSIENT_SMOKE_EXIT=75" in source
+    assert smoke_block.count("SMOKE_STATUS != TRANSIENT_SMOKE_EXIT") == 2
+    assert "failed deterministically; not retrying" in smoke_block
+    assert "transient deployment smoke failure; retrying" in smoke_block
+
+
+def test_release_retention_runs_only_after_deployment_is_accepted() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    accepted = source.index("DEPLOYMENT_ACCEPTED=1")
+    disarmed = source.index("ROLLBACK_ARMED=0", accepted)
+    retention = source.index('"${RELEASE_DIR}/deploy/release_retention.py"')
+
+    assert accepted < disarmed < retention
+    assert 'RETENTION_ARGS+=(--preserve-release "${PREVIOUS_RELEASE}")' in source
+
+
 def test_activation_arms_rollback_before_switching_current() -> None:
     source = INSTALLER.read_text(encoding="utf-8")
 
@@ -461,7 +632,7 @@ def test_generated_token_is_written_only_to_the_restricted_file() -> None:
     assert "retrieve it explicitly with privileged access" in source
 
 
-def test_rollback_restores_prior_service_activity_and_enablement(
+def test_rollback_restores_activity_enablement_and_restart_pending_state(
     tmp_path: Path,
 ) -> None:
     state = tmp_path / "systemd-state"
@@ -476,10 +647,22 @@ action="$1"
 case "$action" in
   is-enabled) test -f "$FAKE_SYSTEMD_STATE/$3.enabled" ;;
   is-active) test -f "$FAKE_SYSTEMD_STATE/$3.active" ;;
+  show)
+    if test -f "$FAKE_SYSTEMD_STATE/$4.active"; then
+      printf 'active\n'
+    elif test -f "$FAKE_SYSTEMD_STATE/$4.restart-pending"; then
+      printf 'activating\n'
+    else
+      printf 'inactive\n'
+    fi
+    ;;
   enable) : >"$FAKE_SYSTEMD_STATE/$2.enabled" ;;
   disable) rm -f -- "$FAKE_SYSTEMD_STATE/$2.enabled" ;;
-  restart) : >"$FAKE_SYSTEMD_STATE/$2.active" ;;
-  stop) rm -f -- "$FAKE_SYSTEMD_STATE/$2.active" ;;
+  restart)
+    rm -f -- "$FAKE_SYSTEMD_STATE/$2.restart-pending"
+    : >"$FAKE_SYSTEMD_STATE/$2.active"
+    ;;
+  stop) rm -f -- "$FAKE_SYSTEMD_STATE/$2.active" "$FAKE_SYSTEMD_STATE/$2.restart-pending" ;;
   *) exit 2 ;;
 esac
 """,
@@ -489,6 +672,7 @@ esac
     (state / "jacobian-mcp.service.enabled").touch()
     (state / "jacobian-mcp.service.active").touch()
     (state / "jacobian-caddy.service.enabled").touch()
+    (state / "jacobian-caddy.service.restart-pending").touch()
     environment = os.environ | {"FAKE_SYSTEMD_STATE": str(state)}
     units = (
         "jacobian-mcp.service",
@@ -533,6 +717,7 @@ esac
     assert (state / "jacobian-mcp.service.enabled").is_file()
     assert (state / "jacobian-mcp.service.active").is_file()
     assert (state / "jacobian-caddy.service.enabled").is_file()
-    assert not (state / "jacobian-caddy.service.active").exists()
+    assert (state / "jacobian-caddy.service.active").is_file()
+    assert not (state / "jacobian-caddy.service.restart-pending").exists()
     assert not (state / "jacobian-funnel.service.enabled").exists()
     assert not (state / "jacobian-funnel.service.active").exists()

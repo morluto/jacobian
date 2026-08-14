@@ -7,9 +7,6 @@ from pathlib import Path
 
 from tests.support.state import publish_template, quiesce_sqlite_template
 
-from jacobian import __version__
-from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.storage.repository import ArtifactRepository
 
@@ -51,6 +48,16 @@ def _polynomial_expression_schema_uri(root: Path) -> str:
         connection.close()
     assert row is not None
     return str(row[0])
+
+
+def _artifact_count(root: Path) -> int:
+    connection = sqlite3.connect(root / "metadata.sqlite3")
+    try:
+        row = connection.execute("SELECT COUNT(*) FROM artifacts").fetchone()
+    finally:
+        connection.close()
+    assert row is not None
+    return int(row[0])
 
 
 def _build_sentinel_store(staging: Path) -> None:
@@ -126,9 +133,6 @@ def test_complete_portfolio_template_is_quiescent_and_copyable(
         destination,
         descriptor_uri=_polynomial_expression_schema_uri(complete_portfolio_template),
     )
-    catalog = OperationCatalog(
-        destination / "metadata.sqlite3",
-        OperationVisibilityPolicy(),
-        expected_package_version=__version__,
-    )
-    assert catalog.snapshot().operations
+    original_artifacts = _artifact_count(complete_portfolio_template)
+    assert original_artifacts > 0
+    assert _artifact_count(destination) == original_artifacts

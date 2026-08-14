@@ -632,7 +632,7 @@ def test_generated_token_is_written_only_to_the_restricted_file() -> None:
     assert "retrieve it explicitly with privileged access" in source
 
 
-def test_rollback_restores_prior_service_activity_and_enablement(
+def test_rollback_restores_activity_enablement_and_restart_pending_state(
     tmp_path: Path,
 ) -> None:
     state = tmp_path / "systemd-state"
@@ -647,10 +647,22 @@ action="$1"
 case "$action" in
   is-enabled) test -f "$FAKE_SYSTEMD_STATE/$3.enabled" ;;
   is-active) test -f "$FAKE_SYSTEMD_STATE/$3.active" ;;
+  show)
+    if test -f "$FAKE_SYSTEMD_STATE/$4.active"; then
+      printf 'active\n'
+    elif test -f "$FAKE_SYSTEMD_STATE/$4.restart-pending"; then
+      printf 'activating\n'
+    else
+      printf 'inactive\n'
+    fi
+    ;;
   enable) : >"$FAKE_SYSTEMD_STATE/$2.enabled" ;;
   disable) rm -f -- "$FAKE_SYSTEMD_STATE/$2.enabled" ;;
-  restart) : >"$FAKE_SYSTEMD_STATE/$2.active" ;;
-  stop) rm -f -- "$FAKE_SYSTEMD_STATE/$2.active" ;;
+  restart)
+    rm -f -- "$FAKE_SYSTEMD_STATE/$2.restart-pending"
+    : >"$FAKE_SYSTEMD_STATE/$2.active"
+    ;;
+  stop) rm -f -- "$FAKE_SYSTEMD_STATE/$2.active" "$FAKE_SYSTEMD_STATE/$2.restart-pending" ;;
   *) exit 2 ;;
 esac
 """,
@@ -660,6 +672,7 @@ esac
     (state / "jacobian-mcp.service.enabled").touch()
     (state / "jacobian-mcp.service.active").touch()
     (state / "jacobian-caddy.service.enabled").touch()
+    (state / "jacobian-caddy.service.restart-pending").touch()
     environment = os.environ | {"FAKE_SYSTEMD_STATE": str(state)}
     units = (
         "jacobian-mcp.service",
@@ -704,6 +717,7 @@ esac
     assert (state / "jacobian-mcp.service.enabled").is_file()
     assert (state / "jacobian-mcp.service.active").is_file()
     assert (state / "jacobian-caddy.service.enabled").is_file()
-    assert not (state / "jacobian-caddy.service.active").exists()
+    assert (state / "jacobian-caddy.service.active").is_file()
+    assert not (state / "jacobian-caddy.service.restart-pending").exists()
     assert not (state / "jacobian-funnel.service.enabled").exists()
     assert not (state / "jacobian-funnel.service.active").exists()

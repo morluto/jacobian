@@ -132,7 +132,9 @@ state, including a unit waiting for an automatic restart. The SQLite/CAS scan
 therefore observes a quiescent snapshot. After stopping the writer, the
 installer remeasures both the state and the rollback filesystem before scanning
 or copying state, so writes received during a long release build cannot stale
-the earlier capacity plan.
+the earlier capacity plan. Rollback records active, activating (including
+automatic-restart delay), and reloading services as running services and
+restarts them if candidate validation or activation fails.
 Unsupported, corrupt, unreadable, or migration-incompatible state stops the
 deployment without changing the active release and restores the prior service
 state. A missing tenant store is valid and remains uncreated until first use.

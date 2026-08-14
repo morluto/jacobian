@@ -98,6 +98,9 @@ def test_core_domain_verification_phase_accepts_empty_declarations() -> None:
 @dataclass
 class _UnauthorizedContext:
     authorize_bundled_checkers: bool = False
+    checkers: object = field(
+        default_factory=lambda: SimpleNamespace(bind_existing_when_omitted=False)
+    )
     registered: list[object] = field(default_factory=list)
 
     def register_operation(self, adapter: object) -> None:

@@ -827,6 +827,23 @@ if [[ -f "${ROLLBACK_ROOT}/jacobian-mcp.service.active" ]]; then
     "${SYSTEMCTL_BIN}" stop jacobian-mcp.service
 fi
 
+QUIESCENT_AVAILABLE_ROLLBACK_KIB="$(
+    df -Pk "${ROLLBACK_ROOT}" | awk 'NR == 2 {print $4}'
+)" || die "could not remeasure rollback space at ${ROLLBACK_ROOT}"
+[[ "${QUIESCENT_AVAILABLE_ROLLBACK_KIB}" =~ ^[0-9]+$ ]] || die \
+    "could not remeasure rollback space at ${ROLLBACK_ROOT}"
+QUIESCENT_STATE_SIZE_KIB=0
+if [[ -e "${STATE_DIR}" || -L "${STATE_DIR}" ]]; then
+    QUIESCENT_STATE_SIZE_KIB="$(
+        du -sk -- "${STATE_DIR}" | awk '{print $1}'
+    )" || die "could not remeasure state rollback size at ${STATE_DIR}"
+fi
+[[ "${QUIESCENT_STATE_SIZE_KIB}" =~ ^[0-9]+$ ]] || die \
+    "could not remeasure state rollback size at ${STATE_DIR}"
+QUIESCENT_REQUIRED_ROLLBACK_KIB=$((QUIESCENT_STATE_SIZE_KIB + 64 * 1024))
+((QUIESCENT_AVAILABLE_ROLLBACK_KIB >= QUIESCENT_REQUIRED_ROLLBACK_KIB)) || die \
+    "insufficient rollback space after stopping writers: need ${QUIESCENT_REQUIRED_ROLLBACK_KIB} KiB, found ${QUIESCENT_AVAILABLE_ROLLBACK_KIB} KiB"
+
 log "checking configured tenant state compatibility with writers stopped"
 STATE_PREFLIGHT_ARGS=()
 if ((ALLOW_ANONYMOUS)); then

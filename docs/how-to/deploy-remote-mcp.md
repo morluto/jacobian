@@ -128,10 +128,12 @@ Before activation, the candidate release performs a read-only compatibility
 check against every tenant selected by the configured token file, or against
 the selected anonymous tenant. It first records the existing service state,
 arms rollback, and stops an active MCP writer so the SQLite/CAS scan observes a
-quiescent snapshot. Unsupported, corrupt, unreadable, or migration-incompatible
-state stops the deployment without changing the active release and restores the
-prior service state. A missing tenant store is valid and remains uncreated until
-first use.
+quiescent snapshot. After stopping the writer, it remeasures both the state and
+the rollback filesystem before scanning or copying state, so writes received
+during a long release build cannot stale the earlier capacity plan.
+Unsupported, corrupt, unreadable, or migration-incompatible state stops the
+deployment without changing the active release and restores the prior service
+state. A missing tenant store is valid and remains uncreated until first use.
 
 After the deployment smoke and final permission audit succeed, the installer
 keeps the active release and prioritizes the release that was active immediately

@@ -387,6 +387,24 @@ def test_candidate_state_is_checked_with_writers_stopped_and_rollback_armed() ->
     assert "--run-as-user jacobian" in source
 
 
+def test_rollback_capacity_is_rechecked_after_writers_stop_before_snapshot() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    writer_stop = source.index('"${SYSTEMCTL_BIN}" stop jacobian-mcp.service')
+    fresh_free_space = source.index('df -Pk "${ROLLBACK_ROOT}"', writer_stop)
+    fresh_state_size = source.index('du -sk -- "${STATE_DIR}"', writer_stop)
+    state_preflight = source.index('"${RELEASE_DIR}/deploy/preflight_state.py"')
+    state_snapshot = source.index('snapshot_file state "${STATE_DIR}"')
+
+    assert writer_stop < fresh_free_space < fresh_state_size
+    assert fresh_state_size < state_preflight < state_snapshot
+    assert "QUIESCENT_REQUIRED_ROLLBACK_KIB" in source[fresh_state_size:state_preflight]
+    assert (
+        "insufficient rollback space after stopping writers"
+        in source[fresh_state_size:state_preflight]
+    )
+
+
 def test_dry_run_validates_host_tools_and_disk_before_reporting_a_plan() -> None:
     source = INSTALLER.read_text(encoding="utf-8")
 

@@ -9,7 +9,7 @@ from typing import Any
 
 from benchmarks.tooling import observation_artifacts, observation_selection
 from benchmarks.tooling.errors import HarborSuiteError
-from benchmarks.tooling.heldout_bundle import validate_manifest
+from benchmarks.tooling.heldout_manifest import validate_manifest
 from benchmarks.tooling.observation_results import (
     _git_sha,
     _json_digest,
@@ -19,6 +19,53 @@ from benchmarks.tooling.observation_results import (
     _validate_contract,
     build_observation_evidence,
 )
+
+
+def normalize_treatment_comparison_job(job: dict[str, Any]) -> dict[str, Any]:
+    """Remove only the frozen C2 Jacobian additions from a pair signature."""
+
+    normalized: dict[str, Any] = json.loads(json.dumps(job))
+    normalized.pop("jobs_dir", None)
+    artifacts = normalized.get("artifacts")
+    if isinstance(artifacts, list):
+        normalized["artifacts"] = [
+            entry
+            for entry in artifacts
+            if entry != {"source": "/logs/jacobian/mcp.log", "service": "jacobian"}
+        ]
+    environment = normalized.get("environment")
+    if isinstance(environment, dict):
+        compose = environment.get("extra_docker_compose")
+        if isinstance(compose, list):
+            environment["extra_docker_compose"] = [
+                value for value in compose if Path(str(value)).name != "c2.compose.json"
+            ]
+    for agent in normalized.get("agents", []):
+        if isinstance(agent, dict):
+            servers = agent.get("mcp_servers")
+            if isinstance(servers, list):
+                remaining = [
+                    server
+                    for server in servers
+                    if server
+                    not in (
+                        {
+                            "name": "jacobian",
+                            "transport": "streamable-http",
+                            "url": "http://127.0.0.1:8000/mcp",
+                        },
+                        {
+                            "name": "jacobian",
+                            "transport": "streamable-http",
+                            "url": "http://jacobian:8000/mcp",
+                        },
+                    )
+                ]
+                if remaining:
+                    agent["mcp_servers"] = remaining
+                else:
+                    agent.pop("mcp_servers", None)
+    return normalized
 
 
 def _heldout_plan_failures(
@@ -79,6 +126,7 @@ def _collect_heldout_runs(
             jobs_dir=root / run["jobs_dir"],
             runtime_snapshot=runtime,
             heldout_manifest=manifest,
+            comparison_job=normalize_treatment_comparison_job,
         )
         failures.extend(f"{run['pair_id']}: {failure}" for failure in run_failures)
         run_id = f"{run['pair_id']}/{condition}"

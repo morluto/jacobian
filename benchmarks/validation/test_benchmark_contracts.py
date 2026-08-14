@@ -20,6 +20,11 @@ def test_every_committed_benchmark_contract_is_valid() -> None:
     assert benchmark_contracts.validate_all() == []
 
 
+def test_generated_benchmark_results_remain_ignored() -> None:
+    ignored = Path(".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "benchmarks/results/" in ignored
+
+
 def test_registry_rejects_global_task_id_collisions() -> None:
     first, second, *_rest = load_registry()
     colliding = replace(second, tasks=(first.tasks[0],))

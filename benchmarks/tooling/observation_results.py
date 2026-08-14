@@ -27,6 +27,7 @@ import hashlib
 import json
 import re
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,7 @@ from benchmarks.tooling.harbor_suite import (
     get_suite,
     task_digest,
 )
+from benchmarks.tooling.observation_ingestion import load_harbor_result
 from benchmarks.tooling.strict_boundaries import (
     HarborJobSelection,
     raise_strict_model,
@@ -92,39 +94,6 @@ def _git_sha() -> str:
     return value
 
 
-def _find_result(jobs_dir: Path) -> Path:
-    candidates = sorted(
-        (path for path in jobs_dir.glob("*/result.json") if path.is_file()),
-        key=lambda path: path.stat().st_mtime_ns,
-        reverse=True,
-    )
-    if not candidates:
-        raise HarborSuiteError(f"no Harbor result.json found below {jobs_dir}")
-    return candidates[0]
-
-
-def _trial_results(
-    result_path: Path, payload: dict[str, Any]
-) -> list[tuple[Path | None, dict[str, Any]]]:
-    paths = sorted(
-        path for path in result_path.parent.glob("*/result.json") if path.is_file()
-    )
-    if paths:
-        values: list[tuple[Path | None, dict[str, Any]]] = []
-        for path in paths:
-            raw = _read_json(path)
-            if not isinstance(raw, dict):
-                raise HarborSuiteError(f"trial result must be an object: {path}")
-            values.append((path, raw))
-        return values
-    inline = payload.get("trial_results", [])
-    if not isinstance(inline, list) or not all(
-        isinstance(item, dict) for item in inline
-    ):
-        raise HarborSuiteError("Harbor result has no valid per-trial results")
-    return [(None, item) for item in inline]
-
-
 def _task_id(name: Any) -> str:
     return name.rsplit("/", 1)[-1] if isinstance(name, str) else ""
 
@@ -164,57 +133,6 @@ def _completed_job_stats(job_stats: dict[str, Any], observed_trial_count: int) -
             "n_cancelled_trials",
         )
     )
-
-
-def _comparison_job(job: dict[str, Any]) -> dict[str, Any]:
-    """Normalize only the frozen Jacobian treatment additions.
-
-    Any other condition-specific Compose or MCP change remains in the
-    comparison signature and therefore invalidates the pair.
-    """
-
-    normalized: dict[str, Any] = json.loads(json.dumps(job))
-    normalized.pop("jobs_dir", None)
-    artifacts = normalized.get("artifacts")
-    if isinstance(artifacts, list):
-        normalized["artifacts"] = [
-            entry
-            for entry in artifacts
-            if entry != {"source": "/logs/jacobian/mcp.log", "service": "jacobian"}
-        ]
-    environment = normalized.get("environment")
-    if isinstance(environment, dict):
-        compose = environment.get("extra_docker_compose")
-        if isinstance(compose, list):
-            environment["extra_docker_compose"] = [
-                value for value in compose if Path(str(value)).name != "c2.compose.json"
-            ]
-    for agent in normalized.get("agents", []):
-        if isinstance(agent, dict):
-            servers = agent.get("mcp_servers")
-            if isinstance(servers, list):
-                remaining = [
-                    server
-                    for server in servers
-                    if server
-                    not in (
-                        {
-                            "name": "jacobian",
-                            "transport": "streamable-http",
-                            "url": "http://127.0.0.1:8000/mcp",
-                        },
-                        {
-                            "name": "jacobian",
-                            "transport": "streamable-http",
-                            "url": "http://jacobian:8000/mcp",
-                        },
-                    )
-                ]
-                if remaining:
-                    agent["mcp_servers"] = remaining
-                else:
-                    agent.pop("mcp_servers", None)
-    return normalized
 
 
 def _timing_seconds(value: Any) -> float | None:
@@ -563,12 +481,12 @@ def build_observation_evidence(
     result_path: Path | None = None,
     runtime_snapshot: dict[str, Any] | None = None,
     heldout_manifest: dict[str, Any] | None = None,
+    comparison_job: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     job = _parse_job_selection(job_path)
-    result_path = (result_path or _find_result(jobs_dir)).resolve()
-    payload = _read_json(result_path)
-    if not isinstance(payload, dict):
-        raise HarborSuiteError("Harbor result must be an object")
+    harbor_result = load_harbor_result(jobs_dir, result_path)
+    result_path = harbor_result.path
+    payload = harbor_result.payload
 
     known_digests, task_dirs, dataset_path, evidence_class, dataset_id = (
         observation_selection.selection_known(
@@ -605,7 +523,7 @@ def build_observation_evidence(
         }
     )
 
-    raw_trials = _trial_results(result_path, payload)
+    raw_trials = list(harbor_result.trials)
     job_stats = dict(_object(payload.get("stats")))
     if "n_total_trials" not in job_stats:
         job_stats["n_total_trials"] = payload.get("n_total_trials")
@@ -716,7 +634,9 @@ def build_observation_evidence(
         "job": {
             "path": job_label,
             "digest": _sha256(job_path),
-            "comparison_signature": _json_digest(_comparison_job(job)),
+            "comparison_signature": _json_digest(
+                (comparison_job or (lambda value: value))(job)
+            ),
             "n_attempts": attempts,
         },
         "runtime_snapshot": runtime,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.tooling.heldout_bundle import _digest, _tree_digest
+from benchmarks.tooling.heldout_manifest import _digest, _tree_digest
 
 
 def _manifest() -> dict:

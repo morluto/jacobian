@@ -9,12 +9,12 @@ from pathlib import Path
 
 from benchmarks.tooling.command_runner import run_operator_command
 from benchmarks.tooling.harbor_suite import task_digest
-from benchmarks.tooling.heldout_bundle import (
+from benchmarks.tooling.heldout_manifest import (
     _digest,
     _json_digest,
     _tree_digest,
-    render_plan,
 )
+from benchmarks.tooling.heldout_plan import render_plan
 
 PYTHON_IMAGE = (
     "python:3.12-slim@sha256:"

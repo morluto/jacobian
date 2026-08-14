@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator
 from benchmarks.tooling.command_runner import operator_environment, run_operator_command
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import BENCHMARKS, ROOT
-from benchmarks.tooling.heldout_bundle import (
+from benchmarks.tooling.heldout_manifest import (
     _DIGEST_RE,
     _digest,
     _json_digest,

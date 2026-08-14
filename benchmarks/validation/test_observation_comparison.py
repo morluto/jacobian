@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from benchmarks.tooling.heldout_observations import normalize_treatment_comparison_job
 from benchmarks.tooling.observation_comparison import compare_evidence, render_markdown
-from benchmarks.tooling.observation_results import _comparison_job
 from benchmarks.validation.observation_results_support import _evidence
 
 
@@ -132,16 +132,22 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
         ],
     }
 
-    assert _comparison_job(control) == _comparison_job(treatment)
+    assert normalize_treatment_comparison_job(
+        control
+    ) == normalize_treatment_comparison_job(treatment)
 
     treatment["artifacts"].append(
         {"source": "/logs/jacobian/extra.log", "service": "jacobian"}
     )
-    assert _comparison_job(control) != _comparison_job(treatment)
+    assert normalize_treatment_comparison_job(
+        control
+    ) != normalize_treatment_comparison_job(treatment)
     treatment["artifacts"].pop()
 
     treatment["agents"][0]["skills"] = ["unexpected-skill"]
-    assert _comparison_job(control) != _comparison_job(treatment)
+    assert normalize_treatment_comparison_job(
+        control
+    ) != normalize_treatment_comparison_job(treatment)
     treatment["agents"][0].pop("skills")
 
     heldout_treatment = {
@@ -165,13 +171,19 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
             }
         ],
     }
-    assert _comparison_job(control) == _comparison_job(heldout_treatment)
+    assert normalize_treatment_comparison_job(
+        control
+    ) == normalize_treatment_comparison_job(heldout_treatment)
 
     treatment["environment"]["extra_docker_compose"].append("unexpected.yaml")
-    assert _comparison_job(control) != _comparison_job(treatment)
+    assert normalize_treatment_comparison_job(
+        control
+    ) != normalize_treatment_comparison_job(treatment)
 
     treatment["environment"]["extra_docker_compose"].pop()
     treatment["agents"][0]["mcp_servers"].append(
         {"name": "unexpected", "transport": "stdio", "url": "http://other"}
     )
-    assert _comparison_job(control) != _comparison_job(treatment)
+    assert normalize_treatment_comparison_job(
+        control
+    ) != normalize_treatment_comparison_job(treatment)

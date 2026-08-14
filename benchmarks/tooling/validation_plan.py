@@ -46,7 +46,13 @@ CONTROL_PLANE_HOST_TESTS = {
         "benchmarks/validation/test_benchmark_validation.py",
     ),
     ".github/workflows/heldout-benchmarks.yml": (
-        "benchmarks/validation/test_heldout_bundle.py",
+        "benchmarks/validation/test_heldout_acquisition.py",
+        "benchmarks/validation/test_heldout_integrity.py",
+        "benchmarks/validation/test_heldout_manifest.py",
+        "benchmarks/validation/test_heldout_observations.py",
+        "benchmarks/validation/test_heldout_plan.py",
+        "benchmarks/validation/test_heldout_routing.py",
+        "benchmarks/validation/test_heldout_workflow.py",
         "benchmarks/validation/test_heldout_runner.py",
     ),
     "tools/benchmark_plan/__init__.py": (

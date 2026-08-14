@@ -303,7 +303,7 @@ def _write_routing_contract(
 def _resolve_harbor_version(manifest_path: Path) -> str:
     """Resolve harbor_version from the canonical manifest."""
 
-    from benchmarks.tooling.heldout_bundle import validate_manifest
+    from benchmarks.tooling.heldout_manifest import validate_manifest
 
     manifest = validate_manifest(manifest_path)
     return str(manifest["experiment"]["harbor_version"])

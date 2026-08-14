@@ -1636,29 +1636,32 @@ _CLI_COMPLETE_PORTFOLIO_ALLOWLIST = frozenset(
 )
 
 
-def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
-    return any(
-        isinstance(node, ast.ImportFrom)
-        and node.module == "tests.support.complete_runtime_fixtures"
-        for node in ast.walk(tree)
-    )
-
-
-def _imports_jacobian_runtime(tree: ast.AST) -> bool:
+def _imports_qualified_module(tree: ast.AST, module: str) -> bool:
+    parent, _, name = module.rpartition(".")
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            if any(alias.name == "jacobian.runtime" for alias in node.names):
+            if any(alias.name == module for alias in node.names):
                 return True
-        elif isinstance(node, ast.ImportFrom):
-            if node.module == "tests.support.catalog_build_runtime":
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            if node.module == module:
                 return True
-            if node.module == "jacobian.runtime":
-                return True
-            if node.module == "jacobian" and any(
-                alias.name == "runtime" for alias in node.names
+            if (
+                parent
+                and node.module == parent
+                and any(alias.name == name for alias in node.names)
             ):
                 return True
     return False
+
+
+def _imports_complete_runtime_fixtures(tree: ast.AST) -> bool:
+    return _imports_qualified_module(tree, "tests.support.complete_runtime_fixtures")
+
+
+def _imports_jacobian_runtime(tree: ast.AST) -> bool:
+    return _imports_qualified_module(
+        tree, "jacobian.runtime"
+    ) or _imports_qualified_module(tree, "tests.support.catalog_build_runtime")
 
 
 def _create_cli_app_call_has_runtime_opener(node: ast.Call) -> bool:

@@ -126,9 +126,12 @@ Untracked files are not archived. Re-running the same revision is idempotent.
 After reviewing and pulling a new revision, run the same command to upgrade.
 Before activation, the candidate release performs a read-only compatibility
 check against every tenant selected by the configured token file, or against
-the selected anonymous tenant. Unsupported, corrupt, unreadable, or
-migration-incompatible state stops the deployment without changing the active
-release. A missing tenant store is valid and remains uncreated until first use.
+the selected anonymous tenant. It first records the existing service state,
+arms rollback, and stops an active MCP writer so the SQLite/CAS scan observes a
+quiescent snapshot. Unsupported, corrupt, unreadable, or migration-incompatible
+state stops the deployment without changing the active release and restores the
+prior service state. A missing tenant store is valid and remains uncreated until
+first use.
 
 After the deployment smoke and final permission audit succeed, the installer
 keeps the active release and prioritizes the release that was active immediately
@@ -155,7 +158,10 @@ GiB free; a new core release requires at least 2 GiB. Existing complete release
 directories do not require that build-space reserve. The rollback temporary
 filesystem must also retain the full current state snapshot plus 64 MiB for
 configuration and metadata; when it shares the installation filesystem, both
-reserves are added before deployment work begins.
+reserves are added before deployment work begins. A non-root dry-run that
+cannot read an existing protected state directory reports rollback capacity as
+unverified and tells the operator to repeat the preflight with `sudo`; the real
+deployment never proceeds without the measurement.
 
 ## Migrate to another VPS
 

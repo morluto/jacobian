@@ -630,20 +630,37 @@ ROLLBACK_FILESYSTEM="${ROLLBACK_DISK_INFO%% *}"
 AVAILABLE_ROLLBACK_KIB="${ROLLBACK_DISK_INFO##* }"
 STATE_SIZE_KIB=0
 if [[ -e "${STATE_DIR}" || -L "${STATE_DIR}" ]]; then
-    STATE_SIZE_KIB="$(du -sk -- "${STATE_DIR}" | awk '{print $1}')" \
-        || die "could not measure state rollback size at ${STATE_DIR}"
+    if ! STATE_SIZE_KIB="$(
+        du -sk -- "${STATE_DIR}" 2>/dev/null | awk '{print $1}'
+    )"; then
+        if ((DRY_RUN && EUID != 0)); then
+            STATE_SIZE_KIB=""
+            printf 'warning: rollback capacity is unverified because %s is not readable; rerun the dry-run with sudo before deployment\n' \
+                "${STATE_DIR}" >&2
+        else
+            die "could not measure state rollback size at ${STATE_DIR}"
+        fi
+    fi
 fi
-REQUIRED_ROLLBACK_KIB=$((STATE_SIZE_KIB + 64 * 1024))
-
-if [[ "${INSTALL_FILESYSTEM}" == "${ROLLBACK_FILESYSTEM}" ]]; then
-    REQUIRED_SHARED_KIB=$((REQUIRED_INSTALL_KIB + REQUIRED_ROLLBACK_KIB))
-    ((AVAILABLE_INSTALL_KIB >= REQUIRED_SHARED_KIB)) || die \
-        "insufficient shared free space for release and rollback: need ${REQUIRED_SHARED_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
-else
+if [[ -z "${STATE_SIZE_KIB}" ]]; then
     ((AVAILABLE_INSTALL_KIB >= REQUIRED_INSTALL_KIB)) || die \
         "insufficient free space below ${DISK_PROBE_PATH}: need ${REQUIRED_INSTALL_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
-    ((AVAILABLE_ROLLBACK_KIB >= REQUIRED_ROLLBACK_KIB)) || die \
-        "insufficient rollback space at ${ROLLBACK_PROBE_PATH}: need ${REQUIRED_ROLLBACK_KIB} KiB, found ${AVAILABLE_ROLLBACK_KIB} KiB"
+    ROLLBACK_PLAN="${AVAILABLE_ROLLBACK_KIB} KiB at ${ROLLBACK_PROBE_PATH}; required capacity unverified"
+else
+    [[ "${STATE_SIZE_KIB}" =~ ^[0-9]+$ ]] || die \
+        "could not measure state rollback size at ${STATE_DIR}"
+    REQUIRED_ROLLBACK_KIB=$((STATE_SIZE_KIB + 64 * 1024))
+    if [[ "${INSTALL_FILESYSTEM}" == "${ROLLBACK_FILESYSTEM}" ]]; then
+        REQUIRED_SHARED_KIB=$((REQUIRED_INSTALL_KIB + REQUIRED_ROLLBACK_KIB))
+        ((AVAILABLE_INSTALL_KIB >= REQUIRED_SHARED_KIB)) || die \
+            "insufficient shared free space for release and rollback: need ${REQUIRED_SHARED_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
+    else
+        ((AVAILABLE_INSTALL_KIB >= REQUIRED_INSTALL_KIB)) || die \
+            "insufficient free space below ${DISK_PROBE_PATH}: need ${REQUIRED_INSTALL_KIB} KiB, found ${AVAILABLE_INSTALL_KIB} KiB"
+        ((AVAILABLE_ROLLBACK_KIB >= REQUIRED_ROLLBACK_KIB)) || die \
+            "insufficient rollback space at ${ROLLBACK_PROBE_PATH}: need ${REQUIRED_ROLLBACK_KIB} KiB, found ${AVAILABLE_ROLLBACK_KIB} KiB"
+    fi
+    ROLLBACK_PLAN="${AVAILABLE_ROLLBACK_KIB} KiB at ${ROLLBACK_PROBE_PATH}; ${REQUIRED_ROLLBACK_KIB} KiB reserved"
 fi
 
 if ((DRY_RUN)); then
@@ -663,7 +680,7 @@ Jacobian deployment plan
   retention:   ${RETAIN_RELEASES} completed releases including active
   smoke:       $(((SKIP_SMOKE)) && printf 'skipped' || printf 'required')
   free space:  ${AVAILABLE_INSTALL_KIB} KiB at ${DISK_PROBE_PATH} for release
-  rollback:    ${AVAILABLE_ROLLBACK_KIB} KiB at ${ROLLBACK_PROBE_PATH}; ${REQUIRED_ROLLBACK_KIB} KiB reserved
+  rollback:    ${ROLLBACK_PLAN}
   tools:       uv=${UV_BIN}, systemctl=${SYSTEMCTL_BIN}$(((WITH_LEAN)) && printf ', elan=%s' "${ELAN_BIN}")$([[ "${MODE}" != "local" ]] && printf ', caddy=%s' "${CADDY_BIN}")
 EOF
     exit 0
@@ -788,7 +805,29 @@ if ((RELEASE_WAS_BUILT)); then
     RELEASE_BUILD_DIR=""
 fi
 
-log "checking configured tenant state compatibility"
+if [[ -e "${CURRENT_LINK}" && ! -L "${CURRENT_LINK}" ]]; then
+    die "${CURRENT_LINK} exists and is not a symlink"
+fi
+ROLLBACK_ROOT="$(mktemp -d)"
+PREVIOUS_RELEASE="$(readlink "${CURRENT_LINK}" 2>/dev/null || true)"
+snapshot_file token "${TOKEN_DESTINATION}"
+snapshot_file mcp-service "${SYSTEMD_ROOT}/jacobian-mcp.service"
+snapshot_file anonymous "${SYSTEMD_ROOT}/jacobian-mcp.service.d/anonymous.conf"
+snapshot_file caddy-config "${CADDY_CONFIG_ROOT}/Caddyfile"
+snapshot_file caddy-service "${SYSTEMD_ROOT}/jacobian-caddy.service"
+snapshot_file funnel-service "${SYSTEMD_ROOT}/jacobian-funnel.service"
+snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+    jacobian-mcp.service
+snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+    jacobian-caddy.service
+snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
+    jacobian-funnel.service
+ROLLBACK_ARMED=1
+if [[ -f "${ROLLBACK_ROOT}/jacobian-mcp.service.active" ]]; then
+    "${SYSTEMCTL_BIN}" stop jacobian-mcp.service
+fi
+
+log "checking configured tenant state compatibility with writers stopped"
 STATE_PREFLIGHT_ARGS=()
 if ((ALLOW_ANONYMOUS)); then
     STATE_PREFLIGHT_ARGS=(
@@ -817,27 +856,6 @@ fi
     "${STATE_PREFLIGHT_ARGS[@]}" \
     || die "configured tenant state is incompatible with revision ${REVISION}"
 
-if [[ -e "${CURRENT_LINK}" && ! -L "${CURRENT_LINK}" ]]; then
-    die "${CURRENT_LINK} exists and is not a symlink"
-fi
-ROLLBACK_ROOT="$(mktemp -d)"
-PREVIOUS_RELEASE="$(readlink "${CURRENT_LINK}" 2>/dev/null || true)"
-snapshot_file token "${TOKEN_DESTINATION}"
-snapshot_file mcp-service "${SYSTEMD_ROOT}/jacobian-mcp.service"
-snapshot_file anonymous "${SYSTEMD_ROOT}/jacobian-mcp.service.d/anonymous.conf"
-snapshot_file caddy-config "${CADDY_CONFIG_ROOT}/Caddyfile"
-snapshot_file caddy-service "${SYSTEMD_ROOT}/jacobian-caddy.service"
-snapshot_file funnel-service "${SYSTEMD_ROOT}/jacobian-funnel.service"
-snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
-    jacobian-mcp.service
-snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
-    jacobian-caddy.service
-snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
-    jacobian-funnel.service
-ROLLBACK_ARMED=1
-if [[ -f "${ROLLBACK_ROOT}/jacobian-mcp.service.active" ]]; then
-    "${SYSTEMCTL_BIN}" stop jacobian-mcp.service
-fi
 snapshot_file state "${STATE_DIR}"
 
 install -d -m 0755 "$(dirname -- "${CURRENT_LINK}")"

@@ -372,15 +372,18 @@ def test_release_runtime_is_checked_before_current_symlink_is_changed() -> None:
     assert '"${RUNUSER_BIN}" --user jacobian -- "${entrypoint}" --version' in source
 
 
-def test_candidate_state_is_checked_before_rollback_or_activation_is_armed() -> None:
+def test_candidate_state_is_checked_with_writers_stopped_and_rollback_armed() -> None:
     source = INSTALLER.read_text(encoding="utf-8")
 
     state_preflight = source.index('"${RELEASE_DIR}/deploy/preflight_state.py"')
     rollback_snapshot = source.index('ROLLBACK_ROOT="$(mktemp -d)"')
     rollback_armed = source.index("ROLLBACK_ARMED=1")
+    writer_stop = source.index('"${SYSTEMCTL_BIN}" stop jacobian-mcp.service')
+    state_snapshot = source.index('snapshot_file state "${STATE_DIR}"')
     current_link = source.index('ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"')
 
-    assert state_preflight < rollback_snapshot < rollback_armed < current_link
+    assert rollback_snapshot < rollback_armed < writer_stop
+    assert writer_stop < state_preflight < state_snapshot < current_link
     assert "--run-as-user jacobian" in source
 
 
@@ -418,12 +421,24 @@ def test_disk_preflight_reserves_state_snapshot_space_before_dry_run() -> None:
         source.index('INSTALL_DISK_INFO="$(') : source.index("if ((DRY_RUN)); then")
     ]
 
-    assert 'STATE_SIZE_KIB="$(du -sk -- "${STATE_DIR}"' in disk_block
+    assert 'du -sk -- "${STATE_DIR}"' in disk_block
     assert "REQUIRED_ROLLBACK_KIB=$((STATE_SIZE_KIB + 64 * 1024))" in disk_block
     assert "REQUIRED_SHARED_KIB=$((REQUIRED_INSTALL_KIB + REQUIRED_ROLLBACK_KIB))" in (
         disk_block
     )
     assert 'AVAILABLE_ROLLBACK_KIB="${ROLLBACK_DISK_INFO##* }"' in disk_block
+
+
+def test_non_root_dry_run_marks_protected_state_capacity_unverified() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+    disk_block = source[
+        source.index("STATE_SIZE_KIB=0") : source.index("if ((DRY_RUN)); then")
+    ]
+
+    assert "if ((DRY_RUN && EUID != 0)); then" in disk_block
+    assert "rollback capacity is unverified" in disk_block
+    assert "rerun the dry-run with sudo before deployment" in disk_block
+    assert "required capacity unverified" in disk_block
 
 
 def test_anonymous_deployment_snapshots_the_anonymous_state_root() -> None:

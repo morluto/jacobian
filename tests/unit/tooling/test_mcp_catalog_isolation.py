@@ -5,7 +5,8 @@ from typing import Any, cast
 
 from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
-from jacobian.adapters.mcp.tools import _OperationSearchRequest, math_find
+from jacobian.adapters.mcp.tools import math_find
+from jacobian.contracts.operation_find import OperationSearchRequest
 from jacobian.contracts.operations import OperationDiscoveryResult
 
 
@@ -31,7 +32,7 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
     result = math_find(
-        _OperationSearchRequest(op="search", query="gcd"),
+        OperationSearchRequest(op="search", query="gcd"),
         ctx=cast(Any, context),
     )
 

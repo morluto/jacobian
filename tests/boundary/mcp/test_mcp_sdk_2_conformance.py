@@ -56,35 +56,35 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert set(find.input_schema["properties"]) == {"request"}
             assert find.input_schema["properties"]["request"]["discriminator"] == {
                 "mapping": {
-                    "inspect": "#/$defs/_OperationInspectRequest",
-                    "search": "#/$defs/_OperationSearchRequest",
+                    "inspect": "#/$defs/OperationInspectRequest",
+                    "search": "#/$defs/OperationSearchRequest",
                 },
                 "propertyName": "op",
             }
             assert find.output_schema["type"] == "object"
             assert find.output_schema["discriminator"] == {
                 "mapping": {
-                    "operation": "#/$defs/_OperationInspectionResult",
-                    "discovery": "#/$defs/_OperationDiscoveryResult",
-                    "error": "#/$defs/_OperationDiscoveryError",
+                    "operation": "#/$defs/OperationInspectionResult",
+                    "discovery": "#/$defs/OperationSearchResult",
+                    "error": "#/$defs/OperationDiscoveryError",
                 },
                 "propertyName": "kind",
             }
             assert len(find.output_schema["oneOf"]) == 3
             assert set(
-                find.output_schema["$defs"]["_OperationDiscoveryResult"]["required"]
+                find.output_schema["$defs"]["OperationSearchResult"]["required"]
             ) >= {"kind", "matches", "total_matches", "truncated"}
             assert set(
-                find.output_schema["$defs"]["_OperationInspectionResult"]["required"]
+                find.output_schema["$defs"]["OperationInspectionResult"]["required"]
             ) >= {"kind", "operation"}
             assert (
-                find.output_schema["$defs"]["_OperationDiscoveryOperationCard"][
+                find.output_schema["$defs"]["OperationDiscoveryCard"][
                     "additionalProperties"
                 ]
                 is False
             )
             assert (
-                find.output_schema["$defs"]["_OperationDiscoveryErrorDetail"][
+                find.output_schema["$defs"]["OperationDiscoveryErrorDetail"][
                     "additionalProperties"
                 ]
                 is False

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context
 from mcp_types import CallToolResult, ResourceLink, TextContent
-from pydantic import BaseModel, ConfigDict, Field, RootModel, StrictInt
+from pydantic import BaseModel, ConfigDict
 
 from jacobian.adapters.mcp.context import AppState, _catalog, _runtime
 from jacobian.adapters.mcp.projections import (
@@ -16,16 +16,17 @@ from jacobian.adapters.mcp.projections import (
 from jacobian.adapters.mcp.tooling import (
     _invoke_operation_attempt,
 )
-from jacobian.contracts.common import ArtifactUri, ValueUri
+from jacobian.contracts.common import ValueUri
+from jacobian.contracts.operation_find import (
+    OperationFindRequest,
+    OperationFindResponse,
+    OperationInspectionResult,
+    OperationSearchRequest,
+)
 from jacobian.contracts.operations import (
-    OperationDescriptor,
-    OperationDiscoveryMatch,
     OperationDiscoveryRequest,
     OperationId,
-    OperationInputKind,
     OperationResult,
-    OperationValuePort,
-    ProviderAvailability,
 )
 from jacobian.runtime.model import JacobianRuntime
 
@@ -38,120 +39,6 @@ class _MCPOutputModel(BaseModel):
 
 class _ValueReferenceArgument(_MCPOutputModel):
     value_ref: ValueUri
-
-
-class _OperationDiscoveryOperationCard(OperationDiscoveryMatch):
-    accepted_input_kinds: tuple[OperationInputKind, ...]
-    accepted_artifact_types: tuple[ArtifactUri, ...]
-    produced_artifact_types: tuple[ArtifactUri, ...]
-    input_ports: tuple[OperationValuePort, ...]
-    output_ports: tuple[OperationValuePort, ...]
-    provider_availability: ProviderAvailability | Literal["UNKNOWN"]
-
-
-class _OperationSearchRequest(_MCPOutputModel):
-    op: Literal["search"]
-    query: Annotated[str, Field(min_length=1, max_length=512)]
-    domain: Annotated[
-        str | None,
-        Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),
-    ] = None
-    input_kind: OperationInputKind | None = None
-    artifact_type: Annotated[
-        str | None,
-        Field(pattern=r"^artifact://sha256/[0-9a-f]{64}$"),
-    ] = None
-    limit: Annotated[StrictInt, Field(ge=1, le=20)] = 5
-    cursor: Annotated[
-        str | None,
-        Field(
-            max_length=128,
-            pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
-        ),
-    ] = None
-
-
-class _OperationInspectRequest(_MCPOutputModel):
-    op: Literal["inspect"]
-    operation_id: OperationId
-
-
-OperationFindRequest = Annotated[
-    _OperationSearchRequest | _OperationInspectRequest,
-    Field(discriminator="op"),
-]
-
-
-class _OperationFindCallArguments(_MCPOutputModel):
-    request: _OperationSearchRequest
-
-
-class _OperationSearchRecoveryPath(_MCPOutputModel):
-    action: Literal["search"]
-    tool: Literal["math.find"] = "math.find"
-    arguments: _OperationFindCallArguments
-
-
-class _OperationCatalogPointer(_MCPOutputModel):
-    action: Literal["inspect_catalog"]
-    resource_uri: Literal["operation://catalog"] = "operation://catalog"
-
-
-OperationErrorRecoveryPath = _OperationSearchRecoveryPath | _OperationCatalogPointer
-
-
-class _OperationDiscoveryErrorDetail(_MCPOutputModel):
-    code: Literal["INVALID_CURSOR", "UNKNOWN_OPERATION"]
-    stage: Literal["operation_discovery", "operation_resolution"]
-    message: str
-    hint: str
-    nearby_operation_ids: tuple[OperationId, ...] = ()
-    available_recovery_paths: tuple[OperationErrorRecoveryPath, ...] = ()
-
-
-class _OperationDiscoveryResult(_MCPOutputModel):
-    kind: Literal["discovery"]
-    discovery_version: Literal["1"]
-    query: str
-    domain: str | None = None
-    input_kind: OperationInputKind | None = None
-    artifact_type: str | None = None
-    matches: tuple[_OperationDiscoveryOperationCard, ...]
-    total_matches: StrictInt
-    truncated: bool
-    next_cursor: str | None = None
-    catalog_resource: Literal["operation://catalog"]
-    response_byte_limit: StrictInt
-    truncation_reason: str | None = None
-    match_metadata_truncated: bool
-
-
-class _OperationInspectionResult(_MCPOutputModel):
-    kind: Literal["operation"]
-    operation: OperationDescriptor
-
-
-class _OperationDiscoveryError(_MCPOutputModel):
-    kind: Literal["error"]
-    error: _OperationDiscoveryErrorDetail
-
-
-class OperationFindResponse(
-    RootModel[
-        Annotated[
-            _OperationDiscoveryResult
-            | _OperationInspectionResult
-            | _OperationDiscoveryError,
-            Field(discriminator="kind"),
-        ]
-    ]
-):
-    """Closed, discriminated structured output for math.find."""
-
-    # MCP tool output schemas describe structured content objects. Pydantic's
-    # RootModel preserves the discriminated union but omits the common object
-    # root from JSON Schema, which stricter MCP clients reject during tools/list.
-    model_config = ConfigDict(json_schema_extra={"type": "object"})
 
 
 OperationRunToolResult = Annotated[CallToolResult, OperationResult]
@@ -267,7 +154,7 @@ def math_find(
     ctx: Context[AppState, Any],
 ) -> OperationFindResponse:
     active_catalog = _catalog(ctx)
-    if isinstance(request, _OperationSearchRequest):
+    if isinstance(request, OperationSearchRequest):
         discovery_response = _operation_discovery_response(
             active_catalog,
             query=request.query,
@@ -297,11 +184,9 @@ def math_find(
             }
         }
         return _find_result(error_response)
-    response: dict[str, Any] = {
-        "kind": "operation",
-        "operation": descriptor.model_dump(mode="json"),
-    }
-    return _find_result(response)
+    return OperationFindResponse(
+        OperationInspectionResult(kind="operation", operation=descriptor)
+    )
 
 
 async def math_run(

@@ -352,6 +352,15 @@ _EXCLUDED_DIRS = frozenset(
     }
 )
 
+# Repository-local generated output excluded from scans. These are ignored by
+# Git and may contain evaluation vocabulary that is not part of the product.
+_EXCLUDED_PATHS = frozenset(
+    {
+        PurePosixPath("benchmarks/results"),
+        PurePosixPath("tmp"),
+    }
+)
+
 # Files excluded from the unsupported-surface text scan.
 # CHANGELOG.md is genuinely historical record.
 # The checker and its test file construct tokens from fragments but still
@@ -453,8 +462,11 @@ class ArchitecturePolicyError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 
-def _is_excluded(path: Path) -> bool:
-    return any(part in _EXCLUDED_DIRS for part in path.parts)
+def _is_excluded(root: Path, path: Path) -> bool:
+    relative = PurePosixPath(path.relative_to(root).as_posix())
+    return any(part in _EXCLUDED_DIRS for part in relative.parts) or any(
+        relative == prefix or prefix in relative.parents for prefix in _EXCLUDED_PATHS
+    )
 
 
 def _relative(root: Path, path: Path) -> PurePosixPath:
@@ -1735,7 +1747,7 @@ def _python_files(root: Path) -> list[Path]:
     """Return all non-excluded Python files under root."""
     files: list[Path] = []
     for path in sorted(root.rglob("*.py")):
-        if _is_excluded(path):
+        if _is_excluded(root, path):
             continue
         if not path.is_file():
             continue
@@ -1747,7 +1759,7 @@ def _text_files(root: Path) -> list[Path]:
     """Return non-Python text files for unsupported-surface scanning."""
     files: list[Path] = []
     for path in sorted(root.rglob("*")):
-        if _is_excluded(path):
+        if _is_excluded(root, path):
             continue
         if not path.is_file():
             continue

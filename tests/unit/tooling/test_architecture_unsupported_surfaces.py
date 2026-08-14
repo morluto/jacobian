@@ -122,6 +122,17 @@ def test_changelog_is_excluded_from_surface_scan(tmp_path: Path) -> None:
     assert all(v.code != "unsupported-surface" for v in report.violations)
 
 
+def test_generated_results_and_local_evidence_are_excluded(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "benchmarks/results/run/config.json",
+        f'{{"tool_name_profile": "{_CAP}"}}\n',
+    )
+    _write(tmp_path, "tmp/rootcause-analysis/report.md", f"# {_CAP}\n")
+    report = check_architecture(tmp_path)
+    assert all(v.code != "unsupported-surface" for v in report.violations)
+
+
 def test_removed_capability_vocabulary_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,

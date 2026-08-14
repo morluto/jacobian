@@ -50,9 +50,9 @@ def test_managed_server_advertises_immutable_deployment_identity(
 
 
 def test_mcp_exposes_only_math_tools_with_read_only_resources(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
-    server = create_server(tmp_path)
+    server = create_server(mcp_state)
     assert server.instructions is not None
     assert "local verification record URI" in server.instructions
 

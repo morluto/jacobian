@@ -11,7 +11,7 @@ from jacobian.operation_visibility import OperationVisibilityPolicy
 
 
 def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
     async def scenario() -> None:
         from mcp import Client
@@ -19,7 +19,7 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
         policy = OperationVisibilityPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
         async with Client(
             create_server(
-                tmp_path,
+                mcp_state,
                 operation_policy=policy,
             ),
             raise_exceptions=True,
@@ -37,13 +37,13 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
 
 
 def test_mcp_compact_operation_index_is_searchable_and_paginated(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
     async def scenario() -> None:
         from mcp import Client
 
         async with Client(
-            create_server(tmp_path),
+            create_server(mcp_state),
             raise_exceptions=True,
         ) as client:
             resource_result = await client.read_resource("operation://catalog")
@@ -195,7 +195,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
 
 
 def test_mcp_text_projection_preserves_produced_artifact_types(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
     """The agent-facing text projection must include produced_artifact_types."""
 
@@ -203,7 +203,7 @@ def test_mcp_text_projection_preserves_produced_artifact_types(
         from mcp import Client
 
         async with Client(
-            create_server(tmp_path),
+            create_server(mcp_state),
             raise_exceptions=True,
         ) as client:
             listed = await client.call_tool(

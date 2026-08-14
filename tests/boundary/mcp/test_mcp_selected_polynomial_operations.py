@@ -10,7 +10,7 @@ from jacobian.registry import CheckerRegistry
 
 
 def test_polynomial_positivity_loads_only_the_selected_path(
-    tmp_path: Path,
+    mcp_state: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def reject_installation(*_args: object, **_kwargs: object) -> None:
@@ -40,7 +40,7 @@ def test_polynomial_positivity_loads_only_the_selected_path(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        async with Client(create_server(mcp_state), raise_exceptions=True) as client:
             decided = await client.call_tool(
                 "math.run",
                 {

@@ -24,7 +24,7 @@ def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
 
 
 def test_mcp_v2_static_validation_context_errors_and_structured_resources(
-    tmp_path: Path,
+    mcp_state: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delattr(server_module, "Context", raising=False)
@@ -39,7 +39,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
         from mcp.shared.exceptions import MCPError
 
         server = create_server(
-            tmp_path,
+            mcp_state,
         )
         assert not hasattr(server_module, "Context")
         async with Client(server, raise_exceptions=True) as client:

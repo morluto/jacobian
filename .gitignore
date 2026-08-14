@@ -27,10 +27,12 @@ coverage.xml
 .hypothesis/
 .jacobian/
 .diagnostics/
+.import_linter_cache/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 .venv/
+node_modules/
 __pycache__/
 *.py[cod]
 build/

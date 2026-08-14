@@ -30,20 +30,20 @@ from tests.support.selected_runtime import create_selected_runtime
 
 
 def test_authenticated_streamable_http_rejects_before_runtime_construction(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
     def fail_if_called(*_args: object, **_kwargs: object) -> JacobianRuntime:
         raise AssertionError("auth rejection must not construct a tenant runtime")
 
     with _RunningRemoteServer(
-        tmp_path,
+        mcp_state.parent,
         runtime_factory=fail_if_called,
     ) as port:
         asyncio.run(_remote_auth_rejections(port))
 
 
 def test_authenticated_streamable_http_isolates_tenant_data(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
     def matrix_runtime(
         root: str | Path,
@@ -55,11 +55,11 @@ def test_authenticated_streamable_http_isolates_tenant_data(
         )
 
     with _RunningRemoteServer(
-        tmp_path,
+        mcp_state.parent,
         runtime_factory=matrix_runtime,
     ) as port:
         asyncio.run(_remote_tenant_scenario(port))
-        tenant_roots = sorted((tmp_path / "state" / "tenants").iterdir())
+        tenant_roots = sorted((mcp_state / "tenants").iterdir())
         assert {path.name for path in tenant_roots} == {
             hashlib.sha256(b"alpha").hexdigest(),
             hashlib.sha256(b"beta").hexdigest(),
@@ -68,7 +68,7 @@ def test_authenticated_streamable_http_isolates_tenant_data(
 
 
 def test_default_authority_remote_mcp_matches_deployment_identity(
-    tmp_path: Path,
+    mcp_state: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     revision = "a" * 40
@@ -79,7 +79,7 @@ def test_default_authority_remote_mcp_matches_deployment_identity(
             package_version=version("jacobian"),
         ),
     )
-    with _RunningRemoteServer(tmp_path) as port:
+    with _RunningRemoteServer(mcp_state.parent) as port:
         monkeypatch.setenv("JACOBIAN_MCP_BEARER_TOKEN", "a" * 32)
         report = asyncio.run(
             inspect_remote_deployment(

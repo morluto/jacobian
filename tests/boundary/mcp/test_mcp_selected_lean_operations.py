@@ -10,7 +10,7 @@ from jacobian.registry import CheckerRegistry
 
 
 def test_lean_operations_do_not_assemble_the_portfolio(
-    tmp_path: Path,
+    mcp_state: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def reject_installation(*_args: object, **_kwargs: object) -> None:
@@ -21,7 +21,7 @@ def test_lean_operations_do_not_assemble_the_portfolio(
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        async with Client(create_server(mcp_state), raise_exceptions=True) as client:
             for operation_id in (
                 "lean.check",
                 "lean.declaration.dependencies",

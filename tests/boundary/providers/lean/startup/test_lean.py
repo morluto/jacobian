@@ -283,21 +283,6 @@ def test_core_lean_check_runs_through_operation_mcp_surface(tmp_path: Path) -> N
             create_server(tmp_path),
             raise_exceptions=True,
         ) as client:
-            described = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": "lean.check",
-                    }
-                },
-            )
-            assert isinstance(described.structured_content, dict)
-            descriptor = described.structured_content
-            assert descriptor["operation"]["examples"][0]["name"] == (
-                "finite-witness-let"
-            )
-
             response = await client.call_tool(
                 "math.run",
                 {

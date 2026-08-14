@@ -10,12 +10,12 @@ from jacobian.adapters.mcp.server import create_server
 
 @pytest.mark.requires_provider("flint")
 def test_mcp_keeps_two_tools_while_a_checker_consumes_a_typed_candidate(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        async with Client(create_server(mcp_state), raise_exceptions=True) as client:
             listed = await client.list_tools()
             assert {tool.name for tool in listed.tools} == {"math.find", "math.run"}
 

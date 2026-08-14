@@ -104,10 +104,12 @@ def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None
     assert internal["error"]["code"] == "OPERATION_FAILED"
 
 
-def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) -> None:
+def test_mcp_protocol_and_authentication_errors_remain_distinct(
+    mcp_state: Path,
+) -> None:
     from mcp.shared.exceptions import MCPError
 
-    server = create_server(tmp_path)
+    server = create_server(mcp_state)
 
     @server.tool(name="fixture.protocol-error")
     async def protocol_error() -> None:
@@ -121,7 +123,7 @@ def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) 
 
         async with Client(
             create_remote_server(
-                tmp_path,
+                mcp_state,
                 allow_anonymous=False,
             ),
             raise_exceptions=False,

@@ -80,6 +80,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import os
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -350,10 +351,18 @@ _EXCLUDED_DIRS = frozenset(
     {
         "wt-438",
         ".git",
+        ".hypothesis",
+        ".import_linter_cache",
+        ".jacobian",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
         "__pycache__",
         ".venv",
+        "build",
         "dist",
         ".diagnostics",
+        "htmlcov",
         "node_modules",
         # Lean toolchain packages (third-party Mathlib build artifacts).
         ".lake",
@@ -472,6 +481,10 @@ class ArchitecturePolicyError(RuntimeError):
 
 def _is_excluded(root: Path, path: Path) -> bool:
     relative = PurePosixPath(path.relative_to(root).as_posix())
+    return _relative_is_excluded(relative)
+
+
+def _relative_is_excluded(relative: PurePosixPath) -> bool:
     return any(part in _EXCLUDED_DIRS for part in relative.parts) or any(
         relative == prefix or prefix in relative.parents for prefix in _EXCLUDED_PATHS
     )
@@ -488,6 +501,19 @@ def _is_under(path: PurePosixPath, prefix: PurePosixPath) -> bool:
 # ---------------------------------------------------------------------------
 # AST helpers
 # ---------------------------------------------------------------------------
+
+
+_AST_WALK_CACHE_ATTRIBUTE = "_jacobian_architecture_walk"
+
+
+def _walk_nodes(node: ast.AST) -> tuple[ast.AST, ...]:
+    """Materialize one AST walk once for the lifetime of its root node."""
+
+    cached = getattr(node, _AST_WALK_CACHE_ATTRIBUTE, None)
+    if cached is None:
+        cached = tuple(ast.walk(node))
+        setattr(node, _AST_WALK_CACHE_ATTRIBUTE, cached)
+    return cached
 
 
 def _imported_module(node: ast.Import | ast.ImportFrom) -> str:
@@ -529,7 +555,7 @@ def _internal_operation_request_violations(
             "OperationRequest",
             node.lineno,
         )
-        for node in ast.walk(tree)
+        for node in _walk_nodes(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id == "OperationRequest"
@@ -595,7 +621,7 @@ def _operation_result_bindings(
 ) -> tuple[set[str], set[str]]:
     constructor_names: set[str] = set()
     module_names: set[str] = set()
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if isinstance(node, ast.ImportFrom):
             constructors, modules = _operation_result_from_import_from(relative, node)
         elif isinstance(node, ast.Import):
@@ -635,7 +661,7 @@ def _operation_result_projection_violations(
             "OperationResult envelope",
             node.lineno,
         )
-        for node in ast.walk(tree)
+        for node in _walk_nodes(tree)
         if isinstance(node, ast.Call) and is_result_constructor(node)
     )
 
@@ -654,7 +680,7 @@ def _legacy_adapter_mode_violations(
             "modes are not supported",
             node.lineno,
         )
-        for node in ast.walk(tree)
+        for node in _walk_nodes(tree)
         if (isinstance(node, ast.Name) and node.id in _LEGACY_ADAPTER_MODE_NAMES)
         or (
             isinstance(node, ast.ImportFrom)
@@ -674,7 +700,7 @@ def _subprocess_violations(
     if relative in _SUBPROCESS_ALLOWED_EXACT:
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             module = _imported_module(node)
             names = _imported_names(node)
@@ -788,7 +814,7 @@ def _run_bounded_process_violations(
     if relative in _RUN_BOUNDED_PROCESS_ALLOWED:
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         violations.extend(_bounded_process_import_violations(relative, node))
         violations.extend(_bounded_process_call_violations(relative, node))
     return tuple(violations)
@@ -805,7 +831,7 @@ def _shutil_which_violations(
     if relative in _SHUTIL_WHICH_ALLOWED:
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if isinstance(node, ast.Attribute) and (
             isinstance(node.value, ast.Name)
             and node.value.id == "shutil"
@@ -896,7 +922,7 @@ def _environ_spread_violations(
     if not any(_is_under(relative, root) for root in _ENVIRON_SPREAD_ROOTS):
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if _is_dict_os_environ_call(node):
             violations.append(
                 Violation(
@@ -958,7 +984,7 @@ def _unsafe_canonical_conversion_violations(
     ):
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
@@ -1123,7 +1149,7 @@ def _contract_dependency_leaf_violations(
     if not _is_under(relative, PurePosixPath("src/jacobian/contracts")):
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         for reference in _import_references(relative, node):
@@ -1146,7 +1172,7 @@ def _native_math_boundary_violations(
     if not _is_under(relative, PurePosixPath("src/jacobian/math")):
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         for reference in _import_references(relative, node):
@@ -1216,7 +1242,7 @@ def _inline_executor_boundary_violations(
     if relative != _INLINE_EXECUTOR_PATH:
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         for reference in _import_references(relative, node):
@@ -1239,7 +1265,7 @@ def _private_math_backend_violations(
     if not _is_under(relative, PurePosixPath("src/jacobian/domains")):
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         for reference in _import_references(relative, node):
@@ -1262,7 +1288,7 @@ def _checker_producer_isolation_violations(
     if not _is_under(relative, PurePosixPath("src/jacobian_checkers")):
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         for reference in _import_references(relative, node):
@@ -1284,7 +1310,7 @@ def _checker_producer_isolation_violations(
 def _contract_model_occurrences(node: ast.AST) -> int:
     return sum(
         isinstance(descendant, ast.Name) and descendant.id == "ContractModel"
-        for descendant in ast.walk(node)
+        for descendant in _walk_nodes(node)
     )
 
 
@@ -1292,7 +1318,7 @@ def _erased_contract_operation_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if not (
             isinstance(node, ast.Subscript)
             and (
@@ -1320,7 +1346,7 @@ def _output_only_contract_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         name = (
             node.id
             if isinstance(node, ast.Name)
@@ -1345,7 +1371,7 @@ def _materialization_reason_violations(
 ) -> tuple[Violation, ...]:
     """Require every durable operation declaration to name its resource reason."""
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if not isinstance(node, ast.Call):
             continue
         name = (
@@ -1418,7 +1444,7 @@ def _unsupported_surface_ast_violations(
     if relative in _UNSUPPORTED_SURFACE_AST_EXCLUDED:
         return ()
     violations: list[Violation] = []
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         removed_name = _python_identifier(node)
         if removed_name is not None and _CAPABILITY in removed_name.lower():
             violations.append(
@@ -1484,7 +1510,7 @@ def _contains_rational_component(
 ) -> bool:
     return any(
         isinstance(descendant, ast.Attribute) and descendant.attr in attributes
-        for descendant in ast.walk(node)
+        for descendant in _walk_nodes(node)
     )
 
 
@@ -1562,7 +1588,7 @@ def _unsafe_canonical_rational_output_violations(
         return ()
 
     unsafe_values: dict[int, ast.AST] = {}
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         direct_output = _direct_output_value(node)
         if direct_output is not None:
             for value in _unsafe_rational_render_nodes(
@@ -1625,7 +1651,7 @@ _EXPENSIVE_RUNTIME_FIXTURES = frozenset(
 
 
 def _calls_catalog_build_runtime(node: ast.AST) -> bool:
-    for child in ast.walk(node):
+    for child in _walk_nodes(node):
         if not isinstance(child, ast.Call):
             continue
         func = child.func
@@ -1645,7 +1671,7 @@ def _discarded_expensive_runtime_fixtures(node: ast.FunctionDef) -> frozenset[st
     if not requested:
         return frozenset()
     discarded: set[str] = set()
-    for child in ast.walk(node):
+    for child in _walk_nodes(node):
         if not isinstance(child, ast.Assign) or len(child.targets) != 1:
             continue
         target = child.targets[0]
@@ -1683,7 +1709,7 @@ _CLI_COMPLETE_PORTFOLIO_ALLOWLIST = frozenset(
 
 def _imports_qualified_module(tree: ast.AST, module: str) -> bool:
     parent, _, name = module.rpartition(".")
-    for node in ast.walk(tree):
+    for node in _walk_nodes(tree):
         if isinstance(node, ast.Import):
             if any(alias.name == module for alias in node.names):
                 return True
@@ -1714,7 +1740,7 @@ def _create_cli_app_call_has_runtime_opener(node: ast.Call) -> bool:
 
 
 def _calls_unscoped_cli_runtime(node: ast.AST) -> bool:
-    for child in ast.walk(node):
+    for child in _walk_nodes(node):
         if not isinstance(child, ast.Call):
             continue
         func = child.func
@@ -1876,30 +1902,24 @@ def _test_ownership_violations(
 # ---------------------------------------------------------------------------
 
 
-def _python_files(root: Path) -> list[Path]:
-    """Return all non-excluded Python files under root."""
+def _repository_files(root: Path) -> list[Path]:
+    """Return files under root without descending into generated directories."""
     files: list[Path] = []
-    for path in sorted(root.rglob("*.py")):
-        if _is_excluded(root, path):
-            continue
-        if not path.is_file():
-            continue
-        files.append(path)
-    return files
-
-
-def _text_files(root: Path) -> list[Path]:
-    """Return non-Python text files for unsupported-surface scanning."""
-    files: list[Path] = []
-    for path in sorted(root.rglob("*")):
-        if _is_excluded(root, path):
-            continue
-        if not path.is_file():
-            continue
-        ext = path.suffix
-        if ext not in _TEXT_EXTENSIONS:
-            continue
-        files.append(path)
+    for current, directories, filenames in os.walk(root):
+        current_path = Path(current)
+        current_relative = current_path.relative_to(root)
+        directories[:] = [
+            directory
+            for directory in sorted(directories)
+            if not _relative_is_excluded(
+                PurePosixPath((current_relative / directory).as_posix())
+            )
+        ]
+        files.extend(
+            current_path / filename
+            for filename in sorted(filenames)
+            if not _is_excluded(root, current_path / filename)
+        )
     return files
 
 
@@ -1946,8 +1966,11 @@ def check_architecture(root: Path | str = ROOT) -> ArchitectureReport:
     violations).
     """
     project_root = Path(root).resolve()
-    py_files = _python_files(project_root)
-    text_files = _text_files(project_root)
+    repository_files = _repository_files(project_root)
+    py_files = [path for path in repository_files if path.suffix == ".py"]
+    text_files = [
+        path for path in repository_files if path.suffix in _TEXT_EXTENSIONS
+    ]
 
     violations: list[Violation] = []
     for file_path in py_files:

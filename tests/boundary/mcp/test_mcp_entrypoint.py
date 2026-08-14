@@ -16,13 +16,13 @@ MCP_TOOL_NAMES = {
 
 
 def test_mcp_stdio_entrypoint_exposes_stable_math_tools(
-    tmp_path: Path,
+    mcp_state: Path,
 ) -> None:
     async def scenario() -> None:
         from mcp import Client, StdioServerParameters, stdio_client
 
         environment = dict(os.environ)
-        environment["JACOBIAN_STATE_DIR"] = str(tmp_path)
+        environment["JACOBIAN_STATE_DIR"] = str(mcp_state)
         parameters = StdioServerParameters(
             command=sys.executable,
             args=["-m", "jacobian.adapters.mcp.server"],

@@ -14,13 +14,25 @@ from pre_commit.parse_shebang import normalize_cmd
 ROOT = Path(__file__).parents[3]
 
 
-def test_pr_base_edits_trigger_ci() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    pull_request_trigger = workflow.split("  pull_request:", 1)[1].split(
-        "  merge_group:", 1
-    )[0]
+def _pull_request_trigger(workflow_path: str) -> str:
+    workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
+    return workflow.split("  pull_request:", 1)[1].split("  merge_group:", 1)[0]
 
-    assert "edited" in pull_request_trigger
+
+def test_pr_metadata_edits_do_not_restart_product_ci() -> None:
+    pull_request_trigger = _pull_request_trigger(".github/workflows/ci.yml")
+
+    assert "edited" not in pull_request_trigger
+    assert "labeled" not in pull_request_trigger
+    assert "unlabeled" not in pull_request_trigger
+
+
+def test_benchmark_labels_replan_without_generic_pr_edit_restarts() -> None:
+    pull_request_trigger = _pull_request_trigger(".github/workflows/benchmarks.yml")
+
+    assert "edited" not in pull_request_trigger
+    assert "labeled" in pull_request_trigger
+    assert "unlabeled" in pull_request_trigger
 
 
 def test_wheel_job_covers_supported_pythons_and_313_compatibility_smoke() -> None:
@@ -203,11 +215,24 @@ def test_focused_unit_lane_skips_validation_lock() -> None:
 
 def test_component_lane_uses_module_fixture_affinity() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    unit = makefile.split("test-unit:", 1)[1].split("test-component:", 1)[0]
     component = makefile.split("test-component:", 1)[1].split("test-domain:", 1)[0]
     domain = makefile.split("test-domain:", 1)[1].split("test-composition:", 1)[0]
 
+    assert "pytest -n 4 --dist worksteal" in unit
     assert "--dist loadscope" in component
     assert "--dist worksteal" in domain
+
+
+def test_mcp_catalog_fixture_is_explicit_and_xdist_shared() -> None:
+    conftest = (ROOT / "tests/boundary/mcp/conftest.py").read_text(encoding="utf-8")
+
+    assert "autouse=True" not in conftest
+    assert (
+        'template_target(tmp_path_factory, request, "compiled-mcp-state")' in conftest
+    )
+    assert "publish_template(target, build, lock=lock)" in conftest
+    assert 'copy_template(compiled_mcp_state, tmp_path / "state")' in conftest
 
 
 def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> None:

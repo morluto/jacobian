@@ -30,8 +30,8 @@ help: ## Show the primary developer workflow.
 help-all: ## Show every low-level and lifecycle developer command.
 	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-test-unit: ## Pure contracts and models (sequential, 10s).
-	$(UV_RUN) pytest --timeout=10 \
+test-unit: ## Pure contracts and models (4 workers, 10s).
+	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=10 \
 		$(if $(TESTS),$(TESTS),tests/unit) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 

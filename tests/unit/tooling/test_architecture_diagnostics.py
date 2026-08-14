@@ -37,6 +37,41 @@ def test_wt438_directory_is_excluded(tmp_path: Path) -> None:
     assert report.violations == ()
 
 
+@pytest.mark.parametrize(
+    "directory",
+    [
+        ".hypothesis",
+        ".import_linter_cache",
+        ".jacobian",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "build",
+        "dist",
+        "htmlcov",
+        "lean/.lake",
+        "node_modules",
+    ],
+)
+def test_generated_directory_is_pruned(tmp_path: Path, directory: str) -> None:
+    _write(
+        tmp_path,
+        f"{directory}/generated.py",
+        "import subprocess\n",
+    )
+    _write(
+        tmp_path,
+        f"{directory}/generated.json",
+        f'{{"operation_id": "{_K}.{_S}"}}\n',
+    )
+
+    report = check_architecture(tmp_path)
+
+    assert report.ok, report.render()
+    assert report.files_scanned == 0
+
+
 def test_clean_tree_passes(tmp_path: Path) -> None:
     _write(tmp_path, "src/jacobian/bounded_process.py", "import subprocess\n")
     _write(

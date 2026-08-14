@@ -43,7 +43,7 @@ def test_mcp_inline_results_do_not_emit_resource_links(
 
 
 def test_mcp_materialized_results_emit_readable_native_resource_links(
-    tmp_path: Path,
+    mcp_state: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
@@ -55,7 +55,7 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
         from mcp import Client
 
         async with Client(
-            create_server(tmp_path),
+            create_server(mcp_state),
             raise_exceptions=True,
         ) as client:
             result = await client.call_tool(

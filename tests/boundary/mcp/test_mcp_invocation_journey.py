@@ -1,6 +1,6 @@
 """Owned MCP smoke journey: live SDK find → run without complete-runtime fixtures.
 
-``create_server(tmp_path)`` installs a fresh server-owned runtime. Keep this
+``create_server(mcp_state)`` installs a fresh server-owned runtime. Keep this
 module small; do not grow ordinary projection or operation matrices here.
 """
 
@@ -18,11 +18,11 @@ MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
 
 
-def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
+def test_mcp_describes_and_invokes_operations(mcp_state: Path) -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(tmp_path), raise_exceptions=True) as client:
+        async with Client(create_server(mcp_state), raise_exceptions=True) as client:
             described = await client.call_tool(
                 "math.find",
                 {
@@ -141,7 +141,9 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
 
 
 @pytest.mark.requires_provider("flint")
-def test_mcp_composes_finite_field_values_by_opaque_reference(tmp_path: Path) -> None:
+def test_mcp_composes_finite_field_values_by_opaque_reference(
+    mcp_state: Path,
+) -> None:
     async def scenario() -> None:
         from mcp import Client
 
@@ -163,7 +165,7 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(tmp_path: Path) ->
         )
 
         async with Client(
-            create_server(tmp_path),
+            create_server(mcp_state),
             raise_exceptions=True,
         ) as client:
             inspected = await client.call_tool(

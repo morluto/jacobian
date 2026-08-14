@@ -1,29 +1,32 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
 
 from jacobian.operator_lifecycle import CheckerAuthorization, initialize_state
+from tests.support.runtime_templates import template_target
+from tests.support.state import copy_template, publish_template
 
 
 @pytest.fixture(scope="session")
-def compiled_mcp_state(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    root = tmp_path_factory.mktemp("compiled-mcp-state")
-    initialize_state(root, checker_authorization=CheckerAuthorization.BUNDLED)
-    return root
-
-
-@pytest.fixture(autouse=True)
-def current_mcp_state(
+def compiled_mcp_state(
+    tmp_path_factory: pytest.TempPathFactory,
     request: pytest.FixtureRequest,
-    compiled_mcp_state: Path,
-) -> None:
-    """MCP serving tests start from the explicit operator lifecycle boundary."""
+) -> Path:
+    target, lock = template_target(tmp_path_factory, request, "compiled-mcp-state")
 
-    if "tmp_path" not in request.fixturenames:
-        return
-    root = request.getfixturevalue("tmp_path")
-    shutil.copytree(compiled_mcp_state, root, dirs_exist_ok=True)
-    shutil.copytree(compiled_mcp_state, root / "state", dirs_exist_ok=True)
+    def build(staging: Path) -> None:
+        initialize_state(staging, checker_authorization=CheckerAuthorization.BUNDLED)
+
+    return publish_template(target, build, lock=lock)
+
+
+@pytest.fixture
+def mcp_state(
+    tmp_path: Path,
+    compiled_mcp_state: Path,
+) -> Path:
+    """Return a private catalog state for an MCP serving test."""
+
+    return copy_template(compiled_mcp_state, tmp_path / "state")

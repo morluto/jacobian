@@ -421,6 +421,20 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         ),
         request_type=LeanCheckRequest,
         result_type=LeanCheckOutput,
+        examples=(
+            OperationExample(
+                name="finite-witness-let",
+                description=(
+                    "Check a finite witness encoded as one let expression without "
+                    "adding declarations."
+                ),
+                input={
+                    "environment": "CORE",
+                    "statement": "let n : Nat := 2; n + n = 4",
+                    "proof": "rfl",
+                },
+            ),
+        ),
     ),
     FamilyIndexSpec(
         operation_id="lean.declaration.dependencies",

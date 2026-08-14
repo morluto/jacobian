@@ -31,15 +31,9 @@ from jacobian.adapters.mcp.lifecycle import (
 from jacobian.adapters.mcp.resources import register_resources
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_dispatcher import OperationDispatcher
-from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_service import OperationPolicy
-from jacobian.runtime import CheckerAuthorityMode
-from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import RuntimeOptions
+from jacobian.runtime.execution import create_execution_runtime
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.portfolio import PortfolioResources
-from jacobian.runtime.services import build_runtime_services
 
 
 def create_server(
@@ -94,30 +88,10 @@ class _LazyLocalRuntime:
 
     def _ensure_selected_runtime(self) -> JacobianRuntime:
         if self._selected_runtime is None:
-            core = bootstrap_services(
+            self._selected_runtime = create_execution_runtime(
                 self.root,
-                RuntimeOptions(
-                    checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
-                    operation_policy=self.operation_policy,
-                ),
-            )
-            services = build_runtime_services(core)
-            registry = OperationRegistry(
                 self.catalog,
-                core.binder,
-                services.verification,
-                core.checkers,
-                core.polynomial_expressions,
-                services.polytope,
-                core.sat,
-                core.smt,
-            )
-            core.operations = OperationDispatcher(self.catalog, registry)
-            self._selected_runtime = JacobianRuntime(
-                core,
-                services,
-                PortfolioResources(),
-                start_lean_warmup=lambda: None,
+                operation_policy=self.operation_policy,
             )
         return self._selected_runtime
 

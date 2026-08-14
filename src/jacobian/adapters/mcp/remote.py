@@ -31,16 +31,11 @@ from jacobian.adapters.mcp.lifecycle import (
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
-from jacobian.operation_dispatcher import OperationDispatcher
-from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_service import OperationPolicy
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
-from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import RuntimeOptions
+from jacobian.runtime.execution import create_execution_runtime
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.portfolio import PortfolioResources
-from jacobian.runtime.services import build_runtime_services
 from jacobian.storage.repository import ArtifactRepository
 
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -555,29 +550,9 @@ def _create_tenant_runtime(
 ) -> JacobianRuntime:
     """Create tenant-owned artifacts over deployment-owned mathematical state."""
 
-    core = bootstrap_services(
+    return create_execution_runtime(
         tenant_root,
-        RuntimeOptions(
-            checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
-            operation_policy=operation_policy,
-        ),
-    )
-    core.checkers = shared_checkers
-    services = build_runtime_services(core)
-    registry = OperationRegistry(
         catalog,
-        core.binder,
-        services.verification,
-        shared_checkers,
-        core.polynomial_expressions,
-        services.polytope,
-        core.sat,
-        core.smt,
-    )
-    core.operations = OperationDispatcher(catalog, registry)
-    return JacobianRuntime(
-        core,
-        services,
-        PortfolioResources(),
-        start_lean_warmup=lambda: None,
+        operation_policy=operation_policy,
+        checker_registry=shared_checkers,
     )

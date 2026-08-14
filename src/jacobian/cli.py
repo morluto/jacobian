@@ -84,13 +84,18 @@ class CliState:
         if self._runtime is None:
             opener = self._runtime_opener
             if opener is None:
-                from jacobian.runtime import create_runtime
+                from jacobian.runtime.execution import create_execution_runtime
 
-                opener = create_runtime
-            self._runtime = opener(
-                self.state_dir,
-                checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
-            )
+                self._runtime = create_execution_runtime(
+                    self.state_dir,
+                    self.catalog,
+                    operation_policy=OperationPolicy(),
+                )
+            else:
+                self._runtime = opener(
+                    self.state_dir,
+                    checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
+                )
         return self._runtime
 
     @property
@@ -214,7 +219,7 @@ def provider_measure(
 
     from jacobian.provider_measurements import measure_provider
 
-    catalog_value = _state(context).runtime.core.operations.catalog()
+    catalog_value = _state(context).catalog_snapshot()
     descriptor = next(
         (
             item

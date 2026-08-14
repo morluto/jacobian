@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Eliminate a radical system to a univariate polynomial, classify roots against principal-domain constraints, and reconstruct exact surviving solutions."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

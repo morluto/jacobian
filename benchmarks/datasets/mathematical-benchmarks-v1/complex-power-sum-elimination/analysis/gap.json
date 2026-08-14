@@ -8,7 +8,7 @@
       "Derive exact Newton power-sum recurrences and eliminate the symmetric product.",
       "Audit every quotient denominator and reconstruct both quadratic-field target branches."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",

@@ -2,7 +2,7 @@
   "analysis": {
     "candidate_ids": [],
     "contamination": "PUBLIC_AUTHOR_CORRECTION_WITH_NEW_COUNTEREXAMPLE_CERTIFICATE",
-    "current_capabilities": [],
+    "current_operations": [],
     "disposition": "NO_NEW_OPERATION",
     "gap_classes": ["LITERATURE_PROOF_AUDIT", "VALUATION_GEOMETRY"],
     "mathematical_moves": ["Construct factors, compute their convolution and p-adic Newton polygon, and separate the erroneous statement from its repair."],

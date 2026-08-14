@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Compute a finite graph-cover path lift and establish the endpoint fiber bijection by reversing the path."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

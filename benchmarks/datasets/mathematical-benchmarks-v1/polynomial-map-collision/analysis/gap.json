@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Evaluate a polynomial map at two points and replay a collision claim."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.map.evaluate",
         "availability": "AVAILABLE",

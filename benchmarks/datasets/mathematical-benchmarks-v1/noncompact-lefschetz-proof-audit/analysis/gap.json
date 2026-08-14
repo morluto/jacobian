@@ -9,7 +9,7 @@
       "Recompute compact-support cohomology, the induced orientation action, and the exact Lefschetz number.",
       "Separate failure of the frozen proof from the status of the original lattice/manifold question."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": [
       "MODEL_REASONING"
     ],

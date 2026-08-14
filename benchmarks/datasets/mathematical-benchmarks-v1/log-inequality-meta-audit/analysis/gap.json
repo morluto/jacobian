@@ -8,7 +8,7 @@
       "Separate mathematical truth from instruction following and evaluation correctness.",
       "Replay an exact rational algebraic comparison."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "rational.compute.product",
         "availability": "AVAILABLE",

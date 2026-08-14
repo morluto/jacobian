@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Separate the intended and implemented pointwise statistics, then replay the aggregate symmetry that masks their disagreement."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

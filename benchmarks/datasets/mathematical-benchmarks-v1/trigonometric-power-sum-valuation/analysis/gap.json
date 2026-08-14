@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Derive a cubic power-sum recurrence, compute exact 7-adic valuations, and align a residue-class induction with the divisibility claim."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "combinatorics.recurrence.linear.evaluate",
         "availability": "AVAILABLE",

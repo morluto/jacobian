@@ -9,7 +9,7 @@
       "Replay an exact symbolic similarity identity over a polynomial coefficient ring.",
       "Derive a determinant factorization without assuming either block channel is invertible."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "matrix.determinant.compute",
         "availability": "AVAILABLE",

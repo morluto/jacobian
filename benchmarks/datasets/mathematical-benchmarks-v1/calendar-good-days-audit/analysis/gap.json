@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Enumerate a declared finite calendar interval and test an exact digit predicate."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": [
       "MODEL_REASONING"
     ],

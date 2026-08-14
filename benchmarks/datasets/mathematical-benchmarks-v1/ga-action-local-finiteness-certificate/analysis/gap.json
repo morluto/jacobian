@@ -2,7 +2,7 @@
   "analysis": {
     "candidate_ids": [],
     "contamination": "PUBLIC_ABSTRACT_PROOF_TRANSFORMED_TO_NEW_SYMBOLIC_CERTIFICATE",
-    "current_capabilities": [],
+    "current_operations": [],
     "disposition": "NO_NEW_OPERATION",
     "gap_classes": ["SYMBOLIC_CONSTRUCTION", "PROOF_GROUNDING"],
     "mathematical_moves": [

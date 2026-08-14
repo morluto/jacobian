@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Construct a nonclosed projection image, prove divergence of a forced preimage, and certify a tail bound beyond the finite sample."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

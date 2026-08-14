@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Use characteristic-p valuation and exponent-class separation to distinguish an annihilating polynomial from the minimal inseparable polynomial."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

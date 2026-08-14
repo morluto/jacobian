@@ -8,7 +8,7 @@
       "Derive exact sparse rational-function coordinates.",
       "Find and replay a nonzero linear relation among three named points."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",

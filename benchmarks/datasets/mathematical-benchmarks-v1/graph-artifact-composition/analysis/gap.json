@@ -8,7 +8,7 @@
       "Compute maximum-degree vertices and distances from every vertex to that set.",
       "Compose graph artifacts while preserving labels and aggregate scope."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "graph.compute.properties",
         "availability": "AVAILABLE",

@@ -8,7 +8,7 @@
       "Compute rank and a nonzero rational dependence among named subspace generators.",
       "Separate generator-family semantics from one Ax=b solution."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "matrix.nullspace.compute",
         "availability": "AVAILABLE",

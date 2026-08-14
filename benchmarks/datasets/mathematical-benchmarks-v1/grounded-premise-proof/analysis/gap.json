@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Select a minimal premise set from a frozen library and replay a proof DAG."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "lean.retrieve.premises",
         "availability": "UNAVAILABLE",

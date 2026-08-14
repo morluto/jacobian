@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Enumerate a complete polynomial residue image and certify that a target residue is absent."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "modular.enumerate.quadratic_residues",
         "availability": "AVAILABLE",

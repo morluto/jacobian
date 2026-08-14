@@ -9,7 +9,7 @@
       "Derive the exact parameter transition and replay two affine polynomial certificate decompositions.",
       "Audit equality, threshold, and limiting-family semantics independently of the dataset answer."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",

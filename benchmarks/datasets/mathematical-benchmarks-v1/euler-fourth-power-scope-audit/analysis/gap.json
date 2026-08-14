@@ -8,7 +8,7 @@
       "Supply a primitive bounded fourth-power identity.",
       "Use one exact witness to refute only the frozen universal claim."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": [
       "MODEL_REASONING"
     ],

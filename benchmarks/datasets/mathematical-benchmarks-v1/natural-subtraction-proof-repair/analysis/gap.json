@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Inspect an expression subtree and replay an exact rational linear combination under a side condition."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "lean.statement.compare",
         "availability": "UNAVAILABLE",

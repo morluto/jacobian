@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Repair the source chain-rule error, derive the exact coefficient constraint space, and reconstruct polynomial potentials."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["PROOF_REPAIR", "SYMBOLIC_CLASSIFICATION"],
     "contamination": "PUBLIC_ANSWER_VISIBLE_BUT_INCORRECT",
     "candidate_ids": [],

@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Enumerate dependent random-mapping events and compute an exact expectation."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": [
       "MISSING_OPERATION",
       "MODEL_REASONING"

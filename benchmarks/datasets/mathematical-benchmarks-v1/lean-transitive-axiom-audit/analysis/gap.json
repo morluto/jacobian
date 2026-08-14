@@ -8,7 +8,7 @@
       "Compute transitive declaration dependencies from frozen roots.",
       "Separate shallow axiom reports from complete trust closure."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "lean.proof.axioms.inspect",
         "availability": "UNAVAILABLE",

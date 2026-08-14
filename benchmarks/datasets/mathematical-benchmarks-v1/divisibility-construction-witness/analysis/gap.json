@@ -8,7 +8,7 @@
       "Evaluate polynomial divisibility conditions over a bounded integer search scope.",
       "Return a witness with exact quotient and remainder arithmetic."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "modular.enumerate.quadratic_residues",
         "availability": "AVAILABLE",

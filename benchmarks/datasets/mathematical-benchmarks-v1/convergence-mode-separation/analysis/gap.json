@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Separate convergence in probability from almost-sure convergence using dyadic interval levels and a pointwise hit/miss argument."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

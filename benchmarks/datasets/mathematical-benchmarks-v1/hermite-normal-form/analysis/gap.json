@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Compute row Hermite normal form and a unimodular transformation certificate."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "matrix.normal_form.hermite",
         "availability": "AVAILABLE",

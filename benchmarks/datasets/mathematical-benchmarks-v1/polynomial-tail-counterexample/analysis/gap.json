@@ -8,7 +8,7 @@
       "Factor and evaluate exact rational polynomials beyond all listed roots.",
       "Produce a finite counterexample to an eventual monotonicity claim."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.factor.compute",
         "availability": "AVAILABLE",

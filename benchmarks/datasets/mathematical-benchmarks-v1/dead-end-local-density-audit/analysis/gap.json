@@ -9,7 +9,7 @@
       "Detect collisions and vacuous digit constraints in forbidden residue classes.",
       "Reconstruct exact reduced local-density factors from complete finite residue audits."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "modular.enumerate.quadratic_residues",
         "availability": "AVAILABLE",

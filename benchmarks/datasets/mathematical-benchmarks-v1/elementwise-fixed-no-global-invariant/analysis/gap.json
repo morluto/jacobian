@@ -8,7 +8,7 @@
       "Construct a determinant-one finite matrix group over an odd prime field.",
       "Certify every element has a nonzero fixed vector while the common fixed-space intersection is zero."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MISSING_OPERATION", "MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

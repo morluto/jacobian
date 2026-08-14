@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Reduce exact logarithmic identities to integer exponents and rational reciprocal-log contributions."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "integer.compute.prime_factorization",
         "availability": "AVAILABLE",

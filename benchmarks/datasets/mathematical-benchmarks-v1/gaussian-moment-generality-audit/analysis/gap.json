@@ -9,7 +9,7 @@
       "Use a branch and correction-factor cancellation to derive all-exponent Gaussian moment generating functions.",
       "Separate a finite-moment audit from a universal identity and calibrate the conclusion below VERIFIED."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "probability.gaussian_polynomial.moment.compute",
         "availability": "AVAILABLE",

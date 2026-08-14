@@ -9,7 +9,7 @@
       "Preserve a valid counterexample while independently refuting an unsupported minimality claim.",
       "Produce an earlier prime-exponent competitor with strict size and divisor-sum inequalities."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "integer.compute.prime_factorization",
         "availability": "AVAILABLE",

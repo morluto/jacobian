@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Construct an exact sparse polynomial ideal-membership certificate and transfer integer generator divisibility through integer linear combinations."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",

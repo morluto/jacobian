@@ -9,7 +9,7 @@
       "Derive the invariant second-order inverse-distance term.",
       "Construct exact rational unit directions with opposite nonzero quadratic residual signs."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",

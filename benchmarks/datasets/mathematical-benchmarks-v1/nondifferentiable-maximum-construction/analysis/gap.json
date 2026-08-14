@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Construct a continuous two-branch piecewise-linear function and compare one-sided slopes."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": [
       "MISSING_OPERATION"
     ],

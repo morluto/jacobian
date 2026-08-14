@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Search finite simple graphs and return a hypothesis-satisfying counterexample."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "graph.search.atlas",
         "availability": "AVAILABLE",

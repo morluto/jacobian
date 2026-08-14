@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Recover a complete cyclotomic factorization and use root-orbit inversion to establish reciprocal coefficient symmetry."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.identity.verify",
         "availability": "AVAILABLE",

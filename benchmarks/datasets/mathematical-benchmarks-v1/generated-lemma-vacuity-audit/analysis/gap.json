@@ -8,7 +8,7 @@
       "Distinguish a satisfiable existential implication from a non-vacuous square-witness bound.",
       "Demonstrate that a generated common-divisor lemma is premise-independent because d=1 always satisfies its conclusion."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": [
       "MODEL_REASONING"
     ],

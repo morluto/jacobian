@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Separate a nonsummable series from a fallback zero and prove divergence using dyadic block lower bounds."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

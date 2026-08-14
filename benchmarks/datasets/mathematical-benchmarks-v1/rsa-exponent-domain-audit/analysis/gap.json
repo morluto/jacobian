@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Split modular exponentiation into unit and nonunit branches and expose the domain obligation for negative exponents."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

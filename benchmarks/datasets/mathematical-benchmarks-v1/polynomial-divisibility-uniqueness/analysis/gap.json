@@ -9,7 +9,7 @@
       "Compute the common polynomial gcd of the remainder coefficients and derive the unique integral root.",
       "Verify the exact quotient by multiplication at the derived parameter."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.compute.gcd",
         "availability": "AVAILABLE",

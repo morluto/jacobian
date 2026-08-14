@@ -8,7 +8,7 @@
       "Replay connectivity, exact average degree, and pendant-vertex hypotheses on a finite graph.",
       "Check two minimal total-dominating sets of different sizes as a counterexample witness."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "graph.compute.properties",
         "availability": "AVAILABLE",

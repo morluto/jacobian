@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Combine sparse rational terms into a canonical polynomial representation."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "polynomial.expression.normalize",
         "availability": "AVAILABLE",

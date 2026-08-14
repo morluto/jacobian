@@ -8,7 +8,7 @@
       "Compute a weighted minimum spanning tree and double-tree trace.",
       "Distinguish a generic approximation guarantee from exact tour optimality."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "graph.invariant.spanning_tree_count.compute",
         "availability": "AVAILABLE",

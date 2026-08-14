@@ -8,7 +8,7 @@
       "Compare formal statement semantics with an informal dimension and dot-product claim.",
       "Produce exact rational vector counterexamples to two semantic substitutions."
     ],
-    "current_capabilities": [
+    "current_operations": [
       {
         "operation_id": "lean.statement.compare",
         "availability": "UNAVAILABLE",

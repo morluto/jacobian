@@ -9,7 +9,7 @@
       "Detect the published coefficient-sign defect by exact symbolic differentiation.",
       "Bind the finite expansion to an explicit integral remainder bound."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_INCORRECT_ANSWER_VISIBLE",
     "candidate_ids": [],

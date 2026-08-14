@@ -7,7 +7,7 @@
     "mathematical_moves": [
       "Factor a finite subset-incidence matrix through the Boolean lattice and align determinant parity with the general counting formula."
     ],
-    "current_capabilities": [],
+    "current_operations": [],
     "gap_classes": ["MODEL_REASONING"],
     "contamination": "PUBLIC_ANSWER_VISIBLE",
     "candidate_ids": [],

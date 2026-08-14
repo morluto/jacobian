@@ -12,7 +12,6 @@ from mcp_types.methods import serialize_server_result
 import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.server import create_server
 from jacobian.contracts.operations import OperationResult
-from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
@@ -32,7 +31,6 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
 
         server = create_server(
             tmp_path,
-            checker_authority=CheckerAuthorityMode.NONE,
         )
         assert not hasattr(server_module, "Context")
         async with Client(server, raise_exceptions=True) as client:

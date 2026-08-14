@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.runtime import CheckerAuthorityMode
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
@@ -161,7 +160,7 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(tmp_path: Path) ->
         )
 
         async with Client(
-            create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
+            create_server(tmp_path),
             raise_exceptions=True,
         ) as client:
             inspected = await client.call_tool(

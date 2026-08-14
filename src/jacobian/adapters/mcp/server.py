@@ -48,13 +48,10 @@ from jacobian.runtime.services import build_runtime_services
 def create_server(
     state_dir: str | Path | None = None,
     *,
-    checker_authority: CheckerAuthorityMode | None = None,
-    operation_exclusions: frozenset[str] = frozenset(),
     operation_policy: OperationPolicy | None = None,
 ) -> MCPServer[AppState]:
     """Create a catalog-only host that lazily owns one execution runtime."""
 
-    del checker_authority
     root = _configured_root(state_dir)
     policy = operation_policy or OperationPolicy()
     catalog = OperationCatalog(
@@ -65,7 +62,6 @@ def create_server(
     owner = _LazyLocalRuntime(
         root,
         catalog,
-        operation_exclusions=operation_exclusions,
         operation_policy=policy,
     )
     state = AppState(
@@ -86,12 +82,10 @@ class _LazyLocalRuntime:
         root: Path,
         catalog: OperationCatalog,
         *,
-        operation_exclusions: frozenset[str],
         operation_policy: OperationPolicy,
     ) -> None:
         self.root = root
         self.catalog = catalog
-        self.operation_exclusions = operation_exclusions
         self.operation_policy = operation_policy
         self._selected_runtime: JacobianRuntime | None = None
         self._complete_binding = False
@@ -116,7 +110,6 @@ class _LazyLocalRuntime:
                     dispatcher.prepare_complete_binding()
                     options = RuntimeOptions(
                         checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
-                        operation_exclusions=self.operation_exclusions,
                         operation_policy=self.operation_policy,
                     )
                     context = create_portfolio_context(

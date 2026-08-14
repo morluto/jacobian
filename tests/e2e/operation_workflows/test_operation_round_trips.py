@@ -15,7 +15,6 @@ from tests.support.rationals import rational_payload as _q
 from tests.support.state import copy_template
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.runtime import CheckerAuthorityMode
 
 
 def _polynomial(*coefficients_ascending: int) -> dict[str, object]:
@@ -59,7 +58,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
 ) -> None:
     async def scenario() -> None:
         server = create_server(
-            tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+            tmp_path
         )
         async with Client(server, raise_exceptions=True) as client:
             operation_ids = await _catalog(client)
@@ -106,7 +105,7 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
             ]
 
         restarted = create_server(
-            tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
+            tmp_path
         )
         async with Client(restarted, raise_exceptions=True) as client:
             replayed = await _tool(
@@ -131,7 +130,7 @@ def test_polynomial_factor_result_verifies_through_mcp(
     async def scenario() -> None:
         state = copy_template(authorized_portfolio_template, tmp_path / "state")
         server = create_server(
-            state, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
+            state
         )
         async with Client(server, raise_exceptions=True) as client:
             factor_input = {"polynomial": _polynomial(-1, 0, 1)}
@@ -204,7 +203,7 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
-        server = create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE)
+        server = create_server(tmp_path)
         async with Client(server, raise_exceptions=True) as client:
             operation_ids = await _catalog(client)
             assert "polynomial.compute.gcd" in operation_ids
@@ -270,7 +269,7 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
 
     async def scenario() -> None:
         server = create_server(
-            tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
+            tmp_path
         )
         async with Client(server, raise_exceptions=True) as client:
             verified = await validate(client)
@@ -283,7 +282,7 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
             assert record["payload"]["evidence_uri"] in verified["artifact_uris"]
 
         restarted = create_server(
-            tmp_path, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
+            tmp_path
         )
         async with Client(restarted, raise_exceptions=True) as client:
             replayed = await validate(client)

@@ -13,7 +13,6 @@ from jacobian.adapters.mcp.context import _public_tool_error
 from jacobian.adapters.mcp.remote import create_remote_server
 from jacobian.adapters.mcp.server import create_server
 from jacobian.domains.number_theory import number_theory_operations
-from jacobian.runtime import CheckerAuthorityMode
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 
@@ -105,7 +104,7 @@ def test_mcp_tool_failures_return_safe_actionable_errors(tmp_path: Path) -> None
 def test_mcp_protocol_and_authentication_errors_remain_distinct(tmp_path: Path) -> None:
     from mcp.shared.exceptions import MCPError
 
-    server = create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE)
+    server = create_server(tmp_path)
 
     @server.tool(name="fixture.protocol-error")
     async def protocol_error() -> None:

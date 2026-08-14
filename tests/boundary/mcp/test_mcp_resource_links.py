@@ -6,7 +6,6 @@ from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
 from jacobian.domains.number_theory import number_theory_operations
-from jacobian.runtime import CheckerAuthorityMode
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
@@ -47,7 +46,7 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
         from mcp import Client
 
         async with Client(
-            create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
+            create_server(tmp_path),
             raise_exceptions=True,
         ) as client:
             result = await client.call_tool(

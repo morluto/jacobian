@@ -8,7 +8,6 @@ from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
 from jacobian.operation_service import OperationPolicy
-from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
@@ -21,7 +20,6 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
         async with Client(
             create_server(
                 tmp_path,
-                checker_authority=CheckerAuthorityMode.NONE,
                 operation_policy=policy,
             ),
             raise_exceptions=True,
@@ -45,7 +43,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
         from mcp import Client
 
         async with Client(
-            create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
+            create_server(tmp_path),
             raise_exceptions=True,
         ) as client:
             resource_result = await client.read_resource("operation://catalog")
@@ -210,7 +208,7 @@ def test_mcp_text_projection_preserves_produced_artifact_types(
         from mcp import Client
 
         async with Client(
-            create_server(tmp_path, checker_authority=CheckerAuthorityMode.NONE),
+            create_server(tmp_path),
             raise_exceptions=True,
         ) as client:
             listed = await client.call_tool(

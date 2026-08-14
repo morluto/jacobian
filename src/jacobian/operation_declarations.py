@@ -30,17 +30,6 @@ from jacobian.operations import (
 
 
 @dataclass(frozen=True, slots=True)
-class BoundedWorker:
-    """A bounded worker selected by an immutable built-in locator."""
-
-    locator: str
-
-    def __post_init__(self) -> None:
-        if not self.locator.strip():
-            raise ValueError("worker locator must not be empty")
-
-
-@dataclass(frozen=True, slots=True)
 class InlinePublication:
     """Publish one bounded mathematical value inline."""
 
@@ -230,7 +219,6 @@ class DurableOperationFactory:
 
 __all__ = [
     "SUPPORTED",
-    "BoundedWorker",
     "DurableOperationFactory",
     "DurablePublication",
     "Effect",

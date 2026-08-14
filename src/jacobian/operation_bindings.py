@@ -1,29 +1,21 @@
-"""Runtime bindings for semantic mathematical operation specifications.
-
-The semantic declaration lives in :mod:`jacobian.operations`.  This module
-pairs it with provider selection and transport-only publication policy without
-making either concern part of the mathematical function contract.
-"""
+"""Transport publication helpers for immutable operation declarations."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Any
 
-from jacobian.contracts.operations import OperationExample
 from jacobian.contracts.results import ContractModel
 from jacobian.operation_declarations import (
+    DurableOperationFactory,
     DurablePublication,
+    InlineOperationFactory,
     InlinePublication,
     OperationDeclaration,
     PublicationPolicy,
 )
 from jacobian.operation_ports import InputPort, OutputPort
-from jacobian.operations import (
-    OperationFailure,
-    OperationRefusalError,
-)
 
 
 def inline_operation[
@@ -72,97 +64,6 @@ def durable_operation[
         input_ports=input_ports,
         output_ports=output_ports,
     )
-
-
-@dataclass(frozen=True, slots=True)
-class InlineOperationFactory:
-    """Build inline installed operations with one domain error policy."""
-
-    failure: OperationFailure
-
-    def __call__[
-        RequestT: ContractModel,
-        ResultT: ContractModel,
-    ](
-        self,
-        operation_id: str,
-        title: str,
-        description: str,
-        request_type: type[RequestT],
-        result_type: type[ResultT],
-        operation: Callable[[RequestT], ResultT],
-        *tags: str,
-        examples: tuple[OperationExample, ...] = (),
-        version: str = "2",
-    ) -> OperationDeclaration[RequestT, ResultT]:
-        def execute(request: RequestT) -> ResultT:
-            try:
-                return operation(request)
-            except self.failure.exceptions as exc:
-                raise OperationRefusalError(self.failure.diagnostic(exc)) from exc
-
-        return inline_operation(
-            OperationDeclaration(
-                operation_id=operation_id,
-                version=version,
-                request_type=request_type,
-                result_type=result_type,
-                execute=execute,
-                title=title,
-                description=description,
-                tags=tags,
-                examples=examples,
-            ),
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class DurableOperationFactory:
-    """Build durable installed operations with one domain error policy."""
-
-    failure: OperationFailure
-
-    def __call__[
-        RequestT: ContractModel,
-        ResultT: ContractModel,
-    ](
-        self,
-        operation_id: str,
-        title: str,
-        description: str,
-        request_type: type[RequestT],
-        result_type: type[ResultT],
-        operation: Callable[[RequestT], ResultT],
-        *tags: str,
-        examples: tuple[OperationExample, ...] = (),
-        resource_reason: str,
-        preview: Callable[[ResultT], ResultT] | None = None,
-        preview_complete: bool = False,
-        version: str = "2",
-    ) -> OperationDeclaration[RequestT, ResultT]:
-        def execute(request: RequestT) -> ResultT:
-            try:
-                return operation(request)
-            except self.failure.exceptions as exc:
-                raise OperationRefusalError(self.failure.diagnostic(exc)) from exc
-
-        return durable_operation(
-            OperationDeclaration(
-                operation_id=operation_id,
-                version=version,
-                request_type=request_type,
-                result_type=result_type,
-                execute=execute,
-                title=title,
-                description=description,
-                tags=tags,
-                examples=examples,
-            ),
-            resource_reason=resource_reason,
-            preview_type=result_type,
-            preview=preview,
-            preview_complete=preview_complete,
-        )
 
 
 __all__ = [

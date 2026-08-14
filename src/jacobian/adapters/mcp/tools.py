@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from mcp.server.mcpserver import Context
 from mcp_types import CallToolResult, ResourceLink, TextContent
@@ -189,4 +189,4 @@ def math_run(
         result = _bounded_run_result(active_runtime, result)
         if result.artifact_uris:
             return _artifact_result(result)
-        return result
+        return cast(OperationRunToolResult, result)

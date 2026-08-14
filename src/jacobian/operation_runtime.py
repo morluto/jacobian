@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from jacobian.artifacts import ArtifactService
 from jacobian.contracts.results import ContractModel
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import OperationSpec
 from jacobian.value_references import ValueReferenceStore
 
-type DomainOperation = OperationDeclaration[Any, Any]
+type DomainOperation = OperationSpec
 
 
 @dataclass(frozen=True, slots=True)

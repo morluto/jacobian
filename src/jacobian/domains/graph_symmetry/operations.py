@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Mapping
-from typing import Any
 
 from jacobian.contracts.graph_symmetry import (
     GraphEdgeOrbit,
@@ -14,7 +13,10 @@ from jacobian.contracts.graph_symmetry import (
 from jacobian.domains._examples import example
 from jacobian.graphs.artifacts import nx
 from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import (
+    OperationDeclaration,
+    OperationDeclarations,
+)
 
 
 def _canonical_edge(left: str, right: str) -> tuple[str, str]:
@@ -107,7 +109,7 @@ def _generator_orbits(
     )
 
 
-GRAPH_SYMMETRY_OPERATIONS: tuple[OperationDeclaration[Any, Any], ...] = (
+GRAPH_SYMMETRY_OPERATIONS: OperationDeclarations = (
     inline_operation(
         OperationDeclaration(
             operation_id="graph.symmetry.generator_orbits.compute",

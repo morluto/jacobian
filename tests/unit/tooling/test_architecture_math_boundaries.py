@@ -323,3 +323,14 @@ def test_qualified_superseded_matrix_contract_variants_are_rejected(
     )
 
     assert "output-only-contract" in _codes(tmp_path)
+
+
+def test_inline_executor_cannot_import_control_plane_layers(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/inline_execution.py",
+        "from jacobian.storage.repository import ArtifactRepository\n"
+        "from jacobian.sat_smt.sat import install_sat_artifacts\n",
+    )
+
+    assert "inline-executor-boundary" in _codes(tmp_path)

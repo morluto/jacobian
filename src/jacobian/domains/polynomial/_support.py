@@ -9,6 +9,7 @@ from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains.polynomial.operations import PolynomialOutputBudgetError
 from jacobian.operation_declarations import (
     DurableOperationFactory,
+    InlineOperation,
     InlineOperationFactory,
     OperationAbortError,
     OperationDeclaration,
@@ -50,7 +51,7 @@ def polynomial_operation[
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
     version: str = "2",
-) -> OperationDeclaration[RequestT, ResultT]:
+) -> InlineOperation[RequestT, ResultT]:
     """Declare an exact polynomial operation with bounded-output failure semantics."""
 
     declared = _polynomial_operation_factory(
@@ -66,7 +67,7 @@ def polynomial_operation[
     )
     return replace(
         declared,
-        execute=_with_polynomial_output_budget(declared.execute),
+        run=_with_polynomial_output_budget(declared.run),
     )
 
 

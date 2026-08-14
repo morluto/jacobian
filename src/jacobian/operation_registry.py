@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from jacobian.builtin_operation_modules import (
     BUILTIN_OPERATION_MODULES,
@@ -10,6 +10,7 @@ from jacobian.builtin_operation_modules import (
 )
 from jacobian.checker_operations import AuthorizedChecker
 from jacobian.contracts.operations import OperationDescriptor
+from jacobian.inline_execution import InlineOperationAdapter
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_catalog import (
@@ -21,14 +22,15 @@ from jacobian.operation_catalog import (
     operation_declaration_digest_from_descriptor,
     public_operation_descriptor,
 )
-from jacobian.operation_declarations import OperationDeclarations
+from jacobian.operation_declarations import InlineOperation, OperationDeclarations
 from jacobian.registry import CheckerRegistry
 from jacobian.selected_operation_bindings import (
     ResourceOwner,
-    RuntimeSelectedFamily,
     SelectedOperationBinding,
 )
-from jacobian.verification.service import VerificationService
+
+if TYPE_CHECKING:
+    from jacobian.runtime.execution import LazyControlPlane
 
 
 class OperationRegistry:
@@ -38,16 +40,15 @@ class OperationRegistry:
         self,
         catalog: OperationCatalog,
         binder: OperationBinder,
-        verification: VerificationService,
         checkers: CheckerRegistry,
-        selected_families: tuple[RuntimeSelectedFamily, ...],
         resource_owner: ResourceOwner,
+        *,
+        control_plane: LazyControlPlane,
     ) -> None:
         self.catalog = catalog
         self.binder = binder
-        self.verification = verification
         self.checkers = checkers
-        self._selected_families = selected_families
+        self._control_plane = control_plane
         self._resource_owner = resource_owner
         self._adapters: dict[str, OperationAdapter[Any]] = {}
 
@@ -67,7 +68,14 @@ class OperationRegistry:
 
         if record.module.startswith("family:"):
             return self._resolve_selected_family(operation_id, descriptor, record)
+        return self._resolve_declaration_module(operation_id, descriptor, record)
 
+    def _resolve_declaration_module(
+        self,
+        operation_id: str,
+        descriptor: OperationDescriptor,
+        record: OperationDeclarationRecord,
+    ) -> OperationAdapter[Any]:
         if record.module not in {
             module_name for module_name, _factory_name in BUILTIN_OPERATION_MODULES
         }:
@@ -108,12 +116,15 @@ class OperationRegistry:
             raise OperationCatalogError(
                 f"operation declaration changed; run `jacobian update`: {operation_id}"
             )
-        bound = self.binder.bind(operations)
-        adapter = next(
-            candidate
-            for candidate in bound.adapters
-            if candidate.descriptor.operation_id == operation_id
-        )
+        if isinstance(declaration, InlineOperation):
+            adapter: OperationAdapter[Any] = InlineOperationAdapter(declaration)
+        else:
+            bound = self.binder.bind(operations)
+            adapter = next(
+                candidate
+                for candidate in bound.adapters
+                if candidate.descriptor.operation_id == operation_id
+            )
         if public_operation_descriptor(adapter.descriptor) != descriptor:
             raise OperationCatalogError(
                 f"operation schema changed; run `jacobian update`: {operation_id}"
@@ -130,7 +141,7 @@ class OperationRegistry:
         family = next(
             (
                 family
-                for family in self._selected_families
+                for family in self._control_plane.families
                 if family.spec.origin == record.module
             ),
             None,
@@ -198,7 +209,7 @@ class OperationRegistry:
             operations=operations,
             declarations=checker_declarations,
             binder=self.binder,
-            verification=self.verification,
+            verification=self._control_plane.verification,
             checkers=self.checkers,
         )
         if public_operation_descriptor(adapter.descriptor) != descriptor:

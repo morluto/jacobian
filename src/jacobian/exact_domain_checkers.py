@@ -17,7 +17,11 @@ from jacobian.contracts.operations import (
     ProviderObservation,
 )
 from jacobian.operation_binding import BoundOperationGroup
-from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
+from jacobian.operation_declarations import (
+    InlineOperation,
+    OperationDeclaration,
+    OperationDeclarations,
+)
 from jacobian.providers.flint_runtime import (
     exact_domain_checker_source_provider_runtime,
 )
@@ -281,4 +285,6 @@ __all__ = [
 
 
 def _operation_spec(operation: Any) -> Any:
-    return operation if isinstance(operation, OperationDeclaration) else operation.spec
+    if isinstance(operation, (InlineOperation, OperationDeclaration)):
+        return operation
+    return operation.spec

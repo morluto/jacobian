@@ -7,8 +7,15 @@ from typing import assert_never
 
 from jacobian.contracts.operations import OperationResult
 from jacobian.contracts.results import ContractModel, Execution, ExecutionStatus
-from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed, NonConclusion
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedOperation:
+    """One optional public projection and every durable carrier it retained."""
+
+    output: ContractModel | None = None
+    artifact_uris: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,4 +99,4 @@ def project_operation_result(projection: OperationProjection) -> OperationResult
     )
 
 
-__all__ = ["OperationProjection", "project_operation_result"]
+__all__ = ["OperationProjection", "PublishedOperation", "project_operation_result"]

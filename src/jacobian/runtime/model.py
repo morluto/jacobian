@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.resources import RuntimeResources
 from jacobian.verification.service import VerificationService
+
+if TYPE_CHECKING:
+    from jacobian.runtime.execution import LazyControlPlane
 
 
 class RuntimeClosedError(RuntimeError):
@@ -17,13 +22,34 @@ class JacobianRuntime:
     def __init__(
         self,
         core: RuntimeResources,
-        verification: VerificationService,
-        polytope: PolytopeService,
+        verification: VerificationService | None = None,
+        polytope: PolytopeService | None = None,
+        *,
+        control_plane: LazyControlPlane | None = None,
     ) -> None:
+        if control_plane is None and (verification is None or polytope is None):
+            raise TypeError(
+                "JacobianRuntime requires verification and polytope or a control plane"
+            )
         self._closed = False
         self.core = core
-        self.verification = verification
-        self.polytope = polytope
+        self._verification = verification
+        self._polytope = polytope
+        self._control_plane = control_plane
+
+    @property
+    def verification(self) -> VerificationService:
+        if self._verification is not None:
+            return self._verification
+        assert self._control_plane is not None
+        return self._control_plane.verification
+
+    @property
+    def polytope(self) -> PolytopeService:
+        if self._polytope is not None:
+            return self._polytope
+        assert self._control_plane is not None
+        return self._control_plane.polytope
 
     def close(self) -> None:
         """Release every runtime-owned resource."""

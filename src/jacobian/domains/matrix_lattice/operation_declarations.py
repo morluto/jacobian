@@ -46,7 +46,7 @@ from jacobian.domains.matrix_lattice.operations import (
 )
 from jacobian.math.matrices.values import SmithNormalForm
 from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import InlineOperation, OperationDeclaration
 from jacobian.operation_ports import OutputPort
 from jacobian.operations import (
     OperationAbortError,
@@ -68,7 +68,7 @@ def matrix_operation[
     examples: tuple[OperationExample, ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
     version: str = "1",
-) -> OperationDeclaration[RequestT, ResultT]:
+) -> InlineOperation[RequestT, ResultT] | OperationDeclaration[RequestT, ResultT]:
     def implementation(request: RequestT) -> ResultT:
         try:
             return operation(request)
@@ -98,55 +98,57 @@ def matrix_operation[
                 )
             ) from exc
 
-    return inline_operation(
-        OperationDeclaration(
-            operation_id=operation_id,
-            version=version,
-            title=title,
-            description=description,
-            request_type=request_model,
-            result_type=result_model,
-            execute=implementation,
-            tags=tags,
-            examples=examples,
-        ),
-        output_ports=output_ports,
+    declaration = OperationDeclaration(
+        operation_id=operation_id,
+        version=version,
+        title=title,
+        description=description,
+        request_type=request_model,
+        result_type=result_model,
+        execute=implementation,
+        tags=tags,
+        examples=examples,
     )
+    if output_ports:
+        return inline_operation(declaration, output_ports=output_ports)
+    return inline_operation(declaration)
 
+
+MATRIX_DETERMINANT_COMPUTE = matrix_operation(
+    "matrix.determinant.compute",
+    "Compute an exact rational matrix determinant",
+    "Compute the determinant of one square matrix over QQ through order 64 with SymPy's exact Bareiss algorithm.",
+    MatrixDeterminantRequest,
+    MatrixDeterminantResult,
+    compute_determinant,
+    "matrix",
+    "determinant",
+    "exact-rational",
+    examples=(
+        example(
+            "determinant_minus_six",
+            "Compute the determinant of [[0, 2], [3, 4]].",
+            {
+                "matrix": {
+                    "entries": [
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "2", "den": "1"},
+                        ],
+                        [
+                            {"num": "3", "den": "1"},
+                            {"num": "4", "den": "1"},
+                        ],
+                    ]
+                }
+            },
+        ),
+    ),
+    version="3",
+)
 
 MATRIX_OPERATIONS = (
-    matrix_operation(
-        "matrix.determinant.compute",
-        "Compute an exact rational matrix determinant",
-        "Compute the determinant of one square matrix over QQ through order 64 with SymPy's exact Bareiss algorithm.",
-        MatrixDeterminantRequest,
-        MatrixDeterminantResult,
-        compute_determinant,
-        "matrix",
-        "determinant",
-        "exact-rational",
-        examples=(
-            example(
-                "determinant_minus_six",
-                "Compute the determinant of [[0, 2], [3, 4]].",
-                {
-                    "matrix": {
-                        "entries": [
-                            [
-                                {"num": "0", "den": "1"},
-                                {"num": "2", "den": "1"},
-                            ],
-                            [
-                                {"num": "3", "den": "1"},
-                                {"num": "4", "den": "1"},
-                            ],
-                        ]
-                    }
-                },
-            ),
-        ),
-        version="3",
-    ),
+    MATRIX_DETERMINANT_COMPUTE,
     matrix_operation(
         "matrix.rank.compute",
         "Compute exact rational matrix rank",

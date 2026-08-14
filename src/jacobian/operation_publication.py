@@ -18,6 +18,7 @@ from jacobian.operation_declarations import (
     InlinePublication,
     OperationDeclaration,
 )
+from jacobian.operation_projection import PublishedOperation
 from jacobian.value_references import ValueReferenceError, ValueReferenceStore
 
 
@@ -31,14 +32,6 @@ class PublicationContext:
     input_schema_uri: str
     result_schema_uri: str
     backend_version: str
-
-
-@dataclass(frozen=True, slots=True)
-class PublishedOperation:
-    """One optional public projection and every durable carrier it retained."""
-
-    output: ContractModel | None = None
-    artifact_uris: tuple[str, ...] = ()
 
 
 class PublicationLimitError(Exception):

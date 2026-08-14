@@ -106,7 +106,41 @@ class OperationDeclaration[RequestT: ContractModel, ResultT: ContractModel]:
         )
 
 
-type OperationDeclarations = tuple[OperationDeclaration[Any, Any], ...]
+@dataclass(frozen=True, slots=True)
+class InlineOperation[RequestT: ContractModel, ResultT: ContractModel]:
+    """Immutable declaration for one ordinary inline mathematical operation."""
+
+    operation_id: str
+    version: str
+    title: str
+    description: str
+    request_type: type[RequestT]
+    result_type: type[ResultT]
+    run: Callable[[RequestT], ResultT]
+    tags: tuple[str, ...] = ()
+    examples: tuple[OperationExample, ...] = ()
+    invalid_request: OperationDiagnostic | None = None
+    enrich_invalid_request: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.operation_id.strip() or not self.version.strip():
+            raise ValueError("inline operations require an ID and version")
+        if not self.title.strip() or not self.description.strip():
+            raise ValueError("inline operations require title and description")
+        if len(set(self.tags)) != len(self.tags):
+            raise ValueError("operation tags must be unique")
+        if any(not tag.strip() for tag in self.tags):
+            raise ValueError("operation tags must not be empty")
+        if len({example.name for example in self.examples}) != len(self.examples):
+            raise ValueError("operation example names must be unique")
+
+    @property
+    def execute(self) -> Callable[[RequestT], ResultT]:
+        return self.run
+
+
+type OperationSpec = OperationDeclaration[Any, Any] | InlineOperation[Any, Any]
+type OperationDeclarations = tuple[OperationSpec, ...]
 
 
 def with_invalid_request(
@@ -147,14 +181,14 @@ class InlineOperationFactory:
         *tags: str,
         examples: tuple[OperationExample, ...] = (),
         version: str = "2",
-    ) -> OperationDeclaration[RequestT, ResultT]:
-        def execute(request: RequestT) -> ResultT:
+    ) -> InlineOperation[RequestT, ResultT]:
+        def run(request: RequestT) -> ResultT:
             try:
                 return operation(request)
             except self.failure.exceptions as exc:
                 raise OperationRefusalError(self.failure.diagnostic(exc)) from exc
 
-        return OperationDeclaration(
+        return InlineOperation(
             operation_id=operation_id,
             version=version,
             title=title,
@@ -162,8 +196,7 @@ class InlineOperationFactory:
             tags=tags,
             request_type=request_type,
             result_type=result_type,
-            execute=execute,
-            publication=InlinePublication(),
+            run=run,
             examples=examples,
         )
 
@@ -222,6 +255,7 @@ __all__ = [
     "DurableOperationFactory",
     "DurablePublication",
     "Effect",
+    "InlineOperation",
     "InlineOperationFactory",
     "InlinePublication",
     "OperationAbortError",
@@ -230,6 +264,7 @@ __all__ = [
     "OperationExample",
     "OperationFailure",
     "OperationRefusalError",
+    "OperationSpec",
     "PreflightResult",
     "PreflightStatus",
     "PublicationPolicy",

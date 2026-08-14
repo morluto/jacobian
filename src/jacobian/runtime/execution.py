@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_dispatcher import OperationDispatcher
@@ -12,8 +14,73 @@ from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.resources import RuntimeResources
 from jacobian.runtime.selected_families import create_runtime_selected_families
+from jacobian.selected_operation_bindings import RuntimeSelectedFamily
 from jacobian.verification.service import VerificationService
+
+
+@dataclass(slots=True)
+class LazyControlPlane:
+    """Construct verification, polytope, and family binders on first non-inline use."""
+
+    core: RuntimeResources
+    catalog: OperationCatalog
+    _lock: Lock = field(default_factory=Lock)
+    _verification: VerificationService | None = None
+    _polytope: PolytopeService | None = None
+    _families: tuple[RuntimeSelectedFamily, ...] | None = None
+
+    def materialize(self) -> None:
+        if self._families is not None:
+            return
+        with self._lock:
+            if self._families is not None:
+                return
+            self.core.ensure_family_artifacts()
+            sat = self.core.sat
+            smt = self.core.smt
+            polynomial_expressions = self.core.polynomial_expressions
+            if sat is None or smt is None or polynomial_expressions is None:
+                raise RuntimeError("family artifact contracts were not installed")
+            verification = VerificationService(
+                self.core.store,
+                self.core.checkers,
+                self.core.schemas,
+                checker_timeout_seconds=105,
+            )
+            polytope = PolytopeService(self.core.store, self.core.schemas)
+            self._verification = verification
+            self._polytope = polytope
+            self._families = create_runtime_selected_families(
+                catalog=self.catalog,
+                binder=self.core.binder,
+                verification=verification,
+                checkers=self.core.checkers,
+                polynomial_expressions=polynomial_expressions,
+                polytope=polytope,
+                sat=sat,
+                smt=smt,
+                runtime_resources=self.core,
+            )
+
+    @property
+    def verification(self) -> VerificationService:
+        self.materialize()
+        assert self._verification is not None
+        return self._verification
+
+    @property
+    def polytope(self) -> PolytopeService:
+        self.materialize()
+        assert self._polytope is not None
+        return self._polytope
+
+    @property
+    def families(self) -> tuple[RuntimeSelectedFamily, ...]:
+        self.materialize()
+        assert self._families is not None
+        return self._families
 
 
 def create_execution_runtime(
@@ -23,44 +90,27 @@ def create_execution_runtime(
     operation_policy: OperationVisibilityPolicy,
     checker_registry: CheckerRegistry | None = None,
 ) -> JacobianRuntime:
-    """Open artifact state and defer implementation loading until selection."""
+    """Open artifact state and defer family machinery until a non-inline ID."""
 
     core = bootstrap_services(
         root,
         operation_policy=operation_policy,
         bind_existing_checkers=True,
+        install_family_artifacts=False,
     )
     try:
         if checker_registry is not None:
             core.checkers = checker_registry
-        verification = VerificationService(
-            core.store,
-            core.checkers,
-            core.schemas,
-            checker_timeout_seconds=105,
-        )
-        polytope = PolytopeService(core.store, core.schemas)
-        selected_families = create_runtime_selected_families(
-            catalog=catalog,
-            binder=core.binder,
-            verification=verification,
-            checkers=core.checkers,
-            polynomial_expressions=core.polynomial_expressions,
-            polytope=polytope,
-            sat=core.sat,
-            smt=core.smt,
-            runtime_resources=core,
-        )
+        control_plane = LazyControlPlane(core, catalog)
         registry = OperationRegistry(
             catalog,
             core.binder,
-            verification,
             core.checkers,
-            selected_families,
             core,
+            control_plane=control_plane,
         )
         core.operations = OperationDispatcher(catalog, registry)
-        return JacobianRuntime(core, verification, polytope)
+        return JacobianRuntime(core, control_plane=control_plane)
     except BaseException as exc:
         try:
             core.close()
@@ -69,4 +119,4 @@ def create_execution_runtime(
         raise
 
 
-__all__ = ["create_execution_runtime"]
+__all__ = ["LazyControlPlane", "create_execution_runtime"]

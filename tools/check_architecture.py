@@ -1,7 +1,7 @@
 """Static architecture enforcement for product source boundaries.
 
 This checker is an AST/filesystem tool that does not import the Jacobian
-runtime.  It enforces eighteen focused invariants:
+runtime.  It enforces nineteen focused invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
@@ -67,6 +67,9 @@ runtime.  It enforces eighteen focused invariants:
 18. **test-ownership**: tests are organized by semantic owner rather than
     historical rollout buckets, and focused suites cannot acquire complete or
     multi-domain runtime fixtures by convenience.
+
+19. **inline-executor-boundary**: the ordinary inline executor must not import
+    storage, checkers, SAT/SMT, Lean, MCP, or tenant isolation.
 
 The checker excludes ``wt-438/`` and generated directories from all scans.
 ``CHANGELOG.md`` is excluded from the unsupported-surface text scan as
@@ -1189,6 +1192,45 @@ def _native_math_boundary_violations(
     return tuple(violations)
 
 
+_INLINE_EXECUTOR_PATH = PurePosixPath("src/jacobian/inline_execution.py")
+_INLINE_EXECUTOR_FORBIDDEN_IMPORT_PREFIXES = (
+    "jacobian.storage",
+    "jacobian.verification",
+    "jacobian.sat_smt",
+    "jacobian.lean_frontend",
+    "jacobian.adapters.mcp",
+    "jacobian.tenant",
+    "jacobian.artifacts",
+    "jacobian.registry",
+    "jacobian.operation_binding",
+    "jacobian.operation_catalog",
+    "jacobian.operation_publication",
+)
+
+
+def _inline_executor_boundary_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    if relative != _INLINE_EXECUTOR_PATH:
+        return ()
+    violations: list[Violation] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        for reference in _import_references(relative, node):
+            if _imports_prefix(reference, _INLINE_EXECUTOR_FORBIDDEN_IMPORT_PREFIXES):
+                violations.append(
+                    Violation(
+                        str(relative),
+                        "inline-executor-boundary",
+                        "the inline executor must not import storage, checkers, "
+                        "SAT/SMT, Lean, MCP, tenant, or binder machinery",
+                        node.lineno,
+                    )
+                )
+    return tuple(violations)
+
+
 def _private_math_backend_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -1878,6 +1920,7 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_unsafe_canonical_conversion_violations(relative, tree))
     violations.extend(_contract_dependency_leaf_violations(relative, tree))
     violations.extend(_native_math_boundary_violations(relative, tree))
+    violations.extend(_inline_executor_boundary_violations(relative, tree))
     violations.extend(_private_math_backend_violations(relative, tree))
     violations.extend(_checker_producer_isolation_violations(relative, tree))
     violations.extend(_erased_contract_operation_violations(relative, tree))

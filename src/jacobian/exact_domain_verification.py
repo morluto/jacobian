@@ -38,7 +38,11 @@ from jacobian.operation_adapters import OperationAdapter, parse_operation_input
 from jacobian.operation_binding import BoundOperationGroup, OperationBinder
 from jacobian.operation_bindings import DurablePublication
 from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
-from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
+from jacobian.operation_declarations import (
+    InlineOperation,
+    OperationDeclaration,
+    OperationDeclarations,
+)
 from jacobian.operation_errors import OperationError, OperationInvocationError
 from jacobian.operation_ports import InputPort
 from jacobian.operation_projection import OperationProjection
@@ -56,7 +60,9 @@ from jacobian.verification.service import VerificationService
 
 
 def _operation_spec(operation: Any) -> Any:
-    return operation if isinstance(operation, OperationDeclaration) else operation.spec
+    if isinstance(operation, (InlineOperation, OperationDeclaration)):
+        return operation
+    return operation.spec
 
 
 def install_exact_domain_verification(
@@ -111,13 +117,15 @@ def install_exact_domain_verification(
         _operation_spec(operation).operation_id
         for operations, _bound_group, _declarations in groups.values()
         for operation in operations
-        if isinstance(operation.publication, DurablePublication)
+        if isinstance(operation, OperationDeclaration)
+        and isinstance(operation.publication, DurablePublication)
     }
     referenceable_results = {
         _operation_spec(operation).operation_id: _operation_spec(operation).result_type
         for operations, _bound_group, _declarations in groups.values()
         for operation in operations
-        if operation.output_ports
+        if isinstance(operation, OperationDeclaration)
+        and operation.output_ports
         and any(
             port.value_type is _operation_spec(operation).result_type
             for port in operation.output_ports
@@ -216,10 +224,13 @@ def bind_selected_exact_verification(
         version="1",
         model=WitnessEnvelope,
     )
-    stored_result_input = isinstance(producer.publication, DurablePublication)
+    stored_result_input = isinstance(producer, OperationDeclaration) and isinstance(
+        producer.publication, DurablePublication
+    )
     candidate_value_type = (
         producer.result_type
         if not stored_result_input
+        and isinstance(producer, OperationDeclaration)
         and any(
             port.value_type is producer.result_type for port in producer.output_ports
         )

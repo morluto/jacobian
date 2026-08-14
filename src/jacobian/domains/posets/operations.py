@@ -34,7 +34,10 @@ from jacobian.operation_bindings import (
     durable_operation,
     inline_operation,
 )
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import (
+    OperationDeclaration,
+    OperationDeclarations,
+)
 
 
 def _networkx() -> Any:
@@ -336,7 +339,7 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
-FINITE_POSET_OPERATIONS: tuple[OperationDeclaration[Any, Any], ...] = (
+FINITE_POSET_OPERATIONS: OperationDeclarations = (
     inline_operation(
         OperationDeclaration(
             operation_id="poset.finite.compute",

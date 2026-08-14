@@ -9,10 +9,13 @@ from jacobian.artifacts import ArtifactService
 from jacobian.catalog_operation_collector import CatalogOperationCollector
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_dispatcher import OperationDispatcher
-from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
+from jacobian.polynomial_expressions import (
+    PolynomialExpressionArtifactService,
+    install_polynomial_expression_artifacts,
+)
 from jacobian.registry import CheckerRegistry
-from jacobian.sat_smt.sat import SatArtifactService
-from jacobian.sat_smt.smt import SmtArtifactService
+from jacobian.sat_smt.sat import SatArtifactService, install_sat_artifacts
+from jacobian.sat_smt.smt import SmtArtifactService, install_smt_artifacts
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceStore
@@ -27,12 +30,37 @@ class RuntimeResources:
     artifacts: ArtifactService
     values: ValueReferenceStore
     binder: OperationBinder
-    sat: SatArtifactService
-    smt: SmtArtifactService
-    polynomial_expressions: PolynomialExpressionArtifactService
     checkers: CheckerRegistry
     operations: CatalogOperationCollector | OperationDispatcher
+    sat: SatArtifactService | None = None
+    smt: SmtArtifactService | None = None
+    polynomial_expressions: PolynomialExpressionArtifactService | None = None
     _owned_resources: list[object] | None = None
+
+    def ensure_family_artifacts(self) -> None:
+        """Install SAT/SMT/polynomial artifact contracts on first family use."""
+
+        if (
+            self.sat is not None
+            and self.smt is not None
+            and self.polynomial_expressions is not None
+        ):
+            return
+        with self.store.transaction():
+            if self.sat is None:
+                self.sat = install_sat_artifacts(
+                    self.store, self.schemas, self.artifacts
+                )
+            if self.smt is None:
+                self.smt = install_smt_artifacts(
+                    self.store, self.schemas, self.artifacts
+                )
+            if self.polynomial_expressions is None:
+                self.polynomial_expressions = install_polynomial_expression_artifacts(
+                    self.store,
+                    self.schemas,
+                    self.artifacts,
+                )
 
     def own(self, resource: object) -> None:
         """Add one lazily acquired closeable to the runtime lifecycle."""

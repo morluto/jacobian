@@ -8,11 +8,14 @@ from jacobian.artifacts import ArtifactService
 from jacobian.catalog_operation_collector import CatalogOperationCollector
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_visibility import OperationVisibilityPolicy
-from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
+from jacobian.polynomial_expressions import (
+    PolynomialExpressionArtifactService,
+    install_polynomial_expression_artifacts,
+)
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.resources import RuntimeResources
-from jacobian.sat_smt.sat import install_sat_artifacts
-from jacobian.sat_smt.smt import install_smt_artifacts
+from jacobian.sat_smt.sat import SatArtifactService, install_sat_artifacts
+from jacobian.sat_smt.smt import SmtArtifactService, install_smt_artifacts
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceStore
@@ -23,6 +26,7 @@ def bootstrap_services(
     *,
     operation_policy: OperationVisibilityPolicy | None = None,
     bind_existing_checkers: bool = False,
+    install_family_artifacts: bool = True,
 ) -> RuntimeResources:
     """Open storage and construct operation-independent resources."""
 
@@ -32,14 +36,18 @@ def bootstrap_services(
         artifacts = ArtifactService(store, schemas)
         values = ValueReferenceStore()
         binder = OperationBinder(store, schemas, artifacts, values)
-        with store.transaction():
-            sat = install_sat_artifacts(store, schemas, artifacts)
-            smt = install_smt_artifacts(store, schemas, artifacts)
-            polynomial_expressions = install_polynomial_expression_artifacts(
-                store,
-                schemas,
-                artifacts,
-            )
+        sat: SatArtifactService | None = None
+        smt: SmtArtifactService | None = None
+        polynomial_expressions: PolynomialExpressionArtifactService | None = None
+        if install_family_artifacts:
+            with store.transaction():
+                sat = install_sat_artifacts(store, schemas, artifacts)
+                smt = install_smt_artifacts(store, schemas, artifacts)
+                polynomial_expressions = install_polynomial_expression_artifacts(
+                    store,
+                    schemas,
+                    artifacts,
+                )
         checkers = CheckerRegistry(store)
         checkers.bind_existing_when_omitted = bind_existing_checkers
         operations = CatalogOperationCollector(
@@ -52,11 +60,11 @@ def bootstrap_services(
             artifacts=artifacts,
             values=values,
             binder=binder,
+            checkers=checkers,
+            operations=operations,
             sat=sat,
             smt=smt,
             polynomial_expressions=polynomial_expressions,
-            checkers=checkers,
-            operations=operations,
         )
     except BaseException as exc:
         try:

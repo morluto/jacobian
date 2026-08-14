@@ -26,7 +26,7 @@ from jacobian.domains.graph_optimization.exact_search import (
 )
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import InlineOperation, OperationDeclaration
 from jacobian.operations import OperationAbortError
 
 
@@ -132,7 +132,7 @@ def _operation[ResultT: ContractModel](
     result_type: type[ResultT],
     solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget], ResultT],
     *tags: str,
-) -> OperationDeclaration[GraphOptimizationRequest, ResultT]:
+) -> InlineOperation[GraphOptimizationRequest, ResultT]:
     return inline_operation(
         OperationDeclaration(
             operation_id=operation_id,

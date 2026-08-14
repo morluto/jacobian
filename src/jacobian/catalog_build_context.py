@@ -59,6 +59,14 @@ def create_catalog_build_context(
     def register(adapter: OperationAdapter[Any]) -> None:
         core.operations.register(adapter)
 
+    if core.sat is None or core.smt is None or core.polynomial_expressions is None:
+        core.ensure_family_artifacts()
+    sat = core.sat
+    smt = core.smt
+    polynomial_expressions = core.polynomial_expressions
+    if sat is None or smt is None or polynomial_expressions is None:
+        raise RuntimeError("catalog compilation requires family artifact contracts")
+
     return CatalogBuildContext(
         store=core.store,
         schemas=core.schemas,
@@ -67,9 +75,9 @@ def create_catalog_build_context(
         checkers=core.checkers,
         verification=verification,
         binder=core.binder,
-        sat=core.sat,
-        smt=core.smt,
-        polynomial_expressions=core.polynomial_expressions,
+        sat=sat,
+        smt=smt,
+        polynomial_expressions=polynomial_expressions,
         authorize_bundled_checkers=authorize_bundled_checkers,
         register_operation=register,
     )

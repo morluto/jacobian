@@ -42,7 +42,7 @@ from jacobian.domains._certified_snf import (
 from jacobian.domains._examples import example
 from jacobian.math import prime_field_linear_algebra as prime_field
 from jacobian.operation_bindings import inline_operation
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import InlineOperation, OperationDeclaration
 
 
 def _canonical_complex(
@@ -521,12 +521,10 @@ _CANONICAL_CIRCLE = {
 }
 
 type TopologyOperation = (
-    OperationDeclaration[
-        SimplicialComplexRequest, SimplicialComplexCanonicalizationResult
-    ]
-    | OperationDeclaration[ChainComplexRequest, ChainComplexResult]
-    | OperationDeclaration[SimplicialHomologyRequest, SimplicialHomologyResult]
-    | OperationDeclaration[
+    InlineOperation[SimplicialComplexRequest, SimplicialComplexCanonicalizationResult]
+    | InlineOperation[ChainComplexRequest, ChainComplexResult]
+    | InlineOperation[SimplicialHomologyRequest, SimplicialHomologyResult]
+    | InlineOperation[
         IntegralSimplicialHomologyRequest, IntegralSimplicialHomologyResult
     ]
 )

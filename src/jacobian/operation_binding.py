@@ -18,11 +18,13 @@ from jacobian.contracts.operations import (
     OperationValuePort,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
+from jacobian.inline_execution import InlineOperationAdapter
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
 from jacobian.operation_declarations import (
     Effect as DeclarationEffect,
 )
 from jacobian.operation_declarations import (
+    InlineOperation,
     InlinePublication,
     OperationDeclaration,
     OperationDeclarations,
@@ -59,26 +61,20 @@ class BoundOperationGroup:
     named_schema_uris: dict[str, str]
 
 
-def _spec(
-    operation: DomainOperation,
-) -> OperationDeclaration[Any, Any]:
-    return operation
-
-
 def _operation_id(operation: DomainOperation) -> str:
-    return _spec(operation).operation_id
+    return operation.operation_id
 
 
 def _operation_version(operation: DomainOperation) -> str:
-    return _spec(operation).version
+    return operation.version
 
 
 def _request_type(operation: DomainOperation) -> type[ContractModel]:
-    return _spec(operation).request_type
+    return operation.request_type
 
 
 def _result_type(operation: DomainOperation) -> type[ContractModel]:
-    return _spec(operation).result_type
+    return operation.result_type
 
 
 class OperationBinder:
@@ -153,6 +149,8 @@ class OperationBinder:
         operation: DomainOperation,
         resources: OperationResources,
     ) -> OperationAdapter[Any]:
+        if isinstance(operation, InlineOperation):
+            return InlineOperationAdapter(operation)
         return DeclaredOperationAdapter(operation, resources)
 
     @staticmethod
@@ -174,11 +172,11 @@ class DeclaredOperationAdapter:
 
     def __init__(
         self,
-        operation: DomainOperation,
+        operation: OperationDeclaration[Any, Any],
         resources: OperationResources,
     ) -> None:
         self.operation = operation
-        self.spec = _spec(operation)
+        self.spec = operation
         self.resources = resources
         publication = operation.publication
         if isinstance(publication, InlinePublication):

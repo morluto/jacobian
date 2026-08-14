@@ -17,7 +17,7 @@ from jacobian.contracts.operations import (
     OperationDiscoveryResult,
     OperationInputKind,
 )
-from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_declarations import InlineOperation, OperationDeclaration
 from jacobian.operation_discovery import (
     discovery_relevance,
     input_acceptance,
@@ -491,7 +491,7 @@ def operation_declaration_digest_from_descriptor(
 
 
 def operation_declaration_digest(
-    declaration: OperationDeclaration[Any, Any],
+    declaration: OperationDeclaration[Any, Any] | InlineOperation[Any, Any],
 ) -> str:
     """Digest the stable typed identity loaded again by selected execution."""
 

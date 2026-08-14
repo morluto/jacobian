@@ -16,7 +16,6 @@ from jacobian.contracts.operations import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_adapters import (
     OperationAdapter,
-    _validate_strict_json_model,
 )
 from jacobian.operation_errors import (
     OperationError,
@@ -262,36 +261,22 @@ def invoke_ready_adapter(
                 ),
             )
     outcome = adapter.invoke(prepared)
-    invalid = _adapter_output_model_failure(descriptor, outcome)
-    if invalid is not None:
-        outcome = invalid
+    if _adapter_output_schema_mismatch(descriptor, outcome):
+        outcome = _adapter_output_model_failure(descriptor)
     return project_operation_result(outcome)
 
 
-def _adapter_output_model_failure(
+def _adapter_output_schema_mismatch(
     descriptor: Any, outcome: OperationProjection
-) -> OperationProjection | None:
+) -> bool:
     publication = outcome.publication
     output = publication.output if publication is not None else None
     if output is None:
-        return None
-    output_type = type(output)
-    if model_schema(output_type) == descriptor.output_schema:
-        try:
-            # Validate the serialized contract rather than a Python-mode dump.
-            # Python-mode dumps turn nested dataclasses (for example
-            # PrimeFieldMatrix) into mappings, which strict model validation
-            # quite correctly rejects even though the published output is
-            # already a valid typed model.
-            _validate_strict_json_model(
-                output_type,
-                output.model_dump_json(warnings="error").encode(),
-                output.model_dump(mode="json"),
-            )
-        except (TypeError, ValueError, ValidationError):
-            pass
-        else:
-            return None
+        return False
+    return bool(model_schema(type(output)) != descriptor.output_schema)
+
+
+def _adapter_output_model_failure(descriptor: Any) -> OperationProjection:
     return OperationProjection(
         operation_id=descriptor.operation_id,
         version=descriptor.version,

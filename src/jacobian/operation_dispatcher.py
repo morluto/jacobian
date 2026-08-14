@@ -42,5 +42,8 @@ class OperationDispatcher(OperationService):
     def catalog(self) -> OperationCatalogSnapshot:
         return self._catalog.snapshot()
 
+    def close(self) -> None:
+        self._registry.close()
+
 
 __all__ = ["OperationDispatcher"]

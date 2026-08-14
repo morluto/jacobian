@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
@@ -136,6 +137,28 @@ class OperationRegistry:
         self.sat = sat
         self.smt = smt
         self._adapters: dict[str, OperationAdapter[Any]] = {}
+        self._owned_close: list[Callable[[], None]] = []
+
+    def close(self) -> None:
+        """Close lazily selected subprocess-backed services in reverse order."""
+
+        failures: list[Exception] = []
+        while self._owned_close:
+            close = self._owned_close.pop()
+            try:
+                close()
+            except Exception as exc:
+                failures.append(exc)
+        if failures:
+            raise ExceptionGroup(
+                "selected operation services failed to close", failures
+            )
+
+    def _own(self, resource: object) -> None:
+        close = getattr(resource, "close", None)
+        if not callable(close):
+            raise TypeError("owned selected-operation resource must be closeable")
+        self._owned_close.append(close)
 
     def resolve(self, operation_id: str) -> OperationAdapter[Any]:
         cached = self._adapters.get(operation_id)
@@ -248,6 +271,7 @@ class OperationRegistry:
                 self.binder.schemas,
                 self.verification,
                 self.checkers,
+                self._own,
             )
         elif operation_id in _SELECTED_GRAPH_OPERATIONS:
             from jacobian.graphs.installation import bind_selected_graph_operation

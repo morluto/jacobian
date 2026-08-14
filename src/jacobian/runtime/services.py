@@ -34,8 +34,21 @@ class CoreServices:
     operations: OperationService
 
     def close(self) -> None:
-        self.values.close()
-        self.store.close()
+        failures: list[Exception] = []
+        close_operations = getattr(self.operations, "close", None)
+        for close in (
+            close_operations if callable(close_operations) else None,
+            self.values.close,
+            self.store.close,
+        ):
+            if close is None:
+                continue
+            try:
+                close()
+            except Exception as exc:
+                failures.append(exc)
+        if failures:
+            raise ExceptionGroup("runtime services failed to close", failures)
 
 
 @dataclass(frozen=True, slots=True)

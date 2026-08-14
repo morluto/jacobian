@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from jacobian.builtin_operations import LeanCheckAdapter
@@ -55,6 +56,7 @@ def bind_selected_lean_operation(
     schemas: SchemaRegistry,
     verification: VerificationService,
     checkers: CheckerRegistry,
+    own: Callable[[object], None],
 ) -> OperationAdapter[Any] | None:
     """Construct only the Lean service family selected by ``operation_id``."""
 
@@ -79,6 +81,7 @@ def bind_selected_lean_operation(
             runtime,
             cache_root=store.root / "cache" / "lean-declarations",
         )
+        own(declarations)
         return _select(
             binder.bind(lean_declaration_query_operations(declarations)).adapters,
             operation_id,
@@ -94,13 +97,14 @@ def bind_selected_lean_operation(
             runtime,
         )
     if operation_id in _EXPLORATION_OPERATIONS:
-        exploration_adapters, _ = install_lean_exploration_operations(
+        exploration_adapters, exploration = install_lean_exploration_operations(
             store,
             schemas,
             binder.artifacts,
             installations,
             runtime,
         )
+        own(exploration.repl)
         return _select(exploration_adapters, operation_id)
     if operation_id == "lean.proof.axioms.inspect":
         axioms_adapter, _ = install_lean_proof_axioms_operation(
@@ -118,6 +122,7 @@ def bind_selected_lean_operation(
             verification,
             installations,
         )
+        own(lean)
         if operation_id == "lean.check":
             return LeanCheckAdapter(lean, runtime)
         proof_edit_adapter, _ = install_lean_proof_edit_operation(

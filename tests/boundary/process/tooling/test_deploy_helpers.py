@@ -9,6 +9,10 @@ rollout machinery.
 
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+from types import ModuleType
+
 import httpx2
 import pytest
 
@@ -19,6 +23,17 @@ from jacobian._deployment_smoke import (
     is_transient_transport_failure,
     raise_for_http_error,
 )
+
+ROOT = Path(__file__).parents[4]
+
+
+def _load_lean_smoke() -> ModuleType:
+    path = ROOT / "deploy" / "smoke_lean.py"
+    spec = importlib.util.spec_from_file_location("smoke_lean", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_smoke_retry_classification_is_transport_only() -> None:
@@ -78,3 +93,33 @@ def test_smoke_failure_exit_codes_are_stable(
 
     assert exc_info.value.code == expected_code
     assert str(failure) in capsys.readouterr().err
+
+
+def test_lean_smoke_uses_one_shot_typed_outcomes() -> None:
+    smoke = _load_lean_smoke()
+    accepted = {
+        "execution": {"status": "COMPLETED"},
+        "output": {"result": {"outcome": "ELABORATED", "diagnostics": []}},
+    }
+    rejected = {
+        "execution": {"status": "COMPLETED"},
+        "output": {
+            "result": {
+                "outcome": "REJECTED",
+                "diagnostics": [{"severity": "ERROR", "message": "invalid proof"}],
+            }
+        },
+    }
+
+    smoke._require_outcome(accepted, expected="ELABORATED")
+    smoke._require_outcome(rejected, expected="REJECTED", require_diagnostics=True)
+
+    with pytest.raises(RuntimeError, match="typed diagnostics"):
+        smoke._require_outcome(
+            {
+                "execution": {"status": "COMPLETED"},
+                "output": {"result": {"outcome": "REJECTED", "diagnostics": []}},
+            },
+            expected="REJECTED",
+            require_diagnostics=True,
+        )

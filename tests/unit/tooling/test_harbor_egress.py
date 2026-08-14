@@ -148,6 +148,8 @@ def test_jacobian_sidecar_keeps_its_project_network_under_egress_control() -> No
     assert "networks:" not in observation_overlay
     assert "condition: service_healthy" in observation_overlay
     assert "socket.create_connection" in observation_overlay
+    assert "--state-dir" not in observation_overlay
+    assert "volumes:" not in observation_overlay
 
 
 def test_proxy_control_job_is_valid_harbor_job_json() -> None:

@@ -34,15 +34,15 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
 
-CI runs the ordinary Python surface, MCP boundaries, maintained Python provider
-boundaries, and the wheel smoke. Full Lean runs on merge-group candidates and
-on `main`, not on every pull request. That gate needs GitHub merge queue
+CI runs the ordinary Python surface, MCP boundaries, and the wheel smoke. Full
+Lean runs on merge-group candidates and on `main`, not on every pull request.
+That gate needs GitHub merge queue
 enabled on `main`; without a queue, Lean only runs after a push to `main`. You
 do not need to reproduce Lean locally for a routine change unless you edited
-Lean sources, fixtures, or provider identity.
+the fixed Lean check or its toolchain configuration.
 
-Specialist lanes (`make test-lean`, `make test-provider`, `make test-process`,
-`make test-mcp`, `make test-domain`, and `make test-composition`) are
+Specialist lanes (`make test-lean`, `make test-process`, `make test-mcp`,
+`make test-domain`, and `make test-composition`) are
 troubleshooting and boundary work, not a routine
 confidence gate. Run one only when your change crosses that boundary or you are
 reproducing an environment-specific failure. The
@@ -61,13 +61,13 @@ operation.
 - **Broad or unknown impact** (CI, dependencies, shared infrastructure): run
   `make check-static` plus the affected tests, and let CI own the fail-closed
   functional lanes.
-- **Lean:** `make check-external` when Lean or Mathlib trees change. That
-  target is the pinned Lean specialist lane only (`test-lean`).
-- **Optional or maintained Python providers:** `make test-provider` when those
-  trees change. `make check-all` already includes that lane; `check-external`
-  does not rerun it. Hosted CI runs full Lean on merge-group candidates and
-  `main` (and after a push to `main` if merge queue is not enabled); pull
-  requests skip that specialist job.
+- **Lean:** `make check-external` when the fixed Lean check or its toolchain
+  configuration changes. That target is the pinned Lean specialist lane only
+  (`test-lean`).
+- **Maintained Python libraries:** run the owning domain or unit test when a
+  direct mathematical adapter changes. Hosted CI runs full Lean on merge-group
+  candidates and `main` (and after a push to `main` if merge queue is not
+  enabled); pull requests skip that specialist job.
 - **Exhaustive local reproduction:** `make test-full` is an explicit exception
   path, not a routine gate. It takes this worktree's exhaustive validation
   lock; `make validation-status` shows whether that lock is held. Before it,
@@ -127,8 +127,8 @@ changed behavior. If the tree changes during validation, rerun checks whose
 evidence was invalidated by that change; do not describe results from an
 earlier tree as final-tree validation. `make check-all` is an explicit broad
 reproduction, not a routine closeout requirement. CI owns the complete matrix.
-Use `make check-external` when Lean or Mathlib change, and `make test-provider`
-when optional or maintained Python providers change.
+Use `make check-external` when the fixed Lean check changes, and run the owning
+domain or unit test when a maintained Python adapter changes.
 
 ## Harbor and Oracle validation
 

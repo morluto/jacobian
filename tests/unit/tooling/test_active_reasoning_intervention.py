@@ -312,12 +312,11 @@ def test_paired_behavior_uses_treatment_minus_control_and_task_bootstrap() -> No
 
 
 def test_server_command_uses_current_remote_host() -> None:
-    command = study._server_command(
-        state_dir=Path("/tmp/state"), port=8123, trial_id="trial"
-    )
+    command = study._server_command(port=8123, trial_id="trial")
 
     assert "jacobian.adapters.mcp.remote_cli" in command[2]
     assert "--allow-anonymous" in command
+    assert "--state-dir" not in command
 
 
 def test_committed_report_is_bounded_ineligible_and_research_only() -> None:

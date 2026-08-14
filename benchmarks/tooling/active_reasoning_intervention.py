@@ -238,7 +238,7 @@ def _wait_for_port(
     raise HarborSuiteError("Jacobian MCP server did not become ready")
 
 
-def _server_command(*, state_dir: Path, port: int, trial_id: str) -> tuple[str, ...]:
+def _server_command(*, port: int, trial_id: str) -> tuple[str, ...]:
     code = (
         "import logging,sys;"
         "logging.basicConfig(level=logging.INFO,stream=sys.stderr,"
@@ -260,8 +260,6 @@ def _server_command(*, state_dir: Path, port: int, trial_id: str) -> tuple[str, 
         trial_id,
         "--operation-policy-profile",
         "COMPUTE_VERIFY_NO_RETRIEVAL",
-        "--state-dir",
-        str(state_dir),
     )
 
 
@@ -312,9 +310,7 @@ def _run_trial(
     trial.mkdir(parents=True)
     workspace = trial / "workspace"
     verifier_logs = trial / "verifier"
-    state_dir = trial / "state"
     verifier_logs.mkdir()
-    state_dir.mkdir()
     _copy_visible_task(task, workspace)
     if arm == "internalcot":
         skill_source = (
@@ -335,9 +331,7 @@ def _run_trial(
     )
     started = time.monotonic()
     with server_stdout.open("wb") as stdout_handle, server_log.open("wb") as log_handle:
-        server_command = _server_command(
-            state_dir=state_dir, port=port, trial_id=trial_id
-        )
+        server_command = _server_command(port=port, trial_id=trial_id)
         server_cancel = threading.Event()
         server_results: list[ToolCommandResult] = []
         server_request = ToolCommandRequest(

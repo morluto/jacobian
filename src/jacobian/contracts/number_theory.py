@@ -25,6 +25,7 @@ from jacobian.contracts.results import ContractModel
 # ---------------------------------------------------------------------------
 
 _MAX_INTEGER_LENGTH = 256
+_MAX_FACTORIZATION_LENGTH = 12
 # These small bounds deliberately keep arithmetic functions that may factor
 # their input (totient, Möbius, divisor sigma, square-free predicates, and
 # multiplicative order) safe for in-process SymPy execution.
@@ -45,6 +46,14 @@ BoundedInteger = Annotated[
     StringConstraints(
         pattern=r"^-?(?:0|[1-9][0-9]*)$",
         max_length=_MAX_INTEGER_LENGTH,
+        strict=True,
+    ),
+]
+FactorizationInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^-?(?:0|[1-9][0-9]*)$",
+        max_length=_MAX_FACTORIZATION_LENGTH,
         strict=True,
     ),
 ]
@@ -82,9 +91,9 @@ class IntegerValueRequest(ContractModel):
 
 
 class FactorizationRequest(ContractModel):
-    """One integer for an exact factorization-derived computation."""
+    """One small integer for direct exact factorization in the server process."""
 
-    value: BoundedInteger
+    value: FactorizationInteger
 
 
 class PowerfulNumberRequest(FactorizationRequest):

@@ -350,13 +350,9 @@ def _compose(image: str) -> dict[str, Any]:
                     "8000",
                     "--allow-anonymous",
                     "--stateless-http",
-                    "--state-dir",
-                    "/state",
                 ],
-                "volumes": ["jacobian-state:/state"],
             }
-        },
-        "volumes": {"jacobian-state": {}},
+        }
     }
 
 

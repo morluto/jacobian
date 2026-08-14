@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.contracts.number_theory import (
     ChineseRemainderRequest,
     FactorialValuationRequest,
+    FactorizationRequest,
     ModularValueRequest,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
@@ -74,6 +75,7 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
         (NonnegativeIntegerRequest, {"n": 1_001}),
         (ModularValueRequest, {"value": "2", "modulus": 10_001}),
         (FactorialValuationRequest, {"n": 1, "base": 1_000_001}),
+        (FactorizationRequest, {"value": "1000000000000"}),
     ):
         with pytest.raises(ValidationError):
             model.model_validate(payload)

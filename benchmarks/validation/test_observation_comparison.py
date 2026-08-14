@@ -134,7 +134,9 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
 
     assert _comparison_job(control) == _comparison_job(treatment)
 
-    treatment["artifacts"].append({"source": "/state", "service": "jacobian"})
+    treatment["artifacts"].append(
+        {"source": "/logs/jacobian/extra.log", "service": "jacobian"}
+    )
     assert _comparison_job(control) != _comparison_job(treatment)
     treatment["artifacts"].pop()
 

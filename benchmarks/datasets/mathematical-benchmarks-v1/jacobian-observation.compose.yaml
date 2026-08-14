@@ -20,10 +20,6 @@ services:
       - --port
       - "8000"
       - --allow-anonymous
-      - --state-dir
-      - /state
-    volumes:
-      - jacobian-state:/state
     healthcheck:
       test:
         - CMD
@@ -33,5 +29,3 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
-volumes:
-  jacobian-state: {}

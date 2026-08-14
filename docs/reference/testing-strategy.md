@@ -21,7 +21,6 @@ when a change crosses its real boundary:
 | Change | Additional check |
 | --- | --- |
 | MCP tool schema or transport | `make test-mcp` |
-| Maintained Python backend | `make test-provider` |
 | One mathematical domain | `make test-unit TESTS=tests/unit/domains/test_logic_operations.py` |
 | Documentation | `make docs-linkcheck` |
 

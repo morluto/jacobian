@@ -1,4 +1,4 @@
-"""Operation and behavior smoke for a deployed pinned Lean portfolio."""
+"""One-shot Lean source smoke for a deployed fixed toolchain."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ from jacobian._deployment_smoke import (
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Check deployed CORE/MATHLIB verification and accepted/rejected "
-            "Lean tactic transitions. This smoke writes disposable artifacts."
+            "Check accepted and rejected bounded Lean source snippets through "
+            "the deployed one-shot lean.check operation."
         )
     )
     parser.add_argument("url", help="public or localhost MCP URL ending in /mcp")
@@ -67,44 +67,17 @@ def _require_completed(result: dict[str, Any], *, operation: str) -> None:
         raise RuntimeError(f"{operation} did not complete")
 
 
-def _require_verified(result: dict[str, Any], *, environment: str) -> None:
-    _require_completed(result, operation=f"{environment} lean.check")
-    if result.get("output", {}).get("conclusion") != "TRUE":
-        raise RuntimeError(f"{environment} lean.check did not accept True")
-    if not result.get("verification_record_uri"):
-        raise RuntimeError(f"{environment} lean.check was not independently verified")
-
-
-def _require_transition(
-    result: dict[str, Any], *, accepted: bool, completed: bool
+def _require_outcome(
+    result: dict[str, Any], *, expected: str, require_diagnostics: bool = False
 ) -> None:
-    _require_completed(result, operation="Lean tactic transition")
+    _require_completed(result, operation="lean.check")
     output = result.get("output", {})
-    if (
-        output.get("accepted") is not accepted
-        or output.get("completed") is not completed
-    ):
-        raise RuntimeError(
-            "Lean tactic transition returned an unexpected candidate verdict"
-        )
-    successors = output.get("successor_states")
-    if accepted != (isinstance(successors, list) and len(successors) == 1):
-        raise RuntimeError("Lean tactic transition successor binding is inconsistent")
-    if not accepted and not output.get("diagnostics"):
-        raise RuntimeError("rejected Lean tactic returned no actionable diagnostics")
-
-
-def _require_mathlib_declaration(result: dict[str, Any]) -> None:
-    _require_completed(result, operation="MATHLIB declaration search")
-    output = result.get("output", {})
-    native_result = output.get("result") if isinstance(output, dict) else None
-    declarations = (
-        native_result.get("declarations") if isinstance(native_result, dict) else None
-    )
-    if not isinstance(declarations, list) or not declarations:
-        raise RuntimeError("MATHLIB declaration search returned no exact match")
-    if declarations[0].get("name") != "irrational_sqrt_two":
-        raise RuntimeError("MATHLIB declaration search returned an unexpected match")
+    value = output.get("result") if isinstance(output, dict) else None
+    if not isinstance(value, dict) or value.get("outcome") != expected:
+        raise RuntimeError(f"lean.check did not return {expected}")
+    diagnostics = value.get("diagnostics")
+    if require_diagnostics and (not isinstance(diagnostics, list) or not diagnostics):
+        raise RuntimeError("rejected Lean source returned no typed diagnostics")
 
 
 async def inspect(*, url: str, timeout_seconds: float) -> dict[str, Any]:
@@ -122,54 +95,24 @@ async def inspect(*, url: str, timeout_seconds: float) -> dict[str, Any]:
             raise_exceptions=True,
         ) as client,
     ):
-        core = await _run(
-            client,
-            "lean.check",
-            {"statement": "True", "proof": "by trivial", "environment": "CORE"},
-        )
-        _require_verified(core, environment="CORE")
-        mathlib = await _run(
-            client,
-            "lean.check",
-            {
-                "statement": "True",
-                "proof": "by trivial",
-                "environment": "MATHLIB",
-            },
-        )
-        _require_verified(mathlib, environment="MATHLIB")
-        declaration = await _run(
-            client,
-            "lean.declaration.search",
-            {
-                "environment": "MATHLIB",
-                "name_contains": "irrational_sqrt_two",
-                "result_limit": 1,
-            },
-        )
-        _require_mathlib_declaration(declaration)
-
         accepted = await _run(
             client,
-            "lean.proof_state.apply_tactic",
-            {"statement": "True", "tactic": "trivial", "environment": "CORE"},
+            "lean.check",
+            {"source": "example : True := by trivial"},
         )
-        _require_transition(accepted, accepted=True, completed=True)
+        _require_outcome(accepted, expected="ELABORATED")
         rejected = await _run(
             client,
-            "lean.proof_state.apply_tactic",
-            {"statement": "1 = 2", "tactic": "rfl", "environment": "CORE"},
+            "lean.check",
+            {"source": "example : 1 = 2 := by rfl"},
         )
-        _require_transition(rejected, accepted=False, completed=False)
+        _require_outcome(rejected, expected="REJECTED", require_diagnostics=True)
 
     return {
         "url": url,
         "checks": {
-            "core_verification": "VERIFIED",
-            "mathlib_verification": "VERIFIED",
-            "mathlib_declaration_search": "COMPLETED",
-            "accepted_tactic": "COMPLETED",
-            "rejected_tactic": "DIAGNOSTIC",
+            "accepted_source": "ELABORATED",
+            "rejected_source": "REJECTED",
         },
     }
 

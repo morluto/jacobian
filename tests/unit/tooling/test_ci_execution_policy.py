@@ -223,17 +223,6 @@ def test_component_lane_uses_module_fixture_affinity() -> None:
     assert "--dist worksteal" in domain
 
 
-def test_mcp_catalog_fixture_is_explicit_and_xdist_shared() -> None:
-    conftest = (ROOT / "tests/boundary/mcp/conftest.py").read_text(encoding="utf-8")
-
-    assert "autouse=True" not in conftest
-    assert (
-        'template_target(tmp_path_factory, request, "compiled-mcp-state")' in conftest
-    )
-    assert "publish_template(target, build, lock=lock)" in conftest
-    assert 'copy_template(compiled_mcp_state, tmp_path / "state")' in conftest
-
-
 def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 

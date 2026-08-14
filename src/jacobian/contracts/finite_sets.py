@@ -6,6 +6,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.exact import CanonicalInteger
 from jacobian.contracts.results import ContractModel
 
@@ -51,7 +52,7 @@ class FiniteSetCoverageResult(ContractModel):
     @model_validator(mode="after")
     def require_canonical_diagnostics(self) -> Self:
         for name in ("missing", "duplicates", "outside"):
-            values = [int(value) for value in getattr(self, name)]
+            values = [parse_canonical_integer(value) for value in getattr(self, name)]
             if values != sorted(set(values)):
                 raise ValueError(f"coverage {name} values must be sorted and unique")
         if self.holds != (not (self.missing or self.duplicates or self.outside)):
@@ -68,7 +69,7 @@ class FiniteSetElementListResult(ContractModel):
 
     @model_validator(mode="after")
     def require_sorted_unique(self) -> Self:
-        values = [int(element) for element in self.elements]
+        values = [parse_canonical_integer(element) for element in self.elements]
         if values != sorted(values):
             raise ValueError("set element list must be sorted")
         if len(set(values)) != len(values):

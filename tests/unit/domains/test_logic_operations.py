@@ -88,6 +88,14 @@ def test_smt_solver_uses_the_inline_smtlib_query() -> None:
     assert result.model_smtlib is not None
 
 
+def test_smt_request_rejects_a_logic_name_hidden_in_a_comment() -> None:
+    with pytest.raises(ValueError, match="declare the requested logic"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib=("; (set-logic QF_LIA)\n(set-logic QF_UF)\n(check-sat)\n"),
+        )
+
+
 def test_lean_check_returns_typed_rejection_without_retaining_source(
     monkeypatch,
 ) -> None:

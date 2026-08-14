@@ -133,6 +133,86 @@ class SmtLogic(StrEnum):
     QF_LRA = "QF_LRA"
 
 
+def _consume_smtlib_string(source: str, position: int) -> int:
+    position += 1
+    while position < len(source):
+        if source[position] != '"':
+            position += 1
+        elif position + 1 < len(source) and source[position + 1] == '"':
+            position += 2
+        else:
+            return position + 1
+    return position
+
+
+def _consume_smtlib_quoted_symbol(source: str, position: int) -> int:
+    closing = source.find("|", position + 1)
+    return len(source) if closing == -1 else closing + 1
+
+
+def _consume_smtlib_atom(source: str, position: int) -> int:
+    while (
+        position < len(source)
+        and not source[position].isspace()
+        and source[position] not in ';()"|'
+    ):
+        position += 1
+    return position
+
+
+def _tokenize_smtlib(source: str) -> tuple[str, ...]:
+    """Tokenize enough SMT-LIB syntax to distinguish real command forms."""
+
+    tokens: list[str] = []
+    position = 0
+    while position < len(source):
+        character = source[position]
+        if character.isspace():
+            position += 1
+        elif character == ";":
+            newline = source.find("\n", position)
+            position = len(source) if newline == -1 else newline + 1
+        elif character in "()":
+            tokens.append(character)
+            position += 1
+        elif character == '"':
+            position = _consume_smtlib_string(source, position)
+            tokens.append("<string>")
+        elif character == "|":
+            position = _consume_smtlib_quoted_symbol(source, position)
+            tokens.append("<quoted-symbol>")
+        else:
+            end = _consume_smtlib_atom(source, position)
+            tokens.append(source[position:end])
+            position = end
+    return tuple(tokens)
+
+
+def _top_level_smtlib_commands(source: str) -> tuple[tuple[str, ...], ...]:
+    """Return the heads and immediate atoms of complete top-level commands.
+
+    This deliberately does not parse SMT-LIB.  Z3 remains the parser and solver;
+    the small lexical pass only prevents comments, strings, and nested terms from
+    impersonating the two boundary commands whose presence this contract owns.
+    """
+
+    commands: list[tuple[str, ...]] = []
+    command: list[str] = []
+    depth = 0
+    for token in _tokenize_smtlib(source):
+        if token == "(":
+            if depth == 0:
+                command = []
+            depth += 1
+        elif token == ")":
+            depth -= 1
+            if depth == 0:
+                commands.append(tuple(command))
+        elif depth == 1:
+            command.append(token)
+    return tuple(commands)
+
+
 class SmtSolveRequest(ContractModel):
     logic: SmtLogic
     smtlib: str = Field(min_length=1, max_length=_MAX_SMTLIB_BYTES)
@@ -146,9 +226,13 @@ class SmtSolveRequest(ContractModel):
             raise ValueError("SMT-LIB input must be ASCII") from exc
         if len(encoded) > _MAX_SMTLIB_BYTES:
             raise ValueError("SMT-LIB input exceeds the byte limit")
-        if "(set-logic " + self.logic.value + ")" not in self.smtlib:
+        commands = _top_level_smtlib_commands(self.smtlib)
+        logic_commands = tuple(
+            command for command in commands if command[:1] == ("set-logic",)
+        )
+        if logic_commands != (("set-logic", self.logic.value),):
             raise ValueError("SMT-LIB input must declare the requested logic")
-        if self.smtlib.count("(check-sat)") != 1:
+        if commands.count(("check-sat",)) != 1:
             raise ValueError("SMT-LIB input must contain exactly one check-sat command")
         return self
 

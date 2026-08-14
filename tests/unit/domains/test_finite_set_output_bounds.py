@@ -5,14 +5,38 @@ import pytest
 from jacobian.contracts.finite_sets import (
     FiniteIntegerSet,
     FiniteSetCardinalityResult,
+    FiniteSetCoverageRequest,
     FiniteSetElementListResult,
     FiniteSetPairRequest,
 )
 from jacobian.domains.finite_sets.operations import (
+    decide_exact_cover,
     set_symmetric_difference,
     set_union,
     union_cardinality,
 )
+
+
+def test_finite_set_operations_support_canonical_integers_above_python_digit_limit() -> (
+    None
+):
+    value = "1" + "0" * 4_300
+
+    coverage = decide_exact_cover(
+        FiniteSetCoverageRequest(
+            scope=FiniteIntegerSet(elements=(value,)),
+            values=(),
+        )
+    )
+    union = set_union(
+        FiniteSetPairRequest(
+            left=FiniteIntegerSet(elements=(value,)),
+            right=FiniteIntegerSet(elements=()),
+        )
+    )
+
+    assert coverage.missing == (value,)
+    assert union.elements == (value,)
 
 
 @pytest.fixture

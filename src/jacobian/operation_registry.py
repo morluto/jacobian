@@ -57,6 +57,9 @@ _SELECTED_DIRECT_OPERATIONS = frozenset(
         "sat.unsat_proof.verify",
         "sat.lrat.verify",
         "smt.unsat_proof.verify",
+        "sat.model.find",
+        "sat.unsat_proof.find",
+        "smt.unsat_proof.find",
     }
 )
 _SELECTED_RESOURCE_OPERATIONS = (
@@ -280,6 +283,29 @@ class OperationRegistry:
         operation_id: str,
         descriptor: OperationDescriptor,
     ) -> OperationAdapter[Any] | None:
+        if operation_id in {"sat.model.find", "sat.unsat_proof.find"}:
+            from jacobian.sat_smt.cadical import install_cadical_operations
+
+            if descriptor.provider_runtime is None:
+                raise OperationCatalogError(
+                    "CaDiCaL provider observation is missing; run `jacobian update`"
+                )
+            return next(
+                adapter
+                for adapter in install_cadical_operations(
+                    self.sat,
+                    descriptor.provider_runtime,
+                )
+                if adapter.descriptor.operation_id == operation_id
+            )
+        if operation_id == "smt.unsat_proof.find":
+            from jacobian.sat_smt.cvc5 import install_cvc5_operation
+
+            if descriptor.provider_runtime is None:
+                raise OperationCatalogError(
+                    "cvc5 provider observation is missing; run `jacobian update`"
+                )
+            return install_cvc5_operation(self.smt, descriptor.provider_runtime)
         if operation_id == "sat.cnf.materialize":
             from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
 

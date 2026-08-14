@@ -87,6 +87,9 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
                 ("sat.unsat_proof.verify", {}),
                 ("sat.lrat.verify", {}),
                 ("smt.unsat_proof.verify", {}),
+                ("sat.model.find", {}),
+                ("sat.unsat_proof.find", {}),
+                ("smt.unsat_proof.find", {}),
             ):
                 invalid_verification = await client.call_tool(
                     "math.run",

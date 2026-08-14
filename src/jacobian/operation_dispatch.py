@@ -25,13 +25,11 @@ from jacobian.operation_errors import (
 )
 from jacobian.operation_projection import OperationProjection, project_operation_result
 from jacobian.operation_validation import validate_payload, validator
-from jacobian.operation_verification import validate_verified_result
 from jacobian.operations import Failed
 from jacobian.provider_runtime import (
     ProviderRuntimeError,
     require_provider_runtime_ready,
 )
-from jacobian.schema_registry import model_schema
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,23 +63,20 @@ def log_invocation(result: OperationResult, started: float) -> None:
     diagnostic_codes = (
         ",".join(diagnostic.code for diagnostic in result.diagnostics) or "-"
     )
-    verification_record_uri_present = result.verification_record_uri is not None
     _LOGGER.info(
         (
             "operation invocation operation_id=%s version=%s "
-            "status=%s verification_record_uri_present=%s elapsed_ms=%d diagnostics=%s"
+            "status=%s elapsed_ms=%d diagnostics=%s"
         ),
         result.operation_id,
         result.operation_version,
         result.execution.status.value,
-        verification_record_uri_present,
         elapsed_ms,
         diagnostic_codes,
         extra={
             "jacobian_operation_id": result.operation_id,
             "jacobian_operation_version": result.operation_version,
             "jacobian_execution_status": result.execution.status.value,
-            "jacobian_verification_record_uri_present": verification_record_uri_present,
             "jacobian_elapsed_ms": elapsed_ms,
             "jacobian_diagnostic_codes": tuple(
                 diagnostic.code for diagnostic in result.diagnostics
@@ -105,10 +100,6 @@ def dispatch_operation(dispatch: Any, request: OperationRequest) -> OperationRes
     if resolution is not None:
         log_invocation(resolution, started)
         return resolution
-    invalid_inputs = _undeclared_value_inputs_failure(descriptor, request)
-    if invalid_inputs is not None:
-        log_invocation(invalid_inputs, started)
-        return invalid_inputs
     try:
         prepared = adapter.prepare(request)
         result = invoke_ready_adapter(
@@ -140,32 +131,8 @@ def dispatch_operation(dispatch: Any, request: OperationRequest) -> OperationRes
     if invalid is not None:
         log_invocation(invalid, started)
         return invalid
-    if dispatch.store is not None:
-        validate_verified_result(dispatch.store, result)
     log_invocation(result, started)
     return result
-
-
-def _undeclared_value_inputs_failure(
-    descriptor: Any,
-    request: OperationRequest,
-) -> OperationResult | None:
-    if not request.inputs or descriptor.input_ports:
-        return None
-    return failed_result(
-        operation_id=descriptor.operation_id,
-        version=descriptor.version,
-        diagnostic=OperationDiagnostic(
-            code="INVALID_REQUEST",
-            stage="operation_input_validation",
-            message="The selected operation declares no typed value inputs.",
-            path="inputs",
-            expected="no value references",
-            actual_type="object",
-            hint="Remove the undeclared value-reference inputs and retry.",
-            details={"unknown_input_ports": sorted(request.inputs)},
-        ),
-    )
 
 
 def _unknown_operation_failure(request: OperationRequest) -> OperationResult:
@@ -315,47 +282,7 @@ def invoke_ready_adapter(
                     details={"provider_failure_code": exc.code.value},
                 ),
             )
-    outcome = adapter.invoke(prepared)
-    invalid = _adapter_output_model_failure(descriptor, outcome)
-    if invalid is not None:
-        outcome = invalid
-    return project_operation_result(outcome)
-
-
-def _adapter_output_model_failure(
-    descriptor: Any, outcome: OperationProjection
-) -> OperationProjection | None:
-    publication = outcome.publication
-    output = publication.output if publication is not None else None
-    if output is None:
-        return None
-    output_type = type(output)
-    if model_schema(output_type) == descriptor.output_schema:
-        try:
-            output_type.model_validate_json(
-                output.model_dump_json(warnings="error").encode(),
-                strict=True,
-            )
-        except (TypeError, ValueError, ValidationError):
-            pass
-        else:
-            return None
-    return OperationProjection(
-        operation_id=descriptor.operation_id,
-        version=descriptor.version,
-        terminal=Failed(
-            status=ExecutionStatus.ERROR,
-            diagnostic=OperationDiagnostic(
-                code="ADAPTER_RESULT_INVALID",
-                stage="adapter_execution",
-                message=(
-                    "The adapter returned a typed result that does not match "
-                    "its installed output model."
-                ),
-                hint="Fix the adapter output type or its operation descriptor.",
-            ),
-        ),
-    )
+    return project_operation_result(adapter.invoke(prepared))
 
 
 __all__ = ["dispatch_operation", "log_invocation", "register_operation"]

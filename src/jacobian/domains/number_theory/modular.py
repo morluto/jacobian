@@ -14,7 +14,6 @@ from jacobian.contracts.number_theory import (
 )
 from jacobian.domains._examples import example
 from jacobian.domains.number_theory._support import (
-    materialized_number_theory_operation,
     number_theory_operation,
 )
 from jacobian.domains.number_theory.discrete_logarithm import (
@@ -23,10 +22,10 @@ from jacobian.domains.number_theory.discrete_logarithm import (
 from jacobian.domains.number_theory.modular_operations import (
     compute_jacobi_symbol,
     compute_modular_inverse,
+    compute_modular_polynomial_residue_assignments,
     compute_modular_polynomial_residue_image,
     compute_multiplicative_order,
     enumerate_quadratic_residues,
-    materialize_modular_polynomial_residue_assignments,
     solve_chinese_remainder,
 )
 
@@ -136,30 +135,26 @@ MODULAR_OPERATIONS = (
             ),
         ),
     ),
-    materialized_number_theory_operation(
-        "modular.polynomial_residue_image.assignments.materialize",
-        "Materialize modular polynomial assignment ledger",
+    number_theory_operation(
+        "modular.polynomial_residue_image.assignments.compute",
+        "Compute modular polynomial assignment ledger",
         (
-            "Retain the complete assignment-to-residue ledger for a bounded sparse "
-            "modular polynomial, including the inline image summary."
+            "Compute the complete bounded assignment-to-residue ledger for a sparse "
+            "modular polynomial, including the image summary."
         ),
         ModularPolynomialResidueImageRequest,
         ModularPolynomialResidueImageResult,
-        materialize_modular_polynomial_residue_assignments,
+        compute_modular_polynomial_residue_assignments,
         "number-theory",
         "modular",
         "polynomial",
         "residue",
         "ledger",
         "evidence",
-        resource_reason=(
-            "the complete assignment-to-residue ledger is retained as explicit "
-            "bulk evidence for independent replay"
-        ),
         examples=(
             example(
                 "cubic_assignment_ledger_mod_7",
-                "Materialize the assignment ledger for four times x cubed modulo 7.",
+                "Compute the assignment ledger for four times x cubed modulo 7.",
                 {
                     "modulus": 7,
                     "variables": [

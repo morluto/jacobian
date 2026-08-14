@@ -82,7 +82,6 @@ def test_help_all_retains_specialist_and_compatibility_commands() -> None:
         "harbor-plan",
         "harbor-prepare-task",
         "harbor-validate-task",
-        "deploy-check",
         "npm-test",
         "test-full",
         "validation-status",

@@ -11,14 +11,14 @@ from jacobian.contracts.exact import (
     CanonicalInteger,
     CanonicalRational,
 )
-from jacobian.contracts.polynomials import (
+from jacobian.contracts.results import ContractModel
+from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalPolynomial,
     require_polynomial_budget,
 )
-from jacobian.contracts.results import ContractModel
 
 _MAX_COEFFICIENT_DIGITS = 256
 _MAX_GCD_TERMS = 512

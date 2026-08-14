@@ -35,9 +35,6 @@ class _McpResourceTelemetry:
     read_attempts: int = 0
     read_uris: list[str] = field(default_factory=list)
     read_successes: int = 0
-    uri_preservation_attempts: int = 0
-    uri_preservation_successes: int = 0
-    digest_preservation_successes: int = 0
 
 
 def _contains_value(value: object, *, field: str, accepted: set[object]) -> bool:
@@ -136,37 +133,6 @@ def _mcp_resource_read_failed(item: Mapping[str, Any]) -> bool:
     )
 
 
-def _mcp_resource_identity_preserved(
-    item: Mapping[str, Any],
-    uri: str,
-) -> tuple[bool, bool]:
-    payload = _mcp_structured_payload(item) or _mcp_text_payload(item)
-    if payload is None:
-        return False, False
-    uri_preserved = payload.get("artifact_uri") == uri
-    manifest = payload.get("manifest")
-    digest_preserved = False
-    if isinstance(manifest, Mapping) and uri.startswith("artifact://sha256/"):
-        try:
-            manifest_digest = (
-                "sha256:" + hashlib.sha256(canonicalize_json(manifest)).hexdigest()
-            )
-            payload_digest = manifest.get("payload_digest")
-            actual_payload_digest = (
-                "sha256:"
-                + hashlib.sha256(canonicalize_json(payload["payload"])).hexdigest()
-            )
-        except (TypeError, ValueError):
-            manifest_digest = None
-            actual_payload_digest = None
-        digest_preserved = (
-            uri_preserved
-            and manifest_digest == "sha256:" + uri.removeprefix("artifact://sha256/")
-            and payload_digest == actual_payload_digest
-        )
-    return uri_preserved, digest_preserved
-
-
 def _record_mcp_resource_telemetry(
     telemetry: _McpResourceTelemetry,
     item: object,
@@ -182,19 +148,9 @@ def _record_mcp_resource_telemetry(
     telemetry.read_attempts += 1
     telemetry.read_uris.append(resource_read_uri)
     read_failed = _mcp_resource_read_failed(item)
-    if resource_read_uri in telemetry.link_uris:
-        telemetry.uri_preservation_attempts += 1
     if read_failed:
         return
     telemetry.read_successes += 1
-    uri_preserved, digest_preserved = _mcp_resource_identity_preserved(
-        item,
-        resource_read_uri,
-    )
-    if resource_read_uri in telemetry.link_uris and uri_preserved:
-        telemetry.uri_preservation_successes += 1
-    if digest_preserved:
-        telemetry.digest_preservation_successes += 1
 
 
 def _serialized_bytes(value: object) -> int:
@@ -617,8 +573,6 @@ def _record_operation_invocation(
             "operation_id": arguments["operation_id"],
             "input": arguments.get("payload"),
             "output": response.get("output"),
-            "artifact_uris": response.get("artifact_uris"),
-            "verification_record_uri": response.get("verification_record_uri"),
         }
     )
 
@@ -714,15 +668,6 @@ def _transcript_payload(telemetry: _AgentTranscriptTelemetry) -> dict[str, Any]:
         "mcp_resource_read_attempts": telemetry.resource_telemetry.read_attempts,
         "mcp_resource_read_uris": telemetry.resource_telemetry.read_uris,
         "mcp_resource_read_successes": telemetry.resource_telemetry.read_successes,
-        "mcp_resource_uri_preservation_attempts": (
-            telemetry.resource_telemetry.uri_preservation_attempts
-        ),
-        "mcp_resource_uri_preservation_successes": (
-            telemetry.resource_telemetry.uri_preservation_successes
-        ),
-        "mcp_resource_digest_preservation_successes": (
-            telemetry.resource_telemetry.digest_preservation_successes
-        ),
         "repeated_mcp_call_count": sum(
             count - 1 for count in telemetry.mcp_call_signatures.values() if count > 1
         ),

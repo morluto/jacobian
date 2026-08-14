@@ -12,10 +12,7 @@ from __future__ import annotations
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.arithmetic.integers import INTEGER_OPERATIONS
 from jacobian.domains.arithmetic.rationals import RATIONAL_OPERATIONS
-from jacobian.domains.arithmetic.real_quadratic import (
-    REAL_QUADRATIC_CHECKERS,
-    REAL_QUADRATIC_OPERATIONS,
-)
+from jacobian.domains.arithmetic.real_quadratic import REAL_QUADRATIC_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
 
 
@@ -33,6 +30,3 @@ def arithmetic_operations() -> OperationDeclarations:
             ),
         ),
     )
-
-
-AUTHORIZED_CHECKERS = REAL_QUADRATIC_CHECKERS

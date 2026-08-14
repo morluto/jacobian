@@ -40,11 +40,6 @@ def test_required_backend_check_measures_each_pinned_math_library(
         "cvc5_provider_runtime",
         probe("cvc5"),
     )
-    monkeypatch.setattr(
-        maintained_backends,
-        "sympy_polynomial_normalization_provider_runtime",
-        probe("sympy-normalization"),
-    )
 
     maintained_backends.require_maintained_math_backends()
 
@@ -54,7 +49,6 @@ def test_required_backend_check_measures_each_pinned_math_library(
         "jacobian.z3",
         "python-flint",
         "cvc5",
-        "sympy-normalization",
     ]
 
 
@@ -98,11 +92,6 @@ def test_required_backend_check_reports_every_broken_library(
     monkeypatch.setattr(
         maintained_backends,
         "cvc5_provider_runtime",
-        lambda: available,
-    )
-    monkeypatch.setattr(
-        maintained_backends,
-        "sympy_polynomial_normalization_provider_runtime",
         lambda: available,
     )
 

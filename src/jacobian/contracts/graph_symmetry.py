@@ -6,8 +6,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.results import ContractModel
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
 MAX_GRAPH_SYMMETRY_EDGES = 4_096

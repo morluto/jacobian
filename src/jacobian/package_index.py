@@ -9,26 +9,16 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from importlib import import_module
-from typing import Any, cast
+from typing import Any
 
 from jacobian.builtin_operation_modules import BUILTIN_OPERATION_MODULES
-from jacobian.contracts.operations import (
-    OperationDescriptor,
-    OperationDiagnostic,
-    OperationExample,
-    OperationInputKind,
-    OperationRequest,
-)
-from jacobian.family_catalog import family_index_payloads
+from jacobian.contracts.operations import OperationDescriptor, OperationExample
 from jacobian.inline_execution import (
     InlineOperationAdapter,
     inline_operation_descriptor,
 )
 from jacobian.operation_adapters import OperationAdapter
-from jacobian.operation_catalog import OperationCatalogError, OperationSearchCard
 from jacobian.operation_declarations import InlineOperation
-from jacobian.operation_errors import OperationInvocationError
-from jacobian.operation_projection import OperationProjection
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,13 +35,7 @@ class PackageIndexEntry:
     output_schema: dict[str, Any]
     module: str
     symbol: str
-    family: str | None = None
     read_only: bool = True
-    accepted_input_kinds: tuple[OperationInputKind, ...] = (
-        OperationInputKind.STRUCTURED_REQUEST,
-    )
-    accepted_artifact_types: tuple[str, ...] = ()
-    produced_artifact_types: tuple[str, ...] = ()
 
     def descriptor(self) -> OperationDescriptor:
         return OperationDescriptor(
@@ -64,9 +48,6 @@ class PackageIndexEntry:
             output_schema=self.output_schema,
             read_only=self.read_only,
             tags=self.tags,
-            accepted_input_kinds=self.accepted_input_kinds,
-            accepted_artifact_types=self.accepted_artifact_types,
-            produced_artifact_types=self.produced_artifact_types,
             examples=self.examples,
         )
 
@@ -83,14 +64,6 @@ class PackageIndex:
     def contains(self, operation_id: str) -> bool:
         return operation_id in self.entries
 
-    def cards(self) -> tuple[OperationSearchCard, ...]:
-        return tuple(
-            OperationSearchCard.from_descriptor(entry.descriptor())
-            for entry in sorted(
-                self.entries.values(), key=lambda item: item.operation_id
-            )
-        )
-
     def descriptors(self) -> tuple[OperationDescriptor, ...]:
         return tuple(
             entry.descriptor()
@@ -103,10 +76,6 @@ class PackageIndex:
         entry = self.entries.get(operation_id)
         if entry is None:
             raise KeyError(operation_id)
-        if entry.family is not None:
-            raise OperationCatalogError(
-                f"family operation requires overlay catalog state: {operation_id}"
-            )
         return load_inline_operation(entry)
 
 
@@ -140,62 +109,14 @@ def collect_inline_index_entries() -> tuple[PackageIndexEntry, ...]:
     return tuple(sorted(entries, key=lambda item: item.operation_id))
 
 
-def collect_family_index_entries() -> tuple[PackageIndexEntry, ...]:
-    """Compile family discovery cards without constructing adapters."""
-
-    entries: list[PackageIndexEntry] = []
-    for payload in family_index_payloads():
-        examples = tuple(
-            OperationExample(
-                name=str(example["name"]),
-                description=str(example["description"]),
-                input=dict(example["input"]),
-            )
-            for example in cast(list[dict[str, Any]], payload.get("examples") or ())
-        )
-        entries.append(
-            PackageIndexEntry(
-                operation_id=str(payload["operation_id"]),
-                version=str(payload["version"]),
-                title=str(payload["title"]),
-                description=str(payload["description"]),
-                tags=tuple(str(tag) for tag in payload["tags"]),
-                examples=examples,
-                input_schema=dict(payload["input_schema"]),
-                output_schema=dict(payload["output_schema"]),
-                module="",
-                symbol="",
-                family=str(payload["family"]),
-                read_only=bool(payload["read_only"]),
-                accepted_input_kinds=tuple(
-                    OperationInputKind(kind)
-                    for kind in cast(list[str], payload["accepted_input_kinds"])
-                ),
-                accepted_artifact_types=tuple(
-                    str(uri)
-                    for uri in cast(list[str], payload["accepted_artifact_types"])
-                ),
-                produced_artifact_types=tuple(
-                    str(uri)
-                    for uri in cast(list[str], payload["produced_artifact_types"])
-                ),
-            )
-        )
-    return tuple(sorted(entries, key=lambda item: item.operation_id))
-
-
 def collect_package_index_entries() -> tuple[PackageIndexEntry, ...]:
-    """Return built-in inline and family discovery cards."""
+    """Return the immutable built-in inline declarations."""
 
-    combined = {
-        entry.operation_id: entry
-        for entry in (*collect_inline_index_entries(), *collect_family_index_entries())
-    }
-    return tuple(sorted(combined.values(), key=lambda item: item.operation_id))
+    return collect_inline_index_entries()
 
 
 def generate_package_index() -> PackageIndex:
-    """Build the in-memory inventory from live declarations and family cards."""
+    """Build the in-memory inventory from live inline declarations."""
 
     return PackageIndex(
         {entry.operation_id: entry for entry in collect_package_index_entries()}
@@ -208,34 +129,8 @@ def load_package_index() -> PackageIndex:
     return generate_package_index()
 
 
-class FamilyStateRequiredAdapter:
-    """Fail closed when a family ID is run without overlay catalog state."""
-
-    def __init__(self, descriptor: OperationDescriptor) -> None:
-        self._descriptor = descriptor
-
-    @property
-    def descriptor(self) -> OperationDescriptor:
-        return self._descriptor
-
-    def prepare(self, request: OperationRequest) -> None:
-        raise OperationInvocationError(_family_state_required_diagnostic())
-
-    def invoke(self, prepared: None) -> OperationProjection:
-        raise OperationInvocationError(_family_state_required_diagnostic())
-
-
-def _family_state_required_diagnostic() -> OperationDiagnostic:
-    return OperationDiagnostic(
-        code="STATE_INITIALIZATION_REQUIRED",
-        stage="operation_resolution",
-        message="Family operations require initialized catalog overlay state.",
-        hint="Run `jacobian init` to create overlay catalog state, then retry.",
-    )
-
-
 class PackageIndexRegistry:
-    """Resolve built-in inline operations without a binder or SQLite digest."""
+    """Resolve built-in inline operations without a binder or persistence digest."""
 
     def __init__(self, index: PackageIndex) -> None:
         self.index = index
@@ -248,13 +143,8 @@ class PackageIndexRegistry:
             return cached
         entry = self.index.get(operation_id)
         if entry is None:
-            raise OperationCatalogError(f"unknown or hidden operation: {operation_id}")
-        if entry.family is not None:
-            adapter: OperationAdapter[Any] = FamilyStateRequiredAdapter(
-                entry.descriptor()
-            )
-        else:
-            adapter = InlineOperationAdapter(load_inline_operation(entry))
+            raise KeyError(operation_id)
+        adapter = InlineOperationAdapter(load_inline_operation(entry))
         self._adapters[operation_id] = adapter
         return adapter
 
@@ -319,7 +209,6 @@ __all__ = [
     "PackageIndex",
     "PackageIndexEntry",
     "PackageIndexRegistry",
-    "collect_family_index_entries",
     "collect_inline_index_entries",
     "collect_package_index_entries",
     "generate_package_index",

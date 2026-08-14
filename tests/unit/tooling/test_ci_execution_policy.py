@@ -149,12 +149,11 @@ def test_full_lean_runs_on_merge_group_and_main() -> None:
     assert "uses: actions/cache" not in action
 
 
-def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() -> None:
+def test_optional_boundary_jobs_have_explicit_workflow_gates() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert "ci:full" not in workflow
     assert "ci:lean" not in workflow
-    assert "run: make deploy-check" in workflow
     assert "name: required" in workflow
     assert "name: Deployment Tests" not in workflow
 

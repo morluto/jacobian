@@ -2,17 +2,37 @@
 
 from jacobian.contracts.finite_sets import (
     FiniteSetBooleanResult,
+    FiniteSetCoverageRequest,
+    FiniteSetCoverageResult,
     FiniteSetPairRequest,
 )
 from jacobian.domains._examples import example
 from jacobian.domains.finite_sets._support import finite_set_operation
 from jacobian.domains.finite_sets.operations import (
     decide_disjoint,
+    decide_exact_cover,
     decide_proper_subset,
     decide_subset,
 )
 
 SET_PREDICATE_OPERATIONS = (
+    finite_set_operation(
+        "finite_set.decide.exact_cover",
+        "Decide exact finite-set coverage",
+        "Decide whether a bounded sequence contains every scope element exactly once.",
+        FiniteSetCoverageRequest,
+        FiniteSetCoverageResult,
+        decide_exact_cover,
+        "finite-set",
+        "predicate",
+        examples=(
+            example(
+                "cover_1_2_3_once",
+                "Check an exactly-once cover of a finite integer set.",
+                {"scope": {"elements": ["1", "2", "3"]}, "values": ["3", "1", "2"]},
+            ),
+        ),
+    ),
     finite_set_operation(
         "finite_set.decide.subset",
         "Decide subset relation",

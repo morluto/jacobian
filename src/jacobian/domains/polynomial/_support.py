@@ -8,11 +8,9 @@ from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domains.polynomial.operations import PolynomialOutputBudgetError
 from jacobian.operation_declarations import (
-    DurableOperationFactory,
     InlineOperation,
     InlineOperationFactory,
     OperationAbortError,
-    OperationDeclaration,
     OperationExample,
     OperationFailure,
     OperationRefusalError,
@@ -25,9 +23,6 @@ _POLYNOMIAL_FAILURE = OperationFailure(
     exceptions=(TypeError, ValueError),
 )
 _polynomial_operation_factory = InlineOperationFactory(_POLYNOMIAL_FAILURE)
-_materialized_polynomial_operation_factory = DurableOperationFactory(
-    _POLYNOMIAL_FAILURE
-)
 
 
 def _polynomial_error() -> type[Exception]:
@@ -68,41 +63,6 @@ def polynomial_operation[
     return replace(
         declared,
         run=_with_polynomial_output_budget(declared.run),
-    )
-
-
-def materialized_polynomial_operation[
-    RequestT: ContractModel,
-    ResultT: ContractModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-    resource_reason: str = "",
-    version: str = "2",
-) -> OperationDeclaration[RequestT, ResultT]:
-    """Declare an exact polynomial operation with durable result lineage."""
-
-    declared = _materialized_polynomial_operation_factory(
-        operation_id,
-        title,
-        description,
-        request_model,
-        result_model,
-        operation,
-        *tags,
-        examples=examples,
-        resource_reason=resource_reason,
-        version=version,
-    )
-    return replace(
-        declared,
-        execute=_with_polynomial_output_budget(declared.execute),
     )
 
 

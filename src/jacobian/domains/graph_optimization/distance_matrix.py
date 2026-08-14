@@ -11,11 +11,7 @@ from jacobian.contracts.graph_distance_matrix import (
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.operation_declarations import (
-    InlinePublication,
-    OperationDeclaration,
-    OperationRefusalError,
-)
+from jacobian.operation_declarations import OperationDeclaration, OperationRefusalError
 
 
 def compute_distance_matrix(
@@ -77,7 +73,6 @@ DISTANCE_MATRIX_OPERATION = OperationDeclaration(
         message="Input does not satisfy the bounded graph distance-matrix contract.",
         hint="Supply a canonical simple graph with at most 64 vertices.",
     ),
-    publication=InlinePublication(),
     tags=("graph", "invariant", "distance", "matrix", "exact"),
     examples=(
         example(

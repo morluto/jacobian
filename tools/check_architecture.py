@@ -261,12 +261,9 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/doctor_external_tools.py"),
         PurePosixPath("tools/setup_lean.py"),
-        PurePosixPath("tools/source_agent_doctor.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
         PurePosixPath("tests/boundary/process/test_inline_no_state_dir.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_deploy_installer.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
     }
 )
 

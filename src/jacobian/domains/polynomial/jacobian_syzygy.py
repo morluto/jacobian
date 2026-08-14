@@ -19,15 +19,7 @@ from jacobian.contracts.jacobian_syzygy import (
 from jacobian.contracts.operations import (
     OperationExample,
 )
-from jacobian.contracts.polynomials import (
-    RationalPolynomial,
-    RationalPolynomialTerm,
-    SparseRationalPolynomial,
-)
-from jacobian.domains.polynomial._support import (
-    materialized_polynomial_operation,
-    polynomial_operation,
-)
+from jacobian.domains.polynomial._support import polynomial_operation
 from jacobian.domains.polynomial.conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
@@ -35,6 +27,11 @@ from jacobian.domains.polynomial.conversions import (
     symbols_for_variables,
 )
 from jacobian.math.arithmetic import primitive_integer_vector
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _homogeneous_basis(degree: int) -> tuple[tuple[int, int, int], ...]:
@@ -161,7 +158,7 @@ def compute_graded_jacobian_syzygy(
     return _compute_graded_jacobian_syzygy(request)
 
 
-def materialize_graded_jacobian_syzygy_coefficients(
+def compute_graded_jacobian_syzygy_coefficients(
     request: GradedJacobianSyzygyRequest,
 ) -> GradedJacobianSyzygyResult:
     """Retain the full sparse coefficient maps as explicit evidence."""
@@ -411,25 +408,21 @@ GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
     ),
 )
 
-JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = materialized_polynomial_operation(
-    "polynomial.jacobian_syzygy.coefficients.materialize",
-    "Materialize graded Jacobian syzygy coefficient ledger",
+JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = polynomial_operation(
+    "polynomial.jacobian_syzygy.coefficients.compute",
+    "Compute graded Jacobian syzygy coefficient ledger",
     (
-        "Retain every sparse entry in the bounded graded Jacobian coefficient "
-        "maps, together with the compact syzygy summary and rank certificates."
+        "Compute every sparse entry in the bounded graded Jacobian coefficient "
+        "maps, together with the syzygy summary and rank certificates."
     ),
     GradedJacobianSyzygyRequest,
     GradedJacobianSyzygyResult,
-    materialize_graded_jacobian_syzygy_coefficients,
+    compute_graded_jacobian_syzygy_coefficients,
     "polynomial",
     "jacobian",
     "syzygy",
     "coefficient-ledger",
     "evidence",
-    resource_reason=(
-        "the full sparse graded coefficient ledger is retained as explicit bulk "
-        "evidence for independent replay"
-    ),
 )
 
 

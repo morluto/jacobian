@@ -64,28 +64,21 @@ def _log_operation_attempt(
         execution_status = result.execution.status.value
         diagnostic_codes = tuple(item.code for item in result.diagnostics)
         operation_version = result.operation_version
-        verification_record_uri_present = result.verification_record_uri is not None
-        artifact_count = len(result.artifact_uris)
     else:
         operation_version = "unknown"
-        verification_record_uri_present = False
-        artifact_count = 0
     codes = ",".join(diagnostic_codes[:8]) or "none"
     checkers = ",".join(checker_ids) or "none"
     _LOGGER.info(
         "MCP operation attempt argument_digest=%s operation_id=%s "
         "operation_version=%s provider=%s checker_ids=%s "
-        "execution_status=%s verification_record_uri_present=%s diagnostic_codes=%s "
-        "artifact_count=%d",
+        "execution_status=%s diagnostic_codes=%s",
         argument_digest,
         operation_id,
         operation_version,
         provider,
         checkers,
         execution_status or "ERROR",
-        verification_record_uri_present,
         codes,
-        artifact_count,
     )
 
 
@@ -94,13 +87,11 @@ def _invoke_operation_attempt(
     *,
     operation_id: str,
     payload: dict[str, Any],
-    inputs: dict[str, str] | None = None,
 ) -> OperationResult:
     argument_digest = _argument_digest(
         {
             "operation_id": operation_id,
             "payload": payload,
-            "inputs": inputs or {},
         }
     )
     descriptor = runtime.operations.inspect(operation_id)
@@ -113,7 +104,6 @@ def _invoke_operation_attempt(
     request = OperationRequest(
         operation_id=operation_id,
         input=payload,
-        inputs=inputs or {},
     )
     try:
         result: OperationResult = runtime.operations.invoke(request)

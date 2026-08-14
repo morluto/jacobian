@@ -1,7 +1,7 @@
 """Owned MCP smoke journey: live SDK find → run without complete-runtime fixtures.
 
-``create_server(mcp_state)`` installs a fresh server-owned runtime. Keep this
-module small; do not grow ordinary projection or operation matrices here.
+``create_server()`` serves the immutable inline library. Keep this module
+small; do not grow ordinary projection or operation matrices here.
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ MATH_TOOL_NAMES = {"math.find", "math.run"}
 MCP_TOOL_NAMES = MATH_TOOL_NAMES
 
 
-def test_mcp_describes_and_invokes_operations(mcp_state: Path) -> None:
+def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        async with Client(create_server(mcp_state), raise_exceptions=True) as client:
+        async with Client(create_server(), raise_exceptions=True) as client:
             described = await client.call_tool(
                 "math.find",
                 {
@@ -47,16 +47,43 @@ def test_mcp_describes_and_invokes_operations(mcp_state: Path) -> None:
                 },
             )
             assert isinstance(result.structured_content, dict)
-            assert result.structured_content["artifact_uris"] == []
             response = json.loads(result.content[0].text)
             assert response["execution"]["status"] == "COMPLETED"
-            assert response["verification_record_uri"] is None
             assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
-            assert result.structured_content["verification_record_uri"] is None
             assert "provider" not in result.structured_content
             assert "provider_digest" not in result.structured_content
+
+            cnf_call = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "sat.cnf.canonicalize",
+                    "payload": {
+                        "variable_names": ["b", "a"],
+                        "clauses": [[1, -2], [2]],
+                    },
+                },
+            )
+            assert isinstance(cnf_call.structured_content, dict)
+            cnf_result = cnf_call.structured_content["output"]["result"]["cnf"]
+            assert cnf_result == {
+                "variables": ["a", "b"],
+                "clauses": [[-1, 2], [1]],
+            }
+
+            assignment_call = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "sat.assignment.check",
+                    "payload": {"cnf": cnf_result, "assignment": [True, True]},
+                },
+            )
+            assert isinstance(assignment_call.structured_content, dict)
+            assert assignment_call.structured_content["output"]["result"] == {
+                "satisfies": True,
+                "first_unsatisfied_clause": None,
+            }
 
             invalid = await client.call_tool(
                 "math.run",
@@ -72,8 +99,6 @@ def test_mcp_describes_and_invokes_operations(mcp_state: Path) -> None:
                 invalid_result["output"]["error"]["code"]
                 == "INVALID_NUMBER_THEORY_REQUEST"
             )
-            assert invalid_result["artifact_uris"] == []
-            assert invalid_result["verification_record_uri"] is None
 
             matching_description = await client.call_tool(
                 "math.find",
@@ -90,28 +115,6 @@ def test_mcp_describes_and_invokes_operations(mcp_state: Path) -> None:
             assert matching_contract["operation"]["examples"][0]["name"] == (
                 "triangle_with_tail"
             )
-
-            reliability_verifier_discovery = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "search",
-                        "query": (
-                            "independently verify exact graph reliability terminal "
-                            "connection probability edge subset enumeration"
-                        ),
-                        "domain": "graph",
-                        "limit": 10,
-                    }
-                },
-            )
-            assert isinstance(reliability_verifier_discovery.structured_content, dict)
-            assert "probability.graph_reliability.connection_probability.verify" in {
-                match["operation_id"]
-                for match in reliability_verifier_discovery.structured_content[
-                    "matches"
-                ]
-            }
 
             unknown = await client.call_tool(
                 "math.run",
@@ -134,15 +137,13 @@ def test_mcp_describes_and_invokes_operations(mcp_state: Path) -> None:
                 "action": "inspect_catalog",
                 "resource_uri": "operation://catalog",
             }
-            assert unknown_result["verification_record_uri"] is None
-            assert unknown.structured_content["verification_record_uri"] is None
 
     asyncio.run(scenario())
 
 
 @pytest.mark.requires_provider("flint")
-def test_mcp_composes_finite_field_values_by_opaque_reference(
-    mcp_state: Path,
+def test_mcp_composes_finite_field_values_by_inline_typed_payload(
+    tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
         from mcp import Client
@@ -165,7 +166,7 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(
         )
 
         async with Client(
-            create_server(mcp_state),
+            create_server(),
             raise_exceptions=True,
         ) as client:
             inspected = await client.call_tool(
@@ -178,10 +179,6 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(
                 },
             )
             assert isinstance(inspected.structured_content, dict)
-            descriptor = inspected.structured_content["operation"]
-            assert descriptor["input_ports"] == [
-                {"name": "table", "value_type": "FiniteMapTable"}
-            ]
 
             table_call = await client.call_tool(
                 "math.run",
@@ -193,21 +190,21 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(
                 },
             )
             assert isinstance(table_call.structured_content, dict)
+            assert table_call.structured_content["execution"]["status"] == "COMPLETED"
             table_output = table_call.structured_content["output"]
-            value_ref = table_output["value_refs"]["table"]
-            assert value_ref.startswith("value://")
+            assert "value_refs" not in table_output
+            table_value = table_output["result"]
 
             fibers_call = await client.call_tool(
                 "math.run",
                 {
                     "operation_id": "finite_field.polynomial_map.fibers.compute",
-                    "payload": {},
-                    "inputs": {"table": {"value_ref": value_ref}},
+                    "payload": {"table": table_value},
                 },
             )
             assert isinstance(fibers_call.structured_content, dict)
             fibers_output = fibers_call.structured_content["output"]
-            assert fibers_output["result"]["table"] == table_output["result"]
+            assert fibers_output["result"]["table"] == table_value
             assert sorted(
                 len(sources) for _image, sources in fibers_output["result"]["fibers"]
             ) == [1, 3]
@@ -238,16 +235,18 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(
                 },
             )
             assert isinstance(directions_call.structured_content, dict)
-            directions_ref = directions_call.structured_content["output"]["value_refs"][
-                "directions"
-            ]
+            assert directions_call.structured_content["execution"]["status"] == (
+                "COMPLETED"
+            )
+            directions_output = directions_call.structured_content["output"]
+            assert "value_refs" not in directions_output
+            directions_value = directions_output["result"]
 
             incomplete_call = await client.call_tool(
                 "math.run",
                 {
                     "operation_id": "finite_field.direction_rank_ledger.compute",
-                    "payload": {},
-                    "inputs": {"directions": {"value_ref": directions_ref}},
+                    "payload": {"directions": directions_value},
                 },
             )
             assert isinstance(incomplete_call.structured_content, dict)
@@ -257,8 +256,10 @@ def test_mcp_composes_finite_field_values_by_opaque_reference(
                 "math.run",
                 {
                     "operation_id": "finite_field.direction_rank_ledger.compute",
-                    "payload": {"subspace": subspace.model_dump(mode="json")},
-                    "inputs": {"directions": {"value_ref": directions_ref}},
+                    "payload": {
+                        "subspace": subspace.model_dump(mode="json"),
+                        "directions": directions_value,
+                    },
                 },
             )
             assert isinstance(ledger_call.structured_content, dict)

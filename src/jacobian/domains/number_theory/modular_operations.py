@@ -61,7 +61,7 @@ def compute_modular_polynomial_residue_image(
     return _residue_image(request, table=None)
 
 
-def materialize_modular_polynomial_residue_assignments(
+def compute_modular_polynomial_residue_assignments(
     request: ModularPolynomialResidueImageRequest,
 ) -> ModularPolynomialResidueImageResult:
     return _residue_image(request, table=[])

@@ -12,10 +12,9 @@ from jacobian.operations import Completed, Failed, NonConclusion
 
 @dataclass(frozen=True, slots=True)
 class PublishedOperation:
-    """One optional public projection and every durable carrier it retained."""
+    """One optional typed public projection."""
 
     output: ContractModel | None = None
-    artifact_uris: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +25,6 @@ class OperationProjection:
     version: str
     terminal: Completed[ContractModel] | NonConclusion | Failed
     publication: PublishedOperation | None = None
-    verification_record_uri: str | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.terminal, Completed) and (
@@ -39,15 +37,6 @@ class OperationProjection:
             and self.publication.output is not None
         ):
             raise ValueError("non-completed operations cannot publish an output")
-        if self.verification_record_uri is not None and (
-            not isinstance(self.terminal, Completed)
-            or self.publication is None
-            or self.publication.output is None
-            or self.verification_record_uri not in self.publication.artifact_uris
-        ):
-            raise ValueError(
-                "verification records require completed execution and artifact lineage"
-            )
 
 
 def project_operation_result(projection: OperationProjection) -> OperationResult:
@@ -71,8 +60,6 @@ def project_operation_result(projection: OperationProjection) -> OperationResult
                 detail=terminal.detail,
             ),
             output=published_output.model_dump(mode="json"),
-            verification_record_uri=projection.verification_record_uri,
-            artifact_uris=publication.artifact_uris,
         )
 
     if isinstance(terminal, (Failed, NonConclusion)):
@@ -95,7 +82,6 @@ def project_operation_result(projection: OperationProjection) -> OperationResult
         ),
         output=output,
         diagnostics=(diagnostic,),
-        artifact_uris=(publication.artifact_uris if publication is not None else ()),
     )
 
 

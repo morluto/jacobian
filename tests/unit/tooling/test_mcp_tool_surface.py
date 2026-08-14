@@ -71,7 +71,7 @@ def test_math_run_checks_status_before_using_output() -> None:
     output = MATH_RUN_DESCRIPTION.index("treating `output`")
     assert status < output
     assert "operation-owned result fields" in MATH_RUN_DESCRIPTION
-    assert "verification_record_uri" in MATH_RUN_DESCRIPTION
+    assert "verification_record_uri" not in MATH_RUN_DESCRIPTION
     assert "completeness" not in MATH_RUN_DESCRIPTION
     assert "assurance" not in MATH_RUN_DESCRIPTION
 

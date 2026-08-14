@@ -12,7 +12,6 @@ from jacobian.contracts.posets import (
     IncomparablePair,
     LinearExtensionCountResult,
     LinearExtensionRequest,
-    LinearExtensionState,
     MatchingEdge,
     MobiusContribution,
     MobiusFunctionRequest,
@@ -27,13 +26,11 @@ from jacobian.contracts.posets import (
     RelationInterpretation,
     canonical_poset_ranks,
     finite_poset_digest,
-    linear_extension_memo_digest,
 )
 from jacobian.domains._examples import example
 from jacobian.operation_declarations import (
     OperationDeclaration,
     OperationDeclarations,
-    durable_operation,
     inline_operation,
 )
 
@@ -192,14 +189,6 @@ def _linear_extensions(
         successor_masks[lower] |= 1 << upper
 
     counts: dict[int, int] = {0: 1}
-    states = [
-        LinearExtensionState(
-            ideal_mask=0,
-            cardinality=0,
-            removable_maximal_elements=(),
-            count=1,
-        )
-    ]
     subset_count = 1 << len(elements)
     for mask in range(1, subset_count):
         if any(
@@ -215,23 +204,8 @@ def _linear_extensions(
         )
         count = sum(counts[mask ^ (1 << index[element])] for element in removable)
         counts[mask] = count
-        states.append(
-            LinearExtensionState(
-                ideal_mask=mask,
-                cardinality=mask.bit_count(),
-                removable_maximal_elements=removable,
-                count=count,
-            )
-        )
-    state_tuple = tuple(states)
     return LinearExtensionCountResult(
-        poset_digest=poset.poset_digest,
-        element_order=elements,
         count=counts[subset_count - 1],
-        states=state_tuple,
-        state_count=len(state_tuple),
-        explored_subset_count=subset_count,
-        memo_digest=linear_extension_memo_digest(state_tuple),
     )
 
 
@@ -239,12 +213,6 @@ def _mobius(
     request: MobiusFunctionRequest,
 ) -> MobiusFunctionResult:
     return _compute_mobius(request, include_recurrence=False)
-
-
-def _materialize_mobius_recurrence(
-    request: MobiusFunctionRequest,
-) -> MobiusFunctionResult:
-    return _compute_mobius(request, include_recurrence=True)
 
 
 def _compute_mobius(
@@ -392,14 +360,13 @@ FINITE_POSET_OPERATIONS: OperationDeclarations = (
             ),
         )
     ),
-    durable_operation(
+    inline_operation(
         OperationDeclaration(
             operation_id="poset.linear_extensions.count",
-            version="3",
+            version="4",
             title="Count linear extensions of a bounded finite poset",
             description=(
-                "Count every linear extension exactly and expose the complete "
-                "order-ideal subset recurrence table and its canonical digest."
+                "Count every linear extension of a bounded finite poset exactly."
             ),
             request_type=LinearExtensionRequest,
             result_type=LinearExtensionCountResult,
@@ -412,10 +379,6 @@ FINITE_POSET_OPERATIONS: OperationDeclarations = (
                 "dynamic-programming",
             ),
         ),
-        resource_reason=(
-            "the full order-ideal recurrence table is retained for independent "
-            "replay and exact count provenance"
-        ),
     ),
     inline_operation(
         OperationDeclaration(
@@ -424,7 +387,7 @@ FINITE_POSET_OPERATIONS: OperationDeclarations = (
             title="Compute finite-poset Möbius values",
             description=(
                 "Return exact incidence-algebra Möbius values for either every "
-                "interval or an explicit selected interval scope, with recurrence terms."
+                "interval or an explicit selected interval scope."
             ),
             request_type=MobiusFunctionRequest,
             result_type=MobiusFunctionResult,
@@ -437,31 +400,6 @@ FINITE_POSET_OPERATIONS: OperationDeclarations = (
                 "exact",
             ),
         )
-    ),
-    durable_operation(
-        OperationDeclaration(
-            operation_id="poset.mobius_function.recurrence.materialize",
-            version="3",
-            title="Materialize the finite-poset Möbius recurrence table",
-            description=(
-                "Retain every interval-convolution recurrence contribution used by "
-                "the bounded Möbius summary."
-            ),
-            request_type=MobiusFunctionRequest,
-            result_type=MobiusFunctionResult,
-            execute=_materialize_mobius_recurrence,
-            tags=(
-                "poset",
-                "mobius-function",
-                "recurrence",
-                "ledger",
-                "evidence",
-            ),
-        ),
-        resource_reason=(
-            "the full interval-convolution recurrence table is retained as "
-            "explicit bulk evidence for independent replay"
-        ),
     ),
 )
 

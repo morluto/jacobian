@@ -1,12 +1,10 @@
 """Exact rational-polynomial operation declarations."""
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.polynomial.checkers import POLYNOMIAL_AUTHORIZED_CHECKERS
 from jacobian.domains.polynomial.elementary import (
     INTEGER_POLYNOMIAL_OPERATIONS,
     RATIONAL_POLYNOMIAL_OPERATIONS,
 )
-from jacobian.domains.polynomial.groebner import POLYNOMIAL_GROEBNER_OPERATION
 from jacobian.domains.polynomial.invariants import (
     POLYNOMIAL_INVARIANT_OPERATIONS,
 )
@@ -22,7 +20,6 @@ def polynomial_operations() -> OperationDeclarations:
     return with_invalid_request(
         (
             *POLYNOMIAL_INVARIANT_OPERATIONS,
-            POLYNOMIAL_GROEBNER_OPERATION,
             GRADED_JACOBIAN_SYZYGY_OPERATION,
             JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
             *INTEGER_POLYNOMIAL_OPERATIONS,
@@ -38,5 +35,3 @@ def polynomial_operations() -> OperationDeclarations:
 
 
 __all__ = ["polynomial_operations"]
-
-AUTHORIZED_CHECKERS = POLYNOMIAL_AUTHORIZED_CHECKERS

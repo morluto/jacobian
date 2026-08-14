@@ -1,7 +1,6 @@
 """Combinatorics operation declarations."""
 
 from jacobian.operation_declarations import (
-    DurableOperationFactory,
     InlineOperationFactory,
     OperationFailure,
 )
@@ -14,4 +13,3 @@ _FAILURE = OperationFailure(
 )
 
 combinatorics_operation = InlineOperationFactory(_FAILURE)
-materialized_combinatorics_operation = DurableOperationFactory(_FAILURE)

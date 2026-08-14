@@ -24,7 +24,6 @@ from jacobian.contracts.polynomial_operations import (
     PolynomialSquareFreeRequest,
     PolynomialValue,
 )
-from jacobian.contracts.polynomials import RationalPolynomial
 from jacobian.domains.polynomial.conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
@@ -32,6 +31,7 @@ from jacobian.domains.polynomial.conversions import (
     symbols_for_variables,
 )
 from jacobian.math import polynomials
+from jacobian.math.polynomials.values import RationalPolynomial
 
 _MAX_OUTPUT_TERMS = 1024
 

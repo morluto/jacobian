@@ -127,28 +127,22 @@ def test_table_consumers_reject_unevaluated_targets() -> None:
             consumer(forged)
 
 
-def test_slice_b_reuses_the_same_ports_for_table_and_certificate_handoff() -> None:
+def test_slice_b_reuses_one_table_for_fiber_and_certificate_handoff() -> None:
     polynomial_map = _map(3)
     _, _, _, _, _, table_operation, fiber_operation, collision_operation, _ = (
         finite_field_operations()
     )
 
-    table_payload = table_operation.input_ports[0].bind_to_request({}, polynomial_map)
     table = table_operation.execute(
-        table_operation.request_type.model_validate(table_payload)
+        table_operation.request_type.model_validate({"polynomial_map": polynomial_map})
     )
-    carried_table = table_operation.output_ports[0].extract_from_result(table)
 
-    fiber_payload = fiber_operation.input_ports[0].bind_to_request({}, carried_table)
     partition = fiber_operation.execute(
-        fiber_operation.request_type.model_validate(fiber_payload)
-    )
-    collision_payload = collision_operation.input_ports[0].bind_to_request(
-        {}, carried_table
+        fiber_operation.request_type.model_validate({"table": table})
     )
     collision = collision_operation.execute(
-        collision_operation.request_type.model_validate(collision_payload)
+        collision_operation.request_type.model_validate({"table": table})
     )
 
-    assert partition.table is carried_table
-    assert collision.table is carried_table
+    assert partition.table is table
+    assert collision.table is table

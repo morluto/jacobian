@@ -422,7 +422,7 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
 
 
 def test_agent_telemetry_ignores_non_string_mcp_status(tmp_path: Path) -> None:
-    uri = "artifact://sha256/" + ("a" * 64)
+    uri = "operation://catalog"
     event = {
         "type": "item.completed",
         "item": {
@@ -450,7 +450,7 @@ def test_agent_telemetry_ignores_non_string_mcp_tool(tmp_path: Path) -> None:
         "item": {
             "type": "not_resource_read",
             "tool": [],
-            "arguments": {"uri": "artifact://sha256/" + ("a" * 64)},
+            "arguments": {"uri": "operation://catalog"},
         },
     }
     transcript = tmp_path / "transcript.jsonl"
@@ -469,8 +469,6 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
         "operation_id": "graph.search.atlas",
         "execution": {"status": "COMPLETED"},
         "output": {"status": "FOUND", "graphs": [{"edges": [[0, 1]]}]},
-        "artifact_uris": ["artifact://sha256/" + ("a" * 64)],
-        "verification_record_uri": None,
     }
     event = {
         "type": "item.completed",
@@ -504,37 +502,22 @@ def test_agent_telemetry_separates_wire_model_and_logical_invocation_bytes(
     assert telemetry["operation_invocations"][0]["output"] == canonical["output"]
 
 
-def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
+def test_agent_telemetry_tracks_resource_link_follow_through(
     tmp_path: Path,
 ) -> None:
-    def read_event(seed: str) -> tuple[str, dict[str, object]]:
-        payload = {"seed": seed}
-        manifest = {
-            "manifest_version": "1",
-            "object_digest": "sha256:" + seed * 64,
-            "payload_digest": "sha256:"
-            + hashlib.sha256(canonicalize_json(payload)).hexdigest(),
-            "schema_uri": "artifact://sha256/" + ("c" * 64),
-            "semantics_uri": "artifact://sha256/" + ("d" * 64),
-            "canonicalizer_digest": "sha256:" + ("e" * 64),
-            "parents": [],
-            "summary": "",
-        }
-        uri = (
-            "artifact://sha256/"
-            + hashlib.sha256(canonicalize_json(manifest)).hexdigest()
-        )
+    def read_event(name: str) -> tuple[str, dict[str, object]]:
+        uri = f"operation://{name}"
         return uri, _tool_event(
             "resources/read",
             {"uri": uri},
-            {"artifact_uri": uri, "manifest": manifest, "payload": payload},
+            {"name": name},
         )
 
     uri, first_read = read_event("a")
     first_result = first_read["item"]["result"]
     first_result["contents"] = first_result.pop("content")
     unnecessary_uri, second_read = read_event("b")
-    malformed_uri = "artifact://sha256/" + ("f" * 64)
+    malformed_uri = "operation://missing"
 
     def link_event(link_uri: str) -> dict[str, object]:
         content = [{"type": "resource_link", "uri": link_uri}]
@@ -565,7 +548,7 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
                 _tool_event(
                     "resources/read",
                     {"uri": malformed_uri},
-                    {"not_an_artifact": True},
+                    {"not_found": True},
                 ),
             )
         )
@@ -580,15 +563,12 @@ def test_agent_telemetry_tracks_resource_link_follow_through_and_identity(
     assert telemetry["mcp_resource_read_attempts"] == 3
     assert telemetry["mcp_resource_read_uris"] == [uri, unnecessary_uri, malformed_uri]
     assert telemetry["mcp_resource_read_successes"] == 3
-    assert telemetry["mcp_resource_uri_preservation_attempts"] == 3
-    assert telemetry["mcp_resource_uri_preservation_successes"] == 2
-    assert telemetry["mcp_resource_digest_preservation_successes"] == 2
 
 
 def test_agent_telemetry_handles_non_hashable_resource_tool_field(
     tmp_path: Path,
 ) -> None:
-    uri = "artifact://sha256/" + ("f" * 64)
+    uri = "operation://catalog"
     malformed_tool_event = {
         "type": "item.completed",
         "item": {
@@ -602,11 +582,7 @@ def test_agent_telemetry_handles_non_hashable_resource_tool_field(
     valid_read = _tool_event(
         "resources/read",
         {"uri": uri},
-        {
-            "artifact_uri": uri,
-            "manifest": {"payload_digest": "sha256:" + ("e" * 64)},
-            "payload": {},
-        },
+        {"name": "catalog"},
     )
     transcript = tmp_path / "transcript.jsonl"
     transcript.write_text(

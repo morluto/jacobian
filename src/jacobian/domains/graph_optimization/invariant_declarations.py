@@ -3,16 +3,10 @@
 from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.graph_optimization.checkers import (
-    GRAPH_INVARIANT_AUTHORIZED_CHECKERS,
-)
 from jacobian.domains.graph_optimization.distance_matrix import (
     DISTANCE_MATRIX_OPERATION,
 )
-from jacobian.domains.graph_optimization.graph6 import (
-    GRAPH6_AUTHORIZED_CHECKERS,
-    GRAPH6_OPERATIONS,
-)
+from jacobian.domains.graph_optimization.graph6 import GRAPH6_OPERATIONS
 from jacobian.domains.graph_optimization.invariants import (
     EXACT_GRAPH_INVARIANT_OPERATIONS,
 )
@@ -34,9 +28,3 @@ def graph_invariant_operations() -> OperationDeclarations:
             hint="Supply a canonical simple graph with at most 32 vertices.",
         ),
     )
-
-
-AUTHORIZED_CHECKERS = (
-    *GRAPH6_AUTHORIZED_CHECKERS,
-    *GRAPH_INVARIANT_AUTHORIZED_CHECKERS,
-)

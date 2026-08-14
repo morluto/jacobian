@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.combinatorics.checkers import COMBINATORICS_AUTHORIZED_CHECKERS
 from jacobian.domains.combinatorics.counting import COUNTING_OPERATIONS
 from jacobian.domains.combinatorics.difference_sets import DIFFERENCE_SET_OPERATIONS
 from jacobian.domains.combinatorics.partitions import PARTITION_OPERATIONS
@@ -27,6 +26,3 @@ def combinatorics_operations() -> OperationDeclarations:
             hint="Provide bounded non-negative integers within each operation's limits.",
         ),
     )
-
-
-AUTHORIZED_CHECKERS = COMBINATORICS_AUTHORIZED_CHECKERS

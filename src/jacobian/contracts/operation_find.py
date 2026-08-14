@@ -7,13 +7,10 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field, RootModel, StrictInt
 
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.common import ArtifactUri
 from jacobian.contracts.operations import (
     OperationDescriptor,
     OperationDiscoveryMatch,
     OperationId,
-    OperationInputKind,
-    OperationValuePort,
     ProviderAvailability,
 )
 
@@ -24,11 +21,6 @@ class OperationSearchRequest(ContractModel):
     domain: Annotated[
         str | None,
         Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),
-    ] = None
-    input_kind: OperationInputKind | None = None
-    artifact_type: Annotated[
-        str | None,
-        Field(pattern=r"^artifact://sha256/[0-9a-f]{64}$"),
     ] = None
     limit: Annotated[StrictInt, Field(ge=1, le=20)] = 5
     cursor: Annotated[
@@ -79,11 +71,6 @@ class OperationDiscoveryErrorDetail(ContractModel):
 
 
 class OperationDiscoveryCard(OperationDiscoveryMatch):
-    accepted_input_kinds: tuple[OperationInputKind, ...]
-    accepted_artifact_types: tuple[ArtifactUri, ...]
-    produced_artifact_types: tuple[ArtifactUri, ...]
-    input_ports: tuple[OperationValuePort, ...]
-    output_ports: tuple[OperationValuePort, ...]
     provider_availability: ProviderAvailability | Literal["UNKNOWN"]
 
 
@@ -92,8 +79,6 @@ class OperationSearchResult(ContractModel):
     discovery_version: Literal["1"]
     query: str
     domain: str | None = None
-    input_kind: OperationInputKind | None = None
-    artifact_type: str | None = None
     matches: tuple[OperationDiscoveryCard, ...]
     total_matches: StrictInt
     truncated: bool

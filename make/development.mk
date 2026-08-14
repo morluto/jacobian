@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup doctor setup-lean doctor-lean doctor-external setup-agent container-image eval-image eval-image-pull eval-image-bind deploy-check hooks fix lint complexity-check lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup doctor setup-lean doctor-lean doctor-external container-image eval-image eval-image-pull eval-image-bind hooks fix lint complexity-check lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
@@ -18,9 +18,6 @@ doctor-lean: ## Diagnose Lean/elan/lake without changing the checkout.
 doctor-external: ## Diagnose optional SAT proof binaries (no downloads).
 	uv run --locked --no-sync python tools/doctor_external_tools.py --repo . --require external-proof
 
-setup-agent: ## Configure an agent against this source checkout (ARGS="--client codex --profile core").
-	./scripts/setup-agent $(ARGS)
-
 JACOBIAN_REGISTRY_IMAGE ?= ghcr.io/morluto/jacobian
 
 container-image: ## Build jacobian:local from the current tree, including dirty changes.
@@ -35,10 +32,6 @@ eval-image-pull: ## Pull the current clean revision and print its digest-pinned 
 eval-image-bind: ## Bind image identity into RUNTIME_SNAPSHOT (JACOBIAN_IMAGE=..., RUNTIME_SNAPSHOT=...).
 	@test -n "$(JACOBIAN_IMAGE)" -a -n "$(RUNTIME_SNAPSHOT)" || { echo "JACOBIAN_IMAGE and RUNTIME_SNAPSHOT are required" >&2; exit 2; }
 	$(UV_RUN) python -m tools.manage_jacobian_image bind-runtime --image "$(JACOBIAN_IMAGE)" --runtime-snapshot "$(RUNTIME_SNAPSHOT)"
-
-deploy-check: ## Validate the clone-to-systemd deployment entrypoint.
-	bash -n deploy/install.sh
-	$(UV_RUN) pytest -n 0 tests/boundary/process/tooling/test_deploy_installer.py
 
 hooks: setup ## Install pre-commit hooks.
 	$(UV_RUN) pre-commit install --install-hooks

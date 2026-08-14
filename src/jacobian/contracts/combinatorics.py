@@ -107,7 +107,7 @@ def _minimum_fraction_wire_bytes(value: Fraction) -> int:
     )
 
 
-def _validate_result_artifact_size(payload: dict[str, object]) -> None:
+def _validate_result_inline_size(payload: dict[str, object]) -> None:
     try:
         canonicalize_json(
             payload,
@@ -118,7 +118,7 @@ def _validate_result_artifact_size(payload: dict[str, object]) -> None:
         )
     except ValueError as exc:
         raise ValueError(
-            "the exact combinatorics result exceeds the durable artifact limit"
+            "the exact combinatorics result exceeds the inline result limit"
         ) from exc
 
 
@@ -160,7 +160,7 @@ def _validate_recurrence_result_budget(
     )
     if minimum_size + 1_024 > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
         raise ValueError(
-            "the exact combinatorics result exceeds the durable artifact limit"
+            "the exact combinatorics result exceeds the inline result limit"
         )
     for value in replay:
         if any(
@@ -176,7 +176,7 @@ def _validate_recurrence_result_budget(
             max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
             label="recurrence result",
         )
-    _validate_result_artifact_size(
+    _validate_result_inline_size(
         {
             "backend": "sympy",
             "backend_version": "1.14.0",
@@ -264,7 +264,7 @@ def _validate_p_recursive_result_budget(
         minimum_size += 32
         if minimum_size > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
             raise ValueError(
-                "the exact combinatorics result exceeds the durable artifact limit"
+                "the exact combinatorics result exceeds the inline result limit"
             )
         replay.append(next_value)
         residuals.append(
@@ -279,7 +279,7 @@ def _validate_p_recursive_result_budget(
                 ),
             )
         )
-    _validate_result_artifact_size(
+    _validate_result_inline_size(
         {
             "backend": "sympy",
             "backend_version": "1.14.0",
@@ -347,9 +347,9 @@ def _validate_series_result_budget(
     minimum_size += truncation_order * _minimum_fraction_wire_bytes(Fraction())
     if minimum_size + 1_024 > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
         raise ValueError(
-            "the exact combinatorics result exceeds the durable artifact limit"
+            "the exact combinatorics result exceeds the inline result limit"
         )
-    _validate_result_artifact_size(
+    _validate_result_inline_size(
         {
             "backend": "sympy",
             "backend_version": "1.14.0",

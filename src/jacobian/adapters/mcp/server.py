@@ -5,7 +5,6 @@ from __future__ import annotations
 import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 
 from mcp.server import MCPServer
@@ -14,12 +13,8 @@ from jacobian import __version__
 from jacobian.adapters.mcp.context import (
     AppState,
     RuntimeAccess,
-    _configured_root,
 )
-from jacobian.adapters.mcp.core import (
-    JacobianMCPServer,
-    register_core_projection,
-)
+from jacobian.adapters.mcp.core import register_core_projection
 from jacobian.adapters.mcp.deployment_identity import (
     DeploymentIdentity,
     load_deployment_identity,
@@ -28,32 +23,25 @@ from jacobian.adapters.mcp.guidance import SERVER_DESCRIPTION, SERVER_INSTRUCTIO
 from jacobian.adapters.mcp.lifecycle import (
     runtime_lifespan,
 )
-from jacobian.adapters.mcp.resources import register_resources
 from jacobian.operation_visibility import OperationVisibilityPolicy
-from jacobian.runtime.execution import create_serving_runtime
+from jacobian.runtime.execution import (
+    create_inline_serving_runtime,
+)
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.serving_catalog import ServingCatalog
 
 
 def create_server(
-    state_dir: str | Path | None = None,
-    *,
-    operation_policy: OperationVisibilityPolicy | None = None,
+    *, operation_policy: OperationVisibilityPolicy | None = None
 ) -> MCPServer[AppState]:
-    """Create a catalog-only host that lazily owns one execution runtime."""
+    """Create the stateless local host over the immutable operation library.
 
-    root = _configured_root(state_dir)
+    Built-in math neither reads nor creates server-owned state.
+    """
+
     policy = operation_policy or OperationVisibilityPolicy()
-    catalog = ServingCatalog.open(
-        root / "metadata.sqlite3",
-        policy,
-        expected_package_version=__version__,
-    )
-    owner = _LazyLocalRuntime(
-        root,
-        catalog,
-        operation_policy=policy,
-    )
+    catalog = ServingCatalog.open(policy=policy)
+    owner = _LazyLocalRuntime(catalog)
     state = AppState(
         acquire_runtime=owner.acquire,
         operation_catalog=catalog,
@@ -68,38 +56,28 @@ def create_server(
 class _LazyLocalRuntime:
     def __init__(
         self,
-        root: Path,
         catalog: ServingCatalog,
-        *,
-        operation_policy: OperationVisibilityPolicy,
     ) -> None:
-        self.root = root
         self.catalog = catalog
-        self.operation_policy = operation_policy
-        self._selected_runtime: JacobianRuntime | None = None
+        self._inline_runtime: JacobianRuntime | None = None
         self._lock = threading.Lock()
 
     def acquire(self, operation_id: str | None = None) -> RuntimeAccess:
         del operation_id
         with self._lock:
-            return RuntimeAccess(self._ensure_selected_runtime())
+            return RuntimeAccess(self._ensure_inline_runtime())
 
-    def _ensure_selected_runtime(self) -> JacobianRuntime:
-        if self._selected_runtime is None:
-            self._selected_runtime = create_serving_runtime(
-                self.root,
-                self.catalog,
-                operation_policy=self.operation_policy,
-            )
-        return self._selected_runtime
+    def _ensure_inline_runtime(self) -> JacobianRuntime:
+        if self._inline_runtime is None:
+            self._inline_runtime = create_inline_serving_runtime(self.catalog)
+        return self._inline_runtime
 
     def close(self) -> None:
         with self._lock:
-            runtimes = (self._selected_runtime,)
-            self._selected_runtime = None
-        for runtime in runtimes:
-            if runtime is not None:
-                runtime.close()
+            runtime = self._inline_runtime
+            self._inline_runtime = None
+        if runtime is not None:
+            runtime.close()
 
 
 def create_server_from_runtime(
@@ -148,7 +126,7 @@ def _build_server(
         ) as active_state:
             yield active_state
 
-    server: MCPServer[AppState] = JacobianMCPServer(
+    server: MCPServer[AppState] = MCPServer(
         name="jacobian",
         title="Jacobian Mathematical Workbench",
         description=SERVER_DESCRIPTION,
@@ -159,7 +137,6 @@ def _build_server(
         auth=auth,
     )
     register_core_projection(server, state, deployment_identity)
-    register_resources(server)
     return server
 
 

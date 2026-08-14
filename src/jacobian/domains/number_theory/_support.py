@@ -1,7 +1,6 @@
 """Number-theory operation declarations."""
 
 from jacobian.operation_declarations import (
-    DurableOperationFactory,
     InlineOperationFactory,
     OperationFailure,
 )
@@ -13,4 +12,3 @@ _NUMBER_THEORY_FAILURE = OperationFailure(
 )
 
 number_theory_operation = InlineOperationFactory(_NUMBER_THEORY_FAILURE)
-materialized_number_theory_operation = DurableOperationFactory(_NUMBER_THEORY_FAILURE)

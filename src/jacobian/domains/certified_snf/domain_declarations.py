@@ -1,7 +1,6 @@
 """Operation declarations for transformation-certified Smith normal forms."""
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.certified_snf.checkers import CERTIFIED_SNF_AUTHORIZED_CHECKERS
 from jacobian.domains.certified_snf.operations import CERTIFIED_SNF_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
 
@@ -23,5 +22,3 @@ def certified_snf_operations() -> OperationDeclarations:
 
 
 __all__ = ["certified_snf_operations"]
-
-AUTHORIZED_CHECKERS = CERTIFIED_SNF_AUTHORIZED_CHECKERS

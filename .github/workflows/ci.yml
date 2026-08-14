@@ -41,7 +41,6 @@ jobs:
       - run: make todo-check
       - run: make import-contracts
       - run: make docs-linkcheck
-      - run: make deploy-check
       - run: make npm-test
       - run: make build
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

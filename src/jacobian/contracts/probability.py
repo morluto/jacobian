@@ -14,8 +14,8 @@ from jacobian.contracts.exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.results import ContractModel
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_FINITE_DISTRIBUTION_ATOMS = 256
 MAX_FINITE_CONVOLUTION_PAIRS = 4096

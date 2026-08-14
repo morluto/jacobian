@@ -11,20 +11,18 @@ from jacobian.contracts.projective_geometry import (
     NormalizedProjectiveLine,
     PrimitiveProjectiveTriple,
     ProjectiveArrangementFlat,
-    ProjectiveLineArrangementPreview,
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
     ProjectiveMultiplicityCount,
 )
 from jacobian.domains._examples import example
 from jacobian.math.arithmetic import primitive_integer_vector
-from jacobian.operation_declarations import OperationDeclaration, durable_operation
+from jacobian.operation_declarations import InlineOperation
 from jacobian.operations import (
     OperationFailure,
     OperationRefusalError,
 )
 
-_PREVIEW_FLAT_LIMIT = 32
 _FAILURE = OperationFailure(
     code="PROJECTIVE_ARRANGEMENT_NOT_APPLICABLE",
     stage="projective_arrangement_computation",
@@ -64,10 +62,10 @@ def _wire_triple(values: tuple[int, int, int]) -> PrimitiveProjectiveTriple:
     )
 
 
-def materialize_projective_line_flats(
+def compute_projective_line_flats(
     request: ProjectiveLineArrangementRequest,
 ) -> ProjectiveLineArrangementResult:
-    """Materialize the complete exact flat lattice for one labelled arrangement."""
+    """Compute the complete exact flat lattice for one labelled arrangement."""
 
     normalized = tuple(
         sorted(
@@ -148,91 +146,64 @@ def _execute(
     request: ProjectiveLineArrangementRequest,
 ) -> ProjectiveLineArrangementResult:
     try:
-        return materialize_projective_line_flats(request)
+        return compute_projective_line_flats(request)
     except _FAILURE.exceptions as exc:
         raise OperationRefusalError(_FAILURE.diagnostic(exc)) from exc
 
 
-def projective_line_arrangement_preview(
-    result: ProjectiveLineArrangementResult,
-) -> ProjectiveLineArrangementPreview:
-    """Project proof-critical higher flats while retaining complete accounting."""
-
-    non_double_flats = tuple(flat for flat in result.flats if flat.multiplicity > 2)
-    projected_flats = non_double_flats[:_PREVIEW_FLAT_LIMIT]
-    return ProjectiveLineArrangementPreview(
-        line_count=result.line_count,
-        non_double_flat_count=len(non_double_flats),
-        non_double_flats=projected_flats,
-        non_double_flats_complete=len(projected_flats) == len(non_double_flats),
-        multiplicity_histogram=result.multiplicity_histogram,
-        pair_count_total=result.pair_count_total,
-    )
-
-
-PROJECTIVE_LINE_ARRANGEMENT_OPERATION: OperationDeclaration[
+PROJECTIVE_LINE_ARRANGEMENT_OPERATION: InlineOperation[
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
-] = durable_operation(
-    OperationDeclaration(
-        operation_id="geometry.projective_line_arrangement.flats.materialize",
-        version="4",
-        title="Materialize projective line-arrangement flats",
-        description=(
-            "Normalize labelled rational projective lines and exactly materialize "
-            "every rank-two flat, full incidence set, multiplicity, non-double flat, "
-            "and line-pair accounting identity."
-        ),
-        request_type=ProjectiveLineArrangementRequest,
-        result_type=ProjectiveLineArrangementResult,
-        execute=_execute,
-        tags=(
-            "geometry",
-            "projective",
-            "line-arrangement",
-            "incidence",
-            "flats",
-            "exact",
-        ),
-        examples=(
-            example(
-                "two_coordinate_lines",
-                "Materialize flats for two coordinate lines.",
-                {
-                    "lines": [
-                        {
-                            "label": "x",
-                            "coefficients": [
-                                {"num": "1", "den": "1"},
-                                {"num": "0", "den": "1"},
-                                {"num": "0", "den": "1"},
-                            ],
-                        },
-                        {
-                            "label": "y",
-                            "coefficients": [
-                                {"num": "0", "den": "1"},
-                                {"num": "1", "den": "1"},
-                                {"num": "0", "den": "1"},
-                            ],
-                        },
-                    ]
-                },
-            ),
+] = InlineOperation(
+    operation_id="geometry.projective_line_arrangement.flats.compute",
+    version="5",
+    title="Compute projective line-arrangement flats",
+    description=(
+        "Normalize labelled rational projective lines and exactly compute "
+        "every rank-two flat, full incidence set, multiplicity, non-double flat, "
+        "and line-pair accounting identity."
+    ),
+    request_type=ProjectiveLineArrangementRequest,
+    result_type=ProjectiveLineArrangementResult,
+    run=_execute,
+    tags=(
+        "geometry",
+        "projective",
+        "line-arrangement",
+        "incidence",
+        "flats",
+        "exact",
+    ),
+    examples=(
+        example(
+            "two_coordinate_lines",
+            "Compute flats for two coordinate lines.",
+            {
+                "lines": [
+                    {
+                        "label": "x",
+                        "coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    {
+                        "label": "y",
+                        "coefficients": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                ]
+            },
         ),
     ),
-    resource_reason=(
-        "the complete labelled flat lattice is retained for durable projective "
-        "incidence provenance and downstream certificate binding"
-    ),
-    preview_type=ProjectiveLineArrangementPreview,
-    preview=projective_line_arrangement_preview,
-    preview_complete=False,
 )
 
 
 __all__ = [
     "PROJECTIVE_LINE_ARRANGEMENT_OPERATION",
-    "materialize_projective_line_flats",
-    "projective_line_arrangement_preview",
+    "compute_projective_line_flats",
 ]

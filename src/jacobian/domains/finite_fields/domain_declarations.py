@@ -1,9 +1,6 @@
 """Finite-field operation declarations over authoritative native values."""
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.finite_fields.checkers import (
-    FINITE_FIELD_AUTHORIZED_CHECKERS,
-)
 from jacobian.domains.finite_fields.contracts import (
     CollisionCertificateRequest,
     DirectionRankLedgerRequest,
@@ -16,19 +13,15 @@ from jacobian.domains.finite_fields.contracts import (
     RestrictScalarsRequest,
 )
 from jacobian.math.finite_fields import (
-    Axis,
     CollisionCertificate,
     DirectionRankLedger,
     FiberPartition,
     FiniteDimensionalSubspace,
-    FiniteFieldPresentation,
     FiniteLinearMap,
     FiniteMapTable,
-    FinitePolynomialMap,
     OrbitDistribution,
     PermutationCertificate,
     ProjectiveLine,
-    ProjectivePoint,
     RankResult,
     collision_certificate,
     direction_rank_ledger,
@@ -53,7 +46,6 @@ from jacobian.operation_declarations import (
     inline_operation,
     with_invalid_request,
 )
-from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import (
     OperationRefusalError,
 )
@@ -256,15 +248,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Return every normalized direction in deterministic order.",
             tags=("finite-field", "projective"),
         ),
-        input_ports=(
-            InputPort(
-                name="presentation",
-                value_type=FiniteFieldPresentation,
-                request_field="presentation",
-            ),
-            InputPort(name="axis", value_type=Axis, request_field="axis"),
-        ),
-        output_ports=(OutputPort(name="directions", value_type=ProjectiveLine),),
     )
     restrict_operation = inline_operation(
         OperationDeclaration(
@@ -277,19 +260,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Construct the exact prime-field map B -> B^T b.",
             tags=("finite-field", "linear-map", "restriction-of-scalars"),
         ),
-        input_ports=(
-            InputPort(
-                name="subspace",
-                value_type=FiniteDimensionalSubspace,
-                request_field="subspace",
-            ),
-            InputPort(
-                name="direction",
-                value_type=ProjectivePoint,
-                request_field="direction",
-            ),
-        ),
-        output_ports=(OutputPort(name="linear_map", value_type=FiniteLinearMap),),
     )
     rank_operation = inline_operation(
         OperationDeclaration(
@@ -302,19 +272,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Return the exact rank bound to its direction and map.",
             tags=("finite-field", "linear-map", "rank", "exact"),
         ),
-        input_ports=(
-            InputPort(
-                name="direction",
-                value_type=ProjectivePoint,
-                request_field="direction",
-            ),
-            InputPort(
-                name="linear_map",
-                value_type=FiniteLinearMap,
-                request_field="linear_map",
-            ),
-        ),
-        output_ports=(OutputPort(name="rank", value_type=RankResult),),
     )
     ledger_operation = inline_operation(
         OperationDeclaration(
@@ -328,19 +285,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Return every direction with its restricted map and rank.",
             tags=("finite-field", "rank"),
         ),
-        input_ports=(
-            InputPort(
-                name="subspace",
-                value_type=FiniteDimensionalSubspace,
-                request_field="subspace",
-            ),
-            InputPort(
-                name="directions",
-                value_type=ProjectiveLine,
-                request_field="directions",
-            ),
-        ),
-        output_ports=(OutputPort(name="ledger", value_type=DirectionRankLedger),),
     )
     orbit_operation = inline_operation(
         OperationDeclaration(
@@ -354,14 +298,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Return exact orbit-size counts bound to the full ledger.",
             tags=("finite-field", "orbit"),
         ),
-        input_ports=(
-            InputPort(
-                name="ledger",
-                value_type=DirectionRankLedger,
-                request_field="ledger",
-            ),
-        ),
-        output_ports=(OutputPort(name="distribution", value_type=OrbitDistribution),),
     )
     table_operation = inline_operation(
         OperationDeclaration(
@@ -375,14 +311,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Return the exact domain-bound map table in canonical order.",
             tags=("finite-field", "polynomial", "map-table", "exact"),
         ),
-        input_ports=(
-            InputPort(
-                name="polynomial_map",
-                value_type=FinitePolynomialMap,
-                request_field="polynomial_map",
-            ),
-        ),
-        output_ports=(OutputPort(name="table", value_type=FiniteMapTable),),
     )
     fiber_operation = inline_operation(
         OperationDeclaration(
@@ -396,10 +324,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Return every nonempty fiber bound to the exact map table.",
             tags=("finite-field", "polynomial", "fibers", "exact"),
         ),
-        input_ports=(
-            InputPort(name="table", value_type=FiniteMapTable, request_field="table"),
-        ),
-        output_ports=(OutputPort(name="fibers", value_type=FiberPartition),),
     )
     collision_operation = inline_operation(
         OperationDeclaration(
@@ -413,10 +337,6 @@ def finite_field_operations() -> OperationDeclarations:
             description="Return two distinct inputs with the same exact table image.",
             tags=("finite-field", "polynomial", "collision", "certificate"),
         ),
-        input_ports=(
-            InputPort(name="table", value_type=FiniteMapTable, request_field="table"),
-        ),
-        output_ports=(OutputPort(name="collision", value_type=CollisionCertificate),),
     )
     permutation_operation = inline_operation(
         OperationDeclaration(
@@ -429,12 +349,6 @@ def finite_field_operations() -> OperationDeclarations:
             title="Certify a finite polynomial permutation",
             description="Return the exact inverse table of an injective finite map.",
             tags=("finite-field", "polynomial", "permutation", "certificate"),
-        ),
-        input_ports=(
-            InputPort(name="table", value_type=FiniteMapTable, request_field="table"),
-        ),
-        output_ports=(
-            OutputPort(name="permutation", value_type=PermutationCertificate),
         ),
     )
     return with_invalid_request(
@@ -459,5 +373,3 @@ def finite_field_operations() -> OperationDeclarations:
 
 
 __all__ = ["finite_field_operations"]
-
-AUTHORIZED_CHECKERS = FINITE_FIELD_AUTHORIZED_CHECKERS

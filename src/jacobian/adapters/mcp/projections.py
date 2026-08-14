@@ -12,7 +12,6 @@ from jacobian.adapters.mcp.constants import (
 from jacobian.contracts.operations import (
     OperationDescriptor,
     OperationDiscoveryRequest,
-    OperationInputKind,
 )
 from jacobian.operation_errors import OperationDiscoveryCursorError
 
@@ -31,22 +30,11 @@ def _discovery_operation_card(
     match: dict[str, Any],
     descriptor: OperationDescriptor,
 ) -> dict[str, Any]:
-    """Add installed availability and typed routing facts to lexical search."""
+    """Add installed availability to lexical search."""
 
     runtime = descriptor.provider_runtime
     return {
         **match,
-        "accepted_input_kinds": [
-            kind.value for kind in descriptor.accepted_input_kinds
-        ],
-        "accepted_artifact_types": list(descriptor.accepted_artifact_types),
-        "produced_artifact_types": list(descriptor.produced_artifact_types),
-        "input_ports": [
-            port.model_dump(mode="json") for port in descriptor.input_ports
-        ],
-        "output_ports": [
-            port.model_dump(mode="json") for port in descriptor.output_ports
-        ],
         "provider_availability": (
             runtime.availability.value
             if runtime is not None
@@ -60,16 +48,12 @@ def _operation_discovery_response(
     *,
     query: str,
     domain: str | None,
-    input_kind: OperationInputKind | None,
-    artifact_type: str | None,
     limit: int | None,
     cursor: str | None,
 ) -> dict[str, Any]:
     discovery_request = OperationDiscoveryRequest(
         query=query,
         domain=domain,
-        input_kind=input_kind,
-        artifact_type=artifact_type,
         limit=limit if limit is not None else 5,
         cursor=cursor,
     )
@@ -84,7 +68,7 @@ def _operation_discovery_response(
                 "message": "The operation discovery cursor is not in this result set.",
                 "hint": (
                     "Restart discovery without a cursor, or reuse the same query, "
-                    "domain, input_kind, artifact_type, and limit that produced "
+                    "domain and limit that produced "
                     "next_cursor."
                 ),
             }
@@ -117,10 +101,7 @@ def _operation_discovery_response(
         response["truncated"] = True
         response["next_cursor"] = matches[-1]["operation_id"]
         response["truncation_reason"] = "BYTE_LIMIT"
-    compact_fields = (
-        "tags",
-        "produced_artifact_types",
-    )
+    compact_fields = ("tags",)
     while len(_mcp_text_json_bytes(response)) > OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT:
         removed = False
         for match in matches:

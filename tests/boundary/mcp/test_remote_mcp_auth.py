@@ -13,7 +13,7 @@ import pytest
 from jacobian.adapters.mcp.remote import (
     StaticTokenGrant,
     StaticTokenVerifier,
-    TenantRuntimeRouter,
+    _SharedRuntimeOwner,
     load_static_token_file,
 )
 
@@ -48,22 +48,19 @@ def test_remote_configuration_errors_name_the_rule_and_recovery(
     ):
         StaticTokenGrant(tenant_id="bad subject", token="a" * 32)
 
-    router = TenantRuntimeRouter(
-        tmp_path,
-        runtime_factory=lambda *_args, **_kwargs: pytest.fail(
-            "authentication must precede runtime construction"
-        ),
+    router = _SharedRuntimeOwner(
+        lambda: pytest.fail("authentication must precede runtime construction"),
     )
     with pytest.raises(
         PermissionError,
         match="Authenticate with a configured bearer token and retry",
     ):
-        router.runtime_for(None)
+        router.acquire(None)
     with pytest.raises(
         PermissionError,
         match="Check the server token configuration",
     ):
-        router.runtime_for("bad subject")
+        router.acquire("bad subject")
 
     missing = tmp_path / "missing-tokens.json"
     with pytest.raises(
@@ -215,24 +212,3 @@ def test_token_file_is_strict_and_remote_cli_fails_closed(
     )
     assert conflicting_auth.returncode != 0
     assert "mutually exclusive" in conflicting_auth.stderr
-
-    invalid_idle_timeout = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "jacobian.adapters.mcp.remote_cli",
-            "--transport",
-            "streamable-http",
-            "--allow-anonymous",
-            "--tenant-idle-timeout-seconds",
-            "0",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert invalid_idle_timeout.returncode != 0
-    assert "--tenant-idle-timeout-seconds must be positive" in (
-        invalid_idle_timeout.stderr
-    )

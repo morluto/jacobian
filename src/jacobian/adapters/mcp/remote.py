@@ -1,4 +1,4 @@
-"""Authentication and tenant routing for remote MCP transports."""
+"""Authentication and shared runtime ownership for remote MCP transports."""
 
 from __future__ import annotations
 
@@ -7,81 +7,94 @@ import hmac
 import json
 import re
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken
 
-from jacobian import __version__
 from jacobian.adapters.mcp.context import (
     AppState,
     AuthenticationError,
     RuntimeAccess,
-    TenantRuntimeLimitError,
-    _configured_root,
 )
 from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.operation_visibility import OperationVisibilityPolicy
-from jacobian.registry import CheckerRegistry
-from jacobian.runtime.execution import (
-    create_inline_serving_runtime,
-    create_serving_runtime,
-)
+from jacobian.runtime.execution import create_inline_serving_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.serving_catalog import ServingCatalog
-from jacobian.storage.repository import ArtifactRepository
 
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-DEFAULT_MAX_TENANT_RUNTIMES = 32
-DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS = 900.0
 
 
-class TenantRuntimeRouterClosedError(RuntimeError):
-    """The tenant runtime owner is shutting down or closed."""
+class _SharedRuntimeOwner:
+    """Compile-safe seam owning one shared immutable runtime for all requests.
 
-
-@dataclass(slots=True)
-class _TenantRuntimeEntry:
-    runtime: JacobianRuntime
-    active_requests: int
-    last_used: float
-
-
-class TenantRuntimeHold:
-    """Private host guard preventing eviction during an active request."""
+    Authentication and request-scoped tenant identity/scopes are resolved on
+    every ``acquire`` from the MCP access token before any runtime is
+    constructed. The runtime is built lazily on the first authenticated
+    request and then shared immutably; there is no per-tenant state rooting,
+    LRU, idle eviction, quarantine, or coordinated shutdown. ``release`` is a
+    no-op because the runtime is shared and immutable for the host lifetime.
+    """
 
     def __init__(
         self,
-        router: TenantRuntimeRouter,
-        tenant_key: str,
-        runtime: JacobianRuntime,
+        runtime_factory: Callable[[], JacobianRuntime],
+        *,
+        allow_anonymous: bool = False,
+        anonymous_tenant_id: str = "anonymous",
     ) -> None:
-        self._router = router
-        self._tenant_key = tenant_key
-        self.runtime = runtime
-        self._released = False
+        if not _TENANT_PATTERN.fullmatch(anonymous_tenant_id):
+            raise ValueError(
+                "anonymous_tenant_id must start with a letter or digit, contain only "
+                "letters, digits, '.', '_', or '-', and be at most 128 characters"
+            )
+        self._runtime_factory = runtime_factory
+        self._allow_anonymous = allow_anonymous
+        self._anonymous_tenant_id = anonymous_tenant_id
+        self._runtime: JacobianRuntime | None = None
+        self._lock = threading.Lock()
 
-    def __enter__(self) -> JacobianRuntime:
-        return self.runtime
+    def acquire(self, subject: str | None) -> RuntimeAccess:
+        """Resolve request-scoped tenant identity, then return the shared runtime."""
 
-    def __exit__(self, *_exc: object) -> None:
-        self.release()
+        self._resolve_tenant(subject)
+        return RuntimeAccess(self._ensure_runtime())
 
-    def release(self) -> None:
-        if self._released:
-            return
-        self._released = True
-        self._router._release(self._tenant_key)
+    def _resolve_tenant(self, subject: str | None) -> str:
+        tenant = subject
+        if tenant is None:
+            if not self._allow_anonymous:
+                raise AuthenticationError(
+                    "Authentication is required for this server. "
+                    "Authenticate with a configured bearer token and retry."
+                )
+            tenant = self._anonymous_tenant_id
+        if not _TENANT_PATTERN.fullmatch(tenant):
+            raise AuthenticationError(
+                "The authenticated subject cannot be used for tenant isolation. "
+                "Check the server token configuration, then authenticate again."
+            )
+        return tenant
 
+    def _ensure_runtime(self) -> JacobianRuntime:
+        with self._lock:
+            if self._runtime is None:
+                self._runtime = self._runtime_factory()
+            return self._runtime
 
-type _AcquisitionPlan = (
-    TenantRuntimeHold | tuple[str, _TenantRuntimeEntry] | Literal["CREATE", "WAIT"]
-)
+    def close(self) -> None:
+        """Close the shared runtime, if one was constructed."""
+
+        with self._lock:
+            runtime = self._runtime
+            self._runtime = None
+        if runtime is not None:
+            runtime.close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,266 +141,6 @@ class StaticTokenVerifier:
                     subject=grant.tenant_id,
                 )
         return None
-
-
-class TenantRuntimeRouter:
-    """Own one isolated runtime per authenticated subject."""
-
-    def __init__(
-        self,
-        root: str | Path,
-        *,
-        allow_anonymous: bool = False,
-        anonymous_tenant_id: str = "anonymous",
-        operation_policy: OperationVisibilityPolicy | None = None,
-        max_tenant_runtimes: int = DEFAULT_MAX_TENANT_RUNTIMES,
-        idle_timeout_seconds: float = DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
-        clock: Callable[[], float] = time.monotonic,
-        runtime_factory: Callable[..., JacobianRuntime],
-    ) -> None:
-        if max_tenant_runtimes < 1:
-            raise ValueError("max_tenant_runtimes must be positive")
-        if idle_timeout_seconds <= 0:
-            raise ValueError("idle_timeout_seconds must be positive")
-        if not _TENANT_PATTERN.fullmatch(anonymous_tenant_id):
-            raise ValueError(
-                "anonymous_tenant_id must start with a letter or digit, contain only "
-                "letters, digits, '.', '_', or '-', and be at most 128 characters"
-            )
-        self.root = Path(root)
-        self.allow_anonymous = allow_anonymous
-        self.anonymous_tenant_id = anonymous_tenant_id
-        self.operation_policy = operation_policy
-        self.max_tenant_runtimes = max_tenant_runtimes
-        self.idle_timeout_seconds = idle_timeout_seconds
-        self._clock = clock
-        self._runtime_factory = runtime_factory
-        self._runtimes: dict[str, _TenantRuntimeEntry] = {}
-        self._quarantined: dict[str, _TenantRuntimeEntry] = {}
-        self._creating: set[str] = set()
-        self._evicting: set[str] = set()
-        self._evictions_in_flight = 0
-        self._condition = threading.Condition()
-        self._closing = False
-        self._closed = False
-        self._shutdown_in_flight = False
-
-    def runtime_for(self, subject: str | None) -> JacobianRuntime:
-        """Return a compatible runtime for non-request local callers."""
-
-        hold = self.hold_for(subject)
-        try:
-            return hold.runtime
-        finally:
-            hold.release()
-
-    def hold_for(self, subject: str | None) -> TenantRuntimeHold:
-        """Acquire one tenant runtime, creating or evicting outside the lock."""
-
-        tenant_key = self._tenant_key(subject)
-        while True:
-            with self._condition:
-                if self._closing or self._closed:
-                    raise TenantRuntimeRouterClosedError(
-                        "tenant runtime router is closing"
-                    )
-                plan = self._plan_acquisition(tenant_key)
-                if isinstance(plan, TenantRuntimeHold):
-                    return plan
-                if plan == "WAIT":
-                    self._condition.wait()
-                    continue
-                if plan == "CREATE":
-                    break
-            self._close_evicted(plan)
-
-        try:
-            runtime = self._runtime_factory(
-                self.root / "tenants" / tenant_key,
-                operation_policy=self.operation_policy,
-            )
-        except BaseException:
-            with self._condition:
-                self._creating.discard(tenant_key)
-                self._condition.notify_all()
-            raise
-        with self._condition:
-            self._creating.discard(tenant_key)
-            entry = _TenantRuntimeEntry(
-                runtime=runtime,
-                active_requests=1,
-                last_used=self._clock(),
-            )
-            self._runtimes[tenant_key] = entry
-            self._condition.notify_all()
-        return TenantRuntimeHold(self, tenant_key, runtime)
-
-    def _tenant_key(self, subject: str | None) -> str:
-        tenant = subject
-        if tenant is None:
-            if not self.allow_anonymous:
-                raise AuthenticationError(
-                    "Authentication is required for this server. "
-                    "Authenticate with a configured bearer token and retry."
-                )
-            tenant = self.anonymous_tenant_id
-        if not _TENANT_PATTERN.fullmatch(tenant):
-            raise AuthenticationError(
-                "The authenticated subject cannot be used for tenant isolation. "
-                "Check the server token configuration, then authenticate again."
-            )
-        return hashlib.sha256(tenant.encode("utf-8")).hexdigest()
-
-    def _plan_acquisition(self, tenant_key: str) -> _AcquisitionPlan:
-        now = self._clock()
-        if tenant_key in self._evicting:
-            return "WAIT"
-        entry = self._runtimes.get(tenant_key)
-        if entry is not None and not (
-            entry.active_requests == 0
-            and now - entry.last_used >= self.idle_timeout_seconds
-        ):
-            entry.active_requests += 1
-            entry.last_used = now
-            return TenantRuntimeHold(self, tenant_key, entry.runtime)
-        if entry is not None:
-            return self._begin_eviction(tenant_key, self._runtimes.pop(tenant_key))
-        quarantined = self._quarantined.pop(tenant_key, None)
-        if quarantined is not None:
-            return self._begin_eviction(tenant_key, quarantined)
-        if tenant_key in self._creating:
-            return "WAIT"
-        if (
-            len(self._runtimes)
-            + len(self._quarantined)
-            + len(self._creating)
-            + self._evictions_in_flight
-            < self.max_tenant_runtimes
-        ):
-            self._creating.add(tenant_key)
-            return "CREATE"
-        if self._quarantined:
-            eviction = min(
-                self._quarantined.items(),
-                key=lambda item: (item[1].last_used, item[0]),
-            )
-            del self._quarantined[eviction[0]]
-            return self._begin_eviction(*eviction)
-        inactive = tuple(
-            (key, candidate)
-            for key, candidate in self._runtimes.items()
-            if candidate.active_requests == 0
-        )
-        if not inactive:
-            raise TenantRuntimeLimitError(
-                "This server has reached its in-memory tenant limit."
-            )
-        eviction = min(inactive, key=lambda item: (item[1].last_used, item[0]))
-        del self._runtimes[eviction[0]]
-        return self._begin_eviction(*eviction)
-
-    def _begin_eviction(
-        self, tenant_key: str, entry: _TenantRuntimeEntry
-    ) -> tuple[str, _TenantRuntimeEntry]:
-        self._evicting.add(tenant_key)
-        self._evictions_in_flight += 1
-        return tenant_key, entry
-
-    def _close_evicted(self, eviction: tuple[str, _TenantRuntimeEntry]) -> None:
-        tenant_key, entry = eviction
-        try:
-            entry.runtime.close()
-        except BaseException:
-            with self._condition:
-                self._evictions_in_flight -= 1
-                self._evicting.remove(tenant_key)
-                self._quarantined[tenant_key] = entry
-                self._condition.notify_all()
-            raise
-        with self._condition:
-            self._evictions_in_flight -= 1
-            self._evicting.remove(tenant_key)
-            self._condition.notify_all()
-
-    def _release(self, tenant_key: str) -> None:
-        with self._condition:
-            entry = self._runtimes.get(tenant_key)
-            if entry is None or entry.active_requests < 1:
-                raise RuntimeError("tenant runtime request ownership was lost")
-            entry.active_requests -= 1
-            entry.last_used = self._clock()
-            self._condition.notify_all()
-
-    def _collect_shutdown_runtimes(
-        self,
-    ) -> tuple[tuple[str, _TenantRuntimeEntry], ...]:
-        with self._condition:
-            while (
-                self._creating
-                or self._evictions_in_flight
-                or any(entry.active_requests for entry in self._runtimes.values())
-            ):
-                self._condition.wait()
-            return tuple(self._runtimes.items()) + tuple(self._quarantined.items())
-
-    def _close_runtime_entries(
-        self, runtimes: tuple[tuple[str, _TenantRuntimeEntry], ...]
-    ) -> None:
-        failures: list[BaseException] = []
-        for tenant_key, entry in runtimes:
-            try:
-                entry.runtime.close()
-            except BaseException as exc:
-                failures.append(exc)
-            else:
-                with self._condition:
-                    self._runtimes.pop(tenant_key, None)
-                    self._quarantined.pop(tenant_key, None)
-        if failures:
-            exception_failures = [
-                failure for failure in failures if isinstance(failure, Exception)
-            ]
-            if len(exception_failures) == len(failures):
-                raise ExceptionGroup(
-                    "one or more tenant runtimes failed to close", exception_failures
-                )
-            raise BaseExceptionGroup(
-                "one or more tenant runtimes failed to close", failures
-            )
-
-    def _finish_shutdown(self) -> None:
-        with self._condition:
-            self._shutdown_in_flight = False
-            self._closed = True
-            self._closing = False
-            self._condition.notify_all()
-
-    def _abort_shutdown(self) -> None:
-        with self._condition:
-            self._shutdown_in_flight = False
-            self._condition.notify_all()
-
-    def close(self) -> None:
-        """Close every tenant runtime owned by this router."""
-
-        owns_shutdown = False
-        try:
-            with self._condition:
-                if self._closed:
-                    return
-                while self._shutdown_in_flight:
-                    self._condition.wait()
-                    if self._closed:
-                        return
-                self._closing = True
-                owns_shutdown = True
-                self._shutdown_in_flight = True
-            self._close_runtime_entries(self._collect_shutdown_runtimes())
-            self._finish_shutdown()
-        except BaseException:
-            if owns_shutdown:
-                self._abort_shutdown()
-            raise
 
 
 def load_static_token_file(path: str | Path) -> tuple[StaticTokenGrant, ...]:
@@ -450,110 +203,51 @@ def _parse_token_record(index: int, record: Any) -> StaticTokenGrant:
 
 
 def create_remote_server(
-    state_dir: str | Path | None = None,
     *,
     allow_anonymous: bool = False,
     anonymous_tenant_id: str = "anonymous",
     token_verifier: Any | None = None,
     auth: Any | None = None,
     operation_policy: OperationVisibilityPolicy | None = None,
-    max_tenant_runtimes: int | None = None,
-    tenant_idle_timeout_seconds: float | None = None,
-    runtime_factory: Callable[..., JacobianRuntime] | None = None,
+    runtime_factory: Callable[[], JacobianRuntime] | None = None,
 ) -> MCPServer[AppState]:
-    """Create one remote host routing requests to isolated tenant runtimes."""
+    """Create one stateless remote host serving a shared operation runtime."""
 
     from mcp.server.auth.middleware.auth_context import get_access_token
 
-    root = _configured_root(state_dir)
     policy = operation_policy or OperationVisibilityPolicy()
-    catalog = ServingCatalog.open(
-        root / "metadata.sqlite3",
-        policy,
-        expected_package_version=__version__,
-    )
-    shared_store: ArtifactRepository | None = None
-    selected_factory = runtime_factory
-    if selected_factory is None and catalog.overlay is None:
+    catalog = ServingCatalog.open(policy=policy)
 
-        def selected_factory(
-            tenant_root: str | Path,
-            **_options: object,
-        ) -> JacobianRuntime:
-            del tenant_root, _options
+    if runtime_factory is not None:
+
+        def build_runtime() -> JacobianRuntime:
+            return runtime_factory()
+
+    else:
+
+        def build_runtime() -> JacobianRuntime:
             return create_inline_serving_runtime(catalog)
 
-    elif selected_factory is None:
-        shared_store = ArtifactRepository(root)
-        shared_checkers = CheckerRegistry(shared_store)
-
-        def selected_factory(
-            tenant_root: str | Path,
-            **_options: object,
-        ) -> JacobianRuntime:
-            return _create_tenant_runtime(
-                Path(tenant_root),
-                catalog,
-                shared_checkers,
-                policy,
-            )
-
-    router = TenantRuntimeRouter(
-        root,
+    owner = _SharedRuntimeOwner(
+        build_runtime,
         allow_anonymous=allow_anonymous,
         anonymous_tenant_id=anonymous_tenant_id,
-        operation_policy=policy,
-        max_tenant_runtimes=(
-            DEFAULT_MAX_TENANT_RUNTIMES
-            if max_tenant_runtimes is None
-            else max_tenant_runtimes
-        ),
-        idle_timeout_seconds=(
-            DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS
-            if tenant_idle_timeout_seconds is None
-            else tenant_idle_timeout_seconds
-        ),
-        runtime_factory=selected_factory,
     )
 
     def acquire_runtime(_operation_id: str | None = None) -> RuntimeAccess:
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
-        hold = router.hold_for(subject)
-        return RuntimeAccess(hold.runtime, hold.release)
+        return owner.acquire(subject)
 
     state = AppState(
         acquire_runtime=acquire_runtime,
         operation_catalog=catalog,
     )
 
-    def close_owner() -> None:
-        try:
-            router.close()
-        finally:
-            if shared_store is not None:
-                shared_store.close()
-
     return _build_server(
         state=state,
-        close_owner=close_owner,
+        close_owner=owner.close,
         deployment_identity=load_deployment_identity(),
         token_verifier=token_verifier,
         auth=auth,
-    )
-
-
-def _create_tenant_runtime(
-    tenant_root: Path,
-    catalog: ServingCatalog,
-    shared_checkers: CheckerRegistry,
-    operation_policy: OperationVisibilityPolicy,
-) -> JacobianRuntime:
-    """Create tenant-owned artifacts over deployment-owned mathematical state."""
-
-    return create_serving_runtime(
-        tenant_root,
-        catalog,
-        operation_policy=operation_policy,
-        checker_registry=shared_checkers,
     )

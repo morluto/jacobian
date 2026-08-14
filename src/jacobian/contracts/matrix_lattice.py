@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import model_validator
 
 from jacobian.contracts.matrices import IntegerMatrix, require_matrix_scalar_digits
 from jacobian.contracts.results import ContractModel
 
 
 class HermiteNormalFormResult(ContractModel):
-    """Complete H and U evidence; artifact lineage binds it to the input."""
+    """Complete H and U evidence for the declared input matrix."""
 
     result_schema_version: Literal["1"] = "1"
     normal_form: IntegerMatrix
@@ -38,20 +38,10 @@ class HermiteNormalFormResult(ContractModel):
         return self
 
 
-class HermiteNormalFormResourceBudget(ContractModel):
-    """Bound the isolated HNF worker attempt."""
-
-    budget_version: Literal["1"] = "1"
-    wall_seconds: StrictInt = Field(default=10, ge=1, le=60)
-
-
 class HermiteNormalFormRequest(ContractModel):
     """Bounded integer matrix input for the durable HNF operation."""
 
     matrix: IntegerMatrix
-    resource_budget: HermiteNormalFormResourceBudget = Field(
-        default_factory=HermiteNormalFormResourceBudget
-    )
 
     @model_validator(mode="after")
     def require_hnf_input_budget(self) -> Self:
@@ -65,6 +55,5 @@ class HermiteNormalFormRequest(ContractModel):
 
 __all__ = [
     "HermiteNormalFormRequest",
-    "HermiteNormalFormResourceBudget",
     "HermiteNormalFormResult",
 ]

@@ -5,15 +5,10 @@ from __future__ import annotations
 from importlib import import_module
 from typing import cast
 
-from jacobian.checker_operations import AuthorizedChecker
 from jacobian.operation_declarations import OperationDeclarations
 
 type BuiltinOperationModule = tuple[str, str]
-type LoadedOperationModule = tuple[
-    str,
-    OperationDeclarations,
-    tuple[AuthorizedChecker, ...],
-]
+type LoadedOperationModule = tuple[str, OperationDeclarations]
 
 BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ("jacobian.domains.arithmetic.domain_declarations", "arithmetic_operations"),
@@ -21,10 +16,7 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ("jacobian.domains.combinatorics.domain_declarations", "combinatorics_operations"),
     ("jacobian.domains.finite_sets.domain_declarations", "finite_set_operations"),
     ("jacobian.domains.finite_fields.domain_declarations", "finite_field_operations"),
-    (
-        "jacobian.domains.formal_datasets.domain_declarations",
-        "formal_dataset_operations",
-    ),
+    ("jacobian.domains.logic.domain_declarations", "logic_operations"),
     ("jacobian.domains.sequences.domain_declarations", "sequence_operations"),
     ("jacobian.domains.geometry.domain_declarations", "geometry_operations"),
     (
@@ -84,11 +76,7 @@ def load_builtin_operation_module(module_name: str) -> LoadedOperationModule:
     module = import_module(module_name)
     factory = getattr(module, factory_name)
     operations = cast(OperationDeclarations, factory())
-    checkers = cast(
-        tuple[AuthorizedChecker, ...],
-        getattr(module, "AUTHORIZED_CHECKERS", ()),
-    )
-    return module_name, operations, checkers
+    return module_name, operations
 
 
 __all__ = [

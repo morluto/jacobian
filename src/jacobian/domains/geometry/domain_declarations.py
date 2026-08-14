@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.geometry.checkers import GEOMETRY_AUTHORIZED_CHECKERS
 from jacobian.domains.geometry.lines import LINE_OPERATIONS
 from jacobian.domains.geometry.points import POINT_OPERATIONS
 from jacobian.domains.geometry.polygons import POLYGON_OPERATIONS
@@ -29,6 +28,3 @@ def geometry_operations() -> OperationDeclarations:
             hint="Use canonical rationals and inspect the operation's point/line schema.",
         ),
     )
-
-
-AUTHORIZED_CHECKERS = GEOMETRY_AUTHORIZED_CHECKERS

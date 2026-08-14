@@ -4,7 +4,6 @@ from dataclasses import replace
 from typing import Any
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.probability.checkers import PROBABILITY_AUTHORIZED_CHECKERS
 from jacobian.domains.probability.gaussian_inputs import (
     CanonicalGaussianPolynomialMomentRequest,
 )
@@ -47,5 +46,3 @@ def finite_probability_operations() -> OperationDeclarations:
 
 
 __all__ = ["finite_probability_operations"]
-
-AUTHORIZED_CHECKERS = PROBABILITY_AUTHORIZED_CHECKERS

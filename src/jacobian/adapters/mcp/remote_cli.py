@@ -1,4 +1,4 @@
-"""Operator entry point for the remote multi-tenant MCP host."""
+"""Operator entry point for the stateless remote MCP host."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from jacobian import __version__
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="jacobian-remote-mcp",
-        description="Run the remote multi-tenant Jacobian MCP host.",
+        description="Run the stateless remote Jacobian MCP host.",
     )
     parser.add_argument(
         "--version",
@@ -22,11 +22,6 @@ def _parser() -> argparse.ArgumentParser:
         "--transport",
         choices=("streamable-http", "sse"),
         default="streamable-http",
-    )
-    parser.add_argument(
-        "--state-dir",
-        type=Path,
-        help="state root; defaults to JACOBIAN_STATE_DIR or .jacobian",
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
@@ -75,18 +70,12 @@ def _parser() -> argparse.ArgumentParser:
             default=[],
             help=help_text,
         )
-    parser.add_argument("--max-tenant-runtimes", type=int, default=32)
-    parser.add_argument("--tenant-idle-timeout-seconds", type=float, default=900.0)
     return parser
 
 
 def main() -> None:
     parser = _parser()
     args = parser.parse_args()
-    if args.max_tenant_runtimes < 1:
-        parser.error("--max-tenant-runtimes must be positive")
-    if args.tenant_idle_timeout_seconds <= 0:
-        parser.error("--tenant-idle-timeout-seconds must be positive")
     if args.allow_anonymous and args.auth_tokens_file is not None:
         parser.error("--allow-anonymous and --auth-tokens-file are mutually exclusive")
     if args.anonymous_tenant_id != "anonymous" and not args.allow_anonymous:
@@ -120,7 +109,6 @@ def main() -> None:
             required_scopes=["jacobian:use"],
         )
     server = create_remote_server(
-        state_dir=args.state_dir,
         allow_anonymous=args.allow_anonymous,
         anonymous_tenant_id=args.anonymous_tenant_id,
         token_verifier=token_verifier,
@@ -134,8 +122,6 @@ def main() -> None:
             allowed_tags=frozenset(args.allowed_tags),
             denied_tags=frozenset(args.denied_tags),
         ),
-        max_tenant_runtimes=args.max_tenant_runtimes,
-        tenant_idle_timeout_seconds=args.tenant_idle_timeout_seconds,
     )
     if args.transport == "streamable-http":
         server.run(

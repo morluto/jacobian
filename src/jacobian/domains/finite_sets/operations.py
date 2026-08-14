@@ -2,12 +2,32 @@
 
 from __future__ import annotations
 
+from collections import Counter
+
 from jacobian.contracts.finite_sets import (
     FiniteSetBooleanResult,
     FiniteSetCardinalityResult,
+    FiniteSetCoverageRequest,
+    FiniteSetCoverageResult,
     FiniteSetElementListResult,
     FiniteSetPairRequest,
 )
+
+
+def decide_exact_cover(request: FiniteSetCoverageRequest) -> FiniteSetCoverageResult:
+    """Decide whether the supplied values contain every scope element exactly once."""
+
+    scope = {int(element) for element in request.scope.elements}
+    counts = Counter(int(element) for element in request.values)
+    missing = scope - counts.keys()
+    duplicates = {value for value, count in counts.items() if count > 1}
+    outside = counts.keys() - scope
+    return FiniteSetCoverageResult(
+        holds=not (missing or duplicates or outside),
+        missing=tuple(str(value) for value in sorted(missing)),
+        duplicates=tuple(str(value) for value in sorted(duplicates)),
+        outside=tuple(str(value) for value in sorted(outside)),
+    )
 
 
 def _pair(request: FiniteSetPairRequest) -> tuple[set[int], set[int]]:

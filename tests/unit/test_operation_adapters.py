@@ -7,7 +7,7 @@ from typing import Annotated
 import pytest
 from pydantic import StrictInt, StringConstraints, ValidationError
 
-from jacobian.contracts.graph_composition import GraphEnumerationRequest
+from jacobian.contracts.operations import OperationDiscoveryRequest
 from jacobian.contracts.results import ContractModel
 from jacobian.operation_adapters import parse_operation_input
 
@@ -54,7 +54,9 @@ def test_parse_operation_input_accepts_json_arrays_for_constrained_tuples() -> N
 
 def test_parse_operation_input_rejects_numeric_strings_for_integers() -> None:
     with pytest.raises(ValidationError, match="int_type"):
-        parse_operation_input(GraphEnumerationRequest, {"order": "3"})
+        parse_operation_input(
+            OperationDiscoveryRequest, {"query": "graph", "limit": "3"}
+        )
 
 
 def test_tuple_normalization_does_not_enable_scalar_coercion() -> None:

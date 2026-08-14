@@ -1,7 +1,6 @@
 """Exact matrix operation declarations."""
 
 from collections.abc import Callable
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -50,7 +49,6 @@ from jacobian.operation_declarations import (
     OperationDeclaration,
     inline_operation,
 )
-from jacobian.operation_ports import OutputPort
 from jacobian.operations import (
     OperationAbortError,
     OperationRefusalError,
@@ -69,9 +67,8 @@ def matrix_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    output_ports: tuple[OutputPort[Any], ...] = (),
     version: str = "1",
-) -> InlineOperation[RequestT, ResultT] | OperationDeclaration[RequestT, ResultT]:
+) -> InlineOperation[RequestT, ResultT]:
     def implementation(request: RequestT) -> ResultT:
         try:
             return operation(request)
@@ -112,8 +109,6 @@ def matrix_operation[
         tags=tags,
         examples=examples,
     )
-    if output_ports:
-        return inline_operation(declaration, output_ports=output_ports)
     return inline_operation(declaration)
 
 
@@ -443,7 +438,6 @@ MATRIX_OPERATIONS = (
                 {"matrix": {"entries": [["2", "4"], ["6", "8"]]}},
             ),
         ),
-        output_ports=(OutputPort(name="smith_form", value_type=SmithNormalForm),),
         version="2",
     ),
 )

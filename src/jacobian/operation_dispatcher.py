@@ -14,9 +14,9 @@ from jacobian.contracts.operations import (
     OperationResult,
 )
 from jacobian.operation_adapters import OperationAdapter
-from jacobian.operation_catalog import OperationCatalogView
 from jacobian.operation_dispatch import dispatch_operation, register_operation
 from jacobian.operation_visibility import OperationVisibilityPolicy
+from jacobian.serving_catalog import ServingCatalog
 
 
 class OperationResolver(Protocol):
@@ -32,9 +32,7 @@ class OperationResolver(Protocol):
 class OperationDispatcher:
     """Resolve a visible operation only when its first request arrives."""
 
-    def __init__(
-        self, catalog: OperationCatalogView, registry: OperationResolver
-    ) -> None:
+    def __init__(self, catalog: ServingCatalog, registry: OperationResolver) -> None:
         if not isinstance(catalog.policy, OperationVisibilityPolicy):
             raise TypeError(
                 "operation dispatcher requires an OperationVisibilityPolicy"

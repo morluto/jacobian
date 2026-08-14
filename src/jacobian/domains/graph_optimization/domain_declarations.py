@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.graph_optimization.checkers import (
-    GRAPH_SEARCH_AUTHORIZED_CHECKERS,
-)
 from jacobian.domains.graph_optimization.chromatic_number import (
     CHROMATIC_NUMBER_OPERATION,
 )
@@ -45,6 +42,3 @@ def graph_optimization_operations() -> OperationDeclarations:
             hint="Supply a canonical bounded simple graph.",
         ),
     )
-
-
-AUTHORIZED_CHECKERS = GRAPH_SEARCH_AUTHORIZED_CHECKERS

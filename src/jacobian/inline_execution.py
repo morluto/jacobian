@@ -23,6 +23,9 @@ from jacobian.contracts.operations import (
 from jacobian.contracts.results import ContractModel
 from jacobian.operation_adapters import parse_operation_input
 from jacobian.operation_declarations import InlineOperation
+from jacobian.operation_declarations import (
+    PreflightStatus as DeclarationPreflightStatus,
+)
 from jacobian.operation_errors import (
     OperationInvocationError,
     enriched_invalid_request,
@@ -35,6 +38,7 @@ from jacobian.operations import (
     NonConclusion,
     OperationAbortError,
     OperationRefusalError,
+    PreflightStatus,
 )
 from jacobian.schema_compiler import SCHEMA_COMPILER
 
@@ -63,7 +67,6 @@ def inline_operation_descriptor(
         output_schema=inline_output_schema(operation.result_type),
         read_only=True,
         tags=operation.tags,
-        produced_artifact_types=(),
         examples=tuple(
             OperationExample(
                 name=example.name,
@@ -79,7 +82,21 @@ def run_inline[RequestT: ContractModel, ResultT: ContractModel](
     operation: InlineOperation[RequestT, ResultT],
     request: RequestT,
 ) -> OperationTerminal[ResultT]:
-    """Run one inline operation and validate its result type once."""
+    """Run preflight (if declared), execution, and result validation once."""
+
+    if operation.preflight is not None:
+        preflight = operation.preflight(request)
+        if preflight.status not in {
+            PreflightStatus.SUPPORTED,
+            DeclarationPreflightStatus.SUPPORTED,
+        }:
+            return NonConclusion(
+                OperationDiagnostic(
+                    code=preflight.status.value,
+                    stage="operation_preflight",
+                    message=preflight.reason or "Operation preflight rejected.",
+                )
+            )
 
     started = time.monotonic()
     try:
@@ -115,7 +132,7 @@ class InlineOperationAdapter:
                     code="REQUEST_RESOURCE_LIMIT_EXCEEDED",
                     stage="operation_request",
                     message=str(exc),
-                    hint="Reduce the request or use a typed artifact input operation.",
+                    hint="Reduce the request to the operation's published bound.",
                 )
             ) from exc
         try:

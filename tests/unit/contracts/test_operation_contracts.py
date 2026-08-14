@@ -7,12 +7,9 @@ from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
     OperationDescriptor,
     OperationDiscoveryResult,
-    OperationResult,
 )
-from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.provider_runtime import known_provider_runtime
 
-RECORD_URI = "artifact://sha256/" + "a" * 64
 POLICY_DIGEST = "sha256:" + "b" * 64
 
 
@@ -84,32 +81,3 @@ def test_operation_descriptor_does_not_publish_execution_identity() -> None:
     assert (
         "provider_runtime" not in OperationDescriptor.model_json_schema()["properties"]
     )
-
-
-def test_noncompleted_execution_cannot_carry_a_verification_record() -> None:
-    with pytest.raises(ValidationError, match="cannot carry a verification record"):
-        OperationResult(
-            operation_id="example.verify",
-            operation_version="1",
-            execution=Execution(status=ExecutionStatus.TIMEOUT),
-            verification_record_uri=RECORD_URI,
-        )
-
-
-def test_verified_result_publishes_its_record_as_a_first_class_artifact() -> None:
-    with pytest.raises(ValidationError, match="included in artifact_uris"):
-        OperationResult(
-            operation_id="example.verify",
-            operation_version="1",
-            execution=Execution(status=ExecutionStatus.COMPLETED),
-            verification_record_uri=RECORD_URI,
-        )
-
-    result = OperationResult(
-        operation_id="example.verify",
-        operation_version="1",
-        execution=Execution(status=ExecutionStatus.COMPLETED),
-        verification_record_uri=RECORD_URI,
-        artifact_uris=(RECORD_URI,),
-    )
-    assert result.artifact_uris == (RECORD_URI,)

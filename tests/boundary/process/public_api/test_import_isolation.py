@@ -111,7 +111,6 @@ def test_native_probability_import_does_not_load_wire_or_runtime_owner() -> None
             "jacobian.provider_runtime",
             "jacobian.providers",
             "jacobian.runtime",
-            "jacobian_checkers",
         ),
     )
 

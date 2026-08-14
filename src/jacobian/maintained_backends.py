@@ -10,9 +10,6 @@ from jacobian.provider_runtime import (
 )
 from jacobian.providers.external_solver_runtime import cvc5_provider_runtime
 from jacobian.providers.flint_runtime import python_flint_provider_runtime
-from jacobian.providers.sympy_runtime import (
-    sympy_polynomial_normalization_provider_runtime,
-)
 
 
 def require_maintained_math_backends() -> None:
@@ -24,7 +21,6 @@ def require_maintained_math_backends() -> None:
         known_provider_runtime("jacobian.z3"),
         python_flint_provider_runtime(),
         cvc5_provider_runtime(),
-        sympy_polynomial_normalization_provider_runtime(),
     )
     failures = _unavailable_backends(observations)
     if not failures:

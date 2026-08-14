@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from jacobian.contracts.polynomial_operations import PolynomialGcdRequest
-from jacobian.contracts.polynomials import RationalPolynomial
 from jacobian.domains.polynomial.conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
 from jacobian.domains.polynomial.operations import polynomial_gcd
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _polynomial() -> RationalPolynomial:

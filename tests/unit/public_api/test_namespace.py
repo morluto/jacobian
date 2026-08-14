@@ -145,12 +145,7 @@ def test_root_namespace_stays_minimal() -> None:
 def test_shared_contract_namespace_contains_only_passive_primitives() -> None:
     contracts = importlib.import_module("jacobian.contracts")
 
-    assert contracts.__all__ == [
-        "ArtifactUri",
-        "CheckerUri",
-        "Sha256Digest",
-        "ValueUri",
-    ]
+    assert contracts.__all__ == ["Sha256Digest"]
     assert not hasattr(contracts, "VerificationResult")
 
 

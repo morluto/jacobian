@@ -1,7 +1,6 @@
 """Bounded exact finite-poset operation declarations."""
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.posets.checkers import FINITE_POSET_AUTHORIZED_CHECKERS
 from jacobian.domains.posets.operations import FINITE_POSET_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
 
@@ -23,5 +22,3 @@ def finite_poset_operations() -> OperationDeclarations:
 
 
 __all__ = ["finite_poset_operations"]
-
-AUTHORIZED_CHECKERS = FINITE_POSET_AUTHORIZED_CHECKERS

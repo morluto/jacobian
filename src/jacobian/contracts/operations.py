@@ -9,8 +9,8 @@ from pydantic import Field, StringConstraints, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest, ValueUri
-from jacobian.contracts.results import ContractModel, Execution, ExecutionStatus
+from jacobian.contracts.common import Sha256Digest
+from jacobian.contracts.results import ContractModel, Execution
 
 OperationId = Annotated[
     str,
@@ -21,31 +21,6 @@ OperationId = Annotated[
         strict=True,
     ),
 ]
-
-
-class OperationInputKind(StrEnum):
-    """Coarse input boundary used to prevent incompatible discovery routes."""
-
-    STRUCTURED_REQUEST = "STRUCTURED_REQUEST"
-    FORMAL_PROPOSITION = "FORMAL_PROPOSITION"
-    TYPED_ARTIFACT = "TYPED_ARTIFACT"
-
-
-def _validate_descriptor_input_contract(
-    accepted_input_kinds: tuple[OperationInputKind, ...],
-    accepted_artifact_types: tuple[ArtifactUri, ...],
-) -> None:
-    if not accepted_input_kinds:
-        raise ValueError("an operation must accept at least one input kind")
-    if len(set(accepted_input_kinds)) != len(accepted_input_kinds):
-        raise ValueError("accepted input kinds must be unique")
-    if len(set(accepted_artifact_types)) != len(accepted_artifact_types):
-        raise ValueError("accepted artifact types must be unique")
-    accepts_typed_artifact = OperationInputKind.TYPED_ARTIFACT in accepted_input_kinds
-    if accepted_artifact_types and not accepts_typed_artifact:
-        raise ValueError("accepted artifact types require TYPED_ARTIFACT input")
-    if accepts_typed_artifact and not accepted_artifact_types:
-        raise ValueError("TYPED_ARTIFACT input requires accepted artifact types")
 
 
 class OperationExample(ContractModel):
@@ -65,13 +40,6 @@ class OperationExample(ContractModel):
         return self
 
 
-class OperationValuePort(ContractModel):
-    """One named whole-value composition port."""
-
-    name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
-    value_type: str = Field(min_length=1, max_length=128)
-
-
 class OperationDiscoveryRequest(ContractModel):
     """Compact installed-portfolio search, independent of any transport."""
 
@@ -80,8 +48,6 @@ class OperationDiscoveryRequest(ContractModel):
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
     )
-    input_kind: OperationInputKind | None = None
-    artifact_type: ArtifactUri | None = None
     limit: int = Field(default=5, ge=1, le=20, strict=True)
     cursor: OperationId | None = None
 
@@ -91,15 +57,6 @@ class OperationDiscoveryRequest(ContractModel):
             raise ValueError("query must contain a non-whitespace character")
         if self.domain is not None and not self.domain.strip():
             raise ValueError("domain must contain a non-whitespace character")
-        if self.artifact_type is not None and (
-            self.input_kind is not OperationInputKind.TYPED_ARTIFACT
-        ):
-            raise ValueError("artifact_type requires input_kind=TYPED_ARTIFACT")
-        if (
-            self.input_kind is OperationInputKind.TYPED_ARTIFACT
-            and self.artifact_type is None
-        ):
-            raise ValueError("TYPED_ARTIFACT input requires artifact_type")
         return self
 
 
@@ -115,11 +72,7 @@ class OperationDiscoveryMatch(ContractModel):
         "INCOMPATIBLE",
         "NEEDS_MORE_TYPED_REQUIREMENTS",
     ]
-    applicability_code: Literal[
-        "FULL_REQUEST_REQUIRED",
-        "INPUT_KIND_MISMATCH",
-        "ARTIFACT_TYPE_MISMATCH",
-    ]
+    applicability_code: Literal["FULL_REQUEST_REQUIRED",]
 
 
 class OperationDiscoveryResult(ContractModel):
@@ -128,8 +81,6 @@ class OperationDiscoveryResult(ContractModel):
     discovery_version: Literal["1"] = "1"
     query: str
     domain: str | None = None
-    input_kind: OperationInputKind | None = None
-    artifact_type: ArtifactUri | None = None
     matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: int = Field(ge=0, strict=True)
     truncated: bool
@@ -232,7 +183,7 @@ def _validate_provider_availability_identity(
 
 def _validate_provider_collection_uniqueness(
     features: tuple[str, ...],
-    checker_ids: tuple[CheckerUri, ...],
+    checker_ids: tuple[str, ...],
     license_files: tuple[str, ...],
 ) -> None:
     if len(set(features)) != len(features):
@@ -279,7 +230,7 @@ class ProviderObservation(ContractModel):
     license_id: str = Field(min_length=1, max_length=128)
     license_files: tuple[str, ...] = ()
     features: tuple[str, ...] = ()
-    checker_ids: tuple[CheckerUri, ...] = ()
+    checker_ids: tuple[str, ...] = ()
     configuration: dict[str, Any] = Field(default_factory=dict)
     distribution_import_name: str | None = Field(
         default=None,
@@ -337,30 +288,10 @@ class OperationDescriptor(ContractModel):
     output_schema: dict[str, Any]
     read_only: bool = False
     tags: tuple[str, ...] = ()
-    accepted_input_kinds: tuple[OperationInputKind, ...] = (
-        OperationInputKind.STRUCTURED_REQUEST,
-    )
-    accepted_artifact_types: tuple[ArtifactUri, ...] = ()
-    produced_artifact_types: tuple[ArtifactUri, ...] = ()
-    input_ports: tuple[OperationValuePort, ...] = ()
-    output_ports: tuple[OperationValuePort, ...] = ()
     examples: tuple[OperationExample, ...] = ()
 
     @model_validator(mode="after")
     def require_canonical_schemas(self) -> Self:
-        _validate_descriptor_input_contract(
-            self.accepted_input_kinds,
-            self.accepted_artifact_types,
-        )
-        if len(set(self.produced_artifact_types)) != len(self.produced_artifact_types):
-            raise ValueError("produced artifact types must be unique")
-        for ports, label in (
-            (self.input_ports, "input"),
-            (self.output_ports, "output"),
-        ):
-            names = tuple(port.name for port in ports)
-            if len(names) != len(set(names)):
-                raise ValueError(f"{label} port names must be unique")
         if len({example.name for example in self.examples}) != len(self.examples):
             raise ValueError("operation invocation example names must be unique")
         canonicalize_json(self.input_schema)
@@ -377,7 +308,6 @@ class OperationRequest(ContractModel):
     request_version: Literal["1"] = "1"
     operation_id: OperationId
     input: dict[str, Any]
-    inputs: dict[str, ValueUri] = Field(default_factory=dict)
 
 
 class OperationDiagnostic(ContractModel):
@@ -387,27 +317,10 @@ class OperationDiagnostic(ContractModel):
     stage: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
     message: str = Field(min_length=1, max_length=1024)
     path: str | None = Field(default=None, max_length=512)
-    schema_uri: ArtifactUri | None = None
     expected: str | None = Field(default=None, max_length=1024)
     actual_type: str | None = Field(default=None, max_length=128)
     hint: str | None = Field(default=None, max_length=1024)
     details: dict[str, Any] = Field(default_factory=dict)
-
-
-def _validate_operation_execution_lane(
-    execution_status: ExecutionStatus,
-    diagnostics: tuple[OperationDiagnostic, ...],
-    verification_record_uri: ArtifactUri | None,
-) -> None:
-    if execution_status is ExecutionStatus.COMPLETED and diagnostics:
-        raise ValueError("completed operation execution cannot carry diagnostics")
-    if (
-        execution_status is not ExecutionStatus.COMPLETED
-        and verification_record_uri is not None
-    ):
-        raise ValueError(
-            "failed operation execution cannot carry a verification record"
-        )
 
 
 class OperationResult(ContractModel):
@@ -419,24 +332,10 @@ class OperationResult(ContractModel):
     execution: Execution
     output: dict[str, Any] = Field(default_factory=dict)
     diagnostics: tuple[OperationDiagnostic, ...] = ()
-    verification_record_uri: ArtifactUri | None = None
-    artifact_uris: tuple[ArtifactUri, ...] = ()
 
     @model_validator(mode="after")
     def enforce_lane_and_canonical_output(self) -> Self:
         canonicalize_json(self.output)
-        _validate_operation_execution_lane(
-            self.execution.status,
-            self.diagnostics,
-            self.verification_record_uri,
-        )
-        if (
-            self.verification_record_uri is not None
-            and self.verification_record_uri not in self.artifact_uris
-        ):
-            raise ValueError(
-                "the verification record must be included in artifact_uris"
-            )
         return self
 
 

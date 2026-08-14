@@ -63,7 +63,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/jacobian", "src/jacobian_checkers"]
+packages = ["src/jacobian"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [
@@ -127,7 +127,7 @@ max-complexity = 10
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["jacobian", "jacobian_checkers"]
+packages = ["jacobian"]
 
 [[tool.mypy.overrides]]
 module = ["sympy", "sympy.*"]
@@ -135,7 +135,7 @@ ignore_missing_imports = true
 
 [tool.deptry]
 extend_exclude = ["benchmarks"]
-known_first_party = ["jacobian", "jacobian_checkers"]
+known_first_party = ["jacobian"]
 # Harbor is intentionally executed as a pinned external CLI through uvx; it is
 # not part of Jacobian's runtime or locked application dependencies.
 # The maintained deployment smoke configures the HTTP client bundled by the
@@ -284,7 +284,7 @@ forbidden_modules = ["jacobian.portfolio"]
 
 [tool.coverage.run]
 branch = true
-source = ["jacobian", "jacobian_checkers"]
+source = ["jacobian"]
 
 [tool.coverage.report]
 fail_under = 50

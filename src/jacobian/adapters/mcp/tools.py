@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import json
-from typing import Annotated, Any, cast
+from typing import Any
 
 from mcp.server.mcpserver import Context
-from mcp_types import CallToolResult, ResourceLink, TextContent
-from pydantic import BaseModel, ConfigDict
 
 from jacobian.adapters.mcp.context import AppState, _catalog, _runtime
 from jacobian.adapters.mcp.projections import (
@@ -16,7 +13,6 @@ from jacobian.adapters.mcp.projections import (
 from jacobian.adapters.mcp.tooling import (
     _invoke_operation_attempt,
 )
-from jacobian.contracts.common import ValueUri
 from jacobian.contracts.operation_find import (
     OperationFindRequest,
     OperationFindResponse,
@@ -29,48 +25,6 @@ from jacobian.contracts.operations import (
     OperationResult,
 )
 from jacobian.runtime.model import JacobianRuntime
-
-
-class _MCPOutputModel(BaseModel):
-    """Closed validation model for structured MCP output."""
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class _ValueReferenceArgument(_MCPOutputModel):
-    value_ref: ValueUri
-
-
-OperationRunToolResult = Annotated[CallToolResult, OperationResult]
-
-
-def _artifact_result(result: OperationResult) -> CallToolResult:
-    """Return SDK-validated structured output plus ResourceLink content blocks."""
-
-    structured_content = result.model_dump(mode="json")
-    return CallToolResult(
-        content=[
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    structured_content,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ),
-            ),
-            *(
-                ResourceLink(
-                    uri=artifact_uri,
-                    name=artifact_uri,
-                    description="Durable Jacobian artifact returned by math.run.",
-                    mime_type="application/json",
-                )
-                for artifact_uri in result.artifact_uris
-            ),
-        ],
-        structured_content=structured_content,
-    )
 
 
 def _find_result(response: dict[str, Any]) -> OperationFindResponse:
@@ -137,8 +91,6 @@ def math_find(
             active_catalog,
             query=request.query,
             domain=request.domain,
-            input_kind=request.input_kind,
-            artifact_type=request.artifact_type,
             limit=request.limit,
             cursor=request.cursor,
         )
@@ -170,23 +122,14 @@ def math_find(
 def math_run(
     operation_id: OperationId,
     payload: dict[str, Any],
-    inputs: dict[str, _ValueReferenceArgument] | None = None,
     *,
     ctx: Context[AppState, Any],
-) -> OperationRunToolResult:
+) -> OperationResult:
     """Run one math tool. Role comes from the tool ID."""
     with _runtime(ctx, operation_id) as active_runtime:
         result = _invoke_operation_attempt(
             active_runtime,
             operation_id=operation_id,
             payload=payload,
-            inputs=(
-                {name: binding.value_ref for name, binding in inputs.items()}
-                if inputs is not None
-                else {}
-            ),
         )
-        result = _bounded_run_result(active_runtime, result)
-        if result.artifact_uris:
-            return _artifact_result(result)
-        return cast(OperationRunToolResult, result)
+        return _bounded_run_result(active_runtime, result)

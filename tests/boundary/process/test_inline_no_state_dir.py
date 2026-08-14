@@ -29,8 +29,6 @@ def test_process_runs_matrix_determinant_with_no_state_dir(tmp_path: Path) -> No
     completed = subprocess.run(
         [
             jacobian,
-            "--state-dir",
-            str(missing),
             "run",
             "matrix.determinant.compute",
             "--json",

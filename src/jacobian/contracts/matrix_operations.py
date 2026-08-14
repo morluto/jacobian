@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from jacobian.contracts.exact import CanonicalInteger, CanonicalRational
 from jacobian.contracts.matrices import (
@@ -176,17 +176,8 @@ class RationalLinearSolveRequest(ContractModel):
         return self
 
 
-class LatticeReductionBudget(ContractModel):
-    """Wall-clock bound for one isolated LLL computation."""
-
-    wall_seconds: StrictInt = Field(default=10, ge=1, le=60)
-
-
 class LatticeReductionRequest(ContractModel):
     basis: IntegerMatrix
-    resource_budget: LatticeReductionBudget = Field(
-        default_factory=LatticeReductionBudget
-    )
 
     @model_validator(mode="after")
     def require_lattice_input_budget(self) -> Self:

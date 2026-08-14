@@ -48,8 +48,6 @@ Forms:
 - Ranking is deterministic lexical retrieval; matches are not recommendations.
 - `request.op="inspect"`: exact ID with authoritative schemas and examples.
 
-Checker tools are separate IDs (often `*.verify`), not a switch on producers.
-
 Examples:
 - `{"request":{"op":"search","query":"exact matrix determinant","domain":"matrix","limit":3}}`
 - `{"request":{"op":"search","query":"counterexample to associativity"}}`
@@ -60,19 +58,13 @@ Examples:
 MATH_RUN_DESCRIPTION = """\
 Run one installed math tool by ID with its typed `payload`. Check execution status
 before treating `output` as mathematical evidence. For a completed run, interpret the
-operation-owned result fields and any `verification_record_uri` to determine exactly
-what the run established. If the payload shape is unknown, inspect the exact operation
+operation-owned result fields to determine exactly what the run established. If the
+payload shape is unknown, inspect the exact operation
 with math.find, select one item from `examples`, and copy and adapt that
 item's `input` object as the `payload`. Do not call math.run with an empty `payload`
 merely to discover required fields; the inspect result is the authoritative contract.
 
-When a completed output contains `value_refs`, an inspected consumer may declare a
-matching named `input_port`. Bind that opaque runtime-local reference through
-`inputs`; keep only the consumer's other request fields in `payload`, and do not
-repeat the port-bound field there. A value reference avoids retranscribing the typed
-value but carries no verification authority.
-
-Ordinary tools return calculations. Independent checking uses a separate checker
+Ordinary tools return calculations. Independent checking, where it is available, uses a separate checker
 tool ID (for example `polynomial.identity.verify`), not a switch on the producer.
 Failed, cancelled, timed-out, or incomplete runs are not mathematical conclusions.
 

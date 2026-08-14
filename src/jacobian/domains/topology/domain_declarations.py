@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian.contracts.operations import OperationDiagnostic
-from jacobian.domains.topology.checkers import TOPOLOGY_AUTHORIZED_CHECKERS
 from jacobian.domains.topology.operations import TOPOLOGY_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations, with_invalid_request
 
@@ -25,5 +24,3 @@ def topology_operations() -> OperationDeclarations:
 
 
 __all__ = ["topology_operations"]
-
-AUTHORIZED_CHECKERS = TOPOLOGY_AUTHORIZED_CHECKERS

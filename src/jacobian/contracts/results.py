@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian.contracts.base import ContractModel as ContractModel
-from jacobian.contracts.common import ArtifactUri, Sha256Digest
 
 
 class ExecutionStatus(StrEnum):
@@ -75,49 +74,3 @@ class InputValidation(ContractModel):
         if self.status == InputStatus.REJECTED and not self.errors:
             raise ValueError("rejected input requires at least one error")
         return self
-
-
-class VerificationResult(ContractModel):
-    """Internal result of one separately authorized checker execution."""
-
-    schema_version: Literal["1"] = "1"
-    execution: Execution
-    input: InputValidation
-    conclusion: Conclusion
-    scope_uri: ArtifactUri | None = None
-    claim_digest: Sha256Digest | None = None
-    semantics_digest: Sha256Digest | None = None
-    candidate_digest: Sha256Digest | None = None
-    evidence_uris: tuple[ArtifactUri, ...] = ()
-    verification_record_uri: ArtifactUri | None = None
-
-    @model_validator(mode="after")
-    def enforce_fail_closed_state(self) -> Self:
-        execution_failed = self.execution.status != ExecutionStatus.COMPLETED
-        input_rejected = self.input.status == InputStatus.REJECTED
-
-        if (execution_failed or input_rejected) and self.conclusion not in {
-            Conclusion.UNKNOWN,
-            Conclusion.NOT_APPLICABLE,
-        }:
-            raise ValueError(
-                "non-completed or rejected results cannot carry a "
-                "mathematical conclusion"
-            )
-        self._require_verification_evidence()
-        return self
-
-    def _require_verification_evidence(self) -> None:
-        if self.verification_record_uri is not None:
-            if self.conclusion not in {Conclusion.TRUE, Conclusion.FALSE}:
-                raise ValueError(
-                    "verified results require a decisive mathematical conclusion"
-                )
-            if self.claim_digest is None or self.semantics_digest is None:
-                raise ValueError(
-                    "verified results require claim and semantics bindings"
-                )
-            if not self.evidence_uris:
-                raise ValueError("verified results require bound evidence")
-            if self.candidate_digest is None:
-                raise ValueError("verified results require a candidate binding")

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from jacobian import __version__
 
@@ -18,20 +17,15 @@ def _parser() -> argparse.ArgumentParser:
         action="version",
         version=f"%(prog)s {__version__}",
     )
-    parser.add_argument(
-        "--state-dir",
-        type=Path,
-        help="state root; defaults to JACOBIAN_STATE_DIR or .jacobian",
-    )
     return parser
 
 
 def main() -> None:
-    args = _parser().parse_args()
+    _parser().parse_args()
 
     from jacobian.adapters.mcp.server import create_server
 
-    create_server(state_dir=args.state_dir).run("stdio")
+    create_server().run("stdio")
 
 
 if __name__ == "__main__":

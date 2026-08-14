@@ -4,24 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 
 from jacobian.adapters.mcp.server import create_server
 from jacobian.operation_visibility import OperationVisibilityPolicy
 
 
-def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
-    mcp_state: Path,
-) -> None:
+def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed() -> None:
     async def scenario() -> None:
         from mcp import Client
 
         policy = OperationVisibilityPolicy(profile="COMPUTE_VERIFY_NO_RETRIEVAL")
         async with Client(
-            create_server(
-                mcp_state,
-                operation_policy=policy,
-            ),
+            create_server(operation_policy=policy),
             raise_exceptions=True,
         ) as client:
             resource = await client.read_resource("operation://catalog")
@@ -36,21 +30,16 @@ def test_mcp_no_retrieval_policy_is_operator_bound_and_fail_closed(
     asyncio.run(scenario())
 
 
-def test_mcp_compact_operation_index_is_searchable_and_paginated(
-    mcp_state: Path,
-) -> None:
+def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
     async def scenario() -> None:
         from mcp import Client
 
         async with Client(
-            create_server(mcp_state),
+            create_server(),
             raise_exceptions=True,
         ) as client:
             resource_result = await client.read_resource("operation://catalog")
             full_catalog = json.loads(resource_result.contents[0].text)
-            all_ids = {
-                descriptor["operation_id"] for descriptor in full_catalog["operations"]
-            }
             discoverable_ids = {
                 descriptor["operation_id"] for descriptor in full_catalog["operations"]
             }
@@ -94,64 +83,6 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
             assert len(indexed_ids) == index["total_matches"]
             assert indexed_ids <= discoverable_ids
 
-            searched = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "search",
-                        "query": "SAT UNSAT proof",
-                        "input_kind": "STRUCTURED_REQUEST",
-                        "limit": 20,
-                    }
-                },
-            )
-            assert isinstance(searched.structured_content, dict)
-            search_index = searched.structured_content
-            search_ids = {
-                descriptor["operation_id"] for descriptor in search_index["matches"]
-            }
-            expected_sat_ids = {
-                "sat.cnf.materialize",
-                "sat.unsat_proof.find",
-                "sat.unsat_proof.verify",
-            }.intersection(all_ids)
-            assert expected_sat_ids.issubset(search_ids)
-
-            coloring_search = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "search",
-                        "query": (
-                            "finite coloring forbidden monochromatic triples exact "
-                            "finite existence certified exhaustive search"
-                        ),
-                        "limit": 20,
-                    }
-                },
-            )
-            assert isinstance(coloring_search.structured_content, dict)
-            coloring_ids = {
-                descriptor["operation_id"]
-                for descriptor in coloring_search.structured_content["matches"]
-            }
-            assert expected_sat_ids.issubset(coloring_ids)
-
-            materialize_description = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "inspect",
-                        "operation_id": "sat.cnf.materialize",
-                    }
-                },
-            )
-            assert isinstance(materialize_description.structured_content, dict)
-            materialize = materialize_description.structured_content
-            assert (
-                materialize["operation"]["examples"][0]["name"] == "finite-coloring-cnf"
-            )
-
             first_page = await client.call_tool(
                 "math.find",
                 {"request": {"op": "search", "query": "exact", "limit": 20}},
@@ -190,33 +121,5 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated(
             )
             invalid = json.loads(invalid_cursor.content[0].text)
             assert invalid["error"]["code"] == "INVALID_CURSOR"
-
-    asyncio.run(scenario())
-
-
-def test_mcp_text_projection_preserves_produced_artifact_types(
-    mcp_state: Path,
-) -> None:
-    """The agent-facing text projection must include produced_artifact_types."""
-
-    async def scenario() -> None:
-        from mcp import Client
-
-        async with Client(
-            create_server(mcp_state),
-            raise_exceptions=True,
-        ) as client:
-            listed = await client.call_tool(
-                "math.find",
-                {"request": {"op": "search", "query": "poset", "limit": 20}},
-            )
-            text = json.loads(listed.content[0].text)
-            assert text["kind"] == "discovery"
-            producing = [m for m in text["matches"] if "produced_artifact_types" in m]
-            assert producing, (
-                "text projection must preserve produced_artifact_types for at "
-                "least one poset operation so agents can connect producers to "
-                "consumers without structured_content"
-            )
 
     asyncio.run(scenario())

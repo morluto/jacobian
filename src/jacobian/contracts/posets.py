@@ -15,7 +15,6 @@ from jacobian.contracts.results import ContractModel
 MAX_POSET_ELEMENTS = 64
 MAX_POSET_RELATIONS = MAX_POSET_ELEMENTS * MAX_POSET_ELEMENTS
 MAX_LINEAR_EXTENSION_ELEMENTS = 14
-MAX_LINEAR_EXTENSION_STATES = 1 << MAX_LINEAR_EXTENSION_ELEMENTS
 
 ElementLabel = Annotated[
     str,
@@ -494,56 +493,9 @@ class LinearExtensionRequest(ContractModel):
         return self
 
 
-class LinearExtensionState(ContractModel):
-    ideal_mask: StrictInt = Field(ge=0, lt=MAX_LINEAR_EXTENSION_STATES)
-    cardinality: StrictInt = Field(ge=0, le=MAX_LINEAR_EXTENSION_ELEMENTS)
-    removable_maximal_elements: tuple[ElementLabel, ...] = Field(
-        default=(),
-        max_length=MAX_LINEAR_EXTENSION_ELEMENTS,
-    )
-    count: StrictInt = Field(ge=1)
-
-
-def linear_extension_memo_digest(
-    states: tuple[LinearExtensionState, ...],
-) -> str:
-    return (
-        "sha256:"
-        + hashlib.sha256(
-            canonicalize_json([state.model_dump(mode="json") for state in states])
-        ).hexdigest()
-    )
-
-
 class LinearExtensionCountResult(PosetExactResult):
-    poset_digest: Sha256Digest
-    element_order: tuple[ElementLabel, ...] = Field(
-        default=(),
-        max_length=MAX_LINEAR_EXTENSION_ELEMENTS,
-    )
     count: StrictInt = Field(ge=1)
-    states: tuple[LinearExtensionState, ...] = Field(
-        min_length=1,
-        max_length=MAX_LINEAR_EXTENSION_STATES,
-    )
-    state_count: StrictInt = Field(ge=1, le=MAX_LINEAR_EXTENSION_STATES)
-    explored_subset_count: StrictInt = Field(ge=1, le=MAX_LINEAR_EXTENSION_STATES)
-    memo_digest: Sha256Digest
-    state_scope: Literal["ALL_ORDER_IDEALS"] = "ALL_ORDER_IDEALS"
     completeness: Literal["COMPLETE"] = "COMPLETE"
-
-    @model_validator(mode="after")
-    def require_complete_table_metadata(self) -> Self:
-        masks = tuple(state.ideal_mask for state in self.states)
-        if masks != tuple(sorted(set(masks))) or masks[0] != 0:
-            raise ValueError("ideal states must be unique and ordered by mask")
-        if self.state_count != len(self.states):
-            raise ValueError("state_count does not equal the recurrence table size")
-        if self.explored_subset_count != 1 << len(self.element_order):
-            raise ValueError("explored_subset_count does not cover every subset")
-        if self.memo_digest != linear_extension_memo_digest(self.states):
-            raise ValueError("memo_digest does not bind the recurrence table")
-        return self
 
 
 class PosetInterval(ContractModel):
@@ -633,7 +585,6 @@ class MobiusFunctionResult(PosetExactResult):
 
 __all__ = [
     "MAX_LINEAR_EXTENSION_ELEMENTS",
-    "MAX_LINEAR_EXTENSION_STATES",
     "MAX_POSET_ELEMENTS",
     "MAX_POSET_RELATIONS",
     "ElementLabel",
@@ -644,7 +595,6 @@ __all__ = [
     "IncomparablePair",
     "LinearExtensionCountResult",
     "LinearExtensionRequest",
-    "LinearExtensionState",
     "MatchingEdge",
     "MobiusContribution",
     "MobiusFunctionRequest",
@@ -661,5 +611,4 @@ __all__ = [
     "RelationInterpretation",
     "canonical_poset_ranks",
     "finite_poset_digest",
-    "linear_extension_memo_digest",
 ]

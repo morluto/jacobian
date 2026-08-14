@@ -81,19 +81,10 @@ class IntegerValueRequest(ContractModel):
     value: BoundedInteger
 
 
-class FactorizationResourceBudget(ContractModel):
-    """Execution budget for complete integer factorization-derived operations."""
-
-    wall_seconds: StrictInt = Field(default=5, ge=1, le=30)
-
-
 class FactorizationRequest(ContractModel):
-    """One integer and an explicit budget for an isolated SymPy computation."""
+    """One integer for an exact factorization-derived computation."""
 
     value: BoundedInteger
-    resource_budget: FactorizationResourceBudget = Field(
-        default_factory=FactorizationResourceBudget
-    )
 
 
 class PowerfulNumberRequest(FactorizationRequest):
@@ -107,12 +98,9 @@ class PowerfulNumberRequest(FactorizationRequest):
 
 
 class ArithmeticFunctionRequest(ContractModel):
-    """A small nonnegative integer with an explicit factorization budget."""
+    """A small nonnegative integer for an exact arithmetic function."""
 
     n: StrictInt = Field(ge=0, le=_MAX_N_SMALL)
-    resource_budget: FactorizationResourceBudget = Field(
-        default_factory=FactorizationResourceBudget
-    )
 
 
 class IntegerPairRequest(ContractModel):

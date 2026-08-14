@@ -2,87 +2,86 @@
 
 "use strict";
 
-const { stderr } = require("node:process");
 const { spawn } = require("node:child_process");
-
-const NPM_UPGRADE_HANDOFF = "JACOBIAN_NPM_UPGRADE_HANDOFF";
+const { stderr } = require("node:process");
 
 /**
- * Jacobian CLI entry point.
+ * Jacobian npm carrier.
  *
- * Subcommands handled in Node:
- *   jacobian setup    — MCP client configuration wizard
- *   jacobian upgrade  — Refresh the launcher-managed Python package
- *   jacobian doctor   — MCP handshake and tool catalog verification
- *   jacobian remove   — Remove Jacobian MCP from client configs
- *   jacobian mcp      — Run the MCP server over stdio
+ * This package does not implement the kernel, install Python, manage
+ * environments, edit MCP client configuration, or forward the full Python
+ * CLI. It is a thin deterministic carrier that invokes the one canonical
+ * Jacobian MCP command:
  *
- * Everything else is forwarded to the Python `jacobian` CLI.
+ *   uvx --from jacobian==<exact-version> jacobian-mcp [args...]
+ *
+ * The npm package version is the single release manifest; the spelling below
+ * maps it to the Python package spec. Install, upgrade, and remove this
+ * carrier with npm. Configure MCP clients with the published command snippet.
  */
 
-const HELP = `Jacobian — composable mathematical operations for AI agents
+const HELP = `Jacobian — MCP server carrier for AI agents.
 
 Usage:
-  jacobian setup [--client <id>...] [--all] [--yes] [--dry-run] [--json] [--plain]
-                 [--source <checkout> --state-dir <path> --profile <name>]
-    Configure MCP clients to use Jacobian.
-  jacobian upgrade
-    Refresh the launcher-managed Python package.
-  jacobian doctor [--client <id>...] [--all] [--json]
-    Verify configured client launchers, the MCP handshake, and the tool catalog.
-  jacobian remove [--client <id>...] [--all] [--yes] [--dry-run] [--json] [--plain]
-    Remove Jacobian from MCP client configs.
-  jacobian mcp
-    Run the Jacobian MCP server over stdio.
-  jacobian <command> [args...]
-    Forward to the Python Jacobian CLI.
+  jacobian mcp [args...]
+    Run the canonical Jacobian MCP server over stdio.
 
-Clients:
-  claude, cursor, opencode, codex, gemini
+The carrier invokes the exact Python MCP command:
+  uvx --from jacobian==<version> jacobian-mcp [args...]
 
-Environment:
-  JACOBIAN_STATE_DIR    State directory (default: ./.jacobian)
-  JACOBIAN_PACKAGE      Python package spec (default: jacobian)
+Requires uv on PATH (or set JACOBIAN_UV_BIN). Override the resolved Python
+package spec with JACOBIAN_PACKAGE. Install, upgrade, and remove this carrier
+with npm; point MCP clients at the published command snippet.
 `;
 
-function requiredOptionValue(value, option) {
-  if (!value || value.startsWith("-")) {
-    throw new Error(`${option} requires a value.`);
-  }
-  return value;
-}
-
-function reportSetupFailure(error) {
-  stderr.write(
-    `Jacobian setup did not finish: ${error.message}\n` +
-      "No additional setup changes will be made. Correct the reported problem, " +
-      "then retry `npx jacobian setup`.\n",
+/**
+ * Map the npm release spelling to the Python spelling used by pip/uvx.
+ *
+ * @param {string} version
+ * @returns {string}
+ */
+function pythonVersionFromNpmVersion(version) {
+  const match = version.match(
+    /^(\d+\.\d+\.\d+)(?:-(alpha|beta|rc)\.(\d+))?$/,
   );
-  process.exitCode = 1;
+  if (!match) throw new Error(`unsupported Jacobian npm version: ${version}`);
+  const prerelease = { alpha: "a", beta: "b", rc: "rc" }[match[2]];
+  return prerelease ? `${match[1]}${prerelease}${match[3]}` : match[1];
 }
 
 /**
- * Resolve the latest npm bootstrap before upgrading the managed Python package.
+ * Resolve the exact Python package spec the carrier pins for `uvx`.
  *
- * An unqualified npx invocation can execute an older cached launcher. The
- * handoff guard lets the latest package enter the pinned-runtime path once.
- *
- * @param {string[]} args
+ * @returns {string}
  */
-function resolveLatestUpgrade(args) {
-  const executable =
-    process.env.JACOBIAN_NPX_EXECUTABLE ||
-    (process.platform === "win32" ? "npx.cmd" : "npx");
+function packageSpec() {
+  const override = process.env.JACOBIAN_PACKAGE;
+  if (override) return override;
+  const npmVersion = require("../package.json").version;
+  return `jacobian==${pythonVersionFromNpmVersion(npmVersion)}`;
+}
+
+/**
+ * Spawn the canonical Jacobian MCP server and forward signals.
+ *
+ * @param {string[]} extraArgs
+ */
+function launchMcp(extraArgs) {
+  const uv = process.env.JACOBIAN_UV_BIN || "uvx";
   const child = spawn(
-    executable,
-    ["--yes", "--prefer-online", "jacobian@latest", "upgrade", ...args.slice(1)],
+    uv,
+    ["--from", packageSpec(), "jacobian-mcp", ...extraArgs],
     {
-      env: { ...process.env, [NPM_UPGRADE_HANDOFF]: "1" },
-      shell: process.platform === "win32",
       stdio: "inherit",
+      env: { ...process.env },
+      windowsHide: true,
     },
   );
-  const signals = ["SIGINT", "SIGTERM", "SIGHUP"];
+
+  const signals =
+    process.platform === "win32"
+      ? ["SIGINT", "SIGTERM"]
+      : ["SIGHUP", "SIGINT", "SIGTERM"];
   const handlers = new Map(
     signals.map((signal) => [
       signal,
@@ -93,23 +92,17 @@ function resolveLatestUpgrade(args) {
   );
   for (const [signal, handler] of handlers) process.on(signal, handler);
 
-  const removeSignalHandlers = () => {
-    for (const [signal, handler] of handlers) {
-      process.removeListener(signal, handler);
-    }
-  };
-
   child.once("error", (error) => {
-    removeSignalHandlers();
-    stderr.write(
-      `Jacobian could not resolve its latest npm bootstrap: ${error.message}\n` +
-        "Run `npx jacobian@latest upgrade` after checking that npx is available.\n",
-    );
+    for (const [signal, handler] of handlers)
+      process.removeListener(signal, handler);
+    stderr.write(`Jacobian MCP could not start: ${error.message}\n`);
     process.exitCode = 1;
   });
-  child.once("exit", (code, signal) => {
-    removeSignalHandlers();
-    if (signal) {
+
+  child.once("close", (code, signal) => {
+    for (const [forwarded, handler] of handlers)
+      process.removeListener(forwarded, handler);
+    if (signal && process.platform !== "win32") {
       process.kill(process.pid, signal);
       return;
     }
@@ -127,226 +120,21 @@ function main() {
   }
 
   if (command === "--version" || command === "-v") {
-    const pkg = require("../package.json");
-    console.log(`jacobian ${pkg.version}`);
-    return;
-  }
-
-  if (command === "setup") {
-    const setup = require("./setup.cjs");
-    const rest = args.slice(1);
-    const options = { operation: "setup" };
-    try {
-      for (let i = 0; i < rest.length; i++) {
-        const arg = rest[i];
-        if (arg === "--all") {
-          options.all = true;
-        } else if (arg === "--yes" || arg === "-y") {
-          options.yes = true;
-        } else if (arg === "--dry-run") {
-          options.dryRun = true;
-        } else if (arg === "--json") {
-          options.json = true;
-        } else if (arg === "--plain") {
-          options.plain = true;
-        } else if (arg === "--source") {
-          options.source = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--source=")) {
-          options.source = requiredOptionValue(arg.slice(9), "--source");
-        } else if (arg === "--state-dir") {
-          options.stateDir = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--state-dir=")) {
-          options.stateDir = requiredOptionValue(arg.slice(12), "--state-dir");
-        } else if (arg === "--uv-bin") {
-          options.uvBin = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--uv-bin=")) {
-          options.uvBin = requiredOptionValue(arg.slice(9), "--uv-bin");
-        } else if (arg === "--profile") {
-          options.profile = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--profile=")) {
-          options.profile = requiredOptionValue(arg.slice(10), "--profile");
-        } else if (arg === "--provider-path") {
-          options.providerPath = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--provider-path=")) {
-          options.providerPath = requiredOptionValue(arg.slice(16), "--provider-path");
-        } else if (arg === "--project-environment") {
-          options.projectEnvironment = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--project-environment=")) {
-          options.projectEnvironment = requiredOptionValue(
-            arg.slice(22),
-            "--project-environment",
-          );
-        } else if (arg === "--elan-home") {
-          options.elanHome = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--elan-home=")) {
-          options.elanHome = requiredOptionValue(arg.slice(12), "--elan-home");
-        } else if (arg === "--lean-runtime") {
-          options.leanRuntime = requiredOptionValue(rest[++i], arg);
-        } else if (arg.startsWith("--lean-runtime=")) {
-          options.leanRuntime = requiredOptionValue(arg.slice(15), "--lean-runtime");
-        } else if (arg === "--client" || arg === "-c") {
-          const value = requiredOptionValue(rest[++i], arg);
-          options.clients = options.clients || [];
-          options.clients.push(...value.split(",").map((s) => s.trim()));
-        } else if (arg.startsWith("--client=")) {
-          const value = requiredOptionValue(arg.slice(9), "--client");
-          options.clients = options.clients || [];
-          options.clients.push(...value.split(",").map((s) => s.trim()));
-        } else {
-          throw new Error(`Unknown setup option: ${arg}.`);
-        }
-      }
-    } catch (error) {
-      reportSetupFailure(error);
-      return;
-    }
-    setup
-      .run(options)
-      .then((result) => {
-        if (result.cancelled) {
-          stderr.write("Jacobian setup cancelled; no client configuration was applied.\n");
-          process.exitCode = 1;
-        }
-      })
-      .catch((error) => {
-        reportSetupFailure(error);
-      });
-    return;
-  }
-
-  if (command === "upgrade") {
-    if (process.env[NPM_UPGRADE_HANDOFF] !== "1") {
-      stderr.write(
-        "Resolving the latest Jacobian bootstrap before upgrading the managed Python runtime.\n",
-      );
-      resolveLatestUpgrade(args);
-      return;
-    }
-    const { PACKAGE_SPEC, upgrade } = require("./launcher.cjs");
-    try {
-      upgrade();
-      console.log(`Jacobian Python package upgraded to ${PACKAGE_SPEC}.`);
-    } catch (error) {
-      stderr.write(
-        `Jacobian upgrade did not finish: ${error.message}\n` +
-          "Check the local Python runtime and package index, then retry `npx jacobian upgrade`.\n",
-      );
-      process.exitCode = 1;
-    }
-    return;
-  }
-
-  if (command === "remove") {
-    const setup = require("./setup.cjs");
-    const rest = args.slice(1);
-    const options = { operation: "remove" };
-    try {
-      for (let i = 0; i < rest.length; i++) {
-        const arg = rest[i];
-        if (arg === "--all") {
-          options.all = true;
-        } else if (arg === "--yes" || arg === "-y") {
-          options.yes = true;
-        } else if (arg === "--json") {
-          options.json = true;
-        } else if (arg === "--dry-run") {
-          options.dryRun = true;
-        } else if (arg === "--plain") {
-          options.plain = true;
-        } else if (arg === "--client" || arg === "-c") {
-          const value = requiredOptionValue(rest[++i], arg);
-          options.clients = options.clients || [];
-          options.clients.push(...value.split(",").map((s) => s.trim()));
-        } else if (arg.startsWith("--client=")) {
-          const value = requiredOptionValue(arg.slice(9), "--client");
-          options.clients = options.clients || [];
-          options.clients.push(...value.split(",").map((s) => s.trim()));
-        } else {
-          throw new Error(`Unknown remove option: ${arg}.`);
-        }
-      }
-    } catch (error) {
-      stderr.write(
-        `Jacobian removal did not start: ${error.message}\n` +
-          "Correct the option and retry `npx jacobian remove`.\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
-    setup
-      .run(options)
-      .then((result) => {
-        if (result.cancelled) {
-          stderr.write("Jacobian removal cancelled; no client configuration was changed.\n");
-        }
-      })
-      .catch((error) => {
-        stderr.write(
-          `Jacobian removal did not finish: ${error.message}\n` +
-            "Inspect the named client configuration, then retry `npx jacobian remove`.\n",
-        );
-        process.exitCode = 1;
-      });
-    return;
-  }
-
-  if (command === "doctor") {
-    const doctor = require("./doctor.cjs");
-    const rest = args.slice(1);
-    const options = {};
-    try {
-      for (let i = 0; i < rest.length; i++) {
-        const arg = rest[i];
-        if (arg === "--json" || arg === "-j") {
-          options.json = true;
-        } else if (arg === "--all") {
-          options.all = true;
-        } else if (arg === "--client" || arg === "-c") {
-          const value = requiredOptionValue(rest[++i], arg);
-          options.clients = options.clients || [];
-          options.clients.push(...value.split(",").map((item) => item.trim()));
-        } else if (arg.startsWith("--client=")) {
-          const value = requiredOptionValue(arg.slice(9), "--client");
-          options.clients = options.clients || [];
-          options.clients.push(...value.split(",").map((item) => item.trim()));
-        } else {
-          throw new Error(`Unknown doctor option: ${arg}.`);
-        }
-      }
-    } catch (error) {
-      stderr.write(`Jacobian diagnostics did not start: ${error.message}\n`);
-      process.exitCode = 1;
-      return;
-    }
-    doctor.run(options).catch((error) => {
-      stderr.write(
-        `Jacobian diagnostics did not finish: ${error.message}\n` +
-          "Run `npx jacobian setup`, then retry `npx jacobian doctor`.\n",
-      );
-      process.exitCode = 1;
-    });
+    console.log(`jacobian ${require("../package.json").version}`);
     return;
   }
 
   if (command === "mcp") {
-    const { launch } = require("./launcher.cjs");
-    try {
-      launch("jacobian.adapters.mcp.server", args.slice(1));
-    } catch (error) {
-      stderr.write(`Jacobian MCP could not start: ${error.message}\n`);
-      process.exitCode = 1;
-    }
+    launchMcp(args.slice(1));
     return;
   }
 
-  // Forward everything else to the Python CLI.
-  const { launch } = require("./launcher.cjs");
-  try {
-    launch("jacobian.cli", args);
-  } catch (error) {
-    stderr.write(`Jacobian could not start: ${error.message}\n`);
-    process.exitCode = 1;
-  }
+  stderr.write(`Unknown command: ${command}\n\n${HELP}`);
+  process.exitCode = 1;
 }
 
-main();
+module.exports = { pythonVersionFromNpmVersion, packageSpec };
+
+if (require.main === module) {
+  main();
+}

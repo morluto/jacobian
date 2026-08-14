@@ -182,66 +182,46 @@ def test_orbit_distribution_rejects_a_forged_in_range_rank() -> None:
         orbit_distribution(forged)
 
 
-def test_slice_a_ports_compose_restriction_into_rank_without_wire_conversion() -> None:
+def test_slice_a_composes_restriction_into_rank_without_wire_conversion() -> None:
     subspace, directions = _slice_a_values()
     direction = directions.points[0]
     _, restrict_operation, rank_operation, *_ = finite_field_operations()
 
-    restrict_payload: dict[str, object] = {}
-    for port, value in zip(
-        restrict_operation.input_ports,
-        (subspace, direction),
-        strict=True,
-    ):
-        restrict_payload = port.bind_to_request(restrict_payload, value)
-    restrict_request = restrict_operation.request_type.model_validate(restrict_payload)
-    linear_map = restrict_operation.execute(restrict_request)
-    carried_map = restrict_operation.output_ports[0].extract_from_result(linear_map)
+    linear_map = restrict_operation.execute(
+        restrict_operation.request_type.model_validate(
+            {"subspace": subspace, "direction": direction}
+        )
+    )
 
-    rank_payload: dict[str, object] = {}
-    for port, value in zip(
-        rank_operation.input_ports,
-        (direction, carried_map),
-        strict=True,
-    ):
-        rank_payload = port.bind_to_request(rank_payload, value)
-    rank_request = rank_operation.request_type.model_validate(rank_payload)
-    result = rank_operation.execute(rank_request)
+    result = rank_operation.execute(
+        rank_operation.request_type.model_validate(
+            {"direction": direction, "linear_map": linear_map}
+        )
+    )
 
     assert result.rank == 3
     assert result.direction is direction
-    assert result.linear_map is carried_map
+    assert result.linear_map is linear_map
 
 
-def test_slice_a_ports_compose_projective_line_into_orbit_distribution() -> None:
+def test_slice_a_composes_projective_line_into_orbit_distribution() -> None:
     subspace, _ = _slice_a_values()
     projective, _, _, ledger_operation, orbit_operation, *_ = finite_field_operations()
 
-    projective_payload: dict[str, object] = {}
-    for port, value in zip(
-        projective.input_ports,
-        (subspace.presentation, subspace.row_axis),
-        strict=True,
-    ):
-        projective_payload = port.bind_to_request(projective_payload, value)
     line = projective.execute(
-        projective.request_type.model_validate(projective_payload)
+        projective.request_type.model_validate(
+            {"presentation": subspace.presentation, "axis": subspace.row_axis}
+        )
     )
 
-    ledger_payload: dict[str, object] = {}
-    for port, value in zip(
-        ledger_operation.input_ports,
-        (subspace, line),
-        strict=True,
-    ):
-        ledger_payload = port.bind_to_request(ledger_payload, value)
     ledger = ledger_operation.execute(
-        ledger_operation.request_type.model_validate(ledger_payload)
+        ledger_operation.request_type.model_validate(
+            {"subspace": subspace, "directions": line}
+        )
     )
 
-    orbit_payload = orbit_operation.input_ports[0].bind_to_request({}, ledger)
     distribution = orbit_operation.execute(
-        orbit_operation.request_type.model_validate(orbit_payload)
+        orbit_operation.request_type.model_validate({"ledger": ledger})
     )
 
     assert len(line.points) == 9

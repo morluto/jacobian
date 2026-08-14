@@ -29,11 +29,12 @@ from jacobian.math.finite_fields import (
     finite_polynomial_map,
     projective_line,
 )
+from jacobian.operation_declarations import InlineOperation
 from jacobian.operation_execution import execute_operation
 from jacobian.operations import NonConclusion
 
 
-def test_bundle_declares_atomic_port_bound_operations() -> None:
+def test_bundle_declares_atomic_inline_typed_operations() -> None:
     bundle = finite_field_operations()
 
     assert tuple(operation.operation_id for operation in bundle) == (
@@ -58,33 +59,42 @@ def test_bundle_declares_atomic_port_bound_operations() -> None:
         collision,
         permutation,
     ) = bundle
-    assert projective.output_ports[0].value_type is ProjectiveLine
-    assert tuple(port.value_type for port in restrict_operation.input_ports) == (
-        FiniteDimensionalSubspace,
-        ProjectivePoint,
+    for operation in bundle:
+        assert isinstance(operation, InlineOperation)
+        assert not hasattr(operation, "provider_binding")
+    assert projective.request_type is ProjectiveLineRequest
+    assert projective.result_type is ProjectiveLine
+    assert restrict_operation.request_type.model_fields["subspace"].annotation is (
+        FiniteDimensionalSubspace
     )
-    assert restrict_operation.output_ports[0].value_type is FiniteLinearMap
-    assert tuple(port.value_type for port in rank_operation.input_ports) == (
-        ProjectivePoint,
-        FiniteLinearMap,
+    assert restrict_operation.request_type.model_fields["direction"].annotation is (
+        ProjectivePoint
     )
-    assert rank_operation.output_ports[0].value_type is RankResult
-    assert tuple(port.value_type for port in ledger.input_ports) == (
-        FiniteDimensionalSubspace,
-        ProjectiveLine,
+    assert restrict_operation.result_type is FiniteLinearMap
+    assert rank_operation.request_type.model_fields["direction"].annotation is (
+        ProjectivePoint
     )
-    assert ledger.output_ports[0].value_type is DirectionRankLedger
-    assert orbit.input_ports[0].value_type is DirectionRankLedger
-    assert orbit.output_ports[0].value_type is OrbitDistribution
-    assert table.input_ports[0].value_type is FinitePolynomialMap
-    assert table.output_ports[0].value_type is FiniteMapTable
-    assert fibers.input_ports[0].value_type is FiniteMapTable
-    assert fibers.output_ports[0].value_type is FiberPartition
-    assert collision.output_ports[0].value_type is CollisionCertificate
-    assert permutation.output_ports[0].value_type is PermutationCertificate
+    assert rank_operation.request_type.model_fields["linear_map"].annotation is (
+        FiniteLinearMap
+    )
+    assert rank_operation.result_type is RankResult
+    assert ledger.request_type.model_fields["subspace"].annotation is (
+        FiniteDimensionalSubspace
+    )
+    assert ledger.request_type.model_fields["directions"].annotation is ProjectiveLine
+    assert ledger.result_type is DirectionRankLedger
+    assert orbit.request_type.model_fields["ledger"].annotation is DirectionRankLedger
+    assert orbit.result_type is OrbitDistribution
+    assert table.request_type.model_fields["polynomial_map"].annotation is (
+        FinitePolynomialMap
+    )
+    assert table.result_type is FiniteMapTable
+    assert fibers.request_type.model_fields["table"].annotation is FiniteMapTable
+    assert fibers.result_type is FiberPartition
+    assert collision.result_type is CollisionCertificate
+    assert permutation.result_type is PermutationCertificate
     for consumer in (fibers, collision, permutation):
         assert consumer.preflight is not None
-        assert not hasattr(consumer, "provider_binding")
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:

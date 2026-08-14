@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian.contracts.exact import CanonicalRational
-from jacobian.contracts.polynomials import (
+from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     RationalPolynomialTerm,

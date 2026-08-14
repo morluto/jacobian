@@ -1,4 +1,4 @@
-"""Bounded canonical JSON for mathematical artifact identity."""
+"""Bounded canonical JSON for mathematical value identity."""
 
 from __future__ import annotations
 

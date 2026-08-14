@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import re
-from typing import Literal, Protocol
+from typing import Protocol
 
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
     OperationDiscoveryMatch,
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
-    OperationInputKind,
 )
 from jacobian.operation_errors import OperationDiscoveryCursorError
 
@@ -33,12 +32,6 @@ class SearchableOperation(Protocol):
     @property
     def tags(self) -> tuple[str, ...]: ...
 
-    @property
-    def accepted_input_kinds(self) -> tuple[OperationInputKind, ...]: ...
-
-    @property
-    def accepted_artifact_types(self) -> tuple[str, ...]: ...
-
 
 def discover_operations(
     catalog: OperationCatalogSnapshot,
@@ -56,9 +49,6 @@ def discover_operations(
             descriptor, normalized_domain
         ):
             continue
-        applicability, applicability_code = input_acceptance(
-            descriptor, request.input_kind, request.artifact_type
-        )
         score = discovery_relevance(descriptor, request.query)
         match = OperationDiscoveryMatch(
             operation_id=descriptor.operation_id,
@@ -66,8 +56,8 @@ def discover_operations(
             description=descriptor.description,
             tags=descriptor.tags,
             relevance_score=score,
-            applicability=applicability,
-            applicability_code=applicability_code,
+            applicability="NEEDS_MORE_TYPED_REQUIREMENTS",
+            applicability_code="FULL_REQUEST_REQUIRED",
         )
         if score > 0:
             ranked.append((score, match))
@@ -95,8 +85,6 @@ def discover_operations(
     return OperationDiscoveryResult(
         query=request.query,
         domain=normalized_domain,
-        input_kind=request.input_kind,
-        artifact_type=request.artifact_type,
         matches=tuple(match for _, match in page),
         total_matches=total_matches,
         truncated=next_cursor is not None,
@@ -114,30 +102,6 @@ def discovery_terms(query: str) -> frozenset[str]:
         for term in _DISCOVERY_TOKEN_PATTERN.findall(query.casefold())
         if term not in _DISCOVERY_STOP_WORDS
     )
-
-
-def input_acceptance(
-    operation: SearchableOperation,
-    input_kind: OperationInputKind | None,
-    artifact_type: str | None,
-) -> tuple[
-    Literal["INCOMPATIBLE", "NEEDS_MORE_TYPED_REQUIREMENTS"],
-    Literal[
-        "FULL_REQUEST_REQUIRED",
-        "INPUT_KIND_MISMATCH",
-        "ARTIFACT_TYPE_MISMATCH",
-    ],
-]:
-    """Report whether the supplied input shape is accepted by an operation."""
-
-    if input_kind is not None and input_kind not in operation.accepted_input_kinds:
-        return "INCOMPATIBLE", "INPUT_KIND_MISMATCH"
-    if (
-        artifact_type is not None
-        and artifact_type not in operation.accepted_artifact_types
-    ):
-        return "INCOMPATIBLE", "ARTIFACT_TYPE_MISMATCH"
-    return "NEEDS_MORE_TYPED_REQUIREMENTS", "FULL_REQUEST_REQUIRED"
 
 
 def token_set(value: str) -> frozenset[str]:
@@ -193,7 +157,6 @@ def matches_domain(operation: SearchableOperation, normalized_domain: str) -> bo
 __all__ = [
     "discover_operations",
     "discovery_relevance",
-    "input_acceptance",
     "matches_domain",
     "normalize_domain",
     "operation_domain",

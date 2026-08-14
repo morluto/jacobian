@@ -130,6 +130,11 @@ def test_lean_job_is_required_on_every_event_and_builds_semantic_targets() -> No
     assert "use-mathlib-cache: true" in action
     assert "lake build JacobianLeanRuntime repl jacobian_lean_proof_state" in action
     assert "tools/preflight_lean_runtime.py --required" in action
+    assert "GitHub .lake cache mode | disabled" in action
+    assert "Restored bytes | 0" in action
+    assert "Saved bytes | 0" in action
+    assert "lean/.lake bytes after build" in action
+    assert "uses: actions/cache" not in action
 
 
 def test_optional_boundary_and_deployment_jobs_have_explicit_workflow_gates() -> None:

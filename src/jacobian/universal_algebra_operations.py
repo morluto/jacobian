@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -226,24 +226,21 @@ def install_universal_algebra_operations(
     """Install exact bounded finite-magma law evaluation."""
 
     contracts = register_universal_algebra_resources(store, schemas)
-    evaluation_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact finite magma law evaluation replay checker",
-                entrypoint=("jacobian_checkers.universal_algebra:check_law_evaluation"),
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="universal_algebra.law_evaluation",
-                format_version="1",
-                claim_schema_uris=(contracts.claim_schema_uri,),
-                semantics_uris=(contracts.semantics_uri,),
-                candidate_schema_uris=(contracts.evaluation_schema_uri,),
-                reason="bundled independent finite table evaluator",
-            ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
+    evaluation_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact finite magma law evaluation replay checker",
+            entrypoint=("jacobian_checkers.universal_algebra:check_law_evaluation"),
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="universal_algebra.law_evaluation",
+            format_version="1",
+            claim_schema_uris=(contracts.claim_schema_uri,),
+            semantics_uris=(contracts.semantics_uri,),
+            candidate_schema_uris=(contracts.evaluation_schema_uri,),
+            reason="bundled independent finite table evaluator",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
     installation = replace(contracts, evaluation_checker_id=evaluation_checker_id)
     runtime_resources = UniversalAlgebraResources(
         store=store,

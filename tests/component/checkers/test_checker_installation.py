@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.registry import CheckerRegistry
@@ -29,11 +29,12 @@ def _operation() -> CheckerOperation:
     )
 
 
-def test_checker_installer_keeps_disabled_operation_unauthorized(
+def test_disabled_checker_operation_remains_unauthorized(
     tmp_path: Path,
 ) -> None:
     store = ArtifactRepository(tmp_path / "store")
-    installed = CheckerInstaller(CheckerRegistry(store)).install(
+    installed = authorize_checker_operation(
+        CheckerRegistry(store),
         _operation(),
         authorize=False,
     )
@@ -44,9 +45,9 @@ def test_checker_installer_keeps_disabled_operation_unauthorized(
         installed.require_checker_id()
 
 
-def test_checker_installer_authorizes_exact_declared_scope(tmp_path: Path) -> None:
+def test_checker_authorization_uses_exact_declared_scope(tmp_path: Path) -> None:
     registry = CheckerRegistry(ArtifactRepository(tmp_path / "store"))
-    installed = CheckerInstaller(registry).install(_operation(), authorize=True)
+    installed = authorize_checker_operation(registry, _operation(), authorize=True)
 
     checker_id = installed.require_checker_id()
     registration = registry.get(checker_id)

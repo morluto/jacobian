@@ -8,7 +8,7 @@ from typing import Literal
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -71,31 +71,27 @@ def install_smt_unsat_proof_checker(
         version="1",
         model=CertificateEnvelope,
     )
-    checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="pinned strict Carcara Alethe QF_UF UNSAT checker",
-                entrypoint="jacobian_checkers.smt:check_unsat_proof",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="smt.unsat-proof",
-                format_version="1",
-                claim_schema_uris=(smt.installation.problem_schema_uri,),
-                semantics_uris=(smt.installation.semantics_uri,),
-                candidate_schema_uris=(smt.installation.proof_schema_uri,),
-                provider_runtime=runtime,
-                reason=(
-                    "operator-authorized strict Carcara replay of zero-hole cvc5 "
-                    "1.3.4 Alethe proofs in the QF_UF compatibility profile"
-                ),
+    checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="pinned strict Carcara Alethe QF_UF UNSAT checker",
+            entrypoint="jacobian_checkers.smt:check_unsat_proof",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="smt.unsat-proof",
+            format_version="1",
+            claim_schema_uris=(smt.installation.problem_schema_uri,),
+            semantics_uris=(smt.installation.semantics_uri,),
+            candidate_schema_uris=(smt.installation.proof_schema_uri,),
+            provider_runtime=runtime,
+            reason=(
+                "operator-authorized strict Carcara replay of zero-hole cvc5 "
+                "1.3.4 Alethe proofs in the QF_UF compatibility profile"
             ),
-            authorize=(
-                authorize_checker
-                and runtime.availability is ProviderAvailability.AVAILABLE
-            ),
-        )
-        .checker_id
-    )
+        ),
+        authorize=(
+            authorize_checker and runtime.availability is ProviderAvailability.AVAILABLE
+        ),
+    ).checker_id
     installation = SmtUnsatProofCheckerInstallation(
         certificate_schema_uri=certificate_schema_uri,
         checker_id=checker_id,

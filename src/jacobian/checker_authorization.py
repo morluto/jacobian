@@ -16,8 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
-from jacobian.checker_installation import CheckerInstaller
-from jacobian.checker_operations import CheckerOperation
+from jacobian.checker_operations import CheckerOperation, InstalledChecker
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope
 from jacobian.contracts.lean import LeanCandidate, LeanClaim, LeanEnvironment
@@ -33,10 +32,59 @@ __all__ = [
     "LeanCheckerInstallation",
     "PolytopeCheckerInstallation",
     "authorize_checker",
+    "authorize_checker_operation",
     "install_lean_checkers",
     "install_polytope_checkers",
     "register_lean_checker_contracts",
 ]
+
+
+def authorize_checker_operation(
+    registry: CheckerRegistry,
+    operation: CheckerOperation,
+    *,
+    authorize: bool,
+    bind_existing: bool | None = None,
+) -> InstalledChecker:
+    """Authorize or bind one declared checker through the operator registry."""
+
+    should_bind_existing = (
+        registry.bind_existing_when_omitted if bind_existing is None else bind_existing
+    )
+    if authorize:
+        registration = registry.authorize(
+            name=operation.name,
+            entrypoint=operation.entrypoint,
+            evidence_kind=operation.evidence_kind,
+            format_id=operation.format_id,
+            format_version=operation.format_version,
+            claim_schema_uris=operation.claim_schema_uris,
+            semantics_uris=operation.semantics_uris,
+            candidate_schema_uris=operation.candidate_schema_uris,
+            target_schema_uris=operation.target_schema_uris,
+            target_semantics_uris=operation.target_semantics_uris,
+            provider_runtime=operation.provider_runtime,
+            reason=operation.reason,
+        )
+        return InstalledChecker(operation=operation, checker_id=registration.checker_id)
+    if should_bind_existing:
+        return InstalledChecker(
+            operation=operation,
+            checker_id=registry.bind_existing(
+                name=operation.name,
+                entrypoint=operation.entrypoint,
+                evidence_kind=operation.evidence_kind,
+                format_id=operation.format_id,
+                format_version=operation.format_version,
+                claim_schema_uris=operation.claim_schema_uris,
+                semantics_uris=operation.semantics_uris,
+                candidate_schema_uris=operation.candidate_schema_uris,
+                target_schema_uris=operation.target_schema_uris,
+                target_semantics_uris=operation.target_semantics_uris,
+                provider_runtime=operation.provider_runtime,
+            ),
+        )
+    return InstalledChecker(operation=operation, checker_id=None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,7 +219,8 @@ def authorize_checker(
 ) -> str | None:
     """Authorize one checker through the operator-owned registry."""
 
-    installed = CheckerInstaller(checkers).install(
+    installed = authorize_checker_operation(
+        checkers,
         CheckerOperation(
             name=name,
             entrypoint=entrypoint,

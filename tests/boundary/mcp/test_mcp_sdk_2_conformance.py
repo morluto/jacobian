@@ -13,8 +13,8 @@ from mcp_types.methods import serialize_server_result
 import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.server import create_server
 from jacobian.adapters.mcp.tools import math_run
-from jacobian.checker_installation import CheckerInstaller
 from jacobian.contracts.operations import OperationResult
+from jacobian.registry import CheckerRegistry
 
 
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
@@ -32,7 +32,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
     def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("selected operation must not assemble the portfolio")
 
-    monkeypatch.setattr(CheckerInstaller, "install", reject_portfolio_assembly)
+    monkeypatch.setattr(CheckerRegistry, "authorize", reject_portfolio_assembly)
 
     async def scenario() -> None:
         from mcp import Client

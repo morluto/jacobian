@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.registry import CheckerRegistry
 
 
 def test_polynomial_positivity_loads_only_the_selected_path(
@@ -18,7 +18,7 @@ def test_polynomial_positivity_loads_only_the_selected_path(
             "selected polynomial operations must not install portfolio"
         )
 
-    monkeypatch.setattr(CheckerInstaller, "install", reject_installation)
+    monkeypatch.setattr(CheckerRegistry, "authorize", reject_installation)
 
     polynomial = {
         "polynomial_schema_version": "1",

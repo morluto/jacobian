@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from jacobian.artifacts import ArtifactService
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope
@@ -310,46 +310,40 @@ def install_graph_operations(
     neighborhood_schema_uri = resources.neighborhood_schema_uri
     neighborhood_claim_schema_uri = resources.neighborhood_claim_schema_uri
     certificate_schema_uri = resources.certificate_schema_uri
-    degree_sequence_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact simple-graph degree-sequence replay checker",
-                entrypoint=(
-                    "jacobian_checkers.graph_degree_sequence:check_degree_sequence"
-                ),
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="graph.degree_sequence",
-                format_version="1",
-                claim_schema_uris=(degree_sequence_claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(degree_sequence_result_schema_uri,),
-                reason="bundled independent degree-sequence checker",
+    degree_sequence_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact simple-graph degree-sequence replay checker",
+            entrypoint=(
+                "jacobian_checkers.graph_degree_sequence:check_degree_sequence"
             ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
-    neighborhood_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact graph neighborhood-independence replay checker",
-                entrypoint=(
-                    "jacobian_checkers.graph_invariants:check_neighborhood_independence"
-                ),
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="graph.neighborhood_independence",
-                format_version="1",
-                claim_schema_uris=(neighborhood_claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(neighborhood_schema_uri,),
-                reason="bundled independent finite-graph invariant checker",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="graph.degree_sequence",
+            format_version="1",
+            claim_schema_uris=(degree_sequence_claim_schema_uri,),
+            semantics_uris=(semantics_uri,),
+            candidate_schema_uris=(degree_sequence_result_schema_uri,),
+            reason="bundled independent degree-sequence checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
+    neighborhood_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact graph neighborhood-independence replay checker",
+            entrypoint=(
+                "jacobian_checkers.graph_invariants:check_neighborhood_independence"
             ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="graph.neighborhood_independence",
+            format_version="1",
+            claim_schema_uris=(neighborhood_claim_schema_uri,),
+            semantics_uris=(semantics_uri,),
+            candidate_schema_uris=(neighborhood_schema_uri,),
+            reason="bundled independent finite-graph invariant checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
     installation = GraphInstallation(
         semantics_uri=semantics_uri,
         graph_schema_uri=graph_schema_uri,

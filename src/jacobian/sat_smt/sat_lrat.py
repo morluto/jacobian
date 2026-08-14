@@ -10,7 +10,7 @@ from typing import Literal
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -69,24 +69,21 @@ def install_sat_lrat_verifier(
     certificate_schema_uri = schemas.register_model(
         name="jacobian.certificate-envelope", version="1", model=CertificateEnvelope
     )
-    checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="bounded independent ASCII LRAT RUP checker",
-                entrypoint="jacobian_checkers.sat_lrat:check_lrat",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="sat.lrat-proof",
-                format_version="1",
-                claim_schema_uris=(sat.installation.cnf_schema_uri,),
-                semantics_uris=(sat.installation.semantics_uri,),
-                candidate_schema_uris=(proof_schema_uri,),
-                reason="operator-authorized standard-library LRAT RUP replay",
-            ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
+    checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="bounded independent ASCII LRAT RUP checker",
+            entrypoint="jacobian_checkers.sat_lrat:check_lrat",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="sat.lrat-proof",
+            format_version="1",
+            claim_schema_uris=(sat.installation.cnf_schema_uri,),
+            semantics_uris=(sat.installation.semantics_uri,),
+            candidate_schema_uris=(proof_schema_uri,),
+            reason="operator-authorized standard-library LRAT RUP replay",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
     installation = SatLratInstallation(
         proof_schema_uri=proof_schema_uri,
         certificate_schema_uri=certificate_schema_uri,

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -201,27 +201,24 @@ def install_finite_coverage(
 
     resources = register_finite_coverage_resources(store, schemas, artifacts)
 
-    checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="finite exactly-once paged coverage checker",
-                entrypoint=("jacobian_checkers.finite_coverage:check_finite_coverage"),
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="finite.coverage",
-                format_version="1",
-                claim_schema_uris=(resources.claim_schema_uri,),
-                semantics_uris=(resources.semantics_uri,),
-                candidate_schema_uris=(resources.archive_schema_uri,),
-                reason=(
-                    "operator requested independent standard-library replay of "
-                    "every canonical scope and archive item"
-                ),
+    checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="finite exactly-once paged coverage checker",
+            entrypoint=("jacobian_checkers.finite_coverage:check_finite_coverage"),
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="finite.coverage",
+            format_version="1",
+            claim_schema_uris=(resources.claim_schema_uri,),
+            semantics_uris=(resources.semantics_uri,),
+            candidate_schema_uris=(resources.archive_schema_uri,),
+            reason=(
+                "operator requested independent standard-library replay of "
+                "every canonical scope and archive item"
             ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
+        ),
+        authorize=authorize_checker,
+    ).checker_id
     installation = replace(resources, checker_id=checker_id)
     adapter = (
         FiniteCoverageVerifyAdapter(

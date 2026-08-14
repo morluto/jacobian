@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -163,24 +163,21 @@ def install_graph_isomorphism(
     semantics_uri = resources.semantics_uri
     mapping_schema_uri = resources.mapping_schema_uri
     claim_schema_uri = resources.claim_schema_uri
-    checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact finite simple-graph isomorphism checker",
-                entrypoint="jacobian_checkers.graph_isomorphism:check_isomorphism",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="graph.isomorphism_replay",
-                format_version="1",
-                claim_schema_uris=(claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(mapping_schema_uri,),
-                reason="bundled independent adjacency-preservation checker",
-            ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
+    checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact finite simple-graph isomorphism checker",
+            entrypoint="jacobian_checkers.graph_isomorphism:check_isomorphism",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="graph.isomorphism_replay",
+            format_version="1",
+            claim_schema_uris=(claim_schema_uri,),
+            semantics_uris=(semantics_uri,),
+            candidate_schema_uris=(mapping_schema_uri,),
+            reason="bundled independent adjacency-preservation checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
     installation = replace(resources, checker_id=checker_id)
     if checker_id is None:
         return None, installation

@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -249,24 +249,21 @@ def install_polynomial_positivity_operations(
     """Register exact univariate polynomial strict positivity contracts."""
 
     contracts = register_polynomial_positivity_resources(store, schemas)
-    checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact rational polynomial interval strict positivity checker",
-                entrypoint="jacobian_checkers.polynomial_positivity:check_positivity",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="polynomial.interval_sturm_positivity_replay",
-                format_version="1",
-                claim_schema_uris=(contracts.claim_schema_uri,),
-                semantics_uris=(contracts.semantics_uri,),
-                candidate_schema_uris=(contracts.decision_schema_uri,),
-                reason="bundled independent Sturm-sequence positivity checker",
-            ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
+    checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact rational polynomial interval strict positivity checker",
+            entrypoint="jacobian_checkers.polynomial_positivity:check_positivity",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="polynomial.interval_sturm_positivity_replay",
+            format_version="1",
+            claim_schema_uris=(contracts.claim_schema_uri,),
+            semantics_uris=(contracts.semantics_uri,),
+            candidate_schema_uris=(contracts.decision_schema_uri,),
+            reason="bundled independent Sturm-sequence positivity checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
     installation = replace(contracts, checker_id=checker_id)
     resources = PolynomialPositivityResources(
         store=store,

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.registry import CheckerRegistry
 
 
 def test_lean_operations_do_not_assemble_the_portfolio(
@@ -16,7 +16,7 @@ def test_lean_operations_do_not_assemble_the_portfolio(
     def reject_installation(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("selected Lean operations must not install the portfolio")
 
-    monkeypatch.setattr(CheckerInstaller, "install", reject_installation)
+    monkeypatch.setattr(CheckerRegistry, "authorize", reject_installation)
 
     async def scenario() -> None:
         from mcp import Client

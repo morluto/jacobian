@@ -11,8 +11,8 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.checker_artifacts import put_witness_envelope
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_identity import batch_checker_manifest_measurement
-from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import AuthorizedChecker, CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import EvidenceBindings, WitnessEnvelope
@@ -134,7 +134,7 @@ def _declared_runtime_groups(
 
 
 def _authorize_replay_operation(
-    installer: CheckerInstaller,
+    checkers: CheckerRegistry,
     operation: CheckerOperation,
     *,
     authorize: bool,
@@ -145,10 +145,14 @@ def _authorize_replay_operation(
     diagnostics: list[OperationDiagnostic],
 ) -> str | None:
     if provider_runtime.availability is ProviderAvailability.AVAILABLE:
-        return installer.install(operation, authorize=authorize).checker_id
+        return authorize_checker_operation(
+            checkers, operation, authorize=authorize
+        ).checker_id
     can_omit = optional and source_available
     if not can_omit:
-        return installer.install(operation, authorize=authorize).checker_id
+        return authorize_checker_operation(
+            checkers, operation, authorize=authorize
+        ).checker_id
     diagnostic = OperationDiagnostic(
         code="EXACT_REPLAY_PROVIDER_UNAVAILABLE",
         stage="provider_availability",
@@ -205,7 +209,6 @@ def install_exact_domain_checkers(
 ) -> ExactDomainCheckerInstallation:
     """Install independent exact replay against dynamically registered schemas."""
 
-    installer = CheckerInstaller(checkers)
     available_declarations = _available_declaration_groups(groups)
     checker_ids: dict[str, str | None] = {}
     declaration_providers: dict[str, str] = {}
@@ -214,7 +217,7 @@ def install_exact_domain_checkers(
         (declaration.operation_id, None)
         for _installed, declaration in available_declarations
     )
-    if not authorize and not installer.bind_existing:
+    if not authorize and not checkers.bind_existing_when_omitted:
         return ExactDomainCheckerInstallation(
             checker_ids=checker_ids,
             provider_runtimes={},
@@ -251,7 +254,7 @@ def install_exact_domain_checkers(
                     provider_runtime=group.probe,
                 )
                 checker_ids[declaration.operation_id] = _authorize_replay_operation(
-                    installer,
+                    checkers,
                     operation,
                     authorize=authorize,
                     provider_runtime=group.probe,

@@ -9,7 +9,7 @@ from typing import Any, cast
 from pydantic import BaseModel
 
 from jacobian.artifacts import ArtifactService
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, WitnessEnvelope
@@ -341,145 +341,121 @@ def install_polynomial_operations(
 ) -> tuple[tuple[OperationAdapter[Any], ...], PolynomialInstallation]:
     """Register exact polynomial-map schemas, adapters, and optional checker."""
     contracts = register_polynomial_resources(store, schemas)
-    collision_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact rational polynomial-map collision checker",
-                entrypoint="jacobian_checkers.polynomial_maps:check_collision",
-                evidence_kind=EvidenceKind.WITNESS,
-                format_id="polynomial.map_collision",
-                format_version="1",
-                claim_schema_uris=(contracts.claim_schema_uri,),
-                semantics_uris=(contracts.semantics_uri,),
-                candidate_schema_uris=(contracts.map_schema_uri,),
-                reason="bundled polynomial-map reference checker",
+    collision_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact rational polynomial-map collision checker",
+            entrypoint="jacobian_checkers.polynomial_maps:check_collision",
+            evidence_kind=EvidenceKind.WITNESS,
+            format_id="polynomial.map_collision",
+            format_version="1",
+            claim_schema_uris=(contracts.claim_schema_uri,),
+            semantics_uris=(contracts.semantics_uri,),
+            candidate_schema_uris=(contracts.map_schema_uri,),
+            reason="bundled polynomial-map reference checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
+    jacobian_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact sparse polynomial Jacobian replay checker",
+            entrypoint="jacobian_checkers.polynomial_maps:check_jacobian",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="polynomial.jacobian_replay",
+            format_version="1",
+            claim_schema_uris=(contracts.jacobian_claim_schema_uri,),
+            semantics_uris=(contracts.semantics_uri,),
+            candidate_schema_uris=(contracts.jacobian_schema_uri,),
+            reason="bundled independent sparse-polynomial Jacobian checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
+    keller_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact polynomial-map Keller-condition checker",
+            entrypoint="jacobian_checkers.polynomial_maps:check_keller_condition",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="polynomial.map.keller_condition.replay",
+            format_version="1",
+            claim_schema_uris=(contracts.keller_claim_schema_uri,),
+            semantics_uris=(contracts.semantics_uri,),
+            candidate_schema_uris=(contracts.jacobian_schema_uri,),
+            reason=(
+                "bundled independent exact checker for a nonzero constant "
+                "polynomial-map Jacobian determinant"
             ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
-    jacobian_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact sparse polynomial Jacobian replay checker",
-                entrypoint="jacobian_checkers.polynomial_maps:check_jacobian",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="polynomial.jacobian_replay",
-                format_version="1",
-                claim_schema_uris=(contracts.jacobian_claim_schema_uri,),
-                semantics_uris=(contracts.semantics_uri,),
-                candidate_schema_uris=(contracts.jacobian_schema_uri,),
-                reason="bundled independent sparse-polynomial Jacobian checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
+    identity_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact sparse rational polynomial identity checker",
+            entrypoint="jacobian_checkers.polynomial_maps:check_identity",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="polynomial.identity_replay",
+            format_version="1",
+            claim_schema_uris=(contracts.identity_claim_schema_uri,),
+            semantics_uris=(contracts.identity_semantics_uri,),
+            candidate_schema_uris=(contracts.right_polynomial_schema_uri,),
+            reason="bundled independent sparse-polynomial identity checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
+    rational_function_identity_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact sparse rational-function identity checker",
+            entrypoint=(
+                "jacobian_checkers.rational_functions:check_rational_function_identity"
             ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
-    keller_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact polynomial-map Keller-condition checker",
-                entrypoint="jacobian_checkers.polynomial_maps:check_keller_condition",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="polynomial.map.keller_condition.replay",
-                format_version="1",
-                claim_schema_uris=(contracts.keller_claim_schema_uri,),
-                semantics_uris=(contracts.semantics_uri,),
-                candidate_schema_uris=(contracts.jacobian_schema_uri,),
-                reason=(
-                    "bundled independent exact checker for a nonzero constant "
-                    "polynomial-map Jacobian determinant"
-                ),
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="polynomial.rational_function.identity_replay",
+            format_version="1",
+            claim_schema_uris=(contracts.rational_function_identity_claim_schema_uri,),
+            semantics_uris=(contracts.rational_function_identity_semantics_uri,),
+            candidate_schema_uris=(contracts.rational_function_right_schema_uri,),
+            reason="bundled independent sparse cross-multiplication checker",
+        ),
+        authorize=authorize_checker,
+    ).checker_id
+    inverse_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact two-sided polynomial-map inverse checker",
+            entrypoint="jacobian_checkers.polynomial_maps:check_map_inverse",
+            evidence_kind=EvidenceKind.CERTIFICATE,
+            format_id="polynomial.map.inverse.two_sided_replay",
+            format_version="1",
+            claim_schema_uris=(contracts.inverse_claim_schema_uri,),
+            semantics_uris=(contracts.inverse_semantics_uri,),
+            candidate_schema_uris=(contracts.inverse_residual_schema_uri,),
+            reason=("bundled independent two-sided sparse-polynomial map checker"),
+        ),
+        authorize=authorize_checker,
+    ).checker_id
+    inverse_collision_checker_id = authorize_checker_operation(
+        checkers,
+        CheckerOperation(
+            name="exact polynomial-map inverse-obstruction checker",
+            entrypoint=(
+                "jacobian_checkers.polynomial_maps:check_collision_refutes_inverse"
             ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
-    identity_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact sparse rational polynomial identity checker",
-                entrypoint="jacobian_checkers.polynomial_maps:check_identity",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="polynomial.identity_replay",
-                format_version="1",
-                claim_schema_uris=(contracts.identity_claim_schema_uri,),
-                semantics_uris=(contracts.identity_semantics_uri,),
-                candidate_schema_uris=(contracts.right_polynomial_schema_uri,),
-                reason="bundled independent sparse-polynomial identity checker",
+            evidence_kind=EvidenceKind.WITNESS,
+            format_id="polynomial.map_collision_refutes_inverse",
+            format_version="1",
+            claim_schema_uris=(contracts.inverse_collision_claim_schema_uri,),
+            semantics_uris=(contracts.semantics_uri,),
+            candidate_schema_uris=(contracts.map_schema_uri,),
+            reason=(
+                "bundled independent exact collision replay whose logical "
+                "consequence is absence of a two-sided polynomial inverse"
             ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
-    rational_function_identity_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact sparse rational-function identity checker",
-                entrypoint=(
-                    "jacobian_checkers.rational_functions:"
-                    "check_rational_function_identity"
-                ),
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="polynomial.rational_function.identity_replay",
-                format_version="1",
-                claim_schema_uris=(
-                    contracts.rational_function_identity_claim_schema_uri,
-                ),
-                semantics_uris=(contracts.rational_function_identity_semantics_uri,),
-                candidate_schema_uris=(contracts.rational_function_right_schema_uri,),
-                reason="bundled independent sparse cross-multiplication checker",
-            ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
-    inverse_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact two-sided polynomial-map inverse checker",
-                entrypoint="jacobian_checkers.polynomial_maps:check_map_inverse",
-                evidence_kind=EvidenceKind.CERTIFICATE,
-                format_id="polynomial.map.inverse.two_sided_replay",
-                format_version="1",
-                claim_schema_uris=(contracts.inverse_claim_schema_uri,),
-                semantics_uris=(contracts.inverse_semantics_uri,),
-                candidate_schema_uris=(contracts.inverse_residual_schema_uri,),
-                reason=("bundled independent two-sided sparse-polynomial map checker"),
-            ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
-    inverse_collision_checker_id = (
-        CheckerInstaller(checkers)
-        .install(
-            CheckerOperation(
-                name="exact polynomial-map inverse-obstruction checker",
-                entrypoint=(
-                    "jacobian_checkers.polynomial_maps:check_collision_refutes_inverse"
-                ),
-                evidence_kind=EvidenceKind.WITNESS,
-                format_id="polynomial.map_collision_refutes_inverse",
-                format_version="1",
-                claim_schema_uris=(contracts.inverse_collision_claim_schema_uri,),
-                semantics_uris=(contracts.semantics_uri,),
-                candidate_schema_uris=(contracts.map_schema_uri,),
-                reason=(
-                    "bundled independent exact collision replay whose logical "
-                    "consequence is absence of a two-sided polynomial inverse"
-                ),
-            ),
-            authorize=authorize_checker,
-        )
-        .checker_id
-    )
+        ),
+        authorize=authorize_checker,
+    ).checker_id
     installation = replace(
         contracts,
         collision_checker_id=collision_checker_id,

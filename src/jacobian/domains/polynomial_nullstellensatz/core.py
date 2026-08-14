@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
 from jacobian.catalog_build_context import CatalogBuildContext
-from jacobian.checker_installation import CheckerInstaller
+from jacobian.checker_authorization import authorize_checker_operation
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
 from jacobian.contracts.evidence import CertificateEnvelope, EvidenceBindings
@@ -527,7 +527,8 @@ def install_nullstellensatz_core(
     provider_runtime: ProviderObservation,
 ) -> BoundOperationGroup:
     contracts = register_nullstellensatz_resources(context.store, context.schemas)
-    installed_checker = CheckerInstaller(context.checkers).install(
+    installed_checker = authorize_checker_operation(
+        context.checkers,
         CheckerOperation(
             name="exact bounded Nullstellensatz chart-cover checker",
             entrypoint="jacobian_checkers.nullstellensatz:check_chart_cover",

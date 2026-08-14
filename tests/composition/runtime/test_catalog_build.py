@@ -38,11 +38,11 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
     )
     context = SimpleNamespace(store=store, checkers=checkers)
     family_origins = (
-        "family:graph",
-        "family:polynomial",
-        "family:lean",
-        "family:sat-smt",
-        "family:core",
+        "graph",
+        "polynomial",
+        "lean",
+        "sat-smt",
+        "core",
     )
 
     monkeypatch.setattr(

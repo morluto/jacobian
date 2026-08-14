@@ -112,12 +112,12 @@ class CliState:
 
     def catalog_snapshot(self) -> OperationCatalogSnapshot:
         if self._runtime_opener is not None:
-            return self.runtime.core.operations.snapshot()
+            return self.runtime.operations.snapshot()
         return self.catalog.snapshot()
 
     def inspect(self, operation_id: str) -> OperationDescriptor | None:
         if self._runtime_opener is not None:
-            return self.runtime.core.operations.inspect(operation_id)
+            return self.runtime.operations.inspect(operation_id)
         return self.catalog.inspect(operation_id)
 
     def close(self) -> None:
@@ -210,7 +210,7 @@ def run_operation(
     payload = loads_strict_json(source)
     if not isinstance(payload, dict):
         raise ValueError("operation payload must be a JSON object")
-    result = _state(context).runtime.core.operations.invoke(
+    result = _state(context).runtime.operations.invoke(
         OperationRequest(operation_id=operation_id, input=payload)
     )
     _emit(result.model_dump(mode="json"))

@@ -117,7 +117,7 @@ def create_server_from_runtime(
 
     state = AppState(
         acquire_runtime=lambda _operation_id: RuntimeAccess(runtime),
-        operation_catalog=runtime.core.operations,
+        operation_catalog=runtime.operations,
     )
     return _build_server(
         state=state,

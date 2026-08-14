@@ -24,6 +24,7 @@ from jacobian.operation_catalog import (
     public_operation_descriptor,
 )
 from jacobian.operation_declarations import InlineOperation, OperationDeclarations
+from jacobian.operation_locators import FamilyLocator, ModuleLocator, decode_locator
 from jacobian.package_index import PackageIndex, load_package_index
 from jacobian.registry import CheckerRegistry
 from jacobian.selected_operation_bindings import (
@@ -81,17 +82,23 @@ class OperationRegistry:
         if descriptor is None or record is None:
             raise OperationCatalogError(f"unknown or hidden operation: {operation_id}")
 
-        if record.module.startswith("family:"):
-            return self._resolve_selected_family(operation_id, descriptor, record)
-        return self._resolve_declaration_module(operation_id, descriptor, record)
+        locator = decode_locator(record.module)
+        if isinstance(locator, FamilyLocator):
+            return self._resolve_selected_family(
+                operation_id, descriptor, record, locator
+            )
+        return self._resolve_declaration_module(
+            operation_id, descriptor, record, locator
+        )
 
     def _resolve_declaration_module(
         self,
         operation_id: str,
         descriptor: OperationDescriptor,
         record: OperationDeclarationRecord,
+        locator: ModuleLocator,
     ) -> OperationAdapter[Any]:
-        if record.module not in {
+        if locator.module not in {
             module_name for module_name, _factory_name in BUILTIN_OPERATION_MODULES
         }:
             raise OperationCatalogError(
@@ -99,7 +106,7 @@ class OperationRegistry:
                 f"{operation_id}"
             )
         _module_name, operations, checker_declarations = load_builtin_operation_module(
-            record.module
+            locator.module
         )
         matches = tuple(
             operation
@@ -155,12 +162,13 @@ class OperationRegistry:
         operation_id: str,
         descriptor: OperationDescriptor,
         record: OperationDeclarationRecord,
+        locator: FamilyLocator,
     ) -> OperationAdapter[Any]:
         family = next(
             (
                 family
                 for family in self._control_plane.families
-                if family.spec.origin == record.module
+                if family.spec.origin == locator.family
             ),
             None,
         )

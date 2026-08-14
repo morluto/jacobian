@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from jacobian.catalog_operation_collector import CatalogOperationCollector
 from jacobian.operation_dispatcher import OperationDispatcher
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.resources import RuntimeResources
@@ -75,6 +76,13 @@ class JacobianRuntime:
         if self._control_plane is None:
             raise RuntimeClosedError("inline serving runtime has no polytope service")
         return self._control_plane.polytope
+
+    @property
+    def operations(self) -> CatalogOperationCollector | OperationDispatcher:
+        bound = self.core.operations
+        if bound is None:
+            raise RuntimeClosedError("runtime operations have not been assigned")
+        return bound
 
     def close(self) -> None:
         """Release every runtime-owned resource."""

@@ -115,6 +115,7 @@ def create_execution_runtime(
         operation_policy=operation_policy,
         bind_existing_checkers=True,
         install_family_artifacts=False,
+        collect_operations=False,
     )
     try:
         if checker_registry is not None:

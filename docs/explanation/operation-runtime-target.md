@@ -53,14 +53,16 @@ explicitly requested. Visibility filtering is applied to search, inspection,
 execution, and the resource without rebuilding the compiled snapshot.
 
 The catalog is inert searchable data. Indexed inline operations carry a
-module and symbol locator in the package index. Overlay entries carry either
-a declaration module locator or an explicit family binding origin. The
-runtime-local `OperationRegistry` reads that locator only after an operation is
-selected. Inline IDs skip SQLite digest comparison. Family adapters still
-validate persisted identity, schemas, and digest. The fixed family table is
-assembled by the runtime; graph, polynomial, Lean, and SAT/SMT modules own
-their selected IDs and binding logic. The runtime owns any closeable resources
-acquired by those binders and releases them at shutdown.
+module and symbol locator in the package index. Overlay entries persist a
+typed JSON locator: a declaration-module locator or a family locator such as
+`{"kind":"family","family":"graph"}`. Legacy `family:` prefixes are stale and
+fail closed until `jacobian update`. The runtime-local `OperationRegistry`
+decodes that locator only after an operation is selected. Each family has one
+`FamilyResolver` with shared resources, an adapter cache, and a close
+boundary. Inline IDs skip SQLite digest comparison. Family adapters still
+validate persisted identity, schemas, and digest. Graph, polynomial, Lean, and
+SAT/SMT modules own their selected IDs and binding logic. The runtime owns any
+closeable resources acquired by those binders and releases them at shutdown.
 
 ## Mathematical backends, execution, and publication
 

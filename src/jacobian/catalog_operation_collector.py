@@ -21,7 +21,12 @@ from jacobian.storage.repository import ArtifactRepository
 
 
 class CatalogOperationCollector:
-    """Collect descriptors and adapters only while compiling a catalog."""
+    """Collect descriptors and adapters only while compiling a catalog.
+
+    Serving never constructs a collector. Domain tests and catalog compilation
+    may still invoke, inspect, or search the in-memory inventory after
+    ``register``.
+    """
 
     def __init__(
         self,

@@ -31,7 +31,7 @@ class RuntimeResources:
     values: ValueReferenceStore
     binder: OperationBinder
     checkers: CheckerRegistry
-    operations: CatalogOperationCollector | OperationDispatcher
+    operations: CatalogOperationCollector | OperationDispatcher | None
     sat: SatArtifactService | None = None
     smt: SmtArtifactService | None = None
     polynomial_expressions: PolynomialExpressionArtifactService | None = None

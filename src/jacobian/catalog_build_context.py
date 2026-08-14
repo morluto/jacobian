@@ -57,6 +57,8 @@ def create_catalog_build_context(
     """
 
     def register(adapter: OperationAdapter[Any]) -> None:
+        if core.operations is None:
+            raise RuntimeError("catalog compilation requires an operation collector")
         core.operations.register(adapter)
 
     if core.sat is None or core.smt is None or core.polynomial_expressions is None:

@@ -26,6 +26,12 @@ from jacobian.graphs.atlas_search import (
     GraphAtlasSearchAdapter,
     GraphAtlasSearchResources,
 )
+from jacobian.graphs.composition import (
+    GraphCompositionResources,
+    bind_selected_graph_composition,
+    build_graph_composition_operations,
+    register_graph_composition_resources,
+)
 from jacobian.graphs.construction import (
     GraphConstructionResources,
     GraphExplicitConstructionAdapter,
@@ -185,6 +191,92 @@ def register_graph_resources(
     )
 
 
+class GraphFamilySession:
+    """Register graph contracts once and bind one requested operation."""
+
+    def __init__(
+        self,
+        store: ArtifactRepository,
+        schemas: SchemaRegistry,
+        artifacts: ArtifactService,
+        verification: VerificationService,
+        checkers: CheckerRegistry,
+        catalog: OperationCatalog,
+    ) -> None:
+        self._store = store
+        self._schemas = schemas
+        self._artifacts = artifacts
+        self._verification = verification
+        self._checkers = checkers
+        self._catalog = catalog
+        self._resources: GraphOperationResources | None = None
+        self._composition: GraphCompositionResources | None = None
+
+    def bind(self, operation_id: str) -> OperationAdapter[Any] | None:
+        if operation_id not in SELECTED_GRAPH_OPERATION_IDS:
+            return None
+        resources = self._resources_for(operation_id)
+        return bind_selected_graph_operation(
+            operation_id,
+            self._store,
+            self._schemas,
+            self._artifacts,
+            self._verification,
+            self._checkers,
+            self._catalog,
+            resources=resources,
+            composition=self._composition_for(resources, operation_id),
+        )
+
+    def _composition_for(
+        self,
+        resources: GraphOperationResources,
+        operation_id: str,
+    ) -> GraphCompositionResources | None:
+        if operation_id not in {
+            "graph.construct.compose",
+            "graph.enumerate.nonisomorphic",
+        }:
+            return None
+        if self._composition is None:
+            self._composition = register_graph_composition_resources(
+                self._store,
+                self._schemas,
+                self._artifacts,
+                semantics_uri=resources.semantics_uri,
+                graph_schema_uri=resources.graph_schema_uri,
+            )
+        return self._composition
+
+    def _resources_for(self, operation_id: str) -> GraphOperationResources:
+        if self._resources is None:
+            self._resources = register_graph_resources(self._store, self._schemas)
+        resources = self._resources
+        if operation_id in {
+            "graph.realize.degree_sequence",
+            "graph.degree_sequence.verify",
+        }:
+            return replace(
+                resources,
+                degree_sequence_checker_id=_active_checker_id(
+                    "graph.degree_sequence.verify", self._catalog, self._checkers
+                ),
+            )
+        if operation_id in {
+            "graph.compute.neighborhood_independence",
+            "graph.neighborhood_independence.verify",
+        }:
+            return replace(
+                resources,
+                neighborhood_checker_id=_active_checker_id(
+                    "graph.neighborhood_independence.verify",
+                    self._catalog,
+                    self._checkers,
+                ),
+            )
+        return resources
+
+
 def bind_selected_graph_operation(
     operation_id: str,
     store: ArtifactRepository,
@@ -193,12 +285,36 @@ def bind_selected_graph_operation(
     verification: VerificationService,
     checkers: CheckerRegistry,
     catalog: OperationCatalog,
+    *,
+    resources: GraphOperationResources | None = None,
+    composition: GraphCompositionResources | None = None,
 ) -> OperationAdapter[Any] | None:
     """Bind one ordinary graph operation without checker or portfolio setup."""
 
     if operation_id not in SELECTED_GRAPH_OPERATION_IDS:
         return None
-    resources = register_graph_resources(store, schemas)
+    if resources is None:
+        resources = register_graph_resources(store, schemas)
+        if operation_id in {
+            "graph.realize.degree_sequence",
+            "graph.degree_sequence.verify",
+        }:
+            resources = replace(
+                resources,
+                degree_sequence_checker_id=_active_checker_id(
+                    "graph.degree_sequence.verify", catalog, checkers
+                ),
+            )
+        if operation_id in {
+            "graph.compute.neighborhood_independence",
+            "graph.neighborhood_independence.verify",
+        }:
+            resources = replace(
+                resources,
+                neighborhood_checker_id=_active_checker_id(
+                    "graph.neighborhood_independence.verify", catalog, checkers
+                ),
+            )
     if operation_id == "graph.isomorphism.verify":
         from jacobian.graphs.isomorphism import bind_selected_graph_isomorphism
 
@@ -215,39 +331,14 @@ def bind_selected_graph_operation(
         "graph.construct.compose",
         "graph.enumerate.nonisomorphic",
     }:
-        from jacobian.graphs.composition import build_graph_composition_operations
-
-        composition_adapters = build_graph_composition_operations(
+        return bind_selected_graph_composition(
+            operation_id,
             store,
             schemas,
             artifacts,
             semantics_uri=resources.semantics_uri,
             graph_schema_uri=resources.graph_schema_uri,
-        )
-        return next(
-            adapter
-            for adapter in composition_adapters
-            if adapter.descriptor.operation_id == operation_id
-        )
-    if operation_id in {
-        "graph.realize.degree_sequence",
-        "graph.degree_sequence.verify",
-    }:
-        resources = replace(
-            resources,
-            degree_sequence_checker_id=_active_checker_id(
-                "graph.degree_sequence.verify", catalog, checkers
-            ),
-        )
-    if operation_id in {
-        "graph.compute.neighborhood_independence",
-        "graph.neighborhood_independence.verify",
-    }:
-        resources = replace(
-            resources,
-            neighborhood_checker_id=_active_checker_id(
-                "graph.neighborhood_independence.verify", catalog, checkers
-            ),
+            resources=composition,
         )
     if operation_id == "graph.degree_sequence.verify":
         return certificate_verification_adapter(
@@ -272,12 +363,7 @@ def bind_selected_graph_operation(
             tags=("graph", "neighborhood-independence"),
             verification=verification,
         )
-    adapters = _graph_operation_adapters(store, artifacts, resources)
-    return next(
-        adapter
-        for adapter in adapters
-        if adapter.descriptor.operation_id == operation_id
-    )
+    return _bind_one_graph_producer(operation_id, store, artifacts, resources)
 
 
 def _active_checker_id(
@@ -442,6 +528,66 @@ def _graph_operation_adapters(
     )
 
 
+def _bind_one_graph_producer(
+    operation_id: str,
+    store: ArtifactRepository,
+    artifacts: ArtifactService,
+    resources: GraphOperationResources,
+) -> OperationAdapter[Any]:
+    """Construct exactly one graph producer adapter."""
+
+    common_resources = GraphArtifactResources(
+        store=store,
+        artifacts=artifacts,
+        semantics_uri=resources.semantics_uri,
+        graph_schema_uri=resources.graph_schema_uri,
+    )
+    if operation_id == "graph.construct.explicit":
+        return GraphExplicitConstructionAdapter(
+            GraphConstructionResources(graph=common_resources)
+        )
+    if operation_id == "graph.search.atlas":
+        return GraphAtlasSearchAdapter(
+            GraphAtlasSearchResources(
+                graph=common_resources,
+                scope_schema_uri=resources.scope_schema_uri,
+            )
+        )
+    if operation_id == "graph.compute.properties":
+        return GraphPropertyAdapter(
+            GraphInvariantResources(
+                graph=common_resources,
+                property_schema_uri=resources.property_schema_uri,
+                invariant_result_schema_uri=resources.invariant_result_schema_uri,
+            )
+        )
+    if operation_id == "graph.realize.degree_sequence":
+        return GraphDegreeSequenceAdapter(
+            GraphDegreeSequenceResources(
+                graph=common_resources,
+                degree_sequence_claim_schema_uri=(
+                    resources.degree_sequence_claim_schema_uri
+                ),
+                degree_sequence_result_schema_uri=(
+                    resources.degree_sequence_result_schema_uri
+                ),
+                certificate_schema_uri=resources.certificate_schema_uri,
+                degree_sequence_checker_id=resources.degree_sequence_checker_id,
+            )
+        )
+    if operation_id == "graph.compute.neighborhood_independence":
+        return GraphNeighborhoodIndependenceAdapter(
+            GraphNeighborhoodIndependenceResources(
+                graph=common_resources,
+                neighborhood_schema_uri=resources.neighborhood_schema_uri,
+                neighborhood_claim_schema_uri=resources.neighborhood_claim_schema_uri,
+                certificate_schema_uri=resources.certificate_schema_uri,
+                neighborhood_checker_id=resources.neighborhood_checker_id,
+            )
+        )
+    raise OperationCatalogError(f"selected graph producer is missing: {operation_id}")
+
+
 def install_selected_graph_catalog(
     context: CatalogBuildContext,
     *,
@@ -451,7 +597,6 @@ def install_selected_graph_catalog(
     """Compile graph construction, isomorphism, and composition operations."""
 
     del polytope, resources
-    from jacobian.graphs.composition import build_graph_composition_operations
     from jacobian.graphs.isomorphism import build_graph_isomorphism_operation
 
     graph_adapters, graph = build_graph_operations(

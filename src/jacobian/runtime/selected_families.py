@@ -6,9 +6,10 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from jacobian.contracts.operations import OperationDescriptor
+from jacobian.family_resolver import FamilyResolver
 from jacobian.graphs.operation_resources import (
     SELECTED_GRAPH_OPERATION_IDS,
-    bind_selected_graph_operation,
+    GraphFamilySession,
     install_selected_graph_catalog,
 )
 from jacobian.lean_frontend.selected import (
@@ -46,19 +47,19 @@ from jacobian.selected_operations import (
 from jacobian.verification.service import VerificationService
 
 _FAMILY_SPECS = (
-    SelectedFamilySpec("family:graph", SELECTED_GRAPH_OPERATION_IDS),
-    SelectedFamilySpec("family:polynomial", SELECTED_POLYNOMIAL_OPERATION_IDS),
-    SelectedFamilySpec("family:lean", SELECTED_LEAN_OPERATION_IDS),
-    SelectedFamilySpec("family:sat-smt", SELECTED_SAT_SMT_OPERATION_IDS),
-    SelectedFamilySpec("family:core", SELECTED_CORE_OPERATION_IDS),
+    SelectedFamilySpec("graph", SELECTED_GRAPH_OPERATION_IDS),
+    SelectedFamilySpec("polynomial", SELECTED_POLYNOMIAL_OPERATION_IDS),
+    SelectedFamilySpec("lean", SELECTED_LEAN_OPERATION_IDS),
+    SelectedFamilySpec("sat-smt", SELECTED_SAT_SMT_OPERATION_IDS),
+    SelectedFamilySpec("core", SELECTED_CORE_OPERATION_IDS),
 )
 
 _FAMILY_CATALOG_INSTALLERS: dict[str, Callable[..., None]] = {
-    "family:graph": install_selected_graph_catalog,
-    "family:polynomial": install_selected_polynomial_catalog,
-    "family:lean": install_selected_lean_catalog,
-    "family:sat-smt": install_selected_sat_smt_catalog,
-    "family:core": install_selected_core_catalog,
+    "graph": install_selected_graph_catalog,
+    "polynomial": install_selected_polynomial_catalog,
+    "lean": install_selected_lean_catalog,
+    "sat-smt": install_selected_sat_smt_catalog,
+    "core": install_selected_core_catalog,
 }
 
 
@@ -107,19 +108,14 @@ def create_runtime_selected_families(
     store = runtime_resources.store
     schemas = runtime_resources.schemas
     artifacts = runtime_resources.artifacts
+    graph_session = GraphFamilySession(
+        store, schemas, artifacts, verification, checkers, catalog
+    )
 
     def graph(
         operation_id: str, _descriptor: OperationDescriptor
     ) -> SelectedOperationBinding | None:
-        adapter = bind_selected_graph_operation(
-            operation_id,
-            store,
-            schemas,
-            artifacts,
-            verification,
-            checkers,
-            catalog,
-        )
+        adapter = graph_session.bind(operation_id)
         return None if adapter is None else SelectedOperationBinding(adapter)
 
     def polynomial(
@@ -183,11 +179,15 @@ def create_runtime_selected_families(
         )
 
     return (
-        RuntimeSelectedFamily(_FAMILY_SPECS[0], graph),
-        RuntimeSelectedFamily(_FAMILY_SPECS[1], polynomial),
-        RuntimeSelectedFamily(_FAMILY_SPECS[2], lean),
-        RuntimeSelectedFamily(_FAMILY_SPECS[3], sat_smt),
-        RuntimeSelectedFamily(_FAMILY_SPECS[4], core),
+        RuntimeSelectedFamily(_FAMILY_SPECS[0], FamilyResolver("graph", graph).resolve),
+        RuntimeSelectedFamily(
+            _FAMILY_SPECS[1], FamilyResolver("polynomial", polynomial).resolve
+        ),
+        RuntimeSelectedFamily(_FAMILY_SPECS[2], FamilyResolver("lean", lean).resolve),
+        RuntimeSelectedFamily(
+            _FAMILY_SPECS[3], FamilyResolver("sat-smt", sat_smt).resolve
+        ),
+        RuntimeSelectedFamily(_FAMILY_SPECS[4], FamilyResolver("core", core).resolve),
     )
 
 

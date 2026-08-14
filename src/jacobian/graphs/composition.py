@@ -90,6 +90,67 @@ class GraphCompositionResources:
     enumeration_scope_schema_uri: str
 
 
+def register_graph_composition_resources(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    *,
+    semantics_uri: str,
+    graph_schema_uri: str,
+) -> GraphCompositionResources:
+    """Register composition schemas once for selected graph binding."""
+
+    return GraphCompositionResources(
+        store=store,
+        artifacts=artifacts,
+        semantics_uri=semantics_uri,
+        graph_schema_uri=graph_schema_uri,
+        composition_result_schema_uri=schemas.register(
+            name="jacobian.graph-composition-result",
+            version="1",
+            schema=model_schema(GraphCompositionResultArtifact),
+        ),
+        enumeration_scope_schema_uri=schemas.register(
+            name="jacobian.graph-enumeration-scope",
+            version="1",
+            schema=model_schema(GraphEnumerationScopeArtifact),
+        ),
+    )
+
+
+def bind_selected_graph_composition(
+    operation_id: str,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    *,
+    semantics_uri: str,
+    graph_schema_uri: str,
+    resources: GraphCompositionResources | None = None,
+) -> GraphComposeAdapter | GraphEnumerateNonisomorphicAdapter | None:
+    """Bind one composition or enumeration adapter without constructing both."""
+
+    if operation_id not in {
+        "graph.construct.compose",
+        "graph.enumerate.nonisomorphic",
+    }:
+        return None
+    bound = (
+        resources
+        if resources is not None
+        else register_graph_composition_resources(
+            store,
+            schemas,
+            artifacts,
+            semantics_uri=semantics_uri,
+            graph_schema_uri=graph_schema_uri,
+        )
+    )
+    if operation_id == "graph.construct.compose":
+        return GraphComposeAdapter(bound)
+    return GraphEnumerateNonisomorphicAdapter(bound)
+
+
 def build_graph_composition_operations(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
@@ -106,23 +167,12 @@ def build_graph_composition_operations(
     ``graph_schema_uri`` from ``GraphOperationResources``.
     """
 
-    composition_result_schema_uri = schemas.register(
-        name="jacobian.graph-composition-result",
-        version="1",
-        schema=model_schema(GraphCompositionResultArtifact),
-    )
-    enumeration_scope_schema_uri = schemas.register(
-        name="jacobian.graph-enumeration-scope",
-        version="1",
-        schema=model_schema(GraphEnumerationScopeArtifact),
-    )
-    resources = GraphCompositionResources(
-        store=store,
-        artifacts=artifacts,
+    resources = register_graph_composition_resources(
+        store,
+        schemas,
+        artifacts,
         semantics_uri=semantics_uri,
         graph_schema_uri=graph_schema_uri,
-        composition_result_schema_uri=composition_result_schema_uri,
-        enumeration_scope_schema_uri=enumeration_scope_schema_uri,
     )
     return (
         GraphComposeAdapter(resources),

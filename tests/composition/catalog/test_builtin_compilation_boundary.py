@@ -94,7 +94,10 @@ def test_family_catalog_hooks_are_indexed_from_selected_family_specs() -> None:
     specs = selected_family_specs()
     installers = selected_family_catalog_installers()
     assert tuple(installers) == tuple(spec.origin for spec in specs)
-    assert all(origin.startswith("family:") for origin in installers)
+    assert all(
+        origin in {"graph", "polynomial", "lean", "sat-smt", "core"}
+        for origin in installers
+    )
     selected_ids = [spec.operation_ids for spec in specs]
     seen: set[str] = set()
     for operation_ids in selected_ids:

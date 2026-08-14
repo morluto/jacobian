@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from jacobian import __version__
 from jacobian.builtin_operation_modules import load_builtin_operation_modules
@@ -19,6 +20,7 @@ from jacobian.operation_catalog import (
     operation_declaration_digest_from_descriptor,
     public_operation_descriptor,
 )
+from jacobian.operation_locators import FamilyLocator, ModuleLocator, encode_locator
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
@@ -53,9 +55,12 @@ def compile_operation_catalog(
             authorize_bundled_checkers=authorize_bundled_checkers,
         )
         resources = build_catalog_operations(context, polytope)
+        operations = core.operations
+        if operations is None:
+            raise RuntimeError("catalog compilation requires an operation collector")
         bound_descriptors = tuple(
             sorted(
-                core.operations.snapshot().operations,
+                operations.snapshot().operations,
                 key=lambda item: item.operation_id,
             )
         )
@@ -106,12 +111,10 @@ def _compiled_entries(
     return tuple(
         CompiledCatalogEntry(
             descriptor=descriptor,
-            declaration_module=(
-                declarations[descriptor.operation_id][0]
-                if descriptor.operation_id in declarations
-                else exact_verifiers[descriptor.operation_id][0]
-                if descriptor.operation_id in exact_verifiers
-                else _selected_operation_origin(descriptor.operation_id)
+            declaration_module=_persisted_locator(
+                descriptor.operation_id,
+                declarations,
+                exact_verifiers,
             ),
             declaration_digest=(
                 operation_declaration_digest(declarations[descriptor.operation_id][1])
@@ -128,14 +131,22 @@ def _compiled_entries(
     )
 
 
-def _selected_operation_origin(operation_id: str) -> str:
+def _persisted_locator(
+    operation_id: str,
+    declarations: dict[str, tuple[str, Any]],
+    exact_verifiers: dict[str, tuple[str, Any]],
+) -> str:
+    if operation_id in declarations:
+        return encode_locator(ModuleLocator(module=declarations[operation_id][0]))
+    if operation_id in exact_verifiers:
+        return encode_locator(ModuleLocator(module=exact_verifiers[operation_id][0]))
     origin = selected_operation_origin(operation_id)
     if origin is None:
         raise ValueError(
             "catalog operation has no declaration or selected family owner: "
             f"{operation_id}"
         )
-    return origin
+    return encode_locator(FamilyLocator(family=origin))
 
 
 def _checker_bindings(

@@ -88,7 +88,7 @@ def test_singular_producer_has_a_lazy_selected_binding(tmp_path: Path) -> None:
             _runtime(),
         )
 
-        assert selected_operation_origin(PRODUCE_OPERATION_ID) == "family:polynomial"
+        assert selected_operation_origin(PRODUCE_OPERATION_ID) == "polynomial"
         assert adapter.descriptor.operation_id == PRODUCE_OPERATION_ID
 
 

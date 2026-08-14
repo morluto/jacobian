@@ -27,8 +27,13 @@ def bootstrap_services(
     operation_policy: OperationVisibilityPolicy | None = None,
     bind_existing_checkers: bool = False,
     install_family_artifacts: bool = True,
+    collect_operations: bool = True,
 ) -> RuntimeResources:
-    """Open storage and construct operation-independent resources."""
+    """Open storage and construct operation-independent resources.
+
+    Serving execution must pass ``collect_operations=False``. Catalog
+    compilation and domain-test inventory keep the collector.
+    """
 
     store = ArtifactRepository(root)
     try:
@@ -50,9 +55,13 @@ def bootstrap_services(
                 )
         checkers = CheckerRegistry(store)
         checkers.bind_existing_when_omitted = bind_existing_checkers
-        operations = CatalogOperationCollector(
-            store,
-            policy=operation_policy,
+        operations = (
+            CatalogOperationCollector(
+                store,
+                policy=operation_policy,
+            )
+            if collect_operations
+            else None
         )
         return RuntimeResources(
             store=store,

@@ -103,7 +103,7 @@ def _invoke_operation_attempt(
             "inputs": inputs or {},
         }
     )
-    descriptor = runtime.core.operations.inspect(operation_id)
+    descriptor = runtime.operations.inspect(operation_id)
     provider = descriptor.provider if descriptor is not None else "unknown"
     checker_ids = (
         tuple(str(checker_id) for checker_id in descriptor.provider_runtime.checker_ids)
@@ -116,7 +116,7 @@ def _invoke_operation_attempt(
         inputs=inputs or {},
     )
     try:
-        result: OperationResult = runtime.core.operations.invoke(request)
+        result: OperationResult = runtime.operations.invoke(request)
     except Exception:
         _log_operation_attempt(
             operation_id=operation_id,

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -31,7 +31,8 @@ from jacobian.contracts.polynomial_systems import (
 )
 from jacobian.contracts.polynomials import SparseRationalPolynomial
 from jacobian.contracts.results import Conclusion, ExecutionStatus
-from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomials._support import PolynomialOperationResult
@@ -60,16 +61,11 @@ class PolynomialSystemResources:
     installation: PolynomialSystemInstallation
 
 
-def install_polynomial_system_operations(
+def register_polynomial_system_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-    artifacts: ArtifactService,
-    verification: VerificationService,
-    checkers: CheckerRegistry,
-    *,
-    authorize_checker: bool,
-) -> tuple[PolynomialSystemSolutionAdapter | None, PolynomialSystemInstallation]:
-    """Register exact polynomial-system schemas and optional verifier."""
+) -> PolynomialSystemInstallation:
+    """Register polynomial-system contracts without installing a checker."""
 
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -85,26 +81,79 @@ def install_polynomial_system_operations(
             "maximum_inequations": 64,
         },
     )
-    system_schema_uri = schemas.register(
-        name="jacobian.rational-polynomial-system",
-        version="1",
-        schema=model_schema(RationalPolynomialSystem),
+    return PolynomialSystemInstallation(
+        semantics_uri=semantics_uri,
+        system_schema_uri=schemas.register(
+            name="jacobian.rational-polynomial-system",
+            version="1",
+            schema=model_schema(RationalPolynomialSystem),
+        ),
+        assignment_schema_uri=schemas.register(
+            name="jacobian.rational-polynomial-assignment",
+            version="1",
+            schema=model_schema(RationalPolynomialAssignment),
+        ),
+        claim_schema_uri=schemas.register(
+            name="jacobian.polynomial-system-solution-claim",
+            version="1",
+            schema=model_schema(PolynomialSystemSolutionClaim),
+        ),
+        certificate_schema_uri=schemas.register(
+            name="jacobian.certificate-envelope",
+            version="1",
+            schema=model_schema(CertificateEnvelope),
+        ),
+        checker_id=None,
     )
-    assignment_schema_uri = schemas.register(
-        name="jacobian.rational-polynomial-assignment",
-        version="1",
-        schema=model_schema(RationalPolynomialAssignment),
+
+
+def bind_selected_polynomial_system_operation(
+    operation_id: str,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[Any] | None:
+    """Bind only the selected polynomial-system operation."""
+
+    installation = register_polynomial_system_resources(store, schemas)
+    if operation_id == "polynomial.system.rational_solution.search":
+        from jacobian.polynomial_system_search import (
+            PolynomialSystemRationalSearchAdapter,
+        )
+
+        return PolynomialSystemRationalSearchAdapter(artifacts, installation)
+    if operation_id != "polynomial.system.solution.verify":
+        return None
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
     )
-    claim_schema_uri = schemas.register(
-        name="jacobian.polynomial-system-solution-claim",
-        version="1",
-        schema=model_schema(PolynomialSystemSolutionClaim),
+    installation = replace(installation, checker_id=binding.checker_id)
+    return PolynomialSystemSolutionAdapter(
+        PolynomialSystemResources(store, artifacts, verification, installation)
     )
-    certificate_schema_uri = schemas.register(
-        name="jacobian.certificate-envelope",
-        version="1",
-        schema=model_schema(CertificateEnvelope),
-    )
+
+
+def install_polynomial_system_operations(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    *,
+    authorize_checker: bool,
+) -> tuple[PolynomialSystemSolutionAdapter | None, PolynomialSystemInstallation]:
+    """Register exact polynomial-system schemas and optional verifier."""
+
+    contracts = register_polynomial_system_resources(store, schemas)
     checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -114,9 +163,9 @@ def install_polynomial_system_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="polynomial.system_solution_replay",
                 format_version="1",
-                claim_schema_uris=(claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(assignment_schema_uri,),
+                claim_schema_uris=(contracts.claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.assignment_schema_uri,),
                 reason="bundled independent exact polynomial-system evaluator",
             ),
             authorize=authorize_checker,
@@ -124,11 +173,11 @@ def install_polynomial_system_operations(
         .checker_id
     )
     installation = PolynomialSystemInstallation(
-        semantics_uri=semantics_uri,
-        system_schema_uri=system_schema_uri,
-        assignment_schema_uri=assignment_schema_uri,
-        claim_schema_uri=claim_schema_uri,
-        certificate_schema_uri=certificate_schema_uri,
+        semantics_uri=contracts.semantics_uri,
+        system_schema_uri=contracts.system_schema_uri,
+        assignment_schema_uri=contracts.assignment_schema_uri,
+        claim_schema_uri=contracts.claim_schema_uri,
+        certificate_schema_uri=contracts.certificate_schema_uri,
         checker_id=checker_id,
     )
     if checker_id is None:

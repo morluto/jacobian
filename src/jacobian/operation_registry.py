@@ -58,6 +58,8 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.rational_function.identity.verify",
         "polynomial.map.inverse.candidate_synthesize",
         "polynomial.map.inverse.verify",
+        "polynomial.system.solution.verify",
+        "polynomial.system.rational_solution.search",
     }
 )
 _SELECTED_DIRECT_OPERATIONS = frozenset(
@@ -340,7 +342,22 @@ class OperationRegistry:
             bind_selected_polynomial_operation,
         )
 
-        return bind_selected_polynomial_operation(
+        polynomial_adapter = bind_selected_polynomial_operation(
+            operation_id,
+            self.binder.store,
+            self.binder.schemas,
+            self.binder.artifacts,
+            self.verification,
+            self.checkers,
+            self.catalog,
+        )
+        if polynomial_adapter is not None:
+            return polynomial_adapter
+        from jacobian.polynomial_system_operations import (
+            bind_selected_polynomial_system_operation,
+        )
+
+        return bind_selected_polynomial_system_operation(
             operation_id,
             self.binder.store,
             self.binder.schemas,

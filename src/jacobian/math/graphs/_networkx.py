@@ -70,6 +70,26 @@ def graph_from_value(value: SimpleUndirectedGraph) -> nx.Graph[str]:
     return graph
 
 
+def graph_from_graph6(encoded: str) -> nx.Graph[Any]:
+    """Decode one standard graph6 payload with NetworkX's maintained codec."""
+
+    try:
+        payload = encoded.encode("ascii")
+        graph = nx.from_graph6_bytes(payload)
+    except (UnicodeEncodeError, ValueError, IndexError, nx.NetworkXError) as exc:
+        raise ValueError(
+            "graph6 payload is malformed or uses an extended header"
+        ) from exc
+    return graph
+
+
+def graph6_canonical_bytes(graph: nx.Graph[Any]) -> bytes:
+    """Return headerless graph6 bytes without NetworkX's trailing newline."""
+
+    encoded = bytes(nx.to_graph6_bytes(graph, header=False))
+    return encoded[:-1] if encoded.endswith(b"\n") else encoded
+
+
 def graph_value(graph: nx.Graph[Any]) -> SimpleUndirectedGraph:
     """Canonicalize a transient NetworkX graph as an immutable graph value."""
 

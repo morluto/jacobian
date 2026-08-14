@@ -61,20 +61,21 @@ def decode_graph6(encoded: str) -> Graph6DecodeValue:
     bit_count = order * (order - 1) // 2
     if len(codes) != 1 + (bit_count + 5) // 6:
         raise ValueError("graph6 payload length does not match its order header")
-    bits = [(code >> shift) & 1 for code in codes[1:] for shift in range(5, -1, -1)]
-    if any(bits[bit_count:]):
+
+    from jacobian.math.graphs import _networkx
+
+    graph = _networkx.graph_from_graph6(value)
+    if graph.number_of_nodes() != order:
+        raise ValueError("graph6 payload is malformed or uses an extended header")
+    if _networkx.graph6_canonical_bytes(graph) != value.encode("ascii"):
         raise ValueError("unused graph6 padding bits must be zero")
-    pairs = [(first, second) for second in range(1, order) for first in range(second)]
     edges = tuple(
         Graph6Edge(first=first, second=second)
         for first, second in sorted(
-            pair for pair, bit in zip(pairs, bits, strict=False) if bit
+            (min(left, right), max(left, right)) for left, right in graph.edges
         )
     )
-    degrees = [0] * order
-    for edge in edges:
-        degrees[edge.first] += 1
-        degrees[edge.second] += 1
+    degrees = tuple(int(graph.degree(vertex)) for vertex in range(order))
     digest_payload = {
         "order": order,
         "edges": [[edge.first, edge.second] for edge in edges],
@@ -83,7 +84,7 @@ def decode_graph6(encoded: str) -> Graph6DecodeValue:
         graph6=value,
         order=order,
         edges=edges,
-        degrees=tuple(degrees),
+        degrees=degrees,
         graph_digest="sha256:" + sha256(canonicalize_json(digest_payload)).hexdigest(),
     )
 

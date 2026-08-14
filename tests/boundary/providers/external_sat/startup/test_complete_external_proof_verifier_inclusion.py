@@ -29,11 +29,11 @@ def test_complete_portfolio_includes_authorized_external_proof_verifiers(
         fake_carcara(tmp_path, "print('valid')\nraise SystemExit(0)")
     )
     monkeypatch.setattr(
-        "jacobian.catalog_build.drat_trim_provider_runtime",
+        "jacobian.providers.external_solver_runtime.drat_trim_provider_runtime",
         lambda *_args, **_kwargs: drat_trim,
     )
     monkeypatch.setattr(
-        "jacobian.catalog_build.carcara_provider_runtime",
+        "jacobian.providers.external_solver_runtime.carcara_provider_runtime",
         lambda *_args, **_kwargs: carcara,
     )
 

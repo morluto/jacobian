@@ -428,6 +428,22 @@ class CheckerRegistry:
         # Executable bytes are measured at authorization and in the bounded worker.
         return registration
 
+    def require_catalog_binding(
+        self,
+        checker_id: str,
+        *,
+        implementation_digest: str,
+    ) -> CheckerRegistration:
+        """Resolve persisted catalog authority without measuring checker source."""
+
+        registration = self.require_active(checker_id)
+        if registration.implementation_digest != implementation_digest:
+            raise CheckerExecutableChangedError(
+                "The active catalog does not match the authorized checker. "
+                "Run `jacobian update`, restart the server, and retry."
+            )
+        return registration
+
     def require_compatible(
         self,
         checker_id: str,

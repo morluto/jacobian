@@ -16,6 +16,7 @@ from jacobian.operation_catalog import (
     OperationCatalogStore,
 )
 from jacobian.operation_service import OperationPolicy
+from jacobian.registry import CheckerRegistry
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -59,6 +60,36 @@ def _commit(store: OperationCatalogStore) -> int:
         checker_bindings={},
     )
     return result.revision
+
+
+def _commit_with_checker(store: OperationCatalogStore) -> tuple[str, str]:
+    with ArtifactRepository(store.database_path.parent) as repository:
+        checker = CheckerRegistry(repository).authorize(
+            name="reject-all-v1",
+            entrypoint="jacobian_checkers.reject:check",
+            evidence_kind="WITNESS",
+            format_id="example.witness",
+            format_version="1",
+            claim_schema_uris=("artifact://sha256/" + "a" * 64,),
+            semantics_uris=("artifact://sha256/" + "a" * 64,),
+            candidate_schema_uris=("artifact://sha256/" + "a" * 64,),
+        )
+    store.commit(
+        package_version="0.13.0",
+        provider_inventory_digest="sha256:" + "b" * 64,
+        checker_binding_digest="sha256:" + "c" * 64,
+        entries=(
+            _entry("integer.gcd.compute", "Greatest common divisor"),
+            _entry("matrix.rank.compute", "Matrix rank"),
+        ),
+        checker_bindings={
+            "matrix.rank.compute": (
+                checker.checker_id,
+                checker.implementation_digest,
+            )
+        },
+    )
+    return checker.checker_id, checker.implementation_digest
 
 
 def test_catalog_search_uses_cards_when_descriptors_are_not_materializable(
@@ -128,6 +159,23 @@ def test_catalog_reads_one_exact_declaration_locator(tmp_path: Path) -> None:
     assert record.module == "jacobian.domains.synthetic.domain_declarations"
     assert record.declaration_digest == "sha256:" + "a" * 64
     assert catalog.declaration_record("missing.operation") is None
+
+
+def test_catalog_loads_the_selected_checker_binding_index(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    checker_id, implementation_digest = _commit_with_checker(store)
+    catalog = OperationCatalog(
+        tmp_path / "metadata.sqlite3",
+        OperationPolicy(),
+        expected_package_version="0.13.0",
+    )
+
+    binding = catalog.checker_binding("matrix.rank.compute")
+
+    assert binding is not None
+    assert binding.checker_id == checker_id
+    assert binding.manifest_digest == implementation_digest
+    assert catalog.checker_binding("missing.operation") is None
 
 
 def test_failed_catalog_commit_leaves_previous_revision_active(tmp_path: Path) -> None:

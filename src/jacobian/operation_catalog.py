@@ -95,6 +95,15 @@ class OperationDeclarationRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationCheckerBinding:
+    """Trusted checker identity selected with one immutable catalog revision."""
+
+    operation_id: str
+    checker_id: str
+    manifest_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class CatalogBuildResult:
     revision: int
     operation_count: int
@@ -209,7 +218,9 @@ class OperationCatalog:
     ) -> None:
         self.database_path = database_path
         self.policy = policy
-        self.header, self._cards = self._load_active(expected_package_version)
+        self.header, self._cards, self._checker_bindings = self._load_active(
+            expected_package_version
+        )
 
     def _connect_read_only(self) -> sqlite3.Connection:
         connection = sqlite3.connect(
@@ -246,9 +257,18 @@ class OperationCatalog:
             declaration_digest=str(row["declaration_digest"]),
         )
 
+    def checker_binding(self, operation_id: str) -> OperationCheckerBinding | None:
+        """Return the persisted checker authority for one operation, if any."""
+
+        return self._checker_bindings.get(operation_id)
+
     def _load_active(
         self, expected_package_version: str
-    ) -> tuple[CatalogHeader, tuple[OperationSearchCard, ...]]:
+    ) -> tuple[
+        CatalogHeader,
+        tuple[OperationSearchCard, ...],
+        dict[str, OperationCheckerBinding],
+    ]:
         try:
             with self._connect_read_only() as connection:
                 row = connection.execute(
@@ -280,6 +300,22 @@ class OperationCatalog:
                         (int(row["revision"]),),
                     )
                 )
+                checker_bindings = {
+                    str(item["operation_id"]): OperationCheckerBinding(
+                        operation_id=str(item["operation_id"]),
+                        checker_id=str(item["checker_id"]),
+                        manifest_digest=str(item["manifest_digest"]),
+                    )
+                    for item in connection.execute(
+                        """
+                        SELECT operation_id, checker_id, manifest_digest
+                        FROM operation_checker_bindings
+                        WHERE snapshot_revision = ?
+                        ORDER BY operation_id
+                        """,
+                        (int(row["revision"]),),
+                    )
+                }
         except sqlite3.DatabaseError as exc:
             raise OperationCatalogError(
                 "STATE_UPDATE_REQUIRED: catalog state is corrupt; run `jacobian update`"
@@ -298,6 +334,7 @@ class OperationCatalog:
                 ),
             ),
             cards,
+            checker_bindings,
         )
 
     def inspect(self, operation_id: str) -> OperationDescriptor | None:
@@ -453,6 +490,7 @@ __all__ = [
     "OperationCatalog",
     "OperationCatalogError",
     "OperationCatalogStore",
+    "OperationCheckerBinding",
     "OperationDeclarationRecord",
     "OperationSearchCard",
     "declaration_digest",

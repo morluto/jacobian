@@ -18,6 +18,7 @@ from jacobian.contracts.operations import (
 from jacobian.provider_runtime import python_distribution_provider_runtime
 from jacobian.registry import (
     CheckerCompatibilityError,
+    CheckerExecutableChangedError,
     CheckerNotFoundError,
     CheckerRegistry,
     CheckerRegistryError,
@@ -93,6 +94,35 @@ def test_revoked_checker_cannot_authorize_new_verification(tmp_path: Path) -> No
         "AUTHORIZED",
         "REVOKED",
     ]
+
+
+def test_catalog_binding_uses_persisted_checker_identity_without_remeasurement(
+    tmp_path: Path,
+) -> None:
+    registry = CheckerRegistry(ArtifactRepository(tmp_path))
+    checker = registry.authorize(
+        name="reject-all-v1",
+        entrypoint="jacobian_checkers.reject:check",
+        evidence_kind="WITNESS",
+        format_id="example.witness",
+        format_version="1",
+        claim_schema_uris=(CLAIM_SCHEMA_A,),
+        semantics_uris=(CLAIM_SCHEMA_A,),
+        candidate_schema_uris=(CLAIM_SCHEMA_A,),
+    )
+
+    assert (
+        registry.require_catalog_binding(
+            checker.checker_id,
+            implementation_digest=checker.implementation_digest,
+        )
+        == checker
+    )
+    with pytest.raises(CheckerExecutableChangedError, match="jacobian update"):
+        registry.require_catalog_binding(
+            checker.checker_id,
+            implementation_digest="sha256:" + "0" * 64,
+        )
 
 
 def test_checker_policy_lock_must_precede_store_transaction(tmp_path: Path) -> None:

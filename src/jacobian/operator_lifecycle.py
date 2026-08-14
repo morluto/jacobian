@@ -25,6 +25,7 @@ from jacobian.persistence.migrations import (
 )
 from jacobian.persistence.state_health import StateHealth, inspect_state_health
 from jacobian.portfolio.builtin import load_builtin_operation_modules
+from jacobian.registry import CheckerRegistry
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 
 
@@ -117,7 +118,7 @@ def _build_catalog(
             for descriptor in descriptors
             if descriptor.provider_runtime is not None
         )
-        checker_bindings = _checker_bindings(descriptors)
+        checker_bindings = _checker_bindings(runtime.core.checkers, descriptors)
         declarations = {
             operation.operation_id: (module_name, operation)
             for module_name, operations, _checker_declarations in (
@@ -175,6 +176,7 @@ def _build_catalog(
 
 
 def _checker_bindings(
+    checkers: CheckerRegistry,
     descriptors: tuple[OperationDescriptor, ...],
 ) -> dict[str, tuple[str, str]]:
     bindings: dict[str, tuple[str, str]] = {}
@@ -183,20 +185,12 @@ def _checker_bindings(
         if runtime is None or not runtime.checker_ids:
             continue
         checker_id = str(runtime.checker_ids[0])
+        registration = checkers.require_active(checker_id)
         bindings[descriptor.operation_id] = (
             checker_id,
-            _checker_manifest_digest(checker_id, descriptor),
+            registration.implementation_digest,
         )
     return bindings
-
-
-def _checker_manifest_digest(checker_id: str, descriptor: OperationDescriptor) -> str:
-    runtime = descriptor.provider_runtime
-    if runtime is not None and runtime.digest is not None:
-        return runtime.digest
-    return declaration_digest(
-        {"checker_id": checker_id, "operation_id": descriptor.operation_id}
-    )
 
 
 def active_catalog_revision(state_dir: Path) -> int | None:

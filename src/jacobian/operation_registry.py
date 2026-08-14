@@ -21,6 +21,7 @@ from jacobian.polytope import PolytopeService
 from jacobian.portfolio.builtin import load_builtin_operation_module
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactService
+from jacobian.sat_smt.smt import SmtArtifactService
 from jacobian.verification.service import VerificationService
 
 _SELECTED_GRAPH_OPERATIONS = frozenset(
@@ -54,6 +55,8 @@ _SELECTED_DIRECT_OPERATIONS = frozenset(
         "sat.cnf.materialize",
         "sat.model.verify",
         "sat.unsat_proof.verify",
+        "sat.lrat.verify",
+        "smt.unsat_proof.verify",
     }
 )
 _SELECTED_RESOURCE_OPERATIONS = (
@@ -81,6 +84,7 @@ class OperationRegistry:
         polynomial_expressions: PolynomialExpressionArtifactService,
         polytope: PolytopeService,
         sat: SatArtifactService,
+        smt: SmtArtifactService,
     ) -> None:
         self.catalog = catalog
         self.binder = binder
@@ -89,6 +93,7 @@ class OperationRegistry:
         self.polynomial_expressions = polynomial_expressions
         self.polytope = polytope
         self.sat = sat
+        self.smt = smt
         self._adapters: dict[str, OperationAdapter[Any]] = {}
 
     def resolve(self, operation_id: str) -> OperationAdapter[Any]:
@@ -264,16 +269,27 @@ class OperationRegistry:
                 self.checkers,
                 self.catalog,
             )
-        elif operation_id == "sat.cnf.materialize":
+        elif operation_id.startswith(("sat.", "smt.")):
+            adapter = self._bind_selected_sat_operation(operation_id, descriptor)
+        else:
+            adapter = None
+        return adapter
+
+    def _bind_selected_sat_operation(
+        self,
+        operation_id: str,
+        descriptor: OperationDescriptor,
+    ) -> OperationAdapter[Any] | None:
+        if operation_id == "sat.cnf.materialize":
             from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
 
-            adapter = SatCnfMaterializationAdapter(self.sat)
-        elif operation_id in {"sat.model.verify", "sat.unsat_proof.verify"}:
+            return SatCnfMaterializationAdapter(self.sat)
+        if operation_id in {"sat.model.verify", "sat.unsat_proof.verify"}:
             from jacobian.sat_smt.sat_operations import (
                 bind_selected_sat_verification,
             )
 
-            adapter = bind_selected_sat_verification(
+            return bind_selected_sat_verification(
                 operation_id,
                 descriptor,
                 self.binder.store,
@@ -284,9 +300,34 @@ class OperationRegistry:
                 self.checkers,
                 self.catalog,
             )
-        else:
-            adapter = None
-        return adapter
+        if operation_id == "sat.lrat.verify":
+            from jacobian.sat_smt.sat_lrat import bind_selected_sat_lrat_verifier
+
+            return bind_selected_sat_lrat_verifier(
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.sat,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        if operation_id == "smt.unsat_proof.verify":
+            from jacobian.sat_smt.smt_operations import (
+                bind_selected_smt_unsat_proof_checker,
+            )
+
+            return bind_selected_smt_unsat_proof_checker(
+                descriptor,
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.smt,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        return None
 
     def _resolve_exact_verifier(
         self,

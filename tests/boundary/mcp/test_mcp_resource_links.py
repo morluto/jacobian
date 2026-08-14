@@ -85,6 +85,8 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
             for operation_id, payload in (
                 ("sat.model.verify", {}),
                 ("sat.unsat_proof.verify", {}),
+                ("sat.lrat.verify", {}),
+                ("smt.unsat_proof.verify", {}),
             ):
                 invalid_verification = await client.call_tool(
                     "math.run",

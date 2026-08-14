@@ -32,6 +32,7 @@ from jacobian.contracts.sat import (
     SatLratVerificationRequest,
 )
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -102,6 +103,49 @@ def install_sat_lrat_verifier(
             installation=installation,
         ),
         installation,
+    )
+
+
+def bind_selected_sat_lrat_verifier(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    sat: SatArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[SatLratVerificationRequest]:
+    """Bind LRAT replay from passive schemas and persisted checker authority."""
+
+    operation_id = "sat.lrat.verify"
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    installation = SatLratInstallation(
+        proof_schema_uri=schemas.register_model(
+            name="jacobian.sat-lrat-proof",
+            version="1",
+            model=SatLratProofArtifact,
+        ),
+        certificate_schema_uri=schemas.register_model(
+            name="jacobian.certificate-envelope",
+            version="1",
+            model=CertificateEnvelope,
+        ),
+        checker_id=binding.checker_id,
+    )
+    return SatLratVerificationAdapter(
+        store=store,
+        artifacts=artifacts,
+        sat=sat,
+        verification=verification,
+        installation=installation,
     )
 
 

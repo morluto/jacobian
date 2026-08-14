@@ -31,6 +31,7 @@ from jacobian.contracts.smt import (
     SmtUnsatProofVerificationRequest,
 )
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -110,6 +111,45 @@ def install_smt_unsat_proof_checker(
             runtime=runtime,
         )
     return adapter, installation
+
+
+def bind_selected_smt_unsat_proof_checker(
+    descriptor: OperationDescriptor,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    smt: SmtArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[SmtUnsatProofVerificationRequest]:
+    """Bind SMT proof replay from persisted provider and checker observations."""
+
+    operation_id = "smt.unsat_proof.verify"
+    binding = catalog.checker_binding(operation_id)
+    if binding is None or descriptor.provider_runtime is None:
+        raise OperationCatalogError(
+            f"checker binding is incomplete; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    return SmtUnsatProofVerificationAdapter(
+        store=store,
+        artifacts=artifacts,
+        smt=smt,
+        verification=verification,
+        installation=SmtUnsatProofCheckerInstallation(
+            certificate_schema_uri=schemas.register_model(
+                name="jacobian.certificate-envelope",
+                version="1",
+                model=CertificateEnvelope,
+            ),
+            checker_id=binding.checker_id,
+        ),
+        runtime=descriptor.provider_runtime,
+    )
 
 
 class SmtUnsatProofVerificationAdapter:

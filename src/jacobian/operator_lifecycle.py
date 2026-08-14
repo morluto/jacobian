@@ -7,7 +7,6 @@ from enum import StrEnum
 from pathlib import Path
 
 from jacobian import __version__
-from jacobian.catalog_compiler import compile_operation_catalog
 from jacobian.operation_catalog import (
     CatalogBuildResult,
     OperationCatalog,
@@ -95,6 +94,8 @@ def _build_catalog(
     state_dir: Path,
     checker_authorization: CheckerAuthorization,
 ) -> CatalogBuildResult:
+    from jacobian.catalog_compiler import compile_operation_catalog
+
     return compile_operation_catalog(
         state_dir,
         authorize_bundled_checkers=(

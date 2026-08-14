@@ -31,7 +31,7 @@ from jacobian.contracts.operations import (  # noqa: E402
 from jacobian.operation_catalog import (  # noqa: E402
     OperationCatalog as CompiledOperationCatalog,
 )
-from jacobian.operation_service import OperationPolicy  # noqa: E402
+from jacobian.operation_visibility import OperationVisibilityPolicy  # noqa: E402
 from jacobian.persistence.migrations import (  # noqa: E402
     CURRENT_STATE_FORMAT_REVISION,
     STATE_MIGRATIONS,
@@ -193,7 +193,7 @@ def inspect_installation(
 
     compiled_catalog = CompiledOperationCatalog(
         state_dir / "metadata.sqlite3",
-        OperationPolicy(),
+        OperationVisibilityPolicy(),
         expected_package_version=jacobian.__version__,
     )
     catalog = compiled_catalog.snapshot()

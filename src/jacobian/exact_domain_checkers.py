@@ -38,8 +38,9 @@ from jacobian.contracts.results import (
     ExecutionStatus,
 )
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
-from jacobian.operation_binding import BoundOperationGroup
+from jacobian.operation_binding import BoundOperationGroup, OperationBinder
 from jacobian.operation_bindings import DurablePublication
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
 from jacobian.operation_errors import OperationError, OperationInvocationError
 from jacobian.operation_ports import InputPort
@@ -341,6 +342,9 @@ def install_exact_domain_verification(
             installation,
             result_models[declaration.operation_id],
         )
+        provider_runtime = installation.provider_runtimes[
+            installation.declaration_providers[declaration.operation_id]
+        ].model_copy(update={"checker_ids": (installed_declaration.checker_id,)})
         adapters.append(
             ExactComputedVerificationAdapter(
                 declaration=installed_declaration,
@@ -350,9 +354,7 @@ def install_exact_domain_verification(
                 values=values,
                 verification=verification,
                 witness_schema_uri=witness_schema_uri,
-                provider_runtime=installation.provider_runtimes[
-                    installation.declaration_providers[declaration.operation_id]
-                ],
+                provider_runtime=provider_runtime,
                 stored_result_input=declaration.operation_id in stored_producers,
                 candidate_value_type=referenceable_results.get(
                     declaration.operation_id
@@ -360,6 +362,92 @@ def install_exact_domain_verification(
             )
         )
     return tuple(adapters), installation
+
+
+def bind_selected_exact_verification(
+    *,
+    catalog: OperationCatalog,
+    operation_id: str,
+    operations: OperationDeclarations,
+    declarations: tuple[ExactReplayCheckerDeclaration, ...],
+    binder: OperationBinder,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+) -> OperationAdapter[Any]:
+    """Bind one catalog-selected verifier without probing or measuring providers."""
+
+    matches = tuple(
+        declaration
+        for declaration in declarations
+        if declaration.verification_operation_id == operation_id
+    )
+    if len(matches) != 1:
+        raise OperationCatalogError(
+            f"exact verifier locator did not resolve exactly once: {operation_id}"
+        )
+    declaration = matches[0]
+    producers = tuple(
+        operation
+        for operation in operations
+        if operation.operation_id == declaration.operation_id
+    )
+    if len(producers) != 1:
+        raise OperationCatalogError(
+            f"exact verifier producer did not resolve exactly once: {operation_id}"
+        )
+    descriptor = catalog.inspect(operation_id)
+    binding = catalog.checker_binding(operation_id)
+    if descriptor is None or binding is None or descriptor.provider_runtime is None:
+        raise OperationCatalogError(
+            f"exact verifier catalog binding is incomplete; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    if binding.checker_id not in {
+        str(checker_id) for checker_id in descriptor.provider_runtime.checker_ids
+    }:
+        raise OperationCatalogError(
+            f"exact verifier descriptor binding changed; run `jacobian update`: {operation_id}"
+        )
+
+    producer = producers[0]
+    bound = binder.bind(operations)
+    installed = _InstalledDeclaration(
+        declaration=declaration,
+        result_model=producer.result_type,
+        input_schema_uri=bound.input_schema_uris[producer.request_type],
+        result_schema_uri=bound.result_schema_uris[producer.operation_id],
+        semantics_uri=bound.semantics_uri,
+        checker_id=binding.checker_id,
+    )
+    witness_schema_uri = binder.schemas.register_model(
+        name="jacobian.witness-envelope",
+        version="1",
+        model=WitnessEnvelope,
+    )
+    stored_result_input = isinstance(producer.publication, DurablePublication)
+    candidate_value_type = (
+        producer.result_type
+        if not stored_result_input
+        and any(
+            port.value_type is producer.result_type for port in producer.output_ports
+        )
+        else None
+    )
+    return ExactComputedVerificationAdapter(
+        declaration=installed,
+        store=binder.store,
+        schemas=binder.schemas,
+        artifacts=binder.artifacts,
+        values=binder.values,
+        verification=verification,
+        witness_schema_uri=witness_schema_uri,
+        provider_runtime=descriptor.provider_runtime,
+        stored_result_input=stored_result_input,
+        candidate_value_type=candidate_value_type,
+    )
 
 
 def _available_declaration_groups(

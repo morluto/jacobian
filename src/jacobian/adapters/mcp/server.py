@@ -131,9 +131,14 @@ class _LazyLocalRuntime:
                     operation_policy=self.operation_policy,
                 ),
             )
-            registry = OperationRegistry(self.catalog, core.binder)
-            core.operations = OperationDispatcher(self.catalog, registry)
             services = build_runtime_services(core)
+            registry = OperationRegistry(
+                self.catalog,
+                core.binder,
+                services.verification,
+                core.checkers,
+            )
+            core.operations = OperationDispatcher(self.catalog, registry)
             self._selected_runtime = JacobianRuntime(
                 core,
                 services,

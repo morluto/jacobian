@@ -4,22 +4,37 @@ from __future__ import annotations
 
 from typing import Any
 
+from jacobian.checker_operations import ExactReplayCheckerDeclaration
+from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_catalog import (
     OperationCatalog,
     OperationCatalogError,
+    OperationDeclarationRecord,
+    exact_checker_declaration_digest,
     operation_declaration_digest,
 )
+from jacobian.operation_declarations import OperationDeclarations
 from jacobian.portfolio.builtin import load_builtin_operation_module
+from jacobian.registry import CheckerRegistry
+from jacobian.verification.service import VerificationService
 
 
 class OperationRegistry:
     """Import, verify, and cache only selected built-in declarations."""
 
-    def __init__(self, catalog: OperationCatalog, binder: OperationBinder) -> None:
+    def __init__(
+        self,
+        catalog: OperationCatalog,
+        binder: OperationBinder,
+        verification: VerificationService,
+        checkers: CheckerRegistry,
+    ) -> None:
         self.catalog = catalog
         self.binder = binder
+        self.verification = verification
+        self.checkers = checkers
         self._adapters: dict[str, OperationAdapter[Any]] = {}
 
     def resolve(self, operation_id: str) -> OperationAdapter[Any]:
@@ -31,8 +46,8 @@ class OperationRegistry:
         if descriptor is None or record is None:
             raise OperationCatalogError(f"unknown or hidden operation: {operation_id}")
         try:
-            _module_name, operations, _checkers = load_builtin_operation_module(
-                record.module
+            _module_name, operations, checker_declarations = (
+                load_builtin_operation_module(record.module)
             )
         except ValueError as exc:
             raise OperationCatalogError(
@@ -43,6 +58,17 @@ class OperationRegistry:
             for operation in operations
             if operation.operation_id == operation_id
         )
+        if not matches and any(
+            declaration.verification_operation_id == operation_id
+            for declaration in checker_declarations
+        ):
+            return self._resolve_exact_verifier(
+                operation_id,
+                descriptor,
+                record,
+                operations,
+                checker_declarations,
+            )
         if len(matches) != 1:
             raise OperationCatalogError(
                 f"operation locator did not resolve exactly once: {operation_id}"
@@ -56,7 +82,52 @@ class OperationRegistry:
             raise OperationCatalogError(
                 f"operation declaration changed; run `jacobian update`: {operation_id}"
             )
-        adapter = self.binder.bind((declaration,)).adapters[0]
+        bound = self.binder.bind(operations)
+        adapter = next(
+            candidate
+            for candidate in bound.adapters
+            if candidate.descriptor.operation_id == operation_id
+        )
+        if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
+            mode="json"
+        ):
+            raise OperationCatalogError(
+                f"operation schema changed; run `jacobian update`: {operation_id}"
+            )
+        self._adapters[operation_id] = adapter
+        return adapter
+
+    def _resolve_exact_verifier(
+        self,
+        operation_id: str,
+        descriptor: OperationDescriptor,
+        record: OperationDeclarationRecord,
+        operations: OperationDeclarations,
+        checker_declarations: tuple[ExactReplayCheckerDeclaration, ...],
+    ) -> OperationAdapter[Any]:
+        from jacobian.exact_domain_checkers import bind_selected_exact_verification
+
+        checker_declaration = next(
+            declaration
+            for declaration in checker_declarations
+            if declaration.verification_operation_id == operation_id
+        )
+        if (
+            exact_checker_declaration_digest(checker_declaration, descriptor)
+            != record.declaration_digest
+        ):
+            raise OperationCatalogError(
+                f"operation declaration changed; run `jacobian update`: {operation_id}"
+            )
+        adapter = bind_selected_exact_verification(
+            catalog=self.catalog,
+            operation_id=operation_id,
+            operations=operations,
+            declarations=checker_declarations,
+            binder=self.binder,
+            verification=self.verification,
+            checkers=self.checkers,
+        )
         if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
             mode="json"
         ):

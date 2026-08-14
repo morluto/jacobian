@@ -15,6 +15,7 @@ from jacobian.operation_catalog import (
     OperationCatalogError,
     OperationCatalogStore,
     declaration_digest,
+    exact_checker_declaration_digest,
     operation_declaration_digest,
 )
 from jacobian.operation_service import OperationPolicy
@@ -119,12 +120,17 @@ def _build_catalog(
             if descriptor.provider_runtime is not None
         )
         checker_bindings = _checker_bindings(runtime.core.checkers, descriptors)
+        loaded_modules = load_builtin_operation_modules()
         declarations = {
             operation.operation_id: (module_name, operation)
-            for module_name, operations, _checker_declarations in (
-                load_builtin_operation_modules()
-            )
+            for module_name, operations, _checker_declarations in loaded_modules
             for operation in operations
+        }
+        exact_verifiers = {
+            declaration.verification_operation_id: (module_name, declaration)
+            for module_name, _operations, checker_declarations in loaded_modules
+            for declaration in checker_declarations
+            if declaration.verification_operation_id is not None
         }
         entries = tuple(
             CompiledCatalogEntry(
@@ -132,6 +138,8 @@ def _build_catalog(
                 declaration_module=(
                     declarations[descriptor.operation_id][0]
                     if descriptor.operation_id in declarations
+                    else exact_verifiers[descriptor.operation_id][0]
+                    if descriptor.operation_id in exact_verifiers
                     else type(
                         runtime.core.operations._adapters[descriptor.operation_id]
                     ).__module__
@@ -141,6 +149,11 @@ def _build_catalog(
                         declarations[descriptor.operation_id][1]
                     )
                     if descriptor.operation_id in declarations
+                    else exact_checker_declaration_digest(
+                        exact_verifiers[descriptor.operation_id][1],
+                        descriptor,
+                    )
+                    if descriptor.operation_id in exact_verifiers
                     else declaration_digest(
                         {
                             "operation_id": descriptor.operation_id,

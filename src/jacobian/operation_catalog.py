@@ -6,7 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.contracts.operations import (
@@ -25,6 +25,9 @@ from jacobian.operation_discovery import (
 )
 from jacobian.operation_errors import OperationDiscoveryCursorError
 from jacobian.schema_registry import model_schema
+
+if TYPE_CHECKING:
+    from jacobian.checker_operations import ExactReplayCheckerDeclaration
 
 
 class OperationCatalogError(RuntimeError):
@@ -445,6 +448,23 @@ def operation_declaration_digest(
     )
 
 
+def exact_checker_declaration_digest(
+    declaration: ExactReplayCheckerDeclaration,
+    descriptor: OperationDescriptor,
+) -> str:
+    """Bind one generated verifier descriptor to its pure checker declaration."""
+
+    return declaration_digest(
+        {
+            "operation_id": descriptor.operation_id,
+            "producer_operation_id": declaration.operation_id,
+            "version": descriptor.version,
+            "input_schema": descriptor.input_schema,
+            "output_schema": descriptor.output_schema,
+        }
+    )
+
+
 def _decode_card(value: bytes | str) -> OperationSearchCard:
     decoded = cast(dict[str, Any], loads_strict_json(value))
     return OperationSearchCard(
@@ -494,5 +514,6 @@ __all__ = [
     "OperationDeclarationRecord",
     "OperationSearchCard",
     "declaration_digest",
+    "exact_checker_declaration_digest",
     "operation_declaration_digest",
 ]

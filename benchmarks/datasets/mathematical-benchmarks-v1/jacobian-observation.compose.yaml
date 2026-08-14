@@ -11,6 +11,7 @@ services:
     command:
       - |
         mkdir -p /logs/jacobian
+        uv run --no-sync jacobian --state-dir /state init
         exec uv run --no-sync jacobian-remote-mcp "$@" > /logs/jacobian/mcp.log 2>&1
       - jacobian-remote-mcp
       - --transport
@@ -20,6 +21,10 @@ services:
       - --port
       - "8000"
       - --allow-anonymous
+      - --state-dir
+      - /state
+    volumes:
+      - jacobian-state:/state
     healthcheck:
       test:
         - CMD
@@ -29,3 +34,6 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
+      start_period: 120s
+volumes:
+  jacobian-state: {}

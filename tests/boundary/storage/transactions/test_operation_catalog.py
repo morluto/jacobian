@@ -206,6 +206,16 @@ def test_failed_catalog_commit_leaves_previous_revision_active(tmp_path: Path) -
 
 
 def test_catalog_requires_init_or_update_with_exact_commands(tmp_path: Path) -> None:
+    with pytest.raises(
+        OperationCatalogError,
+        match=r"STATE_INITIALIZATION_REQUIRED: run `jacobian init`",
+    ):
+        OperationCatalog(
+            tmp_path / "missing" / "metadata.sqlite3",
+            OperationPolicy(),
+            expected_package_version="0.13.0",
+        )
+
     store = _store(tmp_path)
     with pytest.raises(OperationCatalogError, match="jacobian init"):
         OperationCatalog(

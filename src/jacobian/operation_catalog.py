@@ -272,6 +272,15 @@ class OperationCatalog:
         tuple[OperationSearchCard, ...],
         dict[str, OperationCheckerBinding],
     ]:
+        if not self.database_path.exists():
+            raise OperationCatalogError(
+                "STATE_INITIALIZATION_REQUIRED: run `jacobian init`"
+            )
+        if not self.database_path.is_file():
+            raise OperationCatalogError(
+                "STATE_UPDATE_REQUIRED: catalog state is unreadable; "
+                "run `jacobian update`"
+            )
         try:
             with self._connect_read_only() as connection:
                 row = connection.execute(

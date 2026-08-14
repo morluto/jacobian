@@ -8,6 +8,7 @@ import json
 import os
 import pwd
 import stat
+from collections.abc import Iterator
 from pathlib import Path
 
 from jacobian.adapters.mcp.remote import load_static_token_file
@@ -112,21 +113,40 @@ def _require_file_access(path: Path, *, label: str) -> None:
         )
 
 
+def _require_readable_file(path: Path, *, label: str) -> None:
+    metadata = _existing_path_stat(path, label=label)
+    if metadata is None or not stat.S_ISREG(metadata.st_mode):
+        return
+    if not os.access(path, os.R_OK, effective_ids=True):
+        raise PermissionError(f"{label} is not readable by the service identity")
+
+
+def _iter_directory(path: Path, *, label: str) -> Iterator[Path]:
+    try:
+        with os.scandir(path) as entries:
+            for entry in entries:
+                yield Path(entry.path)
+    except OSError as exc:
+        raise PermissionError(f"{label} is not accessible: {exc}") from exc
+
+
 def _require_blob_prefix_access(blob_root: Path, *, tenant_key: str) -> None:
     if not blob_root.is_dir():
         return
-    try:
-        prefixes = tuple(blob_root.iterdir())
-    except OSError as exc:
-        raise PermissionError(
-            f"tenant blob root {tenant_key} is not accessible: {exc}"
-        ) from exc
-    for prefix in prefixes:
+    for prefix in _iter_directory(blob_root, label=f"tenant blob root {tenant_key}"):
         if prefix.is_dir() and not prefix.is_symlink():
             _require_directory_access(
                 prefix,
                 label=f"tenant blob prefix {tenant_key} ({prefix.name})",
             )
+            for blob in _iter_directory(
+                prefix, label=f"tenant blob prefix {tenant_key}"
+            ):
+                if not blob.is_symlink():
+                    _require_readable_file(
+                        blob,
+                        label=(f"tenant blob file {tenant_key} ({prefix.name} prefix)"),
+                    )
 
 
 def _require_existing_tenant_access(state_dir: Path, *, tenant_key: str) -> None:

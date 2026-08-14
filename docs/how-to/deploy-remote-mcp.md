@@ -183,20 +183,32 @@ VPS must preserve them. The maintained authenticated unit uses
 5. On the destination, restore state ownership to `jacobian:jacobian`. Keep
    `/etc/jacobian-mcp` owned by root with mode `0700` and its token file at mode
    `0600`. Rebuildable `cache/lean-declarations` data may be omitted.
-6. Rerun the installer in the intended final mode, add its ingress options, and
-   omit `--skip-smoke`. Its candidate-state preflight reads the token mapping
-   while privileged, drops permanently to the `jacobian` service identity, and
-   then checks every selected tenant. In that identity it verifies that SQLite
-   and its runtime files are readable and writable, and that the tenant,
-   staging, blob, and existing blob-prefix directories are readable, writable,
-   and traversable. It must report `MISSING`, `COMPATIBLE`, or a supported
-   `MIGRATION_PENDING` state before activation. Do not bypass an `UNSUPPORTED`,
-   `INCOMPATIBLE`, `CORRUPT`, or `UNREADABLE` result; an access failure means
-   destination ownership or mode restoration is incomplete.
-7. Verify `deployment://identity`, the two-tool surface, catalog policy, required
-   capabilities, and any provider-specific smoke before switching DNS or client
-   configuration. Keep the source VPS and its unchanged state available until
-   the destination has passed these checks.
+6. Choose the final activation sequence for the ingress mode while the source
+   service remains stopped:
+
+   - For `--mode domain`, run the final domain-mode command once with
+     `--skip-smoke` after state restoration. Switch DNS to the destination, wait
+     until the domain resolves to it from the destination host, then rerun the
+     same command without `--skip-smoke`. This lets Caddy establish the
+     destination endpoint before the revision-bound smoke follows the public
+     hostname.
+   - For `--mode tailscale`, run the final command without `--skip-smoke`, then
+     update clients if the destination node has a different Tailscale DNS name.
+   - For `--mode local`, rerun the final local command without `--skip-smoke`.
+
+   The candidate-state preflight reads the token mapping while privileged,
+   drops permanently to the `jacobian` service identity, and then checks every
+   selected tenant. In that identity it verifies that SQLite and its runtime
+   files are readable and writable, existing blob files are readable, and the
+   tenant, staging, blob, and existing blob-prefix directories are readable,
+   writable, and traversable. It must report `MISSING`, `COMPATIBLE`, or a
+   supported `MIGRATION_PENDING` state before activation. Do not bypass an
+   `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`, or `UNREADABLE` result; an access
+   failure means destination ownership or mode restoration is incomplete.
+7. Verify `deployment://identity`, the two-tool surface, catalog policy,
+   required capabilities, and any provider-specific smoke before updating
+   remaining client configuration. Keep the source VPS and its unchanged state
+   available, but stopped, until the destination has passed these checks.
 
 Current Jacobian writes state revision 12 and accepts revision 11 for an
 in-place migration. Earlier revisions have no direct import bridge; retain the

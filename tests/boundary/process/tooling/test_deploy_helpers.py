@@ -234,6 +234,36 @@ def test_state_preflight_rejects_an_unwritable_runtime_directory(
         _require_probe_access(tmp_path, (tenant_id,))
 
 
+def test_state_preflight_rejects_an_unreadable_existing_blob(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = "unreadable-blob-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state):
+        pass
+    blob = state / "blobs" / "sha256" / "ab" / ("0" * 62)
+    blob.parent.mkdir()
+    blob.write_bytes(b"restored artifact")
+    original_access = os.access
+
+    def guarded_access(
+        path: os.PathLike[str],
+        mode: int,
+        *,
+        effective_ids: bool = False,
+    ) -> bool:
+        if Path(path) == blob and mode & os.R_OK:
+            return False
+        return original_access(path, mode, effective_ids=effective_ids)
+
+    monkeypatch.setattr("deploy.preflight_state.os.access", guarded_access)
+
+    with pytest.raises(PermissionError, match=r"tenant blob file.*not readable"):
+        _require_probe_access(tmp_path, (tenant_id,))
+
+
 def test_state_preflight_requires_a_missing_tenant_to_be_creatable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

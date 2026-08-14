@@ -9,7 +9,14 @@ working beyond a small local change.
 
 ## What we are building
 
-Jacobian is a **stateless MCP server for atomic mathematics**. It exposes two
+Jacobian gives agents a reliable computational vocabulary for higher
+mathematics. An agent can discover and compose small typed operations while it
+investigates conjectures, builds examples, calculates invariants, and checks
+bounded mathematical claims. Jacobian supplies the mathematical primitives; the
+agent remains responsible for the proof strategy, decomposition, and decision
+to stop.
+
+It is a **stateless MCP server for atomic, composable mathematics** with two
 tools:
 
 | Agent verb | MCP tool | Meaning |
@@ -17,7 +24,6 @@ tools:
 | Search | `math.find` | Find or inspect an operation. |
 | Execute | `math.run` | Run one operation and return its mathematical value. |
 
-The model owns representation, decomposition, composition, and stopping.
 Jacobian supplies bounded typed operations and immutable discovery; it is not a
 workflow engine, planner, project manager, or durable mathematical system.
 Use “operation” or “math tool,” not “product” or “provider,” for built-ins.

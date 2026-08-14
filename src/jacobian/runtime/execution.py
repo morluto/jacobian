@@ -88,7 +88,12 @@ class LazyControlPlane:
 def create_inline_serving_runtime(
     catalog: ServingCatalog,
 ) -> JacobianRuntime:
-    """Serve packaged inline operations without opening a state directory."""
+    """Serve packaged inline operations without opening a state directory.
+
+    Family IDs remain discoverable. ``PackageIndexRegistry`` resolves them to a
+    structured ``STATE_INITIALIZATION_REQUIRED`` failure instead of loading
+    them as inline symbols.
+    """
 
     registry = PackageIndexRegistry(catalog.index)
     dispatcher = OperationDispatcher(catalog, registry)

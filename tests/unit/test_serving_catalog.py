@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jacobian.contracts.operations import OperationRequest
+from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
+from jacobian.contracts.operations import OperationInputKind, OperationRequest
+from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.runtime.execution import create_inline_serving_runtime
+from jacobian.schema_registry import model_schema_uri
 from jacobian.serving_catalog import ServingCatalog
 
 
@@ -41,6 +44,17 @@ def test_serving_catalog_inspects_family_ids_from_the_package_index() -> None:
     assert catalog.inspect("lean.check") is None
     assert catalog.declaration_record("sat.cnf.materialize") is None
 
+    neighborhood = catalog.inspect("graph.compute.neighborhood_independence")
+    assert neighborhood is not None
+    assert neighborhood.accepted_input_kinds == (OperationInputKind.TYPED_ARTIFACT,)
+    assert neighborhood.accepted_artifact_types == (
+        model_schema_uri(
+            name="jacobian.simple-undirected-graph",
+            version="1",
+            model=SimpleUndirectedGraph,
+        ),
+    )
+
 
 def test_inline_serving_runtime_runs_determinant_without_state() -> None:
     catalog = ServingCatalog.open(None, OperationVisibilityPolicy())
@@ -73,3 +87,23 @@ def test_inline_serving_runtime_runs_determinant_without_state() -> None:
     assert result.execution.status.value == "COMPLETED"
     assert result.output is not None
     assert result.output["result"]["determinant"] == {"num": "-2", "den": "1"}
+
+
+def test_inline_serving_runtime_returns_state_failure_for_family_ids() -> None:
+    catalog = ServingCatalog.open(None, OperationVisibilityPolicy())
+    runtime = create_inline_serving_runtime(catalog)
+    try:
+        result = runtime.core.operations.invoke(
+            OperationRequest(
+                operation_id="graph.construct.explicit",
+                input={"vertices": ["a"], "edges": []},
+            )
+        )
+    finally:
+        runtime.close()
+
+    assert result.execution.status is ExecutionStatus.ERROR
+    assert result.diagnostics[0].code == "STATE_INITIALIZATION_REQUIRED"
+    assert result.diagnostics[0].stage == "operation_resolution"
+    assert result.diagnostics[0].hint is not None
+    assert "jacobian init" in result.diagnostics[0].hint

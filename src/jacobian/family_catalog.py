@@ -39,6 +39,7 @@ from jacobian.contracts.graph_invariants import (
 from jacobian.contracts.graph_isomorphism import (
     GraphIsomorphismVerifyOutput,
     GraphIsomorphismVerifyRequest,
+    SimpleUndirectedGraph,
 )
 from jacobian.contracts.lean import (
     LeanCheckOutput,
@@ -53,6 +54,7 @@ from jacobian.contracts.lean import (
 from jacobian.contracts.lean_exploration import (
     LeanPremiseRetrievalOutput,
     LeanPremiseRetrievalRequest,
+    LeanProofStateArtifact,
     LeanProofStateOutput,
     LeanProofStateRequest,
 )
@@ -79,12 +81,14 @@ from jacobian.contracts.lean_term_apply import LeanTermApplyOutput, LeanTermAppl
 from jacobian.contracts.nullstellensatz import (
     JacobianDegreeSliceMaterializeOutput,
     JacobianDegreeSliceMaterializeRequest,
+    NormalizedJacobianDegreeSliceSystem,
+    NullstellensatzCertificateBundle,
     NullstellensatzCertificateOutput,
     NullstellensatzCertificateRequest,
     NullstellensatzVerificationOutput,
     NullstellensatzVerificationRequest,
 )
-from jacobian.contracts.operations import OperationExample
+from jacobian.contracts.operations import OperationExample, OperationInputKind
 from jacobian.contracts.polynomial_expressions import (
     PolynomialExpressionNormalizationVerificationOutput,
     PolynomialExpressionNormalizationVerificationRequest,
@@ -136,6 +140,7 @@ from jacobian.contracts.polynomials import (
 from jacobian.contracts.polytope import PolytopeSeparateRequest, PolytopeSeparateResult
 from jacobian.contracts.results import ContractModel, VerificationResult
 from jacobian.contracts.sat import (
+    SatAssignmentArtifact,
     SatAssignmentVerificationOutput,
     SatAssignmentVerificationRequest,
     SatCnfMaterializationOutput,
@@ -144,11 +149,13 @@ from jacobian.contracts.sat import (
     SatLratVerificationOutput,
     SatLratVerificationRequest,
     SatModelFindOutput,
+    SatProofArtifact,
     SatUnsatProofFindOutput,
     SatUnsatProofVerificationOutput,
     SatUnsatProofVerificationRequest,
 )
 from jacobian.contracts.smt import (
+    SmtAletheProofArtifact,
     SmtUnsatProofFindOutput,
     SmtUnsatProofFindRequest,
     SmtUnsatProofVerificationOutput,
@@ -163,6 +170,7 @@ from jacobian.contracts.universal_algebra import (
     UniversalAlgebraEvaluationRequest,
 )
 from jacobian.schema_compiler import SCHEMA_COMPILER
+from jacobian.schema_registry import json_schema_uri, model_schema_uri
 
 # Keep this list aligned with ``jacobian.graphs.invariants.PROPERTY_NAMES``.
 # Do not import that module here: index generation must not load NetworkX.
@@ -186,6 +194,42 @@ _GRAPH_COMPUTE_PROPERTIES_INVARIANTS = (
     "tree",
     "triangle_count",
     "triangle_frequencies",
+)
+
+_GRAPH_SCHEMA_URI = model_schema_uri(
+    name="jacobian.simple-undirected-graph",
+    version="1",
+    model=SimpleUndirectedGraph,
+)
+_SAT_ASSIGNMENT_SCHEMA_URI = model_schema_uri(
+    name="jacobian.sat-assignment",
+    version="1",
+    model=SatAssignmentArtifact,
+)
+_SAT_PROOF_SCHEMA_URI = model_schema_uri(
+    name="jacobian.sat-proof",
+    version="1",
+    model=SatProofArtifact,
+)
+_SMT_PROOF_SCHEMA_URI = model_schema_uri(
+    name="jacobian.smt-alethe-proof",
+    version="1",
+    model=SmtAletheProofArtifact,
+)
+_LEAN_PROOF_STATE_SCHEMA_URI = json_schema_uri(
+    name="jacobian.lean4-proof-state",
+    version="1",
+    schema=LeanProofStateArtifact.model_json_schema(),
+)
+_NULLSTELLENSATZ_SYSTEM_SCHEMA_URI = model_schema_uri(
+    name="jacobian.normalized-jacobian-degree-2-3-system",
+    version="1",
+    model=NormalizedJacobianDegreeSliceSystem,
+)
+_NULLSTELLENSATZ_BUNDLE_SCHEMA_URI = model_schema_uri(
+    name="jacobian.nullstellensatz-chart-cover-certificate",
+    version="1",
+    model=NullstellensatzCertificateBundle,
 )
 
 
@@ -216,6 +260,12 @@ class FamilyIndexSpec:
     request_type: type[BaseModel]
     result_type: type[BaseModel]
     examples: tuple[OperationExample, ...] = ()
+    read_only: bool = False
+    accepted_input_kinds: tuple[OperationInputKind, ...] = (
+        OperationInputKind.STRUCTURED_REQUEST,
+    )
+    accepted_artifact_types: tuple[str, ...] = ()
+    produced_artifact_types: tuple[str, ...] = ()
 
 
 FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
@@ -248,6 +298,8 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("graph", "neighborhood", "independence-number", "exact-computation"),
         request_type=GraphNeighborhoodIndependenceRequest,
         result_type=GraphNeighborhoodIndependenceOutput,
+        accepted_input_kinds=(OperationInputKind.TYPED_ARTIFACT,),
+        accepted_artifact_types=(_GRAPH_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="graph.compute.properties",
@@ -425,6 +477,7 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("lean", "proof", "axioms", "trust-base", "inspection"),
         request_type=LeanProofAxiomsInspectRequest,
         result_type=LeanProofAxiomsInspectOutput,
+        read_only=True,
     ),
     FamilyIndexSpec(
         operation_id="lean.proof_edit.validate",
@@ -474,6 +527,12 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("lean", "proof-state", "inspection", "exploration"),
         request_type=LeanProofStateInspectRequest,
         result_type=LeanProofStateInspectOutput,
+        read_only=True,
+        accepted_input_kinds=(
+            OperationInputKind.STRUCTURED_REQUEST,
+            OperationInputKind.TYPED_ARTIFACT,
+        ),
+        accepted_artifact_types=(_LEAN_PROOF_STATE_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="lean.proof_state.metavariable_fields",
@@ -484,6 +543,11 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("lean", "proof-state", "metavariable", "exploration"),
         request_type=LeanMetavariableFieldsRequest,
         result_type=LeanMetavariableFieldsOutput,
+        accepted_input_kinds=(
+            OperationInputKind.STRUCTURED_REQUEST,
+            OperationInputKind.TYPED_ARTIFACT,
+        ),
+        accepted_artifact_types=(_LEAN_PROOF_STATE_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="lean.retrieve.premises",
@@ -514,6 +578,10 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("lean", "statement", "elaboration", "proposal", "proposition"),
         request_type=LeanStatementProposalRequest,
         result_type=LeanStatementProposalOutput,
+        accepted_input_kinds=(
+            OperationInputKind.STRUCTURED_REQUEST,
+            OperationInputKind.FORMAL_PROPOSITION,
+        ),
     ),
     FamilyIndexSpec(
         operation_id="lean.term.apply",
@@ -536,6 +604,11 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         ),
         request_type=LeanTermApplyRequest,
         result_type=LeanTermApplyOutput,
+        accepted_input_kinds=(
+            OperationInputKind.STRUCTURED_REQUEST,
+            OperationInputKind.TYPED_ARTIFACT,
+        ),
+        accepted_artifact_types=(_LEAN_PROOF_STATE_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="polynomial.expression.normalize",
@@ -699,6 +772,7 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("polynomial", "jacobian", "degree-slice", "rabinowitsch", "exact"),
         request_type=JacobianDegreeSliceMaterializeRequest,
         result_type=JacobianDegreeSliceMaterializeOutput,
+        produced_artifact_types=(_NULLSTELLENSATZ_SYSTEM_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="polynomial.map.collision.search",
@@ -809,6 +883,9 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("polynomial", "nullstellensatz", "singular", "certificate", "bounded"),
         request_type=NullstellensatzCertificateRequest,
         result_type=NullstellensatzCertificateOutput,
+        accepted_input_kinds=(OperationInputKind.TYPED_ARTIFACT,),
+        accepted_artifact_types=(_NULLSTELLENSATZ_SYSTEM_SCHEMA_URI,),
+        produced_artifact_types=(_NULLSTELLENSATZ_BUNDLE_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="polynomial.nullstellensatz.infeasibility_certificate.verify",
@@ -819,6 +896,11 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("polynomial", "nullstellensatz", "certificate", "verification", "exact"),
         request_type=NullstellensatzVerificationRequest,
         result_type=NullstellensatzVerificationOutput,
+        accepted_input_kinds=(OperationInputKind.TYPED_ARTIFACT,),
+        accepted_artifact_types=(
+            _NULLSTELLENSATZ_SYSTEM_SCHEMA_URI,
+            _NULLSTELLENSATZ_BUNDLE_SCHEMA_URI,
+        ),
     ),
     FamilyIndexSpec(
         operation_id="polynomial.rational_function.identity.verify",
@@ -965,6 +1047,11 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         ),
         request_type=SatAssignmentVerificationRequest,
         result_type=SatAssignmentVerificationOutput,
+        accepted_input_kinds=(
+            OperationInputKind.STRUCTURED_REQUEST,
+            OperationInputKind.TYPED_ARTIFACT,
+        ),
+        accepted_artifact_types=(_SAT_ASSIGNMENT_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="sat.unsat_proof.find",
@@ -1006,6 +1093,11 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         ),
         request_type=SatUnsatProofVerificationRequest,
         result_type=SatUnsatProofVerificationOutput,
+        accepted_input_kinds=(
+            OperationInputKind.STRUCTURED_REQUEST,
+            OperationInputKind.TYPED_ARTIFACT,
+        ),
+        accepted_artifact_types=(_SAT_PROOF_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="smt.unsat_proof.find",
@@ -1036,6 +1128,11 @@ FAMILY_INDEX_SPECS: tuple[FamilyIndexSpec, ...] = (
         tags=("smt", "qf-uf", "unsat", "proof", "verification", "alethe", "carcara"),
         request_type=SmtUnsatProofVerificationRequest,
         result_type=SmtUnsatProofVerificationOutput,
+        accepted_input_kinds=(
+            OperationInputKind.STRUCTURED_REQUEST,
+            OperationInputKind.TYPED_ARTIFACT,
+        ),
+        accepted_artifact_types=(_SMT_PROOF_SCHEMA_URI,),
     ),
     FamilyIndexSpec(
         operation_id="universal_algebra.evaluate_laws",
@@ -1106,6 +1203,10 @@ def _family_index_payload(spec: FamilyIndexSpec) -> dict[str, Any]:
         ],
         "input_schema": input_schema,
         "output_schema": SCHEMA_COMPILER.compile_model(spec.result_type).definition(),
+        "read_only": spec.read_only,
+        "accepted_input_kinds": [kind.value for kind in spec.accepted_input_kinds],
+        "accepted_artifact_types": list(spec.accepted_artifact_types),
+        "produced_artifact_types": list(spec.produced_artifact_types),
     }
 
 

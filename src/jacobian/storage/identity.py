@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from jacobian.canonical import CanonicalLimits, canonicalize_json, sha256_digest
 from jacobian.contracts.artifacts import ArtifactManifest
@@ -105,6 +105,44 @@ def _prepare_artifact_identity(
     )
 
 
+def descriptor_identity_uri(
+    *,
+    kind: str,
+    name: str,
+    version: str,
+    definition: Any,
+    canonical_limits: CanonicalLimits | None = None,
+) -> str:
+    """Return the content-addressed URI for an infrastructure descriptor.
+
+    This is the store-free identity that ``ArtifactMetadataStore.descriptor_uri``
+    and ``register_descriptor`` assign to the same name, version, and definition.
+    """
+
+    if kind not in {"schema", "semantics", "canonicalizer", "implementation"}:
+        raise ValueError(f"unsupported descriptor kind: {kind!r}")
+    limits = canonical_limits or CanonicalLimits()
+    canonical_bytes = canonicalize_json(
+        {
+            "descriptor_version": "1",
+            "kind": kind,
+            "name": name,
+            "version": version,
+            "definition": definition,
+        },
+        limits=limits,
+    )
+    uri, _object_digest, _manifest_digest = artifact_identity(
+        canonical_limits=limits,
+        schema_uri=BOOTSTRAP_SCHEMA_URI,
+        semantics_uri=BOOTSTRAP_SEMANTICS_URI,
+        canonical_bytes=canonical_bytes,
+        parents=(),
+        summary=f"{kind}: {name}@{version}",
+    )
+    return uri
+
+
 def artifact_identity(
     *,
     canonical_limits: CanonicalLimits,
@@ -137,6 +175,7 @@ __all__ = [
     "CANONICALIZER_DIGEST",
     "OBJECT_FORMAT_VERSION",
     "artifact_identity",
+    "descriptor_identity_uri",
     "digest_from_uri",
     "framed_digest",
     "uri_from_digest",

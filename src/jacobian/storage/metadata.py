@@ -22,6 +22,7 @@ from jacobian.storage.identity import (
     OBJECT_FORMAT_VERSION,
     _ArtifactIdentity,
     _prepare_artifact_identity,
+    descriptor_identity_uri,
     digest_from_uri,
     framed_digest,
 )
@@ -111,21 +112,14 @@ class ArtifactMetadataStore:
         registration but does not apply repository commit limits.
         """
 
-        summary = self._descriptor_summary(kind=kind, name=name, version=version)
-        canonical_bytes = self._canonicalize_descriptor(
+        self._descriptor_summary(kind=kind, name=name, version=version)
+        return descriptor_identity_uri(
             kind=kind,
             name=name,
             version=version,
             definition=definition,
+            canonical_limits=self._canonical_limits,
         )
-        prepared = self._prepare_identity(
-            schema_uri=BOOTSTRAP_SCHEMA_URI,
-            semantics_uri=BOOTSTRAP_SEMANTICS_URI,
-            canonical_bytes=canonical_bytes,
-            parents=(),
-            summary=summary,
-        )
-        return prepared.identity.artifact_uri
 
     @staticmethod
     def _descriptor_summary(*, kind: str, name: str, version: str) -> str:

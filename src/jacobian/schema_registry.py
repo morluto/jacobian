@@ -12,6 +12,7 @@ from pydantic import ValidationError as PydanticValidationError
 from jacobian.canonical import canonicalize_json, loads_strict_json
 from jacobian.schema_compiler import SCHEMA_COMPILER, SchemaCompilationError
 from jacobian.storage.errors import StorageError
+from jacobian.storage.identity import descriptor_identity_uri
 from jacobian.storage.repository import ArtifactRepository
 
 
@@ -46,6 +47,28 @@ def model_schema(model: type[BaseModel]) -> dict[str, Any]:
     """Return a fresh copy of the process-compiled model JSON Schema."""
 
     return SCHEMA_COMPILER.compile_model(model).definition()
+
+
+def model_schema_uri(*, name: str, version: str, model: type[BaseModel]) -> str:
+    """Return the URI ``SchemaRegistry.register_model`` assigns to this contract."""
+
+    return descriptor_identity_uri(
+        kind="schema",
+        name=name,
+        version=version,
+        definition=SCHEMA_COMPILER.compile_model(model).definition(),
+    )
+
+
+def json_schema_uri(*, name: str, version: str, schema: dict[str, Any]) -> str:
+    """Return the URI ``SchemaRegistry.register`` assigns to this JSON Schema."""
+
+    return descriptor_identity_uri(
+        kind="schema",
+        name=name,
+        version=version,
+        definition=loads_strict_json(canonicalize_json(schema)),
+    )
 
 
 class SchemaRegistry:

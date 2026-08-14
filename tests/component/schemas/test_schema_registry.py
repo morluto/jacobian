@@ -10,7 +10,9 @@ from jacobian.schema_registry import (
     SchemaRegistry,
     SchemaRegistryError,
     SchemaValidationError,
+    json_schema_uri,
     model_schema,
+    model_schema_uri,
 )
 from jacobian.storage.errors import StorageError
 from jacobian.storage.repository import ArtifactRepository
@@ -435,3 +437,29 @@ def test_transaction_cannot_bind_two_models_to_the_same_schema(tmp_path: Path) -
                 version="1",
                 model=_EquivalentCachedSchemaModel,
             )
+
+
+def test_store_free_schema_uris_match_live_registration(tmp_path: Path) -> None:
+    store = ArtifactRepository(tmp_path)
+    registry = SchemaRegistry(store)
+    model_uri = registry.register_model(
+        name="store-free-model-schema",
+        version="1",
+        model=_CachedSchemaModel,
+    )
+    json_uri = registry.register(
+        name="store-free-json-schema",
+        version="1",
+        schema=model_schema(_CachedSchemaModel),
+    )
+
+    assert model_uri == model_schema_uri(
+        name="store-free-model-schema",
+        version="1",
+        model=_CachedSchemaModel,
+    )
+    assert json_uri == json_schema_uri(
+        name="store-free-json-schema",
+        version="1",
+        schema=model_schema(_CachedSchemaModel),
+    )

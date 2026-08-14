@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from jacobian.builtin_operation_modules import load_builtin_operation_modules
+from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
+from jacobian.contracts.operations import OperationInputKind
 from jacobian.family_catalog import FAMILY_INDEX_SPECS
 from jacobian.graphs.operation_resources import SELECTED_GRAPH_OPERATION_IDS
 from jacobian.lean_frontend.selected import SELECTED_LEAN_OPERATION_IDS
@@ -16,6 +18,7 @@ from jacobian.package_index import (
 )
 from jacobian.polynomials.selected import SELECTED_POLYNOMIAL_OPERATION_IDS
 from jacobian.sat_smt.selected import SELECTED_SAT_SMT_OPERATION_IDS
+from jacobian.schema_registry import model_schema_uri
 from jacobian.selected_operations import SELECTED_CORE_OPERATION_IDS
 
 
@@ -63,6 +66,33 @@ def test_package_index_does_not_load_family_operations_as_inline_symbols() -> No
         OperationCatalogError, match="family operation requires overlay catalog state"
     ):
         index.load("graph.construct.explicit")
+
+
+def test_family_descriptor_retains_live_routing_metadata() -> None:
+    index = generate_package_index()
+    graph_schema_uri = model_schema_uri(
+        name="jacobian.simple-undirected-graph",
+        version="1",
+        model=SimpleUndirectedGraph,
+    )
+
+    neighborhood = index.get("graph.compute.neighborhood_independence")
+    assert neighborhood is not None
+    descriptor = neighborhood.descriptor()
+    assert descriptor.accepted_input_kinds == (OperationInputKind.TYPED_ARTIFACT,)
+    assert descriptor.accepted_artifact_types == (graph_schema_uri,)
+    assert descriptor.read_only is False
+
+    propose = index.get("lean.statement.propose")
+    assert propose is not None
+    assert propose.descriptor().accepted_input_kinds == (
+        OperationInputKind.STRUCTURED_REQUEST,
+        OperationInputKind.FORMAL_PROPOSITION,
+    )
+
+    inspect = index.get("lean.proof_state.inspect")
+    assert inspect is not None
+    assert inspect.descriptor().read_only is True
 
 
 def test_family_index_covers_selected_family_ids() -> None:

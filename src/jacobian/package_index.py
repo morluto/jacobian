@@ -14,7 +14,10 @@ from typing import Any, cast
 from jacobian.builtin_operation_modules import BUILTIN_OPERATION_MODULES
 from jacobian.contracts.operations import (
     OperationDescriptor,
+    OperationDiagnostic,
     OperationExample,
+    OperationInputKind,
+    OperationRequest,
 )
 from jacobian.family_catalog import family_index_payloads
 from jacobian.inline_execution import (
@@ -24,6 +27,8 @@ from jacobian.inline_execution import (
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_catalog import OperationCatalogError, OperationSearchCard
 from jacobian.operation_declarations import InlineOperation
+from jacobian.operation_errors import OperationInvocationError
+from jacobian.operation_projection import OperationProjection
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +46,12 @@ class PackageIndexEntry:
     module: str
     symbol: str
     family: str | None = None
+    read_only: bool = True
+    accepted_input_kinds: tuple[OperationInputKind, ...] = (
+        OperationInputKind.STRUCTURED_REQUEST,
+    )
+    accepted_artifact_types: tuple[str, ...] = ()
+    produced_artifact_types: tuple[str, ...] = ()
 
     def descriptor(self) -> OperationDescriptor:
         return OperationDescriptor(
@@ -51,9 +62,11 @@ class PackageIndexEntry:
             provider="built-in",
             input_schema=self.input_schema,
             output_schema=self.output_schema,
-            read_only=self.family is None,
+            read_only=self.read_only,
             tags=self.tags,
-            produced_artifact_types=(),
+            accepted_input_kinds=self.accepted_input_kinds,
+            accepted_artifact_types=self.accepted_artifact_types,
+            produced_artifact_types=self.produced_artifact_types,
             examples=self.examples,
         )
 
@@ -153,6 +166,19 @@ def collect_family_index_entries() -> tuple[PackageIndexEntry, ...]:
                 module="",
                 symbol="",
                 family=str(payload["family"]),
+                read_only=bool(payload["read_only"]),
+                accepted_input_kinds=tuple(
+                    OperationInputKind(kind)
+                    for kind in cast(list[str], payload["accepted_input_kinds"])
+                ),
+                accepted_artifact_types=tuple(
+                    str(uri)
+                    for uri in cast(list[str], payload["accepted_artifact_types"])
+                ),
+                produced_artifact_types=tuple(
+                    str(uri)
+                    for uri in cast(list[str], payload["produced_artifact_types"])
+                ),
             )
         )
     return tuple(sorted(entries, key=lambda item: item.operation_id))
@@ -182,6 +208,32 @@ def load_package_index() -> PackageIndex:
     return generate_package_index()
 
 
+class FamilyStateRequiredAdapter:
+    """Fail closed when a family ID is run without overlay catalog state."""
+
+    def __init__(self, descriptor: OperationDescriptor) -> None:
+        self._descriptor = descriptor
+
+    @property
+    def descriptor(self) -> OperationDescriptor:
+        return self._descriptor
+
+    def prepare(self, request: OperationRequest) -> None:
+        raise OperationInvocationError(_family_state_required_diagnostic())
+
+    def invoke(self, prepared: None) -> OperationProjection:
+        raise OperationInvocationError(_family_state_required_diagnostic())
+
+
+def _family_state_required_diagnostic() -> OperationDiagnostic:
+    return OperationDiagnostic(
+        code="STATE_INITIALIZATION_REQUIRED",
+        stage="operation_resolution",
+        message="Family operations require initialized catalog overlay state.",
+        hint="Run `jacobian init` to create overlay catalog state, then retry.",
+    )
+
+
 class PackageIndexRegistry:
     """Resolve built-in inline operations without a binder or SQLite digest."""
 
@@ -194,13 +246,15 @@ class PackageIndexRegistry:
         cached = self._adapters.get(operation_id)
         if cached is not None:
             return cached
-        try:
-            operation = self.index.load(operation_id)
-        except KeyError as exc:
-            raise OperationCatalogError(
-                f"unknown or hidden operation: {operation_id}"
-            ) from exc
-        adapter: OperationAdapter[Any] = InlineOperationAdapter(operation)
+        entry = self.index.get(operation_id)
+        if entry is None:
+            raise OperationCatalogError(f"unknown or hidden operation: {operation_id}")
+        if entry.family is not None:
+            adapter: OperationAdapter[Any] = FamilyStateRequiredAdapter(
+                entry.descriptor()
+            )
+        else:
+            adapter = InlineOperationAdapter(load_inline_operation(entry))
         self._adapters[operation_id] = adapter
         return adapter
 

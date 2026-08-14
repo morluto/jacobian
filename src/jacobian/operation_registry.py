@@ -63,6 +63,7 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.system.solution.verify",
         "polynomial.system.rational_solution.search",
         "polynomial.jacobian_degree_slice.system.materialize",
+        "polynomial.nullstellensatz.infeasibility_certificate.compute",
         "polynomial.nullstellensatz.infeasibility_certificate.verify",
     }
 )
@@ -423,6 +424,20 @@ class OperationRegistry:
         )
         if system_adapter is not None:
             return system_adapter
+        if operation_id == (
+            "polynomial.nullstellensatz.infeasibility_certificate.compute"
+        ):
+            from jacobian.domains.polynomial_nullstellensatz.singular import (
+                bind_selected_singular_producer,
+            )
+            from jacobian.providers.singular_runtime import singular_provider_runtime
+
+            return bind_selected_singular_producer(
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                singular_provider_runtime(),
+            )
         from jacobian.domains.polynomial_nullstellensatz.core import (
             bind_selected_nullstellensatz_operation,
         )

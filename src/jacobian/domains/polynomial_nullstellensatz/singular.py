@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json, format_canonical_integer
 from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.contracts.exact import CanonicalRational
@@ -33,7 +34,10 @@ from jacobian.contracts.operations import (
     ProviderObservation,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.polynomial_nullstellensatz.core import MATERIALIZE_OPERATION_ID
+from jacobian.domains.polynomial_nullstellensatz.core import (
+    MATERIALIZE_OPERATION_ID,
+    register_nullstellensatz_resources,
+)
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
@@ -50,9 +54,10 @@ from jacobian.process_policy import (
     ProcessTermination,
     execute_process,
 )
-from jacobian.schema_registry import model_schema
+from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 from jacobian.storage.models import StoredArtifact
+from jacobian.storage.repository import ArtifactRepository
 from jacobian.worker_environment import worker_environment
 
 PRODUCE_OPERATION_ID = "polynomial.nullstellensatz.infeasibility_certificate.compute"
@@ -323,11 +328,13 @@ def _certificate_payload(
 class SingularNullstellensatzCertificateAdapter:
     def __init__(
         self,
-        context: CatalogBuildContext,
+        store: ArtifactRepository,
+        artifacts: ArtifactService,
         dependency: BoundOperationGroup,
         provider_runtime: ProviderObservation,
     ) -> None:
-        self.context = context
+        self.store = store
+        self.artifacts = artifacts
         self.dependency = dependency
         self.provider_runtime = provider_runtime
         self.system_schema_uri = dependency.result_schema_uris[MATERIALIZE_OPERATION_ID]
@@ -403,7 +410,7 @@ class SingularNullstellensatzCertificateAdapter:
         NormalizedJacobianDegreeSliceSystem,
     ]:
         try:
-            system_artifact = self.context.store.get(validated.system_uri)
+            system_artifact = self.store.get(validated.system_uri)
             identity = (
                 system_artifact.manifest.schema_uri,
                 system_artifact.manifest.semantics_uri,
@@ -492,7 +499,7 @@ class SingularNullstellensatzCertificateAdapter:
                 ),
                 started,
             )
-        stored = self.context.artifacts.put(
+        stored = self.artifacts.put(
             schema_uri=self.bundle_schema_uri,
             semantics_uri=self.dependency.semantics_uri,
             payload=payload,
@@ -525,7 +532,8 @@ def install_singular_producer(
     provider_runtime: ProviderObservation,
 ) -> BoundOperationGroup:
     adapter = SingularNullstellensatzCertificateAdapter(
-        context,
+        context.store,
+        context.artifacts,
         dependency,
         provider_runtime,
     )
@@ -540,9 +548,38 @@ def install_singular_producer(
     )
 
 
+def bind_selected_singular_producer(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    provider_runtime: ProviderObservation,
+) -> SingularNullstellensatzCertificateAdapter:
+    """Bind the selected Singular producer from passive core contracts."""
+
+    contracts = register_nullstellensatz_resources(store, schemas)
+    dependency = BoundOperationGroup(
+        adapters=(),
+        semantics_uri=contracts.semantics_uri,
+        input_schema_uris={},
+        result_schema_uris={MATERIALIZE_OPERATION_ID: contracts.system_schema_uri},
+        named_schema_uris={
+            "nullstellensatz_certificate_bundle": (
+                contracts.certificate_bundle_schema_uri
+            ),
+        },
+    )
+    return SingularNullstellensatzCertificateAdapter(
+        store,
+        artifacts,
+        dependency,
+        provider_runtime,
+    )
+
+
 __all__ = [
     "DOMAIN_ID",
     "PRODUCE_OPERATION_ID",
     "SingularNullstellensatzCertificateAdapter",
+    "bind_selected_singular_producer",
     "install_singular_producer",
 ]

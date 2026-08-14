@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.contracts.operations import ProviderAvailability
@@ -17,7 +17,7 @@ from jacobian.polynomial_interval_operations import (
 from jacobian.polynomial_positivity_operations import (
     install_polynomial_positivity_operations,
 )
-from jacobian.provider_inventory import ProviderInventoryLoader
+from jacobian.providers.lean_runtime import lean_frontend_provider_runtime
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,9 +25,6 @@ class CatalogResourceBuilder:
     """Build resource-backed descriptors after their dependencies."""
 
     context: CatalogBuildContext
-    provider_resolver: ProviderInventoryLoader = field(
-        default_factory=ProviderInventoryLoader
-    )
 
     def bind(self, graph: GraphOperationResources) -> None:
         ctx = self.context
@@ -65,7 +62,7 @@ class CatalogResourceBuilder:
             if positivity_adapter is not None:
                 ctx.register_operation(positivity_adapter)
 
-        lean_runtime = self.provider_resolver.resolve_lean_frontend()
+        lean_runtime = lean_frontend_provider_runtime()
         lean_adapters, _ = install_lean_statement_operations(
             ctx.store,
             ctx.schemas,

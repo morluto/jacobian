@@ -14,7 +14,6 @@ from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
 from jacobian.polytope import PolytopeService
-from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 
 __all__ = ["PolytopeSeparationAdapter"]
@@ -32,11 +31,7 @@ class PolytopeSeparationAdapter:
             description=(
                 "Compute exact membership evidence or a separator; replay is separate."
             ),
-            provider="jacobian.z3",
-            provider_runtime=known_provider_runtime(
-                "jacobian.z3",
-                features=("polytope", "exact"),
-            ),
+            provider="built-in",
             input_schema=model_schema(PolytopeSeparateRequest),
             output_schema=model_schema(PolytopeSeparateResult),
             tags=("polytope", "exact"),

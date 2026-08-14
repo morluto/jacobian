@@ -22,15 +22,15 @@ from jacobian.providers.sympy_runtime import (
     sympy_polynomial_normalization_provider_runtime,
 )
 from jacobian.sympy_polynomial_normalization import (
-    install_sympy_polynomial_normalization_operation,
+    bind_sympy_polynomial_normalization,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class PolynomialNormalizationTestServices(DomainTestServices):
-    """Services and measured provider owned by the normalization boundary."""
+    """Services and producer identity owned by the normalization boundary."""
 
-    provider_runtime: ProviderObservation
+    producer: ProviderObservation
 
 
 @contextmanager
@@ -47,7 +47,7 @@ def open_polynomial_normalization_services(
     with open_domain_services(root, checker_authority=authority) as services:
         runtime = sympy_polynomial_normalization_provider_runtime()
         with atomic_installation(services.core):
-            producer = install_sympy_polynomial_normalization_operation(
+            producer = bind_sympy_polynomial_normalization(
                 services.core.polynomial_expressions,
                 runtime,
             )
@@ -69,5 +69,5 @@ def open_polynomial_normalization_services(
             verification=services.verification,
             polytope=services.polytope,
             installation=services.installation,
-            provider_runtime=runtime,
+            producer=runtime,
         )

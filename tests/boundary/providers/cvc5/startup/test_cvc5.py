@@ -20,7 +20,7 @@ from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermin
 from jacobian.provider_measurements import measure_provider
 from jacobian.provider_runtime import ProviderRuntimeError
 from jacobian.providers.external_solver_runtime import cvc5_provider_runtime
-from jacobian.sat_smt.cvc5 import install_cvc5_operation
+from jacobian.sat_smt.cvc5 import bind_cvc5_operation
 from jacobian.sat_smt.smt import SmtArtifactError
 
 # Provider lane owns readiness and isolation for this module.
@@ -79,7 +79,7 @@ def cvc5_services(
 ) -> Iterator[DomainTestServices]:
     with open_domain_services(tmp_path / "state") as services:
         services.installation.register_operation(
-            install_cvc5_operation(services.core.smt, cvc5_provider)
+            bind_cvc5_operation(services.core.smt, cvc5_provider)
         )
         yield services
 
@@ -95,9 +95,8 @@ def test_pinned_cvc5_operation_is_discoverable(
         for descriptor in catalog
         if descriptor.operation_id == "smt.unsat_proof.find"
     )
-    assert descriptor.provider == "cvc5"
-    assert descriptor.provider_runtime == cvc5_provider
-    assert descriptor.provider_runtime.checker_ids == ()
+    assert descriptor.provider == "built-in"
+    assert descriptor.provider_runtime is None
     assert "smt.unsat_proof.verify" not in {
         installed.operation_id for installed in catalog
     }
@@ -308,12 +307,12 @@ def test_runtime_rejects_a_base_installation_without_cvc5(
         diagnostic="cvc5 is intentionally unavailable for this test.",
     )
     monkeypatch.setattr(
-        "jacobian.provider_inventory.cvc5_provider_runtime",
+        "jacobian.maintained_backends.cvc5_provider_runtime",
         lambda: unavailable,
     )
 
     with pytest.raises(
         ProviderRuntimeError,
-        match="required Python providers are unavailable: cvc5",
+        match="required Python math backends are unavailable: cvc5",
     ):
         create_catalog_build_runtime(tmp_path)

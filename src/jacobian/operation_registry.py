@@ -16,6 +16,7 @@ from jacobian.operation_catalog import (
     OperationDeclarationRecord,
     exact_checker_declaration_digest,
     operation_declaration_digest,
+    public_operation_descriptor,
 )
 from jacobian.operation_declarations import OperationDeclarations
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
@@ -218,9 +219,7 @@ class OperationRegistry:
             for candidate in bound.adapters
             if candidate.descriptor.operation_id == operation_id
         )
-        if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
-            mode="json"
-        ):
+        if public_operation_descriptor(adapter.descriptor) != descriptor:
             raise OperationCatalogError(
                 f"operation schema changed; run `jacobian update`: {operation_id}"
             )
@@ -245,9 +244,7 @@ class OperationRegistry:
             raise OperationCatalogError(
                 f"operation declaration changed; run `jacobian update`: {operation_id}"
             )
-        if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
-            mode="json"
-        ):
+        if public_operation_descriptor(adapter.descriptor) != descriptor:
             raise OperationCatalogError(
                 f"operation schema changed; run `jacobian update`: {operation_id}"
             )
@@ -336,17 +333,16 @@ class OperationRegistry:
         descriptor: OperationDescriptor,
     ) -> OperationAdapter[Any] | None:
         if operation_id == "polynomial.expression.normalize":
+            from jacobian.providers.sympy_runtime import (
+                sympy_polynomial_normalization_provider_runtime,
+            )
             from jacobian.sympy_polynomial_normalization import (
-                install_sympy_polynomial_normalization_operation,
+                bind_sympy_polynomial_normalization,
             )
 
-            if descriptor.provider_runtime is None:
-                raise OperationCatalogError(
-                    "polynomial provider observation is missing; run `jacobian update`"
-                )
-            adapter = install_sympy_polynomial_normalization_operation(
+            adapter = bind_sympy_polynomial_normalization(
                 self.polynomial_expressions,
-                descriptor.provider_runtime,
+                sympy_polynomial_normalization_provider_runtime(),
             )
             return adapter
         if operation_id == "polynomial.expression_normalization.verify":
@@ -430,10 +426,20 @@ class OperationRegistry:
         from jacobian.domains.polynomial_nullstellensatz.core import (
             bind_selected_nullstellensatz_operation,
         )
+        from jacobian.provider_runtime import known_provider_runtime
 
-        if descriptor.provider_runtime is None:
-            raise OperationCatalogError(
-                "Nullstellensatz provider observation is missing; run `jacobian update`"
+        provider_runtime = known_provider_runtime(
+            "jacobian.nullstellensatz-core",
+            features=(
+                "normalized-jacobian-degree-slice",
+                "rabinowitsch-chart-cover",
+                "independent-exact-replay",
+            ),
+        )
+        binding = self.catalog.checker_binding(operation_id)
+        if binding is not None:
+            provider_runtime = provider_runtime.model_copy(
+                update={"checker_ids": (binding.checker_id,)}
             )
         return bind_selected_nullstellensatz_operation(
             operation_id,
@@ -443,7 +449,7 @@ class OperationRegistry:
             self.verification,
             self.checkers,
             self.catalog,
-            descriptor.provider_runtime,
+            provider_runtime,
         )
 
     def _bind_selected_sat_operation(
@@ -452,28 +458,26 @@ class OperationRegistry:
         descriptor: OperationDescriptor,
     ) -> OperationAdapter[Any] | None:
         if operation_id in {"sat.model.find", "sat.unsat_proof.find"}:
+            from jacobian.providers.external_solver_runtime import (
+                cadical_provider_runtime,
+            )
             from jacobian.sat_smt.cadical import install_cadical_operations
 
-            if descriptor.provider_runtime is None:
-                raise OperationCatalogError(
-                    "CaDiCaL provider observation is missing; run `jacobian update`"
-                )
             return next(
                 adapter
                 for adapter in install_cadical_operations(
                     self.sat,
-                    descriptor.provider_runtime,
+                    cadical_provider_runtime(),
                 )
                 if adapter.descriptor.operation_id == operation_id
             )
         if operation_id == "smt.unsat_proof.find":
-            from jacobian.sat_smt.cvc5 import install_cvc5_operation
+            from jacobian.providers.external_solver_runtime import (
+                cvc5_provider_runtime,
+            )
+            from jacobian.sat_smt.cvc5 import bind_cvc5_operation
 
-            if descriptor.provider_runtime is None:
-                raise OperationCatalogError(
-                    "cvc5 provider observation is missing; run `jacobian update`"
-                )
-            return install_cvc5_operation(self.smt, descriptor.provider_runtime)
+            return bind_cvc5_operation(self.smt, cvc5_provider_runtime())
         if operation_id == "sat.cnf.materialize":
             from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
 
@@ -554,9 +558,7 @@ class OperationRegistry:
             verification=self.verification,
             checkers=self.checkers,
         )
-        if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
-            mode="json"
-        ):
+        if public_operation_descriptor(adapter.descriptor) != descriptor:
             raise OperationCatalogError(
                 f"operation schema changed; run `jacobian update`: {operation_id}"
             )

@@ -65,11 +65,7 @@ class PolynomialMapEvaluationAdapter:
                 "Compute the exact rational image of one point under one sparse "
                 "square polynomial map over QQ."
             ),
-            provider="jacobian.sympy",
-            provider_runtime=known_provider_runtime(
-                "jacobian.sympy",
-                features=("rational-polynomial-evaluation",),
-            ),
+            provider="built-in",
             input_schema=model_schema(PolynomialEvaluationRequest),
             output_schema=model_schema(PolynomialEvaluationOutput),
             tags=("polynomial", "map", "evaluation", "exact-computation"),

@@ -143,45 +143,6 @@ def test_sympy_worker_gets_only_fixed_environment_and_budget(
     assert "JACOBIAN_SYMPY_SECRET" not in observed["environment"]
 
 
-def test_normalization_output_is_discarded_if_runtime_identity_changes(
-    polynomial_normalization_services, monkeypatch
-) -> None:
-    original = polynomial_normalization_services.provider_runtime
-    changed = original.model_copy(update={"digest": "sha256:" + "f" * 64})
-    observations = iter((original, changed))
-    monkeypatch.setattr(
-        "jacobian.sympy_polynomial_normalization.sympy_polynomial_normalization_provider_runtime",
-        lambda **_kwargs: next(observations),
-    )
-    monkeypatch.setattr(
-        "jacobian.sympy_polynomial_normalization.execute_process",
-        lambda *_args, **_kwargs: ProcessResult(
-            termination=ProcessTermination.EXITED,
-            returncode=0,
-            stdout=canonicalize_json(
-                {
-                    "protocol": "jacobian.sympy-polynomial-normalization/v1",
-                    "status": "NORMALIZATION_PRODUCED",
-                    "backend_version": "1.14.0",
-                    "normalized": {"terms": [{"coefficient": _q(1), "exponents": [1]}]},
-                }
-            )
-            + b"\n",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-        ),
-    )
-    result = _invoke(
-        polynomial_normalization_services,
-        "polynomial.expression.normalize",
-        {"expression": _expression(_variable("x"), variables=["x"])},
-    )
-    assert result.execution.status is ExecutionStatus.ERROR
-    assert result.output == {}
-    assert "changed during execution" in result.execution.detail
-
-
 def test_invalid_worker_protocol_retains_no_normalization_evidence(
     polynomial_normalization_services, monkeypatch
 ) -> None:

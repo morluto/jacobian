@@ -213,37 +213,6 @@ def run_operation(
     _emit(result.model_dump(mode="json"))
 
 
-def provider_measure(
-    context: typer.Context,
-    operation_id: str,
-    include_cold_install: Annotated[
-        bool,
-        typer.Option("--include-cold-install/--skip-cold-install"),
-    ] = False,
-) -> None:
-    """Measure the provider declared for one installed operation."""
-
-    from jacobian.provider_measurements import measure_provider
-
-    catalog_value = _state(context).catalog_snapshot()
-    descriptor = next(
-        (
-            item
-            for item in catalog_value.operations
-            if item.operation_id == operation_id
-        ),
-        None,
-    )
-    if descriptor is None or descriptor.provider_runtime is None:
-        raise ValueError(f"operation {operation_id!r} has no provider runtime")
-    _emit(
-        measure_provider(
-            descriptor.provider_runtime,
-            include_cold_install=include_cold_install,
-        ).model_dump(mode="json")
-    )
-
-
 def create_cli_app(*, runtime_opener: RuntimeOpener | None = None) -> typer.Typer:
     """Create the operator CLI, optionally over a caller-owned runtime opener."""
 
@@ -272,7 +241,6 @@ def create_cli_app(*, runtime_opener: RuntimeOpener | None = None) -> typer.Type
     application.command("catalog")(catalog)
     application.command("inspect")(inspect_operation)
     application.command("run")(run_operation)
-    application.command("provider-measure")(provider_measure)
     return application
 
 

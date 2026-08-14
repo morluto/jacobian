@@ -5,12 +5,21 @@ from __future__ import annotations
 from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.catalog_build_resources import CatalogBuildResources
 from jacobian.catalog_checkers import CatalogCheckerBuilder
-from jacobian.catalog_foundations import CatalogFoundationBuilder
+from jacobian.catalog_foundations import bind_catalog_foundations
 from jacobian.catalog_operations import CatalogOperationBuilder
 from jacobian.catalog_resources import CatalogResourceBuilder
 from jacobian.implementation import cached_package_digests
+from jacobian.maintained_backends import require_maintained_math_backends
 from jacobian.polytope import PolytopeService
-from jacobian.provider_inventory import ProviderInventoryLoader
+from jacobian.providers.external_solver_runtime import (
+    cadical_provider_runtime,
+    carcara_provider_runtime,
+    cvc5_provider_runtime,
+    drat_trim_provider_runtime,
+)
+from jacobian.providers.sympy_runtime import (
+    sympy_polynomial_normalization_provider_runtime,
+)
 
 
 def build_catalog_operations(
@@ -28,20 +37,26 @@ def build_catalog_operations(
     """
 
     resources = CatalogBuildResources()
-    resolver = ProviderInventoryLoader()
     try:
         with (
             context.checkers.policy_transaction(),
             context.store.transaction(),
             cached_package_digests(),
         ):
-            runtimes = resolver.resolve()
-            CatalogFoundationBuilder(context).bind(runtimes)
+            require_maintained_math_backends()
+            bind_catalog_foundations(
+                context,
+                cadical=cadical_provider_runtime(),
+                carcara=carcara_provider_runtime(),
+                cvc5=cvc5_provider_runtime(),
+                drat_trim=drat_trim_provider_runtime(),
+                sympy_normalization=(sympy_polynomial_normalization_provider_runtime()),
+            )
             graph = CatalogOperationBuilder(context).bind(
                 polytope,
             )
             CatalogResourceBuilder(context).bind(graph)
-            CatalogCheckerBuilder(context, resolver).bind(
+            CatalogCheckerBuilder(context).bind(
                 polytope,
                 resources,
             )

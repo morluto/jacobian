@@ -29,7 +29,6 @@ from jacobian.operation_execution import execute_operation
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
-from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 from jacobian.validation_diagnostics import project_validation_errors
 
@@ -75,11 +74,7 @@ class GraphExplicitConstructionAdapter:
             version=self.spec.version,
             title=self.spec.title,
             description=self.spec.description,
-            provider="jacobian.networkx",
-            provider_runtime=known_provider_runtime(
-                "jacobian.networkx",
-                features=("simple-undirected-graphs", "canonical-materialization"),
-            ),
+            provider="built-in",
             input_schema=model_schema(GraphExplicitConstructionRequest),
             output_schema=model_schema(GraphExplicitConstructionOutput),
             tags=self.spec.tags,

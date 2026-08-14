@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.common import ArtifactUri, CheckerUri, Sha256Digest, ValueUri
@@ -327,7 +328,11 @@ class OperationDescriptor(ContractModel):
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=512)
     provider: str = Field(min_length=1, max_length=128)
-    provider_runtime: ProviderObservation | None = None
+    # Execution/checker identity is internal lifecycle state, not catalog data.
+    provider_runtime: SkipJsonSchema[ProviderObservation | None] = Field(
+        default=None,
+        exclude=True,
+    )
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
     read_only: bool = False

@@ -43,8 +43,8 @@ target.
 
 `jacobian init` and `jacobian update` compile the declarations into one
 revisioned catalog. The persisted catalog has an active revision, compact
-search cards, exact descriptors, declaration locators and digests, provider
-inventory identity, and checker-binding identity. Search reads cards; exact
+search cards, exact descriptors, declaration locators and digests, and
+checker-binding identity. Search reads cards; exact
 inspection reads one descriptor. The full `operation://catalog` resource is
 materialized only when explicitly requested. Visibility filtering is applied
 to search, inspection, execution, and the resource without rebuilding the

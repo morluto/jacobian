@@ -31,7 +31,6 @@ from jacobian.polynomial_system_operations import (
     PolynomialSystemInstallation,
     _evaluate_request,
 )
-from jacobian.provider_runtime import known_provider_runtime
 
 
 class PolynomialSystemRationalSearchAdapter:
@@ -44,11 +43,7 @@ class PolynomialSystemRationalSearchAdapter:
             version="1",
             title="Search a bounded rational grid for a polynomial-system solution",
             description="Return the first exact satisfying assignment in one declared finite grid.",
-            provider="jacobian.exact-polynomial-system-search",
-            provider_runtime=known_provider_runtime(
-                "jacobian.exact-polynomial-system-search",
-                features=("bounded-rational-enumeration",),
-            ),
+            provider="built-in",
             input_schema=PolynomialSystemRationalSearchRequest.model_json_schema(),
             output_schema=PolynomialSystemRationalSearchOutput.model_json_schema(),
             tags=("polynomial", "system", "solution", "bounded-search"),

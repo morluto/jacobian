@@ -18,9 +18,9 @@ components:
   certificates.
 
 Individual operations and independent replay support depend on the installed
-catalog. The [provider runtime contract](../reference/provider-runtime.md)
-defines how Jacobian measures provider availability, compatibility, identity,
-and checker runtimes. The
+catalog. Jacobian measures optional executable identity during `init` and
+`update`; authorized checkers remeasure the executable at their bounded
+execution boundary. The
 [source setup profiles](setup-agent-from-source.md#profiles) provide maintained
 installation paths for `core`, `lean`, and `external-proof` checkouts.
 

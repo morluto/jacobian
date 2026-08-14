@@ -64,7 +64,6 @@ from jacobian.operation_execution import execute_operation
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
-from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 
@@ -161,14 +160,7 @@ class GraphComposeAdapter:
             version=self.spec.version,
             title=self.spec.title,
             description=self.spec.description,
-            provider="jacobian.networkx",
-            provider_runtime=known_provider_runtime(
-                "jacobian.networkx",
-                features=(
-                    "graph-composition",
-                    "simple-undirected-graphs",
-                ),
-            ),
+            provider="built-in",
             input_schema=GraphCompositionRequest.model_json_schema(),
             output_schema=model_schema(GraphCompositionOutput),
             tags=self.spec.tags,
@@ -279,15 +271,7 @@ class GraphEnumerateNonisomorphicAdapter:
                 "exact order (0-7) from the NetworkX Graph Atlas backend and "
                 "materialize the catalog with an explicit backend boundary."
             ),
-            provider="jacobian.networkx",
-            provider_runtime=known_provider_runtime(
-                "jacobian.networkx",
-                features=(
-                    "graph-atlas",
-                    "nonisomorphic-enumeration",
-                    "simple-undirected-graphs",
-                ),
-            ),
+            provider="built-in",
             input_schema=GraphEnumerationRequest.model_json_schema(),
             output_schema=model_schema(GraphEnumerationOutput),
             tags=(

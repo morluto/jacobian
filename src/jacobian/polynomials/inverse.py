@@ -68,11 +68,7 @@ class PolynomialMapInverseSynthesizeAdapter:
                 "then submit every found candidate to the independent two-sided "
                 "inverse verifier."
             ),
-            provider="jacobian.sympy",
-            provider_runtime=known_provider_runtime(
-                "jacobian.sympy",
-                features=("polynomial-map-inverse-ansatz", "exact-equation-solving"),
-            ),
+            provider="built-in",
             input_schema=model_schema(PolynomialMapInverseSynthesisRequest),
             output_schema=model_schema(PolynomialMapInverseSynthesisOutput),
             tags=("polynomial", "map", "inverse", "synthesis", "exact-rational"),

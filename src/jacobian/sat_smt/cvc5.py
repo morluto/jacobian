@@ -66,11 +66,11 @@ class _Cvc5Run:
     diagnostic: OperationDiagnostic | None = None
 
 
-def install_cvc5_operation(
+def bind_cvc5_operation(
     smt: SmtArtifactService,
     runtime: ProviderObservation,
 ) -> OperationAdapter[SmtUnsatProofFindRequest]:
-    """Install the Alethe producer for one exact available cvc5 runtime."""
+    """Bind the Alethe producer to one exact available cvc5 identity."""
 
     if (
         runtime.provider != "cvc5"
@@ -206,8 +206,7 @@ class Cvc5UnsatProofFindAdapter:
                 "establish UNSAT. The synchronous budget is at most 150 seconds; "
                 "named Boolean CNF is generally better for finite colorings."
             ),
-            provider="cvc5",
-            provider_runtime=backend.runtime,
+            provider="built-in",
             input_schema=model_schema(SmtUnsatProofFindRequest),
             output_schema=model_schema(SmtUnsatProofFindOutput),
             tags=(

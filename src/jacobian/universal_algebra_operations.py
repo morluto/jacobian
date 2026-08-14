@@ -634,11 +634,7 @@ class FiniteMagmaTableEnumerateAdapter:
                 "Enumerate every total binary-operation table of order one or two "
                 "in exact lexicographic row-major order."
             ),
-            provider="jacobian.finite-table",
-            provider_runtime=known_provider_runtime(
-                "jacobian.finite-table",
-                features=("finite-magma-table-enumeration",),
-            ),
+            provider="built-in",
             input_schema=model_schema(FiniteMagmaTableEnumerationRequest),
             output_schema=model_schema(FiniteMagmaTableEnumerationOutput),
             tags=("universal-algebra", "finite-model", "enumeration"),

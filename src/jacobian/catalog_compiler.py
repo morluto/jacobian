@@ -17,6 +17,7 @@ from jacobian.operation_catalog import (
     declaration_digest,
     exact_checker_declaration_digest,
     operation_declaration_digest,
+    public_operation_descriptor,
 )
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.polytope import PolytopeService
@@ -48,24 +49,19 @@ def compile_operation_catalog(
             authorize_bundled_checkers=authorize_bundled_checkers,
         )
         resources = build_catalog_operations(context, polytope)
-        descriptors = tuple(
+        bound_descriptors = tuple(
             sorted(
                 core.operations.snapshot().operations,
                 key=lambda item: item.operation_id,
             )
         )
-        checker_bindings = _checker_bindings(core.checkers, descriptors)
-        entries = _compiled_entries(core.operations._adapters, descriptors)
-        provider_inventory = tuple(
-            descriptor.provider_runtime.model_dump(mode="json")
-            for descriptor in descriptors
-            if descriptor.provider_runtime is not None
+        checker_bindings = _checker_bindings(core.checkers, bound_descriptors)
+        descriptors = tuple(
+            public_operation_descriptor(descriptor) for descriptor in bound_descriptors
         )
+        entries = _compiled_entries(core.operations._adapters, descriptors)
         return OperationCatalogStore(state_dir / "metadata.sqlite3").commit(
             package_version=__version__,
-            provider_inventory_digest=declaration_digest(
-                {"providers": list(provider_inventory)}
-            ),
             checker_binding_digest=declaration_digest(
                 {
                     "bindings": [

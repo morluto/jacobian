@@ -17,7 +17,7 @@ from jacobian.providers.external_solver_runtime import (
     carcara_provider_runtime,
     cvc5_provider_runtime,
 )
-from jacobian.sat_smt.cvc5 import install_cvc5_operation
+from jacobian.sat_smt.cvc5 import bind_cvc5_operation
 from jacobian.sat_smt.smt_operations import install_smt_unsat_proof_checker
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -38,7 +38,7 @@ def carcara_services(
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
         services.installation.register_operation(
-            install_cvc5_operation(services.core.smt, cvc5)
+            bind_cvc5_operation(services.core.smt, cvc5)
         )
         verifier, installation = install_smt_unsat_proof_checker(
             services.core.store,

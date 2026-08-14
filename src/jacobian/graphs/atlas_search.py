@@ -37,7 +37,6 @@ from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
-from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 
 if TYPE_CHECKING:
@@ -63,11 +62,7 @@ class GraphAtlasSearchAdapter:
                 "Search all Graph Atlas representatives of one exact order "
                 "(0-7) using exact NetworkX-computed constraints."
             ),
-            provider="jacobian.networkx",
-            provider_runtime=known_provider_runtime(
-                "jacobian.networkx",
-                features=("graph-atlas", "simple-undirected-graphs"),
-            ),
+            provider="built-in",
             input_schema=model_schema(GraphAtlasSearchRequest),
             output_schema=model_schema(GraphAtlasSearchOutput),
             tags=("graph", "construction", "bounded-search"),

@@ -52,7 +52,6 @@ def _store(root: Path) -> OperationCatalogStore:
 def _commit(store: OperationCatalogStore) -> int:
     result = store.commit(
         package_version="0.13.0",
-        provider_inventory_digest="sha256:" + "b" * 64,
         checker_binding_digest="sha256:" + "c" * 64,
         entries=(
             _entry("integer.gcd.compute", "Greatest common divisor"),
@@ -77,7 +76,6 @@ def _commit_with_checker(store: OperationCatalogStore) -> tuple[str, str]:
         )
     store.commit(
         package_version="0.13.0",
-        provider_inventory_digest="sha256:" + "b" * 64,
         checker_binding_digest="sha256:" + "c" * 64,
         entries=(
             _entry("integer.gcd.compute", "Greatest common divisor"),
@@ -139,7 +137,6 @@ def test_catalog_search_cards_preserve_typed_input_compatibility(
     )
     store.commit(
         package_version="0.13.0",
-        provider_inventory_digest="sha256:" + "b" * 64,
         checker_binding_digest="sha256:" + "c" * 64,
         entries=(
             CompiledCatalogEntry(
@@ -251,7 +248,6 @@ def test_failed_catalog_commit_leaves_previous_revision_active(tmp_path: Path) -
     with pytest.raises(sqlite3.IntegrityError):
         store.commit(
             package_version="0.13.0",
-            provider_inventory_digest="sha256:" + "d" * 64,
             checker_binding_digest="sha256:" + "e" * 64,
             entries=(_entry("integer.gcd.compute", "Changed GCD"),),
             checker_bindings={

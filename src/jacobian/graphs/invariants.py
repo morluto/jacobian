@@ -36,7 +36,6 @@ from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed
-from jacobian.provider_runtime import known_provider_runtime
 from jacobian.schema_registry import model_schema
 
 if TYPE_CHECKING:
@@ -90,11 +89,7 @@ class GraphPropertyAdapter:
                 "Classify and compute a requested batch against the fixed exact "
                 "graph-invariant registry, preserving every per-invariant outcome."
             ),
-            provider="jacobian.networkx",
-            provider_runtime=known_provider_runtime(
-                "jacobian.networkx",
-                features=("graph-properties", "simple-undirected-graphs"),
-            ),
+            provider="built-in",
             input_schema=input_schema,
             output_schema=model_schema(GraphInvariantBatchOutput),
             tags=("graph", "properties", "exact-computation"),

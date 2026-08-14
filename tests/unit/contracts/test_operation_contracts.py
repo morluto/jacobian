@@ -5,10 +5,12 @@ from pydantic import ValidationError
 
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
+    OperationDescriptor,
     OperationDiscoveryResult,
     OperationResult,
 )
 from jacobian.contracts.results import Execution, ExecutionStatus
+from jacobian.provider_runtime import known_provider_runtime
 
 RECORD_URI = "artifact://sha256/" + "a" * 64
 POLICY_DIGEST = "sha256:" + "b" * 64
@@ -67,6 +69,21 @@ def test_catalog_rejects_duplicate_or_nondeterministic_operation_ids() -> None:
                 ],
             }
         )
+
+
+def test_operation_descriptor_does_not_publish_execution_identity() -> None:
+    descriptor = OperationDescriptor.model_validate(
+        {
+            **_descriptor("integer.compute.gcd"),
+            "provider": "test.runtime",
+            "provider_runtime": known_provider_runtime("test.runtime"),
+        }
+    )
+
+    assert "provider_runtime" not in descriptor.model_dump(mode="json")
+    assert "provider_runtime" not in OperationDescriptor.model_json_schema()[
+        "properties"
+    ]
 
 
 def test_noncompleted_execution_cannot_carry_a_verification_record() -> None:

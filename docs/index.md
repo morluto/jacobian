@@ -65,7 +65,6 @@ expectations.
 - [Tool surface](reference/tools.md) — MCP resources, tools, and invocation contracts
 - [Domain operation library](reference/domain-operation-library.md) — built-in producer, bounded-search, artifact, and exact-replay contracts
 - [Native Python API](reference/python-api.md) — supported native-value modules
-- [Provider runtime](reference/provider-runtime.md) — backend availability, compatibility, and identity
 - [Persistent state format](reference/state-format.md) — supported migration floor and fresh-store transition
 - [Testing strategy](reference/testing-strategy.md) — validation layers, commands, and CI responsibilities
 

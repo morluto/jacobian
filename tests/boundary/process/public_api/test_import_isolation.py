@@ -71,9 +71,9 @@ finally:
     assert completed.returncode == 0, completed.stderr
 
 
-def test_portfolio_leaf_import_does_not_load_assembly_or_domains() -> None:
+def test_backend_check_import_does_not_load_assembly_or_domains() -> None:
     _assert_not_imported(
-        _imported_modules("jacobian.provider_inventory"),
+        _imported_modules("jacobian.maintained_backends"),
         (
             "jacobian.domains",
             "jacobian.catalog_build",

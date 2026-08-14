@@ -8,82 +8,11 @@ from typing import Any, cast
 
 import pytest
 
-import jacobian.catalog_foundations as foundation_binding
 from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.catalog_build_resources import CatalogBuildResources
 from jacobian.catalog_checkers import CatalogCheckerBuilder
-from jacobian.catalog_foundations import CatalogFoundationBuilder
 from jacobian.catalog_operations import CatalogOperationBuilder
-from jacobian.contracts.operations import (
-    ProviderAvailability,
-    ProviderDigestKind,
-    ProviderInstallTier,
-    ProviderObservation,
-)
 from jacobian.polytope import PolytopeService
-from jacobian.provider_inventory import (
-    ProviderInventory,
-    ProviderInventoryLoader,
-)
-
-
-def _unavailable_runtime(provider: str) -> ProviderObservation:
-    return ProviderObservation(
-        provider=provider,
-        availability=ProviderAvailability.UNAVAILABLE,
-        platform="test-platform",
-        install_tier=ProviderInstallTier.T0,
-        license_id="MIT",
-        diagnostic=f"{provider} is unavailable",
-    )
-
-
-def _available_runtime(provider: str) -> ProviderObservation:
-    return ProviderObservation(
-        provider=provider,
-        availability=ProviderAvailability.AVAILABLE,
-        version="1",
-        digest="sha256:" + "0" * 64,
-        digest_kind=ProviderDigestKind.SOURCE_TREE,
-        platform="test-platform",
-        install_tier=ProviderInstallTier.T0,
-        license_id="MIT",
-    )
-
-
-def _provider_plan_with_unavailable_external_solvers() -> ProviderInventory:
-    return ProviderInventory(
-        cadical=_unavailable_runtime("cadical"),
-        carcara=_unavailable_runtime("carcara"),
-        cvc5=_available_runtime("cvc5"),
-        drat_trim=_unavailable_runtime("drat-trim"),
-        sympy_polynomial_normalization=_available_runtime(
-            "sympy-polynomial-normalization"
-        ),
-    )
-
-
-def test_foundation_solver_phase_skips_unavailable_external_solver(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    registered: list[object] = []
-    context = SimpleNamespace(register_operation=registered.append, smt=object())
-    adapter = object()
-    monkeypatch.setattr(
-        foundation_binding,
-        "install_cvc5_operation",
-        lambda _smt, _runtime: adapter,
-    )
-
-    CatalogFoundationBuilder(cast(CatalogBuildContext, context)).bind_solver_components(
-        _provider_plan_with_unavailable_external_solvers(),
-    )
-
-    assert (
-        _provider_plan_with_unavailable_external_solvers().cadical.availability
-        is ProviderAvailability.UNAVAILABLE
-    )
-    assert registered == [adapter]
 
 
 def test_core_domain_verification_phase_accepts_empty_declarations() -> None:
@@ -109,10 +38,9 @@ class _UnauthorizedContext:
 
 def test_checker_phase_derives_authority_from_its_context() -> None:
     context = _UnauthorizedContext()
-    CatalogCheckerBuilder(
-        cast(CatalogBuildContext, context),
-        cast(ProviderInventoryLoader, object()),
-    ).bind(cast(PolytopeService, object()), CatalogBuildResources())
+    CatalogCheckerBuilder(cast(CatalogBuildContext, context)).bind(
+        cast(PolytopeService, object()), CatalogBuildResources()
+    )
 
     assert context.registered == []
 

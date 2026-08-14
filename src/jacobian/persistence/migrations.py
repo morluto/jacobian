@@ -528,7 +528,6 @@ _OPERATION_CATALOG_SCHEMA_STATEMENTS = (
         revision INTEGER PRIMARY KEY AUTOINCREMENT,
         package_version TEXT NOT NULL,
         format_version INTEGER NOT NULL,
-        provider_inventory_digest TEXT NOT NULL,
         checker_binding_digest TEXT NOT NULL,
         diagnostics_json BLOB NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

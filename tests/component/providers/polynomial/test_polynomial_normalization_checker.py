@@ -82,7 +82,7 @@ def test_independent_checker_rejects_wrong_bound_coefficients(
     candidate = runtime.core.polynomial_expressions.put_normalization(
         expression_uri=expression_uri,
         normalized={"terms": []},
-        producer=runtime.provider_runtime,
+        producer=runtime.producer,
         resource_budget={"wall_seconds": 5},
     )
     rejected = _invoke(

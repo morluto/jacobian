@@ -48,6 +48,7 @@ from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
 from jacobian.providers.flint_runtime import (
+    exact_domain_checker_provider_runtime,
     exact_domain_checker_source_provider_runtime,
 )
 from jacobian.registry import CheckerRegistry
@@ -401,7 +402,7 @@ def bind_selected_exact_verification(
         )
     descriptor = catalog.inspect(operation_id)
     binding = catalog.checker_binding(operation_id)
-    if descriptor is None or binding is None or descriptor.provider_runtime is None:
+    if descriptor is None or binding is None:
         raise OperationCatalogError(
             f"exact verifier catalog binding is incomplete; run `jacobian update`: {operation_id}"
         )
@@ -409,12 +410,9 @@ def bind_selected_exact_verification(
         binding.checker_id,
         implementation_digest=binding.manifest_digest,
     )
-    if binding.checker_id not in {
-        str(checker_id) for checker_id in descriptor.provider_runtime.checker_ids
-    }:
-        raise OperationCatalogError(
-            f"exact verifier descriptor binding changed; run `jacobian update`: {operation_id}"
-        )
+    provider_runtime = exact_domain_checker_provider_runtime(
+        checker_ids=(binding.checker_id,)
+    )
 
     producer = producers[0]
     bound = binder.bind(operations)
@@ -448,7 +446,7 @@ def bind_selected_exact_verification(
         values=binder.values,
         verification=verification,
         witness_schema_uri=witness_schema_uri,
-        provider_runtime=descriptor.provider_runtime,
+        provider_runtime=provider_runtime,
         stored_result_input=stored_result_input,
         candidate_value_type=candidate_value_type,
     )

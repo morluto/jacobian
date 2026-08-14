@@ -54,7 +54,6 @@ class CatalogHeader:
     revision: int
     package_version: str
     format_version: int
-    provider_inventory_digest: str
     checker_binding_digest: str
     diagnostics: tuple[dict[str, Any], ...]
 
@@ -123,6 +122,17 @@ class CatalogBuildResult:
     diagnostics: tuple[dict[str, Any], ...]
 
 
+def public_operation_descriptor(
+    descriptor: OperationDescriptor,
+) -> OperationDescriptor:
+    """Remove execution-only identity from catalog and wire descriptors."""
+
+    return descriptor.model_copy(
+        update={"provider": "built-in", "provider_runtime": None},
+        deep=True,
+    )
+
+
 class OperationCatalogStore:
     """Own catalog writes performed only by the operator lifecycle."""
 
@@ -133,7 +143,6 @@ class OperationCatalogStore:
         self,
         *,
         package_version: str,
-        provider_inventory_digest: str,
         checker_binding_digest: str,
         entries: tuple[CompiledCatalogEntry, ...],
         checker_bindings: dict[str, tuple[str, str]],
@@ -151,13 +160,12 @@ class OperationCatalogStore:
             cursor = connection.execute(
                 """
                 INSERT INTO operation_catalog_snapshots(
-                    package_version, format_version, provider_inventory_digest,
-                    checker_binding_digest, diagnostics_json
-                ) VALUES (?, 1, ?, ?, ?)
+                    package_version, format_version, checker_binding_digest,
+                    diagnostics_json
+                ) VALUES (?, 1, ?, ?)
                 """,
                 (
                     package_version,
-                    provider_inventory_digest,
                     checker_binding_digest,
                     canonicalize_json(list(diagnostics)),
                 ),
@@ -346,7 +354,6 @@ class OperationCatalog:
                 revision=int(row["revision"]),
                 package_version=str(row["package_version"]),
                 format_version=int(row["format_version"]),
-                provider_inventory_digest=str(row["provider_inventory_digest"]),
                 checker_binding_digest=str(row["checker_binding_digest"]),
                 diagnostics=tuple(
                     cast(
@@ -518,4 +525,5 @@ __all__ = [
     "declaration_digest",
     "exact_checker_declaration_digest",
     "operation_declaration_digest",
+    "public_operation_descriptor",
 ]

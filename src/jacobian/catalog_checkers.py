@@ -36,8 +36,8 @@ from jacobian.lean_frontend.proof_state_inspect import (
 )
 from jacobian.lean_frontend.service import LeanService
 from jacobian.polytope import PolytopeService
-from jacobian.provider_inventory import ProviderInventoryLoader
 from jacobian.provider_runtime import jacobian_provider_runtime
+from jacobian.providers.lean_runtime import lean_provider_runtime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,7 +47,6 @@ class CatalogCheckerBuilder:
     """Authorize retained checkers and build their catalog descriptors."""
 
     context: CatalogBuildContext
-    provider_resolver: ProviderInventoryLoader
 
     def bind(
         self,
@@ -76,11 +75,9 @@ class CatalogCheckerBuilder:
             ctx.store,
             ctx.schemas,
             ctx.checkers,
-            resolve_provider_runtime=lambda profiles: (
-                self.provider_resolver.resolve_lean(
-                    profiles=profiles,
-                    checker_ids=(),
-                )
+            resolve_provider_runtime=lambda profiles: lean_provider_runtime(
+                profiles=profiles,
+                checker_ids=(),
             ),
         )
         runtime = checker_runtime.model_copy(

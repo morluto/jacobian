@@ -43,9 +43,6 @@ from jacobian.process_policy import (
     execute_process,
 )
 from jacobian.provider_runtime import SYMPY_VERSION
-from jacobian.providers.sympy_runtime import (
-    sympy_polynomial_normalization_provider_runtime,
-)
 from jacobian.schema_registry import model_schema
 from jacobian.sympy_polynomial_protocol import (
     make_sympy_polynomial_worker_request,
@@ -69,11 +66,11 @@ class _SympyNormalizationRun:
     detail: str | None = None
 
 
-def install_sympy_polynomial_normalization_operation(
+def bind_sympy_polynomial_normalization(
     expressions: PolynomialExpressionArtifactService,
     runtime: ProviderObservation,
 ) -> OperationAdapter[Any]:
-    """Install the producer only for the exact supported SymPy profile."""
+    """Bind the producer to the supported SymPy artifact identity."""
 
     if (
         runtime.availability is not ProviderAvailability.AVAILABLE
@@ -89,26 +86,11 @@ def install_sympy_polynomial_normalization_operation(
 
 
 class _SympyPolynomialNormalizationBackend:
-    def __init__(self, runtime: ProviderObservation) -> None:
-        self.runtime = runtime
-
     def run(
         self,
         request: PolynomialExpressionNormalizeRequest,
     ) -> _SympyNormalizationRun:
         started = time.monotonic()
-        if (
-            sympy_polynomial_normalization_provider_runtime(refresh=True)
-            != self.runtime
-        ):
-            return _failure(
-                started,
-                ExecutionStatus.ERROR,
-                (
-                    "The installed SymPy runtime no longer matches the operation "
-                    "descriptor; no normalization evidence was retained."
-                ),
-            )
         worker_request = make_sympy_polynomial_worker_request(request.expression)
         completed = execute_process(
             ProcessRequest(
@@ -149,18 +131,6 @@ class _SympyPolynomialNormalizationBackend:
                     "protocol; no normalization evidence was retained."
                 ),
             )
-        if (
-            sympy_polynomial_normalization_provider_runtime(refresh=True)
-            != self.runtime
-        ):
-            return _failure(
-                started,
-                ExecutionStatus.ERROR,
-                (
-                    "The installed SymPy runtime changed during execution; no "
-                    "normalization evidence was retained."
-                ),
-            )
         return _SympyNormalizationRun(
             execution_status=ExecutionStatus.COMPLETED,
             runtime_ms=_runtime_ms(started),
@@ -178,7 +148,8 @@ class SympyPolynomialExpressionNormalizeAdapter:
         runtime: ProviderObservation,
     ) -> None:
         self.expressions = expressions
-        self.backend = _SympyPolynomialNormalizationBackend(runtime)
+        self.producer = runtime
+        self.backend = _SympyPolynomialNormalizationBackend()
         self._descriptor = OperationDescriptor(
             operation_id="polynomial.expression.normalize",
             version="1",
@@ -191,8 +162,7 @@ class SympyPolynomialExpressionNormalizeAdapter:
                 "normalizations do not verify an identity parameterized over all "
                 "orders. Verify each full expression relation separately."
             ),
-            provider="jacobian.sympy",
-            provider_runtime=runtime,
+            provider="built-in",
             input_schema=model_schema(PolynomialExpressionNormalizeRequest),
             output_schema=model_schema(PolynomialExpressionNormalizeOutput),
             tags=(
@@ -346,7 +316,7 @@ class SympyPolynomialExpressionNormalizeAdapter:
             normalization_uri = self.expressions.put_normalization(
                 expression_uri=expression_uri,
                 normalized=run.normalized,
-                producer=self.backend.runtime,
+                producer=self.producer,
                 resource_budget=validated.resource_budget,
             ).artifact_uri
         output = PolynomialExpressionNormalizeOutput(

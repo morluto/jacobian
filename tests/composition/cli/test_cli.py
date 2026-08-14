@@ -17,7 +17,7 @@ def test_cli_help_exposes_only_math_and_operator_commands() -> None:
     result = CliRunner().invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    for command in ("init", "catalog", "inspect", "run", "provider-measure"):
+    for command in ("init", "update", "catalog", "inspect", "run"):
         assert command in result.stdout
     for deleted in ("search-enumerate", "experiment-inspect", "artifact-put"):
         assert deleted not in result.stdout

@@ -19,16 +19,6 @@ class _RecordingContext:
         self.events.append(f"exit:{self.name}")
 
 
-class _Resolver:
-    def __init__(self, events: list[str]) -> None:
-        self.events = events
-        events.append("resolver:init")
-
-    def resolve(self) -> str:
-        self.events.append("resolver:resolve")
-        return "runtimes"
-
-
 def _binder(
     events: list[str], name: str, *, bind_event: str | None = None
 ) -> SimpleNamespace:
@@ -48,11 +38,27 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
     )
     context = SimpleNamespace(store=store, checkers=checkers)
 
-    monkeypatch.setattr(assembler, "ProviderInventoryLoader", lambda: _Resolver(events))
     monkeypatch.setattr(
         assembler,
-        "CatalogFoundationBuilder",
-        lambda _context: _binder(events, "foundation"),
+        "require_maintained_math_backends",
+        lambda: events.append("backends:check"),
+    )
+    for probe_name in (
+        "cadical_provider_runtime",
+        "carcara_provider_runtime",
+        "cvc5_provider_runtime",
+        "drat_trim_provider_runtime",
+        "sympy_polynomial_normalization_provider_runtime",
+    ):
+        monkeypatch.setattr(
+            assembler,
+            probe_name,
+            lambda name=probe_name: events.append(name) or name,
+        )
+    monkeypatch.setattr(
+        assembler,
+        "bind_catalog_foundations",
+        lambda *_args, **_kwargs: events.append("foundation:bind"),
     )
     monkeypatch.setattr(
         assembler,
@@ -65,7 +71,7 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
         lambda _context: _binder(events, "resource"),
     )
 
-    def checker_binder(_context, _resolver):
+    def checker_binder(_context):
         events.append("checker:init")
         return SimpleNamespace(
             bind=lambda *_args: (
@@ -82,11 +88,14 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
     assert isinstance(resources, CatalogBuildResources)
     resources.close()
     assert events == [
-        "resolver:init",
         "enter:policy",
         "enter:store",
-        "resolver:resolve",
-        "foundation:init",
+        "backends:check",
+        "cadical_provider_runtime",
+        "carcara_provider_runtime",
+        "cvc5_provider_runtime",
+        "drat_trim_provider_runtime",
+        "sympy_polynomial_normalization_provider_runtime",
         "foundation:bind",
         "core:init",
         "core:bind",

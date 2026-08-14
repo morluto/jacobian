@@ -3,8 +3,8 @@ from __future__ import annotations
 from contextlib import nullcontext
 from types import SimpleNamespace
 
-import jacobian.portfolio.assembler as assembler
-from jacobian.runtime.portfolio import PortfolioResources
+import jacobian.catalog_build as assembler
+from jacobian.catalog_build_resources import CatalogBuildResources
 
 
 class _RecordingContext:
@@ -38,7 +38,7 @@ def _binder(
     )
 
 
-def test_assemble_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None:
+def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) -> None:
     events: list[str] = []
     store = SimpleNamespace(
         transaction=lambda: _RecordingContext(events, "store"),
@@ -50,22 +50,20 @@ def test_assemble_portfolio_owns_transaction_and_phase_order(monkeypatch) -> Non
     application = SimpleNamespace(core=core)
     context = SimpleNamespace(store=store)
 
-    monkeypatch.setattr(
-        assembler, "ProviderAvailabilityResolver", lambda: _Resolver(events)
-    )
+    monkeypatch.setattr(assembler, "ProviderInventoryLoader", lambda: _Resolver(events))
     monkeypatch.setattr(
         assembler,
-        "FoundationBinder",
+        "CatalogFoundationBuilder",
         lambda _context: _binder(events, "foundation"),
     )
     monkeypatch.setattr(
         assembler,
-        "CoreOperationBinder",
+        "CatalogOperationBuilder",
         lambda _context: _binder(events, "core"),
     )
     monkeypatch.setattr(
         assembler,
-        "ResourceOperationBinder",
+        "CatalogResourceBuilder",
         lambda _context: _binder(events, "resource"),
     )
 
@@ -78,12 +76,12 @@ def test_assemble_portfolio_owns_transaction_and_phase_order(monkeypatch) -> Non
             )[1]
         )
 
-    monkeypatch.setattr(assembler, "CheckerPortfolioBinder", checker_binder)
+    monkeypatch.setattr(assembler, "CatalogCheckerBuilder", checker_binder)
     monkeypatch.setattr(assembler, "cached_package_digests", lambda: nullcontext())
 
-    resources = assembler.assemble_portfolio(context, application)
+    resources = assembler.build_catalog_operations(context, application)
 
-    assert isinstance(resources, PortfolioResources)
+    assert isinstance(resources, CatalogBuildResources)
     resources.close()
     assert events == [
         "resolver:init",

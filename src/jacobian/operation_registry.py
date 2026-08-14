@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from jacobian.builtin_operation_modules import load_builtin_operation_module
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_adapters import OperationAdapter
@@ -19,7 +20,6 @@ from jacobian.operation_catalog import (
 from jacobian.operation_declarations import OperationDeclarations
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.polytope import PolytopeService
-from jacobian.portfolio.builtin import load_builtin_operation_module
 from jacobian.registry import CheckerRegistry
 from jacobian.sat_smt.sat import SatArtifactService
 from jacobian.sat_smt.smt import SmtArtifactService

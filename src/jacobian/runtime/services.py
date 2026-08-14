@@ -1,4 +1,4 @@
-"""Small runtime-owned service graph for the mathematical portfolio."""
+"""Small runtime-owned service graph for selected mathematical operations."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from jacobian.verification.service import VerificationService
 
 @dataclass(slots=True)
 class CoreServices:
-    """Foundational persistence and registries shared across the portfolio."""
+    """Foundational persistence and registries shared by selected operations."""
 
     store: ArtifactRepository
     schemas: SchemaRegistry

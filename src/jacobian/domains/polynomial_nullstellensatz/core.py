@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
+from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.checker_operations import CheckerOperation
 from jacobian.contracts.checkers import EvidenceKind
@@ -41,7 +42,6 @@ from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
-from jacobian.portfolio.context import PortfolioContext
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
@@ -523,7 +523,7 @@ def bind_selected_nullstellensatz_operation(
 
 
 def install_nullstellensatz_core(
-    context: PortfolioContext,
+    context: CatalogBuildContext,
     provider_runtime: ProviderObservation,
 ) -> BoundOperationGroup:
     contracts = register_nullstellensatz_resources(context.store, context.schemas)

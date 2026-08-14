@@ -6,13 +6,13 @@ from collections.abc import Callable
 
 import pytest
 
-import jacobian.portfolio.provider_resolution as provider_resolution
+import jacobian.provider_inventory as provider_resolution
 from jacobian.contracts.operations import (
     ProviderAvailability,
     ProviderInstallTier,
     ProviderObservation,
 )
-from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
+from jacobian.provider_inventory import ProviderInventoryLoader
 from jacobian.provider_runtime import ProviderRuntimeError, known_provider_runtime
 
 
@@ -47,7 +47,7 @@ def test_resolve_builds_one_typed_plan_from_each_declared_probe(
         lambda: known_provider_runtime("python_flint"),
     )
 
-    plan = ProviderAvailabilityResolver().resolve()
+    plan = ProviderInventoryLoader().resolve()
 
     assert calls == list(names)
     assert tuple(getattr(plan, name).provider for name in names) == names
@@ -76,7 +76,7 @@ def test_resolve_rejects_a_missing_packaged_python_backend(
         ProviderRuntimeError,
         match=r"required Python providers are unavailable: jacobian\.networkx",
     ):
-        ProviderAvailabilityResolver().resolve()
+        ProviderInventoryLoader().resolve()
 
 
 def test_packaged_backend_failure_reports_every_broken_provider() -> None:
@@ -124,7 +124,7 @@ def test_lean_resolution_preserves_installed_checker_profile_inputs(
     monkeypatch.setattr(provider_resolution, "lean_provider_runtime", resolve_lean)
     profiles = {"mathlib": {"semantics_uri": "semantics://lean"}}
 
-    runtime = ProviderAvailabilityResolver().resolve_lean(
+    runtime = ProviderInventoryLoader().resolve_lean(
         profiles=profiles,
         checker_ids=("lean.mathlib",),
     )
@@ -146,6 +146,6 @@ def test_lean_frontend_resolution_uses_dedicated_health_probe(
         lambda: expected,
     )
 
-    runtime = ProviderAvailabilityResolver().resolve_lean_frontend()
+    runtime = ProviderInventoryLoader().resolve_lean_frontend()
 
     assert runtime is expected

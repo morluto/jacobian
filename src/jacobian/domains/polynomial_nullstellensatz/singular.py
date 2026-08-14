@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.nullstellensatz import (
     BoundedRationalPolynomial,
@@ -42,7 +43,6 @@ from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
-from jacobian.portfolio.context import PortfolioContext
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessResourceLimits,
@@ -323,7 +323,7 @@ def _certificate_payload(
 class SingularNullstellensatzCertificateAdapter:
     def __init__(
         self,
-        context: PortfolioContext,
+        context: CatalogBuildContext,
         dependency: BoundOperationGroup,
         provider_runtime: ProviderObservation,
     ) -> None:
@@ -520,7 +520,7 @@ class SingularNullstellensatzCertificateAdapter:
 
 
 def install_singular_producer(
-    context: PortfolioContext,
+    context: CatalogBuildContext,
     dependency: BoundOperationGroup,
     provider_runtime: ProviderObservation,
 ) -> BoundOperationGroup:

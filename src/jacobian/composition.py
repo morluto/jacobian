@@ -4,13 +4,35 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jacobian.portfolio.assembler import assemble_portfolio
-from jacobian.portfolio.context import create_portfolio_context
+from jacobian.catalog_build import build_catalog_operations
+from jacobian.catalog_build_context import create_catalog_build_context
+from jacobian.catalog_build_resources import CatalogBuildResources
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.portfolio import PortfolioResources
-from jacobian.runtime.services import build_runtime_services
+from jacobian.runtime.services import (
+    CoreServices,
+    RuntimeServices,
+    build_runtime_services,
+)
+
+
+class CatalogBuildRuntime(JacobianRuntime):
+    """Compatibility owner for compiler-focused tests pending migration."""
+
+    def __init__(
+        self,
+        core: CoreServices,
+        services: RuntimeServices,
+        resources: CatalogBuildResources,
+    ) -> None:
+        super().__init__(
+            core,
+            services,
+            close_resources=resources.close,
+            start_lean_warmup=lambda: _start_lean_warmup(resources),
+        )
+        self.catalog_build_resources = resources
 
 
 def compose_runtime(root: str | Path, options: RuntimeOptions) -> JacobianRuntime:
@@ -19,14 +41,9 @@ def compose_runtime(root: str | Path, options: RuntimeOptions) -> JacobianRuntim
     core = bootstrap_services(root, options)
     try:
         services = build_runtime_services(core)
-        portfolio = create_portfolio_context(core, services, options)
-        portfolio_resources = assemble_portfolio(portfolio, services)
-        return JacobianRuntime(
-            core,
-            services,
-            portfolio_resources,
-            start_lean_warmup=lambda: _start_lean_warmup(portfolio_resources),
-        )
+        portfolio = create_catalog_build_context(core, services, options)
+        catalog_build_resources = build_catalog_operations(portfolio, services)
+        return CatalogBuildRuntime(core, services, catalog_build_resources)
     except BaseException as error:
         cleanup_failures: list[BaseException] = []
         try:
@@ -41,7 +58,7 @@ def compose_runtime(root: str | Path, options: RuntimeOptions) -> JacobianRuntim
         raise
 
 
-def _start_lean_warmup(resources: PortfolioResources) -> None:
+def _start_lean_warmup(resources: CatalogBuildResources) -> None:
     if resources.lean is not None:
         resources.lean.start_mathlib_warmup()
 

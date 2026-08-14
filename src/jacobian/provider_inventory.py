@@ -1,4 +1,4 @@
-"""Resolve packaged and operator-installed provider runtimes once."""
+"""Measure the explicit built-in provider inventory during catalog updates."""
 
 from __future__ import annotations
 
@@ -33,8 +33,8 @@ from jacobian.providers.sympy_runtime import (
 
 
 @dataclass(frozen=True, slots=True)
-class ProviderRuntimePlan:
-    """Resolved runtimes consumed by installation without repeating probes."""
+class ProviderInventory:
+    """Provider observations consumed by one catalog build."""
 
     cadical: ProviderObservation
     carcara: ProviderObservation
@@ -44,10 +44,10 @@ class ProviderRuntimePlan:
 
 
 @dataclass(frozen=True, slots=True)
-class ProviderAvailabilityResolver:
-    """Resolve provider availability before operation installation begins."""
+class ProviderInventoryLoader:
+    """Measure maintained providers before catalog descriptors are built."""
 
-    def resolve(self) -> ProviderRuntimePlan:
+    def resolve(self) -> ProviderInventory:
         cvc5 = cvc5_provider_runtime()
         sympy_polynomial_normalization = (
             sympy_polynomial_normalization_provider_runtime()
@@ -62,7 +62,7 @@ class ProviderAvailabilityResolver:
                 sympy_polynomial_normalization,
             )
         )
-        return ProviderRuntimePlan(
+        return ProviderInventory(
             cadical=cadical_provider_runtime(),
             carcara=carcara_provider_runtime(),
             cvc5=cvc5,

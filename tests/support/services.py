@@ -7,12 +7,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from jacobian.catalog_build_context import (
+    CatalogBuildContext,
+    create_catalog_build_context,
+)
 from jacobian.implementation import cached_package_digests
 from jacobian.operation_declarations import OperationDeclarations
-from jacobian.portfolio.context import (
-    PortfolioContext,
-    create_portfolio_context,
-)
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.services import (
@@ -28,7 +28,7 @@ class DomainTestServices:
 
     core: CoreServices
     application: RuntimeServices
-    installation: PortfolioContext
+    installation: CatalogBuildContext
 
 
 @contextmanager
@@ -64,7 +64,7 @@ def open_domain_services(
     core = bootstrap_services(root, resolved_options)
     try:
         application = build_runtime_services(core)
-        installation = create_portfolio_context(
+        installation = create_catalog_build_context(
             core,
             application,
             resolved_options,

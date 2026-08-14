@@ -7,6 +7,7 @@ import pytest
 from tests.support.artifacts import artifact_uri as _uri
 
 import jacobian.exact_domain_checkers as exact_domain_checkers
+from jacobian.builtin_operation_modules import load_builtin_operation_modules
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
 from jacobian.contracts.graph_invariant_operations import (
     GraphInvariantRequest,
@@ -62,7 +63,6 @@ from jacobian.exact_domain_checkers import (
 )
 from jacobian.operation_binding import BoundOperationGroup
 from jacobian.operation_declarations import OperationDeclarations
-from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.provider_runtime import source_provider_runtime
 from jacobian.providers.flint_runtime import (
     exact_domain_checker_provider_runtime,

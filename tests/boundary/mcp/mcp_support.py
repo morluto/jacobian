@@ -13,7 +13,6 @@ from jacobian.adapters.mcp.server import create_server_from_runtime
 from jacobian.operation_declarations import OperationDeclarations
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.portfolio import PortfolioResources
 from tests.support.services import open_domain_services
 
 
@@ -29,12 +28,7 @@ def open_focused_mcp_server(
         *bundles,
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
-        runtime = JacobianRuntime(
-            services.core,
-            services.application,
-            PortfolioResources(),
-            lambda: None,
-        )
+        runtime = JacobianRuntime(services.core, services.application)
         yield create_server_from_runtime(
             runtime,
             close_owner=lambda: None,

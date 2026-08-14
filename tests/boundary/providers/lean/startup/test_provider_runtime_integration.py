@@ -30,7 +30,7 @@ def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
         diagnostic="The pinned Lean runtime is unavailable.",
     )
     monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.lean_provider_runtime",
+        "jacobian.provider_inventory.lean_provider_runtime",
         lambda **_kwargs: unavailable,
     )
 
@@ -38,7 +38,7 @@ def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
         state, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
     )
     try:
-        assert runtime.portfolio_resources.lean is None
+        assert runtime.catalog_build_resources.lean is None
         operation_ids = {
             item.operation_id for item in runtime.core.operations.catalog().operations
         }
@@ -67,7 +67,7 @@ def test_unhealthy_lean_frontend_is_absent_from_catalog(
         diagnostic=("TOOLCHAIN_RESOLUTION: the pinned Lean executable is unavailable"),
     )
     monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.lean_frontend_provider_runtime",
+        "jacobian.provider_inventory.lean_frontend_provider_runtime",
         lambda: unavailable,
     )
 

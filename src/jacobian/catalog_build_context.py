@@ -1,4 +1,4 @@
-"""Dependencies owned by built-in mathematical portfolio assembly."""
+"""Operator-owned dependencies used while compiling the built-in catalog."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class PortfolioContext:
-    """Resources required while assembling the explicit built-in portfolio."""
+class CatalogBuildContext:
+    """Resources required while compiling the explicit built-in catalog."""
 
     store: ArtifactRepository
     schemas: SchemaRegistry
@@ -42,16 +42,16 @@ class PortfolioContext:
         return self.checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
 
 
-def create_portfolio_context(
+def create_catalog_build_context(
     core: CoreServices,
     services: RuntimeServices,
     options: RuntimeOptions,
-) -> PortfolioContext:
-    """Build the portfolio assembly context for one runtime graph.
+) -> CatalogBuildContext:
+    """Build the operator-only context for one catalog compilation.
 
     The context is derived from explicit core and runtime ownership. It keeps
     operation visibility and operator-owned checker authority at the one
-    portfolio composition boundary.
+    catalog build boundary.
 
     The registrar is the only place where operation exclusions are applied;
     every built-in adapter therefore follows the same policy.
@@ -66,7 +66,7 @@ def create_portfolio_context(
         if adapter.descriptor.operation_id not in excluded:
             core.operations.register(adapter)
 
-    return PortfolioContext(
+    return CatalogBuildContext(
         store=core.store,
         schemas=core.schemas,
         artifacts=core.artifacts,

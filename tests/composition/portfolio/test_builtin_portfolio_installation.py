@@ -1,5 +1,6 @@
 """Whole-portfolio installation coverage belongs to the integration lane."""
 
+from jacobian.builtin_operation_modules import load_builtin_operation_modules
 from jacobian.contracts.operations import ProviderAvailability
 from jacobian.domains.polynomial_nullstellensatz.core import (
     MATERIALIZE_OPERATION_ID,
@@ -8,7 +9,6 @@ from jacobian.domains.polynomial_nullstellensatz.core import (
 from jacobian.domains.polynomial_nullstellensatz.singular import (
     PRODUCE_OPERATION_ID,
 )
-from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.model import JacobianRuntime
 

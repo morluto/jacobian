@@ -2,7 +2,7 @@
 
 import pytest
 
-from jacobian.portfolio.builtin import load_builtin_operation_modules
+from jacobian.builtin_operation_modules import load_builtin_operation_modules
 
 _INLINE_REPLAY_CHECKERS = tuple(
     declaration

@@ -1,9 +1,10 @@
-"""Binding of resource-backed portfolio operations."""
+"""Compilation of resource-backed operation descriptors."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.contracts.operations import ProviderAvailability
 from jacobian.graphs.composition import (
     install_graph_composition_operations,
@@ -16,17 +17,16 @@ from jacobian.polynomial_interval_operations import (
 from jacobian.polynomial_positivity_operations import (
     install_polynomial_positivity_operations,
 )
-from jacobian.portfolio.context import PortfolioContext
-from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
+from jacobian.provider_inventory import ProviderInventoryLoader
 
 
 @dataclass(frozen=True, slots=True)
-class ResourceOperationBinder:
-    """Bind resources after their core operation dependencies exist."""
+class CatalogResourceBuilder:
+    """Build resource-backed descriptors after their dependencies."""
 
-    context: PortfolioContext
-    provider_resolver: ProviderAvailabilityResolver = field(
-        default_factory=ProviderAvailabilityResolver
+    context: CatalogBuildContext
+    provider_resolver: ProviderInventoryLoader = field(
+        default_factory=ProviderInventoryLoader
     )
 
     def bind(self, graph: GraphInstallation) -> None:

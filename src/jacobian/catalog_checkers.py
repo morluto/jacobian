@@ -12,6 +12,8 @@ import logging
 from dataclasses import dataclass
 
 from jacobian.builtin_operations import LeanCheckAdapter
+from jacobian.catalog_build_context import CatalogBuildContext
+from jacobian.catalog_build_resources import CatalogBuildResources
 from jacobian.checker_authorization import (
     install_lean_checkers,
     install_polytope_checkers,
@@ -33,27 +35,25 @@ from jacobian.lean_frontend.proof_state_inspect import (
     install_lean_proof_state_inspect_only,
 )
 from jacobian.lean_frontend.service import LeanService
-from jacobian.portfolio.context import PortfolioContext
-from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
+from jacobian.provider_inventory import ProviderInventoryLoader
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.runtime.config import CheckerAuthorityMode
-from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import RuntimeServices
 
 _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class CheckerPortfolioBinder:
-    """Bind polytope and Lean checkers under operator-owned authority."""
+class CatalogCheckerBuilder:
+    """Authorize retained checkers and build their catalog descriptors."""
 
-    context: PortfolioContext
-    provider_resolver: ProviderAvailabilityResolver
+    context: CatalogBuildContext
+    provider_resolver: ProviderInventoryLoader
 
     def bind(
         self,
         services: RuntimeServices,
-        resources: PortfolioResources,
+        resources: CatalogBuildResources,
     ) -> None:
         ctx = self.context
         # INSTALL_BUNDLED creates authority; HYDRATE_EXISTING binds only checker
@@ -64,7 +64,7 @@ class CheckerPortfolioBinder:
     def _bind_checkers(
         self,
         services: RuntimeServices,
-        resources: PortfolioResources,
+        resources: CatalogBuildResources,
     ) -> None:
         ctx = self.context
         install_polytope_checkers(

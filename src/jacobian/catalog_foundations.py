@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.contracts.operations import (
     ProviderAvailability,
     ProviderObservation,
@@ -21,8 +22,7 @@ from jacobian.contracts.operations import (
 from jacobian.polynomial_expression_operations import (
     install_polynomial_expression_checker,
 )
-from jacobian.portfolio.context import PortfolioContext
-from jacobian.portfolio.provider_resolution import ProviderRuntimePlan
+from jacobian.provider_inventory import ProviderInventory
 from jacobian.runtime.services import CoreServices
 from jacobian.sat_smt.cadical import install_cadical_operations
 from jacobian.sat_smt.cvc5 import install_cvc5_operation
@@ -41,15 +41,15 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class FoundationBinder:
-    """Bind foundational checkers and solver operations."""
+class CatalogFoundationBuilder:
+    """Build foundational checker and solver descriptors for the catalog."""
 
-    context: PortfolioContext
+    context: CatalogBuildContext
 
     def bind(
         self,
         core: CoreServices,
-        runtimes: ProviderRuntimePlan,
+        runtimes: ProviderInventory,
     ) -> None:
         """Bind solver, linear, and normalization foundations."""
 
@@ -114,7 +114,7 @@ class FoundationBinder:
     def bind_solver_components(
         self,
         core: CoreServices,
-        runtimes: ProviderRuntimePlan,
+        runtimes: ProviderInventory,
     ) -> None:
         """Bind the packaged cvc5 adapter and optional CaDiCaL adapter."""
 

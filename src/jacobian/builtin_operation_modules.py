@@ -1,4 +1,4 @@
-"""Explicit inventory of built-in mathematical operation modules."""
+"""Explicit immutable inventory of built-in operation declaration modules."""
 
 from __future__ import annotations
 

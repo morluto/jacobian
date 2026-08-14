@@ -6,6 +6,9 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from jacobian import __version__
+from jacobian.builtin_operation_modules import load_builtin_operation_modules
+from jacobian.catalog_build import build_catalog_operations
+from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_catalog import (
     CatalogBuildResult,
@@ -16,9 +19,6 @@ from jacobian.operation_catalog import (
     operation_declaration_digest,
 )
 from jacobian.operation_service import OperationPolicy
-from jacobian.portfolio.assembler import assemble_portfolio
-from jacobian.portfolio.builtin import load_builtin_operation_modules
-from jacobian.portfolio.context import create_portfolio_context
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
@@ -40,8 +40,8 @@ def compile_operation_catalog(
     resources = None
     try:
         services = build_runtime_services(core)
-        context = create_portfolio_context(core, services, options)
-        resources = assemble_portfolio(context, services)
+        context = create_catalog_build_context(core, services, options)
+        resources = build_catalog_operations(context, services)
         descriptors = tuple(
             sorted(
                 core.operations.catalog().operations,

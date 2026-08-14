@@ -5,12 +5,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.operation_declarations import OperationDeclarations
-from jacobian.portfolio.context import create_portfolio_context
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import build_runtime_services
 from tests.support.services import atomic_installation
 
@@ -28,19 +27,14 @@ def create_selected_runtime(
     core = bootstrap_services(root, options)
     try:
         services = build_runtime_services(core)
-        installation = create_portfolio_context(core, services, options)
+        installation = create_catalog_build_context(core, services, options)
         if bundles:
             with atomic_installation(core):
                 for operations in bundles:
                     bound = installation.binder.bind(operations)
                     for adapter in bound.adapters:
                         installation.register_operation(adapter)
-        return JacobianRuntime(
-            core,
-            services,
-            PortfolioResources(),
-            start_lean_warmup=lambda: None,
-        )
+        return JacobianRuntime(core, services)
     except BaseException as error:
         cleanup_failures: list[BaseException] = []
         try:

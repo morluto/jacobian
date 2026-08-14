@@ -1,4 +1,4 @@
-"""Thin CLI projection over the installed mathematical portfolio."""
+"""Thin CLI projection over the compiled mathematical operation catalog."""
 
 from __future__ import annotations
 

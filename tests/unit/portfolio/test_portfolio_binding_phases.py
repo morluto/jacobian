@@ -8,23 +8,23 @@ from typing import Any, cast
 
 import pytest
 
-import jacobian.portfolio.foundation_binding as foundation_binding
+import jacobian.catalog_foundations as foundation_binding
+from jacobian.catalog_build_context import CatalogBuildContext
+from jacobian.catalog_build_resources import CatalogBuildResources
+from jacobian.catalog_checkers import CatalogCheckerBuilder
+from jacobian.catalog_foundations import CatalogFoundationBuilder
+from jacobian.catalog_operations import CatalogOperationBuilder
 from jacobian.contracts.operations import (
     ProviderAvailability,
     ProviderDigestKind,
     ProviderInstallTier,
     ProviderObservation,
 )
-from jacobian.portfolio.checker_binding import CheckerPortfolioBinder
-from jacobian.portfolio.context import PortfolioContext
-from jacobian.portfolio.core_binding import CoreOperationBinder
-from jacobian.portfolio.foundation_binding import FoundationBinder
-from jacobian.portfolio.provider_resolution import (
-    ProviderAvailabilityResolver,
-    ProviderRuntimePlan,
+from jacobian.provider_inventory import (
+    ProviderInventory,
+    ProviderInventoryLoader,
 )
 from jacobian.runtime.config import CheckerAuthorityMode
-from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
@@ -52,8 +52,8 @@ def _available_runtime(provider: str) -> ProviderObservation:
     )
 
 
-def _provider_plan_with_unavailable_external_solvers() -> ProviderRuntimePlan:
-    return ProviderRuntimePlan(
+def _provider_plan_with_unavailable_external_solvers() -> ProviderInventory:
+    return ProviderInventory(
         cadical=_unavailable_runtime("cadical"),
         carcara=_unavailable_runtime("carcara"),
         cvc5=_available_runtime("cvc5"),
@@ -76,7 +76,7 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
         lambda _smt, _runtime: adapter,
     )
 
-    FoundationBinder(cast(PortfolioContext, context)).bind_solver_components(
+    CatalogFoundationBuilder(cast(CatalogBuildContext, context)).bind_solver_components(
         cast(CoreServices, SimpleNamespace(smt=object())),
         _provider_plan_with_unavailable_external_solvers(),
     )
@@ -90,9 +90,9 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
 
 def test_core_domain_verification_phase_accepts_empty_bundle_result() -> None:
     assert (
-        CoreOperationBinder(cast(PortfolioContext, object())).bind_domain_verification(
-            {}
-        )
+        CatalogOperationBuilder(
+            cast(CatalogBuildContext, object())
+        ).bind_domain_verification({})
         is None
     )
 
@@ -115,10 +115,10 @@ def test_checker_phase_derives_authority_from_its_context() -> None:
             core=SimpleNamespace(),
         ),
     )
-    CheckerPortfolioBinder(
-        cast(PortfolioContext, context),
-        cast(ProviderAvailabilityResolver, object()),
-    ).bind(application, PortfolioResources())
+    CatalogCheckerBuilder(
+        cast(CatalogBuildContext, context),
+        cast(ProviderInventoryLoader, object()),
+    ).bind(application, CatalogBuildResources())
 
     assert context.registered == []
 
@@ -133,7 +133,7 @@ def test_portfolio_close_releases_every_owned_lean_resource_once() -> None:
         def close(self) -> None:
             closed.append(self.name)
 
-    result = PortfolioResources()
+    result = CatalogBuildResources()
     result.lean_declarations = cast(Any, Resource("declarations"))
     result.lean_exploration = cast(
         Any,
@@ -162,7 +162,7 @@ def test_portfolio_close_continues_after_keyboard_interrupt() -> None:
         def close(self) -> None:
             closed.append(self.name)
 
-    result = PortfolioResources()
+    result = CatalogBuildResources()
     result.lean_declarations = cast(Any, InterruptingResource())
     result.lean_exploration = cast(
         Any,
@@ -171,7 +171,7 @@ def test_portfolio_close_continues_after_keyboard_interrupt() -> None:
     result.lean = cast(Any, Resource("verification"))
 
     with pytest.raises(
-        BaseExceptionGroup, match="portfolio resources failed to close"
+        BaseExceptionGroup, match="catalog resources failed to close"
     ) as exc:
         result.close()
 

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jacobian.portfolio.context import create_portfolio_context
+from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 
 
@@ -25,7 +25,7 @@ def _graphs() -> tuple[SimpleNamespace, SimpleNamespace, list[object]]:
 
 def test_context_wires_application_verification_and_filters_excluded_adapters() -> None:
     core, application, registered = _graphs()
-    context = create_portfolio_context(
+    context = create_catalog_build_context(
         core,
         application,
         RuntimeOptions(
@@ -51,7 +51,7 @@ def test_context_rejects_application_built_from_another_core() -> None:
     core, application, _ = _graphs()
 
     with pytest.raises(ValueError, match="built from the supplied core"):
-        create_portfolio_context(
+        create_catalog_build_context(
             core,
             SimpleNamespace(
                 core=SimpleNamespace(), verification=application.verification

@@ -308,7 +308,7 @@ def test_runtime_rejects_a_base_installation_without_cvc5(
         diagnostic="cvc5 is intentionally unavailable for this test.",
     )
     monkeypatch.setattr(
-        "jacobian.portfolio.provider_resolution.cvc5_provider_runtime",
+        "jacobian.provider_inventory.cvc5_provider_runtime",
         lambda: unavailable,
     )
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jacobian.builtin_operation_modules import load_builtin_operation_modules
+from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.checker_identity import batch_checker_manifest_measurement
 from jacobian.contracts.operations import ProviderAvailability
 from jacobian.domains.polynomial_nullstellensatz.core import (
@@ -26,8 +28,6 @@ from jacobian.polynomial_system_operations import (
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
 from jacobian.polynomials import install_polynomial_operations
 from jacobian.polytope_operations import PolytopeSeparationAdapter
-from jacobian.portfolio.builtin import load_builtin_operation_modules
-from jacobian.portfolio.context import PortfolioContext
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.services import RuntimeServices
@@ -37,14 +37,14 @@ from jacobian.universal_algebra_operations import (
 
 
 @dataclass(frozen=True, slots=True)
-class CoreOperationBinder:
-    """Bind core operations and domain-dependent checkers."""
+class CatalogOperationBuilder:
+    """Build core operation and domain-checker descriptors for the catalog."""
 
-    context: PortfolioContext
+    context: CatalogBuildContext
 
     def _bind_graph_operations(
         self,
-        ctx: PortfolioContext,
+        ctx: CatalogBuildContext,
     ) -> GraphInstallation:
         """Install retained graph operations."""
 
@@ -65,7 +65,7 @@ class CoreOperationBinder:
 
         This family has an artifact-producing core and an optional Singular
         producer that depends on that core. It is deliberately not represented
-        as a generic portfolio callback: ordinary mathematical operations come
+        as a generic catalog callback: ordinary mathematical operations come
         from the fixed built-in module inventory.
         """
 
@@ -93,7 +93,7 @@ class CoreOperationBinder:
         self,
         services: RuntimeServices,
     ) -> GraphInstallation:
-        """Install the core portfolio in its explicit dependency order."""
+        """Build core catalog entries in explicit dependency order."""
 
         ctx = self.context
 

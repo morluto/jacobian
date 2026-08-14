@@ -7,10 +7,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from jacobian.builtin_operation_modules import load_builtin_operation_modules
+from jacobian.catalog_operations import CatalogOperationBuilder
 from jacobian.operation_binding import BoundOperationGroup
 from jacobian.operation_declarations import OperationDeclarations
-from jacobian.portfolio.builtin import load_builtin_operation_modules
-from jacobian.portfolio.core_binding import CoreOperationBinder
 from jacobian.runtime.config import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
@@ -55,7 +55,7 @@ def install_verified_domain_bundles(
             name = operation_ids[0].split(".", maxsplit=1)[0]
             bound_by_name[name] = bound
             exact_groups[module_name] = operations, bound, checker_declarations
-        CoreOperationBinder(services.installation).bind_domain_verification(
+        CatalogOperationBuilder(services.installation).bind_domain_verification(
             exact_groups
         )
     return bound_by_name

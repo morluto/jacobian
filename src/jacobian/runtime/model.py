@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
@@ -13,25 +12,26 @@ class RuntimeClosedError(RuntimeError):
 
 
 class JacobianRuntime:
-    """Own the explicit service graph and installed portfolio for one store."""
+    """Own one catalog-backed selected-operation service graph."""
 
     def __init__(
         self,
         core: CoreServices,
         services: RuntimeServices,
-        portfolio_resources: PortfolioResources,
-        start_lean_warmup: Callable[[], None],
+        *,
+        close_resources: Callable[[], None] | None = None,
+        start_lean_warmup: Callable[[], None] | None = None,
     ) -> None:
         if services.core is not core:
             raise ValueError("runtime services must belong to the supplied core")
         self._closed = False
         self.core = core
         self.services = services
-        self.portfolio_resources = portfolio_resources
-        self._start_lean_warmup = start_lean_warmup
+        self._close_resources = close_resources or (lambda: None)
+        self._start_lean_warmup = start_lean_warmup or (lambda: None)
 
     def start_lean_warmup(self) -> None:
-        """Warm the installed Lean backend when the portfolio provides one."""
+        """Run an explicitly configured optional warmup hook."""
 
         self._start_lean_warmup()
 
@@ -42,7 +42,7 @@ class JacobianRuntime:
             return
         failures: list[BaseException] = []
         for close in (
-            self.portfolio_resources.close,
+            self._close_resources,
             self.core.close,
         ):
             try:

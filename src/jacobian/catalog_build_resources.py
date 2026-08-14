@@ -1,4 +1,4 @@
-"""Runtime-owned record and resources produced by portfolio assembly."""
+"""Temporary resources owned while compiling the mathematical catalog."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from jacobian.lean_frontend.service import LeanService
 
 
 @dataclass(slots=True)
-class PortfolioResources:
-    """Closeable resources retained by one live runtime."""
+class CatalogBuildResources:
+    """Closeable resources retained during operator catalog compilation."""
 
     lean: LeanService | None = None
     lean_declarations: LeanDeclarationService | None = None
@@ -38,9 +38,9 @@ class PortfolioResources:
                 failure for failure in failures if isinstance(failure, Exception)
             ]
             if len(exceptions) == len(failures):
-                raise ExceptionGroup("portfolio resources failed to close", exceptions)
-            raise BaseExceptionGroup("portfolio resources failed to close", failures)
+                raise ExceptionGroup("catalog resources failed to close", exceptions)
+            raise BaseExceptionGroup("catalog resources failed to close", failures)
         self._closed = True
 
 
-__all__ = ["PortfolioResources"]
+__all__ = ["CatalogBuildResources"]

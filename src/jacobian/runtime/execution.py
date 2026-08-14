@@ -12,7 +12,6 @@ from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.portfolio import PortfolioResources
 from jacobian.runtime.services import build_runtime_services
 
 
@@ -46,12 +45,7 @@ def create_execution_runtime(
         core.smt,
     )
     core.operations = OperationDispatcher(catalog, registry)
-    return JacobianRuntime(
-        core,
-        services,
-        PortfolioResources(),
-        start_lean_warmup=lambda: None,
-    )
+    return JacobianRuntime(core, services)
 
 
 __all__ = ["create_execution_runtime"]

@@ -59,17 +59,31 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
 def load_builtin_operation_modules() -> tuple[LoadedOperationModule, ...]:
     """Load the fixed built-in inventory for catalog compilation or binding."""
 
-    loaded: list[LoadedOperationModule] = []
-    for module_name, factory_name in BUILTIN_OPERATION_MODULES:
-        module = import_module(module_name)
-        factory = getattr(module, factory_name)
-        operations = cast(OperationDeclarations, factory())
-        checkers = cast(
-            tuple[ExactReplayCheckerDeclaration, ...],
-            getattr(module, "CHECKER_DECLARATIONS", ()),
-        )
-        loaded.append((module_name, operations, checkers))
-    return tuple(loaded)
+    return tuple(
+        load_builtin_operation_module(module_name)
+        for module_name, _factory_name in BUILTIN_OPERATION_MODULES
+    )
 
 
-__all__ = ["BUILTIN_OPERATION_MODULES", "load_builtin_operation_modules"]
+def load_builtin_operation_module(module_name: str) -> LoadedOperationModule:
+    """Load one selected module from the fixed built-in inventory."""
+
+    try:
+        factory_name = dict(BUILTIN_OPERATION_MODULES)[module_name]
+    except KeyError as exc:
+        raise ValueError(f"unknown built-in operation module: {module_name}") from exc
+    module = import_module(module_name)
+    factory = getattr(module, factory_name)
+    operations = cast(OperationDeclarations, factory())
+    checkers = cast(
+        tuple[ExactReplayCheckerDeclaration, ...],
+        getattr(module, "CHECKER_DECLARATIONS", ()),
+    )
+    return module_name, operations, checkers
+
+
+__all__ = [
+    "BUILTIN_OPERATION_MODULES",
+    "load_builtin_operation_module",
+    "load_builtin_operation_modules",
+]

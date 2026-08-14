@@ -15,6 +15,7 @@ from jacobian.operation_catalog import (
     OperationCatalogError,
     OperationCatalogStore,
     declaration_digest,
+    operation_declaration_digest,
 )
 from jacobian.operation_service import OperationPolicy
 from jacobian.persistence.migrations import (
@@ -23,6 +24,7 @@ from jacobian.persistence.migrations import (
     SUPPORTED_STATE_FLOOR,
 )
 from jacobian.persistence.state_health import StateHealth, inspect_state_health
+from jacobian.portfolio.builtin import load_builtin_operation_modules
 from jacobian.runtime import CheckerAuthorityMode, create_runtime
 
 
@@ -107,24 +109,45 @@ def _build_catalog(
     runtime = create_runtime(state_dir, checker_authority=authority)
     try:
         snapshot = runtime.core.operations.catalog()
-        descriptors = tuple(sorted(snapshot.operations, key=lambda item: item.operation_id))
+        descriptors = tuple(
+            sorted(snapshot.operations, key=lambda item: item.operation_id)
+        )
         provider_inventory = tuple(
             descriptor.provider_runtime.model_dump(mode="json")
             for descriptor in descriptors
             if descriptor.provider_runtime is not None
         )
         checker_bindings = _checker_bindings(descriptors)
+        declarations = {
+            operation.operation_id: (module_name, operation)
+            for module_name, operations, _checker_declarations in (
+                load_builtin_operation_modules()
+            )
+            for operation in operations
+        }
         entries = tuple(
             CompiledCatalogEntry(
                 descriptor=descriptor,
-                bundle_module="jacobian.portfolio.builtin",
-                declaration_digest=declaration_digest(
-                    {
-                        "operation_id": descriptor.operation_id,
-                        "version": descriptor.version,
-                        "input_schema": descriptor.input_schema,
-                        "output_schema": descriptor.output_schema,
-                    }
+                bundle_module=(
+                    declarations[descriptor.operation_id][0]
+                    if descriptor.operation_id in declarations
+                    else type(
+                        runtime.core.operations._adapters[descriptor.operation_id]
+                    ).__module__
+                ),
+                declaration_digest=(
+                    operation_declaration_digest(
+                        declarations[descriptor.operation_id][1]
+                    )
+                    if descriptor.operation_id in declarations
+                    else declaration_digest(
+                        {
+                            "operation_id": descriptor.operation_id,
+                            "version": descriptor.version,
+                            "input_schema": descriptor.input_schema,
+                            "output_schema": descriptor.output_schema,
+                        }
+                    )
                 ),
             )
             for descriptor in descriptors

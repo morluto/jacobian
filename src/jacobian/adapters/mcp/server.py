@@ -31,9 +31,18 @@ from jacobian.adapters.mcp.lifecycle import (
 from jacobian.adapters.mcp.resources import register_resources
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
+from jacobian.operation_dispatcher import OperationDispatcher
+from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_service import OperationPolicy
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.portfolio.assembler import assemble_portfolio
+from jacobian.portfolio.builtin import BUILTIN_OPERATION_MODULES
+from jacobian.portfolio.context import create_portfolio_context
+from jacobian.runtime import CheckerAuthorityMode
+from jacobian.runtime.bootstrap import bootstrap_services
+from jacobian.runtime.config import RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.portfolio import PortfolioResources
+from jacobian.runtime.services import build_runtime_services
 
 
 def create_server(
@@ -55,6 +64,7 @@ def create_server(
     )
     owner = _LazyLocalRuntime(
         root,
+        catalog,
         operation_exclusions=operation_exclusions,
         operation_policy=policy,
     )
@@ -74,32 +84,78 @@ class _LazyLocalRuntime:
     def __init__(
         self,
         root: Path,
+        catalog: OperationCatalog,
         *,
         operation_exclusions: frozenset[str],
         operation_policy: OperationPolicy,
     ) -> None:
         self.root = root
+        self.catalog = catalog
         self.operation_exclusions = operation_exclusions
         self.operation_policy = operation_policy
-        self._runtime: JacobianRuntime | None = None
+        self._selected_runtime: JacobianRuntime | None = None
+        self._complete_binding = False
         self._lock = threading.Lock()
 
-    def acquire(self) -> RuntimeAccess:
+    def acquire(self, operation_id: str | None = None) -> RuntimeAccess:
         with self._lock:
-            if self._runtime is None:
-                self._runtime = create_runtime(
-                    self.root,
+            record = (
+                self.catalog.declaration_record(operation_id)
+                if operation_id is not None
+                else None
+            )
+            built_in_modules = dict(BUILTIN_OPERATION_MODULES)
+            if (
+                record is None or record.module not in built_in_modules
+            ) and operation_id is not None:
+                runtime = self._ensure_selected_runtime()
+                if not self._complete_binding:
+                    dispatcher = runtime.core.operations
+                    if not isinstance(dispatcher, OperationDispatcher):
+                        raise TypeError("lazy runtime lost its operation dispatcher")
+                    dispatcher.prepare_complete_binding()
+                    options = RuntimeOptions(
+                        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
+                        operation_exclusions=self.operation_exclusions,
+                        operation_policy=self.operation_policy,
+                    )
+                    context = create_portfolio_context(
+                        runtime.core, runtime.services, options
+                    )
+                    runtime.portfolio_resources = assemble_portfolio(
+                        context, runtime.services
+                    )
+                    self._complete_binding = True
+                return RuntimeAccess(runtime)
+            return RuntimeAccess(self._ensure_selected_runtime())
+
+    def _ensure_selected_runtime(self) -> JacobianRuntime:
+        if self._selected_runtime is None:
+            core = bootstrap_services(
+                self.root,
+                RuntimeOptions(
                     checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
-                    operation_exclusions=self.operation_exclusions,
                     operation_policy=self.operation_policy,
-                )
-            return RuntimeAccess(self._runtime)
+                ),
+            )
+            registry = OperationRegistry(self.catalog, core.binder)
+            core.operations = OperationDispatcher(self.catalog, registry)
+            services = build_runtime_services(core)
+            self._selected_runtime = JacobianRuntime(
+                core,
+                services,
+                PortfolioResources(),
+                start_lean_warmup=lambda: None,
+            )
+        return self._selected_runtime
 
     def close(self) -> None:
         with self._lock:
-            runtime, self._runtime = self._runtime, None
-        if runtime is not None:
-            runtime.close()
+            runtimes = (self._selected_runtime,)
+            self._selected_runtime = None
+        for runtime in runtimes:
+            if runtime is not None:
+                runtime.close()
 
 
 def create_server_from_runtime(
@@ -116,7 +172,7 @@ def create_server_from_runtime(
     """
 
     state = AppState(
-        acquire_runtime=lambda: RuntimeAccess(runtime),
+        acquire_runtime=lambda _operation_id: RuntimeAccess(runtime),
         operation_catalog=runtime.core.operations,
         worker_registry=MCPBlockingWorkerRegistry(),
     )

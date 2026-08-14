@@ -488,7 +488,7 @@ def create_remote_server(
         runtime_factory=create_runtime if runtime_factory is None else runtime_factory,
     )
 
-    def acquire_runtime() -> RuntimeAccess:
+    def acquire_runtime(_operation_id: str | None = None) -> RuntimeAccess:
         access_token = get_access_token()
         subject = access_token.subject if access_token is not None else None
         hold = router.hold_for(subject)

@@ -36,10 +36,8 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert isinstance(described.structured_content, dict)
             contract = described.structured_content
             assert contract["operation"]["operation_id"] == "integer.compute.gcd"
-            assert contract["operation"]["provider_runtime"]["digest"].startswith(
-                "sha256:"
-            )
-            assert "configuration" in contract["operation"]["provider_runtime"]
+            assert contract["operation"]["provider"] == "built-in"
+            assert contract["operation"]["provider_runtime"] is None
             assert "output_schema" in contract["operation"]
 
             result = await client.call_tool(
@@ -58,9 +56,6 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
             assert result.structured_content["verification_record_uri"] is None
-            runtime = contract["operation"]["provider_runtime"]
-            assert runtime["provider"] == contract["operation"]["provider"]
-            assert runtime["digest"] is not None
             assert "provider" not in result.structured_content
             assert "provider_digest" not in result.structured_content
 
@@ -74,10 +69,7 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert isinstance(invalid.structured_content, dict)
             invalid_result = invalid.structured_content
             assert invalid_result["execution"]["status"] == "ERROR"
-            assert (
-                invalid_result["output"]["error"]["code"]
-                == "INVALID_NUMBER_THEORY_REQUEST"
-            )
+            assert invalid_result["output"]["error"]["code"] == "INVALID_REQUEST"
             assert invalid_result["artifact_uris"] == []
             assert invalid_result["verification_record_uri"] is None
 
@@ -93,9 +85,9 @@ def test_mcp_describes_and_invokes_capabilities(tmp_path: Path) -> None:
             assert isinstance(matching_description.structured_content, dict)
             matching_contract = matching_description.structured_content
             assert matching_contract["operation"]["version"] == "3"
-            assert matching_contract["operation"]["examples"][0][
-                "name"
-            ] == ("triangle_with_tail")
+            assert matching_contract["operation"]["examples"][0]["name"] == (
+                "triangle_with_tail"
+            )
 
             reliability_verifier_discovery = await client.call_tool(
                 "math.find",

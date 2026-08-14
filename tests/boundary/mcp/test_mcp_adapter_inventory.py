@@ -188,7 +188,8 @@ def test_mcp_exposes_only_math_tools_with_read_only_resources(
                 descriptor["operation_id"] for descriptor in catalog["operations"]
             }
             assert all(
-                descriptor["provider_runtime"]["availability"] == "AVAILABLE"
+                descriptor["provider"] == "built-in"
+                or descriptor["provider_runtime"]["availability"] == "AVAILABLE"
                 for descriptor in catalog["operations"]
             )
             if "lean.check" in operation_ids:

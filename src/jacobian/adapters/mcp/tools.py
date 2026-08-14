@@ -281,7 +281,9 @@ def math_find(
     operation_id = request.operation_id
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
-        hint = "Call math.find with a mathematical query to search installed operations."
+        hint = (
+            "Call math.find with a mathematical query to search installed operations."
+        )
         error_response = {
             "error": {
                 "code": "UNKNOWN_OPERATION",
@@ -310,7 +312,7 @@ async def math_run(
     ctx: Context[AppState, Any],
 ) -> OperationRunToolResult:
     """Run one math tool. Role comes from the tool ID."""
-    with _runtime(ctx) as active_runtime:
+    with _runtime(ctx, operation_id) as active_runtime:
         result = await _invoke_operation_attempt(
             active_runtime,
             operation_id=operation_id,

@@ -247,9 +247,7 @@ def test_cancelled_worker_retains_its_runtime_until_late_completion(
             worker_finished.set()
 
         async def request() -> None:
-            with blocking_worker_scope(
-                registry, release_callback=runtime_released.set
-            ):
+            with blocking_worker_scope(registry, release_callback=runtime_released.set):
                 await _run_blocking(blocking_operation)
 
         task = asyncio.create_task(request())
@@ -337,7 +335,7 @@ def test_timed_out_lifespan_shutdown_closes_owners_after_late_worker_finishes(
         registry.register(worker, request_scope=None)
         with pytest.raises(MCPBlockingWorkerShutdownError):
             state = AppState(
-                acquire_runtime=lambda: RuntimeAccess(Runtime()),  # type: ignore[arg-type]
+                acquire_runtime=lambda _operation_id: RuntimeAccess(Runtime()),  # type: ignore[arg-type]
                 operation_catalog=object(),
                 worker_registry=registry,
             )
@@ -366,7 +364,7 @@ def test_failed_tenant_warmup_releases_the_acquired_runtime(
 
     runtime = object()
 
-    def acquire_runtime() -> RuntimeAccess:
+    def acquire_runtime(_operation_id: str | None = None) -> RuntimeAccess:
         nonlocal acquired
         acquired += 1
         return RuntimeAccess(runtime, released.set)  # type: ignore[arg-type]
@@ -407,7 +405,7 @@ def test_injected_context_reuses_the_interceptor_tenant_runtime(
         nonlocal released
         released += 1
 
-    def acquire_runtime() -> RuntimeAccess:
+    def acquire_runtime(_operation_id: str | None = None) -> RuntimeAccess:
         nonlocal acquired
         acquired += 1
         return RuntimeAccess(runtime, release_runtime)  # type: ignore[arg-type]

@@ -62,7 +62,9 @@ def _discovery_operation_card(
             port.model_dump(mode="json") for port in descriptor.output_ports
         ],
         "provider_availability": (
-            runtime.availability.value if runtime is not None else "UNKNOWN"
+            runtime.availability.value
+            if runtime is not None
+            else ("AVAILABLE" if descriptor.provider == "built-in" else "UNKNOWN")
         ),
     }
 
@@ -133,9 +135,7 @@ def _operation_discovery_response(
         "tags",
         "produced_artifact_types",
     )
-    while (
-        len(_mcp_text_json_bytes(response)) > OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT
-    ):
+    while len(_mcp_text_json_bytes(response)) > OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT:
         removed = False
         for match in matches:
             for field in compact_fields:

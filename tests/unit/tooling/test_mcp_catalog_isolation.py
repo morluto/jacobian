@@ -20,7 +20,7 @@ class _Catalog:
 
 
 def test_math_find_does_not_acquire_an_execution_runtime() -> None:
-    def acquire_runtime() -> Any:
+    def acquire_runtime(_operation_id: str | None = None) -> Any:
         raise AssertionError("math.find acquired an execution runtime")
 
     state = AppState(
@@ -28,9 +28,7 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
         operation_catalog=_Catalog(),
         worker_registry=MCPBlockingWorkerRegistry(),
     )
-    context = SimpleNamespace(
-        request_context=SimpleNamespace(lifespan_context=state)
-    )
+    context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
     result = math_find(
         _OperationSearchRequest(op="search", query="gcd"),

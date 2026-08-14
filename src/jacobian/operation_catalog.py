@@ -16,6 +16,7 @@ from jacobian.contracts.operations import (
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
 )
+from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_discovery import (
     discovery_applicability,
     discovery_relevance,
@@ -23,6 +24,7 @@ from jacobian.operation_discovery import (
     normalize_domain,
 )
 from jacobian.operation_errors import OperationDiscoveryCursorError
+from jacobian.schema_registry import model_schema
 
 
 class OperationCatalogError(RuntimeError):
@@ -36,7 +38,9 @@ class VisibilityPolicy(Protocol):
     @property
     def digest(self) -> str: ...
 
-    def project(self, descriptor: OperationDescriptor) -> OperationDescriptor | None: ...
+    def project(
+        self, descriptor: OperationDescriptor
+    ) -> OperationDescriptor | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +86,15 @@ class CompiledCatalogEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationDeclarationRecord:
+    """Persisted locator and digest for one exact operation declaration."""
+
+    operation_id: str
+    module: str
+    declaration_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class CatalogBuildResult:
     revision: int
     operation_count: int
@@ -108,7 +121,9 @@ class OperationCatalogStore:
     ) -> CatalogBuildResult:
         operation_ids = tuple(entry.descriptor.operation_id for entry in entries)
         if operation_ids != tuple(sorted(set(operation_ids))):
-            raise OperationCatalogError("compiled catalog entries must be unique and sorted")
+            raise OperationCatalogError(
+                "compiled catalog entries must be unique and sorted"
+            )
         with sqlite3.connect(self.database_path) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("BEGIN IMMEDIATE")
@@ -127,7 +142,9 @@ class OperationCatalogStore:
                 ),
             )
             if cursor.lastrowid is None:
-                raise OperationCatalogError("catalog snapshot revision was not allocated")
+                raise OperationCatalogError(
+                    "catalog snapshot revision was not allocated"
+                )
             revision = cursor.lastrowid
             for entry in entries:
                 descriptor = entry.descriptor
@@ -202,6 +219,33 @@ class OperationCatalog:
         connection.row_factory = sqlite3.Row
         return connection
 
+    def declaration_record(
+        self, operation_id: str
+    ) -> OperationDeclarationRecord | None:
+        """Read one declaration locator without materializing the catalog."""
+
+        try:
+            with self._connect_read_only() as connection:
+                row = connection.execute(
+                    """
+                    SELECT operation_id, bundle_module, declaration_digest
+                    FROM operation_catalog_entries
+                    WHERE snapshot_revision = ? AND operation_id = ?
+                    """,
+                    (self.header.revision, operation_id),
+                ).fetchone()
+        except sqlite3.DatabaseError as exc:
+            raise OperationCatalogError(
+                "active operation declaration locator is unreadable"
+            ) from exc
+        if row is None:
+            return None
+        return OperationDeclarationRecord(
+            operation_id=str(row["operation_id"]),
+            module=str(row["bundle_module"]),
+            declaration_digest=str(row["declaration_digest"]),
+        )
+
     def _load_active(
         self, expected_package_version: str
     ) -> tuple[CatalogHeader, tuple[OperationSearchCard, ...]]:
@@ -217,9 +261,13 @@ class OperationCatalog:
                     """
                 ).fetchone()
                 if row is None:
-                    raise OperationCatalogError("STATE_INITIALIZATION_REQUIRED: run `jacobian init`")
+                    raise OperationCatalogError(
+                        "STATE_INITIALIZATION_REQUIRED: run `jacobian init`"
+                    )
                 if str(row["package_version"]) != expected_package_version:
-                    raise OperationCatalogError("STATE_UPDATE_REQUIRED: run `jacobian update`")
+                    raise OperationCatalogError(
+                        "STATE_UPDATE_REQUIRED: run `jacobian update`"
+                    )
                 cards = tuple(
                     _decode_card(item["search_card_json"])
                     for item in connection.execute(
@@ -244,7 +292,9 @@ class OperationCatalog:
                 provider_inventory_digest=str(row["provider_inventory_digest"]),
                 checker_binding_digest=str(row["checker_binding_digest"]),
                 diagnostics=tuple(
-                    cast(list[dict[str, Any]], loads_strict_json(row["diagnostics_json"]))
+                    cast(
+                        list[dict[str, Any]], loads_strict_json(row["diagnostics_json"])
+                    )
                 ),
             ),
             cards,
@@ -343,6 +393,21 @@ def declaration_digest(value: dict[str, Any]) -> str:
     return "sha256:" + sha256(canonicalize_json(value)).hexdigest()
 
 
+def operation_declaration_digest(
+    declaration: OperationDeclaration[Any, Any],
+) -> str:
+    """Digest the stable typed identity loaded again by selected execution."""
+
+    return declaration_digest(
+        {
+            "operation_id": declaration.operation_id,
+            "version": declaration.version,
+            "input_schema": model_schema(declaration.request_type),
+            "result_schema": model_schema(declaration.result_type),
+        }
+    )
+
+
 def _decode_card(value: bytes | str) -> OperationSearchCard:
     decoded = cast(dict[str, Any], loads_strict_json(value))
     return OperationSearchCard(
@@ -388,6 +453,8 @@ __all__ = [
     "OperationCatalog",
     "OperationCatalogError",
     "OperationCatalogStore",
+    "OperationDeclarationRecord",
     "OperationSearchCard",
     "declaration_digest",
+    "operation_declaration_digest",
 ]

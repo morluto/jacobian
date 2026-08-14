@@ -24,7 +24,7 @@ from jacobian.operation_discovery import (
     operation_domain as _operation_domain,
 )
 from jacobian.operation_dispatch import OperationDispatchMixin
-from jacobian.operation_registry import OperationRegistryMixin
+from jacobian.operation_registration import OperationRegistrationMixin
 from jacobian.operation_verification import OperationVerificationMixin
 from jacobian.storage.repository import ArtifactRepository
 
@@ -127,7 +127,7 @@ class OperationPolicy:
 
 
 class OperationService(
-    OperationRegistryMixin,
+    OperationRegistrationMixin,
     OperationDiscoveryMixin,
     OperationDispatchMixin,
     OperationVerificationMixin,

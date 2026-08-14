@@ -27,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class AppState:
-    acquire_runtime: Callable[[], RuntimeAccess]
+    acquire_runtime: Callable[[str | None], RuntimeAccess]
     operation_catalog: Any
     worker_registry: MCPBlockingWorkerRegistry
 
@@ -55,7 +55,9 @@ _active_runtime: ContextVar[JacobianRuntime | None] = ContextVar(
 
 
 @contextmanager
-def _runtime(ctx: Context[Any, Any]) -> Iterator[JacobianRuntime]:
+def _runtime(
+    ctx: Context[Any, Any], operation_id: str | None = None
+) -> Iterator[JacobianRuntime]:
     """Return a runtime, holding a tenant runtime hold for the full request lifetime.
 
     When tenant isolation is active, the host holds the runtime until the
@@ -73,7 +75,7 @@ def _runtime(ctx: Context[Any, Any]) -> Iterator[JacobianRuntime]:
             "Jacobian is unavailable for this request. Retry once; if it fails "
             "again, inspect the local Jacobian log."
         )
-    with _runtime_scope(state) as runtime:
+    with _runtime_scope(state, operation_id) as runtime:
         yield runtime
 
 
@@ -90,10 +92,12 @@ def _catalog(ctx: Context[Any, Any]) -> Any:
 
 
 @contextmanager
-def _runtime_scope(state: AppState) -> Iterator[JacobianRuntime]:
+def _runtime_scope(
+    state: AppState, operation_id: str | None = None
+) -> Iterator[JacobianRuntime]:
     """Bind exactly one runtime and blocking-worker owner to an MCP request."""
 
-    access = state.acquire_runtime()
+    access = state.acquire_runtime(operation_id)
     with blocking_worker_scope(
         state.worker_registry,
         release_callback=access.release,

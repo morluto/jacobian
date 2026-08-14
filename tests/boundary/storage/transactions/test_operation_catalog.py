@@ -113,6 +113,23 @@ def test_catalog_inspection_reads_one_active_indexed_entry(tmp_path: Path) -> No
     assert any("PRIMARY KEY" in detail or "INDEX" in detail for detail in plan)
 
 
+def test_catalog_reads_one_exact_declaration_locator(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    _commit(store)
+    catalog = OperationCatalog(
+        tmp_path / "metadata.sqlite3",
+        OperationPolicy(),
+        expected_package_version="0.13.0",
+    )
+
+    record = catalog.declaration_record("matrix.rank.compute")
+
+    assert record is not None
+    assert record.module == "jacobian.domains.synthetic.bundle"
+    assert record.declaration_digest == "sha256:" + "a" * 64
+    assert catalog.declaration_record("missing.operation") is None
+
+
 def test_failed_catalog_commit_leaves_previous_revision_active(tmp_path: Path) -> None:
     store = _store(tmp_path)
     revision = _commit(store)

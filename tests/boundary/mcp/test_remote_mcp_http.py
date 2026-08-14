@@ -25,7 +25,6 @@ from jacobian.adapters.mcp.remote import (
     load_static_token_file,
 )
 from jacobian.domains.matrix_lattice import matrix_operations
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.model import JacobianRuntime
 from tests.support.selected_runtime import create_selected_runtime
 
@@ -39,7 +38,6 @@ def test_authenticated_streamable_http_rejects_before_runtime_construction(
     with _RunningRemoteServer(
         tmp_path,
         runtime_factory=fail_if_called,
-        checker_authority=CheckerAuthorityMode.NONE,
     ) as port:
         asyncio.run(_remote_auth_rejections(port))
 
@@ -49,20 +47,16 @@ def test_authenticated_streamable_http_isolates_tenant_data(
 ) -> None:
     def matrix_runtime(
         root: str | Path,
-        *,
-        checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
         **_kwargs: object,
     ) -> JacobianRuntime:
         return create_selected_runtime(
             root,
             (matrix_operations(),),
-            checker_authority=checker_authority,
         )
 
     with _RunningRemoteServer(
         tmp_path,
         runtime_factory=matrix_runtime,
-        checker_authority=CheckerAuthorityMode.NONE,
     ) as port:
         asyncio.run(_remote_tenant_scenario(port))
         tenant_roots = sorted((tmp_path / "state" / "tenants").iterdir())
@@ -110,11 +104,9 @@ class _RunningRemoteServer:
         tmp_path: Path,
         *,
         runtime_factory: Callable[..., JacobianRuntime] | None = None,
-        checker_authority: CheckerAuthorityMode | None = None,
     ) -> None:
         self._tmp_path = tmp_path
         self._runtime_factory = runtime_factory
-        self._checker_authority = checker_authority
         self._http_server: Server | None = None
         self._thread: threading.Thread | None = None
         self._listener: socket.socket | None = None
@@ -146,7 +138,6 @@ class _RunningRemoteServer:
         mcp_server = create_remote_server(
             self._tmp_path / "state",
             allow_anonymous=False,
-            checker_authority=self._checker_authority,
             token_verifier=StaticTokenVerifier(load_static_token_file(token_file)),
             auth=AuthSettings(
                 issuer_url=AnyHttpUrl(public_base_url),

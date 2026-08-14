@@ -14,7 +14,6 @@ from jacobian.adapters.mcp.remote import (
     TenantRuntimeRouter,
     TenantRuntimeRouterClosedError,
 )
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.storage.errors import ArtifactNotFoundError
 from tests.support.selected_runtime import create_selected_runtime
 
@@ -22,7 +21,6 @@ from tests.support.selected_runtime import create_selected_runtime
 def test_tenant_router_isolates_artifact_stores(tmp_path: Path) -> None:
     router = TenantRuntimeRouter(
         tmp_path,
-        checker_authority=CheckerAuthorityMode.NONE,
         max_tenant_runtimes=2,
         runtime_factory=create_selected_runtime,
     )
@@ -462,14 +460,12 @@ def test_concurrent_shutdown_callers_close_each_runtime_once(
 def test_anonymous_tenant_namespace_is_fixed_by_the_operator(tmp_path: Path) -> None:
     first = TenantRuntimeRouter(
         tmp_path,
-        checker_authority=CheckerAuthorityMode.NONE,
         allow_anonymous=True,
         anonymous_tenant_id="test-endpoint-a",
         runtime_factory=create_selected_runtime,
     )
     second = TenantRuntimeRouter(
         tmp_path,
-        checker_authority=CheckerAuthorityMode.NONE,
         allow_anonymous=True,
         anonymous_tenant_id="test-endpoint-b",
         runtime_factory=create_selected_runtime,
@@ -483,7 +479,6 @@ def test_anonymous_tenant_namespace_is_fixed_by_the_operator(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="anonymous_tenant_id must start"):
         TenantRuntimeRouter(
             tmp_path,
-            checker_authority=CheckerAuthorityMode.NONE,
             allow_anonymous=True,
             anonymous_tenant_id="caller controlled",
             runtime_factory=create_selected_runtime,

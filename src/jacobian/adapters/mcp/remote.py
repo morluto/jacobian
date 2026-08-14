@@ -25,15 +25,11 @@ from jacobian.adapters.mcp.context import (
     _configured_root,
 )
 from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
-from jacobian.adapters.mcp.lifecycle import (
-    selected_checker_authority,
-)
 from jacobian.adapters.mcp.server import _build_server
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_service import OperationPolicy
 from jacobian.registry import CheckerRegistry
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.execution import create_execution_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.storage.repository import ArtifactRepository
@@ -139,7 +135,6 @@ class TenantRuntimeRouter:
         self,
         root: str | Path,
         *,
-        checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
         allow_anonymous: bool = False,
         anonymous_tenant_id: str = "anonymous",
         operation_policy: OperationPolicy | None = None,
@@ -158,7 +153,6 @@ class TenantRuntimeRouter:
                 "letters, digits, '.', '_', or '-', and be at most 128 characters"
             )
         self.root = Path(root)
-        self.checker_authority = checker_authority
         self.allow_anonymous = allow_anonymous
         self.anonymous_tenant_id = anonymous_tenant_id
         self.operation_policy = operation_policy
@@ -208,7 +202,6 @@ class TenantRuntimeRouter:
         try:
             runtime = self._runtime_factory(
                 self.root / "tenants" / tenant_key,
-                checker_authority=self.checker_authority,
                 operation_policy=self.operation_policy,
             )
         except BaseException:
@@ -457,7 +450,6 @@ def _parse_token_record(index: int, record: Any) -> StaticTokenGrant:
 def create_remote_server(
     state_dir: str | Path | None = None,
     *,
-    checker_authority: CheckerAuthorityMode | None = None,
     allow_anonymous: bool = False,
     anonymous_tenant_id: str = "anonymous",
     token_verifier: Any | None = None,
@@ -497,7 +489,6 @@ def create_remote_server(
 
     router = TenantRuntimeRouter(
         root,
-        checker_authority=selected_checker_authority(checker_authority),
         allow_anonymous=allow_anonymous,
         anonymous_tenant_id=anonymous_tenant_id,
         operation_policy=policy,

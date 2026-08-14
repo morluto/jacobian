@@ -30,6 +30,7 @@ from jacobian.math.finite_fields import (
 )
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 from jacobian.operation_errors import OperationError
+from jacobian.operation_verification import validate_verified_result
 
 pytestmark = pytest.mark.requires_provider("flint")
 
@@ -199,7 +200,7 @@ def test_inline_verification_record_rejects_unrelated_projected_identity(
 
     expected = field[:-3] if field.endswith("_id") else field
     with pytest.raises(OperationError, match=f"different {expected}"):
-        services.core.operations._validate_verified_result(forged)
+        validate_verified_result(services.core.store, forged)
 
 
 def test_inline_verification_record_rejects_stale_candidate_binding(

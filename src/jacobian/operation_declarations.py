@@ -100,6 +100,7 @@ class OperationDeclaration[RequestT: ContractModel, ResultT: ContractModel]:
     output_ports: tuple[OutputPort[Any], ...] = ()
     examples: tuple[OperationExample, ...] = ()
     invalid_request: OperationDiagnostic | None = None
+    enrich_invalid_request: bool = False
     preflight: Callable[[RequestT], PreflightResult] | None = None
     postcondition: Callable[[RequestT, ResultT], None] | None = None
     effect: Effect = Effect.READ_ONLY
@@ -139,7 +140,11 @@ def with_invalid_request(
     return tuple(
         operation
         if operation.invalid_request is not None
-        else replace(operation, invalid_request=diagnostic)
+        else replace(
+            operation,
+            invalid_request=diagnostic,
+            enrich_invalid_request=True,
+        )
         for operation in operations
     )
 

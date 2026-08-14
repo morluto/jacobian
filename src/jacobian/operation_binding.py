@@ -295,6 +295,8 @@ class DeclaredOperationAdapter:
             )
             raise OperationInvocationError(
                 enriched_invalid_request(base, exc)
+                if self.spec.enrich_invalid_request or invalid_request is None
+                else base
             ) from exc
 
         return parsed_request

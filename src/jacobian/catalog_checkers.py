@@ -57,7 +57,7 @@ class CatalogCheckerBuilder:
         ctx = self.context
         # INSTALL_BUNDLED creates authority; HYDRATE_EXISTING binds only checker
         # identities already authorized on this store. NONE binds neither.
-        if ctx.authorize_bundled_checkers:
+        if ctx.authorize_bundled_checkers or ctx.checkers.bind_existing_when_omitted:
             self._bind_checkers(polytope, resources)
 
     def _bind_checkers(

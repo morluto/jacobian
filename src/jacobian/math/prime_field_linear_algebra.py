@@ -92,72 +92,23 @@ def rank(matrix: PrimeFieldMatrix) -> int:
 def nullspace(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
     """Return a deterministic basis of the right nullspace."""
 
-    reduced, pivots = rref(matrix)
-    free_columns = tuple(
-        column for column in range(matrix.columns) if column not in pivots
+    if matrix.columns == 0:
+        return ()
+    domain = _domain_matrix(matrix).nullspace(divide_last=True)
+    return tuple(
+        tuple(int(value) % matrix.prime for value in row) for row in domain.to_list()
     )
-    basis: list[tuple[int, ...]] = []
-    for free in free_columns:
-        vector = [0] * matrix.columns
-        vector[free] = 1
-        for row, pivot in enumerate(pivots):
-            vector[pivot] = -reduced[row][free] % matrix.prime
-        basis.append(tuple(vector))
-    return tuple(basis)
-
-
-class _IncrementalVectorBasis:
-    def __init__(self, *, dimension: int, prime: int) -> None:
-        self._prime = prime
-        self._rows: dict[int, list[int]] = {}
-        self._dimension = dimension
-
-    def add(self, vector: Sequence[int]) -> bool:
-        reduced = [value % self._prime for value in vector]
-        if len(reduced) != self._dimension:
-            raise ValueError("basis vector has the wrong dimension")
-        for existing_pivot, row in self._rows.items():
-            factor = reduced[existing_pivot]
-            if factor:
-                reduced = [
-                    (value - factor * basis_value) % self._prime
-                    for value, basis_value in zip(reduced, row, strict=True)
-                ]
-        new_pivot = next(
-            (index for index, value in enumerate(reduced) if value),
-            None,
-        )
-        if new_pivot is None:
-            return False
-        inverse = pow(reduced[new_pivot], -1, self._prime)
-        reduced = [value * inverse % self._prime for value in reduced]
-        for existing_pivot, row in tuple(self._rows.items()):
-            factor = row[new_pivot]
-            if factor:
-                self._rows[existing_pivot] = [
-                    (value - factor * basis_value) % self._prime
-                    for value, basis_value in zip(row, reduced, strict=True)
-                ]
-        self._rows[new_pivot] = reduced
-        self._rows = dict(sorted(self._rows.items()))
-        return True
 
 
 def column_basis(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
     """Return the first independent columns in source order."""
 
-    if matrix.columns == 0:
+    if matrix.columns == 0 or not matrix.entries:
         return ()
-    selected: list[tuple[int, ...]] = []
-    basis = _IncrementalVectorBasis(
-        dimension=len(matrix.entries),
-        prime=matrix.prime,
+    _, pivots = rref(matrix)
+    return tuple(
+        tuple(row[pivot] % matrix.prime for row in matrix.entries) for pivot in pivots
     )
-    for column in range(matrix.columns):
-        vector = tuple(row[column] % matrix.prime for row in matrix.entries)
-        if basis.add(vector):
-            selected.append(vector)
-    return tuple(selected)
 
 
 def quotient_basis(
@@ -170,13 +121,25 @@ def quotient_basis(
 
     # Validate the prime even for the empty quotient.
     dimension = len(cycles[0]) if cycles else (len(boundaries[0]) if boundaries else 0)
+    if any(len(vector) != dimension for vector in (*cycles, *boundaries)):
+        raise ValueError("basis vector has the wrong dimension")
     PrimeFieldMatrix(prime=prime, entries=(), columns=dimension)
-    basis = _IncrementalVectorBasis(dimension=dimension, prime=prime)
-    for boundary in boundaries:
-        basis.add(boundary)
-    quotient: list[tuple[int, ...]] = []
-    for cycle in cycles:
-        vector = tuple(cycle)
-        if basis.add(vector):
-            quotient.append(vector)
-    return tuple(quotient)
+    if dimension == 0 or not cycles:
+        return ()
+    columns = tuple(
+        tuple(int(value) % prime for value in vector) for vector in boundaries
+    ) + tuple(tuple(int(value) % prime for value in vector) for vector in cycles)
+    stacked = PrimeFieldMatrix(
+        prime=prime,
+        entries=tuple(
+            tuple(vector[row] for vector in columns) for row in range(dimension)
+        ),
+        columns=len(columns),
+    )
+    _, pivots = rref(stacked)
+    boundary_count = len(boundaries)
+    return tuple(
+        tuple(cycles[pivot - boundary_count])
+        for pivot in pivots
+        if pivot >= boundary_count
+    )

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from jacobian.contracts.graph_isomorphism import SimpleUndirectedGraph
 from jacobian.contracts.operations import OperationInputKind, OperationRequest
 from jacobian.contracts.results import ExecutionStatus
+from jacobian.operation_catalog import OperationCatalogError
 from jacobian.operation_visibility import OperationVisibilityPolicy
 from jacobian.runtime.execution import create_inline_serving_runtime
 from jacobian.schema_registry import model_schema_uri
@@ -21,6 +24,17 @@ def test_serving_catalog_inspects_determinant_without_sqlite(tmp_path: Path) -> 
     assert record is not None
     assert record.declaration_digest == "package-index"
     assert catalog.overlay is None
+
+
+def test_serving_catalog_rejects_non_file_catalog_path(tmp_path: Path) -> None:
+    catalog_path = tmp_path / "metadata.sqlite3"
+    catalog_path.mkdir()
+
+    with pytest.raises(
+        OperationCatalogError,
+        match=r"STATE_UPDATE_REQUIRED: catalog state is unreadable",
+    ):
+        ServingCatalog.open(catalog_path)
 
 
 def test_serving_catalog_inspects_family_ids_from_the_package_index() -> None:

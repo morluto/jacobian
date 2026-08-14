@@ -55,12 +55,18 @@ class ServingCatalog:
 
         visibility = policy or OperationVisibilityPolicy()
         overlay = None
-        if database_path is not None and database_path.is_file():
-            overlay = OperationCatalog(
-                database_path,
-                visibility,
-                expected_package_version=expected_package_version or __version__,
-            )
+        if database_path is not None:
+            if database_path.exists() and not database_path.is_file():
+                raise OperationCatalogError(
+                    "STATE_UPDATE_REQUIRED: catalog state is unreadable; "
+                    "run `jacobian update`"
+                )
+            if database_path.is_file():
+                overlay = OperationCatalog(
+                    database_path,
+                    visibility,
+                    expected_package_version=expected_package_version or __version__,
+                )
         catalog = cls(load_package_index(), overlay, visibility)
         _reject_packaged_descriptor_mirrors(catalog.index, overlay)
         return catalog

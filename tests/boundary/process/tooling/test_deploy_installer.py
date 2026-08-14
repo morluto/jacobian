@@ -438,9 +438,12 @@ def test_activation_arms_rollback_before_switching_current() -> None:
 def test_installer_compiles_state_before_service_activation() -> None:
     source = INSTALLER.read_text(encoding="utf-8")
 
+    snapshot = source.index('snapshot_file state "${STATE_DIR}"')
     lifecycle = source.index('log "running jacobian ${STATE_COMMAND}')
     restart = source.index('"${SYSTEMCTL_BIN}" restart jacobian-mcp.service', lifecycle)
-    assert lifecycle < restart
+    assert snapshot < lifecycle < restart
+    assert source.index('"${SYSTEMCTL_BIN}" stop jacobian-mcp.service') < snapshot
+    assert 'restore_file state "${STATE_DIR}"' in source
     assert '"${RUNUSER_BIN}" -u jacobian -- env' in source
     assert '--state-dir "${STATE_DIR}"' in source
     assert 'STATE_COMMAND="init"' in source

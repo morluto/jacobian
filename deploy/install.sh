@@ -44,6 +44,7 @@ ROLLBACK_ARMED=0
 DEPLOYMENT_ACCEPTED=0
 PREVIOUS_RELEASE=""
 VALIDATED_INSTALL_ROOT=""
+STATE_DIR="/var/lib/jacobian-mcp"
 
 cleanup() {
     if [[ -n "${RELEASE_BUILD_DIR}" && -d "${RELEASE_BUILD_DIR}" ]]; then
@@ -144,6 +145,10 @@ rollback_deployment() {
     trap - ERR
     set +e
     printf 'error: deployment failed; restoring the previous activation\n' >&2
+    if [[ -f "${ROLLBACK_ROOT}/state.present" \
+        || -f "${ROLLBACK_ROOT}/state.absent" ]]; then
+        restore_file state "${STATE_DIR}" || rollback_failed=1
+    fi
     restore_file token "${TOKEN_DESTINATION}" || rollback_failed=1
     restore_file mcp-service "${SYSTEMD_ROOT}/jacobian-mcp.service" \
         || rollback_failed=1
@@ -721,6 +726,10 @@ snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
 snapshot_systemd_service_state "${SYSTEMCTL_BIN}" "${ROLLBACK_ROOT}" \
     jacobian-funnel.service
 ROLLBACK_ARMED=1
+if [[ -f "${ROLLBACK_ROOT}/jacobian-mcp.service.active" ]]; then
+    "${SYSTEMCTL_BIN}" stop jacobian-mcp.service
+fi
+snapshot_file state "${STATE_DIR}"
 
 install -d -m 0755 "$(dirname -- "${CURRENT_LINK}")"
 ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"
@@ -841,7 +850,6 @@ if [[ "${MODE}" == "tailscale" ]]; then
     "${SYSTEMD_ANALYZE_BIN}" verify "${SYSTEMD_ROOT}/jacobian-funnel.service"
 fi
 "${SYSTEMCTL_BIN}" daemon-reload
-STATE_DIR="/var/lib/jacobian-mcp"
 install -d -o jacobian -g jacobian -m 0750 "${STATE_DIR}"
 STATE_COMMAND="init"
 if [[ -f "${STATE_DIR}/metadata.sqlite3" ]]; then

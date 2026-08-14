@@ -121,7 +121,7 @@ npm-test: ## Run the npm package tests and dry-run pack.
 	npm pack --dry-run ./npm
 
 todo-check: ## Fail on TODO comments that do not reference an issue.
-	@violations="$$(rg -n 'TODO' --type py src/ tests/ | rg -v 'TODO\(#\d+\)' || true)"; \
+	@violations="$$(grep -R -n --include='*.py' 'TODO' src/ tests/ | grep -E -v 'TODO\(#[0-9]+\)' || true)"; \
 	if [ -n "$$violations" ]; then \
 	  printf '%s\n' "$$violations"; \
 	  echo "TODO comments must reference an issue, e.g. TODO(#123)." >&2; \

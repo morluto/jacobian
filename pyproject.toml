@@ -145,21 +145,11 @@ source_modules = ["jacobian.contracts"]
 forbidden_modules = [
     "jacobian.adapters",
     "jacobian.operation_adapters",
-    "jacobian.operation_binding",
-    "jacobian.operation_catalog",
-    "jacobian.operation_declarations",
-    "jacobian.operation_registry",
     "jacobian.domains",
-    "jacobian.installation",
-    "jacobian.catalog",
-    "jacobian.operation_installation",
-    "jacobian.operation_publication",
-    "jacobian.operations",
-    "jacobian.portfolio",
-    "jacobian.providers",
-    "jacobian.runtime",
-    "jacobian.storage",
-    "jacobian.verification",
+    "jacobian.math_tools",
+    "jacobian.operation_dispatcher",
+    "jacobian.operation_discovery",
+    "jacobian.serving_catalog",
 ]
 
 [[tool.importlinter.contracts]]
@@ -169,42 +159,11 @@ source_modules = ["jacobian.math"]
 forbidden_modules = [
     "jacobian.adapters",
     "jacobian.operation_adapters",
-    "jacobian.operation_binding",
-    "jacobian.operation_catalog",
-    "jacobian.operation_declarations",
-    "jacobian.operation_registry",
-    "jacobian.checker_authorization",
-    "jacobian.checker_operations",
-    "jacobian.checker_worker",
     "jacobian.domains",
-    "jacobian.installation",
-    "jacobian.catalog",
-    "jacobian.operation_installation",
-    "jacobian.operation_publication",
-    "jacobian.operations",
-    "jacobian.portfolio",
-    "jacobian.providers",
-    "jacobian.runtime",
-    "jacobian.storage",
-    "jacobian.verification",
-    "jacobian.value_references",
-]
-
-[[tool.importlinter.contracts]]
-name = "Semantic operations do not depend on installed layers"
-type = "forbidden"
-source_modules = ["jacobian.operations"]
-forbidden_modules = [
-    "jacobian.adapters",
-    "jacobian.checker_operations",
-    "jacobian.installation",
-    "jacobian.catalog",
-    "jacobian.operation_installation",
-    "jacobian.operation_publication",
-    "jacobian.portfolio",
-    "jacobian.runtime",
-    "jacobian.storage",
-    "jacobian.verification",
+    "jacobian.math_tools",
+    "jacobian.operation_dispatcher",
+    "jacobian.operation_discovery",
+    "jacobian.serving_catalog",
 ]
 
 [[tool.importlinter.contracts]]
@@ -214,25 +173,6 @@ source_modules = ["jacobian.math.finite_fields.values"]
 forbidden_modules = [
     "jacobian.math.finite_fields._flint",
     "jacobian.math.finite_fields._sympy",
-]
-
-[[tool.importlinter.contracts]]
-name = "Provider infrastructure does not depend on installed product layers"
-type = "forbidden"
-source_modules = ["jacobian.providers", "jacobian.provider_runtime"]
-forbidden_modules = [
-    "jacobian.adapters",
-    "jacobian.domains",
-    "jacobian.installation",
-    "jacobian.math",
-    "jacobian.catalog",
-    "jacobian.operation_installation",
-    "jacobian.operation_publication",
-    "jacobian.operations",
-    "jacobian.portfolio",
-    "jacobian.runtime",
-    "jacobian.storage",
-    "jacobian.verification",
 ]
 
 [tool.coverage.run]

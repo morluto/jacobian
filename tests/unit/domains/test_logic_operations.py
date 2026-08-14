@@ -3,7 +3,9 @@ from __future__ import annotations
 import shutil
 
 import pytest
+from pydantic import ValidationError
 
+from jacobian.contracts.operations import OperationRequest
 from jacobian.domains.logic import operations
 from jacobian.domains.logic.domain_declarations import logic_operations
 from jacobian.domains.logic.operations import (
@@ -20,6 +22,8 @@ from jacobian.domains.logic.operations import (
     solve_sat,
     solve_smt,
 )
+from jacobian.inline_execution import InlineOperationAdapter
+from jacobian.operation_errors import OperationInvocationError
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
@@ -48,6 +52,29 @@ def test_canonical_cnf_can_be_passed_directly_to_assignment_and_solver() -> None
     solved = solve_sat(SatSolveRequest(cnf=canonical))
     assert solved.outcome == "SAT"
     assert solved.assignment is not None
+
+
+def test_tautological_cnf_is_a_typed_invalid_request() -> None:
+    with pytest.raises(ValidationError, match="non-tautological"):
+        CanonicalCnf(variables=("x",), clauses=((1, -1),))
+
+    operation = next(
+        operation
+        for operation in logic_operations()
+        if operation.operation_id == "sat.assignment.check"
+    )
+    with pytest.raises(OperationInvocationError) as raised:
+        InlineOperationAdapter(operation).prepare(
+            OperationRequest(
+                operation_id=operation.operation_id,
+                input={
+                    "cnf": {"variables": ["x"], "clauses": [[1, -1]]},
+                    "assignment": [True],
+                },
+            )
+        )
+
+    assert raised.value.diagnostic.code == "INVALID_LOGIC_REQUEST"
 
 
 def test_assignment_reports_the_first_unsatisfied_clause() -> None:

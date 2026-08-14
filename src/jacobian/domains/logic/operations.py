@@ -49,9 +49,13 @@ class CanonicalCnf(ContractModel):
     def require_canonical_clauses(self) -> Self:
         if sum(len(clause) for clause in self.clauses) > _MAX_LITERALS:
             raise ValueError(f"CNF may contain at most {_MAX_LITERALS} literals")
-        normalized = tuple(
-            _canonical_clause(clause, len(self.variables)) for clause in self.clauses
-        )
+        try:
+            normalized = tuple(
+                _canonical_clause(clause, len(self.variables))
+                for clause in self.clauses
+            )
+        except _TautologicalClauseError as exc:
+            raise ValueError("CNF clauses must be non-tautological") from exc
         if self.clauses != tuple(sorted(set(normalized), key=_clause_sort_key)):
             raise ValueError("CNF clauses must be unique, non-tautological, and sorted")
         return self

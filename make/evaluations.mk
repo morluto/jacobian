@@ -127,9 +127,9 @@ codex-tool-context: ## Measure ALL_TOOLS projection cost in Codex ATIF traces (T
 	$(UV_RUN) python -m benchmarks.tooling.codex_tool_context $(TRAJECTORIES) \
 		$(if $(LABEL),--label "$(LABEL)",) $(if $(OUTPUT),--output "$(OUTPUT)",)
 
-provider-eval: ## Run pinned provider feasibility jobs (PROVIDER=cddlib|cgal|gudhi|lean-repl|nauty|regina).
+provider-eval: ## Run pinned provider feasibility jobs (PROVIDER=cddlib|cgal|gudhi|nauty|regina).
 	@test -n "$(PROVIDER)" || { echo "PROVIDER is required" >&2; exit 2; }
-	@case "$(PROVIDER)" in cddlib|cgal|gudhi|lean-repl|nauty|regina) ;; *) echo "unknown provider: $(PROVIDER)" >&2; exit 2;; esac
+	@case "$(PROVIDER)" in cddlib|cgal|gudhi|nauty|regina) ;; *) echo "unknown provider: $(PROVIDER)" >&2; exit 2;; esac
 	@$(MAKE) harbor-check && \
 	$(HARBOR_RUNNER) run \
 		-c benchmarks/datasets/provider-feasibility-v1/jobs/oracle.json \

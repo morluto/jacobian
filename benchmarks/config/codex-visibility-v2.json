@@ -66,16 +66,6 @@
       "require_verified": false
     },
     {
-      "case_id": "latent-independent-verification",
-      "cue_level": "LATENT",
-      "prompt": "Compute and independently verify the exact determinant of [[31, -7, 12, 5], [4, 19, -3, 8], [11, 6, 23, -9], [-5, 14, 2, 17]]. State the determinant and the assurance level supported by the evidence.",
-      "expected_operation_ids": [
-        "matrix.determinant.compute",
-        "matrix.determinant.verify"
-      ],
-      "require_verified": true
-    },
-    {
       "case_id": "negative-conceptual-matrix",
       "cue_level": "LATENT",
       "expectation": "ABSTAIN",

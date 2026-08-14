@@ -53,12 +53,12 @@ this carrier does not.
 - `JACOBIAN_PACKAGE` — override the pinned Python package spec (default:
   `jacobian==<version>` matching this carrier).
 
-## Verification model
+## Results
 
-Search and evaluation may be wrong. A result becomes verified only when an
-operator-authorized checker accepts evidence bound to the exact claim,
-semantics, candidate, and checker version. This carrier never promotes
-evaluator output or solver status to a verified conclusion.
+Each operation returns its own bounded mathematical outcome: an exact value,
+an incomplete result, or an unknown/non-conclusion when its declared scope is
+not enough. The carrier only launches Jacobian; it does not reinterpret or
+upgrade an operation result.
 
 ## License
 

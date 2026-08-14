@@ -26,7 +26,6 @@ from jacobian.adapters.mcp.context import (
 )
 from jacobian.adapters.mcp.deployment_identity import load_deployment_identity
 from jacobian.adapters.mcp.server import _build_server
-from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_service import OperationPolicy
 from jacobian.registry import CheckerRegistry
@@ -514,7 +513,6 @@ def create_remote_server(
     state = AppState(
         acquire_runtime=acquire_runtime,
         operation_catalog=catalog,
-        worker_registry=MCPBlockingWorkerRegistry(),
     )
 
     def close_owner() -> None:

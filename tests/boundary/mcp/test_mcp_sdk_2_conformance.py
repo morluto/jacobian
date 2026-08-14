@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.metadata
+import inspect
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from mcp_types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.server import create_server
+from jacobian.adapters.mcp.tools import math_run
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.contracts.operations import OperationResult
 
@@ -18,6 +20,7 @@ from jacobian.contracts.operations import OperationResult
 def test_mcp_sdk_is_exactly_pinned_and_v2_bindings_are_used() -> None:
     assert importlib.metadata.version("mcp") == "2.0.0"
     assert importlib.metadata.version("mcp-types") == "2.0.0"
+    assert not inspect.iscoroutinefunction(math_run)
 
 
 def test_mcp_v2_static_validation_context_errors_and_structured_resources(

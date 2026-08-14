@@ -189,7 +189,7 @@ def math_find(
     )
 
 
-async def math_run(
+def math_run(
     operation_id: OperationId,
     payload: dict[str, Any],
     inputs: dict[str, _ValueReferenceArgument] | None = None,
@@ -198,7 +198,7 @@ async def math_run(
 ) -> OperationRunToolResult:
     """Run one math tool. Role comes from the tool ID."""
     with _runtime(ctx, operation_id) as active_runtime:
-        result = await _invoke_operation_attempt(
+        result = _invoke_operation_attempt(
             active_runtime,
             operation_id=operation_id,
             payload=payload,

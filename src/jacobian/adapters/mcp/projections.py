@@ -4,19 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 from typing import TYPE_CHECKING, Any, cast
 
 from jacobian.adapters.mcp.constants import (
     OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
 )
-from jacobian.bounded_process import bounded_process_cancellation
 from jacobian.contracts.operations import (
     OperationDescriptor,
     OperationDiscoveryRequest,
     OperationInputKind,
-    OperationRequest,
-    OperationResult,
 )
 from jacobian.operation_errors import OperationDiscoveryCursorError
 
@@ -29,16 +25,6 @@ if TYPE_CHECKING:
 def _mcp_text_json_bytes(value: object) -> bytes:
     """Measure JSON as FastMCP renders structured tool results."""
     return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
-
-
-def _invoke_operation_with_cancellation(
-    runtime: Any,
-    request: OperationRequest,
-    cancellation_event: threading.Event,
-) -> OperationResult:
-    with bounded_process_cancellation(cancellation_event):
-        result: OperationResult = runtime.core.operations.invoke(request)
-        return result
 
 
 def _discovery_operation_card(

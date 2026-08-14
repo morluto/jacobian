@@ -15,11 +15,7 @@ from typing import Any
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 
-from jacobian.adapters.mcp.tooling import (
-    AgentRecoveryError,
-    MCPBlockingWorkerRegistry,
-    blocking_worker_scope,
-)
+from jacobian.adapters.mcp.tooling import AgentRecoveryError
 from jacobian.runtime.model import JacobianRuntime
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,7 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 class AppState:
     acquire_runtime: Callable[[str | None], RuntimeAccess]
     operation_catalog: Any
-    worker_registry: MCPBlockingWorkerRegistry
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,16 +93,14 @@ def _runtime_scope(
     """Bind exactly one runtime and blocking-worker owner to an MCP request."""
 
     access = state.acquire_runtime(operation_id)
-    with blocking_worker_scope(
-        state.worker_registry,
-        release_callback=access.release,
-    ):
-        token: Token[JacobianRuntime | None] = _active_runtime.set(access.runtime)
-        try:
-            _start_lean_warmup(access.runtime)
-            yield access.runtime
-        finally:
-            _active_runtime.reset(token)
+    token: Token[JacobianRuntime | None] = _active_runtime.set(access.runtime)
+    try:
+        _start_lean_warmup(access.runtime)
+        yield access.runtime
+    finally:
+        _active_runtime.reset(token)
+        if access.release is not None:
+            access.release()
 
 
 def _start_lean_warmup(runtime: JacobianRuntime) -> None:

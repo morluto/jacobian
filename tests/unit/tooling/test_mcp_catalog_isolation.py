@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from jacobian.adapters.mcp.context import AppState
-from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.adapters.mcp.tools import math_find
 from jacobian.contracts.operation_find import OperationSearchRequest
 from jacobian.contracts.operations import OperationDiscoveryResult
@@ -27,7 +26,6 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
     state = AppState(
         acquire_runtime=acquire_runtime,
         operation_catalog=_Catalog(),
-        worker_registry=MCPBlockingWorkerRegistry(),
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 

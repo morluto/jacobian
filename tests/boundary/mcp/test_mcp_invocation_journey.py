@@ -68,7 +68,10 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             assert isinstance(invalid.structured_content, dict)
             invalid_result = invalid.structured_content
             assert invalid_result["execution"]["status"] == "ERROR"
-            assert invalid_result["output"]["error"]["code"] == "INVALID_REQUEST"
+            assert (
+                invalid_result["output"]["error"]["code"]
+                == "INVALID_NUMBER_THEORY_REQUEST"
+            )
             assert invalid_result["artifact_uris"] == []
             assert invalid_result["verification_record_uri"] is None
 

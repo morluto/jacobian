@@ -29,7 +29,6 @@ from jacobian.adapters.mcp.lifecycle import (
     runtime_lifespan,
 )
 from jacobian.adapters.mcp.resources import register_resources
-from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_service import OperationPolicy
 from jacobian.runtime.execution import create_execution_runtime
@@ -58,7 +57,6 @@ def create_server(
     state = AppState(
         acquire_runtime=owner.acquire,
         operation_catalog=catalog,
-        worker_registry=MCPBlockingWorkerRegistry(),
     )
     return _build_server(
         state=state,
@@ -120,7 +118,6 @@ def create_server_from_runtime(
     state = AppState(
         acquire_runtime=lambda _operation_id: RuntimeAccess(runtime),
         operation_catalog=runtime.core.operations,
-        worker_registry=MCPBlockingWorkerRegistry(),
     )
     return _build_server(
         state=state,

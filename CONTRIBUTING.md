@@ -1,8 +1,7 @@
 # Contributing to Jacobian
 
 Jacobian is a pre-stable **math toolbox for agents**: atomic tools behind
-`math.find` / `math.run`, math-first results, agent-owned composition, and
-optional checker tools as **separate catalog IDs** (not dual-mode producers).
+`math.find` / `math.run`, math-first results, and agent-owned composition.
 Contributions should preserve that product model—see
 [product-blueprint](docs/explanation/product-blueprint.md) and
 [architecture](docs/explanation/architecture.md).
@@ -35,26 +34,24 @@ pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
 
-CI always runs that ordinary Python surface plus storage/process/MCP,
-maintained Python provider boundaries, and the wheel smoke. Full Lean runs on
-merge-group candidates and on `main`, not on every pull request. That gate
-needs GitHub merge queue enabled on `main`; without a queue, Lean only runs
-after a push to `main`. You do not need to reproduce Lean locally for a
-routine change unless you edited Lean sources, fixtures, or provider identity.
+CI runs the ordinary Python surface, MCP boundaries, maintained Python provider
+boundaries, and the wheel smoke. Full Lean runs on merge-group candidates and
+on `main`, not on every pull request. That gate needs GitHub merge queue
+enabled on `main`; without a queue, Lean only runs after a push to `main`. You
+do not need to reproduce Lean locally for a routine change unless you edited
+Lean sources, fixtures, or provider identity.
 
-Specialist lanes (`make test-lean`, `make test-provider`, `make test-storage`,
-`make test-process`, `make test-mcp`, `make test-e2e`, `make test-domain`, and
-`make test-composition`) are troubleshooting and boundary work, not a routine
+Specialist lanes (`make test-lean`, `make test-provider`, `make test-process`,
+`make test-mcp`, `make test-domain`, and `make test-composition`) are
+troubleshooting and boundary work, not a routine
 confidence gate. Run one only when your change crosses that boundary or you are
 reproducing an environment-specific failure. The
 [testing strategy](docs/reference/testing-strategy.md) is the authoritative
 source for the change matrix, directory ownership, and the escalation rules.
 
 Coverage follows the same ownership rule. Ordinary lanes collect parent-process
-branch coverage without instrumenting every checker child. Changes to checker
-worker startup or coverage transport additionally run
-`make test-checker-subprocess-coverage`, the small lane that explicitly enables
-and verifies child-process coverage collection.
+branch coverage; do not add child-worker coverage plumbing to an inline
+operation.
 
 ### When the quick path is not enough
 
@@ -112,7 +109,7 @@ Every `make test-*` target accepts `TESTS=<file-or-node>` and extra pytest
 options through `PYTEST_ARGS`, and prints its ten slowest tests by default
 (override with `PYTEST_DIAGNOSTIC_ARGS=--durations=0`). Use
 `uv run --locked pytest --lf` after a failure and `uv run --locked pytest -n 0`
-while debugging. Default `uv run pytest` is Lean-free; use `make test-storage`,
+while debugging. Default `uv run pytest` is Lean-free; use
 `make test-process`, `make test-mcp`, or `make test-lean` for those trees.
 See the [testing strategy](docs/reference/testing-strategy.md) for the canonical
 lane commands and narrowing examples.
@@ -173,41 +170,32 @@ with their run history retained; do not add an auto-disable bot.
 `python tools/inventory_github_workflows.py` is the non-mutating inventory.
 Branch protection should require the CI check named `required`.
 
-For the exact task authoring workflow and verifier changes, use the
-[`harbor-benchmarks`](.agents/skills/harbor-benchmarks/SKILL.md) skill. The
-[testing strategy](docs/reference/testing-strategy.md) and
-[benchmark contracts](docs/reference/evaluations/benchmark-contracts.md) define
-the full ownership, host-validation sharding, and Oracle semantics.
+Benchmark and evaluation material is not part of the Jacobian product
+documentation. Keep any such work isolated from the server's operation
+contracts and validate it through its own repository-local workflow.
 
-## Verification rules
+## Bounded-result rules
 
 - Do not turn a timeout, cancellation, error, incomplete enumeration, or
   missing witness into a mathematical conclusion.
+- Keep execution status, input validity, and the domain mathematical conclusion
+  separate.
 - Do not promote an evaluator score, solver status, model answer, or search
-  result directly to `VERIFIED`.
-- Keep execution status, input validity, mathematical conclusion, assurance,
-  and evidence type separate.
-- Bind verified evidence to the exact claim, semantics, candidate, scope,
-  certificate format, and checker identity.
-- Keep checker authorization and trust policy outside untrusted plugins and
-  search workers.
+  result beyond the conclusion stated by its typed domain result.
 
-For trust-sensitive changes, write the failing invariant or attack test first
-and verify replay through an independent checker process.
+For trust-sensitive changes, write the failing invariant or attack test first.
 
 ## Documentation
 
 Documentation follows the [Diátaxis framework](https://diataxis.fr/). Place
 documentation according to the reader's task:
 
-- `docs/tutorials/` teaches through a complete guided experience;
 - `docs/how-to/` explains how to complete one specific task;
 - `docs/reference/` defines exact contracts and lookup information;
 - `docs/explanation/` records architecture, rationale, and tradeoffs.
 
-Domain-owned operation references live in `docs/reference/operations/<domain>/`.
-Adding an operation or provider does not require editing a central documentation
-list.
+The installed catalog is the operation reference. Add prose only when an
+external boundary needs context that a generated schema cannot express.
 
 Keep product intent (product model / architecture) separate from supported
 release behavior.
@@ -245,12 +233,11 @@ layout or diagrams materially change.
 Open a new issue when review, conformance testing, or real use identifies a
 specific unresolved behavior. Each issue should describe the observable
 mathematical or operational problem, distinguish verified facts from
-hypotheses, name the affected public contract or conformance case, include a
-minimal reproduction or failing test where practical, and state whether the
-change can affect artifact identity, checker authority, evidence binding, or
-experiment integrity. Do not prescribe a solver or backend unless the
-requirement depends on it. Do not open umbrella issues that only restate the
-product model; open issues when the problem and success criteria are concrete.
+hypotheses, name the affected public contract or conformance case, and include
+a minimal reproduction or failing test where practical. Do not prescribe a
+solver or backend unless the requirement depends on it. Do not open umbrella
+issues that only restate the product model; open issues when the problem and
+success criteria are concrete.
 
 ## Test ownership and selection
 
@@ -262,12 +249,10 @@ only when they alter execution: `requires_provider(name)`, `performance`,
 directory ownership. Scheduled validation owns `make test-exhaustive`; keep a
 representative behavioral case in the ordinary owning lane.
 
-Lane execution follows the test directory layout. Storage, process, MCP, and
-Lean stay on named Make targets because they need serial SQLite or kill-safe
-process supervision. Prefer the hydration ladder in the
-[testing strategy](docs/reference/testing-strategy.md): domain services before
-`attached_complete_runtime` before `authorized_complete_runtime` before
-`fresh_complete_runtime`.
+Lane execution follows the test directory layout. MCP and Lean stay on named
+Make targets because they exercise transport and kill-safe process boundaries.
+Prefer a direct domain test, then a focused MCP test only when the public
+projection changes.
 
 Tests may reuse concept-specific helpers under `tests/support`, but must not
 import helpers from a sibling semantic lane. Keep fixtures in the narrowest

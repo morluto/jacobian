@@ -11,13 +11,12 @@ operations, also use the
 ## Product Constraints
 
 Jacobian is an **MCP server with two tools for atomic mathematics**. It is not a
-workflow engine: the agent owns decomposition, sequencing, checker choice, and
-stopping.
+workflow engine: the agent owns decomposition, sequencing, and stopping.
 
 | Agent verb | MCP tool | Meaning |
 | --- | --- | --- |
 | Search | `math.find` | Find or inspect math tools (IDs, schemas, examples). |
-| Execute | `math.run` | Run **one** tool → **mathematical value** (or checker **verdict**). |
+| Execute | `math.run` | Run **one** tool → **mathematical value**. |
 | Inventory | `operation://catalog` | Full catalog when needed. |
 
 See [product model](docs/explanation/product-blueprint.md) and
@@ -25,19 +24,16 @@ See [product model](docs/explanation/product-blueprint.md) and
 Not a required sequence: agents may run a known ID, search first, or re-find
 mid-investigation.
 
-**Results are math-first.** Ordinary tools return calculations (GCD, matrix,
-path, factors, …) plus execution status. Do not add generic assurance,
-completeness, scope, or obligation knobs to ordinary results; bounded status
-belongs in the domain result that defines it.
+**Results are math-first.** Operations return calculations (GCD, matrix, path,
+factors, …) plus execution status. Do not add generic assurance, completeness,
+scope, or obligation knobs to ordinary results; bounded status belongs in the
+domain result that defines it. `lean.check` is a one-shot source-checking
+operation, not a general checker framework.
 
-**Checker tools are additional tools.** Independent check is a **separate
-catalog ID** (e.g. `….verify`, `lean.check`), not a role on the producer. **No
-dual-mode tools.**
-
-- Server: typed contracts, resource bounds, catalog compilation, checker
-  authorization.
+- Server: typed contracts, resource bounds, immutable discovery, and the final
+  MCP projection.
 - Model: representation, which tools to run, how to compose values, when to
-  call checker tools, when to stop.
+  stop.
 - Discovery must not become a hidden planner (“recommended next step”).
 - Evaluations reward correct math, useful intermediate values, safety, and
   efficiency—not a fixed tool-call sequence.
@@ -48,21 +44,15 @@ catalogs, documentation, tests, and wire contracts.
 **Lifecycle vocabulary.** A built-in operation is a typed mathematical
 function shipped by Jacobian. Ordinary inline operations are live
 `InlineOperation` declarations; `math.find` and `math.run` load them with no
-state directory. Family operations contribute discovery cards from public
-request and result models. `jacobian init` and
-`jacobian update` compile overlay state for checkers, executables, and
-artifacts; they do not mirror built-in descriptors. Serving never discovers or installs operations. Reserve **installation** for Jacobian itself and
-optional external executables. Ordinary maintained libraries such as SymPy,
-NetworkX, FLINT, Z3, and cvc5 are private math backends, not operation-specific
-providers. Exact runtime identity belongs only to exceptional external
-executables and authorized checkers, and is not part of public operation
-descriptors.
+state directory. Serving neither discovers nor installs operations. Reserve
+**installation** for Jacobian itself and the fixed Lean environment used by
+`lean.check`. Ordinary maintained libraries such as SymPy, NetworkX, FLINT,
+and Z3 are private math backends, not operation-specific providers.
 
 Tools stay atomic, searchable, and freely composable. No prescribed proof
-strategy, verification order, or stopping criteria in discovery, ranking,
-prompts, or adapters.
+strategy or stopping criteria in discovery, ranking, prompts, or adapters.
 
-Design against the portfolio. Reuse values/artifacts; prefer composable
+Design against the portfolio. Reuse typed values; prefer composable
 primitives over paper-shaped mega-tools. Domain-owned tool IDs over generic
 verb taxonomies or new top-level MCP tools.
 
@@ -87,7 +77,7 @@ artifact, provider-loading, or installation objects.
 
 ### Mathematical interoperability
 
-Operations interoperate through shared, typed domain values and artifacts—not
+Operations interoperate through shared, typed domain values—not
 backend-specific objects, JSON round-trips, or wire encodings. Domain values
 live beside their public functions under `jacobian.math.<domain>.values`;
 `jacobian.contracts` is limited to genuinely cross-domain passive primitives.
@@ -103,14 +93,14 @@ already carries complete semantics. Do not add a universal backend wrapper,
 automatic coercion framework, generic conversion language, or second semantic
 type system above maintained libraries.
 
-Canonical decimal strings are wire and persistence values, not computational
+Canonical decimal strings are wire values, not computational
 values. Use the canonical conversion API before calling backends or constructing
 results. Do not directly apply `int()` or `str()` to canonical components or
 change `sys.set_int_max_str_digits()` as a workaround. Keep backend coercion in
 thin adapters, and test above 4,300 digits whenever the contract permits it.
 
-Keep Pydantic models authoritative at operation, persistence, artifact, and
-wire boundaries. Domain implementations and operation factories must preserve
+Keep Pydantic models authoritative at operation and wire boundaries. Domain
+implementations and operation factories must preserve
 their concrete request and result types: do not accept
 `Callable[[ContractModel], ContractModel]` or cast a validated request back to a
 domain model. A bounded operation records exact, incomplete, or unknown status
@@ -122,10 +112,8 @@ than duplicating the mathematics or introducing a generic conversion framework.
 Shared abstractions require two surviving production paths and must delete the
 older duplication in the same change. An ordinary operation should need at most
 one public domain function, one request model when necessary, one rich result
-model when necessary, one semantic operation declaration, and one external
-publication binding only when inline transport is insufficient. Publication
-owns transport only; it does not own mathematical validation, applicability,
-provider selection, effects, parsing, or checker authority.
+model when necessary, and one semantic operation declaration. Bounded results
+are returned inline; do not add publication or retention layers.
 
 Do not introduce pass-through facades to make a dependency graph look cleaner.
 An aggregate may coordinate a public lifecycle or transaction, but it must not
@@ -139,38 +127,24 @@ or return nested installation reports, provider bags, or phase-result mirrors
 that production immediately discards. Keep an installation result only when a
 later production phase consumes that exact typed fact.
 
-Construct wire envelopes only at the final operation or protocol projection.
-Mathematical functions, typed operation executors, artifact services, and
-checker services return their owned typed values or terminal states; they do
-not construct `OperationResult`. Do not hide artifact writes inside an
-`OperationDeclaration.execute` callable to satisfy this rule. When an operation needs
-a domain-specific durable schema or parent closure, keep that publication in a
-narrow named domain publisher and pass its typed projection to the one final
-envelope constructor.
-
-Measure expensive checker source and dependency identity at authorization and
-inside the bounded checker worker, not during catalog discovery, compatibility
-selection, or ordinary runtime startup. Registry reads validate persisted
-identity and authority; the execution boundary remeasures executable bytes.
+Construct wire envelopes only at the final MCP projection. Mathematical
+functions and operation executors return their owned typed values or terminal
+states; they do not construct `OperationResult`.
 
 At the MCP boundary, prefer MCP Python SDK 2.0 high-level typed returns. Return
 Pydantic result models directly and let the SDK derive the output schema,
 validate results, and populate `content` and `structured_content`. Use an
-explicit `CallToolResult` only when a response genuinely requires MCP content
-blocks such as `ResourceLink`, custom metadata, or a deliberate text
-projection. Set `structured_output=True` so unsupported return annotations fail
-during registration.
+explicit `CallToolResult` only for a deliberate text projection. Set
+`structured_output=True` so unsupported return annotations fail during
+registration.
 
-Return small, bounded mathematical values inline. Materialize an artifact only
-when the result needs durable identity, independent retrieval, replay,
-resumability, evidence binding, or size-separated transport. Do not add
-persistence flags or generic retention policy to ordinary computations.
+Return bounded mathematical values inline. Jacobian has no artifact, resource,
+or persistence product; do not add retention flags, resource links, replay, or
+publication to an operation.
 
-Built-in mathematical producers belong in explicit declaration modules. Do not add
-global operation registries, recursive package discovery, import-time
-registration, or mechanical wrappers for backend functions. Producers remain
-capped at `COMPUTED`; domain-owned checker declarations do not authorize
-themselves.
+Built-in mathematical operations belong in explicit declaration modules. Do not
+add global operation registries, recursive package discovery, import-time
+registration, or mechanical wrappers for backend functions.
 
 Declaration modules export immutable operation tuples. Do not add bundle
 objects, installer callbacks, runtime services, storage collaborators, or
@@ -178,28 +152,22 @@ dependency-resolution policy around them. An operation may call a typed private
 computational backend; that backend is part of execution, not application
 lifecycle.
 
-Keep availability, recommendations, compatibility, and verification authority
-separate. Experimental contracts may break between versions; compatibility
-applies only to supported versions. Only an operator-authorized checker
-independent of proposal, search, and evaluation may return `VERIFIED`.
+Keep availability, recommendations, and compatibility separate. Experimental
+contracts may break between versions; compatibility applies only to supported
+versions.
 
 Follow the
 [ownership model](docs/explanation/product-blueprint.md#ownership-model).
-Keep strategy out of the kernel, semantics out of generic contracts, and
-checker authorization out of plugins and search code.
+Keep strategy out of the kernel and semantics out of generic contracts.
 
-## Fail-Closed Verification Rules
+## Bounded-result rules
 
 - Treat `TIMEOUT`, `CANCELLED`, `ERROR`, incomplete enumeration, and failure to
   find a witness as non-conclusions.
-- Never promote an evaluator score, solver status, model answer, or search
-  result directly to `VERIFIED`.
-- Keep execution status, input validity, mathematical conclusion, assurance,
-  and evidence type separate.
-- Bind `VERIFIED` evidence to the exact claim, semantics, candidate, scope,
-  certificate format, and checker identity.
-- Plugins and search code cannot authorize checkers or change trust policy.
-- Independent checkers cannot depend on the search implementation they certify.
+- Keep execution status, input validity, and the domain mathematical conclusion
+  separate.
+- Do not promote an evaluator score, solver status, model answer, or search
+  result beyond the conclusion stated by its typed domain result.
 
 ## Repository Gotchas
 
@@ -212,13 +180,13 @@ checker authorization out of plugins and search code.
 - Jacobian is pre-stable. Current reference documents and the installed catalog
   define the supported surface; they do not order operation research.
 - Validate the complete Pydantic request model before preflight, provider calls,
-  computation, allocation, or artifact writes. This includes relationships among
+  and computation. This includes relationships among
   individually valid fields: parents, characteristics, presentations, axes,
   bases, labels, and bound identities must agree where the operation requires
   them. JSON Schema supports discovery; it does not replace cross-field model
   validation. Exercise incompatible-but-individually-valid values through the
   serialized installed-operation boundary and assert an invalid-request result
-  with no execution or publication.
+  with no execution.
 - Parse agent-supplied JSON strictly into the owning Pydantic request model;
   advertised integers must not accept numeric strings or other coercions. An
   adapter prepares that typed request before provider readiness and executes
@@ -233,11 +201,10 @@ checker authorization out of plugins and search code.
 - A `COMPLETED` bounded operation may return a domain result marked `UNKNOWN` or
   `INCOMPLETE`. Execution completion alone does not establish optimality or a
   mathematical conclusion.
-- Include every first-class artifact reference, including verification records,
-  in the result's `artifact_uris`.
-- An unavailable optional native or formal provider must remove only the
-  affected operations. A missing or mismatched maintained Python backend is
-  a broken installation and must fail runtime construction clearly.
+- Results carry values and execution state only; they never carry artifact or
+  verification-record references.
+- A missing maintained Python backend is a broken installation. `lean.check`
+  reports a bounded provider failure when the fixed Lean environment is absent.
 - Keep `deep_review.md` local; it is ignored and is not design source material.
 - Keep worked cases in reference scenarios and benchmarks.
 
@@ -273,14 +240,9 @@ those rather than duplicating them.
 Non-obvious caveats:
 
 - If a fresh non-login shell can't find `uv`, run `export PATH="$HOME/.local/bin:$PATH"`.
-- Optional native and formal backends are absent by default and their
-  operations are correctly omitted: `lean.check` prints
-  `lean.check is not installed` on `init`/startup
-  (the pinned Lean 4.31.0 toolchain is not installed), and external solver
-  executables (`cadical`, `drat-trim`, `carcara`) are not on `PATH`. This does
-  not break the kernel, catalog, or the core test suites. Only install Lean/elan
-  or those executables when specifically exercising `lean_runtime` tests or SAT
-  proof-artifact operations.
+- Lean is optional. When its fixed environment is absent, `lean.check` returns
+  its typed unavailable outcome. SAT and SMT use their maintained Python APIs;
+  there are no proof-artifact commands or solver-worker installations.
 - `make test-unit` is the cheap unit lane. `make quick` adds lint; `make check`
   adds lint and typecheck. `make check-all` explicitly reproduces the Lean-free
   ordinary CI matrix. Use `make test-full` only
@@ -294,19 +256,14 @@ Non-obvious caveats:
   inspect active processes for pytest jobs from this checkout and stop or wait
   for them; concurrent runtime/store/subprocess suites turn per-test timeouts
   into a host-contention detector rather than useful failure evidence.
-- SQLite is one visible contention point, but not the sole cause: full-runtime
-  construction also performs durable filesystem publication, subprocess
-  startup, schema registration, and CPU-heavy operation setup. A timeout
-  observed in `PRAGMA`, `fsync`, `os.link`, or process startup under concurrent
-  suites must be reproduced with the owning focused test before it is treated
+- Concurrent suites can still contend for CPU, process startup, and native
+  libraries. Reproduce a timeout in the owning focused test before treating it
   as a product defect.
 - Quick end-to-end smoke of the product surface: `uv run jacobian run
-  matrix.determinant.compute --json '{"matrix":{"matrix_schema_version":"1","domain":"QQ","entries":[[{"num":"1","den":"1"},{"num":"2","den":"1"}],[{"num":"3","den":"1"},{"num":"4","den":"1"}]]}}'`
-  (CLI, no state directory), `uv run jacobian --state-dir .jacobian init` for
-  overlay/checker state, `uv run jacobian-mcp` for one local stdio server, or
+  integer.compute.gcd --json '{"left":"84","right":"30"}'`,
+  `uv run jacobian-mcp` for one local stdio server, or
   `uv run jacobian-remote-mcp --host 127.0.0.1 --port 8000 --allow-anonymous`
   for an explicit remote test host. Remote hosting requires `--allow-anonymous`
   or `--auth-tokens-file`; those options are intentionally absent from the local
-  entry point. The runnable
-  `docs/tutorials/first-verified-result.md` script demonstrates one end-to-end
-  investigation that includes discovery and independent verification.
+  entry point. Use `math.find` or `operation://catalog` to inspect the installed
+  operation library, then use `math.run` for one bounded computation.

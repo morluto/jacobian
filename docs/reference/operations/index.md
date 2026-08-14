@@ -1,19 +1,13 @@
-# Math tool references
+# Operation references
 
 [Documentation home](../../index.md) · [Tool surface](../tools.md)
 
-Domain-owned tool reference documents, grouped by owning domain. Adding an
-operation or provider does not require editing this list; each domain owns its
-own subdirectory.
+The installed `operation://catalog` is the exact inventory: it contains every
+available operation ID, request schema, result schema, and example. Use
+`math.find` for a smaller search or one exact inspection.
 
-- [Graphs](graphs/index.md)
-- [Matrix](matrix/index.md)
-- [Polynomial](polynomial/index.md)
-- [Lean](lean/index.md)
+The only operation references maintained outside that live catalog describe
+the external boundary that needs extra operational context:
+
 - [SAT and SMT](sat-smt/index.md)
-- [Finite math](finite-math/index.md)
-- [Number theory](number-theory/index.md)
-- [Linear algebra](linear-algebra/index.md)
-- [Topology](topology/index.md)
-- [Geometry](geometry/index.md)
-- [Datasets](datasets/index.md)
+- [Lean source checking](lean/index.md)

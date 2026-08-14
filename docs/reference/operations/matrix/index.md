@@ -1,65 +1,19 @@
-# Matrix operation references
+# Matrix operations
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
-## Shared matrix values
+Matrix operations use bounded typed integer or rational matrices and return
+their values inline. The live catalog is authoritative for request and result
+schemas. It includes determinant, rank, RREF, nullspace, products, inverses,
+trace, adjugate, characteristic polynomial, Hermite and Smith normal forms,
+and lattice-basis reduction.
 
-`RationalMatrix` and `IntegerMatrix` in
-[`jacobian.contracts.matrices`](../../../../src/jacobian/contracts/matrices.py)
-are the authoritative shared inline matrix values across the matrix and
-lattice domains. Both are bounded Pydantic `ContractModel` types with
-rectangular-shape and scalar-digit validators. They are not operation-specific:
-the same `RationalMatrix` carries a determinant input, an RREF result, a matrix
-product, and a nullspace operand; the same `IntegerMatrix` carries an HNF
-source, a Smith normal form, an adjugate, and an LLL reduced basis.
-
-Operation request models in
-[`jacobian.contracts.matrix_operations`](../../../../src/jacobian/contracts/matrix_operations.py)
-embed `RationalMatrix` or `IntegerMatrix` and apply their own 256-digit
-execution budget via `require_matrix_scalar_digits`. The shared matrix models
-themselves permit up to 32,768 canonical digits; each operation request
-tightens this to 256 decimal digits per scalar component before computation.
-Result models use the provider-independent domain values directly—`RrefResult.reduced_matrix`
-is a `RationalMatrix`, and `SmithNormalForm.normal_form` is an
-`IntegerMatrix`, and so on—so producer and consumer share typed values
-without per-operation matrix schemas.
-
-## Conversion and kernel layer
-
-The supported determinant, rank, RREF, inverse, and trace kernels live in
-[`jacobian.math.matrices`](../../../../src/jacobian/math/matrices/__init__.py).
-Its private `_sympy.py` backend owns SymPy calls, while
-`jacobian.domains.matrix_lattice.conversions` translates wire contracts at the
-operation boundary. Operation declarations and native callers therefore use
-one mathematical implementation. The native API accepts SymPy `MatrixBase`
-values directly, imports its backend lazily, and does not route through
-`math.run` or construct an operation runtime.
-
-## Artifact-backed operations
-
-`matrix.normal_form.hermite.materialize` is deliberately artifact-backed: it stores the
-source matrix, HNF candidate, and left transformation under versioned
-`jacobian.matrix-normal-form` semantics because the full transformation needs
-durable identity and independent retrieval.
-
-`matrix.determinant.compute` and `matrix.rank.compute` are inline
-`ComputedOperation` results in the `matrix_lattice` bundle. They write no
-artifact: their exact scalar result and pivot columns remain directly reusable
-in a later typed request. Their matching `.verify` operations accept those
-authoritative inline request and result values directly. An accepted replay
-persists a verification record and its bound semantics artifact, but never
-materializes ordinary input or candidate values; both durable references appear
-in the verification result's `artifact_uris`.
-
-The remaining matrix and lattice operations—RREF, nullspace, matrix product,
-inverse, trace, characteristic polynomial, Smith normal form (diagonal only),
-adjugate, rational linear solve, and LLL basis reduction—are declared in the
-`matrix_lattice` bundle. The computed operations return results inline without
-artifacts; LLL basis reduction is a `MaterializedOperation` that stores the
-reduced basis and transformation because the bounded worker result needs
-durable identity.
-
-## Operation reference pages
+The direct normal-form operations are
+`matrix.normal_form.hermite.compute`,
+`matrix.normal_form.smith.compute`, and
+`matrix.normal_form.smith.certified.compute`. The certified Smith result keeps
+the matrices needed to inspect (D = UAV) in the returned value; it does not
+publish a record or require later retrieval.
 
 - [Integer matrix Hermite normal form](matrix-hermite-normal-form.md)
 - [Exact rational matrix determinants](matrix-rational-determinant.md)

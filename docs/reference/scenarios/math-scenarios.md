@@ -2,8 +2,8 @@
 
 [Documentation home](../../index.md)
 
-- Purpose: reusable mathematical cases for documentation, tests, benchmarks,
-  and producer/checker conformance
+- Purpose: reusable mathematical cases for documentation, tests, and
+  benchmarks
 - Status: reference inputs and expected mathematical outcomes, not runtime
   workflows
 
@@ -14,12 +14,11 @@ Each scenario identifies:
 - exact mathematical input and parent/domain;
 - expected value or bounded-search outcome;
 - any domain-owned bounds, coverage status, or witness;
-- applicable producer operation;
-- optional independent checker operation; and
-- adversarial mutations that must be rejected.
+- applicable operation or native mathematical function; and
+- adversarial mutations that must be rejected at the typed request boundary.
 
-A scenario does not prescribe tool order. Agents may use an operation directly,
-search first, compose several values, invoke a checker, or stop without checking.
+A scenario does not prescribe tool order. Agents may use a known operation
+directly, search first, compose several values, or stop with the result it has.
 
 ## Exact arithmetic
 
@@ -29,8 +28,8 @@ Input: `84` and `30` over the integers.
 
 Expected value: `6`.
 
-This is a scalar ordinary-operation case. It needs no artifact or verification
-record and is useful as an MCP/CLI parity smoke.
+This is a scalar ordinary-operation case and is useful as an MCP/CLI parity
+smoke.
 
 ### INT-FACTOR-001 — Composite integer
 
@@ -38,9 +37,8 @@ Input: `91`.
 
 Expected factorization: `7 × 13`.
 
-The returned factors are a mathematical value. A separate primality or
-factorization checker may replay them when installed; a failed factor search is
-not evidence that the input is prime.
+The returned factors are a mathematical value. A failed factor search is not
+evidence that the input is prime.
 
 ## Matrices
 
@@ -56,10 +54,9 @@ Input over `QQ`:
 
 Expected determinant: `-1`.
 
-`matrix.determinant.compute` returns the exact value inline.
-`matrix.determinant.verify`, when authorized, independently recomputes the same
-input/candidate pair. Mutate the candidate to `1`, a rational denominator to
-zero, or the matrix after computation to test rejection and binding.
+`matrix.determinant.compute` returns the exact value inline. Mutate a rational
+denominator to zero or change a matrix entry to exercise request validation and
+the resulting value.
 
 ### MATRIX-RANK-001 — Exact rank and pivots
 
@@ -71,9 +68,8 @@ Input over `QQ`:
  [0, 1, 1]]
 ```
 
-Expected rank: `2`. The rank result remains bound to the exact matrix parent and
-axes once typed composition is available; a same-shaped matrix is not a valid
-substitute.
+Expected rank: `2`. A consumer receives the typed matrix value it requires; a
+same-shaped value with different entries is not a substitute.
 
 ## Polynomials
 
@@ -88,9 +84,9 @@ agreement between the Python API and catalog operation.
 
 ### POLY-SEPARATE-001 — Ideal membership or separator
 
-Given an exact polynomial and generators, return either a valid membership
-representation or a domain-owned separating outcome. Keep the two mathematical
-variants typed. A solver status alone is not a checker verdict.
+Given an exact polynomial and generators, return a typed membership
+representation or a typed separating outcome. A solver status alone is not a
+broader mathematical claim.
 
 ## Graphs
 
@@ -151,10 +147,7 @@ and attach every direction to its rank before aggregating the orbit
 distribution.
 
 Reject a differently presented isomorphic field, wrong axes or bases, a
-reinterpreted `2×2` rank over `F₈`, missing directions, substituted ranks, and
-any inherited assurance. The independent checker may share passive formats and
-vectors but not producer conversion, restriction-of-scalars, field execution,
-or rank code.
+reinterpreted `2×2` rank over `F₈`, missing directions, and substituted ranks.
 
 ### Finite polynomial map fibers
 
@@ -163,14 +156,11 @@ ledger scenario. Enumerate a bounded polynomial map table whose domain and
 codomain are exact. The fiber partition covers the complete field exactly once.
 Collision and permutation certificates bind the map and enumeration scope.
 
-Reject a second field representation, incomplete table, duplicate/missing
-domain element, wrong codomain parent, forged fiber, or certificate for another
-map. Producer and checker do not share executable enumeration.
+Reject a second field representation, incomplete table, duplicate or missing
+domain element, wrong codomain parent, or forged fiber.
 
 ## Scenario use
 
 Public examples should remain small enough to understand and run. Larger or
-held-out variants belong in Harbor datasets with a frozen input, hidden Oracle,
-and contamination controls. Scenario coverage reports upstream reproduction,
-authored task coverage, and source references separately; it does not conflate
-them.
+held-out variants may live in evaluation datasets, which are separate from the
+server's operation contract.

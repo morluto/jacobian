@@ -1,6 +1,10 @@
-# Number theory operation references
+# Number theory operations
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
+Number-theory operations are direct bounded computations over canonical integer
+and rational values. Factorization, divisibility predicates, modular arithmetic,
+and finite abelian-group decompositions are separate catalog entries.
+
 - [Powerful-number decision](integer-powerful-number-decision.md)
-- [Integer prime-factorization verification](integer-prime-factorization-verification.md)
+- [Integer prime factorization](integer-prime-factorization-verification.md)

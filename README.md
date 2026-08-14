@@ -5,7 +5,7 @@
 <h1 align="center">Jacobian</h1>
 
 <p align="center">
-  <strong>Pure mathematics for agents: search for examples and counterexamples, compute exactly, and independently check what a result proves.</strong>
+  <strong>Atomic mathematics for agents: discover one typed operation, run it, and compose its bounded result.</strong>
 </p>
 
 <p align="center">
@@ -23,42 +23,24 @@ also available through a CLI and native Python API.
 
 ## Quickstart
 
-For a one-time setup:
+Run the canonical Python MCP command without installing Jacobian globally:
 
 ```sh
-npx jacobian setup
+uvx --from jacobian jacobian-mcp
 ```
 
-For a guided user-local install:
+Where an MCP host requires an npm command, the npm package is a deterministic
+carrier for that same command:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | sh
+npx jacobian mcp
 ```
 
-The installer resolves an npm release to an exact version, installs the small
-launcher without lifecycle scripts, configures selected MCP clients, and
-verifies the local server. The Python package environment is approximately 160
-MB; if Python 3.12 is not already available, uv's managed Python adds about 110
-MB. Add `--defer-runtime` to postpone both until first use:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/morluto/jacobian/main/npm/install.sh | \
-  sh -s -- --client codex --yes --defer-runtime
-```
-
-For repeated use:
-
-```sh
-npm install -g jacobian
-jacobian setup
-jacobian upgrade
-jacobian doctor
-```
-
-For the Python distribution:
+For a persistent installation:
 
 ```sh
 python -m pip install jacobian
+jacobian-mcp
 ```
 
 That package includes Jacobian's exact maintained Python backend stack: SymPy,
@@ -70,35 +52,16 @@ versions. Other systems may have compatible upstream wheels, but are not part
 of the tested release contract yet. In particular, Alpine/musl cannot install
 the complete mandatory stack from PyPI.
 
-The launcher supports Claude, Codex, Cursor, Gemini, and OpenCode. It requires
-Node.js 18 or newer plus CPython 3.12/3.13 or
-[`uv`](https://docs.astral.sh/uv/); the guided installer can install its pinned
-`uv` release after confirmation. Run `jacobian mcp` to start the server
-directly.
-
 The Python distribution contains the mathematical kernel, CLI, and MCP server.
-The npm package is a sub-100 KB thin launcher and MCP client installer for that
-same implementation; it is not a separate JavaScript API. It bundles one TOML
-parser for fail-closed Codex configuration updates and runs no install-time
-scripts. The larger download is the local Python mathematical runtime, not a
-JavaScript dependency tree.
+The npm package contains no lifecycle manager or JavaScript API; it only maps
+its exact package version to the corresponding `uvx` invocation.
 
-To run the exact code in a clone, follow
-[Configure an agent from a source checkout](docs/how-to/setup-agent-from-source.md).
-
-## Compute, then check when needed
+## Compute one bounded result
 
 An ordinary operation returns mathematics first. For example,
 `matrix.determinant.compute` accepts one exact rational matrix and returns its
-determinant inline. If independent replay matters, the agent may separately run
-`matrix.determinant.verify` with that exact input and candidate result.
-
-The producer and checker are distinct catalog IDs with independent
-implementations. Computation does not certify itself, and a timeout,
-cancellation, error, or incomplete bounded search remains a non-conclusion.
-
-The [introductory tutorial](docs/tutorials/first-verified-result.md) runs this
-determinant pair through the public MCP surface.
+determinant inline. Callers compose results by passing their typed values to a
+subsequent operation; Jacobian retains no project state or artifact store.
 
 ## Available mathematics
 
@@ -107,62 +70,39 @@ The built-in portfolio covers work in:
 - polynomial maps and polynomial algebra;
 - exact linear algebra;
 - graphs, paths, colorings, and isomorphism;
-- SAT and SMT models and proof artifacts;
-- finite and universal algebra;
-- polytopes; and
-- Lean declaration discovery and proof checking.
+- bounded SAT and SMT solving;
+- finite algebra, probability, geometry, and topology; and
+- Lean source elaboration.
 
-Some operations require optional external executables or formal runtimes. An
-operation available in the active catalog is invocable; catalog membership
-does not grant verification authority. Read `operation://catalog` or use
-`math.find` to inspect the active catalog. Use `math.run` to invoke a selected
-operation.
+SAT and SMT operations use the maintained Z3 Python binding directly. The
+optional `lean.check` operation runs one bounded source snippet in the fixed
+Lean service environment. It creates only a request-scoped temporary directory
+and returns typed diagnostics; it does not expose a proof-state session or
+retain source. Read `operation://catalog` or use `math.find` to inspect the
+active catalog, then call `math.run` once.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and
-[native and formal backend setup](docs/how-to/install-native-and-formal-providers.md)
-for optional executable requirements.
-
-## Verification model
-
-Jacobian separates mathematical production from independent checking. A
-producer cannot certify its own output.
-
-```text
-Subject + Candidate → Independent checker → Bound record
-```
-
-Only an operator-authorized checker may emit a verified record, bound to the
-exact subject, candidate, evidence, protocol, scope, semantics, certificate
-format, and checker identity. Availability and provider provenance do not grant
-that authority.
-
-> **No witness is not proof.** A failed search, timeout, cancellation, error,
-> or completed bounded search without a witness leaves the claim `UNKNOWN`.
-
-The [architecture document](docs/explanation/architecture.md) describes the
-complete trust boundary.
+[backend requirements](docs/how-to/install-native-and-formal-providers.md).
 
 ## Status
 
-Jacobian 0.11.0 is a pre-stable release. Its published package, operation, and
-artifact contracts describe the current supported surface; ongoing operation
-research may change experimental contracts between releases.
+Jacobian 0.11.0 is pre-stable. Its published package and operation contracts
+describe the supported surface; experimental operation contracts may change
+between releases.
 
 ## Documentation
 
 - [Documentation home](docs/index.md) — tutorials, how-to guides, reference,
   and explanations
-- [First verified result](docs/tutorials/first-verified-result.md) — a complete
-  runnable example
 - [Architecture](docs/explanation/architecture.md) — runtime structure and
   trust boundaries
 - [Product model](docs/explanation/product-blueprint.md) — operation contracts,
   ownership, and project boundaries
 - [Tool reference](docs/reference/tools.md) — MCP resources and invocation
   contracts
-- [Native and formal providers](docs/how-to/install-native-and-formal-providers.md)
-  — provider and Lean setup
+- [Backend requirements](docs/how-to/install-native-and-formal-providers.md)
+  — maintained Python backends and optional Lean
 - [Remote deployment](docs/how-to/deploy-remote-mcp.md) — HTTP deployment and
   authentication
 

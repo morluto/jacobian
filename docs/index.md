@@ -8,11 +8,11 @@ read the explanations for design rationale.
 
 Jacobian is a **toolbox of atomic math tools** for AI agents: find them with
 `math.find`, run them with `math.run`, get **mathematical results**, and
-compose those values across turns. Checker tools are optional **additional**
-catalog IDs—separate from producers. Catalog entries are often still called
+compose those values across turns. Domain predicates and source checks are
+ordinary operations with their own typed outputs; there is no generic checker
+or verification-record product. Catalog entries are often still called
 *operations* in the API. The [product model](explanation/product-blueprint.md)
-and [Search and execute](explanation/architecture.md#search-and-execute) define
-the contract.
+and [architecture](explanation/architecture.md) define the contract.
 
 Jacobian is pre-stable. The product, architecture, operation-library, and tool
 documents define the current contract; the installed catalog defines which
@@ -31,24 +31,13 @@ These documents define the current product contract:
 | What operations are installed now? | Runtime `operation://catalog` | Current installation-specific inventory |
 | What work is open? | GitHub issues (e.g. architecture epics) | Implementation priorities live in issues, not a parallel goals doc |
 
-## Tutorials
-
-Tutorials are guided learning paths. They assume no prior Jacobian experience
-and build toward a complete result.
-
-- [Compute and independently check a determinant](tutorials/first-verified-result.md)
-  shows the boundary between an exact producer and a separate checker.
-- [Retrieve a Lean theorem and check a proof](tutorials/lean-declaration-discovery.md)
-  composes computed declaration retrieval with independent Lean replay.
-
 ## How-to guides
 
 How-to guides assume you already understand Jacobian's basic model and need to
 complete a specific task.
 
-- [Discover, invoke, and check domain math tools](how-to/invoke-domain-operations.md)
-- [Configure an agent from a source checkout](how-to/setup-agent-from-source.md)
-- [Install native and formal providers](how-to/install-native-and-formal-providers.md)
+- [Discover and invoke domain math tools](how-to/invoke-domain-operations.md)
+- [Install native providers](how-to/install-native-and-formal-providers.md)
 - [Troubleshoot Z3 installation on macOS](how-to/troubleshoot-z3-macos.md)
 - [Run the MCP visibility evaluation](how-to/run-codex-visibility-evaluation.md)
 - [Deploy the remote MCP server](how-to/deploy-remote-mcp.md)
@@ -63,24 +52,22 @@ expectations.
 **Cross-cutting references:**
 
 - [Tool surface](reference/tools.md) — MCP resources, tools, and invocation contracts
-- [Domain operation library](reference/domain-operation-library.md) — built-in producer, bounded-search, artifact, and exact-replay contracts
+- [Domain operation library](reference/domain-operation-library.md) — built-in direct-operation contracts
 - [Native Python API](reference/python-api.md) — supported native-value modules
-- [Persistent state format](reference/state-format.md) — supported migration floor and fresh-store transition
 - [Testing strategy](reference/testing-strategy.md) — validation layers, commands, and CI responsibilities
 
-**Domain-owned references:** [Operation references](reference/operations/index.md)
-grouped by owning domain (graphs, matrix, polynomial, Lean, SAT/SMT, finite
-math, number theory, linear algebra, topology, geometry).
-Adding an operation or provider does not require editing a central list; each
-domain owns its own subdirectory.
+**Operation references:** [Operation references](reference/operations/index.md)
+explain the two retained external boundaries. The live catalog remains the
+authoritative reference for the rest of the operation library.
 
 **Evaluation references:** [Benchmark contracts](reference/evaluations/benchmark-contracts.md)
-and [evaluation methods](reference/evaluations/evaluation-methods.md) — Harbor task
-contracts, dataset inventory, validation gates, model observations,
-performance measurement, and regression policy.
+and [evaluation methods](reference/evaluations/evaluation-methods.md) describe
+the repository's separate benchmark work. They do not define the server's
+operation contract.
 
-**Reference scenarios:** [Worked cases](reference/scenarios/index.md) —
-mathematical scenario catalog and certified-homology case.
+**Reference scenarios:** [Worked cases](reference/scenarios/index.md) preserve
+small mathematical workloads for documentation and testing; they are not
+runtime workflows.
 
 Use the runtime `operation://catalog` and `math.find` for the
 active operation inventory and exact operation schemas.
@@ -88,10 +75,7 @@ active operation inventory and exact operation schemas.
 ## Explanation
 
 - [Product model](explanation/product-blueprint.md) — what the product is
-- [Architecture](explanation/architecture.md) — host shape, search/execute,
-  ownership and durable execution
-- [Compiled operation architecture](explanation/operation-runtime-target.md) —
-  catalog compilation and selected execution
+- [Architecture](explanation/architecture.md) — host shape and direct execution
 
 Do not add parallel “direction”, “goals”, or portfolio-planning novels under
 `explanation/`. Product intent lives in those two documents; open work lives
@@ -102,10 +86,6 @@ in GitHub issues.
 Read [CONTRIBUTING.md](../CONTRIBUTING.md) before changing code or public
 documentation.
 
-Harbor benchmark authoring and verifier work uses the repository-local
-[`harbor-benchmarks`](../.agents/skills/harbor-benchmarks/SKILL.md) skill.
-Source-grounded reliability probes based on recently resolved conjectures use
-[`recent-conjecture-evaluations`](../.agents/skills/recent-conjecture-evaluations/SKILL.md).
 For hosted operation, follow
 [Deploy the remote MCP server](how-to/deploy-remote-mcp.md); ignored `tmp/`
 records are host evidence, not source of truth.

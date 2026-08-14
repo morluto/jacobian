@@ -50,7 +50,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             assert result.structured_content["artifact_uris"] == []
             response = json.loads(result.content[0].text)
             assert response["execution"]["status"] == "COMPLETED"
-            assert "verification_record_uri" not in response
+            assert response["verification_record_uri"] is None
             assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
@@ -134,7 +134,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 "action": "inspect_catalog",
                 "resource_uri": "operation://catalog",
             }
-            assert "verification_record_uri" not in unknown_result
+            assert unknown_result["verification_record_uri"] is None
             assert unknown.structured_content["verification_record_uri"] is None
 
     asyncio.run(scenario())

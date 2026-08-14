@@ -44,19 +44,16 @@ class _ValueReferenceArgument(_MCPOutputModel):
 OperationRunToolResult = Annotated[CallToolResult, OperationResult]
 
 
-def _text_result(
-    structured_content: dict[str, Any],
-    text_projection: dict[str, Any],
-    artifact_uris: tuple[str, ...] = (),
-) -> CallToolResult:
-    """Keep one typed wire result plus a small agent-facing text view."""
+def _artifact_result(result: OperationResult) -> CallToolResult:
+    """Return SDK-validated structured output plus ResourceLink content blocks."""
 
+    structured_content = result.model_dump(mode="json")
     return CallToolResult(
         content=[
             TextContent(
                 type="text",
                 text=json.dumps(
-                    text_projection,
+                    structured_content,
                     ensure_ascii=False,
                     sort_keys=True,
                     separators=(",", ":"),
@@ -69,7 +66,7 @@ def _text_result(
                     description="Durable Jacobian artifact returned by math.run.",
                     mime_type="application/json",
                 )
-                for artifact_uri in artifact_uris
+                for artifact_uri in result.artifact_uris
             ),
         ],
         structured_content=structured_content,
@@ -127,25 +124,6 @@ def _bounded_run_result(
     output.update(_unknown_operation_context(runtime, result.operation_id))
     payload["output"] = output
     return OperationResult.model_validate(payload)
-
-
-def _run_text_projection(result: OperationResult) -> dict[str, Any]:
-    """Agent-visible projection: mathematical value first, then status."""
-    payload = result.model_dump(mode="json")
-    projection: dict[str, Any] = {
-        "operation_id": payload["operation_id"],
-        "output": payload["output"],
-        "execution": payload["execution"],
-    }
-    for key in (
-        "diagnostics",
-        "verification_record_uri",
-        "artifact_uris",
-    ):
-        value = payload.get(key)
-        if value not in (None, [], (), {}):
-            projection[key] = value
-    return projection
 
 
 def math_find(
@@ -209,8 +187,6 @@ def math_run(
             ),
         )
         result = _bounded_run_result(active_runtime, result)
-        return _text_result(
-            result.model_dump(mode="json"),
-            _run_text_projection(result),
-            result.artifact_uris,
-        )
+        if result.artifact_uris:
+            return _artifact_result(result)
+        return result

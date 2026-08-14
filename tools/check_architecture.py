@@ -296,6 +296,7 @@ _UNDERSCORE = "_"
 _DOT = "."
 _URI = "uri"
 _RECORDS = "records"
+_CAPABILITY = "capab" + "ility"
 
 # Python identifier-level tokens (case-sensitive — these are exact symbols).
 _UNSUPPORTED_SURFACE_SYMBOLS: frozenset[str] = frozenset(
@@ -330,6 +331,7 @@ _UNSUPPORTED_SURFACE_TEXT_TOKENS: tuple[str, ...] = (
     # Prose variants are case-insensitive.
     f"{_RESEARCH} {_MEMORY.lower()}",
     f"{_RESEARCH} {_EPISODE.lower()}",
+    _CAPABILITY,
 )
 
 # Text file extensions scanned for unsupported surfaces.
@@ -359,6 +361,8 @@ _EXCLUDED_DIRS = frozenset(
 _UNSUPPORTED_SURFACE_TEXT_EXCLUDED: frozenset[PurePosixPath] = frozenset(
     {
         PurePosixPath("CHANGELOG.md"),
+        # Accepted migration design names the removed public contracts.
+        PurePosixPath("docs/explanation/operation-runtime-target.md"),
         PurePosixPath("tools/check_architecture.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
@@ -1324,6 +1328,18 @@ _UNSUPPORTED_SURFACE_AST_EXCLUDED: frozenset[PurePosixPath] = frozenset(
 )
 
 
+def _python_identifier(node: ast.AST) -> str | None:
+    if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+        return node.name
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.arg):
+        return node.arg
+    return None
+
+
 def _unsupported_surface_ast_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -1332,6 +1348,16 @@ def _unsupported_surface_ast_violations(
         return ()
     violations: list[Violation] = []
     for node in ast.walk(tree):
+        removed_name = _python_identifier(node)
+        if removed_name is not None and _CAPABILITY in removed_name.lower():
+            violations.append(
+                Violation(
+                    str(relative),
+                    "unsupported-surface",
+                    f"{removed_name} uses removed operation vocabulary",
+                    node.lineno,
+                )
+            )
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             module = _imported_module(node)
             names = _imported_names(node)
@@ -1361,7 +1387,10 @@ def _unsupported_surface_ast_violations(
         if (
             isinstance(node, ast.Constant)
             and isinstance(node.value, str)
-            and node.value in _UNSUPPORTED_SURFACE_SYMBOLS
+            and (
+                node.value in _UNSUPPORTED_SURFACE_SYMBOLS
+                or _CAPABILITY in node.value.lower()
+            )
         ):
             violations.append(
                 Violation(

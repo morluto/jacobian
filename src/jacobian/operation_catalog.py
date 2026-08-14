@@ -475,6 +475,21 @@ def declaration_digest(value: dict[str, Any]) -> str:
     return "sha256:" + sha256(canonicalize_json(value)).hexdigest()
 
 
+def operation_declaration_digest_from_descriptor(
+    descriptor: OperationDescriptor,
+) -> str:
+    """Digest the persisted identity of a resource-backed operation."""
+
+    return declaration_digest(
+        {
+            "operation_id": descriptor.operation_id,
+            "version": descriptor.version,
+            "input_schema": descriptor.input_schema,
+            "output_schema": descriptor.output_schema,
+        }
+    )
+
+
 def operation_declaration_digest(
     declaration: OperationDeclaration[Any, Any],
 ) -> str:
@@ -551,5 +566,6 @@ __all__ = [
     "declaration_digest",
     "exact_checker_declaration_digest",
     "operation_declaration_digest",
+    "operation_declaration_digest_from_descriptor",
     "public_operation_descriptor",
 ]

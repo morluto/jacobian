@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, cast
 
 from jacobian.artifacts import ArtifactService
 from jacobian.catalog_operation_collector import CatalogOperationCollector
@@ -31,17 +32,35 @@ class RuntimeResources:
     polynomial_expressions: PolynomialExpressionArtifactService
     checkers: CheckerRegistry
     operations: CatalogOperationCollector | OperationDispatcher
+    _owned_resources: list[object] | None = None
+
+    def own(self, resource: object) -> None:
+        """Add one lazily acquired closeable to the runtime lifecycle."""
+
+        if not callable(getattr(resource, "close", None)):
+            raise TypeError("runtime-owned resource must be closeable")
+        if self._owned_resources is None:
+            self._owned_resources = []
+        if all(owned is not resource for owned in self._owned_resources):
+            self._owned_resources.append(resource)
 
     def close(self) -> None:
         failures: list[Exception] = []
         close_operations = getattr(self.operations, "close", None)
-        for close in (
+        owned_closes = [
+            cast(Any, resource).close
+            for resource in reversed(self._owned_resources or [])
+        ]
+        closes: list[object] = [
             close_operations if callable(close_operations) else None,
+            *owned_closes,
             self.values.close,
             self.store.close,
-        ):
+        ]
+        for close in closes:
             if close is None:
                 continue
+            assert callable(close)
             try:
                 close()
             except Exception as exc:

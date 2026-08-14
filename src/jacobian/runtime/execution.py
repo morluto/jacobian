@@ -12,6 +12,7 @@ from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.selected_families import create_runtime_selected_families
 from jacobian.verification.service import VerificationService
 
 
@@ -39,15 +40,24 @@ def create_execution_runtime(
             checker_timeout_seconds=105,
         )
         polytope = PolytopeService(core.store, core.schemas)
+        selected_families = create_runtime_selected_families(
+            catalog=catalog,
+            binder=core.binder,
+            verification=verification,
+            checkers=core.checkers,
+            polynomial_expressions=core.polynomial_expressions,
+            polytope=polytope,
+            sat=core.sat,
+            smt=core.smt,
+            runtime_resources=core,
+        )
         registry = OperationRegistry(
             catalog,
             core.binder,
             verification,
             core.checkers,
-            core.polynomial_expressions,
-            polytope,
-            core.sat,
-            core.smt,
+            selected_families,
+            core,
         )
         core.operations = OperationDispatcher(catalog, registry)
         return JacobianRuntime(core, verification, polytope)

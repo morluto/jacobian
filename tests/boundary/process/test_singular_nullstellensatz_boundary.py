@@ -27,10 +27,10 @@ from jacobian.domains.polynomial_nullstellensatz.singular import (
     bind_selected_singular_producer,
     install_singular_producer,
 )
-from jacobian.operation_registry import supports_selected_operation
 from jacobian.process_policy import ProcessResult, ProcessTermination
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
+from jacobian.runtime.selected_families import selected_operation_origin
 
 
 def _runtime() -> ProviderObservation:
@@ -88,7 +88,7 @@ def test_singular_producer_has_a_lazy_selected_binding(tmp_path: Path) -> None:
             _runtime(),
         )
 
-        assert supports_selected_operation(PRODUCE_OPERATION_ID)
+        assert selected_operation_origin(PRODUCE_OPERATION_ID) == "family:polynomial"
         assert adapter.descriptor.operation_id == PRODUCE_OPERATION_ID
 
 

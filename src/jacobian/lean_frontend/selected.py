@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from jacobian.builtin_operations import LeanCheckAdapter
@@ -27,25 +26,49 @@ from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.providers.lean_runtime import lean_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry
+from jacobian.selected_operation_bindings import SelectedOperationBinding
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
 
-_STATEMENT_OPERATIONS = {
-    "lean.statement.propose",
-    "lean.statement.compare",
-}
-_DECLARATION_OPERATIONS = {
-    "lean.declaration.search",
-    "lean.declaration.inspect",
-    "lean.declaration.dependencies",
-}
-_EXPLORATION_OPERATIONS = {
-    "lean.proof_state.apply_tactic",
-    "lean.retrieve.premises",
-    "lean.term.apply",
-    "lean.proof_state.inspect",
-    "lean.proof_state.metavariable_fields",
-}
+_STATEMENT_OPERATIONS = frozenset(
+    {
+        "lean.statement.propose",
+        "lean.statement.compare",
+    }
+)
+_DECLARATION_OPERATIONS = frozenset(
+    {
+        "lean.declaration.search",
+        "lean.declaration.inspect",
+        "lean.declaration.dependencies",
+    }
+)
+_EXPLORATION_OPERATIONS = frozenset(
+    {
+        "lean.proof_state.apply_tactic",
+        "lean.retrieve.premises",
+        "lean.term.apply",
+        "lean.proof_state.inspect",
+        "lean.proof_state.metavariable_fields",
+    }
+)
+SELECTED_LEAN_OPERATION_IDS = frozenset(
+    {
+        "lean.check",
+        "lean.declaration.dependencies",
+        "lean.declaration.inspect",
+        "lean.declaration.search",
+        "lean.proof.axioms.inspect",
+        "lean.proof_edit.validate",
+        "lean.proof_state.apply_tactic",
+        "lean.proof_state.inspect",
+        "lean.proof_state.metavariable_fields",
+        "lean.retrieve.premises",
+        "lean.statement.compare",
+        "lean.statement.propose",
+        "lean.term.apply",
+    }
+)
 
 
 def bind_selected_lean_operation(
@@ -57,8 +80,7 @@ def bind_selected_lean_operation(
     schemas: SchemaRegistry,
     verification: VerificationService,
     checkers: CheckerRegistry,
-    own: Callable[[object], None],
-) -> OperationAdapter[Any] | None:
+) -> SelectedOperationBinding | None:
     """Construct only the Lean service family selected by ``operation_id``."""
 
     installations = _lean_installations(catalog, store, schemas, checkers)
@@ -80,6 +102,7 @@ def bind_selected_lean_operation(
         if installation.checker_id is not None
     )
     runtime = lean_provider_runtime(profiles=profiles, checker_ids=checker_ids)
+    resources: list[object] = []
     if operation_id in _STATEMENT_OPERATIONS:
         statement_adapters, _ = install_lean_statement_operations(
             store,
@@ -87,25 +110,30 @@ def bind_selected_lean_operation(
             binder.artifacts,
             runtime,
         )
-        return _select(statement_adapters, operation_id)
+        return SelectedOperationBinding(_select(statement_adapters, operation_id))
     if operation_id in _DECLARATION_OPERATIONS:
         declarations = installed_lean_declaration_service(
             runtime,
             cache_root=store.root / "cache" / "lean-declarations",
         )
-        own(declarations)
-        return _select(
-            binder.bind(lean_declaration_query_operations(declarations)).adapters,
-            operation_id,
+        resources.append(declarations)
+        return SelectedOperationBinding(
+            _select(
+                binder.bind(lean_declaration_query_operations(declarations)).adapters,
+                operation_id,
+            ),
+            tuple(resources),
         )
 
     if operation_id == "lean.proof_state.inspect":
-        return install_lean_proof_state_inspect_only(
-            store,
-            schemas,
-            binder.artifacts,
-            installations,
-            runtime,
+        return SelectedOperationBinding(
+            install_lean_proof_state_inspect_only(
+                store,
+                schemas,
+                binder.artifacts,
+                installations,
+                runtime,
+            )
         )
     if operation_id in _EXPLORATION_OPERATIONS:
         exploration_adapters, exploration = install_lean_exploration_operations(
@@ -115,8 +143,10 @@ def bind_selected_lean_operation(
             installations,
             runtime,
         )
-        own(exploration.repl)
-        return _select(exploration_adapters, operation_id)
+        resources.append(exploration.repl)
+        return SelectedOperationBinding(
+            _select(exploration_adapters, operation_id), tuple(resources)
+        )
     if operation_id == "lean.proof.axioms.inspect":
         axioms_adapter, _ = install_lean_proof_axioms_operation(
             store,
@@ -125,7 +155,7 @@ def bind_selected_lean_operation(
             installations,
             runtime,
         )
-        return axioms_adapter
+        return SelectedOperationBinding(axioms_adapter)
     if operation_id in {"lean.check", "lean.proof_edit.validate"}:
         lean = LeanService(
             store,
@@ -133,9 +163,11 @@ def bind_selected_lean_operation(
             verification,
             installations,
         )
-        own(lean)
+        resources.append(lean)
         if operation_id == "lean.check":
-            return LeanCheckAdapter(lean, runtime)
+            return SelectedOperationBinding(
+                LeanCheckAdapter(lean, runtime), tuple(resources)
+            )
         proof_edit_adapter, _ = install_lean_proof_edit_operation(
             store,
             schemas,
@@ -143,7 +175,7 @@ def bind_selected_lean_operation(
             lean,
             runtime,
         )
-        return proof_edit_adapter
+        return SelectedOperationBinding(proof_edit_adapter, tuple(resources))
     return None
 
 
@@ -187,4 +219,4 @@ def _select(
     )
 
 
-__all__ = ["bind_selected_lean_operation"]
+__all__ = ["SELECTED_LEAN_OPERATION_IDS", "bind_selected_lean_operation"]

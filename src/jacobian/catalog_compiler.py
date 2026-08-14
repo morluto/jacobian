@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 
 from jacobian import __version__
@@ -17,6 +16,7 @@ from jacobian.operation_catalog import (
     declaration_digest,
     exact_checker_declaration_digest,
     operation_declaration_digest,
+    operation_declaration_digest_from_descriptor,
     public_operation_descriptor,
 )
 from jacobian.operation_visibility import OperationVisibilityPolicy
@@ -24,6 +24,7 @@ from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.selected_families import selected_operation_origin
 from jacobian.verification.service import VerificationService
 
 
@@ -62,7 +63,7 @@ def compile_operation_catalog(
         descriptors = tuple(
             public_operation_descriptor(descriptor) for descriptor in bound_descriptors
         )
-        entries = _compiled_entries(core.operations._adapters, descriptors)
+        entries = _compiled_entries(descriptors)
         return OperationCatalogStore(state_dir / "metadata.sqlite3").commit(
             package_version=__version__,
             checker_binding_digest=declaration_digest(
@@ -88,7 +89,6 @@ def compile_operation_catalog(
 
 
 def _compiled_entries(
-    adapters: Mapping[str, object],
     descriptors: tuple[OperationDescriptor, ...],
 ) -> tuple[CompiledCatalogEntry, ...]:
     loaded_modules = load_builtin_operation_modules()
@@ -111,7 +111,7 @@ def _compiled_entries(
                 if descriptor.operation_id in declarations
                 else exact_verifiers[descriptor.operation_id][0]
                 if descriptor.operation_id in exact_verifiers
-                else type(adapters[descriptor.operation_id]).__module__
+                else _selected_operation_origin(descriptor.operation_id)
             ),
             declaration_digest=(
                 operation_declaration_digest(declarations[descriptor.operation_id][1])
@@ -121,18 +121,21 @@ def _compiled_entries(
                     descriptor,
                 )
                 if descriptor.operation_id in exact_verifiers
-                else declaration_digest(
-                    {
-                        "operation_id": descriptor.operation_id,
-                        "version": descriptor.version,
-                        "input_schema": descriptor.input_schema,
-                        "output_schema": descriptor.output_schema,
-                    }
-                )
+                else operation_declaration_digest_from_descriptor(descriptor)
             ),
         )
         for descriptor in descriptors
     )
+
+
+def _selected_operation_origin(operation_id: str) -> str:
+    origin = selected_operation_origin(operation_id)
+    if origin is None:
+        raise ValueError(
+            "catalog operation has no declaration or selected family owner: "
+            f"{operation_id}"
+        )
+    return origin
 
 
 def _checker_bindings(

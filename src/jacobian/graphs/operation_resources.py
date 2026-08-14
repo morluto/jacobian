@@ -50,6 +50,21 @@ from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
 from jacobian.verification_operations import certificate_verification_adapter
 
+SELECTED_GRAPH_OPERATION_IDS = frozenset(
+    {
+        "graph.construct.explicit",
+        "graph.search.atlas",
+        "graph.compute.properties",
+        "graph.construct.compose",
+        "graph.enumerate.nonisomorphic",
+        "graph.realize.degree_sequence",
+        "graph.compute.neighborhood_independence",
+        "graph.degree_sequence.verify",
+        "graph.neighborhood_independence.verify",
+        "graph.isomorphism.verify",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class GraphOperationResources:
@@ -178,18 +193,7 @@ def bind_selected_graph_operation(
 ) -> OperationAdapter[Any] | None:
     """Bind one ordinary graph operation without checker or portfolio setup."""
 
-    if operation_id not in {
-        "graph.construct.explicit",
-        "graph.search.atlas",
-        "graph.compute.properties",
-        "graph.construct.compose",
-        "graph.enumerate.nonisomorphic",
-        "graph.realize.degree_sequence",
-        "graph.compute.neighborhood_independence",
-        "graph.degree_sequence.verify",
-        "graph.neighborhood_independence.verify",
-        "graph.isomorphism.verify",
-    }:
+    if operation_id not in SELECTED_GRAPH_OPERATION_IDS:
         return None
     resources = register_graph_resources(store, schemas)
     if operation_id == "graph.isomorphism.verify":

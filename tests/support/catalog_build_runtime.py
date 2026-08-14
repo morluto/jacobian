@@ -30,8 +30,16 @@ class CatalogBuildRuntime(JacobianRuntime):
             core,
             verification,
             polytope,
-            close_resources=resources.close,
         )
+        for resource in (
+            resources.lean_declarations,
+            resources.lean_exploration.repl
+            if resources.lean_exploration is not None
+            else None,
+            resources.lean,
+        ):
+            if resource is not None:
+                core.own(resource)
         self.catalog_build_resources = resources
 
 

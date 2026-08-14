@@ -50,10 +50,14 @@ materialized only when explicitly requested. Visibility filtering is applied
 to search, inspection, execution, and the resource without rebuilding the
 compiled snapshot.
 
-The catalog is inert searchable data. A declaration-module locator plus
-operation ID is resolved by `OperationRegistry` only after an operation is
-selected. The registry then verifies the loaded declaration against the
-persisted identity, schemas, and digest.
+The catalog is inert searchable data. Each entry carries either a declaration
+module locator or an explicit `family:<name>` binding origin. The
+runtime-local `OperationRegistry` reads that locator only after an operation is
+selected, validates the loaded declaration or family adapter against the
+persisted identity, schemas, and digest, and caches the result. The fixed
+family table is assembled by the runtime; graph, polynomial, Lean, and SAT/SMT
+modules own their selected IDs and binding logic. The runtime owns any
+closeable resources acquired by those binders and releases them at shutdown.
 
 ## Mathematical backends, execution, and publication
 

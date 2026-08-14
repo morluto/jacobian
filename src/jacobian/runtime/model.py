@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from jacobian.polytope import PolytopeService
 from jacobian.runtime.resources import RuntimeResources
 from jacobian.verification.service import VerificationService
@@ -21,14 +19,11 @@ class JacobianRuntime:
         core: RuntimeResources,
         verification: VerificationService,
         polytope: PolytopeService,
-        *,
-        close_resources: Callable[[], None] | None = None,
     ) -> None:
         self._closed = False
         self.core = core
         self.verification = verification
         self.polytope = polytope
-        self._close_resources = close_resources or (lambda: None)
 
     def close(self) -> None:
         """Release every runtime-owned resource."""
@@ -36,10 +31,7 @@ class JacobianRuntime:
         if self._closed:
             return
         failures: list[BaseException] = []
-        for close in (
-            self._close_resources,
-            self.core.close,
-        ):
+        for close in (self.core.close,):
             try:
                 close()
             except BaseException as exc:

@@ -59,14 +59,16 @@ async def _run(
     return response.structured_content
 
 
-def _require_verified(result: dict[str, Any], *, environment: str) -> None:
+def _require_completed(result: dict[str, Any], *, operation: str) -> None:
     status = result.get("execution", {}).get("status")
     if status in {"TIMEOUT", "CANCELLED"}:
-        raise TransientSmokeError(
-            f"{environment} lean.check ended with transient status {status}"
-        )
+        raise TransientSmokeError(f"{operation} ended with transient status {status}")
     if status != "COMPLETED":
-        raise RuntimeError(f"{environment} lean.check did not complete")
+        raise RuntimeError(f"{operation} did not complete")
+
+
+def _require_verified(result: dict[str, Any], *, environment: str) -> None:
+    _require_completed(result, operation=f"{environment} lean.check")
     if result.get("output", {}).get("conclusion") != "TRUE":
         raise RuntimeError(f"{environment} lean.check did not accept True")
     if not result.get("verification_record_uri"):
@@ -76,8 +78,7 @@ def _require_verified(result: dict[str, Any], *, environment: str) -> None:
 def _require_transition(
     result: dict[str, Any], *, accepted: bool, completed: bool
 ) -> None:
-    if result.get("execution", {}).get("status") != "COMPLETED":
-        raise RuntimeError("Lean tactic transition did not complete operationally")
+    _require_completed(result, operation="Lean tactic transition")
     output = result.get("output", {})
     if (
         output.get("accepted") is not accepted
@@ -94,8 +95,7 @@ def _require_transition(
 
 
 def _require_mathlib_declaration(result: dict[str, Any]) -> None:
-    if result.get("execution", {}).get("status") != "COMPLETED":
-        raise RuntimeError("MATHLIB declaration search did not complete")
+    _require_completed(result, operation="MATHLIB declaration search")
     output = result.get("output", {})
     native_result = output.get("result") if isinstance(output, dict) else None
     declarations = (

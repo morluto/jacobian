@@ -80,6 +80,39 @@ def test_state_preflight_rejects_an_incomplete_existing_tenant(
     )
 
 
+@pytest.mark.parametrize("missing_blob", ("manifest", "payload"))
+def test_state_preflight_rejects_missing_referenced_blobs(
+    tmp_path: Path, missing_blob: str
+) -> None:
+    tenant_id = "incomplete-blob-restore"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state) as repository:
+        artifact_uri = repository.register_descriptor(
+            kind="schema",
+            name="restored",
+            version="1",
+            definition={"type": "object"},
+        )
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        row = connection.execute(
+            "SELECT manifest_digest, payload_digest FROM artifacts "
+            "WHERE artifact_uri = ?",
+            (artifact_uri,),
+        ).fetchone()
+    assert row is not None
+    digest = str(row[0 if missing_blob == "manifest" else 1]).removeprefix("sha256:")
+    (state / "blobs" / "sha256" / digest[:2] / digest[2:]).unlink()
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "artifact metadata references a missing blob; restore the complete tenant state"
+    )
+
+
 def test_state_preflight_rejects_state_below_the_supported_floor(
     tmp_path: Path,
 ) -> None:

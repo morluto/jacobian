@@ -7,9 +7,11 @@ import hashlib
 import json
 import os
 import pwd
+import sqlite3
 import stat
 from collections.abc import Iterator
 from pathlib import Path
+from urllib.parse import quote
 
 from jacobian.adapters.mcp.remote import load_static_token_file
 from jacobian.persistence.migrations import (
@@ -18,6 +20,48 @@ from jacobian.persistence.migrations import (
     SUPPORTED_STATE_FLOOR,
 )
 from jacobian.persistence.state_health import inspect_state_health
+from jacobian.storage.errors import ArtifactNotFoundError
+from jacobian.storage.identity import digest_from_uri
+
+
+def _blob_path(state_dir: Path, digest: str) -> Path | None:
+    value = digest.removeprefix("sha256:")
+    if (
+        not digest.startswith("sha256:")
+        or len(value) != 64
+        or any(char not in "0123456789abcdef" for char in value)
+    ):
+        return None
+    return state_dir / "blobs" / "sha256" / value[:2] / value[2:]
+
+
+def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
+    database_path = state_dir / "metadata.sqlite3"
+    try:
+        uri = f"file:{quote(str(database_path.resolve()), safe='/')}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as connection:
+            rows = connection.execute(
+                "SELECT artifact_uri, manifest_digest, payload_digest FROM artifacts"
+            )
+            for artifact_uri, manifest_digest, payload_digest in rows:
+                try:
+                    uri_digest = digest_from_uri(str(artifact_uri))
+                except ArtifactNotFoundError:
+                    return "artifact metadata contains an invalid blob reference"
+                if uri_digest != str(manifest_digest):
+                    return "artifact metadata contains an inconsistent blob reference"
+                for digest in (uri_digest, str(payload_digest)):
+                    blob_path = _blob_path(state_dir, digest)
+                    if blob_path is None:
+                        return "artifact metadata contains an invalid blob reference"
+                    if blob_path.is_symlink() or not blob_path.is_file():
+                        return (
+                            "artifact metadata references a missing blob; restore "
+                            "the complete tenant state"
+                        )
+    except (OSError, sqlite3.DatabaseError) as exc:
+        return f"could not inspect artifact blob references: {exc}"
+    return None
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -72,6 +116,17 @@ def inspect_selected_state(
                 ),
                 blocking=True,
             )
+        elif not health.blocking and health.status in {
+            "COMPATIBLE",
+            "MIGRATION_PENDING",
+        }:
+            blob_diagnostic = _referenced_blob_diagnostic(state_dir)
+            if blob_diagnostic is not None:
+                report.update(
+                    status="CORRUPT",
+                    diagnostic=blob_diagnostic,
+                    blocking=True,
+                )
         reports.append(report)
     return tuple(reports)
 

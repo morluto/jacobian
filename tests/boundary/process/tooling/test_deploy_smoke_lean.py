@@ -7,6 +7,8 @@ from deploy.smoke_lean import (
     _require_verified,
 )
 
+from jacobian._deployment_smoke import TransientSmokeError
+
 
 def test_verified_smoke_requires_completed_checker_backing() -> None:
     result = {
@@ -24,6 +26,18 @@ def test_verified_smoke_requires_completed_checker_backing() -> None:
     ):
         with pytest.raises(RuntimeError):
             _require_verified(mutation, environment="MATHLIB")
+
+
+@pytest.mark.parametrize("status", ("TIMEOUT", "CANCELLED"))
+def test_all_bounded_lean_smoke_probes_retry_transient_statuses(status: str) -> None:
+    result = {"execution": {"status": status}}
+
+    with pytest.raises(TransientSmokeError, match=status):
+        _require_verified(result, environment="CORE")
+    with pytest.raises(TransientSmokeError, match=status):
+        _require_transition(result, accepted=True, completed=True)
+    with pytest.raises(TransientSmokeError, match=status):
+        _require_mathlib_declaration(result)
 
 
 def test_transition_smoke_keeps_rejection_distinct_from_execution_failure() -> None:

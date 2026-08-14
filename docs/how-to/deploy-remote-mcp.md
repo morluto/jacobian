@@ -199,15 +199,16 @@ VPS must preserve them. The maintained authenticated unit uses
    The candidate-state preflight reads the token mapping while privileged,
    drops permanently to the `jacobian` service identity, and then checks every
    selected tenant. In that identity it verifies that SQLite and its runtime
-   files are readable and writable, existing blob files are readable, and the
-   tenant, staging, blob, and existing blob-prefix directories are readable,
-   writable, and traversable. It may report `MISSING` only when the selected
-   tenant directory does not exist; an existing directory with missing or
-   uninitialized metadata is a blocking partial restore. Every selected tenant
-   must report `MISSING`, `COMPATIBLE`, or a supported `MIGRATION_PENDING` state
-   before activation. Do not bypass an `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`,
-   or `UNREADABLE` result; an access failure means destination ownership or mode
-   restoration is incomplete.
+   files are readable and writable, every persisted manifest and payload blob
+   reference resolves to a local regular file, existing blob files are
+   readable, and the tenant, staging, blob, and existing blob-prefix directories
+   are readable, writable, and traversable. It may report `MISSING` only when
+   the selected tenant directory does not exist; an existing directory with
+   missing or uninitialized metadata is a blocking partial restore. Every
+   selected tenant must report `MISSING`, `COMPATIBLE`, or a supported
+   `MIGRATION_PENDING` state before activation. Do not bypass an `UNSUPPORTED`,
+   `INCOMPATIBLE`, `CORRUPT`, or `UNREADABLE` result; an access failure means
+   destination ownership or mode restoration is incomplete.
 7. Verify `deployment://identity`, the two-tool surface, catalog policy,
    required capabilities, and any provider-specific smoke before updating
    remaining client configuration. Keep the source VPS and its unchanged state

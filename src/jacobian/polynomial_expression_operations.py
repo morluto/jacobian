@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from jacobian.artifacts import ArtifactService
@@ -25,6 +25,7 @@ from jacobian.contracts.polynomial_expressions import (
 )
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.polynomial_expressions import (
@@ -46,6 +47,55 @@ class PolynomialExpressionCheckerInstallation:
     checker_id: str | None
 
 
+def register_polynomial_expression_checker_resources(
+    schemas: SchemaRegistry,
+) -> PolynomialExpressionCheckerInstallation:
+    """Register the passive witness contract without checker installation."""
+
+    return PolynomialExpressionCheckerInstallation(
+        witness_schema_uri=schemas.register_model(
+            name="jacobian.witness-envelope",
+            version="1",
+            model=WitnessEnvelope,
+        ),
+        checker_id=None,
+    )
+
+
+def bind_selected_polynomial_expression_checker(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    expressions: PolynomialExpressionArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[Any]:
+    """Bind exact normalization verification from persisted checker authority."""
+
+    operation_id = "polynomial.expression_normalization.verify"
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    installation = replace(
+        register_polynomial_expression_checker_resources(schemas),
+        checker_id=binding.checker_id,
+    )
+    return PolynomialExpressionNormalizationVerificationAdapter(
+        store=store,
+        artifacts=artifacts,
+        expressions=expressions,
+        verification=verification,
+        installation=installation,
+    )
+
+
 def install_polynomial_expression_checker(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
@@ -61,11 +111,7 @@ def install_polynomial_expression_checker(
 ]:
     """Install the witness schema and optionally authorize exact AST replay."""
 
-    witness_schema_uri = schemas.register_model(
-        name="jacobian.witness-envelope",
-        version="1",
-        model=WitnessEnvelope,
-    )
+    resources = register_polynomial_expression_checker_resources(schemas)
     checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -92,7 +138,7 @@ def install_polynomial_expression_checker(
         .checker_id
     )
     installation = PolynomialExpressionCheckerInstallation(
-        witness_schema_uri=witness_schema_uri,
+        witness_schema_uri=resources.witness_schema_uri,
         checker_id=checker_id,
     )
     adapter: OperationAdapter[Any] | None = None

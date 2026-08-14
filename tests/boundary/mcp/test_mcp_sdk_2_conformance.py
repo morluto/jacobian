@@ -161,6 +161,19 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert result.structured_content == OperationResult.model_validate(
                 result.structured_content
             ).model_dump(mode="json")
+            verified = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "polynomial.expression_normalization.verify",
+                    "payload": {
+                        "normalization_uri": result.structured_content["output"][
+                            "normalization_uri"
+                        ]
+                    },
+                },
+            )
+            assert isinstance(verified.structured_content, dict)
+            assert verified.structured_content["output"]["conclusion"] == "TRUE"
 
             with pytest.raises(MCPError) as missing_resource:
                 await client.read_resource("artifact://sha256/" + "f" * 64)

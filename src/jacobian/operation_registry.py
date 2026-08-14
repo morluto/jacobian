@@ -35,7 +35,12 @@ _SELECTED_GRAPH_OPERATIONS = frozenset(
         "graph.isomorphism.verify",
     }
 )
-_SELECTED_POLYNOMIAL_OPERATIONS = frozenset({"polynomial.expression.normalize"})
+_SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
+    {
+        "polynomial.expression.normalize",
+        "polynomial.expression_normalization.verify",
+    }
+)
 _SELECTED_RESOURCE_OPERATIONS = (
     _SELECTED_GRAPH_OPERATIONS | _SELECTED_POLYNOMIAL_OPERATIONS
 )
@@ -165,6 +170,20 @@ class OperationRegistry:
             adapter = install_sympy_polynomial_normalization_operation(
                 self.polynomial_expressions,
                 descriptor.provider_runtime,
+            )
+        elif operation_id == "polynomial.expression_normalization.verify":
+            from jacobian.polynomial_expression_operations import (
+                bind_selected_polynomial_expression_checker,
+            )
+
+            adapter = bind_selected_polynomial_expression_checker(
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.polynomial_expressions,
+                self.verification,
+                self.checkers,
+                self.catalog,
             )
         else:
             adapter = None

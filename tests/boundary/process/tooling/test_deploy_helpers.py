@@ -58,6 +58,28 @@ def test_state_preflight_accepts_missing_and_current_tenant_state(
     assert current[0]["blocking"] is False
 
 
+@pytest.mark.parametrize("database_present", (False, True))
+def test_state_preflight_rejects_an_incomplete_existing_tenant(
+    tmp_path: Path,
+    database_present: bool,
+) -> None:
+    tenant_id = "incomplete-restored-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    state.mkdir(parents=True)
+    if database_present:
+        (state / "metadata.sqlite3").touch()
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == (
+        "the tenant directory exists without initialized metadata; "
+        "restore or remove the incomplete tenant state"
+    )
+
+
 def test_state_preflight_rejects_state_below_the_supported_floor(
     tmp_path: Path,
 ) -> None:

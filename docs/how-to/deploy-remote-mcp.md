@@ -201,10 +201,13 @@ VPS must preserve them. The maintained authenticated unit uses
    selected tenant. In that identity it verifies that SQLite and its runtime
    files are readable and writable, existing blob files are readable, and the
    tenant, staging, blob, and existing blob-prefix directories are readable,
-   writable, and traversable. It must report `MISSING`, `COMPATIBLE`, or a
-   supported `MIGRATION_PENDING` state before activation. Do not bypass an
-   `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`, or `UNREADABLE` result; an access
-   failure means destination ownership or mode restoration is incomplete.
+   writable, and traversable. It may report `MISSING` only when the selected
+   tenant directory does not exist; an existing directory with missing or
+   uninitialized metadata is a blocking partial restore. Every selected tenant
+   must report `MISSING`, `COMPATIBLE`, or a supported `MIGRATION_PENDING` state
+   before activation. Do not bypass an `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`,
+   or `UNREADABLE` result; an access failure means destination ownership or mode
+   restoration is incomplete.
 7. Verify `deployment://identity`, the two-tool surface, catalog policy,
    required capabilities, and any provider-specific smoke before updating
    remaining client configuration. Keep the source VPS and its unchanged state

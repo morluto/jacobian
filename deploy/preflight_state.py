@@ -55,13 +55,24 @@ def inspect_selected_state(
     reports: list[dict[str, object]] = []
     for tenant_id in tenant_ids:
         tenant_key = hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()
+        state_dir = state_root / "tenants" / tenant_key
         health = inspect_state_health(
-            state_root / "tenants" / tenant_key,
+            state_dir,
             STATE_MIGRATIONS,
             supported_floor=SUPPORTED_STATE_FLOOR,
             current_revision=CURRENT_STATE_FORMAT_REVISION,
         )
-        reports.append({"tenant_key": tenant_key, **health.as_dict()})
+        report = {"tenant_key": tenant_key, **health.as_dict()}
+        if state_dir.exists() and health.status in {"MISSING", "UNINITIALIZED"}:
+            report.update(
+                status="CORRUPT",
+                diagnostic=(
+                    "the tenant directory exists without initialized metadata; "
+                    "restore or remove the incomplete tenant state"
+                ),
+                blocking=True,
+            )
+        reports.append(report)
     return tuple(reports)
 
 

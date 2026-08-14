@@ -11,6 +11,7 @@ from mcp_types.methods import serialize_server_result
 
 import jacobian.adapters.mcp.server as server_module
 from jacobian.adapters.mcp.server import create_server
+from jacobian.checker_installation import CheckerInstaller
 from jacobian.contracts.operations import OperationResult
 
 
@@ -29,6 +30,7 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
         raise AssertionError("selected operation must not assemble the portfolio")
 
     monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
+    monkeypatch.setattr(CheckerInstaller, "install", reject_portfolio_assembly)
 
     async def scenario() -> None:
         from mcp import Client
@@ -190,6 +192,23 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
                 missing_polytope_inputs.structured_content["operation_id"]
                 == "polytope.separate"
             )
+
+            finite_coverage = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "finite.coverage.verify",
+                    "payload": {
+                        "canonicalizer_id": "finite.string.nfc@1",
+                        "scope_items": ["alpha", "beta", "gamma"],
+                        "pages": [
+                            {"items": ["alpha"]},
+                            {"items": ["beta", "gamma"]},
+                        ],
+                    },
+                },
+            )
+            assert isinstance(finite_coverage.structured_content, dict)
+            assert finite_coverage.structured_content["output"]["conclusion"] == "TRUE"
 
             with pytest.raises(MCPError) as missing_resource:
                 await client.read_resource("artifact://sha256/" + "f" * 64)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from pydantic import ValidationError
@@ -35,6 +35,7 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import (
     OperationInvocationError,
     enriched_invalid_request,
@@ -76,16 +77,12 @@ _CANONICALIZER_SPECS: dict[str, dict[str, str]] = {
 }
 
 
-def install_finite_coverage(
+def register_finite_coverage_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
     artifacts: ArtifactService,
-    verification: VerificationService,
-    checkers: CheckerRegistry,
-    *,
-    authorize_checker: bool,
-) -> tuple[OperationAdapter[Any] | None, FiniteCoverageInstallation]:
-    """Register v1 finite-coverage artifacts and optionally authorize replay."""
+) -> FiniteCoverageInstallation:
+    """Register passive finite-coverage contracts and canonicalizers."""
 
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -146,6 +143,63 @@ def install_finite_coverage(
             summary=f"registered finite canonicalizer {canonicalizer_id}",
         )
         canonicalizer_uris[canonicalizer_id] = stored.artifact_uri
+    return FiniteCoverageInstallation(
+        semantics_uri=semantics_uri,
+        canonicalizer_schema_uri=canonicalizer_schema_uri,
+        scope_schema_uri=scope_schema_uri,
+        page_schema_uri=page_schema_uri,
+        archive_schema_uri=archive_schema_uri,
+        claim_schema_uri=claim_schema_uri,
+        certificate_schema_uri=certificate_schema_uri,
+        canonicalizer_uris=canonicalizer_uris,
+        checker_id=None,
+    )
+
+
+def bind_selected_finite_coverage(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[Any]:
+    """Bind finite coverage from persisted checker authority."""
+
+    operation_id = "finite.coverage.verify"
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    installation = replace(
+        register_finite_coverage_resources(store, schemas, artifacts),
+        checker_id=binding.checker_id,
+    )
+    return FiniteCoverageVerifyAdapter(
+        store=store,
+        artifacts=artifacts,
+        verification=verification,
+        installation=installation,
+    )
+
+
+def install_finite_coverage(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    *,
+    authorize_checker: bool,
+) -> tuple[OperationAdapter[Any] | None, FiniteCoverageInstallation]:
+    """Register v1 finite-coverage artifacts and optionally authorize replay."""
+
+    resources = register_finite_coverage_resources(store, schemas, artifacts)
 
     checker_id = (
         CheckerInstaller(checkers)
@@ -156,9 +210,9 @@ def install_finite_coverage(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="finite.coverage",
                 format_version="1",
-                claim_schema_uris=(claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(archive_schema_uri,),
+                claim_schema_uris=(resources.claim_schema_uri,),
+                semantics_uris=(resources.semantics_uri,),
+                candidate_schema_uris=(resources.archive_schema_uri,),
                 reason=(
                     "operator requested independent standard-library replay of "
                     "every canonical scope and archive item"
@@ -168,17 +222,7 @@ def install_finite_coverage(
         )
         .checker_id
     )
-    installation = FiniteCoverageInstallation(
-        semantics_uri=semantics_uri,
-        canonicalizer_schema_uri=canonicalizer_schema_uri,
-        scope_schema_uri=scope_schema_uri,
-        page_schema_uri=page_schema_uri,
-        archive_schema_uri=archive_schema_uri,
-        claim_schema_uri=claim_schema_uri,
-        certificate_schema_uri=certificate_schema_uri,
-        canonicalizer_uris=canonicalizer_uris,
-        checker_id=checker_id,
-    )
+    installation = replace(resources, checker_id=checker_id)
     adapter = (
         FiniteCoverageVerifyAdapter(
             store=store,

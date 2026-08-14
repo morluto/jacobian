@@ -42,7 +42,7 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.expression_normalization.verify",
     }
 )
-_SELECTED_DIRECT_OPERATIONS = frozenset({"polytope.separate"})
+_SELECTED_DIRECT_OPERATIONS = frozenset({"polytope.separate", "finite.coverage.verify"})
 _SELECTED_RESOURCE_OPERATIONS = (
     _SELECTED_GRAPH_OPERATIONS
     | _SELECTED_POLYNOMIAL_OPERATIONS
@@ -151,7 +151,30 @@ class OperationRegistry:
     ) -> OperationAdapter[Any] | None:
         if not supports_selected_operation(operation_id):
             return None
-        adapter: OperationAdapter[Any] | None
+        adapter = self._bind_selected_resource(operation_id, descriptor)
+        if adapter is None:
+            raise OperationCatalogError(
+                f"selected operation binder is missing: {operation_id}"
+            )
+        expected_digest = operation_declaration_digest_from_descriptor(descriptor)
+        if expected_digest != record.declaration_digest:
+            raise OperationCatalogError(
+                f"operation declaration changed; run `jacobian update`: {operation_id}"
+            )
+        if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
+            mode="json"
+        ):
+            raise OperationCatalogError(
+                f"operation schema changed; run `jacobian update`: {operation_id}"
+            )
+        self._adapters[operation_id] = adapter
+        return adapter
+
+    def _bind_selected_resource(
+        self,
+        operation_id: str,
+        descriptor: OperationDescriptor,
+    ) -> OperationAdapter[Any] | None:
         if operation_id in _SELECTED_GRAPH_OPERATIONS:
             from jacobian.graphs.installation import bind_selected_graph_operation
 
@@ -195,24 +218,19 @@ class OperationRegistry:
             from jacobian.polytope_operations import PolytopeSeparationAdapter
 
             adapter = PolytopeSeparationAdapter(self.polytope)
+        elif operation_id == "finite.coverage.verify":
+            from jacobian.finite_coverage import bind_selected_finite_coverage
+
+            adapter = bind_selected_finite_coverage(
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
         else:
             adapter = None
-        if adapter is None:
-            raise OperationCatalogError(
-                f"selected operation binder is missing: {operation_id}"
-            )
-        expected_digest = operation_declaration_digest_from_descriptor(descriptor)
-        if expected_digest != record.declaration_digest:
-            raise OperationCatalogError(
-                f"operation declaration changed; run `jacobian update`: {operation_id}"
-            )
-        if adapter.descriptor.model_dump(mode="json") != descriptor.model_dump(
-            mode="json"
-        ):
-            raise OperationCatalogError(
-                f"operation schema changed; run `jacobian update`: {operation_id}"
-            )
-        self._adapters[operation_id] = adapter
         return adapter
 
     def _resolve_exact_verifier(

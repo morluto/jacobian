@@ -71,7 +71,7 @@ _TOOL_CALL = re.compile(
     re.DOTALL,
 )
 _OPERATION_ATTEMPT = re.compile(
-    r"\bMCP operation attempt request_digest=(sha256:(?:[0-9a-f]\s*){64})"
+    r"\bMCP operation attempt argument_digest=(sha256:(?:[0-9a-f]\s*){64})"
     r".{0,512}?\boperation_id=([^\s]+)\b"
     r".{0,512}?\boperation_version=([^\s]+)\b"
     r".{0,512}?\bprovider=([^\s]+)\b"
@@ -800,7 +800,7 @@ def _server_events(payload: str) -> tuple[list[dict[str, object]], dict[str, int
         )
     for match in _OPERATION_ATTEMPT.finditer(payload):
         (
-            request_digest,
+            argument_digest,
             operation_id,
             operation_version,
             provider,
@@ -815,7 +815,7 @@ def _server_events(payload: str) -> tuple[list[dict[str, object]], dict[str, int
                 match.start(),
                 {
                     "kind": "OPERATION_ATTEMPT",
-                    "request_digest": re.sub(r"\s", "", request_digest),
+                    "argument_digest": re.sub(r"\s", "", argument_digest),
                     "operation_id": operation_id,
                     "operation_version": operation_version,
                     "provider": provider,
@@ -914,7 +914,7 @@ def _tool_action(
 ) -> str:
     if event.get("tool") == "math.find":
         return "FIND"
-    attempt = attempts.get(str(event.get("request_digest")))
+    attempt = attempts.get(str(event.get("argument_digest")))
     operation_id = attempt.get("operation_id") if isinstance(attempt, Mapping) else None
     return (
         "RUN_CHECKER"
@@ -925,7 +925,7 @@ def _tool_action(
 
 def _tau_features(events: Sequence[Mapping[str, object]]) -> dict[str, float]:
     attempts = {
-        str(event["request_digest"]): event
+        str(event["argument_digest"]): event
         for event in events
         if event.get("kind") == "OPERATION_ATTEMPT"
     }
@@ -957,7 +957,7 @@ def _tau_features(events: Sequence[Mapping[str, object]]) -> dict[str, float]:
             for event in events
         ),
         "tau:request_digest_available": float(
-            sum(event.get("request_digest") != "none" for event in events)
+            sum(event.get("request_digest") != "none" for event in tools)
         ),
         "tau:argument_digest_available": float(
             sum(
@@ -1172,7 +1172,7 @@ def _project_trial(
             )
         )
     attempts = {
-        str(event["request_digest"]): event
+        str(event["argument_digest"]): event
         for event in events
         if event.get("kind") == "OPERATION_ATTEMPT"
     }
@@ -1188,8 +1188,8 @@ def _project_trial(
             if index < len(message_prefix_counts)
             else len(messages)
         )
-        prior_request_digests = {
-            str(event.get("request_digest")) for event in tool_events[:index]
+        prior_argument_digests = {
+            str(event.get("argument_digest")) for event in tool_events[:index]
         }
         prefix_events = [
             event
@@ -1197,7 +1197,7 @@ def _project_trial(
             if (event.get("kind") == "TOOL_CALL" and event in tool_events[:index])
             or (
                 event.get("kind") == "OPERATION_ATTEMPT"
-                and str(event.get("request_digest")) in prior_request_digests
+                and str(event.get("argument_digest")) in prior_argument_digests
             )
         ]
         rows["next_tool_action_class"].append(

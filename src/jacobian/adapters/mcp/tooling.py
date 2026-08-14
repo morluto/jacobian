@@ -53,7 +53,7 @@ def _argument_digest(arguments: dict[str, Any]) -> str:
 def _log_operation_attempt(
     *,
     operation_id: str,
-    request_digest: str,
+    argument_digest: str,
     provider: str,
     checker_ids: tuple[str, ...],
     result: OperationResult | None = None,
@@ -73,11 +73,11 @@ def _log_operation_attempt(
     codes = ",".join(diagnostic_codes[:8]) or "none"
     checkers = ",".join(checker_ids) or "none"
     _LOGGER.info(
-        "MCP operation attempt request_digest=%s operation_id=%s "
+        "MCP operation attempt argument_digest=%s operation_id=%s "
         "operation_version=%s provider=%s checker_ids=%s "
         "execution_status=%s verification_record_uri_present=%s diagnostic_codes=%s "
         "artifact_count=%d",
-        request_digest,
+        argument_digest,
         operation_id,
         operation_version,
         provider,
@@ -96,7 +96,7 @@ def _invoke_operation_attempt(
     payload: dict[str, Any],
     inputs: dict[str, str] | None = None,
 ) -> OperationResult:
-    request_digest = _argument_digest(
+    argument_digest = _argument_digest(
         {
             "operation_id": operation_id,
             "payload": payload,
@@ -120,7 +120,7 @@ def _invoke_operation_attempt(
     except Exception:
         _log_operation_attempt(
             operation_id=operation_id,
-            request_digest=request_digest,
+            argument_digest=argument_digest,
             provider=provider,
             checker_ids=checker_ids,
             execution_status="ERROR",
@@ -129,7 +129,7 @@ def _invoke_operation_attempt(
         raise
     _log_operation_attempt(
         operation_id=operation_id,
-        request_digest=request_digest,
+        argument_digest=argument_digest,
         provider=provider,
         checker_ids=checker_ids,
         result=result,

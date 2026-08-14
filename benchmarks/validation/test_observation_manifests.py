@@ -229,16 +229,19 @@ def test_server_runtime_log_accounts_for_nested_jacobian_calls(
                 "service": "jacobian",
                 "_content": "\n".join(
                     [
-                        "INFO MCP operation attempt request_digest=aaaaaaaaaaaaaaaa",
+                        "INFO MCP operation attempt argument_digest=sha256:" + "a" * 64,
                         "     execution_status=ERROR",
                         "INFO MCP tool call tool=math.run status=error",
-                        "     request_digest=bbbbbbbbbbbbbbbb",
-                        "INFO MCP operation attempt request_digest=cccccccccccccccc",
+                        "     request_digest=bbbbbbbbbbbbbbbb "
+                        "argument_digest=sha256:" + "b" * 64,
+                        "INFO MCP operation attempt argument_digest=sha256:" + "c" * 64,
                         "     execution_status=COMPLETED",
                         "INFO MCP tool call tool=math.run          server.py:314",
-                        "     status=success request_digest=aaaaaaaaaaaaaaaa",
+                        "     status=success request_digest=aaaaaaaaaaaaaaaa "
+                        "argument_digest=sha256:" + "a" * 64,
                         "INFO MCP tool call tool=math.run status=success",
-                        "     request_digest=cccccccccccccccc",
+                        "     request_digest=cccccccccccccccc "
+                        "argument_digest=sha256:" + "c" * 64,
                     ]
                 ),
             },

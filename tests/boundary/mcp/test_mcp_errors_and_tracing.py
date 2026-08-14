@@ -60,7 +60,7 @@ def test_mcp_logs_bounded_operation_metrics_without_arguments(
     )
     assert "execution_status=ERROR" in attempt
     assert "diagnostic_codes=UNKNOWN_OPERATION" in attempt
-    assert "request_digest=sha256:" in attempt
+    assert "argument_digest=sha256:" in attempt
     assert "provider=unknown" in attempt
     assert "checker_ids=none" in attempt
     assert "artifact_count=0" in attempt

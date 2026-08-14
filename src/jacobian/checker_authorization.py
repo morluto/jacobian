@@ -13,7 +13,7 @@ It depends only on the operator-owned :class:`CheckerRegistry`, the shared
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from jacobian.checker_installation import CheckerInstaller
@@ -35,6 +35,7 @@ __all__ = [
     "authorize_checker",
     "install_lean_checkers",
     "install_polytope_checkers",
+    "register_lean_checker_contracts",
 ]
 
 
@@ -58,6 +59,102 @@ class LeanCheckerInstallation:
     candidate_schema_uri: str
     certificate_schema_uri: str
     checker_id: str | None
+
+
+_LEAN_VERSION = "4.31.0"
+_LEAN_COMMIT = "68218e876d2a38b1985b8590fff244a83c321783"
+_MATHLIB_COMMIT = "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
+_LEAN_CONFIGURATIONS: dict[
+    LeanEnvironment,
+    tuple[str | None, str | None, tuple[str, ...], int],
+] = {
+    LeanEnvironment.CORE: (None, None, (), 30),
+    LeanEnvironment.MATHLIB: (
+        "Mathlib",
+        _MATHLIB_COMMIT,
+        ("Classical.choice", "Quot.sound", "propext"),
+        225,
+    ),
+}
+
+
+def register_lean_checker_contracts(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    *,
+    checker_ids: dict[LeanEnvironment, str | None] | None = None,
+) -> tuple[
+    dict[LeanEnvironment, LeanCheckerInstallation],
+    dict[str, dict[str, Any]],
+]:
+    """Register passive Lean contracts without probing or authorizing Lean."""
+
+    claim_schema_uri = schemas.register(
+        name="jacobian.lean4.claim",
+        version="1",
+        schema=model_schema(LeanClaim),
+    )
+    candidate_schema_uri = schemas.register(
+        name="jacobian.lean4.candidate",
+        version="1",
+        schema=model_schema(LeanCandidate),
+    )
+    certificate_schema_uri = schemas.register(
+        name="jacobian.certificate-envelope",
+        version="1",
+        schema=model_schema(CertificateEnvelope),
+    )
+    selected_ids = checker_ids or {}
+    profiles: dict[str, dict[str, Any]] = {}
+    installations: dict[LeanEnvironment, LeanCheckerInstallation] = {}
+    for environment, (
+        import_name,
+        pinned_mathlib,
+        allowed_axioms,
+        checker_timeout_seconds,
+    ) in _LEAN_CONFIGURATIONS.items():
+        semantics_uri = store.register_descriptor(
+            kind="semantics",
+            name=f"jacobian.lean4-{environment.value.lower()}",
+            version="1",
+            definition={
+                "description": (
+                    "exact Lean proposition checked by the pinned Lean kernel"
+                ),
+                "environment": environment.value,
+                "lean_version": _LEAN_VERSION,
+                "lean_commit": _LEAN_COMMIT,
+                "import_name": import_name,
+                "mathlib_commit": pinned_mathlib,
+                "allowed_axioms": list(allowed_axioms),
+                "checker_timeout_seconds": checker_timeout_seconds,
+                "trust_level": 0,
+            },
+        )
+        profiles[environment.value] = {
+            "semantics_uri": semantics_uri,
+            "lean_version": _LEAN_VERSION,
+            "lean_commit": _LEAN_COMMIT,
+            "import_name": import_name,
+            "mathlib_commit": pinned_mathlib,
+            "allowed_axioms": list(allowed_axioms),
+            "checker_timeout_seconds": checker_timeout_seconds,
+        }
+        installations[environment] = LeanCheckerInstallation(
+            environment=environment,
+            lean_version=_LEAN_VERSION,
+            lean_commit=_LEAN_COMMIT,
+            import_name=import_name,
+            mathlib_commit=pinned_mathlib,
+            allowed_axioms=allowed_axioms,
+            checker_timeout_seconds=checker_timeout_seconds,
+            semantics_uri=semantics_uri,
+            claim_schema_uri=claim_schema_uri,
+            candidate_schema_uri=candidate_schema_uri,
+            certificate_schema_uri=certificate_schema_uri,
+            checker_id=selected_ids.get(environment),
+        )
+    return installations, profiles
 
 
 def authorize_checker(
@@ -140,86 +237,9 @@ def install_lean_checkers(
     ],
 ) -> tuple[dict[LeanEnvironment, LeanCheckerInstallation], ProviderObservation]:
     """Authorize Lean checkers bound to their measured provider runtime."""
-
-    mathlib_commit = "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
-    lean_version = "4.31.0"
-    lean_commit = "68218e876d2a38b1985b8590fff244a83c321783"
-    claim_schema_uri = schemas.register(
-        name="jacobian.lean4.claim",
-        version="1",
-        schema=model_schema(LeanClaim),
-    )
-    candidate_schema_uri = schemas.register(
-        name="jacobian.lean4.candidate",
-        version="1",
-        schema=model_schema(LeanCandidate),
-    )
-    certificate_schema_uri = schemas.register(
-        name="jacobian.certificate-envelope",
-        version="1",
-        schema=model_schema(CertificateEnvelope),
-    )
-    configurations: dict[
-        LeanEnvironment,
-        tuple[str | None, str | None, tuple[str, ...], int],
-    ] = {
-        LeanEnvironment.CORE: (None, None, (), 30),
-        LeanEnvironment.MATHLIB: (
-            "Mathlib",
-            mathlib_commit,
-            (
-                "Classical.choice",
-                "Quot.sound",
-                "propext",
-            ),
-            225,
-        ),
-    }
-    profiles: dict[str, dict[str, Any]] = {}
-    for environment, (
-        import_name,
-        pinned_mathlib,
-        allowed_axioms,
-        checker_timeout_seconds,
-    ) in configurations.items():
-        semantics_uri = store.register_descriptor(
-            kind="semantics",
-            name=f"jacobian.lean4-{environment.value.lower()}",
-            version="1",
-            definition={
-                "description": (
-                    "exact Lean proposition checked by the pinned Lean kernel"
-                ),
-                "environment": environment.value,
-                "lean_version": lean_version,
-                "lean_commit": lean_commit,
-                "import_name": import_name,
-                "mathlib_commit": pinned_mathlib,
-                "allowed_axioms": list(allowed_axioms),
-                "checker_timeout_seconds": checker_timeout_seconds,
-                "trust_level": 0,
-            },
-        )
-        profiles[environment.value] = {
-            "semantics_uri": semantics_uri,
-            "lean_version": lean_version,
-            "lean_commit": lean_commit,
-            "import_name": import_name,
-            "mathlib_commit": pinned_mathlib,
-            "allowed_axioms": list(allowed_axioms),
-            "checker_timeout_seconds": checker_timeout_seconds,
-        }
+    installations, profiles = register_lean_checker_contracts(store, schemas)
     provider_runtime = resolve_provider_runtime(profiles)
-
-    installations: dict[LeanEnvironment, LeanCheckerInstallation] = {}
-    for environment, (
-        import_name,
-        pinned_mathlib,
-        allowed_axioms,
-        checker_timeout_seconds,
-    ) in configurations.items():
-        semantics_uri = profiles[environment.value]["semantics_uri"]
-        assert isinstance(semantics_uri, str)
+    for environment, installation in installations.items():
         checker_id = None
         if provider_runtime.availability is ProviderAvailability.AVAILABLE:
             checker_id = authorize_checker(
@@ -228,23 +248,10 @@ def install_lean_checkers(
                 entrypoint="jacobian_checkers.lean4:check_kernel_certificate",
                 evidence_kind="CERTIFICATE",
                 format_id="lean4.kernel",
-                claim_schema=claim_schema_uri,
-                semantics=semantics_uri,
-                candidate_schema=candidate_schema_uri,
+                claim_schema=installation.claim_schema_uri,
+                semantics=installation.semantics_uri,
+                candidate_schema=installation.candidate_schema_uri,
                 provider_runtime=provider_runtime,
             )
-        installations[environment] = LeanCheckerInstallation(
-            environment=environment,
-            lean_version=lean_version,
-            lean_commit=lean_commit,
-            import_name=import_name,
-            mathlib_commit=pinned_mathlib,
-            allowed_axioms=allowed_axioms,
-            checker_timeout_seconds=checker_timeout_seconds,
-            semantics_uri=semantics_uri,
-            claim_schema_uri=claim_schema_uri,
-            candidate_schema_uri=candidate_schema_uri,
-            certificate_schema_uri=certificate_schema_uri,
-            checker_id=checker_id,
-        )
+        installations[environment] = replace(installation, checker_id=checker_id)
     return installations, provider_runtime

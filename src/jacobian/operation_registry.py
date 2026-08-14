@@ -82,10 +82,28 @@ _SELECTED_DIRECT_OPERATIONS = frozenset(
         "smt.unsat_proof.find",
     }
 )
+_SELECTED_LEAN_OPERATIONS = frozenset(
+    {
+        "lean.check",
+        "lean.declaration.dependencies",
+        "lean.declaration.inspect",
+        "lean.declaration.search",
+        "lean.proof.axioms.inspect",
+        "lean.proof_edit.validate",
+        "lean.proof_state.apply_tactic",
+        "lean.proof_state.inspect",
+        "lean.proof_state.metavariable_fields",
+        "lean.retrieve.premises",
+        "lean.statement.compare",
+        "lean.statement.propose",
+        "lean.term.apply",
+    }
+)
 _SELECTED_RESOURCE_OPERATIONS = (
     _SELECTED_GRAPH_OPERATIONS
     | _SELECTED_POLYNOMIAL_OPERATIONS
     | _SELECTED_DIRECT_OPERATIONS
+    | _SELECTED_LEAN_OPERATIONS
 )
 
 
@@ -218,7 +236,20 @@ class OperationRegistry:
         operation_id: str,
         descriptor: OperationDescriptor,
     ) -> OperationAdapter[Any] | None:
-        if operation_id in _SELECTED_GRAPH_OPERATIONS:
+        if operation_id in _SELECTED_LEAN_OPERATIONS:
+            from jacobian.lean_frontend.selected import bind_selected_lean_operation
+
+            adapter = bind_selected_lean_operation(
+                operation_id,
+                descriptor,
+                self.catalog,
+                self.binder,
+                self.binder.store,
+                self.binder.schemas,
+                self.verification,
+                self.checkers,
+            )
+        elif operation_id in _SELECTED_GRAPH_OPERATIONS:
             from jacobian.graphs.installation import bind_selected_graph_operation
 
             adapter = bind_selected_graph_operation(

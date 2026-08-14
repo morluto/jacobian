@@ -10,10 +10,6 @@ from jacobian.artifacts import ArtifactService
 from jacobian.contracts.lean import LeanEnvironment
 from jacobian.contracts.operations import (
     OperationRequest,
-    ProviderAvailability,
-    ProviderDigestKind,
-    ProviderInstallTier,
-    ProviderObservation,
 )
 from jacobian.lean_frontend.declaration_operations import (
     lean_declaration_query_operations,
@@ -37,31 +33,6 @@ from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 
 _DIGEST = "sha256:" + "a" * 64
-_RUNTIME = ProviderObservation(
-    provider="jacobian.lean4",
-    availability=ProviderAvailability.AVAILABLE,
-    version="4.31.0",
-    digest="sha256:" + "b" * 64,
-    digest_kind=ProviderDigestKind.EXECUTABLE,
-    platform="test",
-    install_tier=ProviderInstallTier.T3,
-    license_id="Apache-2.0",
-    features=("CORE", "MATHLIB"),
-    configuration={
-        "profiles": {
-            "CORE": {
-                "lean_version": "4.31.0",
-                "lean_commit": "lean-commit",
-                "mathlib_commit": None,
-            },
-            "MATHLIB": {
-                "lean_version": "4.31.0",
-                "lean_commit": "lean-commit",
-                "mathlib_commit": "mathlib-commit",
-            },
-        }
-    },
-)
 
 
 def _invoke_public(
@@ -125,7 +96,6 @@ def _query_adapter(
     installation = OperationBinder(store, schemas, artifacts).bind(
         lean_declaration_query_operations(
             LeanDeclarationService(backend),
-            _RUNTIME,
         )
     )
     return next(

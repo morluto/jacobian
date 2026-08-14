@@ -841,6 +841,19 @@ if [[ "${MODE}" == "tailscale" ]]; then
     "${SYSTEMD_ANALYZE_BIN}" verify "${SYSTEMD_ROOT}/jacobian-funnel.service"
 fi
 "${SYSTEMCTL_BIN}" daemon-reload
+STATE_DIR="/var/lib/jacobian-mcp"
+install -d -o jacobian -g jacobian -m 0750 "${STATE_DIR}"
+STATE_COMMAND="init"
+if [[ -f "${STATE_DIR}/metadata.sqlite3" ]]; then
+    STATE_COMMAND="update"
+fi
+log "running jacobian ${STATE_COMMAND} before service activation"
+"${RUNUSER_BIN}" -u jacobian -- env \
+    "ELAN_HOME=${LEAN_ELAN_HOME}" \
+    "PATH=${LEAN_SERVICE_PATH}" \
+    "${RELEASE_DIR}/.venv/bin/jacobian" \
+    --state-dir "${STATE_DIR}" \
+    "${STATE_COMMAND}"
 "${SYSTEMCTL_BIN}" enable jacobian-mcp.service
 "${SYSTEMCTL_BIN}" restart jacobian-mcp.service
 

@@ -435,6 +435,18 @@ def test_activation_arms_rollback_before_switching_current() -> None:
     assert "rollback encountered additional failures" in source
 
 
+def test_installer_compiles_state_before_service_activation() -> None:
+    source = INSTALLER.read_text(encoding="utf-8")
+
+    lifecycle = source.index('log "running jacobian ${STATE_COMMAND}')
+    restart = source.index('"${SYSTEMCTL_BIN}" restart jacobian-mcp.service', lifecycle)
+    assert lifecycle < restart
+    assert '"${RUNUSER_BIN}" -u jacobian -- env' in source
+    assert '--state-dir "${STATE_DIR}"' in source
+    assert 'STATE_COMMAND="init"' in source
+    assert 'STATE_COMMAND="update"' in source
+
+
 def test_generated_token_is_written_only_to_the_restricted_file() -> None:
     source = INSTALLER.read_text(encoding="utf-8")
 

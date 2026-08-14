@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal, Protocol
+from typing import Literal
 
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
@@ -21,78 +21,68 @@ _DISCOVERY_STOP_WORDS = frozenset(
 )
 
 
-class DiscoveryOwner(Protocol):
-    def catalog(self) -> OperationCatalogSnapshot: ...
+def discover_operations(
+    catalog: OperationCatalogSnapshot,
+    request: OperationDiscoveryRequest,
+) -> OperationDiscoveryResult:
+    """Search an immutable operation snapshot deterministically."""
 
-
-class OperationDiscoveryMixin:
-    """Provide the installed-portfolio discovery state machine."""
-
-    def discover(
-        self: DiscoveryOwner,
-        request: OperationDiscoveryRequest,
-    ) -> OperationDiscoveryResult:
-        descriptors = self.catalog().operations
-        normalized_domain = (
-            normalize_domain(request.domain) if request.domain is not None else None
+    descriptors = catalog.operations
+    normalized_domain = (
+        normalize_domain(request.domain) if request.domain is not None else None
+    )
+    ranked: list[tuple[int, OperationDiscoveryMatch]] = []
+    for descriptor in descriptors:
+        if normalized_domain is not None and not matches_domain(
+            descriptor, normalized_domain
+        ):
+            continue
+        applicability, applicability_code = discovery_applicability(
+            descriptor, request.input_kind, request.artifact_type
         )
-        ranked: list[tuple[int, OperationDiscoveryMatch]] = []
-        for descriptor in descriptors:
-            if normalized_domain is not None and not matches_domain(
-                descriptor,
-                normalized_domain,
-            ):
-                continue
-            applicability, applicability_code = discovery_applicability(
-                descriptor,
-                request.input_kind,
-                request.artifact_type,
-            )
-            score = discovery_relevance(descriptor, request.query)
-            match = OperationDiscoveryMatch(
-                operation_id=descriptor.operation_id,
-                title=descriptor.title,
-                description=descriptor.description,
-                tags=descriptor.tags,
-                relevance_score=score,
-                applicability=applicability,
-                applicability_code=applicability_code,
-            )
-            if score > 0:
-                ranked.append((score, match))
-        ranked.sort(key=lambda item: (-item[0], item[1].operation_id))
-        total_matches = len(ranked)
-        start = 0
-        if request.cursor is not None:
-            try:
-                start = (
-                    next(
-                        index
-                        for index, (_, match) in enumerate(ranked)
-                        if match.operation_id == request.cursor
-                    )
-                    + 1
+        score = discovery_relevance(descriptor, request.query)
+        match = OperationDiscoveryMatch(
+            operation_id=descriptor.operation_id,
+            title=descriptor.title,
+            description=descriptor.description,
+            tags=descriptor.tags,
+            relevance_score=score,
+            applicability=applicability,
+            applicability_code=applicability_code,
+        )
+        if score > 0:
+            ranked.append((score, match))
+    ranked.sort(key=lambda item: (-item[0], item[1].operation_id))
+    total_matches = len(ranked)
+    start = 0
+    if request.cursor is not None:
+        try:
+            start = (
+                next(
+                    index
+                    for index, (_, match) in enumerate(ranked)
+                    if match.operation_id == request.cursor
                 )
-            except StopIteration:
-                raise OperationDiscoveryCursorError(
-                    "cursor is not present in the filtered discovery result"
-                ) from None
-        page = ranked[start : start + request.limit]
-        next_cursor = (
-            page[-1][1].operation_id
-            if page and start + len(page) < total_matches
-            else None
-        )
-        return OperationDiscoveryResult(
-            query=request.query,
-            domain=normalized_domain,
-            input_kind=request.input_kind,
-            artifact_type=request.artifact_type,
-            matches=tuple(match for _, match in page),
-            total_matches=total_matches,
-            truncated=next_cursor is not None,
-            next_cursor=next_cursor,
-        )
+                + 1
+            )
+        except StopIteration:
+            raise OperationDiscoveryCursorError(
+                "cursor is not present in the filtered discovery result"
+            ) from None
+    page = ranked[start : start + request.limit]
+    next_cursor = (
+        page[-1][1].operation_id if page and start + len(page) < total_matches else None
+    )
+    return OperationDiscoveryResult(
+        query=request.query,
+        domain=normalized_domain,
+        input_kind=request.input_kind,
+        artifact_type=request.artifact_type,
+        matches=tuple(match for _, match in page),
+        total_matches=total_matches,
+        truncated=next_cursor is not None,
+        next_cursor=next_cursor,
+    )
 
 
 def normalize_discovery_text(value: str) -> str:
@@ -182,7 +172,7 @@ def matches_domain(descriptor: OperationDescriptor, normalized_domain: str) -> b
 
 
 __all__ = [
-    "OperationDiscoveryMixin",
+    "discover_operations",
     "discovery_applicability",
     "discovery_relevance",
     "matches_domain",

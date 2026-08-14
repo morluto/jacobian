@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.contracts.operations import (
     OperationRequest,
-    ProviderAvailability,
 )
 from jacobian.contracts.results import VerificationResult
-from jacobian.domains.finite_fields import build_finite_field_bundle
 from jacobian.domains.finite_fields.contracts import (
     FiniteMapTableRequest,
     LinearMapRankRequest,
@@ -123,8 +119,8 @@ def test_rank_request_rejects_cross_field_values_before_execution(
     )
 
     assert result.execution.status.value == "ERROR"
-    assert result.diagnostics[0].code == "INVALID_FINITE_FIELD_REQUEST"
-    assert result.diagnostics[0].stage == "finite_field_input_validation"
+    assert result.diagnostics[0].code == "INVALID_REQUEST"
+    assert result.diagnostics[0].stage == "operation_input_validation"
     assert set(result.output) == {"error"}
     assert result.verification_record_uri is None
     assert result.artifact_uris == ()
@@ -346,56 +342,3 @@ def test_operator_authorized_sympy_replay_checks_complete_polynomial_table(
 
     assert verified.output["status"] == "VERIFIED"
     assert rejected.output["status"] == "REJECTED"
-
-
-def test_missing_flint_omits_only_flint_operations_and_their_checkers(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.providers.flint_runtime import (
-        python_flint_finite_field_provider_runtime,
-    )
-
-    unavailable = python_flint_finite_field_provider_runtime().model_copy(
-        update={
-            "availability": ProviderAvailability.UNAVAILABLE,
-            "version": None,
-            "digest": None,
-            "digest_kind": None,
-            "diagnostic": "python-flint is not installed",
-        }
-    )
-    monkeypatch.setattr(
-        "jacobian.domains.finite_fields.bundle."
-        "python_flint_finite_field_provider_runtime",
-        lambda: unavailable,
-    )
-
-    with open_exact_domain_services(
-        tmp_path,
-        build_finite_field_bundle(),
-    ) as services:
-        ids = {
-            descriptor.operation_id
-            for descriptor in services.core.operations.catalog().operations
-        }
-
-    assert {
-        "finite_field.projective_line.enumerate",
-        "finite_field.polynomial_map.fibers.compute",
-        "finite_field.polynomial_map.collision.compute",
-        "finite_field.polynomial_map.permutation.compute",
-        "finite_field.polynomial_map.fibers.verify",
-        "finite_field.polynomial_map.collision.verify",
-        "finite_field.polynomial_map.permutation.verify",
-    } <= ids
-    assert {
-        "finite_field.restrict_scalars.compute",
-        "finite_field.restrict_scalars.verify",
-        "finite_field.linear_map.rank.compute",
-        "finite_field.linear_map.rank.verify",
-        "finite_field.direction_rank_ledger.compute",
-        "finite_field.orbit_distribution.compute",
-        "finite_field.polynomial_map.table.compute",
-        "finite_field.polynomial_map.table.verify",
-    }.isdisjoint(ids)

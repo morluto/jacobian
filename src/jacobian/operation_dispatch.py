@@ -35,66 +35,61 @@ from jacobian.schema_registry import model_schema
 _LOGGER = logging.getLogger(__name__)
 
 
-class OperationDispatchMixin:
-    """Own the invocation state machine after registry resolution."""
+def dispatch_operation(dispatch: Any, request: OperationRequest) -> OperationResult:
+    """Invoke one already-resolved operation through the typed state machine."""
 
-    def invoke(self: Any, request: OperationRequest) -> OperationResult:
-        started = time.monotonic()
-        try:
-            adapter: OperationAdapter[Any] = self._adapters[request.operation_id]
-        except KeyError:
-            result = _unknown_operation_failure(request)
-            log_invocation(result, started)
-            return result
-        descriptor = self._descriptors[request.operation_id]
-        resolution = _operation_resolution_failure(self, descriptor)
-        if resolution is not None:
-            log_invocation(resolution, started)
-            return resolution
-        invalid_inputs = _undeclared_value_inputs_failure(descriptor, request)
-        if invalid_inputs is not None:
-            result = invalid_inputs
-            log_invocation(result, started)
-            return result
-        try:
-            prepared = adapter.prepare(request)
-            result = invoke_ready_adapter(
-                adapter=adapter,
-                descriptor=descriptor,
-                prepared=prepared,
-            )
-        except OperationInvocationError as exc:
-            result = failed_result(
-                operation_id=descriptor.operation_id,
-                version=descriptor.version,
-                diagnostic=exc.diagnostic,
-            )
-        except OperationError as exc:
-            result = failed_result(
-                operation_id=descriptor.operation_id,
-                version=descriptor.version,
-                diagnostic=OperationDiagnostic(
-                    code="ADAPTER_CONFIGURATION_FAILED",
-                    stage="adapter_execution",
-                    message=str(exc),
-                    hint=(
-                        "The operation is misconfigured. Check the provider "
-                        "runtime identity and digest in the operation descriptor."
-                    ),
-                ),
-            )
-        except Exception as exc:
-            result = _adapter_execution_failure(descriptor, request, exc)
-        invalid = _adapter_result_identity_failure(
-            descriptor=descriptor,
-            result=result,
-        )
-        if invalid is not None:
-            log_invocation(invalid, started)
-            return invalid
-        self._validate_verified_result(result)
+    started = time.monotonic()
+    try:
+        adapter: OperationAdapter[Any] = dispatch._adapters[request.operation_id]
+    except KeyError:
+        result = _unknown_operation_failure(request)
         log_invocation(result, started)
         return result
+    descriptor = dispatch._descriptors[request.operation_id]
+    resolution = _operation_resolution_failure(dispatch, descriptor)
+    if resolution is not None:
+        log_invocation(resolution, started)
+        return resolution
+    invalid_inputs = _undeclared_value_inputs_failure(descriptor, request)
+    if invalid_inputs is not None:
+        log_invocation(invalid_inputs, started)
+        return invalid_inputs
+    try:
+        prepared = adapter.prepare(request)
+        result = invoke_ready_adapter(
+            adapter=adapter, descriptor=descriptor, prepared=prepared
+        )
+    except OperationInvocationError as exc:
+        result = failed_result(
+            operation_id=descriptor.operation_id,
+            version=descriptor.version,
+            diagnostic=exc.diagnostic,
+        )
+    except OperationError as exc:
+        result = failed_result(
+            operation_id=descriptor.operation_id,
+            version=descriptor.version,
+            diagnostic=OperationDiagnostic(
+                code="ADAPTER_CONFIGURATION_FAILED",
+                stage="adapter_execution",
+                message=str(exc),
+                hint=(
+                    "The operation is misconfigured. Check the provider "
+                    "runtime identity and digest in the operation descriptor."
+                ),
+            ),
+        )
+    except Exception as exc:
+        result = _adapter_execution_failure(descriptor, request, exc)
+    invalid = _adapter_result_identity_failure(descriptor=descriptor, result=result)
+    if invalid is not None:
+        log_invocation(invalid, started)
+        return invalid
+    from jacobian.operation_verification import validate_verified_result
+
+    validate_verified_result(dispatch.store, result)
+    log_invocation(result, started)
+    return result
 
 
 def _undeclared_value_inputs_failure(
@@ -315,4 +310,4 @@ def _adapter_output_model_failure(
     )
 
 
-__all__ = ["OperationDispatchMixin"]
+__all__ = ["dispatch_operation"]

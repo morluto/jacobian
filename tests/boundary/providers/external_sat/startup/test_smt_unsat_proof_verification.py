@@ -275,9 +275,7 @@ def test_checker_operational_failure_never_creates_a_conclusion(
         def fail(**_kwargs: Any) -> Never:
             raise exception
 
-        monkeypatch.setattr(
-            runtime.application.verification._checker_executor, "execute", fail
-        )
+        monkeypatch.setattr(runtime.verification._checker_executor, "execute", fail)
         result = _verify(runtime, proof_uri)
 
     assert result.execution.status is expected_status

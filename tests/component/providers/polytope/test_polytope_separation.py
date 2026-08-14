@@ -38,7 +38,7 @@ def polytope_services(tmp_path: Path) -> Iterator[PolytopeTestServices]:
         tmp_path / "state",
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
-        polytope = services.application.polytope
+        polytope = services.polytope
         with atomic_installation(services.core):
             checkers = install_polytope_checkers(
                 services.core.checkers,
@@ -50,7 +50,8 @@ def polytope_services(tmp_path: Path) -> Iterator[PolytopeTestServices]:
         assert checkers.certificate_checker_id is not None
         yield PolytopeTestServices(
             core=services.core,
-            application=services.application,
+            verification=services.verification,
+            polytope=services.polytope,
             installation=services.installation,
             witness_checker_id=checkers.witness_checker_id,
             certificate_checker_id=checkers.certificate_checker_id,
@@ -62,16 +63,16 @@ def _simplex(
     point: tuple[tuple[int, int], ...],
 ) -> tuple[str, str]:
     point_artifact = runtime.core.artifacts.put(
-        schema_uri=runtime.application.polytope.point_schema_uri,
-        semantics_uri=runtime.application.polytope.semantics_uri,
+        schema_uri=runtime.polytope.point_schema_uri,
+        semantics_uri=runtime.polytope.semantics_uri,
         payload={
             "point_schema_version": "1",
             "coordinates": [_q(*value) for value in point],
         },
     )
     generators = runtime.core.artifacts.put(
-        schema_uri=runtime.application.polytope.generator_set_schema_uri,
-        semantics_uri=runtime.application.polytope.semantics_uri,
+        schema_uri=runtime.polytope.generator_set_schema_uri,
+        semantics_uri=runtime.polytope.semantics_uri,
         payload={
             "generator_set_schema_version": "1",
             "dimension": 3,
@@ -101,16 +102,14 @@ def test_backend_failure_keeps_provider_detail_local(
     def fail_backend(*_args: object, **_kwargs: object) -> None:
         raise z3.Z3Exception("provider=solver internal-id=secret")
 
-    monkeypatch.setattr(
-        polytope_services.application.polytope, "_convex_weights", fail_backend
-    )
-    result = polytope_services.application.polytope.separate(
+    monkeypatch.setattr(polytope_services.polytope, "_convex_weights", fail_backend)
+    result = polytope_services.polytope.separate(
         PolytopeSeparateRequest(
             point_uri=point_uri,
             generator_set_uri=generators_uri,
         )
     )
-    adapter = PolytopeSeparationAdapter(polytope_services.application.polytope)
+    adapter = PolytopeSeparationAdapter(polytope_services.polytope)
     projected = project_operation_result(
         adapter.invoke(
             adapter.prepare(
@@ -146,7 +145,7 @@ def test_exact_membership_witness_is_independently_replayed(
         ((1, 4), (1, 4), (1, 4)),
     )
 
-    proposed = polytope_services.application.polytope.separate(
+    proposed = polytope_services.polytope.separate(
         PolytopeSeparateRequest(
             point_uri=point_uri,
             generator_set_uri=generators_uri,
@@ -156,7 +155,7 @@ def test_exact_membership_witness_is_independently_replayed(
     assert proposed.status.value == "MEMBER"
     assert proposed.witness_uri is not None
     assert proposed.certificate_uri is None
-    verified = polytope_services.application.verification.verify_witness(
+    verified = polytope_services.verification.verify_witness(
         claim_uri=proposed.claim_uri or "",
         candidate_uri=proposed.effective_point_uri or "",
         witness_uri=proposed.witness_uri,
@@ -175,7 +174,7 @@ def test_exact_separator_is_generated_then_independently_checked(
         ((1, 2), (1, 2), (1, 2)),
     )
 
-    proposed = polytope_services.application.polytope.separate(
+    proposed = polytope_services.polytope.separate(
         PolytopeSeparateRequest(
             point_uri=point_uri,
             generator_set_uri=generators_uri,
@@ -194,7 +193,7 @@ def test_exact_separator_is_generated_then_independently_checked(
     assert math.gcd(*[abs(value) for value in (*coefficients, rhs)]) == 1
     assert payload["margin"] == _q(1, 2)
 
-    verified = polytope_services.application.verification.verify_certificate(
+    verified = polytope_services.verification.verify_certificate(
         certificate_uri=proposed.certificate_uri,
     )
     assert verified.conclusion.value == "TRUE"
@@ -208,7 +207,7 @@ def test_separator_payload_tampering_fails_closed(
         polytope_services,
         ((1, 2), (1, 2), (1, 2)),
     )
-    proposed = polytope_services.application.polytope.separate(
+    proposed = polytope_services.polytope.separate(
         PolytopeSeparateRequest(
             point_uri=point_uri,
             generator_set_uri=generators_uri,
@@ -231,7 +230,7 @@ def test_separator_payload_tampering_fails_closed(
         summary="adversarial separator tampering",
     )
 
-    result = polytope_services.application.verification.verify_certificate(
+    result = polytope_services.verification.verify_certificate(
         certificate_uri=stored.artifact_uri
     )
 
@@ -245,16 +244,16 @@ def test_projection_is_explicit_and_bound_to_derived_artifacts(
     polytope_services: PolytopeTestServices,
 ) -> None:
     point = polytope_services.core.artifacts.put(
-        schema_uri=polytope_services.application.polytope.point_schema_uri,
-        semantics_uri=polytope_services.application.polytope.semantics_uri,
+        schema_uri=polytope_services.polytope.point_schema_uri,
+        semantics_uri=polytope_services.polytope.semantics_uri,
         payload={
             "point_schema_version": "1",
             "coordinates": [_q(99), _q(1, 2), _q(1, 2), _q(1, 2)],
         },
     )
     generators = polytope_services.core.artifacts.put(
-        schema_uri=polytope_services.application.polytope.generator_set_schema_uri,
-        semantics_uri=polytope_services.application.polytope.semantics_uri,
+        schema_uri=polytope_services.polytope.generator_set_schema_uri,
+        semantics_uri=polytope_services.polytope.semantics_uri,
         payload={
             "generator_set_schema_version": "1",
             "dimension": 4,
@@ -267,7 +266,7 @@ def test_projection_is_explicit_and_bound_to_derived_artifacts(
         },
     )
 
-    proposed = polytope_services.application.polytope.separate(
+    proposed = polytope_services.polytope.separate(
         PolytopeSeparateRequest(
             point_uri=point.artifact_uri,
             generator_set_uri=generators.artifact_uri,

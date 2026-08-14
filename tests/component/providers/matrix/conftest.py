@@ -10,13 +10,13 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import open_domain_services
 
 from jacobian.domains.matrix_lattice import matrix_operations
-from jacobian.runtime.services import CoreServices
+from jacobian.runtime.resources import RuntimeResources
 from jacobian.verification.service import VerificationService
 
 
 @dataclass(frozen=True, slots=True)
 class MatrixRuntime:
-    core: CoreServices
+    core: RuntimeResources
     verification: VerificationService
 
 

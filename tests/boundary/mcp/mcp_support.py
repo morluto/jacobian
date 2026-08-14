@@ -28,7 +28,11 @@ def open_focused_mcp_server(
         *bundles,
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
-        runtime = JacobianRuntime(services.core, services.application)
+        runtime = JacobianRuntime(
+            services.core,
+            services.verification,
+            services.polytope,
+        )
         yield create_server_from_runtime(
             runtime,
             close_owner=lambda: None,

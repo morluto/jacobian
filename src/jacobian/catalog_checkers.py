@@ -35,9 +35,9 @@ from jacobian.lean_frontend.proof_state_inspect import (
     install_lean_proof_state_inspect_only,
 )
 from jacobian.lean_frontend.service import LeanService
+from jacobian.polytope import PolytopeService
 from jacobian.provider_inventory import ProviderInventoryLoader
 from jacobian.provider_runtime import jacobian_provider_runtime
-from jacobian.runtime.services import RuntimeServices
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,26 +51,26 @@ class CatalogCheckerBuilder:
 
     def bind(
         self,
-        services: RuntimeServices,
+        polytope: PolytopeService,
         resources: CatalogBuildResources,
     ) -> None:
         ctx = self.context
         # INSTALL_BUNDLED creates authority; HYDRATE_EXISTING binds only checker
         # identities already authorized on this store. NONE binds neither.
         if ctx.authorize_bundled_checkers:
-            self._bind_checkers(services, resources)
+            self._bind_checkers(polytope, resources)
 
     def _bind_checkers(
         self,
-        services: RuntimeServices,
+        polytope: PolytopeService,
         resources: CatalogBuildResources,
     ) -> None:
         ctx = self.context
         install_polytope_checkers(
             ctx.checkers,
-            claim_schema_uri=services.polytope.claim_schema_uri,
-            semantics_uri=services.polytope.semantics_uri,
-            point_schema_uri=services.polytope.point_schema_uri,
+            claim_schema_uri=polytope.claim_schema_uri,
+            semantics_uri=polytope.semantics_uri,
+            point_schema_uri=polytope.point_schema_uri,
         )
         lean_checkers, checker_runtime = install_lean_checkers(
             ctx.store,

@@ -398,9 +398,7 @@ def test_lean_reuses_only_an_exact_active_checker_result(
     def unexpected_selector(**_: object) -> object:
         raise AssertionError("Lean must use its explicitly installed checker")
 
-    monkeypatch.setattr(
-        runtime.services.verification._checker_executor, "execute", accept
-    )
+    monkeypatch.setattr(runtime.verification._checker_executor, "execute", accept)
     monkeypatch.setattr(runtime.core.checkers, "select_compatible", unexpected_selector)
     first = runtime.catalog_build_resources.lean.verify(
         statement="1 + 1 = 2", proof="rfl"
@@ -456,9 +454,7 @@ def test_lean_cache_never_reuses_a_rejected_checker_input(
         calls += 1
         return next(decisions)
 
-    monkeypatch.setattr(
-        runtime.services.verification._checker_executor, "execute", recover
-    )
+    monkeypatch.setattr(runtime.verification._checker_executor, "execute", recover)
 
     first = runtime.catalog_build_resources.lean.verify(
         statement="True", proof="by trivial"
@@ -487,7 +483,7 @@ def test_lean_cache_does_not_reuse_a_revoked_checker_result(
     )
     assert runtime.catalog_build_resources.lean is not None
     monkeypatch.setattr(
-        runtime.services.verification._checker_executor,
+        runtime.verification._checker_executor,
         "execute",
         lambda **_: CheckerDecision(
             accepted=True,

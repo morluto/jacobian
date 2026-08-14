@@ -27,10 +27,10 @@ from jacobian.polynomial_system_operations import (
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
 from jacobian.polynomials import install_polynomial_operations
+from jacobian.polytope import PolytopeService
 from jacobian.polytope_operations import PolytopeSeparationAdapter
 from jacobian.provider_runtime import known_provider_runtime
 from jacobian.providers.singular_runtime import singular_provider_runtime
-from jacobian.runtime.services import RuntimeServices
 from jacobian.universal_algebra_operations import (
     install_universal_algebra_operations,
 )
@@ -91,13 +91,13 @@ class CatalogOperationBuilder:
 
     def bind(
         self,
-        services: RuntimeServices,
+        polytope: PolytopeService,
     ) -> GraphInstallation:
         """Build core catalog entries in explicit dependency order."""
 
         ctx = self.context
 
-        self.context.register_operation(PolytopeSeparationAdapter(services.polytope))
+        self.context.register_operation(PolytopeSeparationAdapter(polytope))
         finite_coverage_adapter, _ = install_finite_coverage(
             ctx.store,
             ctx.schemas,

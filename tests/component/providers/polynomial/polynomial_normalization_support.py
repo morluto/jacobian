@@ -58,7 +58,7 @@ def open_polynomial_normalization_services(
                     services.core.schemas,
                     services.core.artifacts,
                     services.core.polynomial_expressions,
-                    services.application.verification,
+                    services.verification,
                     services.core.checkers,
                     authorize_checker=True,
                 )
@@ -66,7 +66,8 @@ def open_polynomial_normalization_services(
                 services.installation.register_operation(checker)
         yield PolynomialNormalizationTestServices(
             core=services.core,
-            application=services.application,
+            verification=services.verification,
+            polytope=services.polytope,
             installation=services.installation,
             provider_runtime=runtime,
         )

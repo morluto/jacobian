@@ -46,9 +46,7 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
     checkers = SimpleNamespace(
         policy_transaction=lambda: _RecordingContext(events, "policy"),
     )
-    core = SimpleNamespace(store=store, checkers=checkers)
-    application = SimpleNamespace(core=core)
-    context = SimpleNamespace(store=store)
+    context = SimpleNamespace(store=store, checkers=checkers)
 
     monkeypatch.setattr(assembler, "ProviderInventoryLoader", lambda: _Resolver(events))
     monkeypatch.setattr(
@@ -79,7 +77,7 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
     monkeypatch.setattr(assembler, "CatalogCheckerBuilder", checker_binder)
     monkeypatch.setattr(assembler, "cached_package_digests", lambda: nullcontext())
 
-    resources = assembler.build_catalog_operations(context, application)
+    resources = assembler.build_catalog_operations(context, object())
 
     assert isinstance(resources, CatalogBuildResources)
     resources.close()

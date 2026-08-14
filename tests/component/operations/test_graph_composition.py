@@ -28,7 +28,7 @@ def graph_services(tmp_path: Path) -> Iterator[DomainTestServices]:
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 authorize_checker=False,
             )

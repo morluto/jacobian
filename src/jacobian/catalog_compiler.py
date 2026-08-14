@@ -19,9 +19,10 @@ from jacobian.operation_catalog import (
     operation_declaration_digest,
 )
 from jacobian.operation_service import OperationPolicy
+from jacobian.polytope import PolytopeService
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.services import build_runtime_services
+from jacobian.verification.service import VerificationService
 
 
 def compile_operation_catalog(
@@ -34,13 +35,19 @@ def compile_operation_catalog(
     core = bootstrap_services(state_dir, operation_policy=OperationPolicy())
     resources = None
     try:
-        services = build_runtime_services(core)
+        verification = VerificationService(
+            core.store,
+            core.checkers,
+            core.schemas,
+            checker_timeout_seconds=105,
+        )
+        polytope = PolytopeService(core.store, core.schemas)
         context = create_catalog_build_context(
             core,
-            services,
+            verification,
             authorize_bundled_checkers=authorize_bundled_checkers,
         )
-        resources = build_catalog_operations(context, services)
+        resources = build_catalog_operations(context, polytope)
         descriptors = tuple(
             sorted(
                 core.operations.catalog().operations,

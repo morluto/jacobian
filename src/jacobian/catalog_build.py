@@ -9,13 +9,13 @@ from jacobian.catalog_foundations import CatalogFoundationBuilder
 from jacobian.catalog_operations import CatalogOperationBuilder
 from jacobian.catalog_resources import CatalogResourceBuilder
 from jacobian.implementation import cached_package_digests
+from jacobian.polytope import PolytopeService
 from jacobian.provider_inventory import ProviderInventoryLoader
-from jacobian.runtime.services import RuntimeServices
 
 
 def build_catalog_operations(
     context: CatalogBuildContext,
-    services: RuntimeServices,
+    polytope: PolytopeService,
 ) -> CatalogBuildResources:
     """Build every descriptor and checker binding in deterministic phase order.
 
@@ -27,29 +27,22 @@ def build_catalog_operations(
     the duration of the same atomic assembly.
     """
 
-    core = services.core
-    if context.store is not core.store:
-        raise ValueError("catalog build context must belong to runtime core")
-
     resources = CatalogBuildResources()
     resolver = ProviderInventoryLoader()
     try:
         with (
-            core.checkers.policy_transaction(),
-            core.store.transaction(),
+            context.checkers.policy_transaction(),
+            context.store.transaction(),
             cached_package_digests(),
         ):
             runtimes = resolver.resolve()
-            CatalogFoundationBuilder(context).bind(
-                core,
-                runtimes,
-            )
+            CatalogFoundationBuilder(context).bind(runtimes)
             graph = CatalogOperationBuilder(context).bind(
-                services,
+                polytope,
             )
             CatalogResourceBuilder(context).bind(graph)
             CatalogCheckerBuilder(context, resolver).bind(
-                services,
+                polytope,
                 resources,
             )
     except BaseException as exc:

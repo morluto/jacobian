@@ -9,14 +9,17 @@ from typing import TYPE_CHECKING, Any
 from jacobian.artifacts import ArtifactService
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
+from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
 from jacobian.registry import CheckerRegistry
+from jacobian.sat_smt.sat import SatArtifactService
+from jacobian.sat_smt.smt import SmtArtifactService
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceStore
 from jacobian.verification.service import VerificationService
 
 if TYPE_CHECKING:
-    from jacobian.runtime.services import CoreServices, RuntimeServices
+    from jacobian.runtime.resources import RuntimeResources
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,13 +33,16 @@ class CatalogBuildContext:
     checkers: CheckerRegistry
     verification: VerificationService
     binder: OperationBinder
+    sat: SatArtifactService
+    smt: SmtArtifactService
+    polynomial_expressions: PolynomialExpressionArtifactService
     authorize_bundled_checkers: bool
     register_operation: Callable[[OperationAdapter[Any]], None]
 
 
 def create_catalog_build_context(
-    core: CoreServices,
-    services: RuntimeServices,
+    core: RuntimeResources,
+    verification: VerificationService,
     *,
     authorize_bundled_checkers: bool = False,
 ) -> CatalogBuildContext:
@@ -50,9 +56,6 @@ def create_catalog_build_context(
     every built-in adapter therefore follows the same policy.
     """
 
-    if services.core is not core:
-        raise ValueError("runtime services must be built from the supplied core")
-
     def register(adapter: OperationAdapter[Any]) -> None:
         core.operations.register(adapter)
 
@@ -62,8 +65,11 @@ def create_catalog_build_context(
         artifacts=core.artifacts,
         values=core.values,
         checkers=core.checkers,
-        verification=services.verification,
+        verification=verification,
         binder=core.binder,
+        sat=core.sat,
+        smt=core.smt,
+        polynomial_expressions=core.polynomial_expressions,
         authorize_bundled_checkers=authorize_bundled_checkers,
         register_operation=register,
     )

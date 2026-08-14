@@ -77,7 +77,8 @@ def open_exact_domain_services(
         installed = install_verified_domain_bundles(services, *operation_groups)
         yield VerifiedDomainTestServices(
             core=services.core,
-            application=services.application,
+            verification=services.verification,
+            polytope=services.polytope,
             installation=services.installation,
             operation_groups=installed,
         )

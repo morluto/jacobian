@@ -7,9 +7,10 @@ from pathlib import Path
 
 from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.operation_declarations import OperationDeclarations
+from jacobian.polytope import PolytopeService
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.services import build_runtime_services
+from jacobian.verification.service import VerificationService
 from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import atomic_installation
 
@@ -30,10 +31,16 @@ def create_selected_runtime(
         ),
     )
     try:
-        services = build_runtime_services(core)
+        verification = VerificationService(
+            core.store,
+            core.checkers,
+            core.schemas,
+            checker_timeout_seconds=105,
+        )
+        polytope = PolytopeService(core.store, core.schemas)
         installation = create_catalog_build_context(
             core,
-            services,
+            verification,
             authorize_bundled_checkers=(
                 checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
             ),
@@ -44,7 +51,7 @@ def create_selected_runtime(
                     bound = installation.binder.bind(operations)
                     for adapter in bound.adapters:
                         installation.register_operation(adapter)
-        return JacobianRuntime(core, services)
+        return JacobianRuntime(core, verification, polytope)
     except BaseException as error:
         cleanup_failures: list[BaseException] = []
         try:

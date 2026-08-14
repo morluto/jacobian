@@ -148,7 +148,7 @@ def test_polynomial_identity_verifies_equal_coefficients(
     checker = runtime.core.checkers.get(result.output["checker_id"])
     assert checker.semantics_uris == (semantics_uri,)
 
-    rejected = runtime.application.verification.verify_certificate(
+    rejected = runtime.verification.verify_certificate(
         certificate_uri=result.output["certificate_uri"],
         checker_id=result.output["checker_id"],
         supporting_artifact_uris=(result.output["claim_uri"],),

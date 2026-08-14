@@ -1,4 +1,4 @@
-"""Tier-local service graph helpers backed by production composition seams."""
+"""Tier-local resource helpers backed by production composition seams."""
 
 from __future__ import annotations
 
@@ -13,26 +13,25 @@ from jacobian.catalog_build_context import (
 )
 from jacobian.implementation import cached_package_digests
 from jacobian.operation_declarations import OperationDeclarations
+from jacobian.polytope import PolytopeService
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.services import (
-    CoreServices,
-    RuntimeServices,
-    build_runtime_services,
-)
+from jacobian.runtime.resources import RuntimeResources
+from jacobian.verification.service import VerificationService
 from tests.support.catalog_build_options import CheckerAuthorityMode
 
 
 @dataclass(frozen=True, slots=True)
 class DomainTestServices:
-    """A domain test's explicit foundational and application service graphs."""
+    """Resources owned by one focused domain test."""
 
-    core: CoreServices
-    application: RuntimeServices
+    core: RuntimeResources
+    verification: VerificationService
+    polytope: PolytopeService
     installation: CatalogBuildContext
 
 
 @contextmanager
-def atomic_installation(core: CoreServices) -> Iterator[None]:
+def atomic_installation(core: RuntimeResources) -> Iterator[None]:
     """Apply the same durable boundary as complete portfolio installation."""
 
     with (
@@ -49,7 +48,7 @@ def open_domain_services(
     *operation_groups: OperationDeclarations,
     checker_authority: CheckerAuthorityMode | None = None,
 ) -> Iterator[DomainTestServices]:
-    """Open core/application services and one production installation context.
+    """Open runtime resources and one production installation context.
 
     No built-in portfolio is imported or installed here.  A domain test passes
     its literal portfolio component to the production installer itself.
@@ -61,10 +60,16 @@ def open_domain_services(
         bind_existing_checkers=(authority is CheckerAuthorityMode.HYDRATE_EXISTING),
     )
     try:
-        application = build_runtime_services(core)
+        verification = VerificationService(
+            core.store,
+            core.checkers,
+            core.schemas,
+            checker_timeout_seconds=105,
+        )
+        polytope = PolytopeService(core.store, core.schemas)
         installation = create_catalog_build_context(
             core,
-            application,
+            verification,
             authorize_bundled_checkers=(
                 authority is CheckerAuthorityMode.INSTALL_BUNDLED
             ),
@@ -77,7 +82,8 @@ def open_domain_services(
                         installation.register_operation(adapter)
         yield DomainTestServices(
             core=core,
-            application=application,
+            verification=verification,
+            polytope=polytope,
             installation=installation,
         )
     finally:

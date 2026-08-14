@@ -1,4 +1,4 @@
-"""Construction of foundational runtime-owned services."""
+"""Construction of foundational runtime-owned resources."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from jacobian.operation_binding import OperationBinder
 from jacobian.operation_service import OperationPolicy, OperationService
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
-from jacobian.runtime.services import CoreServices
+from jacobian.runtime.resources import RuntimeResources
 from jacobian.sat_smt.sat import install_sat_artifacts
 from jacobian.sat_smt.smt import install_smt_artifacts
 from jacobian.schema_registry import SchemaRegistry
@@ -22,8 +22,8 @@ def bootstrap_services(
     *,
     operation_policy: OperationPolicy | None = None,
     bind_existing_checkers: bool = False,
-) -> CoreServices:
-    """Open storage and construct the operation-independent service graph."""
+) -> RuntimeResources:
+    """Open storage and construct operation-independent resources."""
 
     store = ArtifactRepository(root)
     try:
@@ -45,7 +45,7 @@ def bootstrap_services(
             store,
             policy=operation_policy,
         )
-        return CoreServices(
+        return RuntimeResources(
             store=store,
             schemas=schemas,
             artifacts=artifacts,

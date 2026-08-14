@@ -8,13 +8,11 @@ from jacobian.catalog_build import build_catalog_operations
 from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.catalog_build_resources import CatalogBuildResources
 from jacobian.operation_service import OperationPolicy
+from jacobian.polytope import PolytopeService
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.model import JacobianRuntime
-from jacobian.runtime.services import (
-    CoreServices,
-    RuntimeServices,
-    build_runtime_services,
-)
+from jacobian.runtime.resources import RuntimeResources
+from jacobian.verification.service import VerificationService
 from tests.support.catalog_build_options import CheckerAuthorityMode
 
 
@@ -23,13 +21,15 @@ class CatalogBuildRuntime(JacobianRuntime):
 
     def __init__(
         self,
-        core: CoreServices,
-        services: RuntimeServices,
+        core: RuntimeResources,
+        verification: VerificationService,
+        polytope: PolytopeService,
         resources: CatalogBuildResources,
     ) -> None:
         super().__init__(
             core,
-            services,
+            verification,
+            polytope,
             close_resources=resources.close,
             start_lean_warmup=lambda: _start_lean_warmup(resources),
         )
@@ -52,16 +52,22 @@ def create_catalog_build_runtime(
         ),
     )
     try:
-        services = build_runtime_services(core)
+        verification = VerificationService(
+            core.store,
+            core.checkers,
+            core.schemas,
+            checker_timeout_seconds=105,
+        )
+        polytope = PolytopeService(core.store, core.schemas)
         context = create_catalog_build_context(
             core,
-            services,
+            verification,
             authorize_bundled_checkers=(
                 checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
             ),
         )
-        resources = build_catalog_operations(context, services)
-        return CatalogBuildRuntime(core, services, resources)
+        resources = build_catalog_operations(context, polytope)
+        return CatalogBuildRuntime(core, verification, polytope, resources)
     except BaseException as error:
         try:
             core.close()

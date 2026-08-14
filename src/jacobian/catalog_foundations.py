@@ -1,7 +1,7 @@
 """Installation of solver, linear, and normalization foundations.
 
 This phase installs built-in adapters and checkers through one narrow
-infrastructure context plus the core service graph.
+infrastructure context.
 It performs no discovery, registration, ranking, or verification authorization
 beyond what the individual installers do.
 
@@ -23,7 +23,6 @@ from jacobian.polynomial_expression_operations import (
     install_polynomial_expression_checker,
 )
 from jacobian.provider_inventory import ProviderInventory
-from jacobian.runtime.services import CoreServices
 from jacobian.sat_smt.cadical import install_cadical_operations
 from jacobian.sat_smt.cvc5 import install_cvc5_operation
 from jacobian.sat_smt.sat_lrat import install_sat_lrat_verifier
@@ -48,18 +47,17 @@ class CatalogFoundationBuilder:
 
     def bind(
         self,
-        core: CoreServices,
         runtimes: ProviderInventory,
     ) -> None:
         """Bind solver, linear, and normalization foundations."""
 
         ctx = self.context
-        self.context.register_operation(SatCnfMaterializationAdapter(core.sat))
+        self.context.register_operation(SatCnfMaterializationAdapter(ctx.sat))
         sat_assignment_adapter, _ = install_sat_assignment_checker(
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
-            core.sat,
+            ctx.sat,
             ctx.verification,
             ctx.checkers,
             authorize_checker=ctx.authorize_bundled_checkers,
@@ -71,7 +69,7 @@ class CatalogFoundationBuilder:
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
-            core.sat,
+            ctx.sat,
             ctx.verification,
             ctx.checkers,
             runtimes.drat_trim,
@@ -84,7 +82,7 @@ class CatalogFoundationBuilder:
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
-            core.sat,
+            ctx.sat,
             ctx.verification,
             ctx.checkers,
             authorize_checker=ctx.authorize_bundled_checkers,
@@ -96,7 +94,7 @@ class CatalogFoundationBuilder:
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
-            core.smt,
+            ctx.smt,
             ctx.verification,
             ctx.checkers,
             runtimes.carcara,
@@ -106,14 +104,12 @@ class CatalogFoundationBuilder:
             self.context.register_operation(smt_proof_adapter)
 
         self._bind_polynomial_expression_operations(
-            core,
             runtimes.sympy_polynomial_normalization,
         )
-        self.bind_solver_components(core, runtimes)
+        self.bind_solver_components(runtimes)
 
     def bind_solver_components(
         self,
-        core: CoreServices,
         runtimes: ProviderInventory,
     ) -> None:
         """Bind the packaged cvc5 adapter and optional CaDiCaL adapter."""
@@ -121,7 +117,7 @@ class CatalogFoundationBuilder:
         if runtimes.cadical.availability is ProviderAvailability.AVAILABLE:
             try:
                 cadical_adapters = install_cadical_operations(
-                    core.sat,
+                    self.context.sat,
                     runtimes.cadical,
                 )
             except OSError as exc:
@@ -130,7 +126,9 @@ class CatalogFoundationBuilder:
                 for adapter in cadical_adapters:
                     self.context.register_operation(adapter)
 
-        self.context.register_operation(install_cvc5_operation(core.smt, runtimes.cvc5))
+        self.context.register_operation(
+            install_cvc5_operation(self.context.smt, runtimes.cvc5)
+        )
 
     # ------------------------------------------------------------------
     # Private binding helpers
@@ -138,7 +136,6 @@ class CatalogFoundationBuilder:
 
     def _bind_polynomial_expression_operations(
         self,
-        core: CoreServices,
         runtime: ProviderObservation,
     ) -> None:
         ctx = self.context
@@ -146,7 +143,7 @@ class CatalogFoundationBuilder:
             ctx.store,
             ctx.schemas,
             ctx.artifacts,
-            core.polynomial_expressions,
+            self.context.polynomial_expressions,
             ctx.verification,
             ctx.checkers,
             authorize_checker=ctx.authorize_bundled_checkers,
@@ -156,7 +153,7 @@ class CatalogFoundationBuilder:
 
         self.context.register_operation(
             install_sympy_polynomial_normalization_operation(
-                core.polynomial_expressions,
+                self.context.polynomial_expressions,
                 runtime,
             )
         )

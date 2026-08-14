@@ -57,7 +57,7 @@ def _open_sat_assignment_services(
                 services.core.schemas,
                 services.core.artifacts,
                 services.core.sat,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorize_bundled_checkers,
             )
@@ -65,7 +65,8 @@ def _open_sat_assignment_services(
                 services.installation.register_operation(adapter)
         yield SatAssignmentTestServices(
             core=services.core,
-            application=services.application,
+            verification=services.verification,
+            polytope=services.polytope,
             installation=services.installation,
             assignment=installation,
         )
@@ -277,7 +278,7 @@ def test_misbound_assignment_artifact_fails_before_checker_dispatch(
         raise AssertionError("checker must not receive malformed source bindings")
 
     monkeypatch.setattr(
-        sat_assignment_services.application.verification._checker_executor,
+        sat_assignment_services.verification._checker_executor,
         "execute",
         unexpected_checker,
     )
@@ -300,7 +301,7 @@ def test_checker_timeout_cannot_create_a_sat_conclusion(
         raise TimeoutError("checker execution timed out")
 
     monkeypatch.setattr(
-        sat_assignment_services.application.verification._checker_executor,
+        sat_assignment_services.verification._checker_executor,
         "execute",
         timeout,
     )
@@ -323,7 +324,7 @@ def test_checker_error_cannot_create_a_sat_conclusion(
         raise CheckerExecutionError("deliberate checker failure")
 
     monkeypatch.setattr(
-        sat_assignment_services.application.verification._checker_executor,
+        sat_assignment_services.verification._checker_executor,
         "execute",
         fail,
     )

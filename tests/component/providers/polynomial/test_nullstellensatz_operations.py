@@ -323,7 +323,7 @@ def test_checker_timeout_never_verifies(
         )
         certificate_uri = _persist_certificate(services, materialized)
         monkeypatch.setattr(
-            services.application.verification,
+            services.verification,
             "verify_certificate",
             lambda **_kwargs: VerificationResult(
                 execution=Execution(status=ExecutionStatus.TIMEOUT),

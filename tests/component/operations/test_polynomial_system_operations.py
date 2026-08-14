@@ -42,7 +42,7 @@ def _open_polynomial_system_services(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorize_bundled_checkers,
             )
@@ -149,7 +149,7 @@ def test_solution_operation_keeps_checker_failure_unknown(
         raise CheckerExecutionError("deliberate checker failure")
 
     monkeypatch.setattr(
-        polynomial_system_services.application.verification._checker_executor,
+        polynomial_system_services.verification._checker_executor,
         "execute",
         fail,
     )

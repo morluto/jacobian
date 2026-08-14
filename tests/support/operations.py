@@ -8,14 +8,14 @@ from jacobian.contracts.operations import (
     OperationRequest,
     OperationResult,
 )
-from jacobian.runtime.services import CoreServices
+from jacobian.runtime.resources import RuntimeResources
 
 
 class OperationRuntime(Protocol):
     """The minimal public invocation surface used by operation tests."""
 
     @property
-    def core(self) -> CoreServices: ...
+    def core(self) -> RuntimeResources: ...
 
 
 def invoke_operation(

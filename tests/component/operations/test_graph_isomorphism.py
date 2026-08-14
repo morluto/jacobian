@@ -47,7 +47,7 @@ def _open_graph_isomorphism_services(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorize_bundled_checkers,
             )
@@ -57,7 +57,7 @@ def _open_graph_isomorphism_services(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 graph,
                 authorize_checker=services.installation.authorize_bundled_checkers,
@@ -66,7 +66,8 @@ def _open_graph_isomorphism_services(
                 services.installation.register_operation(adapter)
         yield GraphIsomorphismTestServices(
             core=services.core,
-            application=services.application,
+            verification=services.verification,
+            polytope=services.polytope,
             installation=services.installation,
             graph=graph,
             isomorphism=isomorphism,

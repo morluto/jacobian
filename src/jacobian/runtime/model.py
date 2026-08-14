@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from jacobian.runtime.services import CoreServices, RuntimeServices
+from jacobian.polytope import PolytopeService
+from jacobian.runtime.resources import RuntimeResources
+from jacobian.verification.service import VerificationService
 
 
 class RuntimeClosedError(RuntimeError):
@@ -12,21 +14,21 @@ class RuntimeClosedError(RuntimeError):
 
 
 class JacobianRuntime:
-    """Own one catalog-backed selected-operation service graph."""
+    """Own one catalog-backed selected-operation execution runtime."""
 
     def __init__(
         self,
-        core: CoreServices,
-        services: RuntimeServices,
+        core: RuntimeResources,
+        verification: VerificationService,
+        polytope: PolytopeService,
         *,
         close_resources: Callable[[], None] | None = None,
         start_lean_warmup: Callable[[], None] | None = None,
     ) -> None:
-        if services.core is not core:
-            raise ValueError("runtime services must belong to the supplied core")
         self._closed = False
         self.core = core
-        self.services = services
+        self.verification = verification
+        self.polytope = polytope
         self._close_resources = close_resources or (lambda: None)
         self._start_lean_warmup = start_lean_warmup or (lambda: None)
 

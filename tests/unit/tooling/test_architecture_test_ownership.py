@@ -98,7 +98,7 @@ def test_runtime_owned_passive_type_import_is_accepted(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/domain/polynomial/test_services.py",
-        "from jacobian.runtime.services import CoreServices\n",
+        "from jacobian.runtime.resources import RuntimeResources\n",
     )
 
     assert _ownership_messages(tmp_path) == []

@@ -36,7 +36,7 @@ def _open_lrat_services(
                 services.core.schemas,
                 services.core.artifacts,
                 services.core.sat,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorize_bundled_checkers,
             )

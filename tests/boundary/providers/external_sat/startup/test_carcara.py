@@ -45,7 +45,7 @@ def carcara_services(
             services.core.schemas,
             services.core.artifacts,
             services.core.smt,
-            services.application.verification,
+            services.verification,
             services.core.checkers,
             carcara,
             authorize_checker=services.installation.authorize_bundled_checkers,

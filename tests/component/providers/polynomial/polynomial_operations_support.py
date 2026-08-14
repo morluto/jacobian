@@ -45,7 +45,7 @@ def open_polynomial_services(
                 services.core.store,
                 services.core.schemas,
                 services.core.artifacts,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 authorize_checker=services.installation.authorize_bundled_checkers,
             )
@@ -53,7 +53,8 @@ def open_polynomial_services(
                 services.installation.register_operation(adapter)
         yield PolynomialTestServices(
             core=services.core,
-            application=services.application,
+            verification=services.verification,
+            polytope=services.polytope,
             installation=services.installation,
             polynomial=polynomial,
         )

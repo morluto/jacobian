@@ -11,10 +11,10 @@ from tests.support.services import atomic_installation, open_domain_services
 
 from jacobian.checker_authorization import install_polytope_checkers
 from jacobian.domains.matrix_lattice import matrix_operations
-from jacobian.runtime.services import CoreServices
+from jacobian.runtime.resources import RuntimeResources
 
 
-def _verify_ids(core: CoreServices) -> set[str]:
+def _verify_ids(core: RuntimeResources) -> set[str]:
     return {
         entry.operation_id
         for entry in core.operations.catalog().operations
@@ -72,7 +72,7 @@ def test_hydrate_authorized_polytope_checkers_without_complete_portfolio(
         root,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
     ) as services:
-        polytope = services.application.polytope
+        polytope = services.polytope
         with atomic_installation(services.core):
             installed = install_polytope_checkers(
                 services.core.checkers,
@@ -88,7 +88,7 @@ def test_hydrate_authorized_polytope_checkers_without_complete_portfolio(
         root,
         checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
     ) as hydrated:
-        polytope = hydrated.application.polytope
+        polytope = hydrated.polytope
         with atomic_installation(hydrated.core):
             rebound = install_polytope_checkers(
                 hydrated.core.checkers,

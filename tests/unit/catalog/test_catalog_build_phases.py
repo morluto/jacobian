@@ -20,11 +20,11 @@ from jacobian.contracts.operations import (
     ProviderInstallTier,
     ProviderObservation,
 )
+from jacobian.polytope import PolytopeService
 from jacobian.provider_inventory import (
     ProviderInventory,
     ProviderInventoryLoader,
 )
-from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
 def _unavailable_runtime(provider: str) -> ProviderObservation:
@@ -67,7 +67,7 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     registered: list[object] = []
-    context = SimpleNamespace(register_operation=registered.append)
+    context = SimpleNamespace(register_operation=registered.append, smt=object())
     adapter = object()
     monkeypatch.setattr(
         foundation_binding,
@@ -76,7 +76,6 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
     )
 
     CatalogFoundationBuilder(cast(CatalogBuildContext, context)).bind_solver_components(
-        cast(CoreServices, SimpleNamespace(smt=object())),
         _provider_plan_with_unavailable_external_solvers(),
     )
 
@@ -107,16 +106,10 @@ class _UnauthorizedContext:
 
 def test_checker_phase_derives_authority_from_its_context() -> None:
     context = _UnauthorizedContext()
-    application = cast(
-        RuntimeServices,
-        SimpleNamespace(
-            core=SimpleNamespace(),
-        ),
-    )
     CatalogCheckerBuilder(
         cast(CatalogBuildContext, context),
         cast(ProviderInventoryLoader, object()),
-    ).bind(application, CatalogBuildResources())
+    ).bind(cast(PolytopeService, object()), CatalogBuildResources())
 
     assert context.registered == []
 

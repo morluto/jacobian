@@ -73,7 +73,7 @@ def _install_fake_cadical(
                 services.core.schemas,
                 services.core.artifacts,
                 services.core.sat,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 authorize_checker=True,
             )
@@ -84,7 +84,7 @@ def _install_fake_cadical(
                 services.core.schemas,
                 services.core.artifacts,
                 services.core.sat,
-                services.application.verification,
+                services.verification,
                 services.core.checkers,
                 drat_trim_provider_runtime(),
                 authorize_checker=True,

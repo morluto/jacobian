@@ -550,7 +550,7 @@ class OperationRegistry:
         operations: OperationDeclarations,
         checker_declarations: tuple[AuthorizedChecker, ...],
     ) -> OperationAdapter[Any]:
-        from jacobian.exact_domain_checkers import bind_selected_exact_verification
+        from jacobian.exact_domain_verification import bind_selected_exact_verification
 
         checker_declaration = next(
             declaration

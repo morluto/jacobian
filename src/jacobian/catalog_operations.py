@@ -17,6 +17,8 @@ from jacobian.domains.polynomial_nullstellensatz.singular import (
 from jacobian.exact_domain_checkers import (
     ExactDomainCheckerInstallation,
     ExactOperationGroup,
+)
+from jacobian.exact_domain_verification import (
     install_exact_domain_verification,
 )
 from jacobian.finite_coverage import install_finite_coverage

@@ -14,7 +14,7 @@ from jacobian.domains.finite_fields.contracts import (
     LinearMapRankRequest,
     RestrictScalarsRequest,
 )
-from jacobian.exact_domain_checkers import ExactComputedVerificationAdapter
+from jacobian.exact_domain_verification import ExactComputedVerificationAdapter
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,

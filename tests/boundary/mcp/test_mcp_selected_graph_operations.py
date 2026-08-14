@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.adapters.mcp import server as server_module
 from jacobian.adapters.mcp.server import create_server
 from jacobian.checker_installation import CheckerInstaller
 
@@ -19,7 +18,6 @@ def test_graph_resource_operations_do_not_assemble_the_portfolio(
             "selected graph operations must not assemble the portfolio"
         )
 
-    monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
     monkeypatch.setattr(CheckerInstaller, "install", reject_portfolio_assembly)
 
     async def scenario() -> None:

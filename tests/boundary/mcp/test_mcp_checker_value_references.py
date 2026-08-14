@@ -5,20 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.adapters.mcp import server as server_module
 from jacobian.adapters.mcp.server import create_server
 
 
 @pytest.mark.requires_provider("flint")
 def test_mcp_keeps_two_tools_while_a_checker_consumes_a_typed_candidate(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("selected operations must not assemble the portfolio")
-
-    monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
-
     async def scenario() -> None:
         from mcp import Client
 

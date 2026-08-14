@@ -32,11 +32,8 @@ from jacobian.adapters.mcp.resources import register_resources
 from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_dispatcher import OperationDispatcher
-from jacobian.operation_registry import OperationRegistry, supports_selected_operation
+from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_service import OperationPolicy
-from jacobian.portfolio.assembler import assemble_portfolio
-from jacobian.portfolio.builtin import BUILTIN_OPERATION_MODULES
-from jacobian.portfolio.context import create_portfolio_context
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import RuntimeOptions
@@ -88,43 +85,11 @@ class _LazyLocalRuntime:
         self.catalog = catalog
         self.operation_policy = operation_policy
         self._selected_runtime: JacobianRuntime | None = None
-        self._complete_binding = False
         self._lock = threading.Lock()
 
     def acquire(self, operation_id: str | None = None) -> RuntimeAccess:
+        del operation_id
         with self._lock:
-            record = (
-                self.catalog.declaration_record(operation_id)
-                if operation_id is not None
-                else None
-            )
-            built_in_modules = dict(BUILTIN_OPERATION_MODULES)
-            needs_complete_binding = operation_id is not None and (
-                record is None
-                or (
-                    record.module not in built_in_modules
-                    and not supports_selected_operation(operation_id)
-                )
-            )
-            if needs_complete_binding:
-                runtime = self._ensure_selected_runtime()
-                if not self._complete_binding:
-                    dispatcher = runtime.core.operations
-                    if not isinstance(dispatcher, OperationDispatcher):
-                        raise TypeError("lazy runtime lost its operation dispatcher")
-                    dispatcher.prepare_complete_binding()
-                    options = RuntimeOptions(
-                        checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
-                        operation_policy=self.operation_policy,
-                    )
-                    context = create_portfolio_context(
-                        runtime.core, runtime.services, options
-                    )
-                    runtime.portfolio_resources = assemble_portfolio(
-                        context, runtime.services
-                    )
-                    self._complete_binding = True
-                return RuntimeAccess(runtime)
             return RuntimeAccess(self._ensure_selected_runtime())
 
     def _ensure_selected_runtime(self) -> JacobianRuntime:

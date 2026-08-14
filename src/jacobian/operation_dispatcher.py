@@ -42,11 +42,5 @@ class OperationDispatcher(OperationService):
     def catalog(self) -> OperationCatalogSnapshot:
         return self._catalog.snapshot()
 
-    def prepare_complete_binding(self) -> None:
-        """Drop lazy adapters before the exceptional checker/resource cutover."""
-
-        self._adapters.clear()
-        self._descriptors.clear()
-
 
 __all__ = ["OperationDispatcher"]

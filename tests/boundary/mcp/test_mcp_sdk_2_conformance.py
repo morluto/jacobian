@@ -29,7 +29,6 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
     def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("selected operation must not assemble the portfolio")
 
-    monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
     monkeypatch.setattr(CheckerInstaller, "install", reject_portfolio_assembly)
 
     async def scenario() -> None:

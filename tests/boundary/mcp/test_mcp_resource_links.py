@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.adapters.mcp import server as server_module
 from jacobian.adapters.mcp.server import create_server
 from jacobian.checker_installation import CheckerInstaller
 from jacobian.domains.number_theory import number_theory_operations
@@ -50,7 +49,6 @@ def test_mcp_materialized_results_emit_readable_native_resource_links(
     def reject_portfolio_assembly(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("SAT materialization must not assemble the portfolio")
 
-    monkeypatch.setattr(server_module, "assemble_portfolio", reject_portfolio_assembly)
     monkeypatch.setattr(CheckerInstaller, "install", reject_portfolio_assembly)
 
     async def scenario() -> None:

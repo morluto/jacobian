@@ -339,15 +339,16 @@ are not supported.
 
 The fixed tools and resources are registered directly through the SDK. Jacobian
 does not advertise an MCP extension: it has no optional protocol methods,
-client-side extension, or negotiated result type. SDK middleware retains the
-runtime lease around tool calls, while the SDK owns protocol tracing and typed
-boundary validation.
+client-side extension, or negotiated result type. The SDK owns protocol tracing,
+typed boundary validation, and synchronous-handler thread offloading.
 
 Hosting has two constructors with separate ownership: `server.create_server`
 owns one concrete local runtime, while `remote.create_remote_server` owns
-authentication and isolated tenant runtimes. Their only shared request boundary
-acquires one runtime lease; local state has no nullable tenant router, and remote
-admission, eviction, and quarantine do not enter the local server module.
+authentication and isolated tenant runtimes. Their shared request boundary
+resolves one lazy runtime. Local requests need no lease. The remote host privately
+holds an active tenant runtime only long enough to prevent eviction during that
+request; this is not part of the mathematical or MCP contract. Remote admission,
+eviction, and quarantine do not enter the local server module.
 The `jacobian-mcp` entry point is local stdio only. Remote transports use the
 separate `jacobian-remote-mcp` operator entry point.
 

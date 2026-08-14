@@ -6,11 +6,10 @@ from random import Random
 from typing import Any
 
 import pytest
-import sympy
 
+from jacobian import __version__
 from jacobian.contracts.operations import (
     OperationRequest,
-    ProviderAvailability,
 )
 from jacobian.contracts.results import ExecutionStatus
 
@@ -73,7 +72,7 @@ def test_matrix_determinant_compute_is_exact_and_unverified(
     )
 
     assert result.output["result"]["determinant"] == _rational(expected)
-    assert result.output["backend_version"] == sympy.__version__
+    assert result.output["backend_version"] == __version__
     assert result.artifact_uris == ()
 
 
@@ -198,7 +197,7 @@ def test_matrix_rank_compute_returns_rectangular_pivot_evidence(
 
     assert result.output["result"]["rank"] == 2
     assert result.output["result"]["pivot_columns"] == [0, 1]
-    assert result.output["backend_version"] == sympy.__version__
+    assert result.output["backend_version"] == __version__
     assert result.artifact_uris == ()
 
 
@@ -288,7 +287,7 @@ def test_matrix_determinant_matches_independent_bounded_oracle(
             )
 
 
-def test_matrix_operations_report_sympy_provider_identity(
+def test_matrix_operations_are_declared_as_builtin_kernels(
     matrix_services: Any,
 ) -> None:
     runtime = matrix_services
@@ -299,9 +298,5 @@ def test_matrix_operations_report_sympy_provider_identity(
 
     for operation_id in ("matrix.determinant.compute", "matrix.rank.compute"):
         descriptor = descriptors[operation_id]
-        assert descriptor.provider == "jacobian.sympy"
-        assert descriptor.provider_runtime.provider == "jacobian.sympy"
-        assert (
-            descriptor.provider_runtime.availability is ProviderAvailability.AVAILABLE
-        )
-        assert descriptor.provider_runtime.version == sympy.__version__
+        assert descriptor.provider == "built-in"
+        assert descriptor.provider_runtime is None

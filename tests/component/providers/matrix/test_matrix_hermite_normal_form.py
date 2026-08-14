@@ -44,7 +44,8 @@ def test_hnf_is_domain_owned_and_explicitly_durable() -> None:
     )
     assert isinstance(operation.publication, DurablePublication)
     assert operation.publication.resource_reason
-    assert operation.provider_binding.runtime is not None
+    assert "python-flint" in operation.tags
+    assert not hasattr(operation, "provider_binding")
 
 
 def test_python_flint_hnf_produces_a_durable_certificate(hnf_services) -> None:

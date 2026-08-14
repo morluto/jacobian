@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -20,13 +21,17 @@ from benchmarks.tooling.command_runner import (  # noqa: E402
     ToolCommandStatus,
     run_operator_command,
 )
-from jacobian.contracts.operations import (  # noqa: E402
-    OperationCatalog,
-    ProviderAvailability,
-)
 
 import jacobian  # noqa: E402
 from jacobian.canonical import canonicalize_json  # noqa: E402
+from jacobian.contracts.operations import (  # noqa: E402
+    OperationCatalogSnapshot,
+    ProviderAvailability,
+)
+from jacobian.operation_catalog import (  # noqa: E402
+    OperationCatalog as CompiledOperationCatalog,
+)
+from jacobian.operation_service import OperationPolicy  # noqa: E402
 from jacobian.persistence.migrations import (  # noqa: E402
     CURRENT_STATE_FORMAT_REVISION,
     STATE_MIGRATIONS,
@@ -37,22 +42,30 @@ from jacobian.persistence.state_health import (  # noqa: E402
     inspect_state_health,
 )
 from jacobian.provider_runtime import known_provider_runtime  # noqa: E402
+from jacobian.providers.external_solver_runtime import (  # noqa: E402
+    cadical_provider_runtime,
+    carcara_provider_runtime,
+    cvc5_provider_runtime,
+    drat_trim_provider_runtime,
+)
 from jacobian.providers.flint_runtime import (  # noqa: E402
     python_flint_hnf_provider_runtime,
     python_flint_provider_runtime,
 )
-from jacobian.runtime import CheckerAuthorityMode, create_runtime  # noqa: E402
+from jacobian.providers.lean_runtime import lean_frontend_provider_runtime  # noqa: E402
+from jacobian.providers.sympy_runtime import (  # noqa: E402
+    sympy_polynomial_normalization_provider_runtime,
+)
 from tools.development_profiles import PROFILE_NAMES, PROFILES  # noqa: E402
 
 _PROFILE_PROVIDERS = {name: selected.providers for name, selected in PROFILES.items()}
 
 
-def _catalog_digest(catalog: OperationCatalog) -> str:
+def _catalog_digest(catalog: OperationCatalogSnapshot) -> str:
     payload = {
         "catalog_version": catalog.catalog_version,
         "operations": [
-            descriptor.model_dump(mode="json")
-            for descriptor in catalog.operations
+            descriptor.model_dump(mode="json") for descriptor in catalog.operations
         ],
     }
     return f"sha256:{hashlib.sha256(canonicalize_json(payload)).hexdigest()}"
@@ -90,46 +103,20 @@ def _repository_version(repo: Path) -> str:
     return result.stdout.decode("utf-8", errors="strict").strip()
 
 
-def _provider_report(runtime: Any) -> dict[str, dict[str, Any]]:
-    portfolio = runtime.portfolio
-    fields = {
-        "cadical": "cadical_runtime",
-        "carcara": "carcara_runtime",
-        "cvc5": "cvc5_runtime",
-        "drat-trim": "drat_trim_runtime",
-        "sympy": "sympy_polynomial_normalization_runtime",
-        "lean": "lean_runtime",
-    }
-    resolvers = {
+def _provider_report() -> dict[str, dict[str, Any]]:
+    resolvers: dict[str, Callable[[], Any]] = {
+        "cadical": cadical_provider_runtime,
+        "carcara": carcara_provider_runtime,
+        "cvc5": cvc5_provider_runtime,
+        "drat-trim": drat_trim_provider_runtime,
+        "sympy": sympy_polynomial_normalization_provider_runtime,
+        "lean": lean_frontend_provider_runtime,
         "python-flint": python_flint_provider_runtime,
         "python-flint-hnf": python_flint_hnf_provider_runtime,
     }
     report: dict[str, dict[str, Any]] = {}
-    for name, field in fields.items():
-        provider_runtime = getattr(portfolio, field)
-        if provider_runtime is None:
-            report[name] = {
-                "availability": "UNAVAILABLE",
-                "provider": None,
-                "version": None,
-                "digest": None,
-                "diagnostic": "provider runtime was not resolved",
-            }
-            continue
-        report[name] = {
-            "availability": provider_runtime.availability.value,
-            "provider": provider_runtime.provider,
-            "version": provider_runtime.version,
-            "digest": provider_runtime.digest,
-            "digest_kind": (
-                provider_runtime.digest_kind.value
-                if provider_runtime.digest_kind is not None
-                else None
-            ),
-            "diagnostic": provider_runtime.diagnostic,
-        }
     for name, resolve in resolvers.items():
-        provider_runtime = resolve(refresh=True)
+        provider_runtime = resolve()
         report[name] = {
             "availability": provider_runtime.availability.value,
             "provider": provider_runtime.provider,
@@ -204,23 +191,15 @@ def inspect_installation(
             state_health=state_health,
         )
 
-    state_dir.mkdir(parents=True, exist_ok=True)
-    with create_runtime(
-        state_dir,
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-    ) as runtime:
-        catalog = runtime.core.operations.catalog()
-        providers = _provider_report(runtime)
-        digest = _catalog_digest(catalog)
-        diagnostics = [
-            {
-                "code": item.code,
-                "component_id": item.component_id,
-                "stage": item.stage,
-                "message": item.message,
-            }
-            for item in runtime.portfolio.portfolio_diagnostics
-        ]
+    compiled_catalog = CompiledOperationCatalog(
+        state_dir / "metadata.sqlite3",
+        OperationPolicy(),
+        expected_package_version=jacobian.__version__,
+    )
+    catalog = compiled_catalog.snapshot()
+    providers = _provider_report()
+    digest = _catalog_digest(catalog)
+    diagnostics = list(compiled_catalog.header.diagnostics)
 
     missing = [
         provider
@@ -273,7 +252,7 @@ def inspect_installation(
         "policy_digest": catalog.policy_digest,
         "providers": providers,
         "missing_profile_providers": missing,
-        "portfolio_diagnostics": diagnostics,
+        "catalog_diagnostics": diagnostics,
         "state_health": state_health.as_dict(),
         "checks": checks,
     }
@@ -321,7 +300,7 @@ def _state_incompatible_report(
         "policy_digest": None,
         "providers": {},
         "missing_profile_providers": [],
-        "portfolio_diagnostics": [],
+        "catalog_diagnostics": [],
         "state_health": state_health.as_dict(),
         "checks": {
             "git_clean": not dirty,

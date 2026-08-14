@@ -33,7 +33,7 @@ from jacobian.adapters.mcp.tooling import MCPBlockingWorkerRegistry
 from jacobian.operation_catalog import OperationCatalog
 from jacobian.operation_service import OperationPolicy
 from jacobian.registry import CheckerRegistry
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.execution import create_execution_runtime
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.storage.repository import ArtifactRepository
@@ -146,7 +146,7 @@ class TenantRuntimeRouter:
         max_tenant_runtimes: int = DEFAULT_MAX_TENANT_RUNTIMES,
         idle_timeout_seconds: float = DEFAULT_TENANT_IDLE_TIMEOUT_SECONDS,
         clock: Callable[[], float] = time.monotonic,
-        runtime_factory: Callable[..., JacobianRuntime] = create_runtime,
+        runtime_factory: Callable[..., JacobianRuntime],
     ) -> None:
         if max_tenant_runtimes < 1:
             raise ValueError("max_tenant_runtimes must be positive")

@@ -16,6 +16,7 @@ from jacobian.adapters.mcp.remote import (
 )
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.storage.errors import ArtifactNotFoundError
+from tests.support.selected_runtime import create_selected_runtime
 
 
 def test_tenant_router_isolates_artifact_stores(tmp_path: Path) -> None:
@@ -23,6 +24,7 @@ def test_tenant_router_isolates_artifact_stores(tmp_path: Path) -> None:
         tmp_path,
         checker_authority=CheckerAuthorityMode.NONE,
         max_tenant_runtimes=2,
+        runtime_factory=create_selected_runtime,
     )
     alpha = router.runtime_for("alpha")
     beta = router.runtime_for("beta")
@@ -463,12 +465,14 @@ def test_anonymous_tenant_namespace_is_fixed_by_the_operator(tmp_path: Path) -> 
         checker_authority=CheckerAuthorityMode.NONE,
         allow_anonymous=True,
         anonymous_tenant_id="test-endpoint-a",
+        runtime_factory=create_selected_runtime,
     )
     second = TenantRuntimeRouter(
         tmp_path,
         checker_authority=CheckerAuthorityMode.NONE,
         allow_anonymous=True,
         anonymous_tenant_id="test-endpoint-b",
+        runtime_factory=create_selected_runtime,
     )
 
     first_runtime = first.runtime_for(None)
@@ -482,4 +486,5 @@ def test_anonymous_tenant_namespace_is_fixed_by_the_operator(tmp_path: Path) -> 
             checker_authority=CheckerAuthorityMode.NONE,
             allow_anonymous=True,
             anonymous_tenant_id="caller controlled",
+            runtime_factory=create_selected_runtime,
         )

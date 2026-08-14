@@ -50,7 +50,7 @@ def create_selected_runtime(
 
 
 def selected_runtime_opener(*bundles: OperationDeclarations):
-    """Return a ``create_runtime``-shaped opener for the supplied bundles."""
+    """Return a ``create_catalog_build_runtime``-shaped opener for the supplied bundles."""
 
     def opener(
         root: str | Path,

@@ -37,9 +37,9 @@ class BlockProvider(importlib.abc.MetaPathFinder):
 
 sys.meta_path.insert(0, BlockProvider())
 
-from jacobian.runtime import create_runtime
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 
-create_runtime(Path(sys.argv[2]))
+create_catalog_build_runtime(Path(sys.argv[2]))
 """
     completed = subprocess.run(
         [

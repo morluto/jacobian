@@ -50,7 +50,7 @@ def test_domain_module_cannot_import_runtime_constructor(tmp_path: Path) -> None
     _write(
         tmp_path,
         "tests/domain/polynomial/test_runtime.py",
-        "from jacobian.runtime import create_runtime\n",
+        "from tests.support.catalog_build_runtime import create_catalog_build_runtime\n",
     )
 
     assert _ownership_messages(tmp_path) == [
@@ -64,7 +64,7 @@ def test_domain_module_cannot_alias_runtime_import(
     _write(
         tmp_path,
         "tests/domain/polynomial/test_runtime.py",
-        "from jacobian.runtime import create_runtime as open_everything\n",
+        "from tests.support.catalog_build_runtime import create_catalog_build_runtime as open_everything\n",
     )
 
     assert _ownership_messages(tmp_path) == [
@@ -84,7 +84,7 @@ def test_domain_module_cannot_import_runtime_as_a_module(tmp_path: Path) -> None
     ]
 
 
-def test_unrelated_create_runtime_call_is_accepted(tmp_path: Path) -> None:
+def test_unrelated_runtime_factory_call_is_accepted(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/domain/polynomial/test_factory.py",
@@ -122,7 +122,7 @@ def test_parent_fixture_cannot_import_jacobian_runtime(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/conftest.py",
-        "from jacobian.runtime import create_runtime\n",
+        "from tests.support.catalog_build_runtime import create_catalog_build_runtime\n",
     )
 
     assert any(
@@ -160,7 +160,7 @@ def test_discarded_complete_runtime_fixture_is_rejected(tmp_path: Path) -> None:
         "tests/boundary/providers/lean/startup/test_discard.py",
         "def test_hydration(authorized_complete_runtime, tmp_path):\n"
         "    _ = authorized_complete_runtime\n"
-        "    create_runtime(tmp_path)\n",
+        "    create_catalog_build_runtime(tmp_path)\n",
     )
 
     assert _ownership_messages(tmp_path) == [

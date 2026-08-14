@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.provider_lean import (
     PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
@@ -13,7 +14,7 @@ from tests.support.provider_lean import (
 from jacobian.contracts.operations import (
     OperationRequest,
 )
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
 
 pytestmark = [
     pytest.mark.skipif(
@@ -24,7 +25,7 @@ pytestmark = [
 
 
 def test_apply_tactic_exposes_child_goals_and_replay_source(tmp_path: Path) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
@@ -64,7 +65,7 @@ def test_apply_tactic_exposes_child_goals_and_replay_source(tmp_path: Path) -> N
 def test_apply_tactic_returns_structured_failure_without_conclusion(
     tmp_path: Path,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
@@ -93,7 +94,7 @@ def test_apply_tactic_returns_structured_failure_without_conclusion(
     reason=PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
 )
 def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
@@ -142,7 +143,7 @@ def test_retrieve_premises_returns_exact_mathlib_suggestion(tmp_path: Path) -> N
 def test_runtime_can_ablate_lean_operations_without_removing_checker(
     tmp_path: Path,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
         operation_exclusions=frozenset(

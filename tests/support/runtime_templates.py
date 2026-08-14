@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.state import (
     publish_template,
     quiesce_sqlite_template,
@@ -47,7 +48,7 @@ def build_complete_portfolio_template(
     )
 
     def build(staging: Path) -> None:
-        runtime = create_runtime(staging)
+        runtime = create_catalog_build_runtime(staging)
         runtime.close()
         quiesce_sqlite_template(staging)
 
@@ -67,7 +68,7 @@ def build_authorized_portfolio_template(
     )
 
     def build(staging: Path) -> None:
-        runtime = create_runtime(
+        runtime = create_catalog_build_runtime(
             staging,
             checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
         )

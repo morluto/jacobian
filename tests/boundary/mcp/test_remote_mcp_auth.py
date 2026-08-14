@@ -49,7 +49,13 @@ def test_remote_configuration_errors_name_the_rule_and_recovery(
     ):
         StaticTokenGrant(tenant_id="bad subject", token="a" * 32)
 
-    router = TenantRuntimeRouter(tmp_path, checker_authority=CheckerAuthorityMode.NONE)
+    router = TenantRuntimeRouter(
+        tmp_path,
+        checker_authority=CheckerAuthorityMode.NONE,
+        runtime_factory=lambda *_args, **_kwargs: pytest.fail(
+            "authentication must precede runtime construction"
+        ),
+    )
     with pytest.raises(
         PermissionError,
         match="Authenticate with a configured bearer token and retry",

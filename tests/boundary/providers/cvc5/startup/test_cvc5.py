@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.operations import (
@@ -19,7 +20,6 @@ from jacobian.process_policy import ProcessRequest, ProcessResult, ProcessTermin
 from jacobian.provider_measurements import measure_provider
 from jacobian.provider_runtime import ProviderRuntimeError
 from jacobian.providers.external_solver_runtime import cvc5_provider_runtime
-from jacobian.runtime import create_runtime
 from jacobian.sat_smt.cvc5 import install_cvc5_operation
 from jacobian.sat_smt.smt import SmtArtifactError
 
@@ -316,4 +316,4 @@ def test_runtime_rejects_a_base_installation_without_cvc5(
         ProviderRuntimeError,
         match="required Python providers are unavailable: cvc5",
     ):
-        create_runtime(tmp_path)
+        create_catalog_build_runtime(tmp_path)

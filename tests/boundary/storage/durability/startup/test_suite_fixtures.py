@@ -5,9 +5,10 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.state import publish_template, quiesce_sqlite_template
 
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import RuntimeOptions
 from jacobian.storage.repository import ArtifactRepository
@@ -125,7 +126,7 @@ def test_complete_portfolio_template_is_quiescent_and_copyable(
         destination,
         descriptor_uri=_polynomial_expression_schema_uri(complete_portfolio_template),
     )
-    with create_runtime(
+    with create_catalog_build_runtime(
         destination, checker_authority=CheckerAuthorityMode.NONE
     ) as runtime:
         assert runtime.core.operations.catalog().operations

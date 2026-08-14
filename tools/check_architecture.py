@@ -633,13 +633,10 @@ def _legacy_adapter_mode_violations(
             node.lineno,
         )
         for node in ast.walk(tree)
-        if (
-            isinstance(node, ast.Name) and node.id in _LEGACY_ADAPTER_MODE_NAMES
-        ) or (
+        if (isinstance(node, ast.Name) and node.id in _LEGACY_ADAPTER_MODE_NAMES)
+        or (
             isinstance(node, ast.ImportFrom)
-            and any(
-                alias.name in _LEGACY_ADAPTER_MODE_NAMES for alias in node.names
-            )
+            and any(alias.name in _LEGACY_ADAPTER_MODE_NAMES for alias in node.names)
         )
     )
 
@@ -1527,14 +1524,17 @@ _EXPENSIVE_RUNTIME_FIXTURES = frozenset(
 )
 
 
-def _calls_create_runtime(node: ast.AST) -> bool:
+def _calls_catalog_build_runtime(node: ast.AST) -> bool:
     for child in ast.walk(node):
         if not isinstance(child, ast.Call):
             continue
         func = child.func
-        if isinstance(func, ast.Name) and func.id == "create_runtime":
+        if isinstance(func, ast.Name) and func.id == "create_catalog_build_runtime":
             return True
-        if isinstance(func, ast.Attribute) and func.attr == "create_runtime":
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "create_catalog_build_runtime"
+        ):
             return True
     return False
 
@@ -1563,7 +1563,7 @@ _HISTORICAL_TEST_BUCKET_WORDS = frozenset(
     {"frontier", "migration", "regression", "release"}
 )
 _COMPOSITION_OWNERS = frozenset(
-    {"authority", "cli", "interoperability", "portfolio", "runtime"}
+    {"authority", "catalog", "cli", "interoperability", "runtime"}
 )
 
 
@@ -1581,6 +1581,8 @@ def _imports_jacobian_runtime(tree: ast.AST) -> bool:
             if any(alias.name == "jacobian.runtime" for alias in node.names):
                 return True
         elif isinstance(node, ast.ImportFrom):
+            if node.module == "tests.support.catalog_build_runtime":
+                return True
             if node.module == "jacobian.runtime":
                 return True
             if node.module == "jacobian" and any(
@@ -1598,7 +1600,7 @@ def _discarded_runtime_setup_violations(
         if not isinstance(node, ast.FunctionDef) or not node.name.startswith("test_"):
             continue
         discarded = _discarded_expensive_runtime_fixtures(node)
-        if discarded and _calls_create_runtime(node):
+        if discarded and _calls_catalog_build_runtime(node):
             names = ", ".join(sorted(discarded))
             violations.append(
                 Violation(

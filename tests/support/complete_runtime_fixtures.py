@@ -12,8 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.model import JacobianRuntime
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.runtime_templates import (
     build_authorized_portfolio_template,
     build_complete_portfolio_template,
@@ -26,7 +27,7 @@ def _open_runtime(
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
 ) -> Iterator[JacobianRuntime]:
-    runtime = create_runtime(state, checker_authority=checker_authority)
+    runtime = create_catalog_build_runtime(state, checker_authority=checker_authority)
     try:
         yield runtime
     finally:

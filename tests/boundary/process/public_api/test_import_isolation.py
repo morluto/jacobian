@@ -48,9 +48,9 @@ def test_runtime_assembly_does_not_import_packaged_backends(tmp_path: Path) -> N
     script = """
 import sys
 from pathlib import Path
-from jacobian.runtime import create_runtime
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 
-runtime = create_runtime(Path(sys.argv[1]))
+runtime = create_catalog_build_runtime(Path(sys.argv[1]))
 try:
     forbidden = {"networkx", "sympy", "flint", "z3", "cvc5"}
     imported = sorted(forbidden.intersection(sys.modules))

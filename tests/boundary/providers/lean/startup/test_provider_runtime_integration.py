@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.state import copy_template
 
 from jacobian.contracts.operations import (
@@ -12,7 +13,7 @@ from jacobian.contracts.operations import (
     ProviderObservation,
 )
 from jacobian.provider_measurements import _cold_install_spec
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
@@ -34,7 +35,7 @@ def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
         lambda **_kwargs: unavailable,
     )
 
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         state, checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING
     )
     try:
@@ -71,7 +72,9 @@ def test_unhealthy_lean_frontend_is_absent_from_catalog(
         lambda: unavailable,
     )
 
-    runtime = create_runtime(tmp_path, checker_authority=CheckerAuthorityMode.NONE)
+    runtime = create_catalog_build_runtime(
+        tmp_path, checker_authority=CheckerAuthorityMode.NONE
+    )
     try:
         operation_ids = {
             item.operation_id for item in runtime.core.operations.catalog().operations

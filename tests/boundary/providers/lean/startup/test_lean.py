@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.provider_lean import (
     PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
     PINNED_MATHLIB_RUNTIME_UNAVAILABLE_REASON,
@@ -34,7 +35,8 @@ from jacobian.lean_frontend.declarations import (
     LeanDeclarationBackendError,
     LeanSubprocessDeclarationBackend,
 )
-from jacobian.runtime import CheckerAuthorityMode, create_runtime
+from jacobian.operator_lifecycle import initialize_state
+from jacobian.runtime import CheckerAuthorityMode
 
 pytestmark = [
     pytest.mark.skipif(
@@ -52,10 +54,10 @@ def test_core_declaration_catalog_matches_a_fresh_scan_and_detects_tampering(
     fresh_root = tmp_path / "fresh"
     copy_template(authorized_portfolio_template, indexed_root)
     copy_template(authorized_portfolio_template, fresh_root)
-    indexed_runtime = create_runtime(
+    indexed_runtime = create_catalog_build_runtime(
         indexed_root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
-    fresh_runtime = create_runtime(
+    fresh_runtime = create_catalog_build_runtime(
         fresh_root, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     indexed = indexed_runtime.catalog_build_resources.lean_declarations
@@ -100,7 +102,7 @@ def test_core_declaration_catalog_matches_a_fresh_scan_and_detects_tampering(
 
 
 def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
 
@@ -137,7 +139,7 @@ def test_core_dependency_graph_is_bounded_and_materialized(tmp_path: Path) -> No
 def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
     tmp_path: Path,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -195,7 +197,7 @@ def test_mathlib_discovery_composes_with_bound_sqrt_two_verification(
 def test_core_lean_induction_proof_creates_bound_verification_record(
     tmp_path: Path,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -247,7 +249,7 @@ def test_core_lean_induction_proof_creates_bound_verification_record(
 
 
 def test_core_lean_checker_binds_the_measured_runtime(tmp_path: Path) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -275,7 +277,7 @@ def test_core_lean_accepts_single_expression_witness_forms(
     statement: str,
     proof: str,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -289,6 +291,8 @@ def test_core_lean_accepts_single_expression_witness_forms(
 
 
 def test_core_lean_check_runs_through_operation_mcp_surface(tmp_path: Path) -> None:
+    initialize_state(tmp_path)
+
     async def scenario() -> None:
         from mcp import Client
 
@@ -348,7 +352,7 @@ def test_core_lean_rejects_untrusted_or_invalid_proofs(
     tmp_path: Path,
     proof: str,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -373,7 +377,7 @@ def test_lean_reuses_only_an_exact_active_checker_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -421,7 +425,7 @@ def test_lean_cache_never_reuses_a_rejected_checker_input(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -478,7 +482,7 @@ def test_lean_cache_does_not_reuse_a_revoked_checker_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None
@@ -519,7 +523,7 @@ def test_mathlib_warmup_starts_only_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = create_runtime(
+    runtime = create_catalog_build_runtime(
         tmp_path, checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED
     )
     assert runtime.catalog_build_resources.lean is not None

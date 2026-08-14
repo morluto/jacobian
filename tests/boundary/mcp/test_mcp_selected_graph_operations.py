@@ -40,6 +40,19 @@ def test_graph_resource_operations_do_not_assemble_the_portfolio(
             assert constructed.structured_content["execution"]["status"] == "COMPLETED"
             graph_uri = constructed.structured_content["output"]["graph_uri"]
 
+            composed = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.construct.compose",
+                    "payload": {
+                        "operation": "COMPLEMENT",
+                        "left_graph_uri": graph_uri,
+                    },
+                },
+            )
+            assert composed.structured_content is not None
+            assert composed.structured_content["execution"]["status"] == "COMPLETED"
+
             properties = await client.call_tool(
                 "math.run",
                 {

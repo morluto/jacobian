@@ -25,6 +25,8 @@ _SELECTED_RESOURCE_OPERATIONS = frozenset(
         "graph.construct.explicit",
         "graph.search.atlas",
         "graph.compute.properties",
+        "graph.construct.compose",
+        "graph.enumerate.nonisomorphic",
         "graph.realize.degree_sequence",
         "graph.compute.neighborhood_independence",
         "graph.degree_sequence.verify",

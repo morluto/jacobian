@@ -180,6 +180,8 @@ def bind_selected_graph_operation(
         "graph.construct.explicit",
         "graph.search.atlas",
         "graph.compute.properties",
+        "graph.construct.compose",
+        "graph.enumerate.nonisomorphic",
         "graph.realize.degree_sequence",
         "graph.compute.neighborhood_independence",
         "graph.degree_sequence.verify",
@@ -187,6 +189,24 @@ def bind_selected_graph_operation(
     }:
         return None
     resources = register_graph_resources(store, schemas)
+    if operation_id in {
+        "graph.construct.compose",
+        "graph.enumerate.nonisomorphic",
+    }:
+        from jacobian.graphs.composition import install_graph_composition_operations
+
+        composition_adapters, _installation = install_graph_composition_operations(
+            store,
+            schemas,
+            artifacts,
+            semantics_uri=resources.semantics_uri,
+            graph_schema_uri=resources.graph_schema_uri,
+        )
+        return next(
+            adapter
+            for adapter in composition_adapters
+            if adapter.descriptor.operation_id == operation_id
+        )
     if operation_id in {
         "graph.realize.degree_sequence",
         "graph.degree_sequence.verify",

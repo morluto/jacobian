@@ -181,9 +181,12 @@ VPS must preserve them. The maintained authenticated unit uses
    `/etc/jacobian-mcp` owned by root with mode `0700` and its token file at mode
    `0600`. Rebuildable `cache/lean-declarations` data may be omitted.
 6. Rerun the same installer command without `--skip-smoke`. Its candidate-state
-   preflight must report every selected tenant as `MISSING`, `COMPATIBLE`, or a
-   supported `MIGRATION_PENDING` state before activation. Do not bypass an
-   `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`, or `UNREADABLE` result.
+   preflight reads the token mapping while privileged, drops permanently to the
+   `jacobian` service identity, and then checks every selected tenant. It must
+   report `MISSING`, `COMPATIBLE`, or a supported `MIGRATION_PENDING` state
+   before activation. Do not bypass an `UNSUPPORTED`, `INCOMPATIBLE`, `CORRUPT`,
+   or `UNREADABLE` result; an access failure means destination ownership or mode
+   restoration is incomplete.
 7. Verify `deployment://identity`, the two-tool surface, catalog policy, required
    capabilities, and any provider-specific smoke before switching DNS or client
    configuration. Keep the source VPS and its unchanged state available until

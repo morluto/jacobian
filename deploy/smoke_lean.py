@@ -12,7 +12,11 @@ import httpx2
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
-from jacobian._deployment_smoke import TransientSmokeError, exit_for_smoke_failure
+from jacobian._deployment_smoke import (
+    TransientSmokeError,
+    exit_for_smoke_failure,
+    raise_for_http_error,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -109,6 +113,7 @@ async def inspect(*, url: str, timeout_seconds: float) -> dict[str, Any]:
     async with (
         httpx2.AsyncClient(
             headers=headers,
+            event_hooks={"response": [raise_for_http_error]},
             trust_env=False,
             timeout=timeout_seconds,
         ) as http,

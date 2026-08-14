@@ -776,6 +776,7 @@ else
 fi
 "${RELEASE_DIR}/.venv/bin/python" \
     "${RELEASE_DIR}/deploy/preflight_state.py" \
+    --run-as-user jacobian \
     "${STATE_PREFLIGHT_ARGS[@]}" \
     || die "configured tenant state is incompatible with revision ${REVISION}"
 

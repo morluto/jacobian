@@ -355,6 +355,7 @@ def test_candidate_state_is_checked_before_rollback_or_activation_is_armed() -> 
     current_link = source.index('ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}.new"')
 
     assert state_preflight < rollback_snapshot < rollback_armed < current_link
+    assert "--run-as-user jacobian" in source
 
 
 def test_dry_run_validates_host_tools_and_disk_before_reporting_a_plan() -> None:

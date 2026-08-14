@@ -8,10 +8,15 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx2
 import pytest
-from deploy.preflight_state import inspect_selected_state
+from deploy.preflight_state import (
+    _drop_privileges,
+    _require_probe_access,
+    inspect_selected_state,
+)
 from deploy.preflight_state import main as preflight_main
 from deploy.release_retention import prune_releases
 
@@ -20,6 +25,7 @@ from jacobian._deployment_smoke import (
     TransientSmokeError,
     exit_for_smoke_failure,
     is_transient_transport_failure,
+    raise_for_http_error,
 )
 from jacobian.storage.repository import ArtifactRepository
 
@@ -109,6 +115,58 @@ def test_state_preflight_cli_does_not_print_bearer_tokens(
     assert token not in output.err
 
 
+def test_state_preflight_drops_to_the_service_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, object]] = []
+    account = SimpleNamespace(pw_uid=1234, pw_gid=5678)
+    monkeypatch.setattr("deploy.preflight_state.pwd.getpwnam", lambda _name: account)
+    monkeypatch.setattr("deploy.preflight_state.os.geteuid", lambda: 0)
+    monkeypatch.setattr(
+        "deploy.preflight_state.os.initgroups",
+        lambda name, gid: calls.append(("initgroups", (name, gid))),
+    )
+    monkeypatch.setattr(
+        "deploy.preflight_state.os.setgid",
+        lambda gid: calls.append(("setgid", gid)),
+    )
+    monkeypatch.setattr(
+        "deploy.preflight_state.os.setuid",
+        lambda uid: calls.append(("setuid", uid)),
+    )
+
+    _drop_privileges("jacobian")
+
+    assert calls == [
+        ("initgroups", ("jacobian", 5678)),
+        ("setgid", 5678),
+        ("setuid", 1234),
+    ]
+
+
+def test_state_preflight_rejects_a_tenant_database_the_service_cannot_stat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = "unreadable-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    state.mkdir(parents=True)
+    database = state / "metadata.sqlite3"
+    database.touch()
+    original_stat = Path.stat
+
+    def guarded_stat(path: Path, *args: object, **kwargs: object) -> os.stat_result:
+        if path == database:
+            raise PermissionError("service account cannot traverse copied state")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", guarded_stat)
+
+    with pytest.raises(PermissionError, match="tenant database"):
+        _require_probe_access(tmp_path, (tenant_id,))
+
+
 def test_release_retention_keeps_active_and_explicit_previous_release(
     tmp_path: Path,
 ) -> None:
@@ -167,6 +225,30 @@ def test_smoke_retry_classification_is_transport_only() -> None:
     assert is_transient_transport_failure(TransientSmokeError("cold worker")) is True
     assert is_transient_transport_failure(deterministic) is False
     assert is_transient_transport_failure(RuntimeError("catalog mismatch")) is False
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected"),
+    ((401, False), (403, False), (500, False), (502, True), (503, True), (504, True)),
+)
+def test_smoke_retry_classification_preserves_http_status(
+    status_code: int, expected: bool
+) -> None:
+    request = httpx2.Request("POST", "https://math.example.org/mcp")
+    response = httpx2.Response(status_code, request=request)
+    with pytest.raises(httpx2.HTTPStatusError) as exc_info:
+        response.raise_for_status()
+
+    assert is_transient_transport_failure(exc_info.value) is expected
+
+
+@pytest.mark.anyio
+async def test_smoke_response_hook_surfaces_http_status() -> None:
+    request = httpx2.Request("POST", "https://math.example.org/mcp")
+    response = httpx2.Response(503, request=request)
+
+    with pytest.raises(httpx2.HTTPStatusError):
+        await raise_for_http_error(response)
 
 
 @pytest.mark.parametrize(

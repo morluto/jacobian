@@ -10,7 +10,7 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.combinatorics import build_combinatorics_bundle
+from jacobian.domains.combinatorics import combinatorics_operations
 
 
 def _q(value: int) -> dict[str, str]:
@@ -20,7 +20,7 @@ def _q(value: int) -> dict[str, str]:
 @pytest.fixture
 def combinatorics_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
-        tmp_path / "state", build_combinatorics_bundle()
+        tmp_path / "state", combinatorics_operations()
     ) as services:
         yield services
 

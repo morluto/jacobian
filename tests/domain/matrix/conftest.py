@@ -6,7 +6,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
 
 
 @pytest.fixture(scope="module")
@@ -17,6 +17,6 @@ def matrix_services(
 
     with open_exact_domain_services(
         tmp_path_factory.mktemp("matrix-domain") / "state",
-        build_matrix_bundle(),
+        matrix_operations(),
     ) as services:
         yield services

@@ -1,8 +1,10 @@
 """Bounded graph-optimization operations."""
 
-from jacobian.domains.graph_optimization.bundle import build_graph_optimization_bundle
-from jacobian.domains.graph_optimization.invariant_bundle import (
-    build_graph_invariant_bundle,
+from jacobian.domains.graph_optimization.domain_declarations import (
+    graph_optimization_operations,
+)
+from jacobian.domains.graph_optimization.invariant_declarations import (
+    graph_invariant_operations,
 )
 
-__all__ = ["build_graph_invariant_bundle", "build_graph_optimization_bundle"]
+__all__ = ["graph_invariant_operations", "graph_optimization_operations"]

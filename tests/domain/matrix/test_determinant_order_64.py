@@ -9,7 +9,7 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
 
 
 def _q(value: int) -> dict[str, str]:
@@ -39,7 +39,7 @@ def _truncated_legendre_matrix(prime: int) -> dict[str, object]:
 @pytest.fixture
 def matrix_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
-        tmp_path / "state", build_matrix_bundle()
+        tmp_path / "state", matrix_operations()
     ) as services:
         yield services
 

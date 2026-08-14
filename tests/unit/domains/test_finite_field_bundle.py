@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.domains.finite_fields import build_finite_field_bundle
+from jacobian.domains.finite_fields import finite_field_operations
 from jacobian.domains.finite_fields.contracts import (
     DirectionRankLedgerRequest,
     FiniteMapTableRequest,
@@ -34,7 +34,7 @@ from jacobian.operations import NonConclusion
 
 
 def test_bundle_declares_atomic_port_bound_operations() -> None:
-    bundle = build_finite_field_bundle()
+    bundle = finite_field_operations()
 
     assert tuple(operation.operation_id for operation in bundle) == (
         "finite_field.projective_line.enumerate",
@@ -88,7 +88,7 @@ def test_bundle_declares_atomic_port_bound_operations() -> None:
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:
-    operation = build_finite_field_bundle()[0]
+    operation = finite_field_operations()[0]
     request = ProjectiveLineRequest(
         presentation=FiniteFieldPresentation(
             characteristic=2,
@@ -104,7 +104,7 @@ def test_projective_enumeration_refuses_large_output_before_allocation() -> None
 
 
 def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
-    operation = build_finite_field_bundle()[5]
+    operation = finite_field_operations()[5]
     presentation = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
     one = element(presentation, (1,) + (0,) * 7)
     request = FiniteMapTableRequest(
@@ -120,7 +120,7 @@ def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
 
 
 def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
-    operation = build_finite_field_bundle()[3]
+    operation = finite_field_operations()[3]
     presentation = finite_field(2, (1, 1, 1))
     row_axis = Axis(name="rows", labels=("r0", "r1"))
     column_axis = Axis(

@@ -1,5 +1,5 @@
 """Exact finite integer-sequence operations."""
 
-from jacobian.domains.sequences.bundle import build_sequence_bundle
+from jacobian.domains.sequences.domain_declarations import sequence_operations
 
-__all__ = ["build_sequence_bundle"]
+__all__ = ["sequence_operations"]

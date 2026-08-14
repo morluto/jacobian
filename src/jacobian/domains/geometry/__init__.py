@@ -1,5 +1,5 @@
 """Exact rational planar-geometry operations."""
 
-from jacobian.domains.geometry.bundle import build_geometry_bundle
+from jacobian.domains.geometry.domain_declarations import geometry_operations
 
-__all__ = ["build_geometry_bundle"]
+__all__ = ["geometry_operations"]

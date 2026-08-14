@@ -22,7 +22,7 @@ def create_selected_runtime(
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
     **_kwargs: object,
 ) -> JacobianRuntime:
-    """Compose one runtime that installs only the supplied domain bundles."""
+    """Compose one runtime that binds only the supplied operations."""
 
     options = RuntimeOptions(checker_authority=checker_authority)
     core = bootstrap_services(root, options)

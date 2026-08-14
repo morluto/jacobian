@@ -7,7 +7,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.domains.certified_snf import build_certified_snf_bundle
+from jacobian.domains.certified_snf import certified_snf_operations
 
 
 @pytest.fixture
@@ -16,6 +16,6 @@ def certified_snf_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
     with open_exact_domain_services(
         tmp_path / "state",
-        build_certified_snf_bundle(),
+        certified_snf_operations(),
     ) as services:
         yield services

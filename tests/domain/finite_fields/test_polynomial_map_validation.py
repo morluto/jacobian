@@ -5,7 +5,7 @@ from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.finite_fields import build_finite_field_bundle
+from jacobian.domains.finite_fields import finite_field_operations
 from jacobian.math.finite_fields import (
     FiniteMapTable,
     element,
@@ -44,7 +44,7 @@ def test_installed_consumers_reject_targets_not_produced_by_the_polynomial(
 
     with open_exact_domain_services(
         tmp_path,
-        build_finite_field_bundle(),
+        finite_field_operations(),
     ) as services:
         results = tuple(
             services.core.operations.invoke(
@@ -81,7 +81,7 @@ def test_valid_tables_report_operation_specific_nonconclusions(tmp_path: Path) -
 
     with open_exact_domain_services(
         tmp_path,
-        build_finite_field_bundle(),
+        finite_field_operations(),
     ) as services:
         results = tuple(
             services.core.operations.invoke(

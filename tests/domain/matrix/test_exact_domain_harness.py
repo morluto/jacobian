@@ -7,14 +7,14 @@ from pathlib import Path
 import pytest
 from tests.support.exact_domain import open_exact_domain_services
 
-from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
 from jacobian.runtime.config import CheckerAuthorityMode
 
 
 def test_open_exact_domain_services_installs_bundle_and_verifiers(
     tmp_path: Path,
 ) -> None:
-    bundle = build_matrix_bundle()
+    bundle = matrix_operations()
     with open_exact_domain_services(tmp_path / "state", bundle) as services:
         catalog_ids = {
             item.operation_id
@@ -30,7 +30,7 @@ def test_open_exact_domain_services_respects_absent_authority(
 ) -> None:
     with open_exact_domain_services(
         tmp_path / "state",
-        build_matrix_bundle(),
+        matrix_operations(),
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         catalog_ids = {

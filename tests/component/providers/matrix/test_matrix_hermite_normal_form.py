@@ -11,7 +11,7 @@ from jacobian.contracts.matrices import IntegerMatrix
 from jacobian.contracts.operations import (
     OperationRequest,
 )
-from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
 from jacobian.domains.matrix_lattice.hnf import _parse_hnf_worker_result
 from jacobian.operation_bindings import DurablePublication
 
@@ -30,13 +30,13 @@ def _matrix(entries: list[list[int]]) -> dict[str, object]:
 def hnf_services(tmp_path: Path):
     with open_exact_domain_services(
         tmp_path,
-        build_matrix_bundle(),
+        matrix_operations(),
     ) as services:
         yield services
 
 
 def test_hnf_is_domain_owned_and_explicitly_durable() -> None:
-    bundle = build_matrix_bundle()
+    bundle = matrix_operations()
     operation = next(
         operation
         for operation in bundle

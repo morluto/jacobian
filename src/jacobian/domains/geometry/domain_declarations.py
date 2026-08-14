@@ -1,4 +1,4 @@
-"""Installation bundle for exact rational planar geometry."""
+"""Exact rational planar-geometry operation declarations."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from jacobian.domains.geometry.triangles import TRIANGLE_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_geometry_bundle() -> OperationDeclarations:
+def geometry_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *POINT_OPERATIONS,

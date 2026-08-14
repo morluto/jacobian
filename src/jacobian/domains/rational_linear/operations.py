@@ -68,10 +68,7 @@ def _run(
     | None
 ):
     runtime = python_flint_provider_runtime(refresh=True)
-    if (
-        RUNTIME.availability is not ProviderAvailability.AVAILABLE
-        or runtime != RUNTIME
-    ):
+    if RUNTIME.availability is not ProviderAvailability.AVAILABLE or runtime != RUNTIME:
         return None
     budget = worker_request.request.resource_budget.wall_seconds
     completed = execute_process(

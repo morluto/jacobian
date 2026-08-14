@@ -11,13 +11,13 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.analysis import build_real_analysis_bundle
+from jacobian.domains.analysis import real_analysis_operations
 
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
-        tmp_path / "state", build_real_analysis_bundle()
+        tmp_path / "state", real_analysis_operations()
     ) as services:
         yield services
 

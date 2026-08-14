@@ -8,12 +8,12 @@ if TYPE_CHECKING:
     from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_rational_linear_bundle() -> OperationDeclarations:
-    from jacobian.domains.rational_linear.bundle import (
-        build_rational_linear_bundle as build,
+def rational_linear_operations() -> OperationDeclarations:
+    from jacobian.domains.rational_linear.domain_declarations import (
+        rational_linear_operations as build,
     )
 
     return build()
 
 
-__all__ = ["build_rational_linear_bundle"]
+__all__ = ["rational_linear_operations"]

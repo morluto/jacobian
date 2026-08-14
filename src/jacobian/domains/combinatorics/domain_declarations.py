@@ -1,4 +1,4 @@
-"""Installation bundle for exact combinatorics operations."""
+"""Exact combinatorics operation declarations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from jacobian.domains.combinatorics.recurrence import RECURRENCE_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_combinatorics_bundle() -> OperationDeclarations:
+def combinatorics_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *COUNTING_OPERATIONS,

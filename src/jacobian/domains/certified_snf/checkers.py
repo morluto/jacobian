@@ -6,9 +6,7 @@ from jacobian.contracts.operations import ProviderObservation
 from jacobian.providers import flint_runtime
 
 
-def _certified_snf_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> ProviderObservation:
+def _certified_snf_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.certified_snf_checker_provider_runtime(checker_ids=checker_ids)
 
 

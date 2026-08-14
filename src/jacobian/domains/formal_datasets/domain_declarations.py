@@ -1,4 +1,4 @@
-"""Installation bundle for deterministic formal-dataset materialization."""
+"""Deterministic formal-dataset operation declarations."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from jacobian.operation_declarations import OperationDeclaration, OperationDecla
 from jacobian_checkers.lean4 import LEAN_VERSION
 
 
-def build_formal_dataset_bundle() -> OperationDeclarations:
+def formal_dataset_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         durable_operation(

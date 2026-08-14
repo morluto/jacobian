@@ -1,5 +1,7 @@
-"""Exact rational projective-geometry operation bundle."""
+"""Exact rational projective-geometry operations."""
 
-from jacobian.domains.projective_geometry.bundle import build_projective_geometry_bundle
+from jacobian.domains.projective_geometry.domain_declarations import (
+    projective_geometry_operations,
+)
 
-__all__ = ["build_projective_geometry_bundle"]
+__all__ = ["projective_geometry_operations"]

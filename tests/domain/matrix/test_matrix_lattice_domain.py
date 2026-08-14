@@ -33,9 +33,9 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.matrix_lattice.bundle import build_matrix_bundle
+from jacobian.domains.matrix_lattice.domain_declarations import matrix_operations
 from jacobian.domains.matrix_lattice.lattice import reduce_lattice_basis
-from jacobian.domains.matrix_lattice.lattice_bundle import build_lattice_bundle
+from jacobian.domains.matrix_lattice.lattice_declarations import lattice_operations
 from jacobian.domains.matrix_lattice.operations import (
     compute_smith_normal_form,
     matrix_operation,
@@ -47,7 +47,7 @@ from jacobian.process_policy import ProcessResult, ProcessTermination
 @fixture
 def matrix_domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
-        tmp_path, build_matrix_bundle(), build_lattice_bundle()
+        tmp_path, matrix_operations(), lattice_operations()
     ) as services:
         yield services
 

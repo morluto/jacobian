@@ -1,4 +1,4 @@
-"""Installation bundle for exact arithmetic.
+"""Exact arithmetic operation declarations.
 
 The arithmetic domain owns integer absolute value, sign, decimal digit
 sum/count, base expansion, integer nth root, and rational arithmetic/order.
@@ -18,7 +18,7 @@ from jacobian.domains.arithmetic.real_quadratic import (
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_arithmetic_bundle() -> OperationDeclarations:
+def arithmetic_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *INTEGER_OPERATIONS,

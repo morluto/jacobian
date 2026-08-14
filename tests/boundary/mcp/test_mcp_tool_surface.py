@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.domains.number_theory import number_theory_operations
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 MATH_TOOL_NAMES = {"math.find", "math.run"}
@@ -59,7 +59,7 @@ def test_math_tool_surface_is_consistent_across_discovery(tmp_path: Path) -> Non
 
     with open_focused_mcp_server(
         tmp_path,
-        build_number_theory_bundle(),
+        number_theory_operations(),
     ) as server:
         assert server.instructions is not None
         assert "math.find" in server.instructions

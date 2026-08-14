@@ -39,7 +39,7 @@ def _refusal(error: LeanDeclarationBackendError) -> OperationRefusalError:
     )
 
 
-def build_lean_declaration_query_bundle(
+def lean_declaration_query_operations(
     declarations: LeanDeclarationService,
 ) -> OperationDeclarations:
     """Bind search and inspection to one declaration service instance."""
@@ -183,4 +183,4 @@ def build_lean_declaration_query_bundle(
     )
 
 
-__all__ = ["build_lean_declaration_query_bundle"]
+__all__ = ["lean_declaration_query_operations"]

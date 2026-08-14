@@ -10,13 +10,13 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.arithmetic import build_arithmetic_bundle
+from jacobian.domains.arithmetic import arithmetic_operations
 
 
 @pytest.fixture
 def arithmetic_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
-        tmp_path / "state", build_arithmetic_bundle()
+        tmp_path / "state", arithmetic_operations()
     ) as services:
         yield services
 

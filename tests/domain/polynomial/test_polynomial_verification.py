@@ -10,7 +10,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.polynomial import build_polynomial_bundle
+from jacobian.domains.polynomial import polynomial_operations
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import DomainTestServices
@@ -52,7 +52,7 @@ def polynomial_verification_services(tmp_path: Path) -> Iterator[DomainTestServi
 
     with open_exact_domain_services(
         tmp_path / "state",
-        build_polynomial_bundle(),
+        polynomial_operations(),
     ) as services:
         yield services
 

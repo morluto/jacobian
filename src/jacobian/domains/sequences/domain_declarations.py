@@ -1,4 +1,4 @@
-"""Installation bundle for exact finite integer-sequence operations."""
+"""Exact finite integer-sequence operation declarations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from jacobian.domains.sequences.transforms import SEQUENCE_TRANSFORM_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_sequence_bundle() -> OperationDeclarations:
+def sequence_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *SEQUENCE_AGGREGATE_OPERATIONS,

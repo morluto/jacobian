@@ -26,9 +26,7 @@ DERIVED_NUMBER_THEORY_OPERATIONS = (
         compute_floor_square_root,
         "number-theory",
         "square",
-        examples=(
-            example("floor_sqrt_80", "Compute floor(sqrt(80)).", {"n": 80}),
-        ),
+        examples=(example("floor_sqrt_80", "Compute floor(sqrt(80)).", {"n": 80}),),
     ),
     number_theory_operation(
         "number_theory.compute.legendre_symbol",

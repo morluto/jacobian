@@ -11,7 +11,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.geometry import build_geometry_bundle
+from jacobian.domains.geometry import geometry_operations
 from jacobian.runtime.config import CheckerAuthorityMode
 
 ZERO = {"num": "0", "den": "1"}
@@ -31,7 +31,7 @@ def geometry_services(
 
     with open_exact_domain_services(
         tmp_path_factory.mktemp("geometry") / "state",
-        build_geometry_bundle(),
+        geometry_operations(),
     ) as services:
         yield services
 
@@ -41,7 +41,7 @@ def test_geometry_checker_availability_does_not_grant_authority(
 ) -> None:
     with open_exact_domain_services(
         tmp_path_factory.mktemp("geometry-no-authority") / "state",
-        build_geometry_bundle(),
+        geometry_operations(),
         checker_authority=CheckerAuthorityMode.NONE,
     ) as services:
         catalog_ids = {

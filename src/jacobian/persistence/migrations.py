@@ -542,7 +542,7 @@ _OPERATION_CATALOG_SCHEMA_STATEMENTS = (
         descriptor_json BLOB NOT NULL,
         input_schema_json BLOB NOT NULL,
         output_schema_json BLOB NOT NULL,
-        bundle_module TEXT NOT NULL,
+        declaration_module TEXT NOT NULL,
         declaration_digest TEXT NOT NULL,
         PRIMARY KEY (snapshot_revision, operation_id),
         FOREIGN KEY (snapshot_revision)

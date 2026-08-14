@@ -81,7 +81,7 @@ class OperationSearchCard:
 @dataclass(frozen=True, slots=True)
 class CompiledCatalogEntry:
     descriptor: OperationDescriptor
-    bundle_module: str
+    declaration_module: str
     declaration_digest: str
 
 
@@ -154,7 +154,7 @@ class OperationCatalogStore:
                     INSERT INTO operation_catalog_entries(
                         snapshot_revision, operation_id, search_card_json,
                         descriptor_json, input_schema_json, output_schema_json,
-                        bundle_module, declaration_digest
+                        declaration_module, declaration_digest
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
@@ -164,7 +164,7 @@ class OperationCatalogStore:
                         canonicalize_json(descriptor.model_dump(mode="json")),
                         canonicalize_json(descriptor.input_schema),
                         canonicalize_json(descriptor.output_schema),
-                        entry.bundle_module,
+                        entry.declaration_module,
                         entry.declaration_digest,
                     ),
                 )
@@ -228,7 +228,7 @@ class OperationCatalog:
             with self._connect_read_only() as connection:
                 row = connection.execute(
                     """
-                    SELECT operation_id, bundle_module, declaration_digest
+                    SELECT operation_id, declaration_module, declaration_digest
                     FROM operation_catalog_entries
                     WHERE snapshot_revision = ? AND operation_id = ?
                     """,
@@ -242,7 +242,7 @@ class OperationCatalog:
             return None
         return OperationDeclarationRecord(
             operation_id=str(row["operation_id"]),
-            module=str(row["bundle_module"]),
+            module=str(row["declaration_module"]),
             declaration_digest=str(row["declaration_digest"]),
         )
 

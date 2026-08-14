@@ -10,7 +10,7 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.optimization import build_rational_optimization_bundle
+from jacobian.domains.optimization import rational_optimization_operations
 
 
 def _q(num: int, den: int = 1) -> dict[str, str]:
@@ -29,7 +29,7 @@ def _program() -> dict[str, object]:
 @pytest.fixture
 def optimization_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
-        tmp_path / "state", build_rational_optimization_bundle()
+        tmp_path / "state", rational_optimization_operations()
     ) as services:
         yield services
 

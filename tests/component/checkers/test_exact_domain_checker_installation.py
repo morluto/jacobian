@@ -42,18 +42,20 @@ from jacobian.contracts.polynomial_operations import (
 )
 from jacobian.contracts.projective_geometry import ProjectiveLineArrangementRequest
 from jacobian.contracts.results import ContractModel
-from jacobian.domains.graph_optimization.bundle import (
-    build_graph_optimization_bundle,
+from jacobian.domains.graph_optimization.domain_declarations import (
+    graph_optimization_operations,
 )
-from jacobian.domains.graph_optimization.invariant_bundle import (
-    build_graph_invariant_bundle,
+from jacobian.domains.graph_optimization.invariant_declarations import (
+    graph_invariant_operations,
 )
-from jacobian.domains.graph_symmetry.bundle import build_graph_symmetry_bundle
-from jacobian.domains.matrix_lattice.bundle import build_matrix_bundle
-from jacobian.domains.number_theory.bundle import build_number_theory_bundle
-from jacobian.domains.polynomial.bundle import build_polynomial_bundle
-from jacobian.domains.projective_geometry.bundle import (
-    build_projective_geometry_bundle,
+from jacobian.domains.graph_symmetry.domain_declarations import (
+    graph_symmetry_operations,
+)
+from jacobian.domains.matrix_lattice.domain_declarations import matrix_operations
+from jacobian.domains.number_theory.domain_declarations import number_theory_operations
+from jacobian.domains.polynomial.domain_declarations import polynomial_operations
+from jacobian.domains.projective_geometry.domain_declarations import (
+    projective_geometry_operations,
 )
 from jacobian.exact_domain_checkers import (
     install_exact_domain_checkers as _install_exact_domain_checkers,
@@ -102,13 +104,13 @@ def install_exact_domain_checkers(
         "graph_symmetry": "graph_symmetry",
     }
     bundle_builders = {
-        "graph_optimization": build_graph_optimization_bundle,
-        "graph_invariants": build_graph_invariant_bundle,
-        "graph_symmetry": build_graph_symmetry_bundle,
-        "matrix": build_matrix_bundle,
-        "number_theory": build_number_theory_bundle,
-        "polynomial": build_polynomial_bundle,
-        "projective_geometry": build_projective_geometry_bundle,
+        "graph_optimization": graph_optimization_operations,
+        "graph_invariants": graph_invariant_operations,
+        "graph_symmetry": graph_symmetry_operations,
+        "matrix": matrix_operations,
+        "number_theory": number_theory_operations,
+        "polynomial": polynomial_operations,
+        "projective_geometry": projective_geometry_operations,
     }
     bundles = {}
     for name, installation in installed.items():
@@ -123,7 +125,7 @@ def install_exact_domain_checkers(
         bundles[module_name] = (operations, installation, checker_declarations)
     return _install_exact_domain_checkers(
         registry,
-        bundles=bundles,
+        groups=bundles,
         authorize=authorize,
     )
 
@@ -361,7 +363,7 @@ def test_installer_omits_explicitly_optional_replay_when_provider_is_unavailable
 
     installation = _install_exact_domain_checkers(
         CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-        bundles=bundles,
+        groups=bundles,
         authorize=True,
     )
 
@@ -399,7 +401,7 @@ def test_installer_fails_required_replay_when_provider_is_unavailable(
     with pytest.raises(CheckerExecutableChangedError):
         _install_exact_domain_checkers(
             CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-            bundles=bundles,
+            groups=bundles,
             authorize=True,
         )
 
@@ -475,14 +477,14 @@ def _single_matrix_declaration_bundle(
     ],
     str,
 ]:
-    operations = build_matrix_bundle()
+    operations = matrix_operations()
     installed = _installed(
         (declaration.request_model,),
         (declaration.operation_id,),
         character="d",
     )
     return {
-        "jacobian.domains.matrix_lattice.bundle": (
+        "jacobian.domains.matrix_lattice.domain_declarations": (
             operations,
             installed,
             (declaration,),
@@ -496,7 +498,7 @@ def test_installer_consumes_direct_declaration_runtime_and_binds_checker_id(
     declaration = next(
         checker
         for module_name, _operations, checkers in load_builtin_operation_modules()
-        if module_name == "jacobian.domains.matrix_lattice.bundle"
+        if module_name == "jacobian.domains.matrix_lattice.domain_declarations"
         for checker in checkers
     )
     runtime = source_provider_runtime(
@@ -516,7 +518,7 @@ def test_installer_consumes_direct_declaration_runtime_and_binds_checker_id(
 
     installation = _install_exact_domain_checkers(
         CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-        bundles=bundles,
+        groups=bundles,
         authorize=True,
     )
 
@@ -538,7 +540,7 @@ def test_installer_skips_factory_free_compatibility_declaration(
 
     installation = _install_exact_domain_checkers(
         CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-        bundles=bundles,
+        groups=bundles,
         authorize=True,
     )
 
@@ -563,7 +565,7 @@ def test_authority_disabled_does_not_realize_declaration_factory(
 
     installation = _install_exact_domain_checkers(
         CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-        bundles=bundles,
+        groups=bundles,
         authorize=False,
     )
 
@@ -608,7 +610,7 @@ def test_installer_omits_unavailable_declaration_owned_runtime(
 
     installation = _install_exact_domain_checkers(
         CheckerRegistry(ArtifactRepository(tmp_path / "store")),
-        bundles=bundles,
+        groups=bundles,
         authorize=True,
     )
 
@@ -620,5 +622,5 @@ def _matrix_declarations() -> tuple[ExactReplayCheckerDeclaration, ...]:
     return next(
         checkers
         for module_name, _operations, checkers in load_builtin_operation_modules()
-        if module_name == "jacobian.domains.matrix_lattice.bundle"
+        if module_name == "jacobian.domains.matrix_lattice.domain_declarations"
     )

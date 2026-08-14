@@ -11,7 +11,7 @@ import pytest
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.polynomial.bundle import build_polynomial_bundle
+from jacobian.domains.polynomial.domain_declarations import polynomial_operations
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
@@ -20,7 +20,7 @@ from tests.support.services import DomainTestServices
 def polynomial_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
         tmp_path / "state",
-        build_polynomial_bundle(),
+        polynomial_operations(),
     ) as services:
         yield services
 
@@ -119,8 +119,7 @@ def test_graded_jacobian_syzygy_finds_and_verifies_the_first_kernel(
     verifier = next(
         descriptor
         for descriptor in polynomial_services.core.operations.catalog().operations
-        if descriptor.operation_id
-        == "polynomial.jacobian_syzygy.minimum_degree.verify"
+        if descriptor.operation_id == "polynomial.jacobian_syzygy.minimum_degree.verify"
     )
     assert "complete, unmodified producer output.result object" in (
         verifier.description

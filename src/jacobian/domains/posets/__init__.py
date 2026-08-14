@@ -1,5 +1,5 @@
-"""Exact finite-poset operation bundle."""
+"""Exact finite-poset operations."""
 
-from jacobian.domains.posets.bundle import build_finite_poset_bundle
+from jacobian.domains.posets.domain_declarations import finite_poset_operations
 
-__all__ = ["build_finite_poset_bundle"]
+__all__ = ["finite_poset_operations"]

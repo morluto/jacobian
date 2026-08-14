@@ -13,7 +13,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.graph_optimization import build_graph_optimization_bundle
+from jacobian.domains.graph_optimization import graph_optimization_operations
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def graph_optimization_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
     with open_exact_domain_services(
         tmp_path / "state",
-        build_graph_optimization_bundle(),
+        graph_optimization_operations(),
     ) as services:
         yield services
 

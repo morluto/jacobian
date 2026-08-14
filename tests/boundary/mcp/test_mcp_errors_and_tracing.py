@@ -12,7 +12,7 @@ import pytest
 from jacobian.adapters.mcp.context import _public_tool_error
 from jacobian.adapters.mcp.remote import create_remote_server
 from jacobian.adapters.mcp.server import create_server
-from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.domains.number_theory import number_theory_operations
 from jacobian.runtime import CheckerAuthorityMode
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
@@ -28,7 +28,7 @@ def test_mcp_logs_bounded_operation_metrics_without_arguments(
 
         with open_focused_mcp_server(
             tmp_path,
-            build_number_theory_bundle(),
+            number_theory_operations(),
         ) as server:
             async with Client(server, raise_exceptions=True) as client:
                 await client.call_tool(

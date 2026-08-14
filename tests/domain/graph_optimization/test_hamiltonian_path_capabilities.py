@@ -10,13 +10,15 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.graph_optimization.bundle import build_graph_optimization_bundle
+from jacobian.domains.graph_optimization.domain_declarations import (
+    graph_optimization_operations,
+)
 
 
 @pytest.fixture
 def graph_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
-        tmp_path / "state", build_graph_optimization_bundle()
+        tmp_path / "state", graph_optimization_operations()
     ) as services:
         yield services
 

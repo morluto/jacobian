@@ -18,8 +18,8 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
-    build_graph_invariant_bundle,
-    build_graph_optimization_bundle,
+    graph_invariant_operations,
+    graph_optimization_operations,
 )
 
 
@@ -29,8 +29,8 @@ def graph_verification_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
     with open_exact_domain_services(
         tmp_path / "state",
-        build_graph_optimization_bundle(),
-        build_graph_invariant_bundle(),
+        graph_optimization_operations(),
+        graph_invariant_operations(),
     ) as services:
         yield services
 

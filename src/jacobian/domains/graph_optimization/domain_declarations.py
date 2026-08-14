@@ -1,4 +1,4 @@
-"""Installation bundle for bounded graph optimization."""
+"""Bounded graph-optimization operation declarations."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from jacobian.domains.graph_optimization.minimum_spanning_tree import (
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_graph_optimization_bundle() -> OperationDeclarations:
+def graph_optimization_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         CHROMATIC_NUMBER_OPERATION,

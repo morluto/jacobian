@@ -1,4 +1,4 @@
-"""Installation bundle for exact rational polynomial operations."""
+"""Exact rational-polynomial operation declarations."""
 
 from jacobian.domains.polynomial.checkers import POLYNOMIAL_EXACT_REPLAY_CHECKERS
 from jacobian.domains.polynomial.elementary import (
@@ -16,7 +16,7 @@ from jacobian.domains.polynomial.jacobian_syzygy import (
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_polynomial_bundle() -> OperationDeclarations:
+def polynomial_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *POLYNOMIAL_INVARIANT_OPERATIONS,
@@ -28,6 +28,6 @@ def build_polynomial_bundle() -> OperationDeclarations:
     )
 
 
-__all__ = ["build_polynomial_bundle"]
+__all__ = ["polynomial_operations"]
 
 CHECKER_DECLARATIONS = POLYNOMIAL_EXACT_REPLAY_CHECKERS

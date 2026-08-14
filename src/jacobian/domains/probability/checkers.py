@@ -46,9 +46,7 @@ def _mutual_information_checker_runtime(
     )
 
 
-def _probability_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> ProviderObservation:
+def _probability_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.probability_exact_checker_provider_runtime(
         checker_ids=checker_ids
     )

@@ -6,12 +6,12 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.geometry import build_geometry_bundle
+from jacobian.domains.geometry import geometry_operations
 
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
-    with open_domain_services(tmp_path / "state", build_geometry_bundle()) as services:
+    with open_domain_services(tmp_path / "state", geometry_operations()) as services:
         yield services
 
 
@@ -70,7 +70,7 @@ def test_segment_midpoint_example_is_directly_invocable(domain_services) -> None
 def test_geometry_capabilities_have_distinct_ids() -> None:
     ids = [
         operation.operation_id
-        for operation in build_geometry_bundle()
+        for operation in geometry_operations()
     ]
 
     assert ids, "expected geometry operations"

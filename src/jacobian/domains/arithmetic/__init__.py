@@ -1,5 +1,5 @@
 """Exact integer and rational arithmetic operations."""
 
-from jacobian.domains.arithmetic.bundle import build_arithmetic_bundle
+from jacobian.domains.arithmetic.domain_declarations import arithmetic_operations
 
-__all__ = ["build_arithmetic_bundle"]
+__all__ = ["arithmetic_operations"]

@@ -63,9 +63,7 @@ PARTITION_OPERATIONS = (
         bell,
         "combinatorics",
         "partition",
-        examples=(
-            example("bell_5", "Compute the fifth Bell number.", {"n": 5}),
-        ),
+        examples=(example("bell_5", "Compute the fifth Bell number.", {"n": 5}),),
     ),
     combinatorics_operation(
         "combinatorics.compute.partition_number",

@@ -9,9 +9,7 @@ from jacobian.contracts.validated_analysis import RationalLinearProgramRequest
 from jacobian.provider_runtime import source_provider_runtime
 
 
-def _rational_lp_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> ProviderObservation:
+def _rational_lp_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.rational-lp-checker",
         version="1",

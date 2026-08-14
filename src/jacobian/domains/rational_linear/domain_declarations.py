@@ -1,4 +1,4 @@
-"""Installation bundle for domain-owned rational-linear operations."""
+"""Domain-owned rational-linear operation declarations."""
 
 from jacobian.contracts.linear import (
     LinearRationalInconsistencyFindRequest,
@@ -18,7 +18,7 @@ from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration, OperationDeclarations
 
 
-def build_rational_linear_bundle() -> OperationDeclarations:
+def rational_linear_operations() -> OperationDeclarations:
     operations = (
         inline_operation(
             OperationDeclaration(
@@ -63,6 +63,6 @@ def build_rational_linear_bundle() -> OperationDeclarations:
     return operations
 
 
-__all__ = ["build_rational_linear_bundle"]
+__all__ = ["rational_linear_operations"]
 
 CHECKER_DECLARATIONS = RATIONAL_LINEAR_EXACT_REPLAY_CHECKERS

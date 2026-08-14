@@ -6,7 +6,7 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.arithmetic import build_arithmetic_bundle
+from jacobian.domains.arithmetic import arithmetic_operations
 
 _LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
 
@@ -14,7 +14,7 @@ _LARGE_CANONICAL_INTEGER = "1" + ("0" * 4_999) + "1"
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
-        tmp_path / "state", build_arithmetic_bundle()
+        tmp_path / "state", arithmetic_operations()
     ) as services:
         yield services
 

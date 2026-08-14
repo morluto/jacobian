@@ -1,4 +1,4 @@
-"""Installation bundle for exact rational projective geometry."""
+"""Exact rational projective-geometry operation declarations."""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ from jacobian.domains.projective_geometry.checkers import (
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_projective_geometry_bundle() -> OperationDeclarations:
+def projective_geometry_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (PROJECTIVE_LINE_ARRANGEMENT_OPERATION,)
 
 
-__all__ = ["build_projective_geometry_bundle"]
+__all__ = ["projective_geometry_operations"]
 
 CHECKER_DECLARATIONS = PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS

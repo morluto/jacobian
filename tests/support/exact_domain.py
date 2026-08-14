@@ -23,7 +23,7 @@ from tests.support.services import (
 class VerifiedDomainTestServices(DomainTestServices):
     """Focused services plus the exact installed bundle resources."""
 
-    bundles: dict[str, BoundOperationGroup]
+    operation_groups: dict[str, BoundOperationGroup]
 
 
 def install_verified_domain_bundles(
@@ -67,10 +67,10 @@ def open_exact_domain_services(
     *bundles: OperationDeclarations,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.INSTALL_BUNDLED,
 ) -> Iterator[VerifiedDomainTestServices]:
-    """Open domain services with explicitly selected verified domain bundles.
+    """Open domain services with explicitly selected verified operations.
 
     Ordinary domain fixtures declare their bundles rather than assembling the
-    installer/checker/adapter-registration recipe.
+    checker and adapter registration recipe.
     """
 
     with open_domain_services(root, checker_authority=checker_authority) as services:
@@ -79,5 +79,5 @@ def open_exact_domain_services(
             core=services.core,
             application=services.application,
             installation=services.installation,
-            bundles=installed,
+            groups=installed,
         )

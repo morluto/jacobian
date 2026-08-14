@@ -9,7 +9,7 @@ from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import atomic_installation, open_domain_services
 
 from jacobian.checker_authorization import install_polytope_checkers
-from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
 
@@ -36,7 +36,7 @@ def test_hydrate_authorized_matches_bundled_authority_without_audit(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "state"
-    bundle = build_matrix_bundle()
+    bundle = matrix_operations()
     with open_exact_domain_services(root, bundle):
         pass
     baseline_audit = _audit_count(root)
@@ -54,7 +54,7 @@ def test_hydrate_authorized_matches_bundled_authority_without_audit(
 
 
 def test_hydrate_authorized_on_empty_store_is_fail_closed(tmp_path: Path) -> None:
-    bundle = build_matrix_bundle()
+    bundle = matrix_operations()
     with open_exact_domain_services(
         tmp_path,
         bundle,

@@ -1,1 +1,1 @@
-"""Domain-owned mathematical operation bundles."""
+"""Domain-owned mathematical operation declarations."""

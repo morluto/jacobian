@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from jacobian.domains.analysis import build_real_analysis_bundle
-from jacobian.domains.optimization import build_rational_optimization_bundle
-from jacobian.domains.probability import build_finite_probability_bundle
+from jacobian.domains.analysis import real_analysis_operations
+from jacobian.domains.optimization import rational_optimization_operations
+from jacobian.domains.probability import finite_probability_operations
 
 
 def test_subject_operation_groups_preserve_wire_contracts() -> None:
     assert tuple(
         tuple(operation.operation_id for operation in operations)
         for operations in (
-            build_real_analysis_bundle(),
-            build_finite_probability_bundle(),
-            build_rational_optimization_bundle(),
+            real_analysis_operations(),
+            finite_probability_operations(),
+            rational_optimization_operations(),
         )
     ) == (
         ("analysis.real_function.point_enclosure.compute",),

@@ -9,13 +9,13 @@ from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.probability import build_finite_probability_bundle
+from jacobian.domains.probability import finite_probability_operations
 
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
-        tmp_path / "state", build_finite_probability_bundle()
+        tmp_path / "state", finite_probability_operations()
     ) as services:
         yield services
 

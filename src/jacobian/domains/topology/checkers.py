@@ -17,9 +17,7 @@ _REASON = (
 )
 
 
-def _topology_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> ProviderObservation:
+def _topology_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.topology_exact_checker_provider_runtime(
         checker_ids=checker_ids
     )

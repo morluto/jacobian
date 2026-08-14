@@ -414,8 +414,6 @@ FACTORIZATION_OPERATIONS = (
         result_model=IntegerValueResult,
         implementation=_compute_radical,
         tags=("number-theory", "arithmetic-function"),
-        examples=(
-            example("radical_360", "Compute the radical of 360.", {"n": 360}),
-        ),
+        examples=(example("radical_360", "Compute the radical of 360.", {"n": 360}),),
     ),
 )

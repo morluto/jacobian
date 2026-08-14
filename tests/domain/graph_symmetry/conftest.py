@@ -7,7 +7,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.domains.graph_symmetry import build_graph_symmetry_bundle
+from jacobian.domains.graph_symmetry import graph_symmetry_operations
 
 
 @pytest.fixture
@@ -16,6 +16,6 @@ def graph_symmetry_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
     with open_exact_domain_services(
         tmp_path / "state",
-        build_graph_symmetry_bundle(),
+        graph_symmetry_operations(),
     ) as services:
         yield services

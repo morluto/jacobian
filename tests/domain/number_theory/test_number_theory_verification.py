@@ -11,7 +11,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.domains.number_theory import number_theory_operations
 
 
 @pytest.fixture(scope="module")
@@ -22,7 +22,7 @@ def number_theory_services(
 
     with open_exact_domain_services(
         tmp_path_factory.mktemp("number-theory") / "state",
-        build_number_theory_bundle(),
+        number_theory_operations(),
     ) as services:
         yield services
 

@@ -128,7 +128,7 @@ def _build_catalog(
         entries = tuple(
             CompiledCatalogEntry(
                 descriptor=descriptor,
-                bundle_module=(
+                declaration_module=(
                     declarations[descriptor.operation_id][0]
                     if descriptor.operation_id in declarations
                     else type(

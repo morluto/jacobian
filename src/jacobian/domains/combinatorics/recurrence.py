@@ -75,9 +75,7 @@ RECURRENCE_OPERATIONS = (
         lucas,
         "combinatorics",
         "sequence",
-        examples=(
-            example("lucas_7", "Compute the seventh Lucas number.", {"n": 7}),
-        ),
+        examples=(example("lucas_7", "Compute the seventh Lucas number.", {"n": 7}),),
     ),
     combinatorics_operation(
         "combinatorics.compute.bernoulli",

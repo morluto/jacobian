@@ -8,7 +8,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.domains.posets import build_finite_poset_bundle
+from jacobian.domains.posets import finite_poset_operations
 
 
 @pytest.fixture(scope="module")
@@ -17,7 +17,7 @@ def poset_services(
 ) -> Iterator[DomainTestServices]:
     with open_domain_services(
         tmp_path_factory.mktemp("poset") / "state",
-        build_finite_poset_bundle(),
+        finite_poset_operations(),
     ) as services:
         yield services
 
@@ -28,6 +28,6 @@ def verified_poset_services(
 ) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
         tmp_path_factory.mktemp("verified-poset") / "state",
-        build_finite_poset_bundle(),
+        finite_poset_operations(),
     ) as services:
         yield services

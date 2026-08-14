@@ -10,7 +10,7 @@ from tests.support.exact_domain import (
     open_exact_domain_services,
 )
 
-from jacobian.domains.finite_fields import build_finite_field_bundle
+from jacobian.domains.finite_fields import finite_field_operations
 
 
 @pytest.fixture(scope="module")
@@ -19,6 +19,6 @@ def finite_field_services(
 ) -> Iterator[VerifiedDomainTestServices]:
     with open_exact_domain_services(
         tmp_path_factory.mktemp("finite-field") / "state",
-        build_finite_field_bundle(),
+        finite_field_operations(),
     ) as services:
         yield services

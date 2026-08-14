@@ -32,9 +32,7 @@ PRIME_OPERATIONS = (
         decide_prime,
         "number-theory",
         "predicate",
-        examples=(
-            example("prime_17", "Check whether 17 is prime.", {"value": "17"}),
-        ),
+        examples=(example("prime_17", "Check whether 17 is prime.", {"value": "17"}),),
     ),
     number_theory_operation(
         "integer.compute.next_prime",
@@ -73,9 +71,7 @@ PRIME_OPERATIONS = (
         compute_prime_count,
         "number-theory",
         "prime",
-        examples=(
-            example("prime_count_20", "Count primes through 20.", {"n": 20}),
-        ),
+        examples=(example("prime_count_20", "Count primes through 20.", {"n": 20}),),
     ),
     number_theory_operation(
         "integer.compute.nth_prime",
@@ -86,9 +82,7 @@ PRIME_OPERATIONS = (
         compute_nth_prime,
         "number-theory",
         "prime",
-        examples=(
-            example("nth_prime_6", "Compute the sixth prime.", {"n": 6}),
-        ),
+        examples=(example("nth_prime_6", "Compute the sixth prime.", {"n": 6}),),
     ),
     number_theory_operation(
         "integer.compute.primorial",
@@ -114,9 +108,7 @@ PRIME_OPERATIONS = (
         compute_euler_totient,
         "number-theory",
         "arithmetic-function",
-        examples=(
-            example("totient_12", "Count residues coprime to 12.", {"n": 12}),
-        ),
+        examples=(example("totient_12", "Count residues coprime to 12.", {"n": 12}),),
     ),
     number_theory_operation(
         "integer.compute.mobius",
@@ -127,8 +119,6 @@ PRIME_OPERATIONS = (
         compute_mobius,
         "number-theory",
         "arithmetic-function",
-        examples=(
-            example("mobius_30", "Compute the Mobius value of 30.", {"n": 30}),
-        ),
+        examples=(example("mobius_30", "Compute the Mobius value of 30.", {"n": 30}),),
     ),
 )

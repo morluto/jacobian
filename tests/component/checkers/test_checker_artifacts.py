@@ -14,7 +14,7 @@ from jacobian.contracts.evidence import (
     WitnessRole,
 )
 from jacobian.contracts.matrices import RationalMatrix
-from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
 from jacobian.storage.models import StoredArtifact
 
 
@@ -29,7 +29,7 @@ def _claim_and_candidate(
             [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
         ],
     }
-    installed = services.bundles["matrix"]
+    installed = services.operation_groups["matrix"]
     matrix_schema_uri = services.core.schemas.register_model(
         name="jacobian.exact-rational-matrix",
         version="1",
@@ -57,10 +57,10 @@ def _claim_and_candidate(
 
 def test_put_witness_envelope_binds_digests_and_parents(tmp_path) -> None:
     with open_exact_domain_services(
-        tmp_path / "state", build_matrix_bundle()
+        tmp_path / "state", matrix_operations()
     ) as services:
         claim, candidate = _claim_and_candidate(services)
-        installed = services.bundles["matrix"]
+        installed = services.operation_groups["matrix"]
         semantics = services.core.store.get(installed.semantics_uri)
         witness_schema_uri = services.core.schemas.register_model(
             name="jacobian.witness-envelope",

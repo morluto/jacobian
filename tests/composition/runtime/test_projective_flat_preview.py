@@ -9,8 +9,8 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.projective_geometry.bundle import (
-    build_projective_geometry_bundle,
+from jacobian.domains.projective_geometry.domain_declarations import (
+    projective_geometry_operations,
 )
 
 
@@ -18,7 +18,7 @@ from jacobian.domains.projective_geometry.bundle import (
 def projective_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
         tmp_path / "state",
-        build_projective_geometry_bundle(),
+        projective_geometry_operations(),
     ) as services:
         yield services
 

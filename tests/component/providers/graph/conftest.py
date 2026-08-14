@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from tests.support.services import DomainTestServices, open_domain_services
 
-from jacobian.domains.graph_optimization.bundle import (
-    build_graph_optimization_bundle,
+from jacobian.domains.graph_optimization.domain_declarations import (
+    graph_optimization_operations,
 )
 
 
@@ -19,6 +19,6 @@ def graph_optimization_services(
 ) -> Iterator[DomainTestServices]:
     with open_domain_services(
         tmp_path / "state",
-        build_graph_optimization_bundle(),
+        graph_optimization_operations(),
     ) as services:
         yield services

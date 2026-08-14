@@ -8,7 +8,7 @@ from tests.support.operations import invoke_operation
 from jacobian.contracts.operations import (
     OperationRequest,
 )
-from jacobian.domains.rational_linear import build_rational_linear_bundle
+from jacobian.domains.rational_linear import rational_linear_operations
 
 
 def _system() -> dict[str, object]:
@@ -29,7 +29,7 @@ def _system() -> dict[str, object]:
 def test_solution_candidate_is_inline_and_replayable(tmp_path: Path) -> None:
     with open_exact_domain_services(
         tmp_path,
-        build_rational_linear_bundle(),
+        rational_linear_operations(),
     ) as services:
         computed = invoke_operation(
             services, "linear.rational_solution.compute", _system()

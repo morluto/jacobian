@@ -1,4 +1,4 @@
-"""Installation bundle for exact finite-integer-set operations."""
+"""Exact finite-integer-set operation declarations."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from jacobian.domains.finite_sets.set_predicates import SET_PREDICATE_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_finite_set_bundle() -> OperationDeclarations:
+def finite_set_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *SET_OPERATION_OPERATIONS,

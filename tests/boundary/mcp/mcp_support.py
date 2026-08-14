@@ -22,7 +22,7 @@ def open_focused_mcp_server(
     root: Path,
     *bundles: OperationDeclarations,
 ) -> Iterator[MCPServer[AppState]]:
-    """Open the real MCP projection over selected production domain bundles."""
+    """Open the real MCP projection over selected mathematical operations."""
 
     with open_domain_services(
         root,

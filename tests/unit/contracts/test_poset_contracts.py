@@ -8,13 +8,13 @@ from jacobian.contracts.posets import (
     LinearExtensionRequest,
     MobiusFunctionRequest,
 )
-from jacobian.domains.posets import build_finite_poset_bundle
+from jacobian.domains.posets import finite_poset_operations
 
 
 def _materialize(elements: list[str], relation: list[tuple[str, str]]):
     operation = next(
         operation
-        for operation in build_finite_poset_bundle()
+        for operation in finite_poset_operations()
         if operation.operation_id == "poset.finite.compute"
     )
     outcome = operation.execute(

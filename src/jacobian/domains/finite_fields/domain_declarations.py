@@ -1,4 +1,4 @@
-"""Installed finite-field operations over the authoritative native values."""
+"""Finite-field operation declarations over authoritative native values."""
 
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domains.finite_fields.checkers import (
@@ -242,7 +242,7 @@ def _finite_map_replay_preflight(
     return SUPPORTED
 
 
-def build_finite_field_bundle() -> OperationDeclarations:
+def finite_field_operations() -> OperationDeclarations:
     projective_line_operation = inline_operation(
         OperationDeclaration(
             operation_id="finite_field.projective_line.enumerate",
@@ -449,6 +449,6 @@ def build_finite_field_bundle() -> OperationDeclarations:
     )
 
 
-__all__ = ["build_finite_field_bundle"]
+__all__ = ["finite_field_operations"]
 
 CHECKER_DECLARATIONS = FINITE_FIELD_EXACT_REPLAY_CHECKERS

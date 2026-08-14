@@ -36,7 +36,7 @@ def _descriptor(operation_id: str, title: str) -> OperationDescriptor:
 def _entry(operation_id: str, title: str) -> CompiledCatalogEntry:
     return CompiledCatalogEntry(
         descriptor=_descriptor(operation_id, title),
-        bundle_module="jacobian.domains.synthetic.bundle",
+        declaration_module="jacobian.domains.synthetic.domain_declarations",
         declaration_digest="sha256:" + "a" * 64,
     )
 
@@ -125,7 +125,7 @@ def test_catalog_reads_one_exact_declaration_locator(tmp_path: Path) -> None:
     record = catalog.declaration_record("matrix.rank.compute")
 
     assert record is not None
-    assert record.module == "jacobian.domains.synthetic.bundle"
+    assert record.module == "jacobian.domains.synthetic.domain_declarations"
     assert record.declaration_digest == "sha256:" + "a" * 64
     assert catalog.declaration_record("missing.operation") is None
 

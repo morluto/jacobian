@@ -9,13 +9,13 @@ from tests.support.services import DomainTestServices
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.domains.number_theory import number_theory_operations
 
 
 @pytest.fixture
 def number_theory_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_exact_domain_services(
-        tmp_path / "state", build_number_theory_bundle()
+        tmp_path / "state", number_theory_operations()
     ) as services:
         yield services
 

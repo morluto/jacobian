@@ -13,13 +13,13 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.validated_analysis import RationalLinearProgramObligation
-from jacobian.domains.optimization import build_rational_optimization_bundle
+from jacobian.domains.optimization import rational_optimization_operations
 
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
-        tmp_path / "state", build_rational_optimization_bundle()
+        tmp_path / "state", rational_optimization_operations()
     ) as services:
         yield services
 

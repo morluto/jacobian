@@ -20,7 +20,7 @@ from jacobian.contracts.operations import (
     ProviderAvailability,
 )
 from jacobian.lean_frontend.declaration_operations import (
-    build_lean_declaration_query_bundle,
+    lean_declaration_query_operations,
 )
 from jacobian.lean_frontend.declarations import (
     LeanDeclarationService,
@@ -166,7 +166,7 @@ class CheckerPortfolioBinder:
             return
         ctx = self.context
         bound_queries = ctx.binder.bind(
-            build_lean_declaration_query_bundle(declarations)
+            lean_declaration_query_operations(declarations)
         )
         for adapter in bound_queries.adapters:
             ctx.register_operation(adapter)

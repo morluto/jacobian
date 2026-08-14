@@ -6,12 +6,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from jacobian.domains.combinatorics import build_combinatorics_bundle
-from jacobian.domains.geometry import build_geometry_bundle
-from jacobian.domains.matrix_lattice import build_matrix_bundle
-from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.domains.polynomial import build_polynomial_bundle
-from jacobian.domains.topology import build_topology_bundle
+from jacobian.domains.combinatorics import combinatorics_operations
+from jacobian.domains.geometry import geometry_operations
+from jacobian.domains.matrix_lattice import matrix_operations
+from jacobian.domains.number_theory import number_theory_operations
+from jacobian.domains.polynomial import polynomial_operations
+from jacobian.domains.topology import topology_operations
 from tests.support.services import DomainTestServices, open_domain_services
 
 
@@ -28,11 +28,11 @@ def open_mcp_projection_catalog(
 
     with open_domain_services(
         root,
-        build_polynomial_bundle(),
-        build_matrix_bundle(),
-        build_topology_bundle(),
-        build_number_theory_bundle(),
-        build_combinatorics_bundle(),
-        build_geometry_bundle(),
+        polynomial_operations(),
+        matrix_operations(),
+        topology_operations(),
+        number_theory_operations(),
+        combinatorics_operations(),
+        geometry_operations(),
     ) as services:
         yield services

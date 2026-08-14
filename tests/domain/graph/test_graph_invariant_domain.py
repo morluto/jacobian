@@ -11,8 +11,8 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.graph_optimization import (
-    build_graph_invariant_bundle,
-    build_graph_optimization_bundle,
+    graph_invariant_operations,
+    graph_optimization_operations,
 )
 from jacobian.graphs import atlas_search, invariants
 from jacobian.graphs.artifacts import nx
@@ -23,8 +23,8 @@ from jacobian.operation_errors import OperationInvocationError
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
         tmp_path / "state",
-        build_graph_invariant_bundle(),
-        build_graph_optimization_bundle(),
+        graph_invariant_operations(),
+        graph_optimization_operations(),
     ) as services:
         yield services
 
@@ -67,9 +67,7 @@ def test_graph_invariant_family_boundaries_and_witnesses(
     ]
     for operation_id, expected in cases:
         result = domain_services.core.operations.invoke(
-            OperationRequest(
-                operation_id=operation_id, input={"graph": _TRIANGLE_TAIL}
-            )
+            OperationRequest(operation_id=operation_id, input={"graph": _TRIANGLE_TAIL})
         )
         assert result.execution.status is ExecutionStatus.COMPLETED, operation_id
         assert result.output["result"] == expected, operation_id

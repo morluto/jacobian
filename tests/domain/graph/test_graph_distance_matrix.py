@@ -22,13 +22,13 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.graph_optimization import build_graph_invariant_bundle
+from jacobian.domains.graph_optimization import graph_invariant_operations
 
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
-        tmp_path / "state", build_graph_invariant_bundle()
+        tmp_path / "state", graph_invariant_operations()
     ) as services:
         yield services
 

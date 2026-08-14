@@ -11,21 +11,21 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.topology import build_topology_bundle
+from jacobian.domains.topology import topology_operations
 
 
 @pytest.fixture
 def topology_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     """Install only the topology bundle exercised by these behaviors."""
 
-    with open_domain_services(tmp_path / "state", build_topology_bundle()) as services:
+    with open_domain_services(tmp_path / "state", topology_operations()) as services:
         yield services
 
 
 def test_every_topology_operation_advertises_an_executable_example(
     topology_services: DomainTestServices,
 ) -> None:
-    bundle = build_topology_bundle()
+    bundle = topology_operations()
 
     for operation in bundle:
         spec = operation

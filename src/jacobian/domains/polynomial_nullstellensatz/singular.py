@@ -330,9 +330,7 @@ class SingularNullstellensatzCertificateAdapter:
         self.context = context
         self.dependency = dependency
         self.provider_runtime = provider_runtime
-        self.system_schema_uri = dependency.result_schema_uris[
-            MATERIALIZE_OPERATION_ID
-        ]
+        self.system_schema_uri = dependency.result_schema_uris[MATERIALIZE_OPERATION_ID]
         self.bundle_schema_uri = dependency.named_schema_uris[
             "nullstellensatz_certificate_bundle"
         ]

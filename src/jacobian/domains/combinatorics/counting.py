@@ -133,9 +133,7 @@ COUNTING_OPERATIONS = (
         motzkin,
         "combinatorics",
         "counting",
-        examples=(
-            example("motzkin_5", "Compute the fifth Motzkin number.", {"n": 5}),
-        ),
+        examples=(example("motzkin_5", "Compute the fifth Motzkin number.", {"n": 5}),),
     ),
     combinatorics_operation(
         "combinatorics.compute.central_binomial",

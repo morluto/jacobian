@@ -1,4 +1,4 @@
-"""Finite-probability domain bundle."""
+"""Finite-probability operation declarations."""
 
 from dataclasses import replace
 from typing import Any
@@ -23,7 +23,7 @@ def _operation_with_canonical_gaussian_input(operation: Any) -> Any:
     )
 
 
-def build_finite_probability_bundle() -> OperationDeclarations:
+def finite_probability_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         MUTUAL_INFORMATION_OPERATION,
@@ -34,6 +34,6 @@ def build_finite_probability_bundle() -> OperationDeclarations:
     )
 
 
-__all__ = ["build_finite_probability_bundle"]
+__all__ = ["finite_probability_operations"]
 
 CHECKER_DECLARATIONS = PROBABILITY_EXACT_REPLAY_CHECKERS

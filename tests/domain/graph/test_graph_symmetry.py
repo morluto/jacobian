@@ -11,14 +11,14 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.graph_symmetry import build_graph_symmetry_bundle
+from jacobian.domains.graph_symmetry import graph_symmetry_operations
 
 
 @pytest.fixture
 def domain_services(tmp_path: Path) -> Iterator[DomainTestServices]:
     with open_domain_services(
         tmp_path / "state",
-        build_graph_symmetry_bundle(),
+        graph_symmetry_operations(),
     ) as services:
         yield services
 

@@ -12,14 +12,14 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.number_theory import build_number_theory_bundle
+from jacobian.domains.number_theory import number_theory_operations
 from jacobian.operation_service import OperationService
 from jacobian.process_policy import ProcessResult, ProcessTermination
 
 
 @pytest.fixture
 def number_theory_service(tmp_path: Path) -> Iterator[OperationService]:
-    with open_domain_services(tmp_path, build_number_theory_bundle()) as services:
+    with open_domain_services(tmp_path, number_theory_operations()) as services:
         yield services.core.operations
 
 

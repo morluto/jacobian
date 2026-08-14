@@ -1,4 +1,4 @@
-"""Installation bundle for finite simple-graph invariants."""
+"""Finite simple-graph invariant operation declarations."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from jacobian.domains.graph_optimization.invariants import (
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_graph_invariant_bundle() -> OperationDeclarations:
+def graph_invariant_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *GRAPH6_OPERATIONS,

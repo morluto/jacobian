@@ -201,7 +201,7 @@ class CoreOperationBinder:
                 ctx.values,
                 ctx.verification,
                 ctx.checkers,
-                bundles=operation_groups,
+                groups=operation_groups,
                 authorize=ctx.authorizes_bundled_checkers,
             )
         for adapter in adapters:

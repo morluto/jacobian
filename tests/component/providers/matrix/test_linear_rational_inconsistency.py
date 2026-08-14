@@ -13,7 +13,7 @@ from jacobian.contracts.linear import (
 from jacobian.contracts.operations import (
     OperationRequest,
 )
-from jacobian.domains.rational_linear import build_rational_linear_bundle
+from jacobian.domains.rational_linear import rational_linear_operations
 from jacobian.domains.rational_linear.protocol import (
     RationalLinearCertificateProduced,
     RationalLinearSolutionProduced,
@@ -93,7 +93,7 @@ def test_rational_linear_worker_payloads_bind_status_and_source_dimensions() -> 
 def test_inconsistency_candidate_is_inline_and_replayable(tmp_path: Path) -> None:
     with open_exact_domain_services(
         tmp_path,
-        build_rational_linear_bundle(),
+        rational_linear_operations(),
     ) as services:
         computed = invoke_operation(
             services,

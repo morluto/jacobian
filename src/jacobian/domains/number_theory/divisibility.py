@@ -180,9 +180,7 @@ DIVISIBILITY_OPERATIONS = (
         decide_even,
         "integer",
         "predicate",
-        examples=(
-            example("even_42", "Check whether 42 is even.", {"value": "42"}),
-        ),
+        examples=(example("even_42", "Check whether 42 is even.", {"value": "42"}),),
     ),
     number_theory_operation(
         "integer.decide.odd",
@@ -193,9 +191,7 @@ DIVISIBILITY_OPERATIONS = (
         decide_odd,
         "integer",
         "predicate",
-        examples=(
-            example("odd_41", "Check whether 41 is odd.", {"value": "41"}),
-        ),
+        examples=(example("odd_41", "Check whether 41 is odd.", {"value": "41"}),),
     ),
     number_theory_operation(
         "integer.decide.square",
@@ -219,9 +215,7 @@ DIVISIBILITY_OPERATIONS = (
         decide_perfect,
         "number-theory",
         "predicate",
-        examples=(
-            example("perfect_28", "Check whether 28 is perfect.", {"n": 28}),
-        ),
+        examples=(example("perfect_28", "Check whether 28 is perfect.", {"n": 28}),),
     ),
     number_theory_operation(
         "integer.decide.abundant",
@@ -232,9 +226,7 @@ DIVISIBILITY_OPERATIONS = (
         decide_abundant,
         "number-theory",
         "predicate",
-        examples=(
-            example("abundant_12", "Check whether 12 is abundant.", {"n": 12}),
-        ),
+        examples=(example("abundant_12", "Check whether 12 is abundant.", {"n": 12}),),
     ),
     number_theory_operation(
         "integer.decide.deficient",

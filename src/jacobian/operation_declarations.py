@@ -1,6 +1,6 @@
 """Pure declarations for explicitly built-in mathematical operations.
 
-Importing this module or a domain bundle must not inspect providers, open
+Importing this module or a domain declaration module must not inspect providers, open
 state, register schemas, or construct runtime services.  A declaration names
 what execution requires; operator lifecycle code measures and binds those
 requirements later.

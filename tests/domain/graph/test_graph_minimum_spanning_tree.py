@@ -17,8 +17,8 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.graph_optimization.bundle import (
-    build_graph_optimization_bundle,
+from jacobian.domains.graph_optimization.domain_declarations import (
+    graph_optimization_operations,
 )
 
 
@@ -28,7 +28,7 @@ def graph_optimization_services(
 ) -> Iterator[DomainTestServices]:
     with open_domain_services(
         tmp_path,
-        build_graph_optimization_bundle(),
+        graph_optimization_operations(),
     ) as services:
         yield services
 
@@ -214,9 +214,7 @@ def test_weighted_mst_intent_is_discoverable_and_example_is_valid(
         )
     )
 
-    assert discovered.matches[0].operation_id == (
-        "graph.spanning_tree.minimum.compute"
-    )
+    assert discovered.matches[0].operation_id == ("graph.spanning_tree.minimum.compute")
     assert discovered.matches[0].relevance_score > 0
     descriptor = next(
         descriptor

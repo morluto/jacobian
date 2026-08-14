@@ -16,7 +16,7 @@ from jacobian.contracts.operations import (
     ProviderObservation,
 )
 from jacobian.lean_frontend.declaration_operations import (
-    build_lean_declaration_query_bundle,
+    lean_declaration_query_operations,
 )
 from jacobian.lean_frontend.declaration_protocol import (
     LeanDeclarationBackendResult,
@@ -123,7 +123,7 @@ def _query_adapter(
     schemas = SchemaRegistry(store)
     artifacts = ArtifactService(store, schemas)
     installation = OperationBinder(store, schemas, artifacts).bind(
-        build_lean_declaration_query_bundle(
+        lean_declaration_query_operations(
             LeanDeclarationService(backend),
             _RUNTIME,
         )

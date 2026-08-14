@@ -1,4 +1,4 @@
-"""Installation bundle for exact SymPy-backed number-theory operations."""
+"""Exact SymPy-backed number-theory operation declarations."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from jacobian.domains.number_theory.primes import PRIME_OPERATIONS
 from jacobian.operation_declarations import OperationDeclarations
 
 
-def build_number_theory_bundle() -> OperationDeclarations:
+def number_theory_operations() -> OperationDeclarations:
     """Build this domain-owned installation unit explicitly."""
     return (
         *DIVISIBILITY_OPERATIONS,

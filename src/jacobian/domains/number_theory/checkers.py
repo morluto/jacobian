@@ -46,9 +46,7 @@ def _flint_exact_replay_runtime(
     )
 
 
-def _integer_lcm_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> ProviderObservation:
+def _integer_lcm_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return source_provider_runtime(
         "jacobian.integer-lcm-checker",
         version="1",

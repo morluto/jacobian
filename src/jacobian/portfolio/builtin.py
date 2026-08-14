@@ -16,43 +16,52 @@ type LoadedOperationModule = tuple[
 ]
 
 BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
-    ("jacobian.domains.arithmetic.bundle", "build_arithmetic_bundle"),
-    ("jacobian.domains.number_theory.bundle", "build_number_theory_bundle"),
-    ("jacobian.domains.combinatorics.bundle", "build_combinatorics_bundle"),
-    ("jacobian.domains.finite_sets.bundle", "build_finite_set_bundle"),
-    ("jacobian.domains.finite_fields.bundle", "build_finite_field_bundle"),
-    ("jacobian.domains.formal_datasets.bundle", "build_formal_dataset_bundle"),
-    ("jacobian.domains.sequences.bundle", "build_sequence_bundle"),
-    ("jacobian.domains.geometry.bundle", "build_geometry_bundle"),
+    ("jacobian.domains.arithmetic.domain_declarations", "arithmetic_operations"),
+    ("jacobian.domains.number_theory.domain_declarations", "number_theory_operations"),
+    ("jacobian.domains.combinatorics.domain_declarations", "combinatorics_operations"),
+    ("jacobian.domains.finite_sets.domain_declarations", "finite_set_operations"),
+    ("jacobian.domains.finite_fields.domain_declarations", "finite_field_operations"),
     (
-        "jacobian.domains.projective_geometry.bundle",
-        "build_projective_geometry_bundle",
+        "jacobian.domains.formal_datasets.domain_declarations",
+        "formal_dataset_operations",
+    ),
+    ("jacobian.domains.sequences.domain_declarations", "sequence_operations"),
+    ("jacobian.domains.geometry.domain_declarations", "geometry_operations"),
+    (
+        "jacobian.domains.projective_geometry.domain_declarations",
+        "projective_geometry_operations",
     ),
     (
-        "jacobian.domains.graph_optimization.bundle",
-        "build_graph_optimization_bundle",
+        "jacobian.domains.graph_optimization.domain_declarations",
+        "graph_optimization_operations",
     ),
     (
-        "jacobian.domains.graph_optimization.invariant_bundle",
-        "build_graph_invariant_bundle",
-    ),
-    ("jacobian.domains.graph_symmetry.bundle", "build_graph_symmetry_bundle"),
-    ("jacobian.domains.certified_snf.bundle", "build_certified_snf_bundle"),
-    ("jacobian.domains.matrix_lattice.bundle", "build_matrix_bundle"),
-    ("jacobian.domains.rational_linear.bundle", "build_rational_linear_bundle"),
-    ("jacobian.domains.matrix_lattice.lattice_bundle", "build_lattice_bundle"),
-    ("jacobian.domains.polynomial.bundle", "build_polynomial_bundle"),
-    ("jacobian.domains.analysis.bundle", "build_real_analysis_bundle"),
-    (
-        "jacobian.domains.probability.bundle",
-        "build_finite_probability_bundle",
+        "jacobian.domains.graph_optimization.invariant_declarations",
+        "graph_invariant_operations",
     ),
     (
-        "jacobian.domains.optimization.bundle",
-        "build_rational_optimization_bundle",
+        "jacobian.domains.graph_symmetry.domain_declarations",
+        "graph_symmetry_operations",
     ),
-    ("jacobian.domains.topology.bundle", "build_topology_bundle"),
-    ("jacobian.domains.posets.bundle", "build_finite_poset_bundle"),
+    ("jacobian.domains.certified_snf.domain_declarations", "certified_snf_operations"),
+    ("jacobian.domains.matrix_lattice.domain_declarations", "matrix_operations"),
+    (
+        "jacobian.domains.rational_linear.domain_declarations",
+        "rational_linear_operations",
+    ),
+    ("jacobian.domains.matrix_lattice.lattice_declarations", "lattice_operations"),
+    ("jacobian.domains.polynomial.domain_declarations", "polynomial_operations"),
+    ("jacobian.domains.analysis.domain_declarations", "real_analysis_operations"),
+    (
+        "jacobian.domains.probability.domain_declarations",
+        "finite_probability_operations",
+    ),
+    (
+        "jacobian.domains.optimization.domain_declarations",
+        "rational_optimization_operations",
+    ),
+    ("jacobian.domains.topology.domain_declarations", "topology_operations"),
+    ("jacobian.domains.posets.domain_declarations", "finite_poset_operations"),
 )
 
 

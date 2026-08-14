@@ -198,13 +198,13 @@ def _authorized_provider_runtimes(
 def install_exact_domain_checkers(
     checkers: CheckerRegistry,
     *,
-    bundles: Mapping[str, ExactOperationGroup],
+    groups: Mapping[str, ExactOperationGroup],
     authorize: bool,
 ) -> ExactDomainCheckerInstallation:
     """Install independent exact replay against dynamically registered schemas."""
 
     installer = CheckerInstaller(checkers)
-    available_declarations = _available_declaration_bundles(bundles)
+    available_declarations = _available_declaration_groups(groups)
     checker_ids: dict[str, str | None] = {}
     declaration_providers: dict[str, str] = {}
     diagnostics: list[OperationDiagnostic] = []
@@ -223,8 +223,8 @@ def install_exact_domain_checkers(
         is ProviderAvailability.AVAILABLE
     )
     with batch_checker_manifest_measurement():
-        groups = _declared_runtime_groups(available_declarations)
-        for group in groups:
+        runtime_groups = _declared_runtime_groups(available_declarations)
+        for group in runtime_groups:
             for installed, declaration in group.members:
                 declaration_providers[declaration.operation_id] = group.probe.provider
                 operation = CheckerOperation(
@@ -261,7 +261,7 @@ def install_exact_domain_checkers(
     return ExactDomainCheckerInstallation(
         checker_ids=checker_ids,
         diagnostics=tuple(diagnostics),
-        provider_runtimes=_authorized_provider_runtimes(groups, checker_ids),
+        provider_runtimes=_authorized_provider_runtimes(runtime_groups, checker_ids),
         declaration_providers=declaration_providers,
     )
 
@@ -274,7 +274,7 @@ def install_exact_domain_verification(
     verification: VerificationService,
     checkers: CheckerRegistry,
     *,
-    bundles: Mapping[str, ExactOperationGroup],
+    groups: Mapping[str, ExactOperationGroup],
     authorize: bool,
 ) -> tuple[tuple[OperationAdapter[Any], ...], ExactDomainCheckerInstallation]:
     """Authorize exact replay and expose per-producer verification operations.
@@ -289,7 +289,7 @@ def install_exact_domain_verification(
 
     installed = install_exact_domain_checkers(
         checkers,
-        bundles=bundles,
+        groups=groups,
         authorize=authorize,
     )
     witness_schema_uri = schemas.register_model(
@@ -311,18 +311,18 @@ def install_exact_domain_verification(
     adapters: list[OperationAdapter[Any]] = []
     result_models = {
         _operation_spec(operation).operation_id: _operation_spec(operation).result_type
-        for operations, _installed_bundle, _declarations in bundles.values()
+        for operations, _bound_group, _declarations in groups.values()
         for operation in operations
     }
     stored_producers = {
         _operation_spec(operation).operation_id
-        for operations, _installed_bundle, _declarations in bundles.values()
+        for operations, _bound_group, _declarations in groups.values()
         for operation in operations
         if isinstance(operation.publication, DurablePublication)
     }
     referenceable_results = {
         _operation_spec(operation).operation_id: _operation_spec(operation).result_type
-        for operations, _installed_bundle, _declarations in bundles.values()
+        for operations, _bound_group, _declarations in groups.values()
         for operation in operations
         if operation.output_ports
         and any(
@@ -330,13 +330,13 @@ def install_exact_domain_verification(
             for port in operation.output_ports
         )
     }
-    for installed_bundle, declaration in _available_declaration_bundles(bundles):
-        if declaration.operation_id not in installed_bundle.result_schema_uris:
+    for bound_group, declaration in _available_declaration_groups(groups):
+        if declaration.operation_id not in bound_group.result_schema_uris:
             continue
         if installation.checker_ids.get(declaration.operation_id) is None:
             continue
         installed_declaration = _installed_declaration(
-            installed_bundle,
+            bound_group,
             declaration,
             installation,
             result_models[declaration.operation_id],
@@ -362,14 +362,14 @@ def install_exact_domain_verification(
     return tuple(adapters), installation
 
 
-def _available_declaration_bundles(
-    bundles: Mapping[str, ExactOperationGroup],
+def _available_declaration_groups(
+    groups: Mapping[str, ExactOperationGroup],
 ) -> tuple[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration], ...]:
     """Pair checker declarations with their unique bound producer."""
 
     available: list[tuple[BoundOperationGroup, ExactReplayCheckerDeclaration]] = []
     owners: dict[str, str] = {}
-    for module_name, (operations, installed, declarations) in bundles.items():
+    for module_name, (operations, installed, declarations) in groups.items():
         producer_operation_ids = {
             _operation_spec(operation).operation_id for operation in operations
         }
@@ -392,7 +392,7 @@ def _available_declaration_bundles(
             previous = owners.setdefault(declaration.operation_id, module_name)
             if previous != module_name:
                 raise ValueError(
-                    "exact replay declaration is owned by multiple bundles: "
+                    "exact replay declaration is owned by multiple groups: "
                     f"{declaration.operation_id}"
                 )
             available.append((installed, declaration))
@@ -405,13 +405,14 @@ def _available_declaration_bundles(
         )
         if duplicates:
             raise ValueError(
-                "bundle repeats exact replay declarations: " + ", ".join(duplicates)
+                "operation group repeats exact replay declarations: "
+                + ", ".join(duplicates)
             )
     return tuple(available)
 
 
 def _installed_declaration(
-    bundle: BoundOperationGroup,
+    group: BoundOperationGroup,
     declaration: ExactReplayCheckerDeclaration,
     installation: ExactDomainCheckerInstallation,
     result_model: type[ContractModel],
@@ -422,9 +423,9 @@ def _installed_declaration(
     return _InstalledDeclaration(
         declaration=declaration,
         result_model=result_model,
-        input_schema_uri=bundle.input_schema_uris[declaration.request_model],
-        result_schema_uri=bundle.result_schema_uris[declaration.operation_id],
-        semantics_uri=bundle.semantics_uri,
+        input_schema_uri=group.input_schema_uris[declaration.request_model],
+        result_schema_uri=group.result_schema_uris[declaration.operation_id],
+        semantics_uri=group.semantics_uri,
         checker_id=checker_id,
     )
 

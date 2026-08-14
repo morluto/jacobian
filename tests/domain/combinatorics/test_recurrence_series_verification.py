@@ -13,7 +13,7 @@ from jacobian.contracts.operations import (
     OperationRequest,
 )
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.combinatorics import build_combinatorics_bundle
+from jacobian.domains.combinatorics import combinatorics_operations
 
 _RECURRENCE_CONVENTION = "A_N_EQUALS_SUM_C_J_TIMES_A_N_MINUS_J_FOR_J_FROM_1"
 _P_RECURSIVE_CONVENTION = "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
@@ -27,7 +27,7 @@ def combinatorics_services(
 
     with open_exact_domain_services(
         tmp_path_factory.mktemp("combinatorics-verification") / "state",
-        build_combinatorics_bundle(),
+        combinatorics_operations(),
     ) as services:
         yield services
 

@@ -5,7 +5,7 @@ from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.domains.finite_fields import build_finite_field_bundle
+from jacobian.domains.finite_fields import finite_field_operations
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -48,7 +48,7 @@ def _forged_ledger() -> DirectionRankLedger:
 def test_installed_orbit_aggregation_rejects_a_forged_ledger(tmp_path: Path) -> None:
     with open_exact_domain_services(
         tmp_path,
-        build_finite_field_bundle(),
+        finite_field_operations(),
     ) as services:
         result = services.core.operations.invoke(
             OperationRequest(

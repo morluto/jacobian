@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.domains.arithmetic import build_arithmetic_bundle
-from jacobian.domains.combinatorics import build_combinatorics_bundle
-from jacobian.domains.finite_sets import build_finite_set_bundle
-from jacobian.domains.number_theory import build_number_theory_bundle
-from jacobian.domains.sequences import build_sequence_bundle
+from jacobian.domains.arithmetic import arithmetic_operations
+from jacobian.domains.combinatorics import combinatorics_operations
+from jacobian.domains.finite_sets import finite_set_operations
+from jacobian.domains.number_theory import number_theory_operations
+from jacobian.domains.sequences import sequence_operations
 
 _CORE_OPERATIONS = tuple(
     operation
     for bundle in (
-        build_arithmetic_bundle(),
-        build_combinatorics_bundle(),
-        build_finite_set_bundle(),
-        build_number_theory_bundle(),
-        build_sequence_bundle(),
+        arithmetic_operations(),
+        combinatorics_operations(),
+        finite_set_operations(),
+        number_theory_operations(),
+        sequence_operations(),
     )
     for operation in bundle
 )

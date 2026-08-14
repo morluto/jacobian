@@ -41,9 +41,7 @@ def _flint_exact_replay_runtime(
     )
 
 
-def _graded_syzygy_runtime(
-    *, checker_ids: tuple[str, ...] = ()
-) -> ProviderObservation:
+def _graded_syzygy_runtime(*, checker_ids: tuple[str, ...] = ()) -> ProviderObservation:
     return flint_runtime.graded_syzygy_checker_provider_runtime(checker_ids=checker_ids)
 
 

@@ -7,7 +7,7 @@ import pytest
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
-from jacobian.domains.probability import build_finite_probability_bundle
+from jacobian.domains.probability import finite_probability_operations
 
 
 @pytest.fixture
@@ -16,6 +16,6 @@ def probability_services(tmp_path: Path) -> Iterator[DomainTestServices]:
 
     with open_exact_domain_services(
         tmp_path / "state",
-        build_finite_probability_bundle(),
+        finite_probability_operations(),
     ) as services:
         yield services

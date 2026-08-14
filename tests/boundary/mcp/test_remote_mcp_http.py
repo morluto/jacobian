@@ -24,7 +24,7 @@ from jacobian.adapters.mcp.remote import (
     create_remote_server,
     load_static_token_file,
 )
-from jacobian.domains.matrix_lattice import build_matrix_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
 from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.model import JacobianRuntime
 from tests.support.selected_runtime import create_selected_runtime
@@ -55,7 +55,7 @@ def test_authenticated_streamable_http_isolates_tenant_data(
     ) -> JacobianRuntime:
         return create_selected_runtime(
             root,
-            (build_matrix_bundle(),),
+            (matrix_operations(),),
             checker_authority=checker_authority,
         )
 

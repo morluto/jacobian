@@ -7,9 +7,9 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from jacobian.contracts.operations import OperationDescriptor
-from jacobian.domains.matrix_lattice import build_matrix_bundle
-from jacobian.domains.polynomial import build_polynomial_bundle
-from jacobian.domains.probability import build_finite_probability_bundle
+from jacobian.domains.matrix_lattice import matrix_operations
+from jacobian.domains.polynomial import polynomial_operations
+from jacobian.domains.probability import finite_probability_operations
 from tests.boundary.mcp.mcp_support import open_focused_mcp_server
 
 
@@ -21,7 +21,7 @@ def test_math_find_discovers_finite_expectation_by_natural_vocabulary(
 
         with open_focused_mcp_server(
             tmp_path,
-            build_finite_probability_bundle(),
+            finite_probability_operations(),
         ) as server:
             async with Client(server, raise_exceptions=True) as client:
                 discovered = await client.call_tool(
@@ -50,7 +50,7 @@ def test_math_find_search_returns_compact_lexical_and_availability_facts(
     async def scenario() -> None:
         from mcp import Client
 
-        with open_focused_mcp_server(tmp_path, build_matrix_bundle()) as server:
+        with open_focused_mcp_server(tmp_path, matrix_operations()) as server:
             async with Client(server, raise_exceptions=True) as client:
                 result = await client.call_tool(
                     "math.find",
@@ -93,7 +93,7 @@ def test_math_find_exact_inspection_returns_one_authoritative_descriptor(
     async def scenario() -> None:
         from mcp import Client
 
-        with open_focused_mcp_server(tmp_path, build_polynomial_bundle()) as server:
+        with open_focused_mcp_server(tmp_path, polynomial_operations()) as server:
             async with Client(server, raise_exceptions=True) as client:
                 result = await client.call_tool(
                     "math.find",

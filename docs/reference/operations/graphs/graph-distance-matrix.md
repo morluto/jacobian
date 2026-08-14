@@ -59,7 +59,7 @@ every source and exact comparison of every finite distance and unreachable
 `null`.
 
 The verification record is bound to the canonical graph input and matrix
-candidate digests, semantics, checker source digest, and provider runtime.
+candidate digests, semantics, checker source digest, and executable identity.
 Rejection, timeout, cancellation, unavailable runtime, or
 checker error remains `UNKNOWN` and cannot produce `VERIFIED`.
 

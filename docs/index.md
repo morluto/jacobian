@@ -83,15 +83,15 @@ performance measurement, and regression policy.
 mathematical scenario catalog and certified-homology case.
 
 Use the runtime `operation://catalog` and `math.find` for the
-installed operation inventory and exact operation schemas.
+active operation inventory and exact operation schemas.
 
 ## Explanation
 
 - [Product model](explanation/product-blueprint.md) — what the product is
 - [Architecture](explanation/architecture.md) — host shape, search/execute,
   ownership and durable execution
-- [Operation runtime target](explanation/operation-runtime-target.md) — implemented
-  target architecture for the next breaking release
+- [Compiled operation architecture](explanation/operation-runtime-target.md) —
+  catalog compilation and selected execution
 
 Do not add parallel “direction”, “goals”, or portfolio-planning novels under
 `explanation/`. Product intent lives in those two documents; open work lives

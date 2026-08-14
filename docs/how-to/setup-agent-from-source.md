@@ -22,25 +22,26 @@ CPython 3.12 or 3.13, Git, and Node.js 18 or newer. The tested binary-install
 platform is glibc Linux x86-64; other platforms require a compatible wheel for
 every mandatory Python backend. It requires a clean checkout,
 performs a locked sync, initializes the state directory, and audits the exact
-Git revision, package version, catalog digest, and provider runtimes before it
+Git revision, package version, catalog digest, maintained Python dependencies,
+and any selected external executable identities before it
 writes any client configuration. The audit is saved as
 `.jacobian/bootstrap-doctor.json` unless `--state-dir` selects another path.
 An alternate state directory inside the checkout must already be ignored by
 Git; the bootstrap rejects a path that would make its clean source identity
 dirty during initialization. A state directory outside the checkout is also
 supported.
-Bootstrap uses the provider-bearing base `PATH` to discover Lean and external
-proof tools. It resolves each accepted tool to an absolute path and records its
-provider identity; product execution does not repeat ambient `PATH` discovery.
-Immediately before an invocation, Jacobian remeasures the recorded provider and
-rejects an identity mismatch. A provider that legitimately launches nested
-tools receives a constructed `PATH` containing only its authorized toolchain
+Bootstrap uses the base `PATH` to discover optional Lean and external proof
+executables. It resolves each accepted executable to an absolute path and
+records its identity; product execution does not repeat ambient `PATH`
+discovery. Checker execution remeasures authorized executable bytes and rejects
+an identity mismatch. A checker that legitimately launches nested tools
+receives a constructed `PATH` containing only its authorized toolchain
 directories.
 
 The generated launcher preserves the bootstrap environment needed to reproduce
 doctor's discovery. uv prepends the project virtual environment to that base
 path for doctor and MCP startup, but child-process policy still controls the
-environment used for provider execution. If bootstrap inherits a custom
+environment used for external execution. If bootstrap inherits a custom
 `UV_PROJECT_ENVIRONMENT`, it resolves that path absolutely and records it in
 the launcher; a checkout-local custom environment must already be ignored by
 Git. Relative entries in the inherited `PATH` are resolved against the
@@ -63,8 +64,9 @@ not install prompts, skills, or client-specific mathematical workflows.
 The `external-proof` profile does not download or trust native executables on
 the user's behalf. Their exact version and provenance contracts are defined in
 the [SAT artifact reference](../reference/operations/sat-smt/sat-artifacts.md) and
-[SMT artifact reference](../reference/operations/sat-smt/smt-artifacts.md). If a required provider
-is absent or has the wrong identity, doctor fails before client configuration.
+[SMT artifact reference](../reference/operations/sat-smt/smt-artifacts.md). If a
+required executable is absent or has the wrong identity, doctor fails before
+client configuration.
 The `lean` profile likewise uses the repository's pinned toolchain and manifest
 instead of a floating Lean installation.
 

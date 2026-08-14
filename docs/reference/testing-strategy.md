@@ -158,13 +158,14 @@ Let pytest own collection and fixture lifetime through the narrowest owning
 tests do not mutate it; tests that revoke authority, patch shared services, or
 otherwise change runtime state retain an isolated fixture.
 
-For repeated installation, first select the smallest production domain bundle.
-Group read-only assertions around an immutable module-scoped fixture only when
-isolation permits it. If measurement still justifies reuse for mutating tests,
-clone a quiesced state template into a private test directory. Keep a
-function-scoped cold start when construction, authorization, or hydration is the
-contract. Do not introduce a universal fixture registry or installation-plan
-abstraction for test convenience.
+For repeated catalog setup, select the smallest set of operation declarations
+or exact operation IDs that exercises the behavior. Group read-only assertions
+around an immutable module-scoped fixture only when isolation permits it. If
+measurement still justifies reuse for mutating tests, clone a quiesced state
+template into a private test directory. Keep a function-scoped cold start when
+catalog compilation, authorization, or hydration is the contract. Do not
+introduce a universal fixture registry, domain-bundle framework, or
+installation-plan abstraction for test convenience.
 
 Do not substitute source-reading tests for caller-visible behavior. If a
 behavioral regression proof is infeasible, state the proof gap.
@@ -186,7 +187,7 @@ behavioral regression proof is infeasible, state the proof gap.
 For each public domain:
 
 - Python callers construct no runtime, catalog, store, or MCP object;
-- installed operations call the same public semantic implementation;
+- catalog operations call the same public semantic implementation;
 - every public function has one canonical semantic input type;
 - provider conversion stays private and backend imports are lazy;
 - request parsing and result serialization each occur once;

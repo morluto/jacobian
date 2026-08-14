@@ -16,10 +16,10 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/morluto/jacobian" alt="MIT license"></a>
 </p>
 
-Jacobian is a collection of mathematical operations for AI agents. It runs as
-an MCP server and is also available as a CLI and Python library. Agents can use
-it to compute invariants, search for examples or counterexamples, work with
-solver artifacts, and check formal proofs.
+Jacobian is an MCP server that gives AI agents two tools for high-level
+mathematics. `math.find` discovers typed mathematical operations and
+`math.run` executes one selected operation. The same mathematical library is
+also available through a CLI and native Python API.
 
 ## Quickstart
 
@@ -102,8 +102,7 @@ determinant pair through the public MCP surface.
 
 ## Available mathematics
 
-The installed operations vary with optional external providers, but the
-maintained portfolio covers work in:
+The built-in portfolio covers work in:
 
 - polynomial maps and polynomial algebra;
 - exact linear algebra;
@@ -113,16 +112,16 @@ maintained portfolio covers work in:
 - polytopes; and
 - Lean declaration discovery and proof checking.
 
-Some operations require optional native or formal backends. Catalog membership
-means an operation is installed and invocable; it does not grant verification
-authority.
-Read `operation://catalog` or use `math.find` to inspect the current
-environment. Use `math.run` to invoke a selected operation.
+Some operations require optional external executables or formal runtimes. An
+operation available in the active catalog is invocable; catalog membership
+does not grant verification authority. Read `operation://catalog` or use
+`math.find` to inspect the active catalog. Use `math.run` to invoke a selected
+operation.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and
-[native and formal provider setup](docs/how-to/install-native-and-formal-providers.md)
-for provider requirements.
+[native and formal backend setup](docs/how-to/install-native-and-formal-providers.md)
+for optional executable requirements.
 
 ## Verification model
 

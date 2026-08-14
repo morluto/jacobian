@@ -84,7 +84,7 @@ domain. The public Python function accepts those canonical semantic inputs;
 wire conversion to sparse polynomial contracts remains outside the function.
 
 Test generator mismatch, coefficient-domain mismatch, output-size refusal, and
-agreement between the Python API and installed operation.
+agreement between the Python API and catalog operation.
 
 ### POLY-SEPARATE-001 — Ideal membership or separator
 

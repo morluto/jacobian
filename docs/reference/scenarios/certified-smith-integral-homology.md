@@ -68,7 +68,7 @@ bounded to 32,768 digits. Complete request validation occurs before computation
 or artifact writes.
 
 The producer delegates the Smith decomposition to SymPy's
-`smith_normal_decomp` over `ZZ` and has no optional-provider availability gate.
+`smith_normal_decomp` over `ZZ` and has no optional-executable availability gate.
 The canonical diagonal \(D\) and the invariant factors \(d_1,\ldots,d_r\) are
 mathematical invariants: they are determined by the determinantal divisors of
 \(A\) and do not depend on the backend. The unimodular transformations

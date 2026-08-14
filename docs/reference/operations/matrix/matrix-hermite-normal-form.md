@@ -36,7 +36,7 @@ integer matrices:
 The [Python-FLINT matrix documentation][python-flint-hnf] exposes this exact
 transformation relation. The materialized operation stores the bounded input
 and complete `H`/`U` certificate as explicit artifacts, along with the
-provider runtime and resource budget. A successful provider call has
+private backend and resource budget. A successful computation has
 `COMPUTED` assurance and `conclusion: UNKNOWN`; it does not verify its own
 output.
 

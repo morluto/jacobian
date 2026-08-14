@@ -3,11 +3,11 @@
 [Documentation home](../../../index.md)
 
 - Status: Experimental contract
-- Installed operation: `sat.cnf.materialize`
+- Built-in operation: `sat.cnf.materialize`
 - Optional operations: `sat.model.find` and `sat.unsat_proof.find` when exact
   CaDiCaL 3.0.1 is installed; `sat.unsat_proof.verify` when the operator
   installs bundled references and an exactly identified DRAT-trim runtime
-- Installed operations: `sat.model.verify` and `sat.lrat.verify` when the
+- Catalog operations: `sat.model.verify` and `sat.lrat.verify` when the
   operator installs the bundled reference checkers
 
 Jacobian always installs canonical CNF, total assignment, and raw DRAT proof

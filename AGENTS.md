@@ -10,8 +10,9 @@ operations, also use the
 
 ## Product Constraints
 
-Jacobian is a **toolbox of atomic math tools** for agents. It is not a workflow
-engine: the agent owns decomposition, sequencing, checker choice, and stopping.
+Jacobian is an **MCP server with two tools for atomic mathematics**. It is not a
+workflow engine: the agent owns decomposition, sequencing, checker choice, and
+stopping.
 
 | Agent verb | MCP tool | Meaning |
 | --- | --- | --- |
@@ -33,7 +34,7 @@ belongs in the domain result that defines it.
 catalog ID** (e.g. `….verify`, `lean.check`), not a role on the producer. **No
 dual-mode tools.**
 
-- Server: typed contracts, resource bounds, catalog install, checker
+- Server: typed contracts, resource bounds, catalog compilation, checker
   authorization.
 - Model: representation, which tools to run, how to compose values, when to
   call checker tools, when to stop.
@@ -43,6 +44,16 @@ dual-mode tools.**
 
 **Naming.** Use **math tool** / **operation** throughout Jacobian-owned code,
 catalogs, documentation, tests, and wire contracts.
+
+**Lifecycle vocabulary.** A built-in operation is a typed mathematical
+function shipped by Jacobian. `jacobian init` and `jacobian update` compile
+those declarations into an inert searchable catalog; serving never discovers
+or installs operations. Reserve **installation** for Jacobian itself and
+optional external executables. Ordinary maintained libraries such as SymPy,
+NetworkX, FLINT, Z3, and cvc5 are private math backends, not operation-specific
+providers. Exact runtime identity belongs only to exceptional external
+executables and authorized checkers, and is not part of public operation
+descriptors.
 
 Tools stay atomic, searchable, and freely composable. No prescribed proof
 strategy, verification order, or stopping criteria in discovery, ranking,

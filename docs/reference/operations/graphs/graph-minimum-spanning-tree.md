@@ -71,7 +71,7 @@ non-tree source edges.
 | Exact total | Sum the selected source weights with exact rational arithmetic. | Reject a forged total. |
 | Certificate coverage | Require one canonical check for every and only every non-tree source edge. | Reject missing, duplicated, or substituted checks. |
 | Cycle optimality | Independently reconstruct each tree path and its maximum edge weight, then check every non-improvement inequality. | Reject a feasible but nonminimum tree. |
-| Authorization and runtime | Dispatch only the operator-authorized checker matching the exact schemas, semantics, evidence format, source digest, and provider runtime. | Unavailable, timeout, cancellation, or error remains non-conclusive. |
+| Authorization and runtime | Dispatch only the operator-authorized checker matching the exact schemas, semantics, evidence format, source digest, and executable identity. | Unavailable, timeout, cancellation, or error remains non-conclusive. |
 
 For a disconnected or empty graph, acceptance uses complete finite
 connectivity replay. For a connected result, acceptance uses a checked

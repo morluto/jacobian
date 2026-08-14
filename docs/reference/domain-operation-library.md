@@ -11,7 +11,7 @@ implementation and not a facade invoked by the native API.
 
 This reference defines ownership and dependency rules. The live
 `operation://catalog` remains the authority for installed IDs, schemas, and
-provider availability.
+optional executable availability.
 
 ## Package ownership
 

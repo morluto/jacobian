@@ -1,12 +1,12 @@
-# Operation runtime target
+# Compiled operation architecture
 
 [Documentation home](../index.md)
 
-- Status: Implemented target for the next breaking release
+- Status: Current architecture
 - Scope: operation declarations, compiled catalogs, and selected-operation execution
 
-This document records the architecture implemented for the next pre-stable
-breaking release. The [product model](product-blueprint.md),
+This document records the catalog and selected-execution architecture behind
+Jacobian's two-tool MCP surface. The [product model](product-blueprint.md),
 [architecture](architecture.md), and reference contracts define its supported
 behavior.
 
@@ -20,7 +20,7 @@ The public vocabulary is `operation` / `math operation`. The existing
 field alias, or parallel contract. Operation ID values themselves do not
 change.
 
-The target contracts are `OperationRequest`, `OperationResult`,
+The public contracts are `OperationRequest`, `OperationResult`,
 `OperationDescriptor`, `OperationDiagnostic`, and `OperationCatalogSnapshot`.
 Checker operations remain ordinary catalog entries with distinct operation
 IDs; a producer is never switched into a checker role.
@@ -39,7 +39,7 @@ providers, authorization records, or installer callbacks. Each mathematical
 domain exposes an immutable tuple of declarations from a pure declaration
 module. A fixed source-controlled module index lists the built-ins;
 third-party plugin discovery and a domain-bundle framework are not part of the
-target.
+architecture.
 
 `jacobian init` and `jacobian update` compile the declarations into one
 revisioned catalog. The persisted catalog has an active revision, compact

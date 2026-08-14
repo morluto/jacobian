@@ -66,7 +66,7 @@ mathematical conclusion.
 The controlled `main`-only image workflow publishes the reusable Lean bases:
 
 - `ghcr.io/morluto/jacobian-lean-checker` for Lean-source replay; and
-- `ghcr.io/morluto/jacobian-lean-repl-agent` for the pinned provider runtime.
+- `ghcr.io/morluto/jacobian-lean-repl-agent` for the pinned Lean runtime.
 
 Publication records the immutable image digest, source revision, platform,
 SBOM/provenance attestations, and unpacked image size. Measure runtime writable

@@ -22,7 +22,7 @@ simple undirected graph:
   `exactness = NOT_APPLICABLE`.
 
 The claim is bound to canonical input and candidate digests, graph semantics,
-checker identity, checker source digest, and provider runtime.
+checker identity, checker source digest, and executable identity.
 The verifier does not certify a directly supplied graph, an unbounded graph
 family, or a theorem that later uses the metric.
 
@@ -47,7 +47,7 @@ passive artifact-envelope parsing.
 | Connectivity convention | Exhaust traversal from every source, with empty and disconnected graphs mapped only to the contract's inapplicable result. | Reject a mismatched status or numeric value. |
 | Exact metric | Recompute every eccentricity and its exact maximum or minimum. | Reject a forged diameter or radius. |
 | Result normalization | Require the exact result fields and consistent status, value, connectivity, exactness, and detail. | Reject noncanonical or internally inconsistent evidence. |
-| Authorization and runtime | Dispatch only the operator-authorized checker matching the schemas, semantics, format, source digest, and provider runtime. | Unavailable, timeout, cancellation, or error remains non-conclusive. |
+| Authorization and runtime | Dispatch only the operator-authorized checker matching the schemas, semantics, format, source digest, and executable identity. | Unavailable, timeout, cancellation, or error remains non-conclusive. |
 
 Acceptance reports exhaustive finite replay. A rejection means only that the
 submitted result was not verified; it never establishes another diameter,

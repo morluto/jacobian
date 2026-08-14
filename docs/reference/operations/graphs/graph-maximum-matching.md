@@ -17,7 +17,7 @@ The verifier checks one claim:
 > submitted finite simple undirected graph.
 
 The claim is bound to canonical producer-input and candidate digests, graph
-semantics, checker identity, and checker provider runtime. It does not certify
+semantics, checker identity, and checker executable identity. It does not certify
 a different graph or matching, or any theorem that uses the matching as an
 intermediate fact.
 
@@ -61,7 +61,7 @@ nonmaximum.
 | Odd-component count | Remove the barrier and independently enumerate connected components by breadth-first traversal; count components of odd order. | Reject a mismatched certificate. |
 | Tutte–Berge upper bound | Recompute \(b=(|V|+|U|-q(G-U))/2\), require integral parity, and require the declared upper bound and matching cardinality to equal \(b\). | Reject the optimality claim. |
 | Optimality conclusion | Combine the feasible matching lower bound with the independently checked Tutte–Berge upper bound. | Only equality permits acceptance. |
-| Authorization and runtime | Dispatch only the operator-authorized checker whose source digest, schemas, semantics, evidence format, and provider runtime match the record. | Unavailable, timeout, cancellation, or error remains non-conclusive. |
+| Authorization and runtime | Dispatch only the operator-authorized checker whose source digest, schemas, semantics, evidence format, and executable identity match the record. | Unavailable, timeout, cancellation, or error remains non-conclusive. |
 
 The Tutte–Berge theorem gives
 

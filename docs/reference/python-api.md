@@ -87,7 +87,7 @@ a corresponding function is called. The maintained backends are exact package
 dependencies, but they do not become mathematical value identity.
 
 This API is the authoritative mathematical implementation rather than a facade
-over `math.run`. Installed operations parse their typed request once, convert
+over `math.run`. Catalog operations parse their typed request once, convert
 once to the documented semantic input, call the same public function, and
 serialize once. Runtime, catalog, storage, publication, provider installation,
 MCP, and checker-authority objects are not part of this namespace.

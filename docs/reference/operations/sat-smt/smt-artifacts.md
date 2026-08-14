@@ -108,7 +108,7 @@ The proof artifact binds:
   language, and exact SMT-LIB digest;
 - format `ALETHE` and version `cvc5.alethe/1.3.4`;
 - exact proof bytes as canonical base64 plus their SHA-256 digest;
-- the exact cvc5 provider runtime;
+- the exact cvc5 executable or distribution identity;
 - the enforced wall-time budget; and
 - `alethe_hole_count` plus `contains_holes`.
 

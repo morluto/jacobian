@@ -3,16 +3,16 @@
 [Documentation home](../index.md)
 
 - Status: Current MCP contract
-- Installed membership is runtime-defined
+- Availability is defined by the active operator-compiled catalog
 
 Jacobian exposes exactly two MCP tools.
 
 | Tool | Meaning |
 | --- | --- |
-| `math.find` | Search installed operations or inspect one exact ID |
+| `math.find` | Search available built-in operations or inspect one exact ID |
 | `math.run` | Execute one selected operation and return a mathematical value or checker verdict |
 
-The complete installed inventory is available from `operation://catalog`.
+The complete active inventory is available from `operation://catalog`.
 Catalog membership establishes availability, not recommendation,
 compatibility, or verification authority.
 
@@ -44,7 +44,6 @@ lexical retrieval
 It returns lexical relevance plus factual catalog metadata:
 
 - applicability status and stable mismatch code;
-- provider availability;
 - accepted input and artifact types; and
 - produced artifact types.
 
@@ -64,9 +63,9 @@ serve inventory for an empty query, expose projection levels, publish
 `next_views`, reconstruct schemas as prose, or prescribe a next operation.
 
 Exact inspection returns the authoritative typed request and result schemas,
-effect, provider requirements, preflight information, declared value ports, and
-bounded validated examples. Current availability remains sourced from the live
-catalog rather than static documentation.
+effect, preflight information, declared value ports, and bounded validated
+examples. Runtime and checker executable identities remain operator-owned
+internal state rather than discovery metadata.
 
 ## `math.run`
 

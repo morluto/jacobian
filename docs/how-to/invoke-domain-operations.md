@@ -3,7 +3,7 @@
 [Documentation home](../index.md)
 
 Use this guide when you know the mathematical outcome you need but not the
-installed tool ID or payload. The product surface is
+built-in operation ID or payload. The product surface is
 [search and execute](../explanation/architecture.md#search-and-execute):
 
 1. **Search or inspect** with `math.find`;
@@ -13,14 +13,13 @@ installed tool ID or payload. The product surface is
 4. when independent checking matters, run a **separate checker tool** (often a
    `*.verify` ID)—not a second mode on the producer.
 
-Do not infer availability or payload fields from examples. Provider health,
-configured exclusions, optional native/formal backends, and checker
-authorization all affect
-the installed catalog.
+Do not infer availability or payload fields from examples. The active compiled
+catalog is authoritative; optional external executables and checker
+authorization may affect which exceptional operations it contains.
 
 ## Discover and describe
 
-Call `math.find` with a search request to receive installed matches.
+Call `math.find` with a search request to receive catalog matches.
 Select by mathematical outcome and domain tags, then inspect the exact ID:
 
 ```json
@@ -33,8 +32,9 @@ Select by mathematical outcome and domain tags, then inspect the exact ID:
 ```
 
 The descriptor is the request contract. Check its `input_schema`,
-`output_schema`, provider runtime, version, and any fixed checker-related
-metadata before constructing a payload.
+`output_schema`, version, accepted input kinds, artifact types, and examples
+before constructing a payload. Runtime and checker executable identities are
+operator-owned internal state and are not exposed in operation descriptors.
 
 Catalog membership means available and invocable. It does not mean recommended,
 release-supported, independently verified, or compatible with a different
@@ -57,7 +57,7 @@ from pathlib import Path
 from mcp import Client
 
 from jacobian.adapters.mcp.server import create_server
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.operator_lifecycle import initialize_state
 
 
 STATE_DIR = Path(".jacobian-domain-how-to")
@@ -91,10 +91,8 @@ async def tool(client: Client, name: str, arguments: dict) -> dict:
 
 
 async def main() -> None:
-    server = create_server(
-        STATE_DIR,
-        checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-    )
+    initialize_state(STATE_DIR)
+    server = create_server(STATE_DIR)
     async with Client(server, raise_exceptions=True) as client:
         # Ordinary producer tool.
         described = await tool(
@@ -195,9 +193,9 @@ create an obligation lifecycle.
 
 If describing the expected verifier returns `UNKNOWN_OPERATION`, do not guess
 another ID or treat computed evidence as verified. Re-read the catalog. The
-usual causes are disabled bundled references, an unavailable checker backend,
-failed runtime measurement, configured exclusions, or a producer relation for
-which no independent checker is installed.
+usual causes are an unavailable optional checker executable, omitted checker
+authorization, visibility policy, or a producer relation for which Jacobian
+ships no independent checker.
 
 You can still use the computed result as explicitly labeled evidence. Preserve
 its typed value and artifacts, and report the missing checker operation.

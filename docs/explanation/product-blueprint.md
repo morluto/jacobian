@@ -3,26 +3,38 @@
 [Documentation home](../index.md)
 
 - Status: Current product contract
-- Scope: MCP, CLI, and Python access to installed mathematical operations
+- Scope: MCP, CLI, and Python access to built-in mathematical operations
 
-The implemented next-breaking-release design is recorded in the
-[operation runtime target](operation-runtime-target.md). This document is the
-current product contract for that architecture.
+The [compiled operation architecture](operation-runtime-target.md) records the
+catalog and selected-execution lifecycle behind this product contract.
 
 ## Product definition
 
-Jacobian is a toolbox of atomic mathematical operations for agents. The agent
-owns decomposition, sequencing, checker choice, and stopping. Jacobian owns
-typed mathematical boundaries, resource admission, operation installation, and
-operator authorization of independent checkers.
+Jacobian is an MCP server with two tools for atomic mathematical operations.
+The agent owns decomposition, sequencing, checker choice, and stopping.
+Jacobian owns typed mathematical boundaries, resource admission, catalog
+compilation, and operator authorization of independent checkers.
 
 ```text
-math.find   search or inspect an installed operation
-math.run    run one installed operation and return a value or checker verdict
+math.find   search or inspect a built-in operation in the active catalog
+math.run    run one selected operation and return a value or checker verdict
 ```
 
-The full installed inventory is available at `operation://catalog`. Adding a
+The full active inventory is available at `operation://catalog`. Adding a
 mathematical operation does not add an MCP tool.
+
+Three terms define the lifecycle:
+
+- A **built-in operation** is a typed mathematical function shipped by
+  Jacobian.
+- The **compiled catalog** is inert searchable metadata created by
+  `jacobian init` or `jacobian update`.
+- An **external checker or executable** is exceptional operator-managed
+  machinery whose identity is internal and fail-closed.
+
+Ordinary maintained libraries such as SymPy, NetworkX, FLINT, Z3, and cvc5 are
+private mathematical backends. They are not operation-specific runtimes or a
+plugin surface.
 
 An ordinary operation has one mathematical outcome: compute a determinant,
 factor a polynomial, enumerate a bounded family, or construct a separating
@@ -117,8 +129,8 @@ persistence flag.
 ## Search, execution, and checking
 
 `math.find` has two purposes: lexical search and exact inspection. Search may
-report factual applicability, provider availability, checker availability, and
-cost admission. It never recommends a workflow or a next operation. The full
+report factual applicability, typed input acceptance, and artifact types. It
+never recommends a workflow or a next operation. The full
 inventory remains a resource rather than an empty-query search mode.
 
 `math.run` executes one selected ID. The external request is parsed once,
@@ -150,9 +162,9 @@ Worked investigations belong in scenarios and benchmarks. Harbor tasks, hidden
 verifiers, and operator-run model evaluations are evaluation infrastructure,
 not runtime workflow features.
 
-External operation packages remain unsupported until a concrete package proves
-the need. Discovery, enablement, provider availability, and checker authority
-will remain separate decisions if that surface is introduced.
+External operation packages remain unsupported. Jacobian ships an explicit
+built-in mathematical library rather than a plugin discovery or enablement
+surface.
 
 ## Architecture budgets
 

@@ -141,11 +141,12 @@ extend_exclude = ["benchmarks"]
 known_first_party = ["jacobian", "jacobian_checkers"]
 # Harbor is intentionally executed as a pinned external CLI through uvx; it is
 # not part of Jacobian's runtime or locked application dependencies.
+# hatchling is the wheel build backend imported only by hatch_build.py.
 # The maintained deployment smoke configures the HTTP client bundled by the
 # exactly pinned MCP transport; deploy/ is not part of the Python wheel.
 # The Harbor manifest writer is repository tooling and uses the direct dev-only
 # tomli-w dependency; it is intentionally absent from the runtime wheel.
-per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["cvc5", "python-flint"], "DEP003" = ["httpx2"], "DEP004" = ["tomli_w"] }
+per_rule_ignores = { "DEP001" = ["harbor", "hatchling"], "DEP002" = ["cvc5", "python-flint"], "DEP003" = ["httpx2"], "DEP004" = ["tomli_w"] }
 
 [tool.importlinter]
 root_package = "jacobian"

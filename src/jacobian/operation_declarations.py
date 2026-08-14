@@ -143,6 +143,26 @@ type OperationSpec = OperationDeclaration[Any, Any] | InlineOperation[Any, Any]
 type OperationDeclarations = tuple[OperationSpec, ...]
 
 
+def _declaration_for_inline(
+    spec: OperationSpec,
+) -> OperationDeclaration[Any, Any]:
+    if isinstance(spec, OperationDeclaration):
+        return spec
+    return OperationDeclaration(
+        operation_id=spec.operation_id,
+        version=spec.version,
+        title=spec.title,
+        description=spec.description,
+        request_type=spec.request_type,
+        result_type=spec.result_type,
+        execute=spec.run,
+        tags=spec.tags,
+        examples=spec.examples,
+        invalid_request=spec.invalid_request,
+        enrich_invalid_request=spec.enrich_invalid_request,
+    )
+
+
 def with_invalid_request(
     operations: OperationDeclarations,
     diagnostic: OperationDiagnostic,
@@ -287,20 +307,25 @@ def inline_operation[
     RequestT: ContractModel,
     ResultT: ContractModel,
 ](
-    spec: OperationDeclaration[RequestT, ResultT],
+    spec: OperationSpec,
     *,
     input_ports: tuple[InputPort[Any], ...] = (),
     output_ports: tuple[OutputPort[Any], ...] = (),
-) -> InlineOperation[RequestT, ResultT] | OperationDeclaration[RequestT, ResultT]:
+) -> InlineOperation[Any, Any] | OperationDeclaration[Any, Any]:
     """Bind a semantic operation to inline publication."""
 
     if input_ports or output_ports:
+        declaration = _declaration_for_inline(spec)
         return replace(
-            spec,
+            declaration,
             publication=InlinePublication(),
             input_ports=input_ports,
             output_ports=output_ports,
         )
+    if isinstance(spec, OperationDeclaration) and spec.effect is not Effect.READ_ONLY:
+        return replace(spec, publication=InlinePublication())
+    if isinstance(spec, InlineOperation):
+        return spec
     return InlineOperation(
         operation_id=spec.operation_id,
         version=spec.version,

@@ -598,7 +598,7 @@ def test_computed_adapter_preserves_operational_failure_status(
         replace(
             bundle[0],
             operation_id=f"synthetic.compute.failure.{status.value.lower()}",
-            execute=abort(status),
+            run=abort(status),
         )
         for status in statuses
     )

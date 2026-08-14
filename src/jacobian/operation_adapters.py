@@ -56,7 +56,7 @@ def parse_operation_input[ModelT: BaseModel](
             )
         ) from exc
     if not any(isinstance(value, ContractModel) for value in payload.values()):
-        return model.model_validate_json(encoded)
+        return model.model_validate_json(encoded, strict=True)
     decoded = loads_strict_json(encoded)
     if not isinstance(decoded, dict):
         raise OperationInvocationError(
@@ -75,7 +75,7 @@ def parse_operation_input[ModelT: BaseModel](
         )
         for key in decoded
     }
-    return model.model_validate(assembled)
+    return model.model_validate(assembled, strict=True)
 
 
 class OperationAdapter(Protocol[PreparedT]):

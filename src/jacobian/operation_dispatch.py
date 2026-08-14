@@ -316,22 +316,30 @@ def invoke_ready_adapter(
                 ),
             )
     outcome = adapter.invoke(prepared)
-    if _adapter_output_schema_mismatch(descriptor, outcome):
-        outcome = _adapter_output_model_failure(descriptor)
+    invalid = _adapter_output_model_failure(descriptor, outcome)
+    if invalid is not None:
+        outcome = invalid
     return project_operation_result(outcome)
 
 
-def _adapter_output_schema_mismatch(
+def _adapter_output_model_failure(
     descriptor: Any, outcome: OperationProjection
-) -> bool:
+) -> OperationProjection | None:
     publication = outcome.publication
     output = publication.output if publication is not None else None
     if output is None:
-        return False
-    return bool(model_schema(type(output)) != descriptor.output_schema)
-
-
-def _adapter_output_model_failure(descriptor: Any) -> OperationProjection:
+        return None
+    output_type = type(output)
+    if model_schema(output_type) == descriptor.output_schema:
+        try:
+            output_type.model_validate_json(
+                output.model_dump_json(warnings="error").encode(),
+                strict=True,
+            )
+        except (TypeError, ValueError, ValidationError):
+            pass
+        else:
+            return None
     return OperationProjection(
         operation_id=descriptor.operation_id,
         version=descriptor.version,

@@ -201,9 +201,10 @@ VPS must preserve them. The maintained authenticated unit uses
    selected tenant. In that identity it verifies that SQLite and its runtime
    files are readable and writable, every persisted manifest and payload blob
    reference resolves to a local regular file whose SHA-256 matches its content
-   address, existing blob files are readable, and the tenant, staging, blob, and
-   existing blob-prefix directories are readable, writable, and traversable. It
-   may report `MISSING` only when
+   address, and each manifest remains bound to its committed metadata, parents,
+   descriptors, and mathematical object digest. Existing blob files must be
+   readable, and the tenant, staging, blob, and existing blob-prefix directories
+   must be readable, writable, and traversable. It may report `MISSING` only when
    the selected tenant directory does not exist; an existing directory with
    missing or uninitialized metadata is a blocking partial restore. Every
    selected tenant must report `MISSING`, `COMPATIBLE`, or a supported

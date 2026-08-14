@@ -49,8 +49,31 @@ def test_state_preflight_accepts_missing_and_current_tenant_state(
 
     tenant_id = "current-tenant"
     tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
-    with ArtifactRepository(tmp_path / "tenants" / tenant_key):
-        pass
+    with ArtifactRepository(tmp_path / "tenants" / tenant_key) as repository:
+        schema_uri = repository.register_descriptor(
+            kind="schema",
+            name="current-schema",
+            version="1",
+            definition={"type": "object"},
+        )
+        semantics_uri = repository.register_descriptor(
+            kind="semantics",
+            name="current-semantics",
+            version="1",
+            definition={"meaning": "deployment preflight fixture"},
+        )
+        parent_uri = repository.register_descriptor(
+            kind="schema",
+            name="current-parent",
+            version="1",
+            definition={"type": "boolean"},
+        )
+        repository.put(
+            schema_uri=schema_uri,
+            semantics_uri=semantics_uri,
+            payload={"restored": True},
+            parents=(parent_uri,),
+        )
 
     current = inspect_selected_state(tmp_path, (tenant_id,))
     assert current[0]["status"] == "COMPATIBLE"
@@ -117,6 +140,43 @@ def test_state_preflight_rejects_damaged_referenced_blobs(
         f"artifact metadata references a {damage} blob; restore the complete "
         "tenant state"
     )
+
+
+def test_state_preflight_rejects_inconsistent_manifest_bindings(
+    tmp_path: Path,
+) -> None:
+    tenant_id = "inconsistent-artifact-restore"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    state = tmp_path / "tenants" / tenant_key
+    with ArtifactRepository(state) as repository:
+        first_uri = repository.register_descriptor(
+            kind="schema",
+            name="first",
+            version="1",
+            definition={"type": "object"},
+        )
+        second_uri = repository.register_descriptor(
+            kind="schema",
+            name="second",
+            version="1",
+            definition={"type": "string"},
+        )
+    with sqlite3.connect(state / "metadata.sqlite3") as connection:
+        second_payload_digest = connection.execute(
+            "SELECT payload_digest FROM artifacts WHERE artifact_uri = ?",
+            (second_uri,),
+        ).fetchone()
+        assert second_payload_digest is not None
+        connection.execute(
+            "UPDATE artifacts SET payload_digest = ? WHERE artifact_uri = ?",
+            (second_payload_digest[0], first_uri),
+        )
+
+    report = inspect_selected_state(tmp_path, (tenant_id,))[0]
+
+    assert report["status"] == "CORRUPT"
+    assert report["blocking"] is True
+    assert report["diagnostic"] == ("artifact manifest differs from committed metadata")
 
 
 def test_state_preflight_rejects_state_below_the_supported_floor(

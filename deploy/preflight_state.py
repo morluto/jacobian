@@ -14,6 +14,12 @@ from pathlib import Path
 from urllib.parse import quote
 
 from jacobian.adapters.mcp.remote import load_static_token_file
+from jacobian.canonical import CanonicalizationError, loads_strict_json
+from jacobian.contracts.artifacts import ArtifactManifest
+from jacobian.persistence.decoding import (
+    PersistenceCorruptionError,
+    decode_persisted_model,
+)
 from jacobian.persistence.migrations import (
     CURRENT_STATE_FORMAT_REVISION,
     STATE_MIGRATIONS,
@@ -21,7 +27,16 @@ from jacobian.persistence.migrations import (
 )
 from jacobian.persistence.state_health import inspect_state_health
 from jacobian.storage.errors import ArtifactNotFoundError
-from jacobian.storage.identity import digest_from_uri
+from jacobian.storage.identity import (
+    BOOTSTRAP_SCHEMA_URI,
+    BOOTSTRAP_SEMANTICS_URI,
+    OBJECT_FORMAT_VERSION,
+    digest_from_uri,
+    framed_digest,
+)
+from jacobian.storage.models import StorageLimits
+
+_MAX_BLOB_BYTES = StorageLimits().max_artifact_bytes
 
 
 def _blob_path(state_dir: Path, digest: str) -> Path | None:
@@ -35,12 +50,157 @@ def _blob_path(state_dir: Path, digest: str) -> Path | None:
     return state_dir / "blobs" / "sha256" / value[:2] / value[2:]
 
 
-def _blob_matches_digest(path: Path, digest: str) -> bool:
+def _read_referenced_blob(
+    state_dir: Path, digest: str
+) -> tuple[bytes | None, str | None]:
+    path = _blob_path(state_dir, digest)
+    if path is None:
+        return None, "artifact metadata contains an invalid blob reference"
+    if path.is_symlink() or not path.is_file():
+        return (
+            None,
+            "artifact metadata references a missing blob; restore the complete "
+            "tenant state",
+        )
+
     measured = hashlib.sha256()
+    contents = bytearray()
     with path.open("rb") as blob:
         while chunk := blob.read(1024 * 1024):
             measured.update(chunk)
-    return f"sha256:{measured.hexdigest()}" == digest
+            contents.extend(chunk)
+            if len(contents) > _MAX_BLOB_BYTES:
+                return None, "artifact metadata references an oversized blob"
+    if f"sha256:{measured.hexdigest()}" != digest:
+        return (
+            None,
+            "artifact metadata references a corrupt blob; restore the complete "
+            "tenant state",
+        )
+    return bytes(contents), None
+
+
+def _decode_manifest(
+    state_dir: Path, artifact_uri: str, manifest_digest: str
+) -> tuple[ArtifactManifest | None, str | None]:
+    manifest_bytes, diagnostic = _read_referenced_blob(state_dir, manifest_digest)
+    if diagnostic is not None:
+        return None, diagnostic
+    if manifest_bytes is None:
+        return None, "artifact metadata contains an unreadable manifest"
+    try:
+        return (
+            decode_persisted_model(
+                ArtifactManifest,
+                manifest_bytes,
+                record_kind="artifact_manifest",
+                record_id=artifact_uri,
+                field="manifest_json",
+            ),
+            None,
+        )
+    except PersistenceCorruptionError:
+        return None, "artifact metadata contains an invalid manifest"
+
+
+def _manifest_metadata_diagnostic(
+    connection: sqlite3.Connection,
+    row: sqlite3.Row,
+    manifest: ArtifactManifest,
+) -> str | None:
+    artifact_uri = str(row["artifact_uri"])
+    parent_rows = connection.execute(
+        """
+        SELECT
+            parent.parent_uri,
+            committed.artifact_uri AS committed_parent_uri
+        FROM artifact_parents AS parent
+        LEFT JOIN artifacts AS committed
+            ON committed.artifact_uri = parent.parent_uri
+        WHERE parent.artifact_uri = ?
+        ORDER BY parent.position
+        """,
+        (artifact_uri,),
+    ).fetchall()
+    if any(parent["committed_parent_uri"] is None for parent in parent_rows):
+        return "artifact metadata references an uncommitted parent"
+    database_parents = tuple(str(parent["parent_uri"]) for parent in parent_rows)
+    if manifest.parents != database_parents:
+        return "artifact manifest parents differ from committed metadata"
+    if (
+        manifest.object_digest != str(row["object_digest"])
+        or manifest.payload_digest != str(row["payload_digest"])
+        or manifest.schema_uri != str(row["schema_uri"])
+        or manifest.semantics_uri != str(row["semantics_uri"])
+        or manifest.canonicalizer_digest != str(row["canonicalizer_digest"])
+        or manifest.summary != str(row["summary"])
+    ):
+        return "artifact manifest differs from committed metadata"
+
+    descriptor_uris = (str(manifest.schema_uri), str(manifest.semantics_uri))
+    if descriptor_uris != (BOOTSTRAP_SCHEMA_URI, BOOTSTRAP_SEMANTICS_URI):
+        committed_references = {
+            str(reference["artifact_uri"])
+            for reference in connection.execute(
+                "SELECT artifact_uri FROM artifacts WHERE artifact_uri IN (?, ?)",
+                descriptor_uris,
+            ).fetchall()
+        }
+        if set(descriptor_uris) != committed_references:
+            return "artifact metadata references an uncommitted descriptor"
+    return None
+
+
+def _payload_binding_diagnostic(
+    state_dir: Path, manifest: ArtifactManifest
+) -> str | None:
+    payload_bytes, diagnostic = _read_referenced_blob(
+        state_dir, str(manifest.payload_digest)
+    )
+    if diagnostic is not None:
+        return diagnostic
+    if payload_bytes is None:
+        return "artifact metadata contains an unreadable payload"
+    recomputed_object_digest = framed_digest(
+        OBJECT_FORMAT_VERSION,
+        (
+            str(manifest.schema_uri).encode(),
+            str(manifest.semantics_uri).encode(),
+            str(manifest.canonicalizer_digest).encode(),
+            payload_bytes,
+        ),
+    )
+    if recomputed_object_digest != manifest.object_digest:
+        return "artifact payload differs from its mathematical object digest"
+    try:
+        loads_strict_json(payload_bytes)
+    except CanonicalizationError:
+        return "artifact metadata contains an invalid payload"
+    return None
+
+
+def _artifact_binding_diagnostic(
+    connection: sqlite3.Connection,
+    state_dir: Path,
+    row: sqlite3.Row,
+) -> str | None:
+    artifact_uri = str(row["artifact_uri"])
+    try:
+        manifest_digest = digest_from_uri(artifact_uri)
+    except ArtifactNotFoundError:
+        return "artifact metadata contains an invalid blob reference"
+    if manifest_digest != str(row["manifest_digest"]):
+        return "artifact metadata contains an inconsistent blob reference"
+
+    manifest, diagnostic = _decode_manifest(state_dir, artifact_uri, manifest_digest)
+    if diagnostic is not None:
+        return diagnostic
+    if manifest is None:
+        return "artifact metadata contains an unreadable manifest"
+    diagnostic = _manifest_metadata_diagnostic(connection, row, manifest)
+    if diagnostic is not None:
+        return diagnostic
+    return _payload_binding_diagnostic(state_dir, manifest)
 
 
 def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
@@ -48,30 +208,12 @@ def _referenced_blob_diagnostic(state_dir: Path) -> str | None:
     try:
         uri = f"file:{quote(str(database_path.resolve()), safe='/')}?mode=ro"
         with sqlite3.connect(uri, uri=True) as connection:
-            rows = connection.execute(
-                "SELECT artifact_uri, manifest_digest, payload_digest FROM artifacts"
-            )
-            for artifact_uri, manifest_digest, payload_digest in rows:
-                try:
-                    uri_digest = digest_from_uri(str(artifact_uri))
-                except ArtifactNotFoundError:
-                    return "artifact metadata contains an invalid blob reference"
-                if uri_digest != str(manifest_digest):
-                    return "artifact metadata contains an inconsistent blob reference"
-                for digest in (uri_digest, str(payload_digest)):
-                    blob_path = _blob_path(state_dir, digest)
-                    if blob_path is None:
-                        return "artifact metadata contains an invalid blob reference"
-                    if blob_path.is_symlink() or not blob_path.is_file():
-                        return (
-                            "artifact metadata references a missing blob; restore "
-                            "the complete tenant state"
-                        )
-                    if not _blob_matches_digest(blob_path, digest):
-                        return (
-                            "artifact metadata references a corrupt blob; restore "
-                            "the complete tenant state"
-                        )
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute("SELECT * FROM artifacts")
+            for row in rows:
+                diagnostic = _artifact_binding_diagnostic(connection, state_dir, row)
+                if diagnostic is not None:
+                    return diagnostic
     except (OSError, sqlite3.DatabaseError) as exc:
         return f"could not inspect artifact blob references: {exc}"
     return None

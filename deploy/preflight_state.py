@@ -302,11 +302,28 @@ def _drop_privileges(user_name: str) -> None:
 
 def _existing_path_stat(path: Path, *, label: str) -> os.stat_result | None:
     try:
+        if path.is_symlink():
+            raise PermissionError(f"{label} must not be a symbolic link")
         return path.stat()
     except FileNotFoundError:
         return None
     except OSError as exc:
         raise PermissionError(f"{label} is not accessible: {exc}") from exc
+
+
+def _require_no_symlink_components(path: Path, *, label: str) -> None:
+    absolute = path.absolute()
+    candidate = Path(absolute.anchor)
+    for component in absolute.parts[1:]:
+        candidate /= component
+        try:
+            metadata = candidate.lstat()
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise PermissionError(f"{label} is not accessible: {exc}") from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise PermissionError(f"{label} must not contain symbolic links")
 
 
 def _require_directory_access(path: Path, *, label: str) -> bool:
@@ -355,7 +372,11 @@ def _require_blob_prefix_access(blob_root: Path, *, tenant_key: str) -> None:
     if not blob_root.is_dir():
         return
     for prefix in _iter_directory(blob_root, label=f"tenant blob root {tenant_key}"):
-        if prefix.is_dir() and not prefix.is_symlink():
+        if prefix.is_symlink():
+            raise PermissionError(
+                f"tenant blob prefix {tenant_key} must not be a symbolic link"
+            )
+        if prefix.is_dir():
             _require_directory_access(
                 prefix,
                 label=f"tenant blob prefix {tenant_key} ({prefix.name})",
@@ -363,11 +384,10 @@ def _require_blob_prefix_access(blob_root: Path, *, tenant_key: str) -> None:
             for blob in _iter_directory(
                 prefix, label=f"tenant blob prefix {tenant_key}"
             ):
-                if not blob.is_symlink():
-                    _require_readable_file(
-                        blob,
-                        label=(f"tenant blob file {tenant_key} ({prefix.name} prefix)"),
-                    )
+                _require_readable_file(
+                    blob,
+                    label=(f"tenant blob file {tenant_key} ({prefix.name} prefix)"),
+                )
 
 
 def _require_existing_tenant_access(state_dir: Path, *, tenant_key: str) -> None:
@@ -397,6 +417,7 @@ def _require_probe_access(state_root: Path, tenant_ids: tuple[str, ...]) -> None
         tenant_key = hashlib.sha256(tenant_id.encode("utf-8")).hexdigest()
         state_dir = state_root / "tenants" / tenant_key
         state_label = f"tenant state {tenant_key}"
+        _require_no_symlink_components(state_dir, label=state_label)
         if not _require_directory_access(state_dir, label=state_label):
             tenants_root = state_dir.parent
             if _existing_path_stat(tenants_root, label="tenant state root") is not None:

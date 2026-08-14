@@ -182,7 +182,9 @@ VPS must preserve them. The maintained authenticated unit uses
    its blobs independently.
 5. On the destination, restore state ownership to `jacobian:jacobian`. Keep
    `/etc/jacobian-mcp` owned by root with mode `0700` and its token file at mode
-   `0600`. Rebuildable `cache/lean-declarations` data may be omitted.
+   `0600`. Rebuildable `cache/lean-declarations` data may be omitted. Restore
+   tenant state as real directories and regular files, not symbolic links;
+   links can resolve outside the filesystem view allowed by the hardened unit.
 6. Choose the final activation sequence for the ingress mode while the source
    service remains stopped:
 

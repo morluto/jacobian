@@ -232,7 +232,8 @@ validate_retain_releases() {
     local value="$1"
     [[ "${value}" =~ ^[1-9][0-9]*$ ]] || die \
         "--retain-releases must be a positive integer"
-    ((value <= 100)) || die "--retain-releases must not exceed 100"
+    [[ "${value}" =~ ^([1-9]|[1-9][0-9]|100)$ ]] || die \
+        "--retain-releases must not exceed 100"
 }
 
 validate_domain() {

@@ -108,7 +108,7 @@ def test_lean_dry_run_uses_a_distinct_release_profile() -> None:
     assert "tools:       uv=" in completed.stdout
 
 
-@pytest.mark.parametrize("value", ("0", "-1", "all", "101"))
+@pytest.mark.parametrize("value", ("0", "-1", "all", "101", "18446744073709551616"))
 def test_release_retention_rejects_invalid_counts(value: str) -> None:
     completed = _run("--retain-releases", value, "--dry-run")
 

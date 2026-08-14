@@ -409,6 +409,20 @@ def test_state_preflight_requires_a_missing_tenant_to_be_creatable(
         _require_probe_access(tmp_path, ("missing-tenant",))
 
 
+def test_state_preflight_rejects_symlinked_tenant_state(tmp_path: Path) -> None:
+    tenant_id = "symlinked-tenant"
+    tenant_key = hashlib.sha256(tenant_id.encode()).hexdigest()
+    external_state = tmp_path / "external-state"
+    with ArtifactRepository(external_state):
+        pass
+    tenants_root = tmp_path / "state" / "tenants"
+    tenants_root.mkdir(parents=True)
+    (tenants_root / tenant_key).symlink_to(external_state, target_is_directory=True)
+
+    with pytest.raises(PermissionError, match="must not contain symbolic links"):
+        _require_probe_access(tmp_path / "state", (tenant_id,))
+
+
 def test_release_retention_keeps_active_and_explicit_previous_release(
     tmp_path: Path,
 ) -> None:

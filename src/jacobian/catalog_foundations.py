@@ -62,7 +62,7 @@ class CatalogFoundationBuilder:
             core.sat,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         if sat_assignment_adapter is not None:
             self.context.register_operation(sat_assignment_adapter)
@@ -75,7 +75,7 @@ class CatalogFoundationBuilder:
             ctx.verification,
             ctx.checkers,
             runtimes.drat_trim,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         if proof_adapter is not None:
             self.context.register_operation(proof_adapter)
@@ -87,7 +87,7 @@ class CatalogFoundationBuilder:
             core.sat,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         if lrat_adapter is not None:
             self.context.register_operation(lrat_adapter)
@@ -100,7 +100,7 @@ class CatalogFoundationBuilder:
             ctx.verification,
             ctx.checkers,
             runtimes.carcara,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         if smt_proof_adapter is not None:
             self.context.register_operation(smt_proof_adapter)
@@ -149,7 +149,7 @@ class CatalogFoundationBuilder:
             core.polynomial_expressions,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         if verification_adapter is not None:
             self.context.register_operation(verification_adapter)

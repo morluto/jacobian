@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import DomainTestServices, open_domain_services
 
 from jacobian.contracts.operations import (
@@ -16,7 +17,6 @@ from jacobian.providers.external_solver_runtime import (
     carcara_provider_runtime,
     cvc5_provider_runtime,
 )
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.cvc5 import install_cvc5_operation
 from jacobian.sat_smt.smt_operations import install_smt_unsat_proof_checker
 
@@ -48,7 +48,7 @@ def carcara_services(
             services.application.verification,
             services.core.checkers,
             carcara,
-            authorize_checker=services.installation.authorizes_bundled_checkers,
+            authorize_checker=services.installation.authorize_bundled_checkers,
         )
         assert verifier is not None
         assert installation.checker_id is not None

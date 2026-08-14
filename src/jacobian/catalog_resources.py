@@ -47,7 +47,7 @@ class CatalogResourceBuilder:
             ctx.artifacts,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         for interval_adapter in interval_adapters:
             if interval_adapter is not None:
@@ -59,7 +59,7 @@ class CatalogResourceBuilder:
             ctx.artifacts,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         for positivity_adapter in positivity_adapters:
             if positivity_adapter is not None:

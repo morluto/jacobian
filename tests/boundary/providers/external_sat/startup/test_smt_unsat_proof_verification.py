@@ -10,6 +10,7 @@ from tests.boundary.providers.external_sat.external_sat_support import (
     fake_carcara,
     open_smt_proof_verifier_services,
 )
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import DomainTestServices
 
 import jacobian_checkers.smt
@@ -26,7 +27,6 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.smt import SmtResourceBudget
 from jacobian.contracts.verification import VerificationRecord
 from jacobian.providers.external_solver_runtime import carcara_provider_runtime
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.verification.errors import CheckerExecutionError
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

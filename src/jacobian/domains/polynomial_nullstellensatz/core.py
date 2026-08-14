@@ -541,7 +541,7 @@ def install_nullstellensatz_core(
                 "bundled standard-library sparse QQ replay independent of Singular and Groebner generation"
             ),
         ),
-        authorize=context.authorizes_bundled_checkers,
+        authorize=context.authorize_bundled_checkers,
     )
     installation = replace(contracts, checker_id=installed_checker.checker_id)
     resources = NullstellensatzResources(

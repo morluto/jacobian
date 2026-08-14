@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -14,7 +15,6 @@ from tests.support.services import (
 
 from jacobian.contracts.operations import OperationRequest
 from jacobian.contracts.results import ExecutionStatus
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.sat_lrat import install_sat_lrat_verifier
 
 
@@ -38,7 +38,7 @@ def _open_lrat_services(
                 services.core.sat,
                 services.application.verification,
                 services.core.checkers,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             if adapter is not None:
                 services.installation.register_operation(adapter)

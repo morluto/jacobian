@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.provider_lean import (
     PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
@@ -36,7 +37,6 @@ from jacobian.lean_frontend.declarations import (
     LeanSubprocessDeclarationBackend,
 )
 from jacobian.operator_lifecycle import initialize_state
-from jacobian.runtime import CheckerAuthorityMode
 
 pytestmark = [
     pytest.mark.skipif(

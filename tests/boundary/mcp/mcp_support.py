@@ -11,8 +11,8 @@ from mcp.server import MCPServer
 from jacobian.adapters.mcp.context import AppState
 from jacobian.adapters.mcp.server import create_server_from_runtime
 from jacobian.operation_declarations import OperationDeclarations
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.model import JacobianRuntime
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import open_domain_services
 
 

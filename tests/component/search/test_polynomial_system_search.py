@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import open_domain_services
 
 from jacobian.contracts.operations import (
@@ -10,7 +11,6 @@ from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
 )
 from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 def _request(constant: int) -> OperationRequest:
@@ -53,7 +53,7 @@ def _invoke_search(
             services.core.artifacts,
             services.installation.verification,
             services.core.checkers,
-            authorize_checker=services.installation.authorizes_bundled_checkers,
+            authorize_checker=services.installation.authorize_bundled_checkers,
         )
         if checker is not None:
             services.installation.register_operation(checker)

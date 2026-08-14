@@ -5,12 +5,12 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import atomic_installation, open_domain_services
 
 from jacobian.checker_authorization import install_polytope_checkers
 from jacobian.domains.matrix_lattice import matrix_operations
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices
 
 

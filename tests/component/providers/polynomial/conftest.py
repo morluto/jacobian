@@ -13,8 +13,7 @@ from tests.component.providers.polynomial.polynomial_operations_support import (
     PolynomialTestServices,
     open_polynomial_services,
 )
-
-from jacobian.runtime.config import CheckerAuthorityMode
+from tests.support.catalog_build_options import CheckerAuthorityMode
 
 
 @pytest.fixture(scope="module")

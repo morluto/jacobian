@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from tests.support.artifacts import sha256_file
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -17,7 +18,6 @@ from jacobian.providers.external_solver_runtime import (
     cadical_provider_runtime,
     drat_trim_provider_runtime,
 )
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.sat_smt.cadical import install_cadical_operations
 from jacobian.sat_smt.sat_operations import (
     install_sat_assignment_checker,
@@ -118,7 +118,7 @@ def open_sat_proof_verifier_services(
                 services.application.verification,
                 services.core.checkers,
                 runtime,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             if verifier is not None:
                 services.installation.register_operation(verifier)
@@ -147,7 +147,7 @@ def open_smt_proof_verifier_services(
                 services.application.verification,
                 services.core.checkers,
                 runtime,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             if verifier is not None:
                 services.installation.register_operation(verifier)
@@ -213,7 +213,7 @@ def _open_external_sat_services(
                     services.core.sat,
                     services.application.verification,
                     services.core.checkers,
-                    authorize_checker=services.installation.authorizes_bundled_checkers,
+                    authorize_checker=services.installation.authorize_bundled_checkers,
                 )
                 if assignment is None:
                     raise RuntimeError("the SAT assignment checker was not installed")
@@ -228,7 +228,7 @@ def _open_external_sat_services(
                     services.application.verification,
                     services.core.checkers,
                     drat_trim_provider_runtime(),
-                    authorize_checker=services.installation.authorizes_bundled_checkers,
+                    authorize_checker=services.installation.authorize_bundled_checkers,
                 )
                 if proof is None:
                     raise RuntimeError("the SAT proof checker was not installed")

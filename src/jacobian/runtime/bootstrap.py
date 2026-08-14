@@ -6,10 +6,9 @@ from pathlib import Path
 
 from jacobian.artifacts import ArtifactService
 from jacobian.operation_binding import OperationBinder
-from jacobian.operation_service import OperationService
+from jacobian.operation_service import OperationPolicy, OperationService
 from jacobian.polynomial_expressions import install_polynomial_expression_artifacts
 from jacobian.registry import CheckerRegistry
-from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.services import CoreServices
 from jacobian.sat_smt.sat import install_sat_artifacts
 from jacobian.sat_smt.smt import install_smt_artifacts
@@ -18,7 +17,12 @@ from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceStore
 
 
-def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreServices:
+def bootstrap_services(
+    root: str | Path,
+    *,
+    operation_policy: OperationPolicy | None = None,
+    bind_existing_checkers: bool = False,
+) -> CoreServices:
     """Open storage and construct the operation-independent service graph."""
 
     store = ArtifactRepository(root)
@@ -36,12 +40,10 @@ def bootstrap_services(root: str | Path, options: RuntimeOptions) -> CoreService
                 artifacts,
             )
         checkers = CheckerRegistry(store)
-        checkers.bind_existing_when_omitted = (
-            options.checker_authority is CheckerAuthorityMode.HYDRATE_EXISTING
-        )
+        checkers.bind_existing_when_omitted = bind_existing_checkers
         operations = OperationService(
             store,
-            policy=options.operation_policy,
+            policy=operation_policy,
         )
         return CoreServices(
             store=store,

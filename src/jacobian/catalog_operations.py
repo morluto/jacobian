@@ -54,7 +54,7 @@ class CatalogOperationBuilder:
             ctx.artifacts,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         for graph_adapter in graph_adapters:
             self.context.register_operation(graph_adapter)
@@ -104,7 +104,7 @@ class CatalogOperationBuilder:
             ctx.artifacts,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         if finite_coverage_adapter is not None:
             self.context.register_operation(finite_coverage_adapter)
@@ -136,7 +136,7 @@ class CatalogOperationBuilder:
             ctx.verification,
             ctx.checkers,
             graph,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         if graph_isomorphism_adapter is not None:
             self.context.register_operation(graph_isomorphism_adapter)
@@ -147,7 +147,7 @@ class CatalogOperationBuilder:
             ctx.artifacts,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         for polynomial_adapter in polynomial_adapters:
             self.context.register_operation(polynomial_adapter)
@@ -159,7 +159,7 @@ class CatalogOperationBuilder:
                 ctx.artifacts,
                 ctx.verification,
                 ctx.checkers,
-                authorize_checker=ctx.authorizes_bundled_checkers,
+                authorize_checker=ctx.authorize_bundled_checkers,
             )
         )
         if polynomial_system_adapter is not None:
@@ -177,7 +177,7 @@ class CatalogOperationBuilder:
             ctx.artifacts,
             ctx.verification,
             ctx.checkers,
-            authorize_checker=ctx.authorizes_bundled_checkers,
+            authorize_checker=ctx.authorize_bundled_checkers,
         )
         for universal_adapter in universal_adapters:
             self.context.register_operation(universal_adapter)
@@ -202,7 +202,7 @@ class CatalogOperationBuilder:
                 ctx.verification,
                 ctx.checkers,
                 groups=operation_groups,
-                authorize=ctx.authorizes_bundled_checkers,
+                authorize=ctx.authorize_bundled_checkers,
             )
         for adapter in adapters:
             self.context.register_operation(adapter)

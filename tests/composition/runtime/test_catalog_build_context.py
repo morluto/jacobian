@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import pytest
 
 from jacobian.catalog_build_context import create_catalog_build_context
-from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 
 
 def _graphs() -> tuple[SimpleNamespace, SimpleNamespace, list[object]]:
@@ -23,28 +22,23 @@ def _graphs() -> tuple[SimpleNamespace, SimpleNamespace, list[object]]:
     return core, application, registered
 
 
-def test_context_wires_application_verification_and_filters_excluded_adapters() -> None:
+def test_context_wires_application_verification_and_registers_adapters() -> None:
     core, application, registered = _graphs()
     context = create_catalog_build_context(
         core,
         application,
-        RuntimeOptions(
-            checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-            operation_exclusions=frozenset({"excluded"}),
-        ),
+        authorize_bundled_checkers=True,
     )
 
-    context.register_operation(
-        SimpleNamespace(descriptor=SimpleNamespace(operation_id="excluded"))
-    )
+    first = SimpleNamespace(descriptor=SimpleNamespace(operation_id="first"))
+    context.register_operation(first)
     included = SimpleNamespace(descriptor=SimpleNamespace(operation_id="included"))
     context.register_operation(included)
 
     assert context.verification is application.verification
     assert context.values is core.values
-    assert context.checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
-    assert registered == [included]
-    assert context.authorizes_bundled_checkers
+    assert context.authorize_bundled_checkers
+    assert registered == [first, included]
 
 
 def test_context_rejects_application_built_from_another_core() -> None:
@@ -56,5 +50,4 @@ def test_context_rejects_application_built_from_another_core() -> None:
             SimpleNamespace(
                 core=SimpleNamespace(), verification=application.verification
             ),
-            RuntimeOptions(),
         )

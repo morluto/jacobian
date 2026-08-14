@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.polynomials import univariate_term as _term
 from tests.support.services import (
     DomainTestServices,
@@ -21,7 +22,6 @@ from jacobian.contracts.results import ExecutionStatus
 from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
 )
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.verification.errors import CheckerExecutionError
 
 
@@ -44,7 +44,7 @@ def _open_polynomial_system_services(
                 services.core.artifacts,
                 services.application.verification,
                 services.core.checkers,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             if adapter is not None:
                 services.installation.register_operation(adapter)

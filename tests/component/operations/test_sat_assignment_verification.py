@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -26,7 +27,6 @@ from jacobian.contracts.operations import (
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.contracts.sat import SatResourceBudget
 from jacobian.contracts.verification import VerificationRecord
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.sat_operations import (
     SatAssignmentCheckerInstallation,
     install_sat_assignment_checker,
@@ -59,7 +59,7 @@ def _open_sat_assignment_services(
                 services.core.sat,
                 services.application.verification,
                 services.core.checkers,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             if adapter is not None:
                 services.installation.register_operation(adapter)

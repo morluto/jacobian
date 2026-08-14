@@ -25,7 +25,6 @@ from jacobian.operator_lifecycle import (
     initialize_state,
     update_state,
 )
-from jacobian.runtime.config import CheckerAuthorityMode
 
 if TYPE_CHECKING:
     from jacobian.runtime.model import JacobianRuntime
@@ -94,7 +93,6 @@ class CliState:
             else:
                 self._runtime = opener(
                     self.state_dir,
-                    checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
                 )
         return self._runtime
 

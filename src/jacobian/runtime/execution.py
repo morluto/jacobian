@@ -10,7 +10,6 @@ from jacobian.operation_registry import OperationRegistry
 from jacobian.operation_service import OperationPolicy
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.runtime.services import build_runtime_services
 
@@ -26,10 +25,8 @@ def create_execution_runtime(
 
     core = bootstrap_services(
         root,
-        RuntimeOptions(
-            checker_authority=CheckerAuthorityMode.HYDRATE_EXISTING,
-            operation_policy=operation_policy,
-        ),
+        operation_policy=operation_policy,
+        bind_existing_checkers=True,
     )
     if checker_registry is not None:
         core.checkers = checker_registry

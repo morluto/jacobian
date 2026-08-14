@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.state import copy_template
 
@@ -13,7 +14,6 @@ from jacobian.contracts.operations import (
     ProviderObservation,
 )
 from jacobian.provider_measurements import _cold_install_spec
-from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(

@@ -11,7 +11,7 @@ from jacobian.builtin_operation_modules import load_builtin_operation_modules
 from jacobian.catalog_operations import CatalogOperationBuilder
 from jacobian.operation_binding import BoundOperationGroup
 from jacobian.operation_declarations import OperationDeclarations
-from jacobian.runtime.config import CheckerAuthorityMode
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,

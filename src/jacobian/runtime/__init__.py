@@ -1,10 +1,3 @@
-"""Passive runtime configuration contracts."""
+"""Selected-operation execution runtime ownership."""
 
 from __future__ import annotations
-
-from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
-
-__all__ = [
-    "CheckerAuthorityMode",
-    "RuntimeOptions",
-]

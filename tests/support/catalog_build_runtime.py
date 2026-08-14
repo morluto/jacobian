@@ -8,15 +8,14 @@ from jacobian.catalog_build import build_catalog_operations
 from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.catalog_build_resources import CatalogBuildResources
 from jacobian.operation_service import OperationPolicy
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.runtime.services import (
     CoreServices,
     RuntimeServices,
     build_runtime_services,
 )
+from tests.support.catalog_build_options import CheckerAuthorityMode
 
 
 class CatalogBuildRuntime(JacobianRuntime):
@@ -41,20 +40,26 @@ def create_catalog_build_runtime(
     root: str | Path,
     *,
     checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE,
-    operation_exclusions: frozenset[str] = frozenset(),
     operation_policy: OperationPolicy | None = None,
 ) -> JacobianRuntime:
     """Build all catalog adapters for integration and provider tests."""
 
-    options = RuntimeOptions(
-        checker_authority=checker_authority,
-        operation_exclusions=operation_exclusions,
+    core = bootstrap_services(
+        root,
         operation_policy=operation_policy,
+        bind_existing_checkers=(
+            checker_authority is CheckerAuthorityMode.HYDRATE_EXISTING
+        ),
     )
-    core = bootstrap_services(root, options)
     try:
         services = build_runtime_services(core)
-        context = create_catalog_build_context(core, services, options)
+        context = create_catalog_build_context(
+            core,
+            services,
+            authorize_bundled_checkers=(
+                checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
+            ),
+        )
         resources = build_catalog_operations(context, services)
         return CatalogBuildRuntime(core, services, resources)
     except BaseException as error:

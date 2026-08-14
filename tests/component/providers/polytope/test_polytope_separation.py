@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.rationals import rational_payload as _q
 from tests.support.services import (
     DomainTestServices,
@@ -23,7 +24,6 @@ from jacobian.contracts.polytope import PolytopeSeparateRequest
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.operation_projection import project_operation_result
 from jacobian.polytope_operations import PolytopeSeparationAdapter
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @dataclass(frozen=True, slots=True)

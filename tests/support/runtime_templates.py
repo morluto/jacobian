@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
-from jacobian.runtime import CheckerAuthorityMode
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.state import (
     publish_template,

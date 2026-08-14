@@ -24,7 +24,6 @@ from jacobian.provider_inventory import (
     ProviderInventory,
     ProviderInventoryLoader,
 )
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
@@ -99,8 +98,7 @@ def test_core_domain_verification_phase_accepts_empty_declarations() -> None:
 
 @dataclass
 class _UnauthorizedContext:
-    authorizes_bundled_checkers: bool = False
-    checker_authority: CheckerAuthorityMode = CheckerAuthorityMode.NONE
+    authorize_bundled_checkers: bool = False
     registered: list[object] = field(default_factory=list)
 
     def register_operation(self, adapter: object) -> None:

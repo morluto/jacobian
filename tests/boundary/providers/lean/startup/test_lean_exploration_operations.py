@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.provider_lean import (
     PINNED_LEAN_CORE_RUNTIME_UNAVAILABLE_REASON,
@@ -14,7 +15,7 @@ from tests.support.provider_lean import (
 from jacobian.contracts.operations import (
     OperationRequest,
 )
-from jacobian.runtime import CheckerAuthorityMode
+from jacobian.operation_service import OperationPolicy
 
 pytestmark = [
     pytest.mark.skipif(
@@ -146,11 +147,13 @@ def test_runtime_can_ablate_lean_operations_without_removing_checker(
     runtime = create_catalog_build_runtime(
         tmp_path,
         checker_authority=CheckerAuthorityMode.INSTALL_BUNDLED,
-        operation_exclusions=frozenset(
-            {
-                "lean.proof_state.apply_tactic",
-                "lean.retrieve.premises",
-            }
+        operation_policy=OperationPolicy(
+            denied_operation_ids=frozenset(
+                {
+                    "lean.proof_state.apply_tactic",
+                    "lean.retrieve.premises",
+                }
+            )
         ),
     )
     operation_ids = {

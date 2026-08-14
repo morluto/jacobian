@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.exact_domain import open_exact_domain_services
 from tests.support.services import DomainTestServices
 
@@ -12,7 +13,6 @@ from jacobian.contracts.operations import (
 )
 from jacobian.contracts.results import ExecutionStatus
 from jacobian.domains.geometry import geometry_operations
-from jacobian.runtime.config import CheckerAuthorityMode
 
 ZERO = {"num": "0", "den": "1"}
 ONE = {"num": "1", "den": "1"}
@@ -51,7 +51,7 @@ def test_geometry_checker_availability_does_not_grant_authority(
             item.endswith(".compute") or ".decide" in item for item in catalog_ids
         )
         assert not any(item.endswith(".verify") for item in catalog_ids)
-        assert not services.installation.authorizes_bundled_checkers
+        assert not services.installation.authorize_bundled_checkers
 
 
 def _weighted_square() -> dict[str, object]:

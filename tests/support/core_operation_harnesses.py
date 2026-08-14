@@ -12,12 +12,12 @@ from jacobian.finite_coverage import (
     install_finite_coverage,
 )
 from jacobian.graphs import GraphInstallation, install_graph_operations
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sat_smt.sat_operations import SatCnfMaterializationAdapter
 from jacobian.universal_algebra_operations import (
     UniversalAlgebraInstallation,
     install_universal_algebra_operations,
 )
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -64,7 +64,7 @@ def open_finite_coverage_services(
                 services.core.artifacts,
                 services.application.verification,
                 services.core.checkers,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             if adapter is not None:
                 services.installation.register_operation(adapter)
@@ -90,7 +90,7 @@ def open_universal_algebra_services(
                 services.core.artifacts,
                 services.application.verification,
                 services.core.checkers,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             for adapter in adapters:
                 services.installation.register_operation(adapter)

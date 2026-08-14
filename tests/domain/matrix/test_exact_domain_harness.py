@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.exact_domain import open_exact_domain_services
 
 from jacobian.domains.matrix_lattice import matrix_operations
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 def test_open_exact_domain_services_installs_bundle_and_verifiers(
@@ -21,7 +21,7 @@ def test_open_exact_domain_services_installs_bundle_and_verifiers(
         }
         assert "matrix.determinant.compute" in catalog_ids
         assert any(item.endswith(".verify") for item in catalog_ids)
-        assert services.installation.authorizes_bundled_checkers
+        assert services.installation.authorize_bundled_checkers
 
 
 def test_open_exact_domain_services_respects_absent_authority(
@@ -37,7 +37,7 @@ def test_open_exact_domain_services_respects_absent_authority(
         }
         assert "matrix.determinant.compute" in catalog_ids
         assert not any(item.endswith(".verify") for item in catalog_ids)
-        assert not services.installation.authorizes_bundled_checkers
+        assert not services.installation.authorize_bundled_checkers
 
 
 def test_open_exact_domain_services_rejects_empty_selection(

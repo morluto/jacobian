@@ -7,6 +7,7 @@ from contextlib import ExitStack
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.provider_external_sat import drat_trim_runtime_available
 from tests.support.services import (
     DomainTestServices,
@@ -25,7 +26,6 @@ from jacobian.providers.external_solver_runtime import (
     cadical_provider_runtime,
     drat_trim_provider_runtime,
 )
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.sat_smt.cadical import install_cadical_operations
 from jacobian.sat_smt.sat_operations import (
     install_sat_assignment_checker,

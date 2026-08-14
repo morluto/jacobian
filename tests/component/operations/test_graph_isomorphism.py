@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -21,7 +22,6 @@ from jacobian.graphs.isomorphism import (
     GraphIsomorphismInstallation,
     install_graph_isomorphism,
 )
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +49,7 @@ def _open_graph_isomorphism_services(
                 services.core.artifacts,
                 services.application.verification,
                 services.core.checkers,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             for adapter in graph_adapters:
                 services.installation.register_operation(adapter)
@@ -60,7 +60,7 @@ def _open_graph_isomorphism_services(
                 services.application.verification,
                 services.core.checkers,
                 graph,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             if adapter is not None:
                 services.installation.register_operation(adapter)

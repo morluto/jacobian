@@ -13,7 +13,7 @@ from jacobian.domains.polynomial_nullstellensatz.core import (
     install_nullstellensatz_core,
 )
 from jacobian.provider_runtime import known_provider_runtime
-from jacobian.runtime.config import CheckerAuthorityMode
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,

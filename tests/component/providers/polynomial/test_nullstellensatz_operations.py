@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.nullstellensatz import (
     load_chart_certificates,
     open_nullstellensatz_services,
@@ -31,7 +32,6 @@ from jacobian.domains.polynomial_nullstellensatz.core import (
     _failure_details,
 )
 from jacobian.operation_errors import OperationInvocationError
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 def test_failure_details_are_bounded_and_summarize_validation_errors() -> None:

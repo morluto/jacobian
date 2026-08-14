@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from jacobian.runtime import CheckerAuthorityMode
 from jacobian.runtime.model import JacobianRuntime
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.catalog_build_runtime import create_catalog_build_runtime
 from tests.support.runtime_templates import (
     build_authorized_portfolio_template,

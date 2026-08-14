@@ -8,9 +8,9 @@ from pathlib import Path
 from jacobian.catalog_build_context import create_catalog_build_context
 from jacobian.operation_declarations import OperationDeclarations
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
 from jacobian.runtime.services import build_runtime_services
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import atomic_installation
 
 
@@ -23,11 +23,21 @@ def create_selected_runtime(
 ) -> JacobianRuntime:
     """Compose one runtime that binds only the supplied operations."""
 
-    options = RuntimeOptions(checker_authority=checker_authority)
-    core = bootstrap_services(root, options)
+    core = bootstrap_services(
+        root,
+        bind_existing_checkers=(
+            checker_authority is CheckerAuthorityMode.HYDRATE_EXISTING
+        ),
+    )
     try:
         services = build_runtime_services(core)
-        installation = create_catalog_build_context(core, services, options)
+        installation = create_catalog_build_context(
+            core,
+            services,
+            authorize_bundled_checkers=(
+                checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
+            ),
+        )
         if bundles:
             with atomic_installation(core):
                 for operations in bundles:

@@ -10,14 +10,12 @@ from jacobian.artifacts import ArtifactService
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
 from jacobian.registry import CheckerRegistry
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.value_references import ValueReferenceStore
 from jacobian.verification.service import VerificationService
 
 if TYPE_CHECKING:
-    from jacobian.runtime.config import RuntimeOptions
     from jacobian.runtime.services import CoreServices, RuntimeServices
 
 
@@ -32,20 +30,15 @@ class CatalogBuildContext:
     checkers: CheckerRegistry
     verification: VerificationService
     binder: OperationBinder
-    checker_authority: CheckerAuthorityMode
+    authorize_bundled_checkers: bool
     register_operation: Callable[[OperationAdapter[Any]], None]
-
-    @property
-    def authorizes_bundled_checkers(self) -> bool:
-        """Whether built-in checker declarations may be authorized."""
-
-        return self.checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
 
 
 def create_catalog_build_context(
     core: CoreServices,
     services: RuntimeServices,
-    options: RuntimeOptions,
+    *,
+    authorize_bundled_checkers: bool = False,
 ) -> CatalogBuildContext:
     """Build the operator-only context for one catalog compilation.
 
@@ -60,11 +53,8 @@ def create_catalog_build_context(
     if services.core is not core:
         raise ValueError("runtime services must be built from the supplied core")
 
-    excluded = options.operation_exclusions
-
     def register(adapter: OperationAdapter[Any]) -> None:
-        if adapter.descriptor.operation_id not in excluded:
-            core.operations.register(adapter)
+        core.operations.register(adapter)
 
     return CatalogBuildContext(
         store=core.store,
@@ -74,6 +64,6 @@ def create_catalog_build_context(
         checkers=core.checkers,
         verification=services.verification,
         binder=core.binder,
-        checker_authority=options.checker_authority,
+        authorize_bundled_checkers=authorize_bundled_checkers,
         register_operation=register,
     )

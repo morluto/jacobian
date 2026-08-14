@@ -20,7 +20,6 @@ from jacobian.persistence.migrations import (
     SUPPORTED_STATE_FLOOR,
 )
 from jacobian.persistence.state_health import StateHealth, inspect_state_health
-from jacobian.runtime import CheckerAuthorityMode
 
 
 class CheckerAuthorization(StrEnum):
@@ -96,14 +95,11 @@ def _build_catalog(
     state_dir: Path,
     checker_authorization: CheckerAuthorization,
 ) -> CatalogBuildResult:
-    authority = (
-        CheckerAuthorityMode.INSTALL_BUNDLED
-        if checker_authorization is CheckerAuthorization.BUNDLED
-        else CheckerAuthorityMode.NONE
-    )
     return compile_operation_catalog(
         state_dir,
-        checker_authority=authority,
+        authorize_bundled_checkers=(
+            checker_authorization is CheckerAuthorization.BUNDLED
+        ),
     )
 
 

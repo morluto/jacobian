@@ -21,26 +21,25 @@ from jacobian.operation_catalog import (
 from jacobian.operation_service import OperationPolicy
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.services import build_runtime_services
 
 
 def compile_operation_catalog(
     state_dir: Path,
     *,
-    checker_authority: CheckerAuthorityMode,
+    authorize_bundled_checkers: bool,
 ) -> CatalogBuildResult:
     """Authorize checkers and atomically compile one catalog revision."""
 
-    options = RuntimeOptions(
-        checker_authority=checker_authority,
-        operation_policy=OperationPolicy(),
-    )
-    core = bootstrap_services(state_dir, options)
+    core = bootstrap_services(state_dir, operation_policy=OperationPolicy())
     resources = None
     try:
         services = build_runtime_services(core)
-        context = create_catalog_build_context(core, services, options)
+        context = create_catalog_build_context(
+            core,
+            services,
+            authorize_bundled_checkers=authorize_bundled_checkers,
+        )
         resources = build_catalog_operations(context, services)
         descriptors = tuple(
             sorted(

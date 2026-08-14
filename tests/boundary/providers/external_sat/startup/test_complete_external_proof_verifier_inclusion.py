@@ -9,13 +9,13 @@ from tests.boundary.providers.external_sat.external_sat_support import (
     fake_carcara,
     fake_drat_trim,
 )
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.catalog_build_runtime import create_catalog_build_runtime
 
 from jacobian.providers.external_solver_runtime import (
     carcara_provider_runtime,
     drat_trim_provider_runtime,
 )
-from jacobian.runtime import CheckerAuthorityMode
 
 
 def test_complete_portfolio_includes_authorized_external_proof_verifiers(

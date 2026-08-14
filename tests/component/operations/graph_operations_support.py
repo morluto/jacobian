@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -12,7 +13,6 @@ from tests.support.services import (
 )
 
 from jacobian.graphs.installation import GraphInstallation, install_graph_operations
-from jacobian.runtime.config import CheckerAuthorityMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +41,7 @@ def open_graph_services(
                 services.core.artifacts,
                 services.application.verification,
                 services.core.checkers,
-                authorize_checker=services.installation.authorizes_bundled_checkers,
+                authorize_checker=services.installation.authorize_bundled_checkers,
             )
             for adapter in adapters:
                 services.installation.register_operation(adapter)

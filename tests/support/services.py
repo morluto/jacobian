@@ -14,12 +14,12 @@ from jacobian.catalog_build_context import (
 from jacobian.implementation import cached_package_digests
 from jacobian.operation_declarations import OperationDeclarations
 from jacobian.runtime.bootstrap import bootstrap_services
-from jacobian.runtime.config import CheckerAuthorityMode, RuntimeOptions
 from jacobian.runtime.services import (
     CoreServices,
     RuntimeServices,
     build_runtime_services,
 )
+from tests.support.catalog_build_options import CheckerAuthorityMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +47,6 @@ def atomic_installation(core: CoreServices) -> Iterator[None]:
 def open_domain_services(
     root: str | Path,
     *operation_groups: OperationDeclarations,
-    options: RuntimeOptions | None = None,
     checker_authority: CheckerAuthorityMode | None = None,
 ) -> Iterator[DomainTestServices]:
     """Open core/application services and one production installation context.
@@ -56,18 +55,19 @@ def open_domain_services(
     its literal portfolio component to the production installer itself.
     """
 
-    if options is not None and checker_authority is not None:
-        raise ValueError("pass either options or checker_authority, not both")
-    resolved_options = options or RuntimeOptions(
-        checker_authority=checker_authority or CheckerAuthorityMode.NONE,
+    authority = checker_authority or CheckerAuthorityMode.NONE
+    core = bootstrap_services(
+        root,
+        bind_existing_checkers=(authority is CheckerAuthorityMode.HYDRATE_EXISTING),
     )
-    core = bootstrap_services(root, resolved_options)
     try:
         application = build_runtime_services(core)
         installation = create_catalog_build_context(
             core,
             application,
-            resolved_options,
+            authorize_bundled_checkers=(
+                authority is CheckerAuthorityMode.INSTALL_BUNDLED
+            ),
         )
         if operation_groups:
             with atomic_installation(core):

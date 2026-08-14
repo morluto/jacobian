@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from tests.support.catalog_build_options import CheckerAuthorityMode
 from tests.support.services import (
     DomainTestServices,
     atomic_installation,
@@ -20,7 +21,6 @@ from jacobian.polynomial_expression_operations import (
 from jacobian.providers.sympy_runtime import (
     sympy_polynomial_normalization_provider_runtime,
 )
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.sympy_polynomial_normalization import (
     install_sympy_polynomial_normalization_operation,
 )

@@ -37,7 +37,6 @@ from jacobian.lean_frontend.proof_state_inspect import (
 from jacobian.lean_frontend.service import LeanService
 from jacobian.provider_inventory import ProviderInventoryLoader
 from jacobian.provider_runtime import jacobian_provider_runtime
-from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.runtime.services import RuntimeServices
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,7 +57,7 @@ class CatalogCheckerBuilder:
         ctx = self.context
         # INSTALL_BUNDLED creates authority; HYDRATE_EXISTING binds only checker
         # identities already authorized on this store. NONE binds neither.
-        if ctx.checker_authority is not CheckerAuthorityMode.NONE:
+        if ctx.authorize_bundled_checkers:
             self._bind_checkers(services, resources)
 
     def _bind_checkers(

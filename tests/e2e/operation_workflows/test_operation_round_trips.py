@@ -15,6 +15,7 @@ from tests.support.rationals import rational_payload as _q
 from tests.support.state import copy_template
 
 from jacobian.adapters.mcp.server import create_server
+from jacobian.operator_lifecycle import CheckerAuthorization, initialize_state
 
 
 def _polynomial(*coefficients_ascending: int) -> dict[str, object]:
@@ -57,6 +58,10 @@ def test_exact_domain_result_verifies_and_replays_after_restart(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
+        initialize_state(
+            tmp_path,
+            checker_authorization=CheckerAuthorization.BUNDLED,
+        )
         server = create_server(tmp_path)
         async with Client(server, raise_exceptions=True) as client:
             operation_ids = await _catalog(client)
@@ -125,6 +130,10 @@ def test_polynomial_factor_result_verifies_through_mcp(
 ) -> None:
     async def scenario() -> None:
         state = copy_template(authorized_portfolio_template, tmp_path / "state")
+        initialize_state(
+            state,
+            checker_authorization=CheckerAuthorization.BUNDLED,
+        )
         server = create_server(state)
         async with Client(server, raise_exceptions=True) as client:
             factor_input = {"polynomial": _polynomial(-1, 0, 1)}
@@ -197,6 +206,10 @@ def test_computed_domain_operation_remains_available_without_checker_authority(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
+        initialize_state(
+            tmp_path,
+            checker_authorization=CheckerAuthorization.NONE,
+        )
         server = create_server(tmp_path)
         async with Client(server, raise_exceptions=True) as client:
             operation_ids = await _catalog(client)
@@ -262,6 +275,10 @@ def test_lean_proof_edit_verifies_through_mcp_and_replays_after_restart(
         )
 
     async def scenario() -> None:
+        initialize_state(
+            tmp_path,
+            checker_authorization=CheckerAuthorization.BUNDLED,
+        )
         server = create_server(tmp_path)
         async with Client(server, raise_exceptions=True) as client:
             verified = await validate(client)

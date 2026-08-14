@@ -120,6 +120,7 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
         PurePosixPath("tests/boundary/process/test_cvc5_worker_command_profile.py"),
         PurePosixPath("tests/boundary/process/test_process_policy.py"),
+        PurePosixPath("tests/boundary/process/test_inline_no_state_dir.py"),
         PurePosixPath("tests/boundary/process/test_rational_lp_worker_protocol.py"),
         PurePosixPath(
             "tests/boundary/process/polynomial/test_polynomial_system_adapter_guards.py"
@@ -262,6 +263,7 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tools/source_agent_doctor.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
+        PurePosixPath("tests/boundary/process/test_inline_no_state_dir.py"),
         PurePosixPath("tests/boundary/process/tooling/test_deploy_installer.py"),
         PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
     }
@@ -1674,6 +1676,7 @@ _CLI_COMPLETE_PORTFOLIO_ALLOWLIST = frozenset(
         "test_cli_help_exposes_only_math_and_operator_commands",
         "test_cli_init_reports_installed_operation_count",
         "test_cli_run_requires_exactly_one_payload_source",
+        "test_cli_run_matrix_determinant_without_state_directory",
     }
 )
 

@@ -80,6 +80,3 @@ def formal_dataset_operations() -> OperationDeclarations:
             hint="Provide a supported row with pinned dataset and environment data.",
         ),
     )
-
-
-AUTHORIZED_CHECKERS = ()

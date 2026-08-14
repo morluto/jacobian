@@ -30,6 +30,3 @@ def sequence_operations() -> OperationDeclarations:
             ),
         ),
     )
-
-
-AUTHORIZED_CHECKERS = ()

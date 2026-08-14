@@ -24,6 +24,3 @@ def finite_set_operations() -> OperationDeclarations:
             hint="Use canonical integer strings and inspect the operation's set schema.",
         ),
     )
-
-
-AUTHORIZED_CHECKERS = ()

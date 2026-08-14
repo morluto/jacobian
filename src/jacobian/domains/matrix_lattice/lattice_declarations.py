@@ -21,6 +21,3 @@ def lattice_operations() -> OperationDeclarations:
             ),
         ),
     )
-
-
-AUTHORIZED_CHECKERS = ()

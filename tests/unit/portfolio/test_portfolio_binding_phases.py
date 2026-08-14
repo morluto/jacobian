@@ -1,4 +1,4 @@
-"""Direct seam tests for the explicit portfolio installation phases."""
+"""Direct seam tests for explicit portfolio binding phases."""
 
 from __future__ import annotations
 
@@ -8,17 +8,17 @@ from typing import Any, cast
 
 import pytest
 
-import jacobian.portfolio.foundation_installation as foundation_installation
+import jacobian.portfolio.foundation_binding as foundation_binding
 from jacobian.contracts.operations import (
     ProviderAvailability,
     ProviderDigestKind,
     ProviderInstallTier,
     ProviderObservation,
 )
-from jacobian.installation.context import InstallationContext
-from jacobian.portfolio.checker_installation import CheckerPortfolioInstaller
-from jacobian.portfolio.core_installation import CoreApplicationInstaller
-from jacobian.portfolio.foundation_installation import FoundationInstaller
+from jacobian.portfolio.checker_binding import CheckerPortfolioBinder
+from jacobian.portfolio.context import PortfolioContext
+from jacobian.portfolio.core_binding import CoreOperationBinder
+from jacobian.portfolio.foundation_binding import FoundationBinder
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.portfolio.provider_resolution import (
     ProviderAvailabilityResolver,
@@ -72,12 +72,12 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
     context = SimpleNamespace(register_operation=registered.append)
     adapter = object()
     monkeypatch.setattr(
-        foundation_installation,
+        foundation_binding,
         "install_cvc5_operation",
         lambda _smt, _runtime: adapter,
     )
 
-    FoundationInstaller(cast(InstallationContext, context)).install_solver_components(
+    FoundationBinder(cast(PortfolioContext, context)).bind_solver_components(
         cast(CoreServices, SimpleNamespace(smt=object())),
         _provider_plan_with_unavailable_external_solvers(),
     )
@@ -91,10 +91,8 @@ def test_foundation_solver_phase_skips_unavailable_external_solver(
 
 def test_core_domain_verification_phase_accepts_empty_bundle_result() -> None:
     assert (
-        CoreApplicationInstaller(
-            cast(InstallationContext, object())
-        ).install_domain_verification(
-            SimpleNamespace(installed={}), PortfolioPlan(components=())
+        CoreOperationBinder(cast(PortfolioContext, object())).bind_domain_verification(
+            {}, PortfolioPlan(components=())
         )
         is None
     )
@@ -118,10 +116,10 @@ def test_checker_phase_derives_authority_from_its_context() -> None:
             core=SimpleNamespace(),
         ),
     )
-    CheckerPortfolioInstaller(
-        cast(InstallationContext, context),
+    CheckerPortfolioBinder(
+        cast(PortfolioContext, context),
         cast(ProviderAvailabilityResolver, object()),
-    ).install(application, PortfolioResources())
+    ).bind(application, PortfolioResources())
 
     assert context.registered == []
 

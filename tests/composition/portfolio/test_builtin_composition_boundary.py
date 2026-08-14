@@ -29,13 +29,13 @@ def test_only_explicit_builtin_composition_imports_every_domain_factory() -> Non
     central_installers = (
         SOURCE / "portfolio" / "assembler.py",
         SOURCE / "portfolio" / "domain_binding.py",
-        SOURCE / "portfolio" / "foundation_installation.py",
+        SOURCE / "portfolio" / "foundation_binding.py",
     )
     assert all(
         not any(module.startswith("jacobian.domains.") for module in _imports(path))
         for path in central_installers
     )
-    core_imports = _imports(SOURCE / "portfolio" / "core_installation.py")
+    core_imports = _imports(SOURCE / "portfolio" / "core_binding.py")
     assert {
         module for module in core_imports if module.startswith("jacobian.domains.")
     } == {

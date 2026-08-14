@@ -18,10 +18,10 @@ from jacobian.contracts.operations import (
     ProviderAvailability,
     ProviderObservation,
 )
-from jacobian.installation.context import InstallationContext
 from jacobian.polynomial_expression_operations import (
     install_polynomial_expression_checker,
 )
+from jacobian.portfolio.context import PortfolioContext
 from jacobian.portfolio.provider_resolution import ProviderRuntimePlan
 from jacobian.runtime.services import CoreServices
 from jacobian.sat_smt.cadical import install_cadical_capabilities
@@ -41,17 +41,17 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class FoundationInstaller:
-    """Install foundational checkers and solver adapters."""
+class FoundationBinder:
+    """Bind foundational checkers and solver operations."""
 
-    context: InstallationContext
+    context: PortfolioContext
 
-    def install(
+    def bind(
         self,
         core: CoreServices,
         runtimes: ProviderRuntimePlan,
     ) -> None:
-        """Install solver, linear, and normalization foundations."""
+        """Bind solver, linear, and normalization foundations."""
 
         ctx = self.context
         self.context.register_operation(SatCnfMaterializationAdapter(core.sat))
@@ -105,18 +105,18 @@ class FoundationInstaller:
         if smt_proof_adapter is not None:
             self.context.register_operation(smt_proof_adapter)
 
-        self._install_polynomial_expression_operations(
+        self._bind_polynomial_expression_operations(
             core,
             runtimes.sympy_polynomial_normalization,
         )
-        self.install_solver_components(core, runtimes)
+        self.bind_solver_components(core, runtimes)
 
-    def install_solver_components(
+    def bind_solver_components(
         self,
         core: CoreServices,
         runtimes: ProviderRuntimePlan,
     ) -> None:
-        """Install the packaged cvc5 adapter and optional CaDiCaL adapter."""
+        """Bind the packaged cvc5 adapter and optional CaDiCaL adapter."""
 
         if runtimes.cadical.availability is ProviderAvailability.AVAILABLE:
             try:
@@ -130,15 +130,13 @@ class FoundationInstaller:
                 for adapter in cadical_adapters:
                     self.context.register_operation(adapter)
 
-        self.context.register_operation(
-            install_cvc5_operation(core.smt, runtimes.cvc5)
-        )
+        self.context.register_operation(install_cvc5_operation(core.smt, runtimes.cvc5))
 
     # ------------------------------------------------------------------
-    # Private installation helpers
+    # Private binding helpers
     # ------------------------------------------------------------------
 
-    def _install_polynomial_expression_operations(
+    def _bind_polynomial_expression_operations(
         self,
         core: CoreServices,
         runtime: ProviderObservation,

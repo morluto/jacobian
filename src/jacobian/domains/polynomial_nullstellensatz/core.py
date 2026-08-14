@@ -32,13 +32,13 @@ from jacobian.contracts.results import Execution, ExecutionStatus
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
-from jacobian.installation.context import InstallationContext
 from jacobian.operation_adapters import parse_operation_input
 from jacobian.operation_binding import BoundDomainOperations
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
+from jacobian.portfolio.context import PortfolioContext
 from jacobian.schema_registry import model_schema
 from jacobian.storage.errors import ArtifactNotFoundError, StorageError
 
@@ -106,7 +106,7 @@ def _request_value_summary(value: object) -> str:
 class JacobianDegreeSliceMaterializeAdapter:
     def __init__(
         self,
-        context: InstallationContext,
+        context: PortfolioContext,
         installation: NullstellensatzCoreInstallation,
         provider_runtime: ProviderObservation,
     ) -> None:
@@ -183,7 +183,7 @@ class JacobianDegreeSliceMaterializeAdapter:
 class NullstellensatzVerificationAdapter:
     def __init__(
         self,
-        context: InstallationContext,
+        context: PortfolioContext,
         installation: NullstellensatzCoreInstallation,
         provider_runtime: ProviderObservation,
     ) -> None:
@@ -430,7 +430,7 @@ class NullstellensatzVerificationAdapter:
 
 
 def install_nullstellensatz_core(
-    context: InstallationContext,
+    context: PortfolioContext,
     provider_runtime: ProviderObservation,
 ) -> BoundDomainOperations:
     semantics_uri = context.store.register_descriptor(

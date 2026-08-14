@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jacobian.installation.context import create_installation_context
-from jacobian.portfolio.assembler import install_portfolio
+from jacobian.portfolio.assembler import assemble_portfolio
+from jacobian.portfolio.context import create_portfolio_context
 from jacobian.runtime.bootstrap import bootstrap_services
 from jacobian.runtime.config import RuntimeOptions
 from jacobian.runtime.model import JacobianRuntime
@@ -19,8 +19,8 @@ def compose_runtime(root: str | Path, options: RuntimeOptions) -> JacobianRuntim
     core = bootstrap_services(root, options)
     try:
         services = build_runtime_services(core)
-        installation = create_installation_context(core, services, options)
-        portfolio_resources = install_portfolio(installation, services)
+        portfolio = create_portfolio_context(core, services, options)
+        portfolio_resources = assemble_portfolio(portfolio, services)
         return JacobianRuntime(
             core,
             services,

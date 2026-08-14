@@ -14,7 +14,7 @@ from jacobian.artifacts import ArtifactService
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ContractModel
 from jacobian.domain_bundles import DomainBundle
-from jacobian.installation.context import InstallationContext
+from jacobian.portfolio.context import PortfolioContext
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
@@ -83,16 +83,16 @@ def _synthetic_bundle(
 
 @dataclass
 class _RecordingContext:
-    """A self-contained InstallationContext plus its owned resources."""
+    """A self-contained PortfolioContext plus its owned resources."""
 
-    context: InstallationContext
+    context: PortfolioContext
     store: ArtifactRepository
     registered: list[str]
 
 
 @pytest.fixture
 def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
-    """Build a real, narrow InstallationContext without the full runtime."""
+    """Build a real, narrow PortfolioContext without the full runtime."""
 
     store = ArtifactRepository(tmp_path)
     try:
@@ -106,7 +106,7 @@ def assembly(tmp_path: Path) -> Iterator[_RecordingContext]:
         def register_operation(adapter: Any) -> None:
             registered.append(adapter.descriptor.operation_id)
 
-        context = InstallationContext(
+        context = PortfolioContext(
             store=store,
             schemas=schemas,
             artifacts=artifacts,

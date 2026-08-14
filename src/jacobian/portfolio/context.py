@@ -1,4 +1,4 @@
-"""Narrow foundational dependencies shared by operation installers."""
+"""Dependencies owned by built-in mathematical portfolio assembly."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class InstallationContext:
-    """Infrastructure used across independent domain installers."""
+class PortfolioContext:
+    """Resources required while assembling the explicit built-in portfolio."""
 
     store: ArtifactRepository
     schemas: SchemaRegistry
@@ -42,21 +42,19 @@ class InstallationContext:
         return self.checker_authority is CheckerAuthorityMode.INSTALL_BUNDLED
 
 
-def create_installation_context(
+def create_portfolio_context(
     core: CoreServices,
     services: RuntimeServices,
     options: RuntimeOptions,
-) -> InstallationContext:
-    """Build the production installation context for one service graph.
+) -> PortfolioContext:
+    """Build the portfolio assembly context for one runtime graph.
 
-    Installation contexts are deliberately derived from the explicit core and
-    runtime graphs.  Keeping this wiring here gives domain and composition
-    callers one production seam while preserving operation exclusions and the
-    operator-owned checker authority configured on ``RuntimeOptions``.
+    The context is derived from explicit core and runtime ownership. It keeps
+    operation visibility and operator-owned checker authority at the one
+    portfolio composition boundary.
 
     The registrar is the only place where operation exclusions are applied;
-    installers can therefore remain independent of runtime configuration while
-    every built-in adapter follows the same policy.
+    every built-in adapter therefore follows the same policy.
     """
 
     if services.core is not core:
@@ -68,7 +66,7 @@ def create_installation_context(
         if adapter.descriptor.operation_id not in excluded:
             core.operations.register(adapter)
 
-    return InstallationContext(
+    return PortfolioContext(
         store=core.store,
         schemas=core.schemas,
         artifacts=core.artifacts,

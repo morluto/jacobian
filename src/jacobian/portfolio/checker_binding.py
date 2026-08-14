@@ -1,7 +1,7 @@
 """Installation of operator-authorized Lean and polytope checkers.
 
 This phase authorizes the retained polytope and Lean checker families through
-the standalone :mod:`jacobian.checker_authorization` module and then installs
+the standalone :mod:`jacobian.checker_authorization` module and then binds
 the Lean declaration, exploration, proof-axiom, proof-edit, and proof-state
 inspection operations.
 """
@@ -20,7 +20,6 @@ from jacobian.contracts.operations import (
     ProviderAvailability,
     ProviderObservation,
 )
-from jacobian.installation.context import InstallationContext
 from jacobian.lean_frontend.declaration_operations import (
     build_lean_declaration_query_bundle,
 )
@@ -35,6 +34,7 @@ from jacobian.lean_frontend.proof_state_inspect import (
     install_lean_proof_state_inspect_only,
 )
 from jacobian.lean_frontend.service import LeanService
+from jacobian.portfolio.context import PortfolioContext
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
 from jacobian.provider_runtime import jacobian_provider_runtime
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -45,24 +45,24 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class CheckerPortfolioInstaller:
-    """Install polytope and Lean checkers according to context-owned authority."""
+class CheckerPortfolioBinder:
+    """Bind polytope and Lean checkers under operator-owned authority."""
 
-    context: InstallationContext
+    context: PortfolioContext
     provider_resolver: ProviderAvailabilityResolver
 
-    def install(
+    def bind(
         self,
         services: RuntimeServices,
         resources: PortfolioResources,
     ) -> None:
         ctx = self.context
         # INSTALL_BUNDLED creates authority; HYDRATE_EXISTING binds only checker
-        # identities already authorized on this store. NONE installs neither.
+        # identities already authorized on this store. NONE binds neither.
         if ctx.checker_authority is not CheckerAuthorityMode.NONE:
-            self._install_checkers(services, resources)
+            self._bind_checkers(services, resources)
 
-    def _install_checkers(
+    def _bind_checkers(
         self,
         services: RuntimeServices,
         resources: PortfolioResources,
@@ -123,7 +123,7 @@ class CheckerPortfolioInstaller:
             )
         except (OSError, RuntimeError) as exc:
             _LOGGER.warning("Lean declaration discovery is not installed: %s", exc)
-        self._install_lean_declaration_adapters(resources.lean_declarations, runtime)
+        self._bind_lean_declaration_adapters(resources.lean_declarations, runtime)
         resources.lean = LeanService(
             ctx.store,
             ctx.artifacts,
@@ -159,7 +159,7 @@ class CheckerPortfolioInstaller:
         )
         ctx.register_operation(proof_edit_adapter)
 
-    def _install_lean_declaration_adapters(
+    def _bind_lean_declaration_adapters(
         self,
         declarations: LeanDeclarationService | None,
         runtime: ProviderObservation,
@@ -167,8 +167,8 @@ class CheckerPortfolioInstaller:
         if declarations is None:
             return
         ctx = self.context
-        query_installation = ctx.binder.bind(
+        bound_queries = ctx.binder.bind(
             build_lean_declaration_query_bundle(declarations, runtime)
         )
-        for adapter in query_installation.adapters:
+        for adapter in bound_queries.adapters:
             ctx.register_operation(adapter)

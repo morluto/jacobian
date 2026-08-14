@@ -9,9 +9,9 @@ from pathlib import Path
 
 from jacobian.domain_bundles import DomainBundle
 from jacobian.implementation import cached_package_digests
-from jacobian.installation.context import (
-    InstallationContext,
-    create_installation_context,
+from jacobian.portfolio.context import (
+    PortfolioContext,
+    create_portfolio_context,
 )
 from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
@@ -30,7 +30,7 @@ class DomainTestServices:
 
     core: CoreServices
     application: RuntimeServices
-    installation: InstallationContext
+    installation: PortfolioContext
 
 
 @contextmanager
@@ -66,7 +66,7 @@ def open_domain_services(
     core = bootstrap_services(root, resolved_options)
     try:
         application = build_runtime_services(core)
-        installation = create_installation_context(
+        installation = create_portfolio_context(
             core,
             application,
             resolved_options,

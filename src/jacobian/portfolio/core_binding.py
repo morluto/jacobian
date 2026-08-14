@@ -20,7 +20,6 @@ from jacobian.exact_domain_checkers import (
 from jacobian.finite_coverage import install_finite_coverage
 from jacobian.graphs.installation import GraphInstallation, install_graph_capabilities
 from jacobian.graphs.isomorphism import install_graph_isomorphism
-from jacobian.installation.context import InstallationContext
 from jacobian.operation_binding import BoundDomainOperations
 from jacobian.polynomial_system_operations import (
     install_polynomial_system_operations,
@@ -29,6 +28,7 @@ from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdap
 from jacobian.polynomials import install_polynomial_capabilities
 from jacobian.polytope_operations import PolytopeSeparationAdapter
 from jacobian.portfolio.builtin import build_builtin_portfolio
+from jacobian.portfolio.context import PortfolioContext
 from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.provider_runtime import known_provider_runtime
@@ -40,14 +40,14 @@ from jacobian.universal_algebra_operations import (
 
 
 @dataclass(frozen=True, slots=True)
-class CoreApplicationInstaller:
-    """Install core application adapters and domain-dependent checkers."""
+class CoreOperationBinder:
+    """Bind core operations and domain-dependent checkers."""
 
-    context: InstallationContext
+    context: PortfolioContext
 
-    def _install_graph_capabilities(
+    def _bind_graph_operations(
         self,
-        ctx: InstallationContext,
+        ctx: PortfolioContext,
     ) -> GraphInstallation:
         """Install retained graph operations."""
 
@@ -63,7 +63,7 @@ class CoreApplicationInstaller:
             self.context.register_operation(graph_adapter)
         return graph
 
-    def _install_nullstellensatz(self) -> None:
+    def _bind_nullstellensatz(self) -> None:
         """Install the named Nullstellensatz family at the composition root.
 
         This family has an artifact-producing core and an optional Singular
@@ -92,7 +92,7 @@ class CoreApplicationInstaller:
         for adapter in singular.adapters:
             ctx.register_operation(adapter)
 
-    def install(
+    def bind(
         self,
         services: RuntimeServices,
     ) -> GraphInstallation:
@@ -112,12 +112,12 @@ class CoreApplicationInstaller:
         if finite_coverage_adapter is not None:
             self.context.register_operation(finite_coverage_adapter)
 
-        graph = self._install_graph_capabilities(ctx)
+        graph = self._bind_graph_operations(ctx)
 
         portfolio = build_builtin_portfolio()
         bundle_result = DomainBundleBinder(ctx).bind(portfolio)
-        self.install_domain_verification(bundle_result, portfolio)
-        self._install_nullstellensatz()
+        self.bind_domain_verification(bundle_result, portfolio)
+        self._bind_nullstellensatz()
 
         graph_isomorphism_adapter, _ = install_graph_isomorphism(
             ctx.store,
@@ -173,7 +173,7 @@ class CoreApplicationInstaller:
             self.context.register_operation(universal_adapter)
         return graph
 
-    def install_domain_verification(
+    def bind_domain_verification(
         self,
         bundles: dict[str, BoundDomainOperations],
         plan: PortfolioPlan,

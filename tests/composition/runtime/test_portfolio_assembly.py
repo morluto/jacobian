@@ -29,18 +29,16 @@ class _Resolver:
         return "runtimes"
 
 
-def _installer(
-    events: list[str], name: str, *, install_event: str | None = None
+def _binder(
+    events: list[str], name: str, *, bind_event: str | None = None
 ) -> SimpleNamespace:
     events.append(f"{name}:init")
     return SimpleNamespace(
-        install=lambda *_args, **_kwargs: events.append(
-            install_event or f"{name}:install"
-        )
+        bind=lambda *_args, **_kwargs: events.append(bind_event or f"{name}:bind")
     )
 
 
-def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None:
+def test_assemble_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None:
     events: list[str] = []
     store = SimpleNamespace(
         transaction=lambda: _RecordingContext(events, "store"),
@@ -57,33 +55,33 @@ def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None
     )
     monkeypatch.setattr(
         assembler,
-        "FoundationInstaller",
-        lambda _context: _installer(events, "foundation"),
+        "FoundationBinder",
+        lambda _context: _binder(events, "foundation"),
     )
     monkeypatch.setattr(
         assembler,
-        "CoreApplicationInstaller",
-        lambda _context: _installer(events, "core"),
+        "CoreOperationBinder",
+        lambda _context: _binder(events, "core"),
     )
     monkeypatch.setattr(
         assembler,
         "ResourceOperationBinder",
-        lambda _context: _installer(events, "resource"),
+        lambda _context: _binder(events, "resource"),
     )
 
-    def checker_installer(_context, _resolver):
+    def checker_binder(_context, _resolver):
         events.append("checker:init")
         return SimpleNamespace(
-            install=lambda *_args: (
-                events.append("checker:install"),
+            bind=lambda *_args: (
+                events.append("checker:bind"),
                 SimpleNamespace(),
             )[1]
         )
 
-    monkeypatch.setattr(assembler, "CheckerPortfolioInstaller", checker_installer)
+    monkeypatch.setattr(assembler, "CheckerPortfolioBinder", checker_binder)
     monkeypatch.setattr(assembler, "cached_package_digests", lambda: nullcontext())
 
-    resources = assembler.install_portfolio(context, application)
+    resources = assembler.assemble_portfolio(context, application)
 
     assert isinstance(resources, PortfolioResources)
     resources.close()
@@ -93,13 +91,13 @@ def test_install_portfolio_owns_transaction_and_phase_order(monkeypatch) -> None
         "enter:store",
         "resolver:resolve",
         "foundation:init",
-        "foundation:install",
+        "foundation:bind",
         "core:init",
-        "core:install",
+        "core:bind",
         "resource:init",
-        "resource:install",
+        "resource:bind",
         "checker:init",
-        "checker:install",
+        "checker:bind",
         "exit:store",
         "exit:policy",
     ]

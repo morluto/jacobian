@@ -36,13 +36,13 @@ from jacobian.domains.polynomial_nullstellensatz.core import MATERIALIZE_OPERATI
 from jacobian.domains.polynomial_nullstellensatz.system import (
     materialize_degree_23_system,
 )
-from jacobian.installation.context import InstallationContext
 from jacobian.operation_adapters import parse_operation_input
 from jacobian.operation_binding import BoundDomainOperations
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
 from jacobian.operations import Completed, Failed
+from jacobian.portfolio.context import PortfolioContext
 from jacobian.process_policy import (
     ProcessRequest,
     ProcessResourceLimits,
@@ -323,7 +323,7 @@ def _certificate_payload(
 class SingularNullstellensatzCertificateAdapter:
     def __init__(
         self,
-        context: InstallationContext,
+        context: PortfolioContext,
         dependency: BoundDomainOperations,
         provider_runtime: ProviderObservation,
     ) -> None:
@@ -522,7 +522,7 @@ class SingularNullstellensatzCertificateAdapter:
 
 
 def install_singular_producer(
-    context: InstallationContext,
+    context: PortfolioContext,
     dependency: BoundDomainOperations,
     provider_runtime: ProviderObservation,
 ) -> BoundDomainOperations:

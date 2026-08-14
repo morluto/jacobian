@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_binding import BoundDomainOperations
-from jacobian.portfolio.core_installation import CoreApplicationInstaller
+from jacobian.portfolio.core_binding import CoreOperationBinder
 from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.config import CheckerAuthorityMode
@@ -46,7 +46,7 @@ def install_verified_domain_bundles(
             raise ValueError(
                 "verified domain installation omitted bundle(s): " + ", ".join(missing)
             )
-        CoreApplicationInstaller(services.installation).install_domain_verification(
+        CoreOperationBinder(services.installation).bind_domain_verification(
             bound,
             PortfolioPlan(components=bundles),
         )

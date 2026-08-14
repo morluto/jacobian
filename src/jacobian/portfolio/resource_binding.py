@@ -1,4 +1,4 @@
-"""Installation of resource-backed portfolio operations."""
+"""Binding of resource-backed portfolio operations."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from jacobian.graphs.composition import (
     install_graph_composition_capabilities,
 )
 from jacobian.graphs.installation import GraphInstallation
-from jacobian.installation.context import InstallationContext
 from jacobian.lean_frontend.statement import install_lean_statement_capabilities
 from jacobian.polynomial_interval_operations import (
     install_polynomial_interval_operations,
@@ -17,19 +16,20 @@ from jacobian.polynomial_interval_operations import (
 from jacobian.polynomial_positivity_operations import (
     install_polynomial_positivity_operations,
 )
+from jacobian.portfolio.context import PortfolioContext
 from jacobian.portfolio.provider_resolution import ProviderAvailabilityResolver
 
 
 @dataclass(frozen=True, slots=True)
 class ResourceOperationBinder:
-    """Install resources after their core operation dependencies exist."""
+    """Bind resources after their core operation dependencies exist."""
 
-    context: InstallationContext
+    context: PortfolioContext
     provider_resolver: ProviderAvailabilityResolver = field(
         default_factory=ProviderAvailabilityResolver
     )
 
-    def install(self, graph: GraphInstallation) -> None:
+    def bind(self, graph: GraphInstallation) -> None:
         ctx = self.context
         graph_adapters, _ = install_graph_composition_capabilities(
             ctx.store,

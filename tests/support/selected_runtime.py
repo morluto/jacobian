@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from jacobian.domain_bundles import DomainBundle
-from jacobian.installation.context import create_installation_context
+from jacobian.portfolio.context import create_portfolio_context
 from jacobian.portfolio.domain_binding import DomainBundleBinder
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.runtime.bootstrap import bootstrap_services
@@ -30,7 +30,7 @@ def create_selected_runtime(
     core = bootstrap_services(root, options)
     try:
         services = build_runtime_services(core)
-        installation = create_installation_context(core, services, options)
+        installation = create_portfolio_context(core, services, options)
         if bundles:
             with atomic_installation(core):
                 DomainBundleBinder(installation).bind(

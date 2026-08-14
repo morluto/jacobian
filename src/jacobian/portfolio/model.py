@@ -1,4 +1,4 @@
-"""Typed declaration of the explicitly installed portfolio."""
+"""Typed declaration of the explicit built-in mathematical portfolio."""
 
 from __future__ import annotations
 
@@ -13,19 +13,18 @@ class PortfolioPlan:
 
     The plan is a literal, ordered tuple of ordinary domain bundles. It
     performs no discovery, registration, or ranking:
-    callers install it through
-    :class:`jacobian.portfolio.domain_binding.DomainBundleBinder`,
-    which records every per-component outcome as a typed diagnostic.
+    callers bind it through
+    :class:`jacobian.portfolio.domain_binding.DomainBundleBinder`.
     """
 
     components: tuple[DomainBundle, ...]
 
     def validate(self) -> None:
-        """Reject structural portfolio defects before installation.
+        """Reject structural portfolio defects before binding.
 
         Plan-level defects (invalid components, blank IDs, duplicate IDs)
         are programming errors and fail fast. Installation failures other than
-        declared provider unavailability also propagate from the assembler.
+        propagate from the portfolio composition root.
         """
 
         domain_ids: list[str] = []

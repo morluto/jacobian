@@ -102,9 +102,7 @@ def test_subprocess_in_development_profiles_is_allowed(tmp_path: Path) -> None:
     "relative",
     [
         "tools/inventory_github_workflows.py",
-        "tools/restack_feature_branch.py",
         "tools/worktree_admission.py",
-        "tests/unit/tooling/test_restack_feature_branch.py",
         "tests/unit/tooling/test_worktree_admission.py",
     ],
 )

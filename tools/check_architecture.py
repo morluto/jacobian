@@ -102,7 +102,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # Developer helpers that shell out to git, gh, or Make. They are not
         # product process callers.
         PurePosixPath("tools/inventory_github_workflows.py"),
-        PurePosixPath("tools/restack_feature_branch.py"),
         PurePosixPath("tools/worktree_admission.py"),
         # This clean-room verifier must independently replay the pinned Lean
         # protocol inside its isolated verifier image.  It cannot import the
@@ -170,7 +169,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_unsupported_surfaces.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),
-        PurePosixPath("tests/unit/tooling/test_restack_feature_branch.py"),
         PurePosixPath("tests/unit/tooling/test_worktree_admission.py"),
         # Benchmark regressions spawn task-owned solution or Oracle entrypoints.
         PurePosixPath(

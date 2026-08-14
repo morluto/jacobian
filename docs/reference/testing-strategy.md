@@ -116,9 +116,7 @@ branch. Registrations whose files are gone, including historical
 `agent-port-*` and `agent-rebase-*` leftovers, are historical: disable them in
 the GitHub UI and retain their run history.
 `python tools/inventory_github_workflows.py` compares files to registrations
-and never disables workflows. `python tools/restack_feature_branch.py` reports
-unique feature commits and duplicate subjects against a declared parent; it
-never force-pushes.
+and never disables workflows.
 
 Ordinary CI coverage instruments each pytest process but does not automatically
 instrument every child it launches. Independent checker calls therefore retain

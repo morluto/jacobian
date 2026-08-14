@@ -22,7 +22,7 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import PYTHON_FLINT_VERSION, known_provider_runtime
+from jacobian.provider_runtime import PYTHON_FLINT_VERSION
 
 
 def build_rational_linear_bundle() -> DomainBundle:
@@ -79,11 +79,6 @@ def build_rational_linear_bundle() -> DomainBundle:
                 "results": "ordinary solution and inconsistency candidates are inline",
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.rational-linear",
-            features=("rational-linear-contracts", "inline-exact-candidates"),
-        ),
-        backend_version=f"python-flint-{PYTHON_FLINT_VERSION}",
         operations=operations,
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

@@ -7,7 +7,6 @@ from jacobian.domains.graph_symmetry.checkers import (
 )
 from jacobian.domains.graph_symmetry.operations import GRAPH_SYMMETRY_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import NETWORKX_VERSION, known_provider_runtime
 
 
 def build_graph_symmetry_bundle() -> DomainBundle:
@@ -34,17 +33,6 @@ def build_graph_symmetry_bundle() -> DomainBundle:
                 ),
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.networkx",
-            features=(
-                "declared-graph-automorphisms",
-                "color-preserving-actions",
-                "vertex-orbit-partition",
-                "edge-orbit-partition",
-                "union-find-orbit-closure",
-            ),
-        ),
-        backend_version=NETWORKX_VERSION,
         operations=GRAPH_SYMMETRY_OPERATIONS,
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

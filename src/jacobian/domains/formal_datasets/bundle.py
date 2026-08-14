@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import platform
-
 from jacobian.contracts.formal_datasets import (
     FormalDatasetArtifact,
     FormalDatasetMaterializeRequest,
@@ -18,8 +16,7 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import jacobian_provider_runtime
-from jacobian_checkers.lean4 import LEAN_VERSION, MATHLIB_COMMIT
+from jacobian_checkers.lean4 import LEAN_VERSION
 
 
 def build_formal_dataset_bundle() -> DomainBundle:
@@ -37,14 +34,6 @@ def build_formal_dataset_bundle() -> DomainBundle:
                 ),
                 "verification": "none; materialization never establishes theorem truth",
             },
-        ),
-        provider_runtime=jacobian_provider_runtime(
-            "jacobian.formal-datasets",
-            features=("MINIF2F", "PROOFNET", "deterministic-materialization"),
-        ),
-        backend_version=(
-            f"python-{platform.python_version()};lean-{LEAN_VERSION};"
-            f"mathlib-{MATHLIB_COMMIT}"
         ),
         operations=(
             durable_operation(

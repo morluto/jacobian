@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import platform
-
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.number_theory.checkers import NUMBER_THEORY_EXACT_REPLAY_CHECKERS
@@ -22,7 +20,6 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_number_theory_bundle() -> DomainBundle:
@@ -42,11 +39,6 @@ def build_number_theory_bundle() -> DomainBundle:
                 "integer_encoding": "canonical decimal string",
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=("exact-integer-number-theory",),
-        ),
-        backend_version=f"python-{platform.python_version()};sympy-{SYMPY_VERSION}",
         operations=(
             *DIVISIBILITY_OPERATIONS,
             *PRIME_OPERATIONS,

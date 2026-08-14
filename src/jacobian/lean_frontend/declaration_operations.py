@@ -86,8 +86,6 @@ def build_lean_declaration_query_bundle(
                 "dependency_api": "Lean.Expr.getUsedConstantsAsSet",
             },
         ),
-        provider_runtime=provider_runtime,
-        backend_version=provider_runtime.version or "unknown",
         operations=(
             inline_operation(
                 OperationDeclaration(

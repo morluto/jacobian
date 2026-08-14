@@ -4,13 +4,8 @@ from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.matrix_lattice.lattice import (
     LATTICE_OPERATIONS,
-    LATTICE_RUNTIME,
 )
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import (
-    PYTHON_FLINT_HNF_FLINT_VERSION,
-    PYTHON_FLINT_VERSION,
-)
 
 
 def build_lattice_bundle() -> DomainBundle:
@@ -34,10 +29,6 @@ def build_lattice_bundle() -> DomainBundle:
                 "relation": "reduced_basis = transformation * source_basis",
                 "timeout": "operational TIMEOUT with no retained result artifacts",
             },
-        ),
-        provider_runtime=LATTICE_RUNTIME,
-        backend_version=(
-            f"python-flint {PYTHON_FLINT_VERSION} / FLINT {PYTHON_FLINT_HNF_FLINT_VERSION}"
         ),
         operations=LATTICE_OPERATIONS,
         diagnostics=DomainDiagnostics(

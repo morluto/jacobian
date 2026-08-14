@@ -8,7 +8,6 @@ from jacobian.domains.matrix_lattice.checkers import MATRIX_EXACT_REPLAY_CHECKER
 from jacobian.domains.matrix_lattice.hnf import HERMITE_NORMAL_FORM_OPERATION
 from jacobian.domains.matrix_lattice.operation_declarations import MATRIX_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_matrix_bundle() -> DomainBundle:
@@ -33,20 +32,6 @@ def build_matrix_bundle() -> DomainBundle:
                 ),
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=(
-                "exact-rational-matrix",
-                "matrix-multiplication",
-                "determinant",
-                "rank",
-                "rref",
-                "nullspace",
-                "characteristic-polynomial",
-                "smith-normal-form",
-            ),
-        ),
-        backend_version=SYMPY_VERSION,
         operations=(*MATRIX_OPERATIONS, HERMITE_NORMAL_FORM_OPERATION),
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

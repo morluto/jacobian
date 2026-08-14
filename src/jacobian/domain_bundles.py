@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from jacobian.checker_operations import ExactReplayCheckerDeclaration
-from jacobian.contracts.operations import ProviderObservation
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operations import DomainDiagnostics, DomainSemantics
 
@@ -18,8 +17,6 @@ class DomainBundle:
     domain_id: str
     schema_namespace: str
     semantics: DomainSemantics
-    provider_runtime: ProviderObservation
-    backend_version: str
     operations: tuple[OperationDeclaration[Any, Any], ...]
     diagnostics: DomainDiagnostics
     checker_declarations: tuple[ExactReplayCheckerDeclaration, ...] = ()

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import platform
-
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.finite_sets.set_cardinality import SET_CARDINALITY_OPERATIONS
@@ -13,7 +11,6 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import jacobian_provider_runtime
 
 
 def build_finite_set_bundle() -> DomainBundle:
@@ -30,11 +27,6 @@ def build_finite_set_bundle() -> DomainBundle:
                 "max_set_size": 128,
             },
         ),
-        provider_runtime=jacobian_provider_runtime(
-            "jacobian.finite-sets",
-            features=("exact-finite-sets",),
-        ),
-        backend_version=f"python-{platform.python_version()}",
         operations=(
             *SET_OPERATION_OPERATIONS,
             *SET_PREDICATE_OPERATIONS,

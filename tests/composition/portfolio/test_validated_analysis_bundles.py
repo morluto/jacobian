@@ -5,10 +5,9 @@ from jacobian.domains.optimization import build_rational_optimization_bundle
 from jacobian.domains.probability import build_finite_probability_bundle
 
 
-def test_subject_bundles_preserve_wire_contracts_and_report_one_backend() -> None:
+def test_subject_bundles_preserve_wire_contracts() -> None:
     assert {
         bundle.domain_id: (
-            bundle.provider_runtime.provider,
             bundle.schema_namespace,
             tuple(operation.operation_id for operation in bundle.operations),
         )
@@ -19,12 +18,10 @@ def test_subject_bundles_preserve_wire_contracts_and_report_one_backend() -> Non
         )
     } == {
         "analysis": (
-            "python-flint",
             "jacobian.validated-analysis",
             ("analysis.real_function.point_enclosure.compute",),
         ),
         "probability": (
-            "python-flint",
             "jacobian.validated-analysis",
             (
                 "probability.joint.mutual_information.compute",
@@ -38,7 +35,6 @@ def test_subject_bundles_preserve_wire_contracts_and_report_one_backend() -> Non
             ),
         ),
         "optimization": (
-            "jacobian.sympy",
             "jacobian.validated-analysis",
             ("optimization.linear.rational_optimum.compute",),
         ),

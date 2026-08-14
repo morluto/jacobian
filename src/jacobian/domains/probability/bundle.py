@@ -14,8 +14,6 @@ from jacobian.domains.probability.mutual_information import (
 )
 from jacobian.domains.probability.operations import FINITE_PROBABILITY_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import PYTHON_FLINT_VERSION
-from jacobian.providers.flint_runtime import python_flint_probability_provider_runtime
 
 
 def _operation_with_canonical_gaussian_input(operation: Any) -> Any:
@@ -48,8 +46,6 @@ def build_finite_probability_bundle() -> DomainBundle:
                 "failure": "invalid bounded probability inputs fail before computation",
             },
         ),
-        provider_runtime=python_flint_probability_provider_runtime(),
-        backend_version=f"python-flint-{PYTHON_FLINT_VERSION}",
         operations=(
             MUTUAL_INFORMATION_OPERATION,
             *(

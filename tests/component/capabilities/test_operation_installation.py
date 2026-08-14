@@ -7,6 +7,7 @@ import pytest
 from pydantic import ConfigDict, Field, model_validator
 from tests.support.services import DomainTestServices, open_domain_services
 
+from jacobian import __version__
 from jacobian.contracts.operations import (
     OperationDiagnostic,
     OperationRequest,
@@ -32,7 +33,6 @@ from jacobian.operations import (
     DomainSemantics,
     Failed,
 )
-from jacobian.provider_runtime import known_provider_runtime
 
 
 @pytest.fixture
@@ -102,11 +102,6 @@ def _synthetic_bundle() -> DomainBundle:
             version="1",
             definition={"description": "synthetic operation test semantics"},
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.synthetic",
-            features=("deterministic",),
-        ),
-        backend_version="synthetic-1",
         operations=(
             inline_operation(
                 OperationDeclaration(
@@ -132,7 +127,12 @@ def _synthetic_bundle() -> DomainBundle:
 
 
 def _install(runtime: DomainTestServices, bundle: DomainBundle) -> None:
-    installation = runtime.core.operations.install(bundle)
+    installation = OperationInstaller(
+        runtime.core.store,
+        runtime.core.schemas,
+        runtime.core.artifacts,
+        runtime.core.values,
+    ).install(bundle)
     for adapter in installation.adapters:
         runtime.core.operations.register(adapter)
 
@@ -147,7 +147,7 @@ def test_synthetic_bundle_returns_an_inline_typed_result(
         for descriptor in operation_services.core.operations.catalog().operations
         if descriptor.operation_id == "synthetic.compute.double"
     )
-    assert descriptor.provider == "jacobian.synthetic"
+    assert descriptor.provider == "built-in"
     assert descriptor.input_schema["additionalProperties"] is False
     result_schema = descriptor.output_schema["properties"]["result"]
     assert result_schema == {"$ref": "#/$defs/_SyntheticResult"}
@@ -469,7 +469,7 @@ def test_materialized_operation_retains_artifacts_lineage_and_typed_preview(
     input_uri, result_uri = result.artifact_uris
     assert result.output["input_uri"] == input_uri
     assert result.output["result_uri"] == result_uri
-    assert result.output["backend_version"] == "synthetic-1"
+    assert result.output["backend_version"] == __version__
     assert result.output["preview"] == {"summary": "doubled=12"}
     assert result.output["preview_complete"] is True
     input_artifact = operation_services.core.store.get(input_uri)
@@ -536,7 +536,7 @@ def test_materialized_operation_omits_preview_without_projection(
     assert len(result.artifact_uris) == 2
     assert result.output["preview"] is None
     assert result.output["preview_complete"] is False
-    assert result.output["backend_version"] == "synthetic-1"
+    assert result.output["backend_version"] == __version__
     assert operation_services.core.store.get(result.artifact_uris[1]).payload == {
         "doubled": 8
     }
@@ -681,8 +681,6 @@ def test_computed_adapter_rejects_invalid_implementation_result(
             domain_id=bundle.domain_id,
             schema_namespace=bundle.schema_namespace,
             semantics=bundle.semantics,
-            provider_runtime=bundle.provider_runtime,
-            backend_version=bundle.backend_version,
             operations=(invalid,),
             diagnostics=bundle.diagnostics,
         ),

@@ -29,13 +29,6 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import (
-    NETWORKX_VERSION,
-    SYMPY_VERSION,
-    Z3_SOLVER_VERSION,
-    composite_provider_runtime,
-    known_provider_runtime,
-)
 
 
 def build_graph_optimization_bundle() -> DomainBundle:
@@ -89,37 +82,6 @@ def build_graph_optimization_bundle() -> DomainBundle:
                     "Kruskal selection"
                 ),
             },
-        ),
-        provider_runtime=composite_provider_runtime(
-            "jacobian.graph-optimization",
-            components=(
-                known_provider_runtime(
-                    "jacobian.z3",
-                    features=("bounded-finite-search",),
-                ),
-                known_provider_runtime(
-                    "jacobian.networkx",
-                    features=(
-                        "graph-witness-validation",
-                        "graph-approximations",
-                        "exact-rational-minimum-spanning-tree",
-                    ),
-                ),
-                known_provider_runtime(
-                    "jacobian.sympy",
-                    features=("exact-spanning-tree-determinant",),
-                ),
-            ),
-            features=(
-                "bounded-k-colorability",
-                "finite-graph-optimization",
-                "exact-rational-minimum-spanning-tree",
-                "timeout-aware",
-            ),
-        ),
-        backend_version=(
-            f"z3-solver-{Z3_SOLVER_VERSION};networkx-{NETWORKX_VERSION};"
-            f"sympy-{SYMPY_VERSION}"
         ),
         operations=(
             CHROMATIC_NUMBER_OPERATION,

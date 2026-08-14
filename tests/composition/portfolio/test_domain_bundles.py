@@ -100,5 +100,5 @@ def test_catalog_matches_installed_operations(service: OperationService) -> None
             assert desc.version == operation.version
             assert desc.title == operation.title
             assert desc.description == operation.description
-            assert desc.provider == bundle.provider_runtime.provider
+            assert desc.provider == "built-in"
             assert desc.tags == operation.tags

@@ -9,8 +9,6 @@ intentionally excluded from this bundle.
 
 from __future__ import annotations
 
-import platform
-
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.arithmetic.integers import INTEGER_OPERATIONS
@@ -23,7 +21,6 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_arithmetic_bundle() -> DomainBundle:
@@ -45,12 +42,6 @@ def build_arithmetic_bundle() -> DomainBundle:
                 "arithmetic": "exact via stdlib and maintained SymPy APIs",
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=("exact-integer-arithmetic", "exact-rational-arithmetic"),
-            configuration={"sympy_version": SYMPY_VERSION},
-        ),
-        backend_version=f"python-{platform.python_version()};sympy-{SYMPY_VERSION}",
         operations=(
             *INTEGER_OPERATIONS,
             *RATIONAL_OPERATIONS,

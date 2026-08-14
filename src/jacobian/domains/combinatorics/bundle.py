@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import platform
-
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.combinatorics.checkers import COMBINATORICS_EXACT_REPLAY_CHECKERS
@@ -15,7 +13,6 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_combinatorics_bundle() -> DomainBundle:
@@ -34,11 +31,6 @@ def build_combinatorics_bundle() -> DomainBundle:
                 "arithmetic": "exact integer and rational via maintained SymPy and stdlib APIs",
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=("exact-combinatorics",),
-        ),
-        backend_version=f"python-{platform.python_version()};sympy-{SYMPY_VERSION}",
         operations=(
             *COUNTING_OPERATIONS,
             *PARTITION_OPERATIONS,

@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
+from jacobian import __version__
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.contracts.operations import (
@@ -15,7 +16,6 @@ from jacobian.contracts.operations import (
     OperationExample,
     OperationRequest,
     OperationValuePort,
-    ProviderAvailability,
 )
 from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
@@ -41,7 +41,6 @@ from jacobian.operation_publication import (
 from jacobian.operation_runtime import (
     DomainOperation,
     OperationResources,
-    operation_runtime,
 )
 from jacobian.operations import Completed, Effect, Failed
 from jacobian.schema_registry import SchemaRegistry, model_schema
@@ -132,7 +131,6 @@ class OperationInstaller:
         adapters = tuple(
             self._adapter(operation, bundle, resources)
             for operation in bundle.operations
-            if self._operation_available(operation, bundle)
         )
         return InstalledDomainBundle(
             adapters=adapters,
@@ -141,14 +139,6 @@ class OperationInstaller:
             result_schema_uris=result_schema_uris,
             named_schema_uris={},
         )
-
-    @staticmethod
-    def _operation_available(
-        operation: DomainOperation,
-        bundle: DomainBundle,
-    ) -> bool:
-        runtime = operation_runtime(operation, bundle)
-        return runtime.availability is ProviderAvailability.AVAILABLE
 
     @staticmethod
     def _adapter(
@@ -165,8 +155,6 @@ class OperationInstaller:
         ids = tuple(_operation_id(operation) for operation in bundle.operations)
         if len(ids) != len(set(ids)):
             raise ValueError(f"duplicate operation ID in bundle {bundle.domain_id}")
-        if bundle.provider_runtime.provider == "":
-            raise ValueError("operation bundle provider must not be empty")
 
 
 class InstalledOperationAdapter:
@@ -210,14 +198,12 @@ class InstalledOperationAdapter:
             produced_artifact_types = (
                 resources.result_schema_uris[self.spec.operation_id],
             )
-        runtime = operation_runtime(operation, bundle)
         self._descriptor = OperationDescriptor(
             operation_id=self.spec.operation_id,
             version=self.spec.version,
             title=self.spec.title,
             description=self.spec.description,
-            provider=runtime.provider,
-            provider_runtime=runtime,
+            provider="built-in",
             input_schema=model_schema(self.spec.request_type),
             output_schema=model_schema(output_model),
             read_only=(
@@ -315,7 +301,6 @@ class InstalledOperationAdapter:
             ) from exc
         publication = None
         if isinstance(terminal, Completed):
-            backend_version = self.bundle.backend_version
             try:
                 publication = publish_operation(
                     self.operation,
@@ -331,7 +316,7 @@ class InstalledOperationAdapter:
                         result_schema_uri=self.resources.result_schema_uris[
                             self.spec.operation_id
                         ],
-                        backend_version=backend_version,
+                        backend_version=__version__,
                     ),
                 )
             except PublicationLimitError as exc:

@@ -7,7 +7,6 @@ from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.topology.checkers import TOPOLOGY_EXACT_REPLAY_CHECKERS
 from jacobian.domains.topology.operations import TOPOLOGY_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import known_provider_runtime
 
 
 def build_topology_bundle() -> DomainBundle:
@@ -36,19 +35,6 @@ def build_topology_bundle() -> DomainBundle:
                 "persistent_homology": "not provided",
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.topology",
-            features=(
-                "finite-simplicial-complex",
-                "oriented-boundary-matrices",
-                "prime-field-homology",
-                "integral-homology",
-                "torsion-invariant-factors",
-                "smith-transformation-certificates",
-                "exact-modular-elimination",
-            ),
-        ),
-        backend_version="jacobian.topology/1",
         operations=TOPOLOGY_OPERATIONS,
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

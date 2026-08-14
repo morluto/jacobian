@@ -16,7 +16,6 @@ from jacobian.domains.polynomial.jacobian_syzygy import (
     JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
 )
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_polynomial_bundle() -> DomainBundle:
@@ -53,11 +52,6 @@ def build_polynomial_bundle() -> DomainBundle:
                 ),
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=("exact-rational-polynomial-operations",),
-        ),
-        backend_version=SYMPY_VERSION,
         operations=(
             *POLYNOMIAL_INVARIANT_OPERATIONS,
             POLYNOMIAL_GROEBNER_OPERATION,

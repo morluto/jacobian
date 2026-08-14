@@ -7,7 +7,6 @@ from jacobian.domains.optimization.checkers import (
 )
 from jacobian.domains.optimization.operations import RATIONAL_LINEAR_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_rational_optimization_bundle() -> DomainBundle:
@@ -27,11 +26,6 @@ def build_rational_optimization_bundle() -> DomainBundle:
                 ),
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=("rational-linear-programming",),
-        ),
-        backend_version=f"sympy-{SYMPY_VERSION}",
         operations=RATIONAL_LINEAR_OPERATIONS,
         checker_declarations=RATIONAL_OPTIMIZATION_EXACT_REPLAY_CHECKERS,
         diagnostics=DomainDiagnostics(

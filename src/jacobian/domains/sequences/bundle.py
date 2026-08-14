@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import platform
-
 from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.sequences.aggregates import SEQUENCE_AGGREGATE_OPERATIONS
@@ -15,7 +13,6 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import jacobian_provider_runtime
 
 
 def build_sequence_bundle() -> DomainBundle:
@@ -32,11 +29,6 @@ def build_sequence_bundle() -> DomainBundle:
                 "max_sequence_length": 256,
             },
         ),
-        provider_runtime=jacobian_provider_runtime(
-            "jacobian.sequences",
-            features=("exact-integer-sequences",),
-        ),
-        backend_version=f"python-{platform.python_version()}",
         operations=(
             *SEQUENCE_AGGREGATE_OPERATIONS,
             *SEQUENCE_STATISTIC_OPERATIONS,

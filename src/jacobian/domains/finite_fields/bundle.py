@@ -58,7 +58,6 @@ from jacobian.operations import (
     DomainSemantics,
     OperationRefusalError,
 )
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 _MAX_PROJECTIVE_POINTS = 4096
 _MAX_FINITE_MAP_ELEMENTS = 4096
@@ -246,15 +245,6 @@ def _finite_map_replay_preflight(
 
 
 def build_finite_field_bundle() -> DomainBundle:
-    provider = known_provider_runtime(
-        "jacobian.sympy",
-        features=(
-            "finite-field-presentation",
-            "finite-map-replay",
-            "projective-normalization",
-            "projective-enumeration",
-        ),
-    )
     projective_line_operation = inline_operation(
         OperationDeclaration(
             operation_id="finite_field.projective_line.enumerate",
@@ -459,8 +449,6 @@ def build_finite_field_bundle() -> DomainBundle:
                 "linear_map": "explicit restriction of scalars to the prime field",
             },
         ),
-        provider_runtime=provider,
-        backend_version=f"sympy-{SYMPY_VERSION}",
         operations=(
             projective_line_operation,
             restrict_operation,

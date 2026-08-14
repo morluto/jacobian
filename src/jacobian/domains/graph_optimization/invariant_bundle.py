@@ -18,12 +18,6 @@ from jacobian.domains.graph_optimization.invariants import (
     EXACT_GRAPH_INVARIANT_OPERATIONS,
 )
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import (
-    NETWORKX_VERSION,
-    SYMPY_VERSION,
-    composite_provider_runtime,
-    known_provider_runtime,
-)
 
 
 def build_graph_invariant_bundle() -> DomainBundle:
@@ -53,29 +47,6 @@ def build_graph_invariant_bundle() -> DomainBundle:
                 "spanning_tree_arithmetic": "exact SymPy integer determinant",
             },
         ),
-        provider_runtime=composite_provider_runtime(
-            "jacobian.graph-invariants",
-            components=(
-                known_provider_runtime(
-                    "jacobian.networkx",
-                    features=(
-                        "finite-simple-graph",
-                        "exact-invariants",
-                        "matching-witnesses",
-                    ),
-                ),
-                known_provider_runtime(
-                    "jacobian.sympy",
-                    features=("exact-spanning-tree-determinant",),
-                ),
-            ),
-            features=(
-                "finite-simple-graph",
-                "exact-invariants",
-                "matching-witnesses",
-            ),
-        ),
-        backend_version=f"networkx-{NETWORKX_VERSION};sympy-{SYMPY_VERSION}",
         operations=(
             *GRAPH6_OPERATIONS,
             DISTANCE_MATRIX_OPERATION,

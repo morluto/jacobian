@@ -5,7 +5,6 @@ from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.certified_snf.checkers import CERTIFIED_SNF_EXACT_REPLAY_CHECKERS
 from jacobian.domains.certified_snf.operations import CERTIFIED_SNF_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_certified_snf_bundle() -> DomainBundle:
@@ -31,17 +30,6 @@ def build_certified_snf_bundle() -> DomainBundle:
                 ),
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=(
-                "exact-integer",
-                "sympy-smith-normal-decomposition",
-                "left-unimodular-transformation",
-                "right-unimodular-transformation",
-                "smith-divisibility-chain",
-            ),
-        ),
-        backend_version=SYMPY_VERSION,
         operations=CERTIFIED_SNF_OPERATIONS,
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

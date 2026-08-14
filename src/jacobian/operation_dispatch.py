@@ -251,27 +251,21 @@ def invoke_ready_adapter(
     *, adapter: OperationAdapter[Any], descriptor: Any, prepared: Any
 ) -> OperationResult:
     runtime = descriptor.provider_runtime
-    if runtime is None:
-        raise OperationError(
-            f"operation {descriptor.operation_id} has no provider runtime identity"
-        )
-    try:
-        require_provider_runtime_ready(runtime)
-    except ProviderRuntimeError as exc:
-        return failed_result(
-            operation_id=descriptor.operation_id,
-            version=descriptor.version,
-            diagnostic=OperationDiagnostic(
-                code="PROVIDER_READINESS_FAILED",
-                stage="provider_readiness",
-                message="The declared operation provider is not ready for first use.",
-                hint=(
-                    "Repair or reinstall the declared provider, then retry the "
-                    "operation invocation."
+    if runtime is not None:
+        try:
+            require_provider_runtime_ready(runtime)
+        except ProviderRuntimeError as exc:
+            return failed_result(
+                operation_id=descriptor.operation_id,
+                version=descriptor.version,
+                diagnostic=OperationDiagnostic(
+                    code="PROVIDER_READINESS_FAILED",
+                    stage="provider_readiness",
+                    message="The selected external executable is not ready.",
+                    hint="Run `jacobian update` after repairing the executable.",
+                    details={"provider_failure_code": exc.code.value},
                 ),
-                details={"provider_failure_code": exc.code.value},
-            ),
-        )
+            )
     outcome = adapter.invoke(prepared)
     invalid = _adapter_output_model_failure(descriptor, outcome)
     if invalid is not None:

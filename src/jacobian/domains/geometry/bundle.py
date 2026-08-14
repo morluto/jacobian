@@ -14,7 +14,6 @@ from jacobian.operations import (
     DomainDiagnostics,
     DomainSemantics,
 )
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_geometry_bundle() -> DomainBundle:
@@ -33,11 +32,6 @@ def build_geometry_bundle() -> DomainBundle:
                 "degeneracy": "operation-specific and fail-closed",
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=("exact-rational-geometry",),
-        ),
-        backend_version=SYMPY_VERSION,
         operations=(
             *POINT_OPERATIONS,
             *SEGMENT_OPERATIONS,

@@ -7,7 +7,6 @@ from typing import Any, cast
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
     OperationDescriptor,
-    ProviderAvailability,
 )
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_errors import OperationError
@@ -20,21 +19,7 @@ class OperationRegistryMixin:
     def register(self: Any, adapter: OperationAdapter[Any]) -> None:
         descriptor = adapter.descriptor
         if descriptor.operation_id in self._adapters:
-            raise OperationError(
-                f"duplicate operation ID: {descriptor.operation_id}"
-            )
-        if descriptor.provider_runtime is None:
-            raise OperationError(
-                f"operation {descriptor.operation_id} has no provider runtime identity"
-            )
-        if (
-            descriptor.provider_runtime.availability
-            is not ProviderAvailability.AVAILABLE
-        ):
-            raise OperationError(
-                f"operation {descriptor.operation_id} is unavailable: "
-                f"{descriptor.provider_runtime.diagnostic}"
-            )
+            raise OperationError(f"duplicate operation ID: {descriptor.operation_id}")
         validator(descriptor.input_schema)
         validator(descriptor.output_schema)
         for example in descriptor.examples:

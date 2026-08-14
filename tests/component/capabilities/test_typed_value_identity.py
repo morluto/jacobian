@@ -11,9 +11,9 @@ from jacobian.contracts.results import ContractModel, ExecutionStatus
 from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_bindings import inline_operation
 from jacobian.operation_declarations import OperationDeclaration
+from jacobian.operation_installation import OperationInstaller
 from jacobian.operation_ports import InputPort, OutputPort
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import known_provider_runtime
 
 
 class _SourceRequest(ContractModel):
@@ -88,11 +88,6 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
             version="1",
             definition={"description": "typed identity regression semantics"},
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.typed-identity",
-            features=("deterministic",),
-        ),
-        backend_version="typed-identity-1",
         operations=(producer, consumer),
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(
@@ -102,7 +97,12 @@ def test_resolved_typed_value_retains_identity_while_payload_stays_strict(
             )
         ),
     )
-    installation = typed_value_services.core.operations.install(bundle)
+    installation = OperationInstaller(
+        typed_value_services.core.store,
+        typed_value_services.core.schemas,
+        typed_value_services.core.artifacts,
+        typed_value_services.core.values,
+    ).install(bundle)
     for adapter in installation.adapters:
         typed_value_services.core.operations.register(adapter)
 

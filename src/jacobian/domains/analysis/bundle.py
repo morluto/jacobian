@@ -4,8 +4,6 @@ from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.analysis.operations import POINT_ENCLOSURE_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import PYTHON_FLINT_VERSION
-from jacobian.providers.flint_runtime import python_flint_analysis_provider_runtime
 
 
 def build_real_analysis_bundle() -> DomainBundle:
@@ -26,8 +24,6 @@ def build_real_analysis_bundle() -> DomainBundle:
                 "failure": "non-finite balls and worker failures are non-conclusions",
             },
         ),
-        provider_runtime=python_flint_analysis_provider_runtime(),
-        backend_version=f"python-flint-{PYTHON_FLINT_VERSION}",
         operations=POINT_ENCLOSURE_OPERATIONS,
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

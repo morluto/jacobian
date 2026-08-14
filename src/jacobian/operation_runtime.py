@@ -6,9 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from jacobian.artifacts import ArtifactService
-from jacobian.contracts.operations import ProviderObservation
 from jacobian.contracts.results import ContractModel
-from jacobian.domain_bundles import DomainBundle
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.value_references import ValueReferenceStore
 
@@ -24,17 +22,7 @@ class OperationResources:
     result_schema_uris: dict[str, str]
 
 
-def operation_runtime(
-    operation: DomainOperation,
-    bundle: DomainBundle,
-) -> ProviderObservation:
-    """Resolve provider identity at operation granularity."""
-
-    return bundle.provider_runtime
-
-
 __all__ = [
     "DomainOperation",
     "OperationResources",
-    "operation_runtime",
 ]

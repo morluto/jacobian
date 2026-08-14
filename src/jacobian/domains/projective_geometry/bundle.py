@@ -11,7 +11,6 @@ from jacobian.domains.projective_geometry.checkers import (
     PROJECTIVE_GEOMETRY_EXACT_REPLAY_CHECKERS,
 )
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import SYMPY_VERSION, known_provider_runtime
 
 
 def build_projective_geometry_bundle() -> DomainBundle:
@@ -33,11 +32,6 @@ def build_projective_geometry_bundle() -> DomainBundle:
                 "completion": "all distinct line pairs are grouped by exact cross product",
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.sympy",
-            features=("exact-rational-projective-incidence",),
-        ),
-        backend_version=SYMPY_VERSION,
         operations=(PROJECTIVE_LINE_ARRANGEMENT_OPERATION,),
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

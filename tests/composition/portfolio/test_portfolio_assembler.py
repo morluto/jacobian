@@ -1,10 +1,4 @@
-"""Behavioral tests for the portfolio assembler's installation absorption.
-
-The assembler records declared provider unavailability and bundles affected by
-an unavailable declared dependency. Every other installation failure
-(programming, schema, store, or configuration defects) must propagate so the
-caller's enclosing transaction rolls back atomically.
-"""
+"""Behavioral tests for explicit built-in domain installation."""
 
 from __future__ import annotations
 
@@ -17,12 +11,7 @@ import pytest
 from pydantic import Field
 
 from jacobian.artifacts import ArtifactService
-from jacobian.contracts.operations import (
-    OperationDiagnostic,
-    ProviderAvailability,
-    ProviderInstallTier,
-    ProviderObservation,
-)
+from jacobian.contracts.operations import OperationDiagnostic
 from jacobian.contracts.results import ContractModel
 from jacobian.domain_bundles import DomainBundle
 from jacobian.installation.context import InstallationContext
@@ -36,11 +25,9 @@ from jacobian.operations import (
 from jacobian.portfolio.domain_installation import DomainBundleInstaller
 from jacobian.portfolio.model import PortfolioPlan
 from jacobian.portfolio.result import (
-    PROVIDER_UNAVAILABLE,
     BundleInstallationStatus,
     PortfolioInstallationResult,
 )
-from jacobian.provider_runtime import known_provider_runtime
 from jacobian.registry import CheckerRegistry
 from jacobian.runtime.config import CheckerAuthorityMode
 from jacobian.schema_registry import SchemaRegistry
@@ -56,27 +43,9 @@ class _SyntheticResult(ContractModel):
     doubled: int
 
 
-def _available_runtime() -> ProviderObservation:
-    return known_provider_runtime("jacobian.synthetic", features=("deterministic",))
-
-
-def _unavailable_runtime(
-    message: str = "synthetic provider is unavailable",
-) -> ProviderObservation:
-    return ProviderObservation(
-        provider="jacobian.synthetic.unavailable",
-        availability=ProviderAvailability.UNAVAILABLE,
-        platform="test-platform",
-        install_tier=ProviderInstallTier.T0,
-        license_id="MIT",
-        diagnostic=message,
-    )
-
-
 def _synthetic_bundle(
     *,
     domain_id: str = "synthetic",
-    runtime: ProviderObservation | None = None,
     operations: tuple[OperationDeclaration[Any, Any], ...] | None = None,
 ) -> DomainBundle:
     def compute(request: _SyntheticRequest) -> _SyntheticResult:
@@ -90,8 +59,6 @@ def _synthetic_bundle(
             version="1",
             definition={"description": f"synthetic {domain_id} semantics"},
         ),
-        provider_runtime=runtime or _available_runtime(),
-        backend_version="synthetic-1",
         operations=operations
         if operations is not None
         else (
@@ -194,69 +161,6 @@ def test_install_domains_preserves_declaration_order_across_bundles(
 
     assert [outcome.domain_id for outcome in result.outcomes] == ["alpha", "beta"]
     assert assembly.registered == ["alpha.compute.double", "beta.compute.double"]
-
-
-def test_unavailable_provider_is_skipped_with_typed_diagnostic(
-    assembly: _RecordingContext,
-) -> None:
-    assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(
-        components=(
-            _synthetic_bundle(domain_id="alpha"),
-            _synthetic_bundle(
-                domain_id="beta",
-                runtime=_unavailable_runtime("beta provider is missing"),
-            ),
-        )
-    )
-
-    result = assembler.install(plan)
-
-    assert set(result.installed) == {"alpha"}
-    # The unavailable bundle's adapters are never registered.
-    assert assembly.registered == ["alpha.compute.double"]
-
-    (diagnostic,) = result.diagnostics
-    assert diagnostic.code == PROVIDER_UNAVAILABLE
-    assert diagnostic.component_id == "beta"
-    assert diagnostic.message == "beta provider is missing"
-
-    outcome = result.outcomes[1]
-    assert outcome.status is BundleInstallationStatus.SKIPPED_PROVIDER_UNAVAILABLE
-    assert outcome.installed is None
-    # Operation IDs are still exposed so callers can see what is missing.
-    assert outcome.operation_ids == ("beta.compute.double",)
-
-
-def test_unavailable_provider_does_not_block_subsequent_bundles(
-    assembly: _RecordingContext,
-) -> None:
-    """An unavailable optional provider removes only its own bundle."""
-
-    assembler = DomainBundleInstaller(assembly.context)
-    plan = PortfolioPlan(
-        components=(
-            _synthetic_bundle(domain_id="alpha"),
-            _synthetic_bundle(
-                domain_id="beta",
-                runtime=_unavailable_runtime("beta provider is missing"),
-            ),
-            _synthetic_bundle(domain_id="gamma"),
-        )
-    )
-
-    result = assembler.install(plan)
-
-    assert set(result.installed) == {"alpha", "gamma"}
-    assert [outcome.domain_id for outcome in result.outcomes] == [
-        "alpha",
-        "beta",
-        "gamma",
-    ]
-    assert assembly.registered == [
-        "alpha.compute.double",
-        "gamma.compute.double",
-    ]
 
 
 def test_install_domains_validates_the_plan_before_installing(

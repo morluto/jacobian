@@ -5,7 +5,6 @@ from jacobian.domain_bundles import DomainBundle
 from jacobian.domains.posets.checkers import FINITE_POSET_EXACT_REPLAY_CHECKERS
 from jacobian.domains.posets.operations import FINITE_POSET_OPERATIONS
 from jacobian.operations import DomainDiagnostics, DomainSemantics
-from jacobian.provider_runtime import NETWORKX_VERSION, known_provider_runtime
 
 
 def build_finite_poset_bundle() -> DomainBundle:
@@ -33,17 +32,6 @@ def build_finite_poset_bundle() -> DomainBundle:
                 ),
             },
         ),
-        provider_runtime=known_provider_runtime(
-            "jacobian.networkx",
-            features=(
-                "finite-poset",
-                "dag-transitive-closure",
-                "dag-transitive-reduction",
-                "bipartite-maximum-matching",
-                "exact-subset-dp",
-            ),
-        ),
-        backend_version=f"networkx-{NETWORKX_VERSION}",
         operations=FINITE_POSET_OPERATIONS,
         diagnostics=DomainDiagnostics(
             invalid_request=OperationDiagnostic(

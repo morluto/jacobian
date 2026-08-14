@@ -174,12 +174,11 @@ def test_internalcot_adherence_fails_closed_on_bad_order_or_workflow() -> None:
 def test_current_server_evidence_is_bound_without_assurance_inference() -> None:
     digest = "sha256:" + "3" * 64
     payload = (
-        "INFO MCP operation attempt request_digest=cccccccccccccccc "
-        "trace_digest=cccccccc trace_source=request_id "
+        f"INFO MCP operation attempt request_digest={digest} "
         "operation_id=matrix.normal_form.hermite.verify operation_version=1 "
+        "provider=python-flint checker_ids=checker://sha256/abc "
         "execution_status=COMPLETED verification_record_uri_present=True "
-        "diagnostic_codes=none attempt_duration_ms=4.5 operation_runtime_ms=2 "
-        f"response_bytes=120 argument_digest={digest}"
+        "diagnostic_codes=none artifact_count=1"
     )
 
     events, coverage = study._server_events(payload)

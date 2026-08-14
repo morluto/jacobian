@@ -70,34 +70,16 @@ _TOOL_CALL = re.compile(
     r".{0,512}?\bargument_digest=(sha256:(?:[0-9a-f]\s*){64})",
     re.DOTALL,
 )
-_OPERATION_ATTEMPT_WITH_ASSURANCE = re.compile(
-    r"\bMCP operation attempt request_digest=([0-9a-f]{16}|none)\b"
-    r".{0,512}?\btrace_digest=([0-9a-f]{8}|none)\b"
-    r".{0,512}?\btrace_source=([^\s]+)\b"
+_OPERATION_ATTEMPT = re.compile(
+    r"\bMCP operation attempt request_digest=(sha256:(?:[0-9a-f]\s*){64})"
     r".{0,512}?\boperation_id=([^\s]+)\b"
     r".{0,512}?\boperation_version=([^\s]+)\b"
-    r".{0,512}?\bexecution_status=([A-Z_]+)\b"
-    r".{0,512}?\bassurance=([^\s]+)\b"
-    r".{0,512}?\bdiagnostic_codes=([^\s]+)\b"
-    r".{0,512}?\battempt_duration_ms=([0-9]+(?:\.[0-9]+)?)\b"
-    r".{0,512}?\boperation_runtime_ms=([^\s]+)\b"
-    r".{0,512}?\bresponse_bytes=(-?[0-9]+)\b"
-    r".{0,512}?\bargument_digest=(sha256:(?:[0-9a-f]\s*){64})",
-    re.DOTALL,
-)
-_OPERATION_ATTEMPT_WITH_EVIDENCE = re.compile(
-    r"\bMCP operation attempt request_digest=([0-9a-f]{16}|none)\b"
-    r".{0,512}?\btrace_digest=([0-9a-f]{8}|none)\b"
-    r".{0,512}?\btrace_source=([^\s]+)\b"
-    r".{0,512}?\boperation_id=([^\s]+)\b"
-    r".{0,512}?\boperation_version=([^\s]+)\b"
+    r".{0,512}?\bprovider=([^\s]+)\b"
+    r".{0,512}?\bchecker_ids=([^\s]+)\b"
     r".{0,512}?\bexecution_status=([A-Z_]+)\b"
     r".{0,512}?\bverification_record_uri_present=(True|False)\b"
     r".{0,512}?\bdiagnostic_codes=([^\s]+)\b"
-    r".{0,512}?\battempt_duration_ms=([0-9]+(?:\.[0-9]+)?)\b"
-    r".{0,512}?\boperation_runtime_ms=([^\s]+)\b"
-    r".{0,512}?\bresponse_bytes=(-?[0-9]+)\b"
-    r".{0,512}?\bargument_digest=(sha256:(?:[0-9a-f]\s*){64})",
+    r".{0,512}?\bartifact_count=([0-9]+)\b",
     re.DOTALL,
 )
 _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -816,56 +798,44 @@ def _server_events(payload: str) -> tuple[list[dict[str, object]], dict[str, int
                 },
             )
         )
-    for pattern, outcome_kind in (
-        (_OPERATION_ATTEMPT_WITH_ASSURANCE, "assurance"),
-        (_OPERATION_ATTEMPT_WITH_EVIDENCE, "evidence"),
-    ):
-        for match in pattern.finditer(payload):
+    for match in _OPERATION_ATTEMPT.finditer(payload):
+        (
+            request_digest,
+            operation_id,
+            operation_version,
+            provider,
+            checker_ids,
+            execution_status,
+            verification_record_uri_present,
+            diagnostic_codes,
+            artifact_count,
+        ) = match.groups()
+        events.append(
             (
-                request_digest,
-                trace_digest,
-                trace_source,
-                operation_id,
-                operation_version,
-                execution_status,
-                outcome,
-                diagnostic_codes,
-                attempt_duration_ms,
-                operation_runtime_ms,
-                response_bytes,
-                argument_digest,
-            ) = match.groups()
-            events.append(
-                (
-                    match.start(),
-                    {
-                        "kind": "OPERATION_ATTEMPT",
-                        "request_digest": request_digest,
-                        "trace_digest": trace_digest,
-                        "trace_source": trace_source,
-                        "operation_id": operation_id,
-                        "operation_version": operation_version,
-                        "execution_status": execution_status,
-                        "assurance": outcome if outcome_kind == "assurance" else None,
-                        "verification_record_uri_present": (
-                            outcome == "True" if outcome_kind == "evidence" else None
-                        ),
-                        "diagnostic_codes": (
-                            []
-                            if diagnostic_codes in {"none", "-"}
-                            else diagnostic_codes.split(",")[:8]
-                        ),
-                        "attempt_duration_ms": float(attempt_duration_ms),
-                        "operation_runtime_ms": (
-                            None
-                            if operation_runtime_ms == "none"
-                            else float(operation_runtime_ms)
-                        ),
-                        "response_bytes": int(response_bytes),
-                        "argument_digest": re.sub(r"\s", "", argument_digest),
-                    },
-                )
+                match.start(),
+                {
+                    "kind": "OPERATION_ATTEMPT",
+                    "request_digest": re.sub(r"\s", "", request_digest),
+                    "operation_id": operation_id,
+                    "operation_version": operation_version,
+                    "provider": provider,
+                    "checker_ids": (
+                        [] if checker_ids == "none" else checker_ids.split(",")
+                    ),
+                    "execution_status": execution_status,
+                    "assurance": None,
+                    "verification_record_uri_present": (
+                        verification_record_uri_present == "True"
+                    ),
+                    "diagnostic_codes": (
+                        []
+                        if diagnostic_codes in {"none", "-"}
+                        else diagnostic_codes.split(",")[:8]
+                    ),
+                    "artifact_count": int(artifact_count),
+                },
             )
+        )
     ordered = [event for _, event in sorted(events, key=lambda item: item[0])]
     candidates = len(_SERVER_EVENT_MARKER.findall(payload))
     return ordered, {"candidates": candidates, "recorded": len(ordered)}

@@ -307,65 +307,12 @@ def _argument_digest(arguments: dict[str, Any]) -> str:
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
-def _request_trace_digest(ctx: Any | None) -> tuple[str, str]:
-    """Return a bounded correlation digest without retaining caller identifiers."""
-
-    if ctx is None:
-        return "none", "none"
-    headers = getattr(ctx, "headers", None)
-    if headers is not None:
-        traceparent = headers.get("traceparent")
-        if isinstance(traceparent, str) and 0 < len(traceparent) <= 256:
-            digest = hashlib.sha256(traceparent.encode("utf-8")).hexdigest()[:8]
-            return digest, "traceparent"
-    try:
-        request_id = str(ctx.request_id)
-    except (AttributeError, TypeError, ValueError):
-        return "none", "none"
-    if not request_id or len(request_id) > 256:
-        return "none", "none"
-    digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()[:8]
-    return digest, "request_id"
-
-
-def _request_id_digest(ctx: Any | None) -> str:
-    """Return a bounded per-request correlation digest for telemetry joins."""
-
-    if ctx is None:
-        return "none"
-    try:
-        request_id = str(ctx.request_id)
-    except (AttributeError, TypeError, ValueError):
-        return "none"
-    if not request_id or len(request_id) > 256:
-        return "none"
-    return hashlib.sha256(request_id.encode("utf-8")).hexdigest()[:16]
-
-
-def _response_size(value: Any) -> int:
-    try:
-        if hasattr(value, "model_dump_json"):
-            return len(value.model_dump_json().encode("utf-8"))
-        return len(
-            json.dumps(
-                value,
-                ensure_ascii=False,
-                sort_keys=True,
-                default=str,
-            ).encode("utf-8")
-        )
-    except (TypeError, ValueError):
-        return -1
-
-
 def _log_operation_attempt(
     *,
     operation_id: str,
-    started: float,
-    argument_digest: str,
     request_digest: str,
-    trace_digest: str,
-    trace_source: str,
+    provider: str,
+    checker_ids: tuple[str, ...],
     result: OperationResult | None = None,
     execution_status: str | None = None,
     diagnostic_codes: tuple[str, ...] = (),
@@ -375,32 +322,27 @@ def _log_operation_attempt(
         diagnostic_codes = tuple(item.code for item in result.diagnostics)
         operation_version = result.operation_version
         verification_record_uri_present = result.verification_record_uri is not None
-        operation_runtime_ms = result.execution.runtime_ms
-        response_bytes = _response_size(result)
+        artifact_count = len(result.artifact_uris)
     else:
         operation_version = "unknown"
         verification_record_uri_present = False
-        operation_runtime_ms = None
-        response_bytes = 0
+        artifact_count = 0
     codes = ",".join(diagnostic_codes[:8]) or "none"
+    checkers = ",".join(checker_ids) or "none"
     _LOGGER.info(
-        "MCP operation attempt request_digest=%s trace_digest=%s trace_source=%s "
-        "operation_id=%s operation_version=%s "
+        "MCP operation attempt request_digest=%s operation_id=%s "
+        "operation_version=%s provider=%s checker_ids=%s "
         "execution_status=%s verification_record_uri_present=%s diagnostic_codes=%s "
-        "attempt_duration_ms=%.3f operation_runtime_ms=%s "
-        "response_bytes=%d argument_digest=%s",
+        "artifact_count=%d",
         request_digest,
-        trace_digest,
-        trace_source,
         operation_id,
         operation_version,
+        provider,
+        checkers,
         execution_status or "ERROR",
         verification_record_uri_present,
         codes,
-        (time.monotonic() - started) * 1000,
-        "none" if operation_runtime_ms is None else operation_runtime_ms,
-        response_bytes,
-        argument_digest,
+        artifact_count,
     )
 
 
@@ -410,18 +352,21 @@ async def _invoke_operation_attempt(
     operation_id: str,
     payload: dict[str, Any],
     inputs: dict[str, str] | None = None,
-    ctx: Any | None,
 ) -> OperationResult:
-    started = time.monotonic()
-    argument_digest = _argument_digest(
+    request_digest = _argument_digest(
         {
             "operation_id": operation_id,
             "payload": payload,
             "inputs": inputs or {},
         }
     )
-    trace_digest, trace_source = _request_trace_digest(ctx)
-    request_digest = _request_id_digest(ctx)
+    descriptor = runtime.core.operations.inspect(operation_id)
+    provider = descriptor.provider if descriptor is not None else "unknown"
+    checker_ids = (
+        tuple(str(checker_id) for checker_id in descriptor.provider_runtime.checker_ids)
+        if descriptor is not None and descriptor.provider_runtime is not None
+        else ()
+    )
     cancellation_event = threading.Event()
     request = OperationRequest(
         operation_id=operation_id,
@@ -441,21 +386,17 @@ async def _invoke_operation_attempt(
         if isinstance(drained, OperationResult):
             _log_operation_attempt(
                 operation_id=operation_id,
-                started=started,
-                argument_digest=argument_digest,
                 request_digest=request_digest,
-                trace_digest=trace_digest,
-                trace_source=trace_source,
+                provider=provider,
+                checker_ids=checker_ids,
                 result=drained,
             )
         else:
             _log_operation_attempt(
                 operation_id=operation_id,
-                started=started,
-                argument_digest=argument_digest,
                 request_digest=request_digest,
-                trace_digest=trace_digest,
-                trace_source=trace_source,
+                provider=provider,
+                checker_ids=checker_ids,
                 execution_status="CANCELLED",
                 diagnostic_codes=("CLIENT_CANCELLED",),
             )
@@ -463,22 +404,18 @@ async def _invoke_operation_attempt(
     except Exception:
         _log_operation_attempt(
             operation_id=operation_id,
-            started=started,
-            argument_digest=argument_digest,
             request_digest=request_digest,
-            trace_digest=trace_digest,
-            trace_source=trace_source,
+            provider=provider,
+            checker_ids=checker_ids,
             execution_status="ERROR",
             diagnostic_codes=("INVOCATION_EXCEPTION",),
         )
         raise
     _log_operation_attempt(
         operation_id=operation_id,
-        started=started,
-        argument_digest=argument_digest,
         request_digest=request_digest,
-        trace_digest=trace_digest,
-        trace_source=trace_source,
+        provider=provider,
+        checker_ids=checker_ids,
         result=result,
     )
     return result

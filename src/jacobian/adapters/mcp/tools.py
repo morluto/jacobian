@@ -322,7 +322,6 @@ async def math_run(
                 if inputs is not None
                 else {}
             ),
-            ctx=ctx,
         )
         result = _bounded_run_result(active_runtime, result)
         return _text_result(

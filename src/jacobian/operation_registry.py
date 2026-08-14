@@ -17,6 +17,7 @@ from jacobian.operation_catalog import (
 )
 from jacobian.operation_declarations import OperationDeclarations
 from jacobian.polynomial_expressions import PolynomialExpressionArtifactService
+from jacobian.polytope import PolytopeService
 from jacobian.portfolio.builtin import load_builtin_operation_module
 from jacobian.registry import CheckerRegistry
 from jacobian.verification.service import VerificationService
@@ -41,8 +42,11 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.expression_normalization.verify",
     }
 )
+_SELECTED_DIRECT_OPERATIONS = frozenset({"polytope.separate"})
 _SELECTED_RESOURCE_OPERATIONS = (
-    _SELECTED_GRAPH_OPERATIONS | _SELECTED_POLYNOMIAL_OPERATIONS
+    _SELECTED_GRAPH_OPERATIONS
+    | _SELECTED_POLYNOMIAL_OPERATIONS
+    | _SELECTED_DIRECT_OPERATIONS
 )
 
 
@@ -62,12 +66,14 @@ class OperationRegistry:
         verification: VerificationService,
         checkers: CheckerRegistry,
         polynomial_expressions: PolynomialExpressionArtifactService,
+        polytope: PolytopeService,
     ) -> None:
         self.catalog = catalog
         self.binder = binder
         self.verification = verification
         self.checkers = checkers
         self.polynomial_expressions = polynomial_expressions
+        self.polytope = polytope
         self._adapters: dict[str, OperationAdapter[Any]] = {}
 
     def resolve(self, operation_id: str) -> OperationAdapter[Any]:
@@ -185,6 +191,10 @@ class OperationRegistry:
                 self.checkers,
                 self.catalog,
             )
+        elif operation_id == "polytope.separate":
+            from jacobian.polytope_operations import PolytopeSeparationAdapter
+
+            adapter = PolytopeSeparationAdapter(self.polytope)
         else:
             adapter = None
         if adapter is None:

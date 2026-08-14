@@ -175,6 +175,22 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert isinstance(verified.structured_content, dict)
             assert verified.structured_content["output"]["conclusion"] == "TRUE"
 
+            missing_polytope_inputs = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "polytope.separate",
+                    "payload": {
+                        "point_uri": "artifact://sha256/" + "a" * 64,
+                        "generator_set_uri": "artifact://sha256/" + "b" * 64,
+                    },
+                },
+            )
+            assert isinstance(missing_polytope_inputs.structured_content, dict)
+            assert (
+                missing_polytope_inputs.structured_content["operation_id"]
+                == "polytope.separate"
+            )
+
             with pytest.raises(MCPError) as missing_resource:
                 await client.read_resource("artifact://sha256/" + "f" * 64)
             assert missing_resource.value.code == -32602

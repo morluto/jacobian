@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from threading import Lock
 from typing import Any
 
 from jacobian.contracts.operations import (
@@ -34,16 +35,19 @@ class OperationDispatcher:
         self._descriptors: dict[str, OperationDescriptor] = {}
         self._catalog = catalog
         self._registry = registry
+        self._registration_lock = Lock()
 
     def register(self, adapter: OperationAdapter[Any]) -> None:
         register_operation(adapter, self._adapters, self._descriptors)
 
     def invoke(self, request: OperationRequest) -> OperationResult:
-        if (
-            request.operation_id not in self._adapters
-            and self._catalog.inspect(request.operation_id) is not None
-        ):
-            self.register(self._registry.resolve(request.operation_id))
+        if request.operation_id not in self._adapters:
+            with self._registration_lock:
+                if (
+                    request.operation_id not in self._adapters
+                    and self._catalog.inspect(request.operation_id) is not None
+                ):
+                    self.register(self._registry.resolve(request.operation_id))
         return dispatch_operation(self, request)
 
     def search(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:

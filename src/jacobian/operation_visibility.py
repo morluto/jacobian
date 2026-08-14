@@ -8,7 +8,7 @@ from typing import Literal
 
 from jacobian.canonical import canonicalize_json
 from jacobian.contracts.operations import OperationDescriptor
-from jacobian.operation_discovery import normalize_domain, operation_domain
+from jacobian.operation_discovery import normalize_domain
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,12 +71,27 @@ class OperationVisibilityPolicy:
         )
 
     def project(self, descriptor: OperationDescriptor) -> OperationDescriptor | None:
-        return None if self.denial_reasons(descriptor) else descriptor
+        return (
+            descriptor
+            if self.allows(descriptor.operation_id, descriptor.tags)
+            else None
+        )
+
+    def allows(self, operation_id: str, tags: tuple[str, ...]) -> bool:
+        """Return whether compact catalog metadata passes this policy."""
+
+        return not self._denial_reasons(operation_id, tags)
 
     def denial_reasons(self, descriptor: OperationDescriptor) -> tuple[str, ...]:
-        operation_id = descriptor.operation_id
-        domain = normalize_domain(operation_domain(descriptor))
-        tags = {normalize_domain(tag) for tag in descriptor.tags}
+        return self._denial_reasons(descriptor.operation_id, descriptor.tags)
+
+    def _denial_reasons(
+        self,
+        operation_id: str,
+        operation_tags: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        domain = normalize_domain(operation_id.partition(".")[0])
+        tags = {normalize_domain(tag) for tag in operation_tags}
         reasons: list[str] = []
         if (
             self.allowed_operation_ids

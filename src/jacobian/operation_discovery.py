@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Literal, Protocol
 
 from jacobian.contracts.operations import (
     OperationCatalogSnapshot,
-    OperationDescriptor,
     OperationDiscoveryMatch,
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
@@ -19,6 +18,26 @@ _DISCOVERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _DISCOVERY_STOP_WORDS = frozenset(
     {"a", "an", "and", "for", "find", "from", "in", "of", "on", "the", "to", "with"}
 )
+
+
+class SearchableOperation(Protocol):
+    @property
+    def operation_id(self) -> str: ...
+
+    @property
+    def title(self) -> str: ...
+
+    @property
+    def description(self) -> str: ...
+
+    @property
+    def tags(self) -> tuple[str, ...]: ...
+
+    @property
+    def accepted_input_kinds(self) -> tuple[OperationInputKind, ...]: ...
+
+    @property
+    def accepted_artifact_types(self) -> tuple[str, ...]: ...
 
 
 def discover_operations(
@@ -37,7 +56,7 @@ def discover_operations(
             descriptor, normalized_domain
         ):
             continue
-        applicability, applicability_code = discovery_applicability(
+        applicability, applicability_code = input_acceptance(
             descriptor, request.input_kind, request.artifact_type
         )
         score = discovery_relevance(descriptor, request.query)
@@ -97,8 +116,8 @@ def discovery_terms(query: str) -> frozenset[str]:
     )
 
 
-def discovery_applicability(
-    descriptor: OperationDescriptor,
+def input_acceptance(
+    operation: SearchableOperation,
     input_kind: OperationInputKind | None,
     artifact_type: str | None,
 ) -> tuple[
@@ -109,13 +128,13 @@ def discovery_applicability(
         "ARTIFACT_TYPE_MISMATCH",
     ],
 ]:
-    """Return only compatibility facts established by the supplied filters."""
+    """Report whether the supplied input shape is accepted by an operation."""
 
-    if input_kind is not None and input_kind not in descriptor.accepted_input_kinds:
+    if input_kind is not None and input_kind not in operation.accepted_input_kinds:
         return "INCOMPATIBLE", "INPUT_KIND_MISMATCH"
     if (
         artifact_type is not None
-        and artifact_type not in descriptor.accepted_artifact_types
+        and artifact_type not in operation.accepted_artifact_types
     ):
         return "INCOMPATIBLE", "ARTIFACT_TYPE_MISMATCH"
     return "NEEDS_MORE_TYPED_REQUIREMENTS", "FULL_REQUEST_REQUIRED"
@@ -126,16 +145,16 @@ def token_set(value: str) -> frozenset[str]:
 
 
 def discovery_relevance(
-    descriptor: OperationDescriptor,
+    operation: SearchableOperation,
     query: str,
 ) -> int:
     query_terms = discovery_terms(query)
     if not query_terms:
         return 0
-    identifier_terms = token_set(descriptor.operation_id)
-    tag_terms = frozenset(term for tag in descriptor.tags for term in token_set(tag))
-    title_terms = token_set(descriptor.title)
-    description_terms = token_set(descriptor.description)
+    identifier_terms = token_set(operation.operation_id)
+    tag_terms = frozenset(term for tag in operation.tags for term in token_set(tag))
+    title_terms = token_set(operation.title)
+    description_terms = token_set(operation.description)
     score = 0
     for terms, weight in (
         (identifier_terms, 12),
@@ -148,7 +167,7 @@ def discovery_relevance(
             score += weight * len(overlap)
     normalized_query = normalize_discovery_text(query)
     normalized_text = normalize_discovery_text(
-        f"{descriptor.operation_id} {descriptor.title} {descriptor.description}"
+        f"{operation.operation_id} {operation.title} {operation.description}"
     )
     if normalized_query and f"-{normalized_query}-" in f"-{normalized_text}-":
         score += 20
@@ -159,22 +178,22 @@ def normalize_domain(value: str) -> str:
     return "_".join(_DISCOVERY_TOKEN_PATTERN.findall(value.casefold()))
 
 
-def operation_domain(descriptor: OperationDescriptor) -> str:
-    return descriptor.operation_id.partition(".")[0]
+def operation_domain(operation: SearchableOperation) -> str:
+    return operation.operation_id.partition(".")[0]
 
 
-def matches_domain(descriptor: OperationDescriptor, normalized_domain: str) -> bool:
-    normalized_tags = {normalize_domain(tag) for tag in descriptor.tags}
+def matches_domain(operation: SearchableOperation, normalized_domain: str) -> bool:
+    normalized_tags = {normalize_domain(tag) for tag in operation.tags}
     return (
-        normalized_domain == normalize_domain(operation_domain(descriptor))
+        normalized_domain == normalize_domain(operation_domain(operation))
         or normalized_domain in normalized_tags
     )
 
 
 __all__ = [
     "discover_operations",
-    "discovery_applicability",
     "discovery_relevance",
+    "input_acceptance",
     "matches_domain",
     "normalize_domain",
     "operation_domain",

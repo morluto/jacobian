@@ -8,6 +8,7 @@ import pytest
 from jacobian.contracts.operations import (
     OperationDescriptor,
     OperationDiscoveryRequest,
+    OperationInputKind,
 )
 from jacobian.operation_catalog import (
     CompiledCatalogEntry,
@@ -114,6 +115,71 @@ def test_catalog_search_uses_cards_when_descriptors_are_not_materializable(
     )
     with pytest.raises(ValueError):
         catalog.inspect("integer.gcd.compute")
+
+
+def test_catalog_search_cards_preserve_typed_input_compatibility(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    artifact_type = "artifact://sha256/" + "d" * 64
+    descriptor = _descriptor("graph.consume.typed", "Typed graph consumer")
+    descriptor = descriptor.model_copy(
+        update={
+            "accepted_input_kinds": (OperationInputKind.TYPED_ARTIFACT,),
+            "accepted_artifact_types": (artifact_type,),
+        }
+    )
+    formal_descriptor = _descriptor(
+        "lean.statement.compare",
+        "Formal statement comparison",
+    ).model_copy(
+        update={
+            "accepted_input_kinds": (OperationInputKind.FORMAL_PROPOSITION,),
+        }
+    )
+    store.commit(
+        package_version="0.13.0",
+        provider_inventory_digest="sha256:" + "b" * 64,
+        checker_binding_digest="sha256:" + "c" * 64,
+        entries=(
+            CompiledCatalogEntry(
+                descriptor=descriptor,
+                declaration_module=("jacobian.domains.synthetic.domain_declarations"),
+                declaration_digest="sha256:" + "a" * 64,
+            ),
+            CompiledCatalogEntry(
+                descriptor=formal_descriptor,
+                declaration_module=("jacobian.lean_frontend.statement"),
+                declaration_digest="sha256:" + "e" * 64,
+            ),
+        ),
+        checker_bindings={},
+    )
+    catalog = OperationCatalog(
+        tmp_path / "metadata.sqlite3",
+        OperationVisibilityPolicy(),
+        expected_package_version="0.13.0",
+    )
+
+    result = catalog.search(
+        OperationDiscoveryRequest(
+            query="typed graph",
+            input_kind=OperationInputKind.TYPED_ARTIFACT,
+            artifact_type=artifact_type,
+        )
+    )
+
+    assert len(result.matches) == 1
+    assert result.matches[0].applicability == "NEEDS_MORE_TYPED_REQUIREMENTS"
+
+    formal_result = catalog.search(
+        OperationDiscoveryRequest(
+            query="formal statement",
+            input_kind=OperationInputKind.FORMAL_PROPOSITION,
+        )
+    )
+    assert len(formal_result.matches) == 1
+    assert formal_result.matches[0].applicability == "NEEDS_MORE_TYPED_REQUIREMENTS"
 
 
 def test_catalog_inspection_reads_one_active_indexed_entry(tmp_path: Path) -> None:

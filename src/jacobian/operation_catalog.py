@@ -15,11 +15,12 @@ from jacobian.contracts.operations import (
     OperationDiscoveryMatch,
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
+    OperationInputKind,
 )
 from jacobian.operation_declarations import OperationDeclaration
 from jacobian.operation_discovery import (
-    discovery_applicability,
     discovery_relevance,
+    input_acceptance,
     matches_domain,
     normalize_domain,
 )
@@ -45,6 +46,8 @@ class VisibilityPolicy(Protocol):
         self, descriptor: OperationDescriptor
     ) -> OperationDescriptor | None: ...
 
+    def allows(self, operation_id: str, tags: tuple[str, ...]) -> bool: ...
+
 
 @dataclass(frozen=True, slots=True)
 class CatalogHeader:
@@ -62,6 +65,8 @@ class OperationSearchCard:
     title: str
     description: str
     tags: tuple[str, ...]
+    accepted_input_kinds: tuple[OperationInputKind, ...]
+    accepted_artifact_types: tuple[str, ...]
 
     @classmethod
     def from_descriptor(cls, descriptor: OperationDescriptor) -> OperationSearchCard:
@@ -70,6 +75,8 @@ class OperationSearchCard:
             title=descriptor.title,
             description=descriptor.description,
             tags=descriptor.tags,
+            accepted_input_kinds=descriptor.accepted_input_kinds,
+            accepted_artifact_types=descriptor.accepted_artifact_types,
         )
 
     def as_json(self) -> dict[str, Any]:
@@ -78,6 +85,8 @@ class OperationSearchCard:
             "title": self.title,
             "description": self.description,
             "tags": list(self.tags),
+            "accepted_input_kinds": [kind.value for kind in self.accepted_input_kinds],
+            "accepted_artifact_types": list(self.accepted_artifact_types),
         }
 
 
@@ -372,17 +381,16 @@ class OperationCatalog:
         )
         ranked: list[tuple[int, OperationDiscoveryMatch]] = []
         for card in self._cards:
-            descriptor = _card_descriptor(card)
-            if self.policy.project(descriptor) is None:
+            if not self.policy.allows(card.operation_id, card.tags):
                 continue
             if normalized_domain is not None and not matches_domain(
-                descriptor, normalized_domain
+                card, normalized_domain
             ):
                 continue
-            applicability, code = discovery_applicability(
-                descriptor, request.input_kind, request.artifact_type
+            applicability, code = input_acceptance(
+                card, request.input_kind, request.artifact_type
             )
-            score = discovery_relevance(descriptor, request.query)
+            score = discovery_relevance(card, request.query)
             if score:
                 ranked.append(
                     (
@@ -473,21 +481,14 @@ def _decode_card(value: bytes | str) -> OperationSearchCard:
         title=str(decoded["title"]),
         description=str(decoded["description"]),
         tags=tuple(str(tag) for tag in cast(list[Any], decoded["tags"])),
-    )
-
-
-def _card_descriptor(card: OperationSearchCard) -> OperationDescriptor:
-    """Adapt searchable fields to the existing deterministic ranker only."""
-
-    return OperationDescriptor(
-        operation_id=card.operation_id,
-        version="catalog-card",
-        title=card.title,
-        description=card.description,
-        provider="built-in",
-        input_schema={},
-        output_schema={},
-        tags=card.tags,
+        accepted_input_kinds=tuple(
+            OperationInputKind(str(kind))
+            for kind in cast(list[Any], decoded["accepted_input_kinds"])
+        ),
+        accepted_artifact_types=tuple(
+            str(artifact_type)
+            for artifact_type in cast(list[Any], decoded["accepted_artifact_types"])
+        ),
     )
 
 

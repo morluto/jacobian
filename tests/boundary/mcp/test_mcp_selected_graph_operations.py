@@ -53,6 +53,20 @@ def test_graph_resource_operations_do_not_assemble_the_portfolio(
             assert composed.structured_content is not None
             assert composed.structured_content["execution"]["status"] == "COMPLETED"
 
+            isomorphic = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "graph.isomorphism.verify",
+                    "payload": {
+                        "left_graph_uri": graph_uri,
+                        "right_graph_uri": graph_uri,
+                        "mapping": {"a": "a", "b": "b", "c": "c"},
+                    },
+                },
+            )
+            assert isomorphic.structured_content is not None
+            assert isomorphic.structured_content["output"]["conclusion"] == "TRUE"
+
             properties = await client.call_tool(
                 "math.run",
                 {

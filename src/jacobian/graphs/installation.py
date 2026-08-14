@@ -186,9 +186,22 @@ def bind_selected_graph_operation(
         "graph.compute.neighborhood_independence",
         "graph.degree_sequence.verify",
         "graph.neighborhood_independence.verify",
+        "graph.isomorphism.verify",
     }:
         return None
     resources = register_graph_resources(store, schemas)
+    if operation_id == "graph.isomorphism.verify":
+        from jacobian.graphs.isomorphism import bind_selected_graph_isomorphism
+
+        return bind_selected_graph_isomorphism(
+            store,
+            schemas,
+            artifacts,
+            verification,
+            checkers,
+            resources,
+            catalog,
+        )
     if operation_id in {
         "graph.construct.compose",
         "graph.enumerate.nonisomorphic",

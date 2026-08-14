@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import combinations
 from typing import Literal
 
@@ -34,6 +34,7 @@ from jacobian.contracts.operations import (
 from jacobian.contracts.results import Conclusion, ExecutionStatus
 from jacobian.graphs.installation import GraphInstallation
 from jacobian.operation_adapters import parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -64,16 +65,13 @@ class _SourceGraph:
     graph: SimpleUndirectedGraph
 
 
-def install_graph_isomorphism(
+def register_graph_isomorphism_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-    artifacts: ArtifactService,
-    verification: VerificationService,
-    checkers: CheckerRegistry,
     graph: GraphInstallation,
-    *,
-    authorize_checker: bool,
-) -> tuple[GraphIsomorphismAdapter | None, GraphIsomorphismInstallation]:
+) -> GraphIsomorphismInstallation:
+    """Register passive isomorphism contracts without checker installation."""
+
     semantics_uri = store.register_descriptor(
         kind="semantics",
         name="jacobian.simple-undirected-graph-isomorphism",
@@ -106,6 +104,65 @@ def install_graph_isomorphism(
         version="1",
         schema=model_schema(CertificateEnvelope),
     )
+    return GraphIsomorphismInstallation(
+        semantics_uri=semantics_uri,
+        source_graph_semantics_uri=graph.semantics_uri,
+        source_graph_schema_uri=graph.graph_schema_uri,
+        pair_schema_uri=pair_schema_uri,
+        mapping_schema_uri=mapping_schema_uri,
+        claim_schema_uri=claim_schema_uri,
+        certificate_schema_uri=certificate_schema_uri,
+        checker_id=None,
+    )
+
+
+def bind_selected_graph_isomorphism(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    graph: GraphInstallation,
+    catalog: OperationCatalog,
+) -> GraphIsomorphismAdapter:
+    """Bind the selected verifier from persisted checker authority."""
+
+    operation_id = "graph.isomorphism.verify"
+    binding = catalog.checker_binding(operation_id)
+    if binding is None:
+        raise OperationCatalogError(
+            f"checker binding is missing; run `jacobian update`: {operation_id}"
+        )
+    checkers.require_catalog_binding(
+        binding.checker_id,
+        implementation_digest=binding.manifest_digest,
+    )
+    installation = replace(
+        register_graph_isomorphism_resources(store, schemas, graph),
+        checker_id=binding.checker_id,
+    )
+    return GraphIsomorphismAdapter(
+        store=store,
+        artifacts=artifacts,
+        verification=verification,
+        installation=installation,
+    )
+
+
+def install_graph_isomorphism(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    graph: GraphInstallation,
+    *,
+    authorize_checker: bool,
+) -> tuple[GraphIsomorphismAdapter | None, GraphIsomorphismInstallation]:
+    resources = register_graph_isomorphism_resources(store, schemas, graph)
+    semantics_uri = resources.semantics_uri
+    mapping_schema_uri = resources.mapping_schema_uri
+    claim_schema_uri = resources.claim_schema_uri
     checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -124,16 +181,7 @@ def install_graph_isomorphism(
         )
         .checker_id
     )
-    installation = GraphIsomorphismInstallation(
-        semantics_uri=semantics_uri,
-        source_graph_semantics_uri=graph.semantics_uri,
-        source_graph_schema_uri=graph.graph_schema_uri,
-        pair_schema_uri=pair_schema_uri,
-        mapping_schema_uri=mapping_schema_uri,
-        claim_schema_uri=claim_schema_uri,
-        certificate_schema_uri=certificate_schema_uri,
-        checker_id=checker_id,
-    )
+    installation = replace(resources, checker_id=checker_id)
     if checker_id is None:
         return None, installation
     return (

@@ -31,6 +31,7 @@ _SELECTED_RESOURCE_OPERATIONS = frozenset(
         "graph.compute.neighborhood_independence",
         "graph.degree_sequence.verify",
         "graph.neighborhood_independence.verify",
+        "graph.isomorphism.verify",
     }
 )
 

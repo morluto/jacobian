@@ -37,50 +37,39 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
         policy_transaction=lambda: _RecordingContext(events, "policy"),
     )
     context = SimpleNamespace(store=store, checkers=checkers)
+    family_origins = (
+        "family:graph",
+        "family:polynomial",
+        "family:lean",
+        "family:sat-smt",
+        "family:core",
+    )
 
     monkeypatch.setattr(
         assembler,
         "require_maintained_math_backends",
         lambda: events.append("backends:check"),
     )
-    for probe_name in (
-        "cadical_provider_runtime",
-        "carcara_provider_runtime",
-        "cvc5_provider_runtime",
-        "drat_trim_provider_runtime",
-        "sympy_polynomial_normalization_provider_runtime",
-    ):
-        monkeypatch.setattr(
-            assembler,
-            probe_name,
-            lambda name=probe_name: events.append(name) or name,
-        )
-    monkeypatch.setattr(
-        assembler,
-        "bind_catalog_foundations",
-        lambda *_args, **_kwargs: events.append("foundation:bind"),
-    )
     monkeypatch.setattr(
         assembler,
         "CatalogOperationBuilder",
-        lambda _context: _binder(events, "core"),
+        lambda _context: _binder(events, "builtin"),
     )
     monkeypatch.setattr(
         assembler,
-        "CatalogResourceBuilder",
-        lambda _context: _binder(events, "resource"),
+        "selected_family_specs",
+        lambda: tuple(SimpleNamespace(origin=origin) for origin in family_origins),
     )
-
-    def checker_binder(_context):
-        events.append("checker:init")
-        return SimpleNamespace(
-            bind=lambda *_args: (
-                events.append("checker:bind"),
-                SimpleNamespace(),
-            )[1]
-        )
-
-    monkeypatch.setattr(assembler, "CatalogCheckerBuilder", checker_binder)
+    monkeypatch.setattr(
+        assembler,
+        "selected_family_catalog_installers",
+        lambda: {
+            origin: (
+                lambda *_args, origin=origin, **_kwargs: events.append(origin)
+            )
+            for origin in family_origins
+        },
+    )
     monkeypatch.setattr(assembler, "cached_package_digests", lambda: nullcontext())
 
     resources = assembler.build_catalog_operations(context, object())
@@ -91,18 +80,9 @@ def test_build_catalog_operations_owns_transaction_and_phase_order(monkeypatch) 
         "enter:policy",
         "enter:store",
         "backends:check",
-        "cadical_provider_runtime",
-        "carcara_provider_runtime",
-        "cvc5_provider_runtime",
-        "drat_trim_provider_runtime",
-        "sympy_polynomial_normalization_provider_runtime",
-        "foundation:bind",
-        "core:init",
-        "core:bind",
-        "resource:init",
-        "resource:bind",
-        "checker:init",
-        "checker:bind",
+        "builtin:init",
+        "builtin:bind",
+        *family_origins,
         "exit:store",
         "exit:policy",
     ]

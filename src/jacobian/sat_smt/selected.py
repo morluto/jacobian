@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from typing import TYPE_CHECKING
+
 from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_catalog import OperationCatalog
@@ -12,6 +15,11 @@ from jacobian.schema_registry import SchemaRegistry
 from jacobian.selected_operation_bindings import SelectedOperationBinding
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
+
+if TYPE_CHECKING:
+    from jacobian.catalog_build_context import CatalogBuildContext
+
+_LOGGER = logging.getLogger(__name__)
 
 SELECTED_SAT_SMT_OPERATION_IDS = frozenset(
     {
@@ -125,7 +133,99 @@ def bind_selected_sat_smt_operation(
     )
 
 
+def install_selected_sat_smt_catalog(
+    context: CatalogBuildContext,
+    *,
+    polytope: object | None = None,
+    resources: object | None = None,
+) -> None:
+    """Compile CNF, SAT/SMT checkers, CaDiCaL, cvc5, and LRAT operations."""
+
+    del polytope, resources
+    from jacobian.contracts.operations import ProviderAvailability
+    from jacobian.providers.external_solver_runtime import (
+        cadical_provider_runtime,
+        carcara_provider_runtime,
+        cvc5_provider_runtime,
+        drat_trim_provider_runtime,
+    )
+    from jacobian.sat_smt.cadical import install_cadical_operations
+    from jacobian.sat_smt.cvc5 import bind_cvc5_operation
+    from jacobian.sat_smt.sat_lrat import install_sat_lrat_verifier
+    from jacobian.sat_smt.sat_operations import (
+        SatCnfMaterializationAdapter,
+        install_sat_assignment_checker,
+        install_sat_unsat_proof_checker,
+    )
+    from jacobian.sat_smt.smt_operations import install_smt_unsat_proof_checker
+
+    ctx = context
+    ctx.register_operation(SatCnfMaterializationAdapter(ctx.sat))
+    sat_assignment_adapter, _ = install_sat_assignment_checker(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.sat,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    if sat_assignment_adapter is not None:
+        ctx.register_operation(sat_assignment_adapter)
+
+    proof_adapter, _ = install_sat_unsat_proof_checker(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.sat,
+        ctx.verification,
+        ctx.checkers,
+        drat_trim_provider_runtime(),
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    if proof_adapter is not None:
+        ctx.register_operation(proof_adapter)
+
+    lrat_adapter, _ = install_sat_lrat_verifier(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.sat,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    if lrat_adapter is not None:
+        ctx.register_operation(lrat_adapter)
+
+    smt_proof_adapter, _ = install_smt_unsat_proof_checker(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.smt,
+        ctx.verification,
+        ctx.checkers,
+        carcara_provider_runtime(),
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    if smt_proof_adapter is not None:
+        ctx.register_operation(smt_proof_adapter)
+
+    cadical = cadical_provider_runtime()
+    if cadical.availability is ProviderAvailability.AVAILABLE:
+        try:
+            cadical_adapters = install_cadical_operations(ctx.sat, cadical)
+        except OSError as exc:
+            _LOGGER.warning("CaDiCaL SAT exploration is not installed: %s", exc)
+        else:
+            for adapter in cadical_adapters:
+                ctx.register_operation(adapter)
+
+    ctx.register_operation(bind_cvc5_operation(ctx.smt, cvc5_provider_runtime()))
+
+
 __all__ = [
     "SELECTED_SAT_SMT_OPERATION_IDS",
     "bind_selected_sat_smt_operation",
+    "install_selected_sat_smt_catalog",
 ]

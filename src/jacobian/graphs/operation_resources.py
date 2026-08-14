@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from jacobian.artifacts import ArtifactService
 from jacobian.checker_authorization import authorize_checker_operation
@@ -49,6 +49,9 @@ from jacobian.schema_registry import SchemaRegistry, model_schema
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
 from jacobian.verification_operations import certificate_verification_adapter
+
+if TYPE_CHECKING:
+    from jacobian.catalog_build_context import CatalogBuildContext
 
 SELECTED_GRAPH_OPERATION_IDS = frozenset(
     {
@@ -437,3 +440,46 @@ def _graph_operation_adapters(
         GraphDegreeSequenceAdapter(degree_sequence_resources),
         GraphNeighborhoodIndependenceAdapter(neighborhood_resources),
     )
+
+
+def install_selected_graph_catalog(
+    context: CatalogBuildContext,
+    *,
+    polytope: object | None = None,
+    resources: object | None = None,
+) -> None:
+    """Compile graph construction, isomorphism, and composition operations."""
+
+    del polytope, resources
+    from jacobian.graphs.composition import build_graph_composition_operations
+    from jacobian.graphs.isomorphism import build_graph_isomorphism_operation
+
+    graph_adapters, graph = build_graph_operations(
+        context.store,
+        context.schemas,
+        context.artifacts,
+        context.verification,
+        context.checkers,
+        authorize_checker=context.authorize_bundled_checkers,
+    )
+    for adapter in graph_adapters:
+        context.register_operation(adapter)
+    isomorphism_adapter, _ = build_graph_isomorphism_operation(
+        context.store,
+        context.schemas,
+        context.artifacts,
+        context.verification,
+        context.checkers,
+        graph,
+        authorize_checker=context.authorize_bundled_checkers,
+    )
+    if isomorphism_adapter is not None:
+        context.register_operation(isomorphism_adapter)
+    for adapter in build_graph_composition_operations(
+        context.store,
+        context.schemas,
+        context.artifacts,
+        semantics_uri=graph.semantics_uri,
+        graph_schema_uri=graph.graph_schema_uri,
+    ):
+        context.register_operation(adapter)

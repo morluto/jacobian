@@ -31,7 +31,7 @@ def test_unhealthy_optional_lean_runtime_is_absent_from_catalog(
         diagnostic="The pinned Lean runtime is unavailable.",
     )
     monkeypatch.setattr(
-        "jacobian.catalog_checkers.lean_provider_runtime",
+        "jacobian.lean_frontend.selected.lean_provider_runtime",
         lambda **_kwargs: unavailable,
     )
 
@@ -68,7 +68,7 @@ def test_unhealthy_lean_frontend_is_absent_from_catalog(
         diagnostic=("TOOLCHAIN_RESOLUTION: the pinned Lean executable is unavailable"),
     )
     monkeypatch.setattr(
-        "jacobian.catalog_resources.lean_frontend_provider_runtime",
+        "jacobian.lean_frontend.selected.lean_frontend_provider_runtime",
         lambda: unavailable,
     )
 

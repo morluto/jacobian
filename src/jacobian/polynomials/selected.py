@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_catalog import OperationCatalog
@@ -11,6 +13,9 @@ from jacobian.schema_registry import SchemaRegistry
 from jacobian.selected_operation_bindings import SelectedOperationBinding
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
+
+if TYPE_CHECKING:
+    from jacobian.catalog_build_context import CatalogBuildContext
 
 SELECTED_POLYNOMIAL_OPERATION_IDS = frozenset(
     {
@@ -212,4 +217,130 @@ def bind_selected_polynomial_operation(
 __all__ = [
     "SELECTED_POLYNOMIAL_OPERATION_IDS",
     "bind_selected_polynomial_operation",
+    "install_selected_polynomial_catalog",
 ]
+
+
+def install_selected_polynomial_catalog(
+    context: CatalogBuildContext,
+    *,
+    polytope: object | None = None,
+    resources: object | None = None,
+) -> None:
+    """Compile polynomial map, system, search, Nullstellensatz, and interval ops."""
+
+    del polytope, resources
+    from jacobian.contracts.operations import ProviderAvailability
+    from jacobian.domains.polynomial_nullstellensatz.core import (
+        install_nullstellensatz_core,
+    )
+    from jacobian.domains.polynomial_nullstellensatz.singular import (
+        install_singular_producer,
+    )
+    from jacobian.polynomial_expression_operations import (
+        install_polynomial_expression_checker,
+    )
+    from jacobian.polynomial_interval_operations import (
+        install_polynomial_interval_operations,
+    )
+    from jacobian.polynomial_positivity_operations import (
+        install_polynomial_positivity_operations,
+    )
+    from jacobian.polynomial_system_operations import (
+        install_polynomial_system_operations,
+    )
+    from jacobian.polynomial_system_search import PolynomialSystemRationalSearchAdapter
+    from jacobian.polynomials import build_polynomial_operations
+    from jacobian.provider_runtime import known_provider_runtime
+    from jacobian.providers.singular_runtime import singular_provider_runtime
+    from jacobian.providers.sympy_runtime import (
+        sympy_polynomial_normalization_provider_runtime,
+    )
+    from jacobian.sympy_polynomial_normalization import (
+        bind_sympy_polynomial_normalization,
+    )
+
+    ctx = context
+    verification_adapter, _ = install_polynomial_expression_checker(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.polynomial_expressions,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    if verification_adapter is not None:
+        ctx.register_operation(verification_adapter)
+    ctx.register_operation(
+        bind_sympy_polynomial_normalization(
+            ctx.polynomial_expressions,
+            sympy_polynomial_normalization_provider_runtime(),
+        )
+    )
+
+    core_runtime = known_provider_runtime(
+        "jacobian.nullstellensatz-core",
+        features=(
+            "normalized-jacobian-degree-slice",
+            "rabinowitsch-chart-cover",
+            "independent-exact-replay",
+        ),
+    )
+    core = install_nullstellensatz_core(ctx, core_runtime)
+    for adapter in core.adapters:
+        ctx.register_operation(adapter)
+    singular_runtime = singular_provider_runtime()
+    if singular_runtime.availability is ProviderAvailability.AVAILABLE:
+        singular = install_singular_producer(ctx, core, singular_runtime)
+        for adapter in singular.adapters:
+            ctx.register_operation(adapter)
+
+    polynomial_adapters, _ = build_polynomial_operations(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    for polynomial_adapter in polynomial_adapters:
+        ctx.register_operation(polynomial_adapter)
+
+    polynomial_system_adapter, polynomial_system = install_polynomial_system_operations(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    if polynomial_system_adapter is not None:
+        ctx.register_operation(polynomial_system_adapter)
+    ctx.register_operation(
+        PolynomialSystemRationalSearchAdapter(ctx.artifacts, polynomial_system)
+    )
+
+    interval_adapters, _ = install_polynomial_interval_operations(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    for interval_adapter in interval_adapters:
+        if interval_adapter is not None:
+            ctx.register_operation(interval_adapter)
+
+    positivity_adapters, _ = install_polynomial_positivity_operations(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    for positivity_adapter in positivity_adapters:
+        if positivity_adapter is not None:
+            ctx.register_operation(positivity_adapter)

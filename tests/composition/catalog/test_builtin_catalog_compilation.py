@@ -11,6 +11,10 @@ from jacobian.domains.polynomial_nullstellensatz.singular import (
 )
 from jacobian.providers.singular_runtime import singular_provider_runtime
 from jacobian.runtime.model import JacobianRuntime
+from jacobian.runtime.selected_families import (
+    selected_family_specs,
+    selected_operation_origin,
+)
 
 
 def test_builtin_catalog_compiles_cleanly(
@@ -33,3 +37,24 @@ def test_builtin_catalog_compiles_cleanly(
     }
     assert expected_operation_ids <= installed_operation_ids
     assert (PRODUCE_OPERATION_ID in installed_operation_ids) is singular_available
+
+
+def test_compiled_family_ids_match_selected_operation_ids(
+    fresh_complete_runtime: JacobianRuntime,
+) -> None:
+    installed_operation_ids = {
+        descriptor.operation_id
+        for descriptor in fresh_complete_runtime.core.operations.snapshot().operations
+    }
+    selected_ids = {
+        operation_id
+        for spec in selected_family_specs()
+        for operation_id in spec.operation_ids
+    }
+    compiled_family_ids = selected_ids & installed_operation_ids
+    assert compiled_family_ids
+    for spec in selected_family_specs():
+        for operation_id in spec.operation_ids & installed_operation_ids:
+            assert selected_operation_origin(operation_id) == spec.origin
+    for operation_id in installed_operation_ids - selected_ids:
+        assert selected_operation_origin(operation_id) is None

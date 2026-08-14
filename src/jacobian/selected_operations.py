@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from jacobian.contracts.operations import OperationDescriptor
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_catalog import OperationCatalog
@@ -11,6 +13,9 @@ from jacobian.schema_registry import SchemaRegistry
 from jacobian.selected_operation_bindings import SelectedOperationBinding
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
+
+if TYPE_CHECKING:
+    from jacobian.catalog_build_context import CatalogBuildContext
 
 SELECTED_CORE_OPERATION_IDS = frozenset(
     {
@@ -76,4 +81,57 @@ def bind_selected_core_operation(
     return SelectedOperationBinding(adapter)
 
 
-__all__ = ["SELECTED_CORE_OPERATION_IDS", "bind_selected_core_operation"]
+def install_selected_core_catalog(
+    context: CatalogBuildContext,
+    *,
+    polytope: object | None = None,
+    resources: object | None = None,
+) -> None:
+    """Compile polytope, finite-coverage, and universal-algebra operations."""
+
+    del resources
+    from jacobian.checker_authorization import install_polytope_checkers
+    from jacobian.finite_coverage import install_finite_coverage
+    from jacobian.polytope_operations import PolytopeSeparationAdapter
+    from jacobian.universal_algebra_operations import (
+        install_universal_algebra_operations,
+    )
+
+    if not isinstance(polytope, PolytopeService):
+        raise TypeError("core catalog install requires a polytope service")
+    ctx = context
+    ctx.register_operation(PolytopeSeparationAdapter(polytope))
+    finite_coverage_adapter, _ = install_finite_coverage(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    if finite_coverage_adapter is not None:
+        ctx.register_operation(finite_coverage_adapter)
+    universal_adapters, _ = install_universal_algebra_operations(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        ctx.verification,
+        ctx.checkers,
+        authorize_checker=ctx.authorize_bundled_checkers,
+    )
+    for universal_adapter in universal_adapters:
+        ctx.register_operation(universal_adapter)
+    if ctx.authorize_bundled_checkers or ctx.checkers.bind_existing_when_omitted:
+        install_polytope_checkers(
+            ctx.checkers,
+            claim_schema_uri=polytope.claim_schema_uri,
+            semantics_uri=polytope.semantics_uri,
+            point_schema_uri=polytope.point_schema_uri,
+        )
+
+
+__all__ = [
+    "SELECTED_CORE_OPERATION_IDS",
+    "bind_selected_core_operation",
+    "install_selected_core_catalog",
+]

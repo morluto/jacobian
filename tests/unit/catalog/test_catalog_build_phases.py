@@ -10,9 +10,9 @@ import pytest
 
 from jacobian.catalog_build_context import CatalogBuildContext
 from jacobian.catalog_build_resources import CatalogBuildResources
-from jacobian.catalog_checkers import CatalogCheckerBuilder
 from jacobian.catalog_operations import CatalogOperationBuilder
-from jacobian.polytope import PolytopeService
+from jacobian.contracts.operations import ProviderAvailability
+from jacobian.lean_frontend.selected import install_selected_lean_catalog
 
 
 def test_core_domain_verification_phase_accepts_empty_declarations() -> None:
@@ -36,10 +36,21 @@ class _UnauthorizedContext:
         self.registered.append(adapter)
 
 
-def test_checker_phase_derives_authority_from_its_context() -> None:
+def test_lean_catalog_omits_checkers_without_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "jacobian.lean_frontend.selected.lean_frontend_provider_runtime",
+        lambda: SimpleNamespace(availability=ProviderAvailability.UNAVAILABLE),
+    )
+    monkeypatch.setattr(
+        "jacobian.lean_frontend.selected.install_lean_statement_operations",
+        lambda *_args, **_kwargs: ((), None),
+    )
     context = _UnauthorizedContext()
-    CatalogCheckerBuilder(cast(CatalogBuildContext, context)).bind(
-        cast(PolytopeService, object()), CatalogBuildResources()
+    install_selected_lean_catalog(
+        cast(CatalogBuildContext, context),
+        resources=CatalogBuildResources(),
     )
 
     assert context.registered == []

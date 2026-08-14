@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import TYPE_CHECKING, Any, cast
 
 from jacobian.builtin_operations import LeanCheckAdapter
 from jacobian.checker_authorization import register_lean_checker_contracts
@@ -23,12 +24,21 @@ from jacobian.lean_frontend.statement import install_lean_statement_operations
 from jacobian.operation_adapters import OperationAdapter
 from jacobian.operation_binding import OperationBinder
 from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
-from jacobian.providers.lean_runtime import lean_provider_runtime
+from jacobian.providers.lean_runtime import (
+    lean_frontend_provider_runtime,
+    lean_provider_runtime,
+)
 from jacobian.registry import CheckerRegistry
 from jacobian.schema_registry import SchemaRegistry
 from jacobian.selected_operation_bindings import SelectedOperationBinding
 from jacobian.storage.repository import ArtifactRepository
 from jacobian.verification.service import VerificationService
+
+if TYPE_CHECKING:
+    from jacobian.catalog_build_context import CatalogBuildContext
+    from jacobian.catalog_build_resources import CatalogBuildResources
+
+_LOGGER = logging.getLogger(__name__)
 
 _STATEMENT_OPERATIONS = frozenset(
     {
@@ -219,4 +229,126 @@ def _select(
     )
 
 
-__all__ = ["SELECTED_LEAN_OPERATION_IDS", "bind_selected_lean_operation"]
+def install_selected_lean_catalog(
+    context: CatalogBuildContext,
+    *,
+    polytope: object | None = None,
+    resources: object | None = None,
+) -> None:
+    """Compile Lean statements, checkers, and exploration operations."""
+
+    del polytope
+    from jacobian.checker_authorization import install_lean_checkers
+    from jacobian.contracts.operations import ProviderAvailability
+    from jacobian.provider_runtime import jacobian_provider_runtime
+
+    ctx = context
+    lean_runtime = lean_frontend_provider_runtime()
+    lean_adapters, _ = install_lean_statement_operations(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        provider_runtime=lean_runtime,
+    )
+    if lean_runtime.availability is ProviderAvailability.AVAILABLE:
+        for lean_adapter in lean_adapters:
+            ctx.register_operation(lean_adapter)
+
+    if not (ctx.authorize_bundled_checkers or ctx.checkers.bind_existing_when_omitted):
+        return
+    if resources is None:
+        raise TypeError("lean catalog install requires catalog build resources")
+    catalog_resources = cast("CatalogBuildResources", resources)
+
+    lean_checkers, checker_runtime = install_lean_checkers(
+        ctx.store,
+        ctx.schemas,
+        ctx.checkers,
+        resolve_provider_runtime=lambda profiles: lean_provider_runtime(
+            profiles=profiles,
+            checker_ids=(),
+        ),
+    )
+    runtime = checker_runtime.model_copy(
+        update={
+            "checker_ids": tuple(
+                installation.checker_id
+                for _, installation in sorted(
+                    lean_checkers.items(),
+                    key=lambda item: item[0].value,
+                )
+                if installation.checker_id is not None
+            )
+        }
+    )
+    inspect_adapter = install_lean_proof_state_inspect_only(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        lean_checkers,
+        jacobian_provider_runtime(
+            "jacobian.lean4",
+            features=("immutable-proof-state", "read-only-inspection"),
+        ),
+    )
+    ctx.register_operation(inspect_adapter)
+    if runtime.availability is not ProviderAvailability.AVAILABLE:
+        _LOGGER.warning("lean.check is not installed: %s", runtime.diagnostic)
+        return
+    if any(installation.checker_id is None for installation in lean_checkers.values()):
+        _LOGGER.warning("lean.check is not installed: no active Lean checker")
+        return
+    try:
+        catalog_resources.lean_declarations = installed_lean_declaration_service(
+            runtime,
+            cache_root=ctx.store.root / "cache" / "lean-declarations",
+        )
+    except (OSError, RuntimeError) as exc:
+        _LOGGER.warning("Lean declaration discovery is not installed: %s", exc)
+    if catalog_resources.lean_declarations is not None:
+        bound_queries = ctx.binder.bind(
+            lean_declaration_query_operations(catalog_resources.lean_declarations)
+        )
+        for adapter in bound_queries.adapters:
+            ctx.register_operation(adapter)
+    catalog_resources.lean = LeanService(
+        ctx.store,
+        ctx.artifacts,
+        ctx.verification,
+        lean_checkers,
+    )
+    ctx.register_operation(LeanCheckAdapter(catalog_resources.lean, runtime))
+    proof_axioms_adapter, _ = install_lean_proof_axioms_operation(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        lean_checkers,
+        runtime,
+    )
+    ctx.register_operation(proof_axioms_adapter)
+    adapters, catalog_resources.lean_exploration = install_lean_exploration_operations(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        lean_checkers,
+        runtime,
+    )
+    for adapter in adapters:
+        if adapter.descriptor.operation_id == "lean.proof_state.inspect":
+            continue
+        ctx.register_operation(adapter)
+    proof_edit_adapter, _ = install_lean_proof_edit_operation(
+        ctx.store,
+        ctx.schemas,
+        ctx.artifacts,
+        catalog_resources.lean,
+        runtime,
+    )
+    ctx.register_operation(proof_edit_adapter)
+
+
+__all__ = [
+    "SELECTED_LEAN_OPERATION_IDS",
+    "bind_selected_lean_operation",
+    "install_selected_lean_catalog",
+]

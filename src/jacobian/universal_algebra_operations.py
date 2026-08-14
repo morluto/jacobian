@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 import importlib
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import product
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from jacobian.artifacts import ArtifactService
 from jacobian.canonical import canonicalize_json
@@ -49,6 +49,7 @@ from jacobian.contracts.universal_algebra import (
 )
 from jacobian.domains._examples import example
 from jacobian.operation_adapters import OperationAdapter, parse_operation_input
+from jacobian.operation_catalog import OperationCatalog, OperationCatalogError
 from jacobian.operation_errors import OperationInvocationError
 from jacobian.operation_projection import OperationProjection
 from jacobian.operation_publication import PublishedOperation
@@ -83,19 +84,11 @@ class UniversalAlgebraResources:
     installation: UniversalAlgebraInstallation
 
 
-def install_universal_algebra_operations(
+def register_universal_algebra_resources(
     store: ArtifactRepository,
     schemas: SchemaRegistry,
-    artifacts: ArtifactService,
-    verification: VerificationService,
-    checkers: CheckerRegistry,
-    *,
-    authorize_checker: bool,
-) -> tuple[
-    tuple[OperationAdapter[Any], ...],
-    UniversalAlgebraInstallation,
-]:
-    """Install exact bounded finite-magma law evaluation."""
+) -> UniversalAlgebraInstallation:
+    """Register passive finite-magma contracts without checker installation."""
 
     semantics_uri = store.register_descriptor(
         kind="semantics",
@@ -114,41 +107,125 @@ def install_universal_algebra_operations(
             "countermodel_timeout_ms": _COUNTERMODEL_TIMEOUT_MS,
         },
     )
-    magma_schema_uri = schemas.register(
-        name="jacobian.finite-magma",
-        version="1",
-        schema=model_schema(FiniteMagma),
+    registrations: dict[str, tuple[str, type[BaseModel]]] = {
+        "magma_schema_uri": ("jacobian.finite-magma", FiniteMagma),
+        "problem_schema_uri": (
+            "jacobian.finite-magma-law-problem",
+            FiniteMagmaLawProblem,
+        ),
+        "evaluation_schema_uri": (
+            "jacobian.finite-magma-law-evaluation",
+            FiniteMagmaLawEvaluationArtifact,
+        ),
+        "countermodel_schema_uri": (
+            "jacobian.finite-magma-countermodel-search",
+            FiniteMagmaCountermodelArtifact,
+        ),
+        "table_enumeration_schema_uri": (
+            "jacobian.finite-magma-table-enumeration",
+            FiniteMagmaTableEnumerationArtifact,
+        ),
+        "claim_schema_uri": (
+            "jacobian.finite-magma-law-evaluation-claim",
+            FiniteMagmaLawEvaluationClaim,
+        ),
+        "certificate_schema_uri": (
+            "jacobian.certificate-envelope",
+            CertificateEnvelope,
+        ),
+    }
+    schema_uris = {
+        field: schemas.register(name=name, version="1", schema=model_schema(model))
+        for field, (name, model) in registrations.items()
+    }
+    return UniversalAlgebraInstallation(
+        semantics_uri=semantics_uri,
+        **schema_uris,
+        evaluation_checker_id=None,
     )
-    problem_schema_uri = schemas.register(
-        name="jacobian.finite-magma-law-problem",
-        version="1",
-        schema=model_schema(FiniteMagmaLawProblem),
+
+
+def bind_selected_universal_algebra_operation(
+    operation_id: str,
+    descriptor: OperationDescriptor,
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    catalog: OperationCatalog,
+) -> OperationAdapter[Any] | None:
+    """Bind one finite-magma operation from passive resources and catalog state."""
+
+    supported = {
+        "finite_magma.table.enumerate",
+        "universal_algebra.evaluate_laws",
+        "universal_algebra.search.countermodel",
+        "universal_algebra.law_evaluation.verify",
+    }
+    if operation_id not in supported:
+        return None
+    installation = register_universal_algebra_resources(store, schemas)
+    if operation_id in {
+        "universal_algebra.evaluate_laws",
+        "universal_algebra.law_evaluation.verify",
+    }:
+        binding = catalog.checker_binding("universal_algebra.law_evaluation.verify")
+        if binding is None:
+            raise OperationCatalogError(
+                "checker binding is missing; run `jacobian update`: "
+                "universal_algebra.law_evaluation.verify"
+            )
+        checkers.require_catalog_binding(
+            binding.checker_id,
+            implementation_digest=binding.manifest_digest,
+        )
+        installation = replace(
+            installation,
+            evaluation_checker_id=binding.checker_id,
+        )
+    resources = UniversalAlgebraResources(store, artifacts, installation)
+    if operation_id == "finite_magma.table.enumerate":
+        return FiniteMagmaTableEnumerateAdapter(resources)
+    if operation_id == "universal_algebra.evaluate_laws":
+        return UniversalAlgebraEvaluateLawsAdapter(resources)
+    if operation_id == "universal_algebra.search.countermodel":
+        if descriptor.provider_runtime is None:
+            raise OperationCatalogError(
+                "countermodel provider observation is missing; run `jacobian update`"
+            )
+        return UniversalAlgebraSearchCountermodelAdapter(
+            resources,
+            descriptor.provider_runtime,
+        )
+    return certificate_verification_adapter(
+        operation_id=operation_id,
+        title="Verify a finite-magma law evaluation",
+        description=(
+            "Independently replay one exhaustive finite-magma law evaluation "
+            "certificate."
+        ),
+        checker_id=installation.evaluation_checker_id,
+        tags=("universal-algebra", "finite-magma", "law-evaluation"),
+        verification=verification,
     )
-    evaluation_schema_uri = schemas.register(
-        name="jacobian.finite-magma-law-evaluation",
-        version="1",
-        schema=model_schema(FiniteMagmaLawEvaluationArtifact),
-    )
-    countermodel_schema_uri = schemas.register(
-        name="jacobian.finite-magma-countermodel-search",
-        version="1",
-        schema=model_schema(FiniteMagmaCountermodelArtifact),
-    )
-    table_enumeration_schema_uri = schemas.register(
-        name="jacobian.finite-magma-table-enumeration",
-        version="1",
-        schema=model_schema(FiniteMagmaTableEnumerationArtifact),
-    )
-    claim_schema_uri = schemas.register(
-        name="jacobian.finite-magma-law-evaluation-claim",
-        version="1",
-        schema=model_schema(FiniteMagmaLawEvaluationClaim),
-    )
-    certificate_schema_uri = schemas.register(
-        name="jacobian.certificate-envelope",
-        version="1",
-        schema=model_schema(CertificateEnvelope),
-    )
+
+
+def install_universal_algebra_operations(
+    store: ArtifactRepository,
+    schemas: SchemaRegistry,
+    artifacts: ArtifactService,
+    verification: VerificationService,
+    checkers: CheckerRegistry,
+    *,
+    authorize_checker: bool,
+) -> tuple[
+    tuple[OperationAdapter[Any], ...],
+    UniversalAlgebraInstallation,
+]:
+    """Install exact bounded finite-magma law evaluation."""
+
+    contracts = register_universal_algebra_resources(store, schemas)
     evaluation_checker_id = (
         CheckerInstaller(checkers)
         .install(
@@ -158,32 +235,22 @@ def install_universal_algebra_operations(
                 evidence_kind=EvidenceKind.CERTIFICATE,
                 format_id="universal_algebra.law_evaluation",
                 format_version="1",
-                claim_schema_uris=(claim_schema_uri,),
-                semantics_uris=(semantics_uri,),
-                candidate_schema_uris=(evaluation_schema_uri,),
+                claim_schema_uris=(contracts.claim_schema_uri,),
+                semantics_uris=(contracts.semantics_uri,),
+                candidate_schema_uris=(contracts.evaluation_schema_uri,),
                 reason="bundled independent finite table evaluator",
             ),
             authorize=authorize_checker,
         )
         .checker_id
     )
-    installation = UniversalAlgebraInstallation(
-        semantics_uri=semantics_uri,
-        magma_schema_uri=magma_schema_uri,
-        problem_schema_uri=problem_schema_uri,
-        evaluation_schema_uri=evaluation_schema_uri,
-        countermodel_schema_uri=countermodel_schema_uri,
-        table_enumeration_schema_uri=table_enumeration_schema_uri,
-        claim_schema_uri=claim_schema_uri,
-        certificate_schema_uri=certificate_schema_uri,
-        evaluation_checker_id=evaluation_checker_id,
-    )
-    resources = UniversalAlgebraResources(
+    installation = replace(contracts, evaluation_checker_id=evaluation_checker_id)
+    runtime_resources = UniversalAlgebraResources(
         store=store,
         artifacts=artifacts,
         installation=installation,
     )
-    evaluation = UniversalAlgebraEvaluateLawsAdapter(resources)
+    evaluation = UniversalAlgebraEvaluateLawsAdapter(runtime_resources)
     search_runtime = known_provider_runtime(
         "jacobian.z3",
         features=("finite-magma-countermodel-search",),
@@ -191,9 +258,11 @@ def install_universal_algebra_operations(
     adapters: tuple[OperationAdapter[Any], ...] = (evaluation,)
     if search_runtime.availability is ProviderAvailability.AVAILABLE:
         adapters += (
-            UniversalAlgebraSearchCountermodelAdapter(resources, search_runtime),
+            UniversalAlgebraSearchCountermodelAdapter(
+                runtime_resources, search_runtime
+            ),
         )
-    adapters += (FiniteMagmaTableEnumerateAdapter(resources),)
+    adapters += (FiniteMagmaTableEnumerateAdapter(runtime_resources),)
     verify = certificate_verification_adapter(
         operation_id="universal_algebra.law_evaluation.verify",
         title="Verify a finite-magma law evaluation",

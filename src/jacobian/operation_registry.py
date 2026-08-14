@@ -42,7 +42,16 @@ _SELECTED_POLYNOMIAL_OPERATIONS = frozenset(
         "polynomial.expression_normalization.verify",
     }
 )
-_SELECTED_DIRECT_OPERATIONS = frozenset({"polytope.separate", "finite.coverage.verify"})
+_SELECTED_DIRECT_OPERATIONS = frozenset(
+    {
+        "polytope.separate",
+        "finite.coverage.verify",
+        "finite_magma.table.enumerate",
+        "universal_algebra.evaluate_laws",
+        "universal_algebra.search.countermodel",
+        "universal_algebra.law_evaluation.verify",
+    }
+)
 _SELECTED_RESOURCE_OPERATIONS = (
     _SELECTED_GRAPH_OPERATIONS
     | _SELECTED_POLYNOMIAL_OPERATIONS
@@ -222,6 +231,26 @@ class OperationRegistry:
             from jacobian.finite_coverage import bind_selected_finite_coverage
 
             adapter = bind_selected_finite_coverage(
+                self.binder.store,
+                self.binder.schemas,
+                self.binder.artifacts,
+                self.verification,
+                self.checkers,
+                self.catalog,
+            )
+        elif operation_id in {
+            "finite_magma.table.enumerate",
+            "universal_algebra.evaluate_laws",
+            "universal_algebra.search.countermodel",
+            "universal_algebra.law_evaluation.verify",
+        }:
+            from jacobian.universal_algebra_operations import (
+                bind_selected_universal_algebra_operation,
+            )
+
+            adapter = bind_selected_universal_algebra_operation(
+                operation_id,
+                descriptor,
                 self.binder.store,
                 self.binder.schemas,
                 self.binder.artifacts,

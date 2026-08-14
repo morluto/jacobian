@@ -210,6 +210,75 @@ def test_mcp_v2_static_validation_context_errors_and_structured_resources(
             assert isinstance(finite_coverage.structured_content, dict)
             assert finite_coverage.structured_content["output"]["conclusion"] == "TRUE"
 
+            magma_tables = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "finite_magma.table.enumerate",
+                    "payload": {"order": 1},
+                },
+            )
+            assert isinstance(magma_tables.structured_content, dict)
+            assert magma_tables.structured_content["output"]["enumerated_count"] == 1
+
+            invalid_countermodel = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "universal_algebra.search.countermodel",
+                    "payload": {},
+                },
+            )
+            assert isinstance(invalid_countermodel.structured_content, dict)
+            assert (
+                invalid_countermodel.structured_content["operation_id"]
+                == "universal_algebra.search.countermodel"
+            )
+
+            law_evaluation = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "universal_algebra.evaluate_laws",
+                    "payload": {
+                        "problem": {
+                            "structure": {"order": 1, "table": [[0]]},
+                            "laws": [
+                                {
+                                    "law_id": "idempotence",
+                                    "variables": ["x"],
+                                    "left": {
+                                        "kind": "PRODUCT",
+                                        "left": {
+                                            "kind": "VARIABLE",
+                                            "variable": "x",
+                                        },
+                                        "right": {
+                                            "kind": "VARIABLE",
+                                            "variable": "x",
+                                        },
+                                    },
+                                    "right": {
+                                        "kind": "VARIABLE",
+                                        "variable": "x",
+                                    },
+                                }
+                            ],
+                        }
+                    },
+                },
+            )
+            assert isinstance(law_evaluation.structured_content, dict)
+            law_certificate = law_evaluation.structured_content["output"][
+                "certificate_uri"
+            ]
+            law_verified = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "universal_algebra.law_evaluation.verify",
+                    "payload": {"certificate_uri": law_certificate},
+                },
+            )
+            assert isinstance(law_verified.structured_content, dict)
+            assert law_verified.structured_content["output"]["conclusion"] == "TRUE"
+
             with pytest.raises(MCPError) as missing_resource:
                 await client.read_resource("artifact://sha256/" + "f" * 64)
             assert missing_resource.value.code == -32602

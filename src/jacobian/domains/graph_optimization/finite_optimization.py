@@ -32,6 +32,7 @@ _WitnessValidator = Callable[[Any, ContractModel], bool]
 def _validate_domination(graph: Any, result: ContractModel) -> bool:
     import networkx as nx
 
+    result = cast(GraphDominationMinimumOutput, result)
     graph_vertices = set(graph)
     return set(result.witness_vertices) <= graph_vertices and nx.is_dominating_set(
         graph,
@@ -42,6 +43,7 @@ def _validate_domination(graph: Any, result: ContractModel) -> bool:
 def _validate_matching(graph: Any, result: ContractModel) -> bool:
     import networkx as nx
 
+    result = cast(GraphMinimumMaximalMatchingOutput, result)
     graph_vertices = set(graph)
     edges = set(result.witness_edges)
     return (
@@ -54,6 +56,7 @@ def _validate_matching(graph: Any, result: ContractModel) -> bool:
 def _validate_induced_forest(graph: Any, result: ContractModel) -> bool:
     import networkx as nx
 
+    result = cast(GraphInducedForestMaximumOutput, result)
     if not set(result.witness_vertices) <= set(graph):
         return False
     induced = graph.subgraph(result.witness_vertices)
@@ -63,6 +66,7 @@ def _validate_induced_forest(graph: Any, result: ContractModel) -> bool:
 def _validate_induced_tree(graph: Any, result: ContractModel) -> bool:
     import networkx as nx
 
+    result = cast(GraphInducedTreeMaximumOutput, result)
     if not set(result.witness_vertices) <= set(graph):
         return False
     induced = graph.subgraph(result.witness_vertices)
@@ -76,6 +80,7 @@ def _validate_induced_tree(graph: Any, result: ContractModel) -> bool:
 def _validate_induced_bipartite(graph: Any, result: ContractModel) -> bool:
     import networkx as nx
 
+    result = cast(GraphInducedBipartiteMaximumOutput, result)
     return set(result.witness_vertices) <= set(graph) and nx.is_bipartite(
         graph.subgraph(result.witness_vertices)
     )
